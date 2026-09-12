@@ -1,3 +1,5 @@
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
+
 export type RouteLoader = () => Promise<unknown>
 
 export const loadLandingPage = () => import('../pages/LandingPage')
@@ -5,6 +7,7 @@ export const loadLoginPage = () => import('../pages/LoginPage')
 export const loadInviteAcceptPage = () => import('../pages/InviteAcceptPage')
 export const loadBuilderPage = () => import('../pages/BuilderPage')
 export const loadConfigPage = () => import('../pages/ConfigPage')
+export const loadConfigSchemaReferencePage = () => import('../pages/ConfigSchemaReferencePage')
 export const loadDashboardPage = () => import('../pages/DashboardPage')
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
@@ -37,6 +40,10 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/playground'), load: loadPlaygroundPage },
   { matches: (pathname) => pathname.startsWith('/builder'), load: loadBuilderPage },
   { matches: (pathname) => pathname.startsWith('/models'), load: loadModelHubPage },
+  {
+    matches: (pathname) => pathname.startsWith('/config/reference'),
+    load: loadConfigSchemaReferencePage,
+  },
   { matches: (pathname) => pathname.startsWith('/config'), load: loadConfigPage },
   {
     matches: (pathname) => /^\/knowledge-bases\/[^/]+\/map\/?$/.test(pathname),
@@ -57,9 +64,25 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
 ]
 
 const routePreloads = new Map<RouteLoader, Promise<unknown>>()
+const routePages = new WeakMap<RouteLoader, unknown>()
+
+// A route page must keep one lazy() identity per loader. react-router v7
+// navigates inside startTransition, so a suspended render is discarded; a
+// lazy() created during render is rebuilt on every retry and never resolves.
+export function lazyRoutePage<Props extends object>(
+  loader: () => Promise<{ default: ComponentType<Props> }>,
+): LazyExoticComponent<ComponentType<Props>> {
+  const cached = routePages.get(loader)
+  if (cached) return cached as LazyExoticComponent<ComponentType<Props>>
+
+  const page = lazy(loader)
+  routePages.set(loader, page)
+  return page
+}
 
 export function resetDashboardRouteLoader(loader: RouteLoader): void {
   routePreloads.delete(loader)
+  routePages.delete(loader)
 }
 
 export function preloadDashboardRoute(pathname: string): Promise<unknown> | undefined {

@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -75,6 +76,10 @@ type RequestContext struct {
 	ContextCompressionSkipReason  string
 	StartTime                     time.Time
 	ProcessingStartTime           time.Time
+	RoutingLatency                time.Duration
+	RequestCost                   float64
+	RequestCostCurrency           string
+	RequestCostPriced             bool
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
@@ -170,6 +175,10 @@ type RequestContext struct {
 
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
+
+	// RequestDemandSnapshots retains at most one content-free demand estimate for
+	// each stable request stage. It is observe-only until final admission lands.
+	RequestDemandSnapshots []routerreplay.RequestDemandSnapshot
 
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords        []string // Matched keyword rule names
@@ -275,6 +284,10 @@ type RequestContext struct {
 	SourceFormat             llmprotocol.WireFormat
 	TargetFormat             llmprotocol.WireFormat
 	SemanticRequest          *llmprotocol.Request
+	OriginalContextHistory   *contextcompression.HistorySnapshot
+	ContextRequestIR         *contextcompression.RequestIR
+	ContextHistorySteps      []contextcompression.TransformationStep
+	ProtectedContextMessages map[int]contextcompression.Protection
 	SemanticResponse         *llmprotocol.Response
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope

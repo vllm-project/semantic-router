@@ -118,7 +118,7 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string, credentialProvide
 	}
 }
 
-// RouterIntentRequest is the request body for Router's /api/v1/classify/intent
+// RouterIntentRequest is the request body for Router's /api/v1/diagnostics/classify/intent
 type RouterIntentRequest struct {
 	Text    string               `json:"text"`
 	Model   string               `json:"model,omitempty"`
@@ -157,7 +157,7 @@ type RouterEvalDecisionResult struct {
 	UnmatchedSignals *RouterMatchedSignals `json:"unmatched_signals,omitempty"`
 }
 
-// RouterEvalResponse is the response from Router's /api/v1/eval endpoint.
+// RouterEvalResponse is the response from Router's /api/v1/routing/preview endpoint.
 type RouterEvalResponse struct {
 	OriginalText      string                    `json:"original_text,omitempty"`
 	DecisionResult    *RouterEvalDecisionResult `json:"decision_result,omitempty"`
@@ -189,7 +189,7 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string, creden
 	}
 
 	// Call Router eval API so topology can inspect all matched signals and signal scores.
-	apiURL := fmt.Sprintf("%s/api/v1/eval", strings.TrimSuffix(routerAPIURL, "/"))
+	apiURL := fmt.Sprintf("%s/api/v1/routing/preview", strings.TrimSuffix(routerAPIURL, "/"))
 	httpReq, err := http.NewRequest("POST", apiURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return &TestQueryResult{

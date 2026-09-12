@@ -1,0 +1,7309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-sr.ai/schemas/router-config-v0.3.schema.json",
+  "$defs": {
+    "APIConfig": {
+      "properties": {
+        "batch_classification": {
+          "$ref": "#/$defs/BatchClassificationConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AdmissionConfig": {
+      "properties": {
+        "max_concurrency": {
+          "type": "integer"
+        },
+        "max_queue": {
+          "type": "integer"
+        },
+        "queue_timeout_ms": {
+          "type": "integer"
+        },
+        "on_overflow": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AdvancedToolFilteringConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "retrieval_strategy": {
+          "type": "string"
+        },
+        "candidate_pool_size": {
+          "type": "integer"
+        },
+        "min_lexical_overlap": {
+          "type": "integer"
+        },
+        "min_combined_score": {
+          "type": "number"
+        },
+        "weights": {
+          "$ref": "#/$defs/ToolFilteringWeights"
+        },
+        "use_category_filter": {
+          "type": "boolean"
+        },
+        "category_confidence_threshold": {
+          "type": "number"
+        },
+        "allow_tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "block_tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hybrid_history": {
+          "$ref": "#/$defs/HybridHistoryToolRetrievalConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AlgorithmConfig": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "automix",
+            "confidence",
+            "fusion",
+            "hybrid",
+            "kmeans",
+            "knn",
+            "latency_aware",
+            "mlp",
+            "multi_factor",
+            "prompt",
+            "ratings",
+            "remom",
+            "router_dc",
+            "static",
+            "svm",
+            "workflows"
+          ]
+        },
+        "minimum_candidates": {
+          "type": "integer"
+        },
+        "confidence": {
+          "$ref": "#/$defs/ConfidenceAlgorithmConfig"
+        },
+        "ratings": {
+          "$ref": "#/$defs/RatingsAlgorithmConfig"
+        },
+        "remom": {
+          "$ref": "#/$defs/ReMoMAlgorithmConfig"
+        },
+        "fusion": {
+          "$ref": "#/$defs/FusionAlgorithmConfig"
+        },
+        "workflows": {
+          "$ref": "#/$defs/WorkflowsAlgorithmConfig"
+        },
+        "router_dc": {
+          "$ref": "#/$defs/RouterDCSelectionConfig"
+        },
+        "automix": {
+          "$ref": "#/$defs/AutoMixSelectionConfig"
+        },
+        "hybrid": {
+          "$ref": "#/$defs/HybridSelectionConfig"
+        },
+        "latency_aware": {
+          "$ref": "#/$defs/LatencyAwareAlgorithmConfig"
+        },
+        "multi_factor": {
+          "$ref": "#/$defs/MultiFactorSelectionConfig"
+        },
+        "prompt": {
+          "$ref": "#/$defs/PromptSelectionConfig"
+        },
+        "on_error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AuthzConfig": {
+      "properties": {
+        "fail_open": {
+          "type": "boolean"
+        },
+        "identity": {
+          "$ref": "#/$defs/IdentityConfig"
+        },
+        "providers": {
+          "items": {
+            "$ref": "#/$defs/AuthzProviderConfig"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AuthzProviderConfig": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AutoMixSelectionConfig": {
+      "properties": {
+        "verification_threshold": {
+          "type": "number"
+        },
+        "max_escalations": {
+          "type": "integer"
+        },
+        "cost_aware_routing": {
+          "type": "boolean"
+        },
+        "cost_quality_tradeoff": {
+          "type": "number"
+        },
+        "discount_factor": {
+          "type": "number"
+        },
+        "use_logprob_verification": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BatchClassificationConfig": {
+      "properties": {
+        "max_batch_size": {
+          "type": "integer"
+        },
+        "concurrency_threshold": {
+          "type": "integer"
+        },
+        "max_concurrency": {
+          "type": "integer"
+        },
+        "metrics": {
+          "$ref": "#/$defs/BatchClassificationMetricsConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BatchClassificationMetricsConfig": {
+      "properties": {
+        "sample_rate": {
+          "type": "number"
+        },
+        "batch_size_ranges": {
+          "items": {
+            "$ref": "#/$defs/BatchSizeRangeConfig"
+          },
+          "type": "array"
+        },
+        "duration_buckets": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "size_buckets": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "detailed_goroutine_tracking": {
+          "type": "boolean"
+        },
+        "high_resolution_timing": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BatchSizeRangeConfig": {
+      "properties": {
+        "min": {
+          "type": "integer"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BenchmarkDefinition": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source": {
+          "type": "string"
+        },
+        "default_profile": {
+          "type": "string"
+        },
+        "profiles": {
+          "items": {
+            "$ref": "#/$defs/BenchmarkProfile"
+          },
+          "type": "array"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/BenchmarkMetric"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BenchmarkMetric": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "range": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "normalization": {
+          "$ref": "#/$defs/Normalization"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BenchmarkProfile": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CandidateIterationConfig": {
+      "properties": {
+        "variable": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/ModelRef"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/CandidateIterationOutputConfig"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CandidateIterationOutputConfig": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalBackendRef": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer"
+        },
+        "base_url": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "auth_header": {
+          "type": "string"
+        },
+        "auth_prefix": {
+          "type": "string"
+        },
+        "extra_headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "api_version": {
+          "type": "string"
+        },
+        "chat_path": {
+          "type": "string"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "api_key_env": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalCategoryModule": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "use_modernbert": {
+          "type": "boolean"
+        },
+        "use_mmbert_32k": {
+          "type": "boolean"
+        },
+        "variant": {
+          "type": "string"
+        },
+        "backend": {
+          "$ref": "#/$defs/RemoteClassifierBackend"
+        },
+        "category_mapping_path": {
+          "type": "string"
+        },
+        "fallback_category": {
+          "type": "string"
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalClassifierModule": {
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/CanonicalCategoryModule"
+        },
+        "mcp": {
+          "$ref": "#/$defs/MCPCategoryModel"
+        },
+        "pii": {
+          "$ref": "#/$defs/CanonicalPIIModule"
+        },
+        "preference": {
+          "$ref": "#/$defs/PreferenceModelConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalEmbeddingModels": {
+      "properties": {
+        "semantic": {
+          "$ref": "#/$defs/EmbeddingModels"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalEntrypoint": {
+      "properties": {
+        "model_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recipe": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalEvaluation": {
+      "properties": {
+        "benchmarks": {
+          "items": {
+            "$ref": "#/$defs/BenchmarkDefinition"
+          },
+          "type": "array"
+        },
+        "indices": {
+          "items": {
+            "$ref": "#/$defs/IndexDefinition"
+          },
+          "type": "array"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/CanonicalEvaluationRecord"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalEvaluationRecord": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "benchmark": {
+          "type": "string"
+        },
+        "benchmark_profile": {
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "source": {
+          "type": "string"
+        },
+        "measured_at": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalExplainerModule": {
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalFactCheckModule": {
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "use_mmbert_32k": {
+          "type": "boolean"
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalFeedbackDetectorModule": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "use_modernbert": {
+          "type": "boolean"
+        },
+        "use_mmbert_32k": {
+          "type": "boolean"
+        },
+        "feedback_mapping_path": {
+          "type": "string"
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalGlobal": {
+      "properties": {
+        "router": {
+          "$ref": "#/$defs/CanonicalRouterGlobal"
+        },
+        "services": {
+          "$ref": "#/$defs/CanonicalServiceGlobal"
+        },
+        "stores": {
+          "$ref": "#/$defs/CanonicalStoreGlobal"
+        },
+        "integrations": {
+          "$ref": "#/$defs/CanonicalIntegrationGlobal"
+        },
+        "model_catalog": {
+          "$ref": "#/$defs/CanonicalModelCatalog"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalHallucinationDetector": {
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "include_explanation": {
+          "type": "boolean"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "min_span_length": {
+          "type": "integer"
+        },
+        "min_span_confidence": {
+          "type": "number"
+        },
+        "context_window_size": {
+          "type": "integer"
+        },
+        "enable_nli_filtering": {
+          "type": "boolean"
+        },
+        "nli_entailment_threshold": {
+          "type": "number"
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalHallucinationModule": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "fact_check": {
+          "$ref": "#/$defs/CanonicalFactCheckModule"
+        },
+        "detector": {
+          "$ref": "#/$defs/CanonicalHallucinationDetector"
+        },
+        "explainer": {
+          "$ref": "#/$defs/CanonicalExplainerModule"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalIntegrationGlobal": {
+      "properties": {
+        "tools": {
+          "$ref": "#/$defs/ToolsConfig"
+        },
+        "looper": {
+          "$ref": "#/$defs/LooperConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalModelCatalog": {
+      "properties": {
+        "embeddings": {
+          "$ref": "#/$defs/CanonicalEmbeddingModels"
+        },
+        "system": {
+          "$ref": "#/$defs/CanonicalSystemModels"
+        },
+        "external": {
+          "items": {
+            "$ref": "#/$defs/ExternalModelConfig"
+          },
+          "type": "array"
+        },
+        "kbs": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeBaseConfig"
+          },
+          "type": "array"
+        },
+        "modules": {
+          "$ref": "#/$defs/CanonicalModelModules"
+        },
+        "admission": {
+          "additionalProperties": {
+            "$ref": "#/$defs/AdmissionConfig"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalModelModules": {
+      "properties": {
+        "prompt_compression": {
+          "$ref": "#/$defs/PromptCompressionConfig"
+        },
+        "prompt_guard": {
+          "$ref": "#/$defs/CanonicalPromptGuardModule"
+        },
+        "classifier": {
+          "$ref": "#/$defs/CanonicalClassifierModule"
+        },
+        "complexity": {
+          "$ref": "#/$defs/ComplexityModelConfig"
+        },
+        "hallucination_mitigation": {
+          "$ref": "#/$defs/CanonicalHallucinationModule"
+        },
+        "feedback_detector": {
+          "$ref": "#/$defs/CanonicalFeedbackDetectorModule"
+        },
+        "modality_detector": {
+          "$ref": "#/$defs/ModalityDetectorConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalPIIModule": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "use_mmbert_32k": {
+          "type": "boolean"
+        },
+        "pii_mapping_path": {
+          "type": "string"
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalProjections": {
+      "properties": {
+        "partitions": {
+          "items": {
+            "$ref": "#/$defs/ProjectionPartition"
+          },
+          "type": "array"
+        },
+        "scores": {
+          "items": {
+            "$ref": "#/$defs/ProjectionScore"
+          },
+          "type": "array"
+        },
+        "mappings": {
+          "items": {
+            "$ref": "#/$defs/ProjectionMapping"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalPromptGuardModule": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "jailbreak_mapping_path": {
+          "type": "string"
+        },
+        "positive_labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "variant": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "on_error": {
+          "type": "string"
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalProviderDefaults": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalProviderModel": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "catalog": {
+          "type": "string"
+        },
+        "reasoning": {
+          "$ref": "#/$defs/CanonicalReasoning"
+        },
+        "provider_model_id": {
+          "type": "string"
+        },
+        "backend_refs": {
+          "items": {
+            "$ref": "#/$defs/CanonicalBackendRef"
+          },
+          "type": "array"
+        },
+        "pricing": {
+          "$ref": "#/$defs/ModelPricing"
+        },
+        "reliability": {
+          "$ref": "#/$defs/ProviderReliability"
+        },
+        "api_format": {
+          "type": "string"
+        },
+        "external_model_ids": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalProviders": {
+      "properties": {
+        "defaults": {
+          "$ref": "#/$defs/CanonicalProviderDefaults"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/CanonicalProviderModel"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalReasoning": {
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "parameter": {
+          "type": "string"
+        },
+        "activation_parameter": {
+          "type": "string"
+        },
+        "effort_flags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default": {
+          "type": "string"
+        },
+        "modes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default_mode": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalRecipe": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "routing": {
+          "$ref": "#/$defs/CanonicalRecipeRouting"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalRecipeRouting": {
+      "properties": {
+        "signals": {
+          "$ref": "#/$defs/CanonicalSignals"
+        },
+        "projections": {
+          "$ref": "#/$defs/CanonicalProjections"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/Decision"
+          },
+          "type": "array"
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "priority",
+            "confidence"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Recipe-owned routing profile. Model cards remain in the shared top-level catalog."
+    },
+    "CanonicalRouterGlobal": {
+      "properties": {
+        "config_source": {
+          "type": "string",
+          "enum": [
+            "file",
+            "kubernetes"
+          ]
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "auto_model_name": {
+          "type": "string"
+        },
+        "auto_model_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "include_config_models_in_list": {
+          "type": "boolean"
+        },
+        "clear_route_cache": {
+          "type": "boolean"
+        },
+        "streamed_body": {
+          "$ref": "#/$defs/CanonicalStreamedBody"
+        },
+        "skip_processing": {
+          "$ref": "#/$defs/SkipProcessingConfig"
+        },
+        "model_selection": {
+          "$ref": "#/$defs/ModelSelectionConfig"
+        },
+        "learning": {
+          "$ref": "#/$defs/RouterLearningConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalRouting": {
+      "properties": {
+        "modelCards": {
+          "items": {
+            "$ref": "#/$defs/RoutingModel"
+          },
+          "type": "array"
+        },
+        "signals": {
+          "$ref": "#/$defs/CanonicalSignals"
+        },
+        "projections": {
+          "$ref": "#/$defs/CanonicalProjections"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/Decision"
+          },
+          "type": "array"
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "priority",
+            "confidence"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalServiceGlobal": {
+      "properties": {
+        "api": {
+          "$ref": "#/$defs/APIConfig"
+        },
+        "response_api": {
+          "$ref": "#/$defs/ResponseAPIConfig"
+        },
+        "observability": {
+          "$ref": "#/$defs/ObservabilityConfig"
+        },
+        "authz": {
+          "$ref": "#/$defs/AuthzConfig"
+        },
+        "ratelimit": {
+          "$ref": "#/$defs/RateLimitConfig"
+        },
+        "management_api": {
+          "$ref": "#/$defs/ManagementAPIConfig"
+        },
+        "router_replay": {
+          "$ref": "#/$defs/RouterReplayConfig"
+        },
+        "startup_status": {
+          "$ref": "#/$defs/StartupStatusConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalSignals": {
+      "properties": {
+        "keywords": {
+          "items": {
+            "$ref": "#/$defs/KeywordRule"
+          },
+          "type": "array"
+        },
+        "embeddings": {
+          "items": {
+            "$ref": "#/$defs/EmbeddingRule"
+          },
+          "type": "array"
+        },
+        "domains": {
+          "items": {
+            "$ref": "#/$defs/Category"
+          },
+          "type": "array"
+        },
+        "fact_check": {
+          "items": {
+            "$ref": "#/$defs/FactCheckRule"
+          },
+          "type": "array"
+        },
+        "user_feedbacks": {
+          "items": {
+            "$ref": "#/$defs/UserFeedbackRule"
+          },
+          "type": "array"
+        },
+        "reasks": {
+          "items": {
+            "$ref": "#/$defs/ReaskRule"
+          },
+          "type": "array"
+        },
+        "preferences": {
+          "items": {
+            "$ref": "#/$defs/PreferenceRule"
+          },
+          "type": "array"
+        },
+        "language": {
+          "items": {
+            "$ref": "#/$defs/LanguageRule"
+          },
+          "type": "array"
+        },
+        "context": {
+          "items": {
+            "$ref": "#/$defs/ContextRule"
+          },
+          "type": "array"
+        },
+        "structure": {
+          "items": {
+            "$ref": "#/$defs/StructureRule"
+          },
+          "type": "array"
+        },
+        "complexity": {
+          "items": {
+            "$ref": "#/$defs/ComplexityRule"
+          },
+          "type": "array"
+        },
+        "modality": {
+          "items": {
+            "$ref": "#/$defs/ModalityRule"
+          },
+          "type": "array"
+        },
+        "role_bindings": {
+          "items": {
+            "$ref": "#/$defs/RoleBinding"
+          },
+          "type": "array"
+        },
+        "jailbreak": {
+          "items": {
+            "$ref": "#/$defs/JailbreakRule"
+          },
+          "type": "array"
+        },
+        "hallucination": {
+          "items": {
+            "$ref": "#/$defs/HallucinationRule"
+          },
+          "type": "array"
+        },
+        "pii": {
+          "items": {
+            "$ref": "#/$defs/PIIRule"
+          },
+          "type": "array"
+        },
+        "kb": {
+          "items": {
+            "$ref": "#/$defs/KBSignalRule"
+          },
+          "type": "array"
+        },
+        "conversation": {
+          "items": {
+            "$ref": "#/$defs/ConversationRule"
+          },
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/EventRule"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "items": {
+            "$ref": "#/$defs/MetadataRule"
+          },
+          "type": "array"
+        },
+        "classifiers": {
+          "items": {
+            "$ref": "#/$defs/ClassifierSignalRule"
+          },
+          "type": "array"
+        },
+        "input_modality": {
+          "items": {
+            "$ref": "#/$defs/InputModalityRule"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalStoreGlobal": {
+      "properties": {
+        "response_cache": {
+          "$ref": "#/$defs/ResponseCacheStoreConfig"
+        },
+        "memory": {
+          "$ref": "#/$defs/MemoryConfig"
+        },
+        "vector_store": {
+          "$ref": "#/$defs/VectorStoreConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalStreamedBody": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_bytes": {
+          "type": "integer"
+        },
+        "timeout_sec": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CanonicalSystemModels": {
+      "properties": {
+        "prompt_guard": {
+          "type": "string"
+        },
+        "domain_classifier": {
+          "type": "string"
+        },
+        "pii_classifier": {
+          "type": "string"
+        },
+        "fact_check_classifier": {
+          "type": "string"
+        },
+        "hallucination_detector": {
+          "type": "string"
+        },
+        "hallucination_explainer": {
+          "type": "string"
+        },
+        "feedback_detector": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Category": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "mmlu_categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "model_scores": {
+          "items": {
+            "$ref": "#/$defs/ModelScore"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ClassifierSignalRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "model_path": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ClassifierVLLMEndpoint": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "use_chat_template": {
+          "type": "boolean"
+        },
+        "prompt_template": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ComplexityCandidates": {
+      "properties": {
+        "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ComplexityModelConfig": {
+      "properties": {
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
+        },
+        "backend": {
+          "$ref": "#/$defs/RemoteClassifierBackend"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ComplexityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "hard": {
+          "$ref": "#/$defs/ComplexityCandidates"
+        },
+        "easy": {
+          "$ref": "#/$defs/ComplexityCandidates"
+        },
+        "hard_above": {
+          "type": "number"
+        },
+        "easy_below": {
+          "type": "number"
+        },
+        "hard_below": {
+          "type": "number"
+        },
+        "easy_above": {
+          "type": "number"
+        },
+        "description": {
+          "type": "string"
+        },
+        "composer": {
+          "$ref": "#/$defs/RuleNode"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConfidenceAlgorithmConfig": {
+      "properties": {
+        "confidence_method": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "hybrid_weights": {
+          "$ref": "#/$defs/HybridWeightsConfig"
+        },
+        "on_error": {
+          "type": "string"
+        },
+        "escalation_order": {
+          "type": "string"
+        },
+        "cost_quality_tradeoff": {
+          "type": "number"
+        },
+        "token_filter": {
+          "type": "string"
+        },
+        "verifier_server_url": {
+          "type": "string"
+        },
+        "verifier_timeout_seconds": {
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextCompressionBudgetConfig": {
+      "properties": {
+        "trigger_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ]
+        },
+        "target_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ]
+        },
+        "reserve_output_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextCompressionPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "budget": {
+          "$ref": "#/$defs/ContextCompressionBudgetConfig"
+        },
+        "targets": {
+          "$ref": "#/$defs/ContextCompressionTargetsConfig"
+        },
+        "scoring": {
+          "$ref": "#/$defs/ContextCompressionScoringConfig"
+        },
+        "recovery": {
+          "$ref": "#/$defs/ContextCompressionRecoveryConfig"
+        },
+        "request_controls": {
+          "$ref": "#/$defs/ContextCompressionRequestControlsConfig"
+        },
+        "failure_mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextCompressionRecoveryConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "store": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "max_bytes_per_request": {
+          "type": "integer"
+        },
+        "max_total_bytes": {
+          "type": "integer"
+        },
+        "max_retrievals": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextCompressionRequestControlsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string"
+        },
+        "allowed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_target_tokens": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextCompressionScoringConfig": {
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "embedding_model_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextCompressionTargetConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "min_tokens": {
+          "type": "integer"
+        },
+        "target_tokens": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextCompressionTargetsConfig": {
+      "properties": {
+        "tool_outputs": {
+          "$ref": "#/$defs/ContextCompressionTargetConfig"
+        },
+        "history": {
+          "$ref": "#/$defs/ContextCompressionTargetConfig"
+        },
+        "rag": {
+          "$ref": "#/$defs/ContextCompressionTargetConfig"
+        },
+        "memory": {
+          "$ref": "#/$defs/ContextCompressionTargetConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "min_tokens": {
+          "type": "string"
+        },
+        "max_tokens": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConversationFeature": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/ConversationSource"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConversationRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "feature": {
+          "$ref": "#/$defs/ConversationFeature"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConversationSource": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Decision": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "tier": {
+          "type": "integer"
+        },
+        "output_contract": {
+          "type": "string"
+        },
+        "output_contract_spec": {
+          "$ref": "#/$defs/OutputContractSpec"
+        },
+        "rules": {
+          "$ref": "#/$defs/RuleNode"
+        },
+        "action": {
+          "$ref": "#/$defs/DecisionAction"
+        },
+        "modelRefs": {
+          "items": {
+            "$ref": "#/$defs/ModelRef"
+          },
+          "type": "array"
+        },
+        "algorithm": {
+          "$ref": "#/$defs/AlgorithmConfig"
+        },
+        "adaptations": {
+          "$ref": "#/$defs/DecisionAdaptationsConfig"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/DecisionPlugin"
+          },
+          "type": "array"
+        },
+        "candidateIterations": {
+          "items": {
+            "$ref": "#/$defs/CandidateIterationConfig"
+          },
+          "type": "array"
+        },
+        "emits": {
+          "items": {
+            "$ref": "#/$defs/EmitDirective"
+          },
+          "type": "array"
+        },
+        "annotations": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionAction": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "route"
+          ]
+        },
+        "destination": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "destination"
+      ]
+    },
+    "DecisionAdaptationsConfig": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "",
+            "apply",
+            "observe",
+            "bypass"
+          ]
+        },
+        "adaptation": {
+          "$ref": "#/$defs/DecisionLearningAdaptationConfig"
+        },
+        "protection": {
+          "$ref": "#/$defs/DecisionLearningProtectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionLearningAdaptationConfig": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "",
+            "apply",
+            "observe",
+            "bypass"
+          ]
+        },
+        "candidate_set": {
+          "type": "string",
+          "enum": [
+            "",
+            "decision",
+            "tier",
+            "global"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionLearningProtectionConfig": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "",
+            "apply",
+            "observe",
+            "bypass"
+          ]
+        },
+        "stability_weight": {
+          "type": "number",
+          "minimum": 0
+        },
+        "switch_margin": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionPlugin": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "response_cache"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/ResponseCachePluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "memory"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/MemoryPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "system_prompt"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/SystemPromptPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "header_mutation"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/HeaderMutationPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "hallucination"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/HallucinationPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "router_replay"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/RouterReplayPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "rag"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/RAGPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "fast_response"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/FastResponsePluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "tools"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/ToolsPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "tool_selection"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/ToolSelectionPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "request_params"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/RequestParamsPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "response_jailbreak"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/ResponseJailbreakPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "context_compression"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/ContextCompressionPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "shadow_dispatch"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/ShadowDispatchPluginConfig"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "context_compression",
+            "fast_response",
+            "hallucination",
+            "header_mutation",
+            "memory",
+            "rag",
+            "request_params",
+            "response_cache",
+            "response_jailbreak",
+            "router_replay",
+            "shadow_dispatch",
+            "system_prompt",
+            "tool_selection",
+            "tools"
+          ]
+        },
+        "configuration": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "configuration"
+      ]
+    },
+    "DynamicRetrievalConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "history_window": {
+          "type": "integer"
+        },
+        "weights": {
+          "$ref": "#/$defs/DynamicRetrievalWeights"
+        },
+        "min_history_confidence": {
+          "type": "number"
+        },
+        "fallback_on_low_confidence": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DynamicRetrievalWeights": {
+      "properties": {
+        "semantic": {
+          "type": "number"
+        },
+        "history": {
+          "type": "number"
+        },
+        "decision_prior": {
+          "type": "number"
+        },
+        "repetition_penalty": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EmbeddingEndpointConfig": {
+      "properties": {
+        "base_url": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "api_key_env": {
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "type": "integer"
+        },
+        "max_retries": {
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "type": "integer"
+        },
+        "dimensions": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EmbeddingModels": {
+      "properties": {
+        "qwen3_model_path": {
+          "type": "string"
+        },
+        "gemma_model_path": {
+          "type": "string"
+        },
+        "mmbert_model_path": {
+          "type": "string"
+        },
+        "multimodal_model_path": {
+          "type": "string"
+        },
+        "bert_model_path": {
+          "type": "string"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "embedding_config": {
+          "$ref": "#/$defs/HNSWConfig"
+        },
+        "endpoint": {
+          "$ref": "#/$defs/EmbeddingEndpointConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EmbeddingRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "aggregation_method": {
+          "type": "string"
+        },
+        "query_modality": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EmitDirective": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "retention": {
+          "$ref": "#/$defs/RetentionDirective"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EventRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "event_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "severities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "action_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "temporal": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ExternalModelConfig": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "llm_provider": {
+          "type": "string"
+        },
+        "model_role": {
+          "type": "string"
+        },
+        "llm_endpoint": {
+          "$ref": "#/$defs/ClassifierVLLMEndpoint"
+        },
+        "llm_model_name": {
+          "type": "string"
+        },
+        "llm_timeout_seconds": {
+          "type": "integer"
+        },
+        "parser_type": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "access_key": {
+          "type": "string"
+        },
+        "max_tokens": {
+          "type": "integer"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "max_request_bytes": {
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FactCheckRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FastResponsePluginConfig": {
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FlowRuntimeConfig": {
+      "properties": {
+        "model_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "state": {
+          "$ref": "#/$defs/WorkflowStateRuntimeConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FusionAlgorithmConfig": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "analysis_models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "analysis_mode": {
+          "type": "string"
+        },
+        "analysis_overrides": {
+          "items": {
+            "$ref": "#/$defs/FusionModelOverride"
+          },
+          "type": "array"
+        },
+        "max_concurrent": {
+          "type": "integer"
+        },
+        "max_completion_tokens": {
+          "type": "integer"
+        },
+        "round_timeout_seconds": {
+          "type": "integer"
+        },
+        "min_successful_responses": {
+          "type": "integer"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "include_analysis": {
+          "type": "boolean"
+        },
+        "on_error": {
+          "type": "string"
+        },
+        "analysis_template": {
+          "type": "string"
+        },
+        "synthesis_template": {
+          "type": "string"
+        },
+        "judge_prompt_version": {
+          "type": "string"
+        },
+        "include_intermediate_responses": {
+          "type": "boolean"
+        },
+        "grounding": {
+          "$ref": "#/$defs/FusionGroundingConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FusionGroundingConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "policy": {
+          "type": "string"
+        },
+        "min_score": {
+          "type": "number"
+        },
+        "min_keep": {
+          "type": "integer"
+        },
+        "nli_contradiction_penalty": {
+          "type": "number"
+        },
+        "on_error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FusionModelOverride": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "max_completion_tokens": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FusionRuntimeConfig": {
+      "properties": {
+        "model_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HNSWConfig": {
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "model_type": {
+          "type": "string"
+        },
+        "preload_embeddings": {
+          "type": "boolean"
+        },
+        "target_dimension": {
+          "type": "integer"
+        },
+        "target_layer": {
+          "type": "integer"
+        },
+        "enable_soft_matching": {
+          "type": "boolean"
+        },
+        "top_k": {
+          "type": "integer"
+        },
+        "min_score_threshold": {
+          "type": "number"
+        },
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HallucinationPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "use_nli": {
+          "type": "boolean"
+        },
+        "hallucination_action": {
+          "type": "string"
+        },
+        "unverified_factual_action": {
+          "type": "string"
+        },
+        "include_hallucination_details": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HallucinationRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "use_nli": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HeaderMutationPluginConfig": {
+      "properties": {
+        "add": {
+          "items": {
+            "$ref": "#/$defs/HeaderPair"
+          },
+          "type": "array"
+        },
+        "update": {
+          "items": {
+            "$ref": "#/$defs/HeaderPair"
+          },
+          "type": "array"
+        },
+        "delete": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HeaderPair": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HybridHistoryToolRetrievalConfig": {
+      "properties": {
+        "history_horizon": {
+          "type": "integer"
+        },
+        "min_history_steps": {
+          "type": "integer"
+        },
+        "history_confidence_threshold": {
+          "type": "number"
+        },
+        "weight_semantic": {
+          "type": "number"
+        },
+        "weight_history_transition": {
+          "type": "number"
+        },
+        "weight_decision_prior": {
+          "type": "number"
+        },
+        "repetition_penalty_strength": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HybridSelectionConfig": {
+      "properties": {
+        "experience_weight": {
+          "type": "number"
+        },
+        "router_dc_weight": {
+          "type": "number"
+        },
+        "automix_weight": {
+          "type": "number"
+        },
+        "cost_weight": {
+          "type": "number"
+        },
+        "quality_gap_threshold": {
+          "type": "number"
+        },
+        "normalize_scores": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HybridWeightsConfig": {
+      "properties": {
+        "logprob_weight": {
+          "type": "number"
+        },
+        "margin_weight": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "IdentityConfig": {
+      "properties": {
+        "user_id_header": {
+          "type": "string"
+        },
+        "user_groups_header": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "IndexComponent": {
+      "properties": {
+        "benchmark": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "benchmark_profile": {
+          "type": "string"
+        },
+        "benchmark_profiles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "index": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "number"
+        },
+        "normalization": {
+          "$ref": "#/$defs/Normalization"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "IndexDefinition": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "methodology": {
+          "type": "string"
+        },
+        "aggregation": {
+          "type": "string"
+        },
+        "scale": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "missing": {
+          "$ref": "#/$defs/MissingPolicy"
+        },
+        "domains": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/IndexComponent"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "InputModalityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "modality": {
+          "type": "string",
+          "enum": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "JailbreakRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "include_history": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "jailbreak_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "benign_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "direction": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KBSignalRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kb": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/KBSignalTarget"
+        },
+        "match": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KBSignalTarget": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KeywordRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "case_sensitive": {
+          "type": "boolean"
+        },
+        "method": {
+          "type": "string"
+        },
+        "fuzzy_match": {
+          "type": "boolean"
+        },
+        "fuzzy_threshold": {
+          "type": "integer"
+        },
+        "bm25_threshold": {
+          "type": "number"
+        },
+        "ngram_threshold": {
+          "type": "number"
+        },
+        "ngram_arity": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KnowledgeBaseConfig": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/KnowledgeBaseSource"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "label_thresholds": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "groups": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeBaseMetricConfig"
+          },
+          "type": "array"
+        },
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KnowledgeBaseMetricConfig": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "positive_group": {
+          "type": "string"
+        },
+        "negative_group": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KnowledgeBaseSource": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "manifest": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LanguageRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LatencyAwareAlgorithmConfig": {
+      "properties": {
+        "tpot_percentile": {
+          "type": "integer"
+        },
+        "ttft_percentile": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Listener": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "timeout": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LlamaStackVectorStoreConfig": {
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "auth_token": {
+          "type": "string"
+        },
+        "embedding_model": {
+          "type": "string"
+        },
+        "request_timeout_seconds": {
+          "type": "integer"
+        },
+        "search_type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LoRAAdapter": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LooperConfig": {
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "grpc_max_msg_size_mb": {
+          "type": "integer"
+        },
+        "max_response_bytes_mb": {
+          "type": "integer"
+        },
+        "timeout_seconds": {
+          "type": "integer"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "remom": {
+          "$ref": "#/$defs/ReMoMRuntimeConfig"
+        },
+        "fusion": {
+          "$ref": "#/$defs/FusionRuntimeConfig"
+        },
+        "flow": {
+          "$ref": "#/$defs/FlowRuntimeConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MCPCategoryModel": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "transport_type": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "url": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "timeout_seconds": {
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MLKMeansConfig": {
+      "properties": {
+        "num_clusters": {
+          "type": "integer"
+        },
+        "efficiency_weight": {
+          "type": "number"
+        },
+        "pretrained_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MLKNNConfig": {
+      "properties": {
+        "k": {
+          "type": "integer"
+        },
+        "pretrained_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MLMLPConfig": {
+      "properties": {
+        "device": {
+          "type": "string"
+        },
+        "pretrained_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MLSVMConfig": {
+      "properties": {
+        "kernel": {
+          "type": "string"
+        },
+        "gamma": {
+          "type": "number"
+        },
+        "pretrained_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MLSelectionConfig": {
+      "properties": {
+        "models_path": {
+          "type": "string"
+        },
+        "model_type": {
+          "type": "string"
+        },
+        "embedding_dim": {
+          "type": "integer"
+        },
+        "knn": {
+          "$ref": "#/$defs/MLKNNConfig"
+        },
+        "kmeans": {
+          "$ref": "#/$defs/MLKMeansConfig"
+        },
+        "svm": {
+          "$ref": "#/$defs/MLSVMConfig"
+        },
+        "mlp": {
+          "$ref": "#/$defs/MLMLPConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ManagementAPIAuthConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/ManagementAPITokenRef"
+          },
+          "type": "array"
+        },
+        "roles": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ManagementAPIConfig": {
+      "properties": {
+        "bind_address": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "remote_exposure": {
+          "type": "boolean"
+        },
+        "auth": {
+          "$ref": "#/$defs/ManagementAPIAuthConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ManagementAPITokenRef": {
+      "properties": {
+        "env": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "auto_store": {
+          "type": "boolean"
+        },
+        "disabled_routes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "disabled_models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "milvus": {
+          "$ref": "#/$defs/MemoryMilvusConfig"
+        },
+        "valkey": {
+          "$ref": "#/$defs/MemoryValkeyConfig"
+        },
+        "qdrant": {
+          "$ref": "#/$defs/MemoryQdrantConfig"
+        },
+        "redis_cache": {
+          "$ref": "#/$defs/MemoryRedisCacheConfig"
+        },
+        "embedding_model": {
+          "type": "string"
+        },
+        "default_retrieval_limit": {
+          "type": "integer"
+        },
+        "default_similarity_threshold": {
+          "type": "number"
+        },
+        "hybrid_search": {
+          "type": "boolean"
+        },
+        "hybrid_mode": {
+          "type": "string"
+        },
+        "adaptive_threshold": {
+          "type": "boolean"
+        },
+        "reflection": {
+          "$ref": "#/$defs/MemoryReflectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryMilvusConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "dimension": {
+          "type": "integer"
+        },
+        "num_partitions": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "retrieval_limit": {
+          "type": "integer"
+        },
+        "similarity_threshold": {
+          "type": "number"
+        },
+        "auto_store": {
+          "type": "boolean"
+        },
+        "hybrid_search": {
+          "type": "boolean"
+        },
+        "hybrid_mode": {
+          "type": "string"
+        },
+        "reflection": {
+          "$ref": "#/$defs/MemoryReflectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryQdrantConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "use_tls": {
+          "type": "boolean"
+        },
+        "connect_timeout": {
+          "type": "integer"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "dimension": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryRedisCacheConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "address": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "db": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryReflectionConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "algorithm": {
+          "type": "string"
+        },
+        "max_inject_tokens": {
+          "type": "integer"
+        },
+        "recency_decay_days": {
+          "type": "integer"
+        },
+        "dedup_threshold": {
+          "type": "number"
+        },
+        "block_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryValkeyConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "database": {
+          "type": "integer"
+        },
+        "password": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "integer"
+        },
+        "collection_prefix": {
+          "type": "string"
+        },
+        "index_name": {
+          "type": "string"
+        },
+        "dimension": {
+          "type": "integer"
+        },
+        "metric_type": {
+          "type": "string"
+        },
+        "index_m": {
+          "type": "integer"
+        },
+        "index_ef_construction": {
+          "type": "integer"
+        },
+        "tls_enabled": {
+          "type": "boolean"
+        },
+        "tls_ca_path": {
+          "type": "string"
+        },
+        "tls_insecure_skip_verify": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MetadataPredicate": {
+      "properties": {
+        "equals": {
+          "type": "string"
+        },
+        "in": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "exists": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MetadataRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "predicate": {
+          "$ref": "#/$defs/MetadataPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MetricsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "windowed_metrics": {
+          "$ref": "#/$defs/WindowedMetricsConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MilvusConfig": {
+      "properties": {
+        "connection": {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "database": {
+              "type": "string"
+            },
+            "timeout": {
+              "type": "integer"
+            },
+            "auth": {
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "tls": {
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "cert_file": {
+                  "type": "string"
+                },
+                "key_file": {
+                  "type": "string"
+                },
+                "ca_file": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "collection": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "vector_field": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "dimension": {
+                  "type": "integer"
+                },
+                "metric_type": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "index": {
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "params": {
+                  "properties": {
+                    "M": {
+                      "type": "integer"
+                    },
+                    "efConstruction": {
+                      "type": "integer"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "type": "object"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "search": {
+          "properties": {
+            "params": {
+              "properties": {
+                "ef": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "topk": {
+              "type": "integer"
+            },
+            "consistency_level": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "logging": {
+          "properties": {
+            "level": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "development": {
+          "properties": {
+            "drop_collection_on_startup": {
+              "type": "boolean"
+            },
+            "auto_create_collection": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MissingPolicy": {
+      "properties": {
+        "policy": {
+          "type": "string"
+        },
+        "minimum": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Modalities": {
+      "properties": {
+        "input": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "output": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModalityClassifierConfig": {
+      "properties": {
+        "model_path": {
+          "type": "string"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModalityDetectorConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "method": {
+          "type": "string"
+        },
+        "classifier": {
+          "$ref": "#/$defs/ModalityClassifierConfig"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "both_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "confidence_threshold": {
+          "type": "number"
+        },
+        "lower_threshold_ratio": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModalityRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelDistribution": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelPricing": {
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "prompt_per_1m": {
+          "type": "number"
+        },
+        "completion_per_1m": {
+          "type": "number"
+        },
+        "cached_input_per_1m": {
+          "type": "number"
+        },
+        "cache_write_per_1m": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelRef": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "lora_name": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "number"
+        },
+        "use_reasoning": {
+          "type": "boolean"
+        },
+        "reasoning_description": {
+          "type": "string"
+        },
+        "reasoning_mode": {
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelScore": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "use_reasoning": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelSelectionConfig": {
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "router_dc": {
+          "$ref": "#/$defs/RouterDCSelectionConfig"
+        },
+        "automix": {
+          "$ref": "#/$defs/AutoMixSelectionConfig"
+        },
+        "hybrid": {
+          "$ref": "#/$defs/HybridSelectionConfig"
+        },
+        "ml": {
+          "$ref": "#/$defs/MLSelectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MultiFactorObjectiveConfig": {
+      "properties": {
+        "strategy": {
+          "type": "string"
+        },
+        "priorities": {
+          "items": {
+            "$ref": "#/$defs/MultiFactorPriorityConfig"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MultiFactorPriorityConfig": {
+      "properties": {
+        "factor": {
+          "type": "string"
+        },
+        "tolerance": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MultiFactorSLOConfig": {
+      "properties": {
+        "max_tpot_ms": {
+          "type": "number"
+        },
+        "max_ttft_ms": {
+          "type": "number"
+        },
+        "max_cost_per_1m": {
+          "type": "number"
+        },
+        "max_inflight": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MultiFactorSelectionConfig": {
+      "properties": {
+        "objective": {
+          "$ref": "#/$defs/MultiFactorObjectiveConfig"
+        },
+        "weights": {
+          "$ref": "#/$defs/MultiFactorWeightsConfig"
+        },
+        "slo": {
+          "$ref": "#/$defs/MultiFactorSLOConfig"
+        },
+        "quality": {
+          "$ref": "#/$defs/QualityEvidenceConfig"
+        },
+        "latency_percentile": {
+          "type": "integer"
+        },
+        "on_no_candidates": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MultiFactorWeightsConfig": {
+      "properties": {
+        "quality": {
+          "type": "number"
+        },
+        "latency": {
+          "type": "number"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "load": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Normalization": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "k": {
+          "type": "number"
+        },
+        "x0": {
+          "type": "number"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/NormalizationPoint"
+          },
+          "type": "array"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "NormalizationPoint": {
+      "properties": {
+        "input": {
+          "type": "number"
+        },
+        "output": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "NumericPredicate": {
+      "properties": {
+        "gt": {
+          "type": "number"
+        },
+        "gte": {
+          "type": "number"
+        },
+        "lt": {
+          "type": "number"
+        },
+        "lte": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ObservabilityConfig": {
+      "properties": {
+        "tracing": {
+          "$ref": "#/$defs/TracingConfig"
+        },
+        "metrics": {
+          "$ref": "#/$defs/MetricsConfig"
+        },
+        "profiling": {
+          "$ref": "#/$defs/ProfilingConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractChoiceSetSpec": {
+      "properties": {
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractExtractSpec": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractJSONSchemaSpec": {
+      "properties": {
+        "schema_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractNormalizeSpec": {
+      "properties": {
+        "defaults": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractPostprocess": {
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractReferenceSpec": {
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "id_format": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractRenderSpec": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "template": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OutputContractSpec": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "choice_set": {
+          "$ref": "#/$defs/OutputContractChoiceSetSpec"
+        },
+        "json_schema": {
+          "$ref": "#/$defs/OutputContractJSONSchemaSpec"
+        },
+        "reference": {
+          "$ref": "#/$defs/OutputContractReferenceSpec"
+        },
+        "render": {
+          "$ref": "#/$defs/OutputContractRenderSpec"
+        },
+        "extract": {
+          "$ref": "#/$defs/OutputContractExtractSpec"
+        },
+        "normalize": {
+          "$ref": "#/$defs/OutputContractNormalizeSpec"
+        },
+        "postprocess": {
+          "items": {
+            "$ref": "#/$defs/OutputContractPostprocess"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PIIRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "pii_types_allowed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "include_history": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PolarityGuardConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "nli": {
+          "$ref": "#/$defs/PolarityGuardNLIConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PolarityGuardNLIConfig": {
+      "properties": {
+        "contradiction_threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PreferenceModelConfig": {
+      "properties": {
+        "use_contrastive": {
+          "type": "boolean"
+        },
+        "embedding_model": {
+          "type": "string"
+        },
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PreferenceRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "examples": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProfilingConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "bind": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProjectionMapping": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "calibration": {
+          "$ref": "#/$defs/ProjectionMappingCalibration"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/ProjectionMappingOutput"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProjectionMappingCalibration": {
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "slope": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProjectionMappingOutput": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "lt": {
+          "type": "number"
+        },
+        "lte": {
+          "type": "number"
+        },
+        "gt": {
+          "type": "number"
+        },
+        "gte": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProjectionPartition": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "semantics": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProjectionScore": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/ProjectionScoreInput"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProjectionScoreInput": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "embedding",
+            "domain",
+            "fact_check",
+            "user_feedback",
+            "reask",
+            "preference",
+            "language",
+            "context",
+            "structure",
+            "complexity",
+            "modality",
+            "authz",
+            "jailbreak",
+            "pii",
+            "kb",
+            "conversation",
+            "event",
+            "input_modality",
+            "kb_metric",
+            "projection"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "kb": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "number"
+        },
+        "value_source": {
+          "type": "string"
+        },
+        "match": {
+          "type": "number"
+        },
+        "miss": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PromptCompressionConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "max_tokens": {
+          "type": "integer"
+        },
+        "min_length": {
+          "type": "integer"
+        },
+        "skip_signals": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "textrank_weight": {
+          "type": "number"
+        },
+        "position_weight": {
+          "type": "number"
+        },
+        "tfidf_weight": {
+          "type": "number"
+        },
+        "novelty_weight": {
+          "type": "number"
+        },
+        "position_depth": {
+          "type": "number"
+        },
+        "preserve_first_n": {
+          "type": "integer"
+        },
+        "preserve_last_n": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PromptSelectionConfig": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PrototypeScoringConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cluster_similarity_threshold": {
+          "type": "number"
+        },
+        "max_prototypes": {
+          "type": "integer"
+        },
+        "best_weight": {
+          "type": "number"
+        },
+        "top_m": {
+          "type": "integer"
+        },
+        "margin_threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProviderPresentation": {
+      "properties": {
+        "logo": {
+          "type": "string"
+        },
+        "monogram": {
+          "type": "string"
+        },
+        "monochrome": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProviderReliability": {
+      "properties": {
+        "lb_policy": {
+          "type": "string"
+        },
+        "retry_count": {
+          "type": "integer"
+        },
+        "retry_on": {
+          "type": "string"
+        },
+        "consecutive_5xx": {
+          "type": "integer"
+        },
+        "base_ejection_time": {
+          "type": "string"
+        },
+        "max_ejection_percent": {
+          "type": "integer"
+        },
+        "health_check_path": {
+          "type": "string"
+        },
+        "health_check_interval": {
+          "type": "string"
+        },
+        "health_check_timeout": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "QdrantConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "use_tls": {
+          "type": "boolean"
+        },
+        "connect_timeout": {
+          "type": "integer"
+        },
+        "collection_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "QdrantVectorStoreConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "use_tls": {
+          "type": "boolean"
+        },
+        "connect_timeout": {
+          "type": "integer"
+        },
+        "collection_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "QualityEvidenceConfig": {
+      "properties": {
+        "index": {
+          "type": "string"
+        },
+        "on_missing": {
+          "type": "string"
+        },
+        "min_coverage": {
+          "type": "number"
+        },
+        "min_score": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RAGPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "similarity_threshold": {
+          "type": "number"
+        },
+        "top_k": {
+          "type": "integer"
+        },
+        "max_context_length": {
+          "type": "integer"
+        },
+        "injection_mode": {
+          "type": "string"
+        },
+        "backend_config": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "on_failure": {
+          "type": "string"
+        },
+        "cache_results": {
+          "type": "boolean"
+        },
+        "cache_ttl_seconds": {
+          "type": "integer"
+        },
+        "min_confidence_threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RateLimitConfig": {
+      "properties": {
+        "fail_open": {
+          "type": "boolean"
+        },
+        "providers": {
+          "items": {
+            "$ref": "#/$defs/RateLimitProviderConfig"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RateLimitMatch": {
+      "properties": {
+        "user": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RateLimitProviderConfig": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RateLimitRule"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RateLimitRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/$defs/RateLimitMatch"
+        },
+        "requests_per_unit": {
+          "type": "integer"
+        },
+        "tokens_per_unit": {
+          "type": "integer"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RatingsAlgorithmConfig": {
+      "properties": {
+        "max_concurrent": {
+          "type": "integer"
+        },
+        "on_error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ReMoMAlgorithmConfig": {
+      "properties": {
+        "breadth_schedule": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "model_distribution": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "include_reasoning": {
+          "type": "boolean"
+        },
+        "compaction_strategy": {
+          "type": "string"
+        },
+        "compaction_tokens": {
+          "type": "integer"
+        },
+        "synthesis_template": {
+          "type": "string"
+        },
+        "synthesis_model": {
+          "type": "string"
+        },
+        "max_concurrent": {
+          "type": "integer"
+        },
+        "max_completion_tokens": {
+          "type": "integer"
+        },
+        "round_timeout_seconds": {
+          "type": "integer"
+        },
+        "min_successful_responses": {
+          "type": "integer"
+        },
+        "on_error": {
+          "type": "string"
+        },
+        "shuffle_seed": {
+          "type": "integer"
+        },
+        "include_intermediate_responses": {
+          "type": "boolean"
+        },
+        "max_responses_per_round": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ReMoMRuntimeConfig": {
+      "properties": {
+        "model_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ReaskRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "lookback_turns": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RedisConfig": {
+      "properties": {
+        "connection": {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "database": {
+              "type": "integer"
+            },
+            "password": {
+              "type": "string"
+            },
+            "timeout": {
+              "type": "integer"
+            },
+            "tls": {
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "cert_file": {
+                  "type": "string"
+                },
+                "key_file": {
+                  "type": "string"
+                },
+                "ca_file": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "index": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "vector_field": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "dimension": {
+                  "type": "integer"
+                },
+                "metric_type": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "index_type": {
+              "type": "string"
+            },
+            "params": {
+              "properties": {
+                "M": {
+                  "type": "integer"
+                },
+                "efConstruction": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "search": {
+          "properties": {
+            "topk": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "development": {
+          "properties": {
+            "drop_index_on_startup": {
+              "type": "boolean"
+            },
+            "auto_create_index": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "logging": {
+          "properties": {
+            "level": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RemoteClassifierBackend": {
+      "properties": {
+        "protocol": {
+          "type": "string"
+        },
+        "contract": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "deadline_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RequestParamsPluginConfig": {
+      "properties": {
+        "blocked_params": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_tokens_limit": {
+          "type": "integer"
+        },
+        "max_n": {
+          "type": "integer"
+        },
+        "strip_unknown": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseAPIConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "store_backend": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "max_responses": {
+          "type": "integer"
+        },
+        "redis": {
+          "$ref": "#/$defs/ResponseAPIRedisConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseAPIRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "db": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        },
+        "cluster_mode": {
+          "type": "boolean"
+        },
+        "cluster_addresses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pool_size": {
+          "type": "integer"
+        },
+        "min_idle_conns": {
+          "type": "integer"
+        },
+        "max_retries": {
+          "type": "integer"
+        },
+        "dial_timeout": {
+          "type": "integer"
+        },
+        "read_timeout": {
+          "type": "integer"
+        },
+        "write_timeout": {
+          "type": "integer"
+        },
+        "tls_enabled": {
+          "type": "boolean"
+        },
+        "tls_cert_path": {
+          "type": "string"
+        },
+        "tls_key_path": {
+          "type": "string"
+        },
+        "tls_ca_path": {
+          "type": "string"
+        },
+        "config_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseCachePersonalizedConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseCachePluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "semantic": {
+          "$ref": "#/$defs/ResponseCacheSemanticConfig"
+        },
+        "request_controls": {
+          "$ref": "#/$defs/ResponseCacheRequestControlsConfig"
+        },
+        "personalized": {
+          "$ref": "#/$defs/ResponseCachePersonalizedConfig"
+        },
+        "revision": {
+          "$ref": "#/$defs/ResponseCacheRevisionConfig"
+        },
+        "allow_request_controls": {
+          "type": "boolean"
+        },
+        "control_header": {
+          "type": "string"
+        },
+        "similarity_threshold": {
+          "type": "number"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseCacheRequestControlsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string"
+        },
+        "allowed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_ttl_seconds": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseCacheRevisionConfig": {
+      "properties": {
+        "cache_epoch": {
+          "type": "string"
+        },
+        "model_revision": {
+          "type": "string"
+        },
+        "prompt_revision": {
+          "type": "string"
+        },
+        "policy_revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseCacheSemanticConfig": {
+      "properties": {
+        "similarity_threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseCacheStoreConfig": {
+      "properties": {
+        "backend_type": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "similarity_threshold": {
+          "type": "number"
+        },
+        "max_entries": {
+          "type": "integer"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "eviction_policy": {
+          "type": "string"
+        },
+        "redis": {
+          "$ref": "#/$defs/RedisConfig"
+        },
+        "valkey": {
+          "$ref": "#/$defs/ValkeyConfig"
+        },
+        "milvus": {
+          "$ref": "#/$defs/MilvusConfig"
+        },
+        "qdrant": {
+          "$ref": "#/$defs/QdrantConfig"
+        },
+        "embedding_model": {
+          "type": "string"
+        },
+        "polarity_guard": {
+          "$ref": "#/$defs/PolarityGuardConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResponseJailbreakPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "action": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RetentionDirective": {
+      "properties": {
+        "drop": {
+          "type": "boolean"
+        },
+        "ttl_turns": {
+          "type": "integer"
+        },
+        "keep_current_model": {
+          "type": "boolean"
+        },
+        "prefer_prefix_retention": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RoleBinding": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "subjects": {
+          "items": {
+            "$ref": "#/$defs/Subject"
+          },
+          "type": "array"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterDCSelectionConfig": {
+      "properties": {
+        "temperature": {
+          "type": "number"
+        },
+        "dimension_size": {
+          "type": "integer"
+        },
+        "min_similarity": {
+          "type": "number"
+        },
+        "use_query_contrastive": {
+          "type": "boolean"
+        },
+        "use_model_contrastive": {
+          "type": "boolean"
+        },
+        "require_descriptions": {
+          "type": "boolean"
+        },
+        "use_capabilities": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningAdaptationConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "candidate_set": {
+          "type": "string",
+          "enum": [
+            "",
+            "decision",
+            "tier",
+            "global"
+          ]
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "",
+            "routing_sampling"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "adaptation": {
+          "$ref": "#/$defs/RouterLearningAdaptationConfig"
+        },
+        "protection": {
+          "$ref": "#/$defs/RouterLearningProtectionConfig"
+        },
+        "state_store": {
+          "$ref": "#/$defs/RouterLearningStateStoreConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningIdentityConfig": {
+      "properties": {
+        "headers": {
+          "$ref": "#/$defs/RouterLearningIdentityHeadersConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningIdentityHeadersConfig": {
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningProtectionConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "",
+            "conversation",
+            "session"
+          ]
+        },
+        "identity": {
+          "$ref": "#/$defs/RouterLearningIdentityConfig"
+        },
+        "tuning": {
+          "$ref": "#/$defs/RouterLearningProtectionTuning"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningProtectionTuning": {
+      "properties": {
+        "idle_timeout_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_turns_before_switch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "switch_margin": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stability_weight": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningRedisStateStoreConfig": {
+      "properties": {
+        "address": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string"
+        },
+        "database": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "key_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "address"
+      ]
+    },
+    "RouterLearningStateStoreConfig": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "backend": {
+                "const": "redis"
+              }
+            },
+            "required": [
+              "backend"
+            ]
+          },
+          "then": {
+            "required": [
+              "redis"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": [
+            "",
+            "local",
+            "redis"
+          ]
+        },
+        "ttl_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "redis": {
+          "$ref": "#/$defs/RouterLearningRedisStateStoreConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterReplayConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "store_backend": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "async_writes": {
+          "type": "boolean"
+        },
+        "redis": {
+          "$ref": "#/$defs/RouterReplayRedisConfig"
+        },
+        "postgres": {
+          "$ref": "#/$defs/RouterReplayPostgresConfig"
+        },
+        "milvus": {
+          "$ref": "#/$defs/RouterReplayMilvusConfig"
+        },
+        "qdrant": {
+          "$ref": "#/$defs/RouterReplayQdrantConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterReplayMilvusConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "collection_name": {
+          "type": "string"
+        },
+        "consistency_level": {
+          "type": "string"
+        },
+        "shard_num": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterReplayPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_records": {
+          "type": "integer"
+        },
+        "capture_request_body": {
+          "type": "boolean"
+        },
+        "capture_response_body": {
+          "type": "boolean"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_bytes": {
+          "type": "integer"
+        },
+        "max_tool_trace_steps": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterReplayPostgresConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "database": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "ssl_mode": {
+          "type": "string"
+        },
+        "max_open_conns": {
+          "type": "integer"
+        },
+        "max_idle_conns": {
+          "type": "integer"
+        },
+        "conn_max_lifetime": {
+          "type": "integer"
+        },
+        "table_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterReplayQdrantConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "use_tls": {
+          "type": "boolean"
+        },
+        "collection_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterReplayRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "db": {
+          "type": "integer"
+        },
+        "password": {
+          "type": "string"
+        },
+        "use_tls": {
+          "type": "boolean"
+        },
+        "tls_skip_verify": {
+          "type": "boolean"
+        },
+        "max_retries": {
+          "type": "integer"
+        },
+        "pool_size": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RoutingModel": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "presentation": {
+          "$ref": "#/$defs/ProviderPresentation"
+        },
+        "distribution": {
+          "$ref": "#/$defs/ModelDistribution"
+        },
+        "family": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "released_at": {
+          "type": "string"
+        },
+        "knowledge_cutoff": {
+          "type": "string"
+        },
+        "lifecycle": {
+          "type": "string"
+        },
+        "param_size": {
+          "type": "string"
+        },
+        "context_window_size": {
+          "type": "integer"
+        },
+        "max_output_tokens": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "loras": {
+          "items": {
+            "$ref": "#/$defs/LoRAAdapter"
+          },
+          "type": "array"
+        },
+        "modalities": {
+          "$ref": "#/$defs/Modalities"
+        },
+        "modality": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RuleNode": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "authz",
+            "classifier",
+            "complexity",
+            "context",
+            "conversation",
+            "domain",
+            "embedding",
+            "event",
+            "fact_check",
+            "input_modality",
+            "jailbreak",
+            "kb",
+            "keyword",
+            "language",
+            "metadata",
+            "modality",
+            "pii",
+            "preference",
+            "reask",
+            "structure",
+            "user_feedback",
+            "projection"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "on_error": {
+          "type": "string"
+        },
+        "on_unknown": {
+          "type": "string",
+          "enum": [
+            "no_match",
+            "match",
+            "fail_request"
+          ]
+        },
+        "operator": {
+          "type": "string"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/RuleNode"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowDispatchPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "sample_rate": {
+          "type": "number"
+        },
+        "max_concurrency": {
+          "type": "integer"
+        },
+        "max_queue_depth": {
+          "type": "integer"
+        },
+        "timeout_seconds": {
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "type": "integer"
+        },
+        "max_retries": {
+          "type": "integer"
+        },
+        "capture_response_body": {
+          "type": "boolean"
+        },
+        "max_capture_bytes": {
+          "type": "integer"
+        },
+        "tls_skip_verify": {
+          "type": "boolean"
+        },
+        "forward_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SkipProcessingConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "StartupStatusConfig": {
+      "properties": {
+        "store_backend": {
+          "type": "string"
+        },
+        "redis": {
+          "$ref": "#/$defs/StartupStatusRedisConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "StartupStatusRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "db": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "StructureFeature": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/StructureSource"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "StructureRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "feature": {
+          "$ref": "#/$defs/StructureFeature"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "StructureSource": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "case_sensitive": {
+          "type": "boolean"
+        },
+        "sequences": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Subject": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SystemPromptPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "system_prompt": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolFilteringWeights": {
+      "properties": {
+        "embed": {
+          "type": "number"
+        },
+        "lexical": {
+          "type": "number"
+        },
+        "tag": {
+          "type": "number"
+        },
+        "name": {
+          "type": "number"
+        },
+        "category": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSelectionPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "tools_db_path": {
+          "type": "string"
+        },
+        "top_k": {
+          "type": "integer"
+        },
+        "similarity_threshold": {
+          "type": "number"
+        },
+        "advanced_filtering": {
+          "$ref": "#/$defs/AdvancedToolFilteringConfig"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "fallback_to_empty": {
+          "type": "boolean"
+        },
+        "relevance_threshold": {
+          "type": "number"
+        },
+        "preserve_count": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "top_k": {
+          "type": "integer"
+        },
+        "similarity_threshold": {
+          "type": "number"
+        },
+        "tools_db_path": {
+          "type": "string"
+        },
+        "fallback_to_empty": {
+          "type": "boolean"
+        },
+        "advanced_filtering": {
+          "$ref": "#/$defs/AdvancedToolFilteringConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolsPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "semantic_selection": {
+          "type": "boolean"
+        },
+        "allow_tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "block_tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "strip_tool_history": {
+          "type": "boolean"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "dynamic_retrieval": {
+          "$ref": "#/$defs/DynamicRetrievalConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TracingConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "exporter": {
+          "$ref": "#/$defs/TracingExporterConfig"
+        },
+        "sampling": {
+          "$ref": "#/$defs/TracingSamplingConfig"
+        },
+        "resource": {
+          "$ref": "#/$defs/TracingResourceConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TracingExporterConfig": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "insecure": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TracingResourceConfig": {
+      "properties": {
+        "service_name": {
+          "type": "string"
+        },
+        "service_version": {
+          "type": "string"
+        },
+        "deployment_environment": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TracingSamplingConfig": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "rate": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "UserFeedbackRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ValkeyConfig": {
+      "properties": {
+        "connection": {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "database": {
+              "type": "integer"
+            },
+            "password": {
+              "type": "string"
+            },
+            "timeout": {
+              "type": "integer"
+            },
+            "tls": {
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "cert_file": {
+                  "type": "string"
+                },
+                "key_file": {
+                  "type": "string"
+                },
+                "ca_file": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "index": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "vector_field": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "dimension": {
+                  "type": "integer"
+                },
+                "metric_type": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "index_type": {
+              "type": "string"
+            },
+            "params": {
+              "properties": {
+                "M": {
+                  "type": "integer"
+                },
+                "efConstruction": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "search": {
+          "properties": {
+            "topk": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "development": {
+          "properties": {
+            "drop_index_on_startup": {
+              "type": "boolean"
+            },
+            "auto_create_index": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "logging": {
+          "properties": {
+            "level": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ValkeyVectorStoreConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "database": {
+          "type": "integer"
+        },
+        "password": {
+          "type": "string"
+        },
+        "connect_timeout": {
+          "type": "integer"
+        },
+        "collection_prefix": {
+          "type": "string"
+        },
+        "metric_type": {
+          "type": "string"
+        },
+        "index_m": {
+          "type": "integer"
+        },
+        "index_ef_construction": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "VectorStoreConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend_type": {
+          "type": "string"
+        },
+        "file_storage_dir": {
+          "type": "string"
+        },
+        "max_file_size_mb": {
+          "type": "integer"
+        },
+        "embedding_model": {
+          "type": "string"
+        },
+        "embedding_dimension": {
+          "type": "integer"
+        },
+        "ingestion_workers": {
+          "type": "integer"
+        },
+        "ingestion_drain_timeout_seconds": {
+          "type": "integer"
+        },
+        "supported_formats": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "milvus": {
+          "$ref": "#/$defs/MilvusConfig"
+        },
+        "memory": {
+          "$ref": "#/$defs/VectorStoreMemoryConfig"
+        },
+        "llama_stack": {
+          "$ref": "#/$defs/LlamaStackVectorStoreConfig"
+        },
+        "valkey": {
+          "$ref": "#/$defs/ValkeyVectorStoreConfig"
+        },
+        "qdrant": {
+          "$ref": "#/$defs/QdrantVectorStoreConfig"
+        },
+        "metadata_store": {
+          "type": "string"
+        },
+        "metadata_postgres": {
+          "$ref": "#/$defs/VectorStoreMetadataPostgresConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "VectorStoreMemoryConfig": {
+      "properties": {
+        "max_entries_per_store": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "VectorStoreMetadataPostgresConfig": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "database": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "ssl_mode": {
+          "type": "string"
+        },
+        "max_open_conns": {
+          "type": "integer"
+        },
+        "max_idle_conns": {
+          "type": "integer"
+        },
+        "conn_max_lifetime": {
+          "type": "integer"
+        },
+        "table_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WindowedMetricsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "time_windows": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "update_interval": {
+          "type": "string"
+        },
+        "queue_depth_estimation": {
+          "type": "boolean"
+        },
+        "max_models": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkflowFinalConfig": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkflowPlannerConfig": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "max_completion_tokens": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkflowRoleConfig": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "access_list": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkflowStateFileConfig": {
+      "properties": {
+        "directory": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkflowStateRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "db": {
+          "type": "integer"
+        },
+        "password": {
+          "type": "string"
+        },
+        "use_tls": {
+          "type": "boolean"
+        },
+        "tls_skip_verify": {
+          "type": "boolean"
+        },
+        "max_retries": {
+          "type": "integer"
+        },
+        "pool_size": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkflowStateRuntimeConfig": {
+      "properties": {
+        "store_backend": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "file": {
+          "$ref": "#/$defs/WorkflowStateFileConfig"
+        },
+        "redis": {
+          "$ref": "#/$defs/WorkflowStateRedisConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkflowsAlgorithmConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "template": {
+          "type": "string"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/WorkflowRoleConfig"
+          },
+          "type": "array"
+        },
+        "final": {
+          "$ref": "#/$defs/WorkflowFinalConfig"
+        },
+        "planner": {
+          "$ref": "#/$defs/WorkflowPlannerConfig"
+        },
+        "max_steps": {
+          "type": "integer"
+        },
+        "max_parallel": {
+          "type": "integer"
+        },
+        "max_completion_tokens": {
+          "type": "integer"
+        },
+        "round_timeout_seconds": {
+          "type": "integer"
+        },
+        "min_successful_responses": {
+          "type": "integer"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "include_intermediate_responses": {
+          "type": "boolean"
+        },
+        "on_error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    }
+  },
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v0.3"
+    },
+    "listeners": {
+      "items": {
+        "$ref": "#/$defs/Listener"
+      },
+      "type": "array"
+    },
+    "providers": {
+      "$ref": "#/$defs/CanonicalProviders"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/CanonicalEvaluation"
+    },
+    "routing": {
+      "$ref": "#/$defs/CanonicalRouting"
+    },
+    "entrypoints": {
+      "items": {
+        "$ref": "#/$defs/CanonicalEntrypoint"
+      },
+      "type": "array"
+    },
+    "recipes": {
+      "items": {
+        "$ref": "#/$defs/CanonicalRecipe"
+      },
+      "type": "array"
+    },
+    "global": {
+      "$ref": "#/$defs/CanonicalGlobal"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "title": "vLLM Semantic Router canonical configuration",
+  "description": "Canonical v0.3 Router configuration. JSON Schema validates document structure; the Router validation endpoint applies cross-field, reference, and runtime semantic checks.",
+  "x-vllm-sr": {
+    "contract_version": "vllm-sr/config-schema/v1",
+    "config_version": "v0.3",
+    "schema_endpoint": "/api/v1/config/schema",
+    "validation": {
+      "structural": "json-schema-draft-2020-12",
+      "semantic": "router",
+      "endpoint": "/api/v1/config/validate"
+    },
+    "signals": [
+      {
+        "type": "keyword",
+        "display_name": "Keywords",
+        "collection": "keywords",
+        "observation_key": "keywords",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/KeywordRule"
+      },
+      {
+        "type": "embedding",
+        "display_name": "Embeddings",
+        "collection": "embeddings",
+        "observation_key": "embeddings",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/EmbeddingRule"
+      },
+      {
+        "type": "domain",
+        "display_name": "Domain",
+        "collection": "domains",
+        "observation_key": "domains",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/Category"
+      },
+      {
+        "type": "fact_check",
+        "display_name": "Fact Check",
+        "collection": "fact_check",
+        "observation_key": "fact_check",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/FactCheckRule"
+      },
+      {
+        "type": "user_feedback",
+        "display_name": "User Feedback",
+        "collection": "user_feedbacks",
+        "observation_key": "user_feedback",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/UserFeedbackRule"
+      },
+      {
+        "type": "reask",
+        "display_name": "Reask",
+        "collection": "reasks",
+        "observation_key": "reask",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ReaskRule"
+      },
+      {
+        "type": "preference",
+        "display_name": "Preference",
+        "collection": "preferences",
+        "observation_key": "preferences",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/PreferenceRule"
+      },
+      {
+        "type": "language",
+        "display_name": "Language",
+        "collection": "language",
+        "observation_key": "language",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/LanguageRule"
+      },
+      {
+        "type": "context",
+        "display_name": "Context",
+        "collection": "context",
+        "observation_key": "context",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ContextRule"
+      },
+      {
+        "type": "structure",
+        "display_name": "Structure",
+        "collection": "structure",
+        "observation_key": "structure",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/StructureRule"
+      },
+      {
+        "type": "complexity",
+        "display_name": "Complexity",
+        "collection": "complexity",
+        "observation_key": "complexity",
+        "decision_referenceable": true,
+        "reference_suffixes": [
+          "easy",
+          "medium",
+          "hard"
+        ],
+        "reference_qualifier": "fixed_suffix",
+        "schema_ref": "#/$defs/ComplexityRule"
+      },
+      {
+        "type": "modality",
+        "display_name": "Modality",
+        "collection": "modality",
+        "observation_key": "modality",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ModalityRule"
+      },
+      {
+        "type": "authz",
+        "display_name": "Authz",
+        "collection": "role_bindings",
+        "observation_key": "authz",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/RoleBinding"
+      },
+      {
+        "type": "jailbreak",
+        "display_name": "Jailbreak",
+        "collection": "jailbreak",
+        "observation_key": "jailbreak",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/JailbreakRule"
+      },
+      {
+        "type": "hallucination",
+        "display_name": "Hallucination",
+        "collection": "hallucination",
+        "decision_referenceable": false,
+        "schema_ref": "#/$defs/HallucinationRule"
+      },
+      {
+        "type": "pii",
+        "display_name": "PII",
+        "collection": "pii",
+        "observation_key": "pii",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/PIIRule"
+      },
+      {
+        "type": "kb",
+        "display_name": "KB",
+        "collection": "kb",
+        "observation_key": "kb",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/KBSignalRule"
+      },
+      {
+        "type": "conversation",
+        "display_name": "Conversation",
+        "collection": "conversation",
+        "observation_key": "conversation",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/ConversationRule"
+      },
+      {
+        "type": "event",
+        "display_name": "Event",
+        "collection": "events",
+        "observation_key": "event",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/EventRule"
+      },
+      {
+        "type": "metadata",
+        "display_name": "Metadata",
+        "collection": "metadata",
+        "observation_key": "metadata",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/MetadataRule"
+      },
+      {
+        "type": "classifier",
+        "display_name": "Classifier",
+        "collection": "classifiers",
+        "observation_key": "classifier",
+        "decision_referenceable": true,
+        "reference_qualifier": "label",
+        "schema_ref": "#/$defs/ClassifierSignalRule"
+      },
+      {
+        "type": "input_modality",
+        "display_name": "Input Modality",
+        "collection": "input_modality",
+        "observation_key": "input_modality",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/InputModalityRule"
+      }
+    ],
+    "algorithms": [
+      {
+        "type": "automix",
+        "display_name": "AutoMix",
+        "description": "Optimize a cost-quality escalation policy.",
+        "tier": "experimental",
+        "execution": "selector",
+        "config_field": "automix",
+        "schema_ref": "#/$defs/AutoMixSelectionConfig"
+      },
+      {
+        "type": "confidence",
+        "display_name": "Confidence",
+        "description": "Escalate across candidate models until confidence is sufficient.",
+        "tier": "supported",
+        "execution": "looper",
+        "config_field": "confidence",
+        "schema_ref": "#/$defs/ConfidenceAlgorithmConfig"
+      },
+      {
+        "type": "fusion",
+        "display_name": "Fusion",
+        "description": "Run a parallel panel and synthesize a judged final response.",
+        "tier": "experimental",
+        "execution": "looper",
+        "config_field": "fusion",
+        "schema_ref": "#/$defs/FusionAlgorithmConfig"
+      },
+      {
+        "type": "hybrid",
+        "display_name": "Hybrid",
+        "description": "Combine experience, similarity, AutoMix, and cost signals.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "hybrid",
+        "schema_ref": "#/$defs/HybridSelectionConfig"
+      },
+      {
+        "type": "kmeans",
+        "display_name": "K-Means",
+        "description": "Select a model with the shared K-Means classifier.",
+        "tier": "experimental",
+        "execution": "selector"
+      },
+      {
+        "type": "knn",
+        "display_name": "KNN",
+        "description": "Select a model with the shared nearest-neighbor classifier.",
+        "tier": "experimental",
+        "execution": "selector"
+      },
+      {
+        "type": "latency_aware",
+        "display_name": "Latency Aware",
+        "description": "Select against configured latency percentiles.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "latency_aware",
+        "schema_ref": "#/$defs/LatencyAwareAlgorithmConfig"
+      },
+      {
+        "type": "mlp",
+        "display_name": "MLP",
+        "description": "Select a model with the shared neural classifier.",
+        "tier": "experimental",
+        "execution": "selector"
+      },
+      {
+        "type": "multi_factor",
+        "display_name": "Multi Factor",
+        "description": "Score quality, latency, cost, and load under optional SLOs.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "multi_factor",
+        "schema_ref": "#/$defs/MultiFactorSelectionConfig"
+      },
+      {
+        "type": "ratings",
+        "display_name": "Ratings",
+        "description": "Execute a bounded candidate set and return comparable choices.",
+        "tier": "supported",
+        "execution": "looper",
+        "config_field": "ratings",
+        "schema_ref": "#/$defs/RatingsAlgorithmConfig"
+      },
+      {
+        "type": "remom",
+        "display_name": "ReMoM",
+        "description": "Run multi-round parallel reasoning and synthesis.",
+        "tier": "supported",
+        "execution": "looper",
+        "config_field": "remom",
+        "schema_ref": "#/$defs/ReMoMAlgorithmConfig"
+      },
+      {
+        "type": "router_dc",
+        "display_name": "RouterDC",
+        "description": "Match the request to candidate descriptions with dual contrastive embeddings.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "router_dc",
+        "schema_ref": "#/$defs/RouterDCSelectionConfig"
+      },
+      {
+        "type": "static",
+        "display_name": "Static",
+        "description": "Select from configured candidate order and weights.",
+        "tier": "supported",
+        "execution": "selector"
+      },
+      {
+        "type": "svm",
+        "display_name": "SVM",
+        "description": "Select a model with the shared support-vector classifier.",
+        "tier": "experimental",
+        "execution": "selector"
+      },
+      {
+        "type": "workflows",
+        "display_name": "Workflows",
+        "description": "Execute a static or dynamically planned Router Flow.",
+        "tier": "experimental",
+        "execution": "looper",
+        "config_field": "workflows",
+        "schema_ref": "#/$defs/WorkflowsAlgorithmConfig"
+      },
+      {
+        "type": "prompt",
+        "display_name": "Prompt",
+        "description": "Use a helper model to select one declared candidate.",
+        "tier": "experimental",
+        "execution": "selector",
+        "config_field": "prompt",
+        "payload_shape": "nested",
+        "schema_ref": "#/$defs/PromptSelectionConfig"
+      }
+    ],
+    "plugins": [
+      {
+        "type": "response_cache",
+        "display_name": "Response Cache",
+        "description": "Reuse exact or semantically compatible responses.",
+        "schema_ref": "#/$defs/ResponseCachePluginConfig"
+      },
+      {
+        "type": "memory",
+        "display_name": "Memory",
+        "description": "Retrieve and store persistent conversation memory.",
+        "schema_ref": "#/$defs/MemoryPluginConfig"
+      },
+      {
+        "type": "system_prompt",
+        "display_name": "System Prompt",
+        "description": "Insert or replace the system prompt.",
+        "schema_ref": "#/$defs/SystemPromptPluginConfig"
+      },
+      {
+        "type": "header_mutation",
+        "display_name": "Header Mutation",
+        "description": "Add, update, or remove provider-bound headers.",
+        "schema_ref": "#/$defs/HeaderMutationPluginConfig"
+      },
+      {
+        "type": "hallucination",
+        "display_name": "Hallucination",
+        "description": "Apply response hallucination handling.",
+        "schema_ref": "#/$defs/HallucinationPluginConfig"
+      },
+      {
+        "type": "router_replay",
+        "display_name": "Router Replay",
+        "description": "Capture bounded request and response replay evidence.",
+        "schema_ref": "#/$defs/RouterReplayPluginConfig"
+      },
+      {
+        "type": "rag",
+        "display_name": "RAG",
+        "description": "Retrieve external context and inject it into the request.",
+        "schema_ref": "#/$defs/RAGPluginConfig"
+      },
+      {
+        "type": "fast_response",
+        "display_name": "Fast Response",
+        "description": "Return a fixed response without calling an upstream model.",
+        "schema_ref": "#/$defs/FastResponsePluginConfig"
+      },
+      {
+        "type": "tools",
+        "display_name": "Tools",
+        "description": "Apply route-local tool filtering and selection.",
+        "schema_ref": "#/$defs/ToolsPluginConfig"
+      },
+      {
+        "type": "tool_selection",
+        "display_name": "Tool Selection",
+        "description": "Add or filter tools using semantic retrieval.",
+        "schema_ref": "#/$defs/ToolSelectionPluginConfig"
+      },
+      {
+        "type": "request_params",
+        "display_name": "Request Parameters",
+        "description": "Constrain or remove provider request parameters.",
+        "schema_ref": "#/$defs/RequestParamsPluginConfig"
+      },
+      {
+        "type": "response_jailbreak",
+        "display_name": "Response Jailbreak",
+        "description": "Screen generated responses for jailbreak-like output.",
+        "schema_ref": "#/$defs/ResponseJailbreakPluginConfig"
+      },
+      {
+        "type": "context_compression",
+        "display_name": "Context Compression",
+        "description": "Compress selected context before provider dispatch.",
+        "schema_ref": "#/$defs/ContextCompressionPluginConfig"
+      },
+      {
+        "type": "shadow_dispatch",
+        "display_name": "Shadow Dispatch",
+        "description": "Send a bounded asynchronous copy to a secondary model.",
+        "schema_ref": "#/$defs/ShadowDispatchPluginConfig"
+      }
+    ],
+    "projections": [
+      {
+        "collection": "partitions",
+        "display_name": "Partitions",
+        "schema_ref": "#/$defs/ProjectionPartition"
+      },
+      {
+        "collection": "scores",
+        "display_name": "Scores",
+        "schema_ref": "#/$defs/ProjectionScore"
+      },
+      {
+        "collection": "mappings",
+        "display_name": "Mappings",
+        "schema_ref": "#/$defs/ProjectionMapping"
+      }
+    ],
+    "projection_input_types": [
+      "keyword",
+      "embedding",
+      "domain",
+      "fact_check",
+      "user_feedback",
+      "reask",
+      "preference",
+      "language",
+      "context",
+      "structure",
+      "complexity",
+      "modality",
+      "authz",
+      "jailbreak",
+      "pii",
+      "kb",
+      "conversation",
+      "event",
+      "input_modality",
+      "kb_metric",
+      "projection"
+    ],
+    "global_sections": [
+      {
+        "key": "router",
+        "layer": "router",
+        "display_name": "Router Core",
+        "path": [
+          "router"
+        ]
+      },
+      {
+        "key": "api",
+        "layer": "services",
+        "display_name": "API",
+        "path": [
+          "services",
+          "api"
+        ]
+      },
+      {
+        "key": "response_api",
+        "layer": "services",
+        "display_name": "Response API",
+        "path": [
+          "services",
+          "response_api"
+        ]
+      },
+      {
+        "key": "observability",
+        "layer": "services",
+        "display_name": "Observability",
+        "path": [
+          "services",
+          "observability"
+        ]
+      },
+      {
+        "key": "authz",
+        "layer": "services",
+        "display_name": "Authz",
+        "path": [
+          "services",
+          "authz"
+        ]
+      },
+      {
+        "key": "ratelimit",
+        "layer": "services",
+        "display_name": "Ratelimit",
+        "path": [
+          "services",
+          "ratelimit"
+        ]
+      },
+      {
+        "key": "management_api",
+        "layer": "services",
+        "display_name": "Management API",
+        "path": [
+          "services",
+          "management_api"
+        ]
+      },
+      {
+        "key": "router_replay",
+        "layer": "services",
+        "display_name": "Router Replay",
+        "path": [
+          "services",
+          "router_replay"
+        ]
+      },
+      {
+        "key": "startup_status",
+        "layer": "services",
+        "display_name": "Startup Status",
+        "path": [
+          "services",
+          "startup_status"
+        ]
+      },
+      {
+        "key": "response_cache",
+        "layer": "stores",
+        "display_name": "Response Cache",
+        "path": [
+          "stores",
+          "response_cache"
+        ]
+      },
+      {
+        "key": "memory",
+        "layer": "stores",
+        "display_name": "Memory",
+        "path": [
+          "stores",
+          "memory"
+        ]
+      },
+      {
+        "key": "vector_store",
+        "layer": "stores",
+        "display_name": "Vector Store",
+        "path": [
+          "stores",
+          "vector_store"
+        ]
+      },
+      {
+        "key": "tools",
+        "layer": "integrations",
+        "display_name": "Tools",
+        "path": [
+          "integrations",
+          "tools"
+        ]
+      },
+      {
+        "key": "looper",
+        "layer": "integrations",
+        "display_name": "Looper",
+        "path": [
+          "integrations",
+          "looper"
+        ]
+      },
+      {
+        "key": "embeddings",
+        "layer": "model_catalog",
+        "display_name": "Embeddings",
+        "path": [
+          "model_catalog",
+          "embeddings"
+        ]
+      },
+      {
+        "key": "system",
+        "layer": "model_catalog",
+        "display_name": "System",
+        "path": [
+          "model_catalog",
+          "system"
+        ]
+      },
+      {
+        "key": "external",
+        "layer": "model_catalog",
+        "display_name": "External",
+        "path": [
+          "model_catalog",
+          "external"
+        ]
+      },
+      {
+        "key": "kbs",
+        "layer": "model_catalog",
+        "display_name": "Kbs",
+        "path": [
+          "model_catalog",
+          "kbs"
+        ]
+      },
+      {
+        "key": "prompt_compression",
+        "layer": "model_catalog",
+        "display_name": "Prompt Compression",
+        "path": [
+          "model_catalog",
+          "modules",
+          "prompt_compression"
+        ]
+      },
+      {
+        "key": "prompt_guard",
+        "layer": "model_catalog",
+        "display_name": "Prompt Guard",
+        "path": [
+          "model_catalog",
+          "modules",
+          "prompt_guard"
+        ]
+      },
+      {
+        "key": "classifier",
+        "layer": "model_catalog",
+        "display_name": "Classifier",
+        "path": [
+          "model_catalog",
+          "modules",
+          "classifier"
+        ]
+      },
+      {
+        "key": "complexity",
+        "layer": "model_catalog",
+        "display_name": "Complexity",
+        "path": [
+          "model_catalog",
+          "modules",
+          "complexity"
+        ]
+      },
+      {
+        "key": "hallucination_mitigation",
+        "layer": "model_catalog",
+        "display_name": "Hallucination Mitigation",
+        "path": [
+          "model_catalog",
+          "modules",
+          "hallucination_mitigation"
+        ]
+      },
+      {
+        "key": "feedback_detector",
+        "layer": "model_catalog",
+        "display_name": "Feedback Detector",
+        "path": [
+          "model_catalog",
+          "modules",
+          "feedback_detector"
+        ]
+      },
+      {
+        "key": "modality_detector",
+        "layer": "model_catalog",
+        "display_name": "Modality Detector",
+        "path": [
+          "model_catalog",
+          "modules",
+          "modality_detector"
+        ]
+      },
+      {
+        "key": "admission",
+        "layer": "model_catalog",
+        "display_name": "Admission",
+        "path": [
+          "model_catalog",
+          "admission"
+        ]
+      }
+    ]
+  }
+}

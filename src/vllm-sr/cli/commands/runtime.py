@@ -14,7 +14,7 @@ from cli.bootstrap import (
 )
 from cli.commands.common import exit_with_logged_error
 from cli.commands.runtime_config_mutation import (
-    ALGORITHM_TYPES,
+    ALGORITHM_OVERRIDE_TYPES,
 )
 from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
@@ -167,6 +167,7 @@ def _deploy_serve_backend(
 
 def _execute_serve(
     config: str,
+    replace_active_config: bool,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
@@ -205,6 +206,7 @@ def _execute_serve(
                 source_setup_mode=source_setup_mode,
                 platform=platform,
                 recipe_env_bindings=recipe_env_bindings,
+                replace_active_config=replace_active_config,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -253,6 +255,14 @@ def _execute_serve(
     default="config.yaml",
     show_default=True,
     help="Path to the Router configuration.",
+)
+@click.option(
+    "--replace-active-config",
+    is_flag=True,
+    help=(
+        "Replace this local Docker stack's active runtime config from --config, "
+        "discarding Dashboard edits."
+    ),
 )
 @click.option(
     "--image",
@@ -322,11 +332,14 @@ def _execute_serve(
 )
 @click.option(
     "--algorithm",
-    type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
+    type=click.Choice(ALGORITHM_OVERRIDE_TYPES, case_sensitive=False),
     default=None,
-    help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
-    "workflows, latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
-    "Cross-request learning uses global.router.learning.adaptation/protection.",
+    help=(
+        "Request-time base algorithm override for payload-safe algorithms: "
+        f"{', '.join(ALGORITHM_OVERRIDE_TYPES)}. Algorithms that require an "
+        "authored payload remain available in config.yaml. Cross-request learning "
+        "uses global.router.learning.adaptation/protection."
+    ),
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -362,6 +375,7 @@ def _execute_serve(
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
     config: str,
+    replace_active_config: bool,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
@@ -382,6 +396,7 @@ def serve(
 ) -> None:
     _execute_serve(
         config,
+        replace_active_config,
         image,
         router_image,
         envoy_image,

@@ -48,9 +48,9 @@ func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
 		}
 		authenticated = append(authenticated, r.URL.Path)
 		switch r.URL.Path {
-		case "/config/hash":
-			_, _ = fmt.Fprintf(w, `{"hash":%q,"runtime_hash":%q,"active_hash":%q,"status":"active"}`, hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]))
-		case "/api/v1/eval":
+		case "/api/v1/config/hash":
+			_, _ = fmt.Fprintf(w, `{"source_config_hash":%q,"generated_runtime_hash":%q,"active_runtime_hash":%q,"activation_status":"active"}`, hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]))
+		case "/api/v1/routing/preview":
 			_, _ = w.Write([]byte(`{
   "requested_model":"vllm-sr/auto",
   "selected_model":"gpt55-worker",
@@ -101,7 +101,7 @@ func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
 	if validationResponse.Code != http.StatusOK {
 		t.Fatalf("POST /api/recipe/probes/.../validate status=%d body=%s", validationResponse.Code, validationResponse.Body.String())
 	}
-	if got, want := authenticated, []string{"/config/hash", "/api/v1/eval", "/config/hash"}; !slices.Equal(got, want) {
+	if got, want := authenticated, []string{"/api/v1/config/hash", "/api/v1/routing/preview", "/api/v1/config/hash"}; !slices.Equal(got, want) {
 		t.Fatalf("authenticated Router requests = %v, want %v", got, want)
 	}
 }
@@ -300,7 +300,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		t.Fatal(err)
 	}
 	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/config/kbs/example" || r.Method != http.MethodPost {
+		if r.URL.Path != "/api/v1/storage/knowledge-bases/example" || r.Method != http.MethodPost {
 			t.Fatalf("unexpected KBS proxy request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -328,7 +328,6 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/config/rollback"},
 		{method: http.MethodPost, path: "/api/router/config/global/update"},
 		{method: http.MethodPost, path: "/api/router/config/global/raw/update"},
-		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, strings.NewReader(`{}`)))
@@ -337,8 +336,22 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		}
 	}
 
+	for _, target := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/router/config/defaults"},
+		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("removed alias %s %s status=%d want=%d", target.method, target.path, response.Code, http.StatusNotFound)
+		}
+	}
+
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/router/config/kbs/example", strings.NewReader(`{}`)))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/router/api/v1/storage/knowledge-bases/example", strings.NewReader(`{}`)))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("KBS proxy status=%d want=%d body=%s", response.Code, http.StatusNoContent, response.Body.String())
 	}
