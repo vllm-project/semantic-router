@@ -8,6 +8,8 @@ use hf_hub::{api::sync::Api, Repo, RepoType};
 use std::path::Path;
 use tokenizers::{Tokenizer, TruncationDirection, TruncationParams, TruncationStrategy};
 
+use crate::core::resolve_device;
+
 /// Structure to hold BERT model and tokenizer for semantic similarity
 ///
 /// This is the core similarity computation engine that provides embedding
@@ -37,11 +39,7 @@ impl BertSimilarity {
     /// let similarity = BertSimilarity::new("sentence-transformers/all-MiniLM-L6-v2", false)?;
     /// ```
     pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
-        let device = if use_cpu {
-            Device::Cpu
-        } else {
-            Device::cuda_if_available(0)?
-        };
+        let device = resolve_device(use_cpu);
 
         // Default to a sentence transformer model if not specified or empty
         let model_id = if model_id.is_empty() {

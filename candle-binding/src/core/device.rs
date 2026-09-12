@@ -11,7 +11,9 @@ pub fn resolve_device(use_cpu: bool) -> Device {
     }
     #[cfg(feature = "metal")]
     {
-        Device::new_metal(0).unwrap_or(Device::Cpu)
+        let device = Device::new_metal(0).unwrap_or(Device::Cpu);
+        eprintln!("[candle-binding] inference device: {device:?}");
+        device
     }
     #[cfg(not(feature = "metal"))]
     {
@@ -87,5 +89,23 @@ pub fn drain_loader_queue(device: &Device) {
     #[cfg(not(feature = "metal"))]
     {
         let _ = device;
+    }
+}
+
+#[cfg(all(test, feature = "metal", target_os = "macos"))]
+mod tests {
+    use super::*;
+    use candle_core::Device;
+
+    #[test]
+    fn gpu_request_selects_metal() {
+        let device = resolve_device(false);
+        assert!(device.is_metal(), "expected Metal device, got {device:?}");
+    }
+
+    #[test]
+    fn cpu_request_stays_cpu() {
+        let device = resolve_device(true);
+        assert!(!device.is_metal());
     }
 }
