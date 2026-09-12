@@ -70,6 +70,10 @@ PII rule is `on_error`: `allow` (default) treats the unread content as not
 matching, `block` matches it as `classification_error`, so unverified text
 cannot pass as clean.
 
+The PII mapping cannot declare `classification_error` as an entity label.
+Aliases with `B-`, `I-`, or `E-` prefixes, including stacked prefixes, are also
+reserved and rejected at mapping load time in either mapping direction.
+
 Spans returned before a declared cut are real detections under both policies. A
 rule that matched on one of them stays a genuine match even when the rest of
 its content was never read, so a decision using `rules.on_unknown: no_match`

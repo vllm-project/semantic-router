@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -75,26 +76,58 @@ func TestPIIDetectionAPIsReportAnIncompleteScan(t *testing.T) {
 // on the same distinction, and a remote backend can only return labels the
 // mapping declares, so the PII loader must refuse it too.
 func TestLoadPIIMappingRejectsTheSentinelLabel(t *testing.T) {
+	// The remote decoder strips one prefix before the detection API translates
+	// the result again. Reserve stacked aliases too, not just one BIO tag.
+	for _, prefix := range []string{"", "B-", "I-", "E-", "B-B-", "B-I-", "B-E-", "I-B-", "I-I-", "I-E-", "E-B-", "E-I-", "E-E-", "B-I-E-"} {
+		t.Run(prefix+PIIClassificationErrorType, func(t *testing.T) {
+			testPIIMappingRejectsSentinel(t, prefix+PIIClassificationErrorType)
+		})
+	}
+}
+
+func testPIIMappingRejectsSentinel(t *testing.T, label string) {
+	t.Helper()
 	for name, body := range map[string]string{
-		"in label_to_idx": `{"label_to_idx": {"O": 0, "classification_error": 1}, "idx_to_label": {"0": "O", "1": "OTHER"}}`,
-		"in idx_to_label": `{"label_to_idx": {"O": 0, "OTHER": 1}, "idx_to_label": {"0": "O", "1": "classification_error"}}`,
+		"in label_to_idx":   fmt.Sprintf(`{"label_to_idx": {"O": 0, %q: 1}, "idx_to_label": {"0": "O", "1": "OTHER"}}`, label),
+		"in idx_to_label":   fmt.Sprintf(`{"label_to_idx": {"O": 0, "OTHER": 1}, "idx_to_label": {"0": "O", "1": %q}}`, label),
+		"label_to_idx only": fmt.Sprintf(`{"label_to_idx": {"O": 0, %q: 1}}`, label),
+		"idx_to_label only": fmt.Sprintf(`{"idx_to_label": {"0": "O", "1": %q}}`, label),
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "pii_type_mapping.json")
 			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 				t.Fatalf("write mapping: %v", err)
 			}
-			if _, err := LoadPIIMapping(path); err == nil {
-				t.Fatal("mapping with the reserved sentinel label was accepted")
+			if mapping, err := LoadPIIMapping(path); err == nil || mapping != nil {
+				t.Fatalf("mapping with reserved label %q: mapping=%v err=%v, want nil mapping and error", label, mapping, err)
 			}
 		})
 	}
+}
 
-	path := filepath.Join(t.TempDir(), "pii_type_mapping.json")
-	if err := os.WriteFile(path, []byte(`{"label_to_idx": {"O": 0, "EMAIL_ADDRESS": 1}, "idx_to_label": {"0": "O", "1": "EMAIL_ADDRESS"}}`), 0o600); err != nil {
-		t.Fatalf("write mapping: %v", err)
-	}
-	if _, err := LoadPIIMapping(path); err != nil {
-		t.Fatalf("ordinary mapping was rejected: %v", err)
+func TestLoadPIIMappingAcceptsBIOEntityLabels(t *testing.T) {
+	for _, prefix := range []string{"", "B-", "I-", "E-"} {
+		t.Run(prefix+"EMAIL_ADDRESS", func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "pii_type_mapping.json")
+			label := prefix + "EMAIL_ADDRESS"
+			body := fmt.Sprintf(`{"label_to_idx": {"O": 0, %q: 1}, "idx_to_label": {"0": "O", "1": %q}}`, label, label)
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatalf("write mapping: %v", err)
+			}
+			mapping, err := LoadPIIMapping(path)
+			if err != nil {
+				t.Fatalf("ordinary mapping was rejected: %v", err)
+			}
+			if got := mapping.TranslatePIIType("class_1"); got != "EMAIL_ADDRESS" {
+				t.Fatalf("native label = %q, want EMAIL_ADDRESS", got)
+			}
+			known, _ := knownPIILabels(mapping)
+			if _, ok := known["EMAIL_ADDRESS"]; !ok {
+				t.Fatalf("remote label set = %v, want EMAIL_ADDRESS", known)
+			}
+			if _, ok := known[PIIClassificationErrorType]; ok {
+				t.Fatal("remote label set contains the reserved sentinel")
+			}
+		})
 	}
 }
