@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from .model import load_model
+from .runtime_mapping import RUNTIME_TASKS, write_runtime_mappings
 
 
 def main():
@@ -21,6 +22,7 @@ def main():
     parser.add_argument("--contract", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--run-manifest", type=Path, required=True)
+    parser.add_argument("--runtime-task", choices=RUNTIME_TASKS, required=True)
     args = parser.parse_args()
     if args.output.exists() and any(args.output.iterdir()):
         raise ValueError("Refusing to overwrite a frozen candidate")
@@ -52,10 +54,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     merged.save_pretrained(args.output, safe_serialization=True)
     tokenizer.save_pretrained(args.output)
-    (args.output / "label_mapping.json").write_text(
-        json.dumps({"label2id": labels, "id2label": merged.config.id2label}, indent=2)
-        + "\n"
-    )
+    mapping_files = write_runtime_mappings(args.output, labels, args.runtime_task)
     receipt = {
         "base_model": args.base_id,
         "base_revision": args.base_revision,
@@ -70,6 +69,8 @@ def main():
             parameter.numel() for parameter in merged.model.parameters()
         ),
         "label2id": labels,
+        "runtime_task": args.runtime_task,
+        "runtime_mapping_files": mapping_files,
         "task": merged.config.problem_type,
         "classifier_pooling": merged.config.classifier_pooling,
         "max_position_embeddings": merged.config.max_position_embeddings,

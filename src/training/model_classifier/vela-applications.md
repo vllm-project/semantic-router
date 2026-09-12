@@ -78,6 +78,14 @@ the repository root. Download only the source files required by a builder.
   data is synthetic translation/adaptation, not twelve independent natural
   benchmarks. Its jailbreak tag is never converted into a PromptGuard target.
 
+For Hazard, the versioned `safety_classifier.vela_hazard_supervision` projection
+excludes training-only unsafe `jailbreaking` rows: new generated attacks do not
+independently validate every inherited fine-grained category. It retains safe
+negatives and the generic/adapted source projections, without turning unknown
+risks into negative labels. This protocol refuses development/test rows and
+records every exclusion. Preserve the original full development/test benchmark;
+generic and adapted labels still carry synthetic annotation limitations.
+
 For example:
 
 ```bash
@@ -139,6 +147,16 @@ adapter, contract, data and budget arguments. Its selection choices are
 `macro-ap` and `source-macro-ap`; it implements masked BCE and samples safe
 negatives plus positive categories. Do not pass Hazard data through the
 single-label trainer or use softmax to decode its logits.
+
+Hazard also accepts `--source-weights` as a JSON object naming every training
+source with a positive weight. This replaces equal-source selection while
+preserving optional length/category balancing within each source. For example,
+large external corpora need not receive the same draw probability as a small
+set of authored contrasts. Existing runs without this option preserve their
+sampling sequence. Each evaluation checkpoint records actual source draws,
+unique-row coverage, language draws and positive-label exposures. Select total
+steps using these counts and loss curves; repeated sampling is not an epoch.
+Pass the actual `--base-id` as well as `--base-revision` when using a new encoder.
 
 Both loops use FP32 parameters and loss, BF16 GPU autocast, and an explicit
 mean loss divided by accumulation steps. This avoids a Transformers loss-

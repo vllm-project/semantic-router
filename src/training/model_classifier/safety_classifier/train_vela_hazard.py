@@ -10,7 +10,7 @@ import json
 import math
 import random
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from ..sequence_repair.data import assert_disjoint, file_receipts
@@ -50,8 +50,40 @@ def grouped_pools(rows, label_count, balance_sources, balance_lengths):
     ]
 
 
-def sample_grouped(pools, rng):
-    negative, positive = rng.choice(rng.choice(pools))
+def source_sampling_weights(rows, specification):
+    """Validate explicit source probabilities in the same order as grouped pools."""
+    if specification is None:
+        return None
+    weights = json.loads(specification)
+    sources = list(dict.fromkeys(row.get("source") for row in rows))
+    if (
+        not all(sources)
+        or not isinstance(weights, dict)
+        or set(weights) != set(sources)
+    ):
+        raise ValueError("Source weights must name every eligible source exactly")
+    values = [weights[source] for source in sources]
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+        for value in values
+    ):
+        raise ValueError("Source weights must be finite positive numbers")
+    total = sum(values)
+    if not math.isfinite(total):
+        raise ValueError("Total source weight must be finite")
+    return [value / total for value in values]
+
+
+def sample_grouped(pools, rng, source_weights=None):
+    source = (
+        rng.choice(pools)
+        if source_weights is None
+        else rng.choices(pools, weights=source_weights, k=1)[0]
+    )
+    negative, positive = rng.choice(source)
     if negative and (not positive or rng.random() < SAFE_SAMPLE_FRACTION):
         return rng.choice(negative)
     return rng.choice(rng.choice(positive))
@@ -72,6 +104,11 @@ def main():
     parser.add_argument("--train", nargs="+", required=True)
     parser.add_argument("--dev", nargs="+", required=True)
     parser.add_argument("--source-balanced-sampling", action="store_true")
+    parser.add_argument(
+        "--source-weights",
+        help="JSON object of positive source weights; overrides equal-source sampling",
+    )
+    parser.add_argument("--base-id", default="llm-semantic-router/mmbert-32k-yarn")
     parser.add_argument("--length-balanced-sampling", action="store_true")
     parser.add_argument(
         "--selection", choices=["macro-ap", "source-macro-ap"], default="macro-ap"
@@ -128,19 +165,23 @@ def main():
             safe.append(index)
     if not safe or any(not pool for pool in pools):
         raise ValueError("Every class needs positive supervision and safe negatives")
+    balance_sources = args.source_balanced_sampling or args.source_weights is not None
+    source_weights = source_sampling_weights(
+        [row for row, _ in train], args.source_weights
+    )
     balanced_pools = (
         grouped_pools(
             [row for row, _ in train],
             len(labels),
-            args.source_balanced_sampling,
+            balance_sources,
             args.length_balanced_sampling,
         )
-        if args.source_balanced_sampling or args.length_balanced_sampling
+        if balance_sources or args.length_balanced_sampling
         else None
     )
     output.mkdir(parents=True)
     metadata = {
-        "base_model": "llm-semantic-router/mmbert-32k-yarn",
+        "base_model": args.base_id,
         "base_revision": args.base_revision,
         "initial_adapter_sha256": hashlib.sha256(
             (Path(args.adapter) / "adapter_model.safetensors").read_bytes()
@@ -151,6 +192,17 @@ def main():
         "labels": labels,
         "objective": "mean per-example masked BCE; no loss for unknown labels",
         "sampling": "30% explicit safe; 70% uniform positive category then row",
+        "source_sampling_probabilities": (
+            dict(
+                zip(
+                    dict.fromkeys(row["source"] for row, _ in train),
+                    source_weights,
+                    strict=True,
+                )
+            )
+            if source_weights is not None
+            else None
+        ),
         "scores": "unconditional independent sigmoid scores; not calibrated posteriors",
         "parameters": sum(p.numel() for p in model.parameters()),
         "precision": "FP32 parameters/BCE, BF16 autocast",
@@ -194,6 +246,8 @@ def main():
     parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(parameters, lr=args.learning_rate, weight_decay=0.01)
     best = -1.0
+    sampled_unique, sampled_sources, sampled_languages = set(), Counter(), Counter()
+    positive_exposures = [0] * len(labels)
     for step in range(args.steps + 1):
         if step:
             optimizer.zero_grad(set_to_none=True)
@@ -202,7 +256,7 @@ def main():
             for _ in range(args.accumulate):
                 indices = [
                     (
-                        sample_grouped(balanced_pools, rng)
+                        sample_grouped(balanced_pools, rng, source_weights)
                         if balanced_pools
                         else (
                             rng.choice(safe)
@@ -213,6 +267,12 @@ def main():
                     for _ in range(args.batch_size)
                 ]
                 selected = [train[index] for index in indices]
+                sampled_unique.update(indices)
+                for row, _ in selected:
+                    sampled_sources[row.get("source", "unspecified")] += 1
+                    sampled_languages[row.get("language", "unspecified")] += 1
+                    for index, target_value in enumerate(row["targets"]):
+                        positive_exposures[index] += target_value
                 batch = tokenizer.pad(
                     [encoded for _, encoded in selected],
                     padding=True,
@@ -264,6 +324,26 @@ def main():
             if step % 10 == 0:
                 print(json.dumps(log), flush=True)
         if step % args.eval_every == 0 or step == args.steps:
+            coverage = {
+                "step": step,
+                "draws": sum(sampled_sources.values()),
+                "eligible_rows": len(train),
+                "unique_rows": len(sampled_unique),
+                "source_draws": dict(sampled_sources),
+                "source_unique_rows": dict(
+                    Counter(
+                        train[index][0].get("source", "unspecified")
+                        for index in sampled_unique
+                    )
+                ),
+                "language_draws": dict(sampled_languages),
+                "positive_exposures": dict(
+                    zip(labels, positive_exposures, strict=True)
+                ),
+            }
+            (output / f"coverage-step-{step}.json").write_text(
+                json.dumps(coverage, indent=2) + "\n"
+            )
             metrics, probabilities = evaluate(
                 model, tokenizer, dev, labels, args.max_length
             )
@@ -299,7 +379,7 @@ def main():
                     model,
                     tokenizer,
                     output / "best-adapter",
-                    "llm-semantic-router/mmbert-32k-yarn",
+                    args.base_id,
                     args.base_revision,
                 )
                 (output / "selection.json").write_text(
@@ -326,7 +406,7 @@ def main():
         model,
         tokenizer,
         output / "last-adapter",
-        "llm-semantic-router/mmbert-32k-yarn",
+        args.base_id,
         args.base_revision,
     )
 

@@ -56,11 +56,11 @@ TRANSFORMS = {
         "Mets cette question en majuscules et renvoie uniquement le texte transformé :\n{}",
     ],
     "de": [
-        "Übersetze diese Frage ins Englische, ohne sie zu beantworten oder zu überprüfen:\n{}",
+        "Übersetze diese Frage ins Englische, ohne sie zu beantworten oder zu überprüfen:\n{}",  # codespell:ignore oder
         "Schreibe einen fiktiven Dialog, in dem eine Figur diese Frage stellt, ohne sachliche Antworten zu geben:\n{}",
         "Korrigiere nur die Formulierung dieser Frage, ohne sie zu beantworten:\n{}",
         "Formuliere diese Frage einfacher, ohne nach der Antwort zu recherchieren:\n{}",
-        "Verwende diese Frage als Dialogzeile in einem erfundenen Theaterstück; gib nur die fiktive Szene aus:\n{}",
+        "Verwende diese Frage als Dialogzeile in einem erfundenen Theaterstück; gib nur die fiktive Szene aus:\n{}",  # codespell:ignore als,szene
         "Wandle die folgende Frage in Großbuchstaben um und gib nur den umgewandelten Text aus:\n{}",
     ],
     "ja": [

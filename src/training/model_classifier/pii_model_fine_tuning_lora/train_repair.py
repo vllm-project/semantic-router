@@ -45,10 +45,10 @@ def prepare_records(records, tokenizer, label_to_id, max_length):
     return accepted, rejected
 
 
-def save_adapter(model, tokenizer, directory, base_revision, label_to_id):
+def save_adapter(model, tokenizer, directory, base_id, base_revision, label_to_id):
     directory.mkdir(parents=True, exist_ok=True)
     config = model.peft_config["default"]
-    config.base_model_name_or_path = "llm-semantic-router/mmbert-32k-yarn"
+    config.base_model_name_or_path = base_id
     config.revision = base_revision
     model.save_pretrained(directory)
     tokenizer.save_pretrained(directory)
@@ -72,6 +72,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", required=True)
+    parser.add_argument("--base-id", default="llm-semantic-router/mmbert-32k-yarn")
     parser.add_argument("--base-revision", required=True)
     parser.add_argument("--adapter", required=True)
     parser.add_argument("--config", required=True)
@@ -156,6 +157,7 @@ def main():
         return_tensors="pt",
     )
     metadata = {
+        "base_model": args.base_id,
         "base_revision": args.base_revision,
         "seed": args.seed,
         "label2id": label_to_id,
@@ -211,6 +213,7 @@ def main():
             model,
             tokenizer,
             args.output / "best-adapter",
+            args.base_id,
             args.base_revision,
             label_to_id,
         )
@@ -330,6 +333,7 @@ def main():
                     model,
                     tokenizer,
                     args.output / "best-adapter",
+                    args.base_id,
                     args.base_revision,
                     label_to_id,
                 )
@@ -350,6 +354,7 @@ def main():
             model,
             tokenizer,
             args.output / "last-adapter",
+            args.base_id,
             args.base_revision,
             label_to_id,
         )

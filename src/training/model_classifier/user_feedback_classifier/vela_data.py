@@ -84,7 +84,11 @@ def wild_records(rows):
         if not MIN_TEXT_CHARS <= len(text) <= MAX_TEXT_CHARS or SENSITIVE.search(text):
             continue
         label = project_label(
-            text, row["State"], row["Satisfaction"], row["Disatisfaction"]
+            # Keep the original WildFeedback column spelling.
+            text,
+            row["State"],
+            row["Satisfaction"],
+            row["Disatisfaction"],  # codespell:ignore disatisfaction
         )
         if label:
             yield {

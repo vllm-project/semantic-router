@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"fmt"
 	"strings"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -10,6 +11,7 @@ import (
 
 // ModalityClassificationResult holds the result of modality signal classification.
 type ModalityClassificationResult struct {
+	Err        error   // No modality verdict was produced when inference fails.
 	Modality   string  // "AR", "DIFFUSION", or "BOTH"
 	Confidence float32 // Confidence score (0.0-1.0)
 	Method     string  // Detection method used: "classifier", "keyword", or "hybrid"
@@ -35,8 +37,7 @@ func (c *Classifier) classifyModality(text string, detectionConfig *config.Modal
 	case config.ModalityDetectionHybrid:
 		return c.classifyModalityHybrid(text, detectionConfig)
 	default:
-		logging.Errorf("[ModalitySignal] BUG: unknown detection method %q; defaulting to AR", method)
-		return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "error/unknown-method"}
+		return ModalityClassificationResult{Err: fmt.Errorf("unknown modality detection method %q", method), Method: "error/unknown-method"}
 	}
 }
 
@@ -53,8 +54,7 @@ func (c *Classifier) classifyModalityByClassifier(text string, cfg *config.Modal
 		}
 	}
 
-	logging.Errorf("[ModalitySignal] Classifier unavailable: %v; defaulting to AR", err)
-	return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "classifier/error"}
+	return ModalityClassificationResult{Err: err, Method: "classifier/error"}
 }
 
 // classifyModalityByKeyword uses keyword patterns from config to detect modality.

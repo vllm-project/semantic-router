@@ -51,6 +51,14 @@ reference. Configure the detector through
 
 ## Dependencies and Limitations
 
+Set `classifier.max_sequence_length` inside the detector configuration to select
+an explicit token budget; zero keeps the historical 512-token default. The
+native loader checks that the model supports the budget. Input beyond that
+budget produces an error instead of a truncated prediction. With
+`method: classifier`, an inference error leaves modality unknown, and a decision's
+`on_unknown` policy controls the outcome. It does not create an `AR` match.
+`method: hybrid` explicitly permits the existing keyword fallback.
+
 The modality detector classifies intended output mode; it does not prove that a
 backend supports the request's input attachments. Keep model-card capabilities
 and provider validation aligned. See a complete example:

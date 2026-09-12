@@ -72,7 +72,7 @@ TEMPLATES = {
             "Explica solo con texto cómo dibujar esto; no generes una imagen: {}",
             "Escribe código Python para dibujar la escena; devuelve código, no una imagen renderizada: {}",
             "Traduce esta descripción visual al inglés sin generar imágenes: {}",
-            "Ya tengo una imagen de este tema; sugiere solo un pie de foto escrito: {}",
+            "Ya tengo una imagen de este tema; sugiere solo un pie de foto escrito: {}",  # codespell:ignore foto
             "Analiza por escrito esta composición visual; no quiero una imagen nueva: {}",
             "Convierte esta descripción de una imagen en un párrafo de prosa, sin crear imágenes: {}",
         ],
@@ -82,7 +82,7 @@ TEMPLATES = {
             "Crea una ilustración digital que muestre: {}",
             "Necesito una representación visual nueva; entrega solo la imagen: {}",
             "Produce una imagen a partir de esta idea, sin explicación escrita: {}",
-            "Haz una nueva obra visual que represente este tema: {}",
+            "Haz una nueva obra visual que represente este tema: {}",  # codespell:ignore represente
         ],
         "BOTH": [
             "Explica el concepto por escrito y genera una imagen de: {}",
@@ -100,7 +100,7 @@ TEMPLATES = {
             "Traduis cette description visuelle en anglais sans produire d'image : {}",
             "J'ai déjà une image de ce sujet ; propose seulement une légende écrite : {}",
             "Analyse cette composition visuelle par écrit ; je ne veux pas de nouvelle image : {}",
-            "Transforme cette description d'image en un paragraphe de prose, sans créer d'image : {}",
+            "Transforme cette description d'image en un paragraphe de prose, sans créer d'image : {}",  # codespell:ignore transforme
         ],
         "DIFFUSION": [
             "Génère une image de cette scène : {}",
@@ -122,14 +122,14 @@ TEMPLATES = {
     "de": {
         "AR": [
             "Erkläre nur in Worten, wie man dieses Motiv zeichnet; erzeuge kein Bild: {}",
-            "Schreibe Python-Code zum Zeichnen dieser Szene; liefere Quellcode statt eines gerenderten Bildes: {}",
+            "Schreibe Python-Code zum Zeichnen dieser Szene; liefere Quellcode statt eines gerenderten Bildes: {}",  # codespell:ignore szene
             "Übersetze diese Bildbeschreibung ins Englische, ohne ein Bild zu erzeugen: {}",
-            "Ich habe bereits ein Bild dieses Motivs; schlage nur eine schriftliche Bildunterschrift vor: {}",
+            "Ich habe bereits ein Bild dieses Motivs; schlage nur eine schriftliche Bildunterschrift vor: {}",  # codespell:ignore vor
             "Analysiere diese Bildkomposition schriftlich; ich möchte kein neues Bild: {}",
-            "Formuliere diese Bildbeschreibung als Prosaabsatz, ohne ein Bild zu erstellen: {}",
+            "Formuliere diese Bildbeschreibung als Prosaabsatz, ohne ein Bild zu erstellen: {}",  # codespell:ignore als
         ],
         "DIFFUSION": [
-            "Erzeuge ein Bild dieser Szene: {}",
+            "Erzeuge ein Bild dieser Szene: {}",  # codespell:ignore szene
             "Zeichne ein Bild nach dieser Beschreibung: {}",
             "Erstelle eine digitale Illustration von: {}",
             "Ich brauche eine neue visuelle Darstellung; liefere nur das Bild: {}",
@@ -139,10 +139,10 @@ TEMPLATES = {
         "BOTH": [
             "Erkläre das Konzept schriftlich und erzeuge ein Bild von: {}",
             "Gib mir eine schriftliche Beschreibung und eine neue Illustration von: {}",
-            "Erstelle ein Bild dieser Szene und ergänze eine kurze Erklärung: {}",
+            "Erstelle ein Bild dieser Szene und ergänze eine kurze Erklärung: {}",  # codespell:ignore szene
             "Liefere zwei Dinge: einen erklärenden Absatz und ein neues Bild von: {}",
             "Ich möchte einen schriftlichen Überblick zusammen mit einem erzeugten Bild von: {}",
-            "Erstelle sowohl eine Illustration als auch einen separaten Erklärungstext zu: {}",
+            "Erstelle sowohl eine Illustration als auch einen separaten Erklärungstext zu: {}",  # codespell:ignore als
         ],
     },
     "ja": {

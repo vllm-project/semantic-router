@@ -77,8 +77,8 @@ type MmBERT32KCategoryInitializerImpl struct {
 func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
 	backend := embeddingBackendOverride()
 	if backend == "openvino" {
-		if c.maxSequenceLength > 512 {
-			return fmt.Errorf("explicit long classifier context is not implemented by the OpenVINO bridge")
+		if c.maxSequenceLength != 0 && c.maxSequenceLength != 512 {
+			return fmt.Errorf("the OpenVINO classifier bridge supports only the default 512-token budget")
 		}
 		nc := 0
 		if len(numClasses) > 0 {

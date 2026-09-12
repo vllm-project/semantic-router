@@ -7,6 +7,7 @@ import unittest
 from src.training.model_classifier.safety_classifier.train_vela_hazard import (
     grouped_pools,
     sample_grouped,
+    source_sampling_weights,
 )
 from src.training.model_classifier.safety_classifier.vela_hazard import (
     calibrate_thresholds,
@@ -16,6 +17,55 @@ from src.training.model_classifier.safety_classifier.vela_hazard import (
 
 
 class VelaHazardSamplingTests(unittest.TestCase):
+    def test_explicit_source_weights_limit_tiny_authored_source(self):
+        rows = [
+            {"targets": [1], "source": "external"},
+            {"targets": [1], "source": "authored"},
+        ]
+        weights = source_sampling_weights(rows, '{"authored": 0.05, "external": 0.95}')
+        pools = grouped_pools(rows, 1, True, False)
+        rng = random.Random(20260913)
+        authored = sum(sample_grouped(pools, rng, weights) == 1 for _ in range(10000))
+        self.assertGreater(authored, 400)
+        self.assertLess(authored, 600)
+
+    def test_source_weights_reject_missing_unknown_and_invalid_values(self):
+        rows = [{"targets": [1], "source": "a"}]
+        for specification in [
+            "{}",
+            '{"b": 1}',
+            '{"a": 0}',
+            '{"a": -1}',
+            '{"a": true}',
+            '{"a": NaN}',
+            "[]",
+        ]:
+            with self.subTest(specification=specification), self.assertRaises(
+                ValueError
+            ):
+                source_sampling_weights(rows, specification)
+
+    def test_default_sampling_preserves_previous_random_sequence(self):
+        rows = [
+            {"targets": [1, 0], "source": "a"},
+            {"targets": [0, 1], "source": "a"},
+            {"targets": [0, 0], "source": "a"},
+            {"targets": [1, 0], "source": "b"},
+        ]
+        pools = grouped_pools(rows, 2, True, False)
+        old_rng, new_rng = random.Random(41), random.Random(41)
+        previous_safe_fraction = 0.3
+        expected = []
+        for _ in range(100):
+            negative, positive = old_rng.choice(old_rng.choice(pools))
+            expected.append(
+                old_rng.choice(negative)
+                if negative
+                and (not positive or old_rng.random() < previous_safe_fraction)
+                else old_rng.choice(old_rng.choice(positive))
+            )
+        self.assertEqual(expected, [sample_grouped(pools, new_rng) for _ in range(100)])
+
     def test_source_and_length_balance_with_safe_only_bucket(self):
         large_count = 1000
         rows = [

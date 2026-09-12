@@ -76,7 +76,8 @@ class VelaFeedbackDataTests(unittest.TestCase):
                 "Content": "Thanks, that works",
                 "State": "FEEDBACK",
                 "Satisfaction": True,
-                "Disatisfaction": False,
+                # The external dataset uses this exact column spelling.
+                "Disatisfaction": False,  # codespell:ignore disatisfaction
             },
         ]
         self.assertEqual(len(list(wild_records(rows))), 1)

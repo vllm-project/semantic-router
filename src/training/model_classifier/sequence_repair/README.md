@@ -162,6 +162,7 @@ explicitly false.
 
 ```bash
 python -m src.training.model_classifier.sequence_repair.export \
+  --runtime-task fact-check \
   --base artifacts/vela/base \
   --base-revision 72a23a6640489471eb4ff7ad3ec5bc80af8a27de \
   --adapter artifacts/vela/runs/factcheck-short/best-adapter \
@@ -176,6 +177,14 @@ python -m src.training.model_classifier.sequence_repair.evaluate \
   --output artifacts/vela/evidence/factcheck-final.json \
   --max-length 32768 --dtype bfloat16
 ```
+
+The required `--runtime-task` writes the router's actual sidecar schema alongside
+the HF label mapping, before hashing the frozen candidate. Domain uses
+`category_mapping.json`; FactCheck uses `fact_check_mapping.json`; PromptGuard
+uses `jailbreak_type_mapping.json`; Modality also receives `modality_mapping.json`
+and must retain the native `AR=0`, `DIFFUSION=1`, `BOTH=2` indices. Feedback,
+Safety, and Hazard retain the complete named label set in `config.json` and
+`label_mapping.json`. Every sidecar derives from the same classifier label IDs.
 
 Test is an explicit separate invocation, never run by training or export. Compare
 baseline and candidate on the same rows, precision, and decoding policy; report

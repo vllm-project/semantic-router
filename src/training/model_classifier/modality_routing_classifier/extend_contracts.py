@@ -54,7 +54,7 @@ CONTRACTS = {
     },
     "es": {
         "AR": [
-            "Un artista ya entregó su obra. Redacta un texto alternativo accesible; no hace falta sustituir la obra. Tema: {}",
+            "Un artista ya entregó su obra. Redacta un texto alternativo accesible; no hace falta sustituir la obra. Tema: {}",  # codespell:ignore accesible
             "Estoy preparando un tutorial. Devuelve una lista numerada de instrucciones escritas para dibujar: {}",
             "Devuelve el código fuente SVG editable como texto. Yo mismo lo renderizaré. Encargo: {}",
             "Revisa la redacción de este encargo visual citado y propón mejoras por escrito: {}",
@@ -62,20 +62,20 @@ CONTRACTS = {
         "DIFFUSION": [
             "Entrega una obra rasterizada terminada como archivo de imagen; las instrucciones para dibujar no bastan. Encargo: {}",
             "Renderiza esta escena. Solo necesito el recurso visual resultante, sin comentario en prosa: {}",
-            "Utiliza el generador de imágenes para este encargo. El producto solicitado es la propia imagen: {}",
-            "El único resultado solicitado es una imagen recién renderizada que represente: {}",
+            "Utiliza el generador de imágenes para este encargo. El producto solicitado es la propia imagen: {}",  # codespell:ignore utiliza
+            "El único resultado solicitado es una imagen recién renderizada que represente: {}",  # codespell:ignore represente
         ],
         "BOTH": [
             "Necesito un recurso visual original renderizado junto con un texto separado sobre las decisiones de diseño: {}",
             "Dame un archivo de imagen y una explicación adjunta fuera de la imagen. Tema: {}",
             "Este encargo tiene dos entregables: una obra generada y un análisis escrito de ella: {}",
-            "Entrega una ilustración nueva y, en una respuesta escrita aparte, su texto alternativo accesible: {}",
+            "Entrega una ilustración nueva y, en una respuesta escrita aparte, su texto alternativo accesible: {}",  # codespell:ignore accesible
         ],
     },
     "fr": {
         "AR": [
             "Un artiste a déjà livré son œuvre. Rédige un texte alternatif accessible sans remplacer cette œuvre. Sujet : {}",
-            "Je prépare un tutoriel. Fournis une liste numérotée d'instructions écrites pour dessiner : {}",
+            "Je prépare un tutoriel. Fournis une liste numérotée d'instructions écrites pour dessiner : {}",  # codespell:ignore tutoriel
             "Renvoie le code source SVG modifiable sous forme de texte. Je le rendrai moi-même. Sujet : {}",
             "Relis la formulation de ce brief visuel cité et propose des améliorations par écrit : {}",
         ],
@@ -95,21 +95,21 @@ CONTRACTS = {
     "de": {
         "AR": [
             "Ein Künstler hat sein fertiges Werk bereits geliefert. Verfasse einen barrierefreien Alternativtext; ein Ersatzbild ist unnötig. Motiv: {}",
-            "Ich bereite eine Anleitung vor. Liefere nummerierte schriftliche Zeichenschritte zu diesem Motiv: {}",
+            "Ich bereite eine Anleitung vor. Liefere nummerierte schriftliche Zeichenschritte zu diesem Motiv: {}",  # codespell:ignore vor
             "Gib bearbeitbaren SVG-Quelltext aus. Ich werde den Code selbst rendern. Vorgabe: {}",
-            "Prüfe die Formulierung dieser zitierten Bildvorgabe und schlage schriftliche Verbesserungen vor: {}",
+            "Prüfe die Formulierung dieser zitierten Bildvorgabe und schlage schriftliche Verbesserungen vor: {}",  # codespell:ignore vor
         ],
         "DIFFUSION": [
-            "Liefere ein fertiges Rasterbild als Bilddatei; schriftliche Zeichenanweisungen genügen nicht. Vorgabe: {}",
-            "Rendere diese Szene. Ich brauche nur das fertige visuelle Ergebnis ohne begleitende Erörterung: {}",
+            "Liefere ein fertiges Rasterbild als Bilddatei; schriftliche Zeichenanweisungen genügen nicht. Vorgabe: {}",  # codespell:ignore als
+            "Rendere diese Szene. Ich brauche nur das fertige visuelle Ergebnis ohne begleitende Erörterung: {}",  # codespell:ignore szene
             "Verwende den Bildgenerator für diese Vorgabe. Das gewünschte Ergebnis ist das Bild selbst: {}",
-            "Als einzige Ausgabe wird ein neu gerendertes Bild dieses Motivs benötigt: {}",
+            "Als einzige Ausgabe wird ein neu gerendertes Bild dieses Motivs benötigt: {}",  # codespell:ignore als
         ],
         "BOTH": [
             "Ich brauche ein neu gerendertes Motiv und zusätzlich einen getrennten Text über die Gestaltungsentscheidungen: {}",
             "Liefere eine Bilddatei sowie eine begleitende Erklärung außerhalb des Bildes. Motiv: {}",
             "Diese Vorgabe verlangt zwei Ergebnisse: ein erzeugtes Kunstwerk und eine schriftliche Analyse davon: {}",
-            "Liefere eine neue Illustration und ihren barrierefreien Alternativtext als getrennte schriftliche Antwort: {}",
+            "Liefere eine neue Illustration und ihren barrierefreien Alternativtext als getrennte schriftliche Antwort: {}",  # codespell:ignore als
         ],
     },
     "ja": {

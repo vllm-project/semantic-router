@@ -13,6 +13,7 @@ TEST_GPU_DEVICE ?= 2
 # Keep this list explicit. Do not include tests whose fixtures initialize
 # models from ../models unless those tests have been converted to skip cleanly.
 RUST_CI_LIB_TESTS ?= \
+	model_architectures::model_factory::tokenizer_contract_tests::mmbert_embedding_discards_saved_training_limits \
 	core::tokenization_test::test_tokenization_config_default \
 	model_architectures::embedding::pooling_test::test_mean_pool_long_low_precision \
 	model_architectures::embedding::pooling_test::test_mean_pool_padding_and_invalid_rows \

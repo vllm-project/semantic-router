@@ -51,9 +51,12 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     merged.save_pretrained(args.output, safe_serialization=True)
     tokenizer.save_pretrained(args.output)
-    (args.output / "label_mapping.json").write_bytes(
-        (args.adapter / "label_mapping.json").read_bytes()
-    )
+    labels = {
+        "label_to_idx": label_to_id,
+        "idx_to_label": {str(index): label for label, index in label_to_id.items()},
+    }
+    for name in ("label_mapping.json", "pii_mapping.json"):
+        (args.output / name).write_text(json.dumps(labels, indent=2) + "\n")
     evidence = {
         "base_model": args.base_id,
         "base_revision": args.base_revision,
@@ -61,6 +64,7 @@ def main():
             (args.adapter / "adapter_model.safetensors").read_bytes()
         ).hexdigest(),
         "label2id": label_to_id,
+        "runtime_mapping_files": ["label_mapping.json", "pii_mapping.json"],
         "weight_dtype": "float32",
         "task": "token-classification",
         "parameter_count": sum(parameter.numel() for parameter in merged.parameters()),

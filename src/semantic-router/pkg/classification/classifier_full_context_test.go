@@ -80,3 +80,14 @@ func TestNativeLongContextPIIUsesOnePassWithOriginalByteOffsets(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenVINORejectsBudgetsItCannotEnforce(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "openvino")
+	for _, limit := range []int{1, 128, 256, 513, 32768} {
+		initializer := &MmBERT32KCategoryInitializerImpl{maxSequenceLength: limit}
+		err := initializer.Init("unused-model-path", true, 2)
+		if err == nil || !strings.Contains(err.Error(), "only the default 512-token budget") {
+			t.Fatalf("limit=%d did not fail before model loading: %v", limit, err)
+		}
+	}
+}

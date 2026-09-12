@@ -38,8 +38,8 @@ FIELDS = {
     "en": "age|card number|date|website|email address|city|IBAN|IP address|nationality|organization|full name|phone number|street address|title|driver license|social security number|postal code",
     "zh": "年龄|银行卡号|日期|网站|电子邮箱|城市|国际银行账号|IP地址|国籍|机构|姓名|电话号码|街道地址|称谓|驾驶证号|社会保障号码|邮政编码",
     "es": "edad|número de tarjeta|fecha|sitio web|correo electrónico|ciudad|IBAN|dirección IP|nacionalidad|organización|nombre completo|teléfono|dirección postal|título|permiso de conducir|número de seguridad social|código postal",
-    "fr": "âge|numéro de carte|date|site web|adresse courriel|ville|IBAN|adresse IP|nationalité|organisation|nom complet|numéro de téléphone|adresse|titre|permis de conduire|numéro de sécurité sociale|code postal",
-    "de": "Alter|Kartennummer|Datum|Webseite|E-Mail-Adresse|Stadt|IBAN|IP-Adresse|Nationalität|Organisation|vollständiger Name|Telefonnummer|Straßenadresse|Titel|Führerscheinnummer|Sozialversicherungsnummer|Postleitzahl",
+    "fr": "âge|numéro de carte|date|site web|adresse courriel|ville|IBAN|adresse IP|nationalité|organisation|nom complet|numéro de téléphone|adresse|titre|permis de conduire|numéro de sécurité sociale|code postal",  # codespell:ignore complet
+    "de": "Alter|Kartennummer|Datum|Webseite|E-Mail-Adresse|Stadt|IBAN|IP-Adresse|Nationalität|Organisation|vollständiger Name|Telefonnummer|Straßenadresse|Titel|Führerscheinnummer|Sozialversicherungsnummer|Postleitzahl",  # codespell:ignore titel
     "ja": "年齢|カード番号|日付|ウェブサイト|メールアドレス|市|IBAN|IPアドレス|国籍|組織|氏名|電話番号|住所|敬称|運転免許証番号|社会保障番号|郵便番号",
 }
 TEMPLATES = {
@@ -79,9 +79,9 @@ TEMPLATES = {
         "Der Eintrag für {field} ist {value}.",
         "Bitte speichern Sie {field}: {value}.",
         "Für das Konto gilt {field} = {value}.",
-        "Das Formular enthält [{value}] unter {field}.",
-        "Eine Anfrage nennt {value} als {field}.",
-        "Die Angabe {value} gehört zum Feld {field}.",
+        "Das Formular enthält [{value}] unter {field}.",  # codespell:ignore unter
+        "Eine Anfrage nennt {value} als {field}.",  # codespell:ignore als
+        "Die Angabe {value} gehört zum Feld {field}.",  # codespell:ignore feld
     ],
     "ja": [
         "記録された{field}は{value}です。",
@@ -110,13 +110,13 @@ NEGATIVES = {
     ],
     "fr": [
         "Le service réessaie la requête après une courte pause.",
-        "Un point termine la phrase ; l'arobase est un symbole.",
+        "Un point termine la phrase ; l'arobase est un symbole.",  # codespell:ignore symbole,termine
         "L'application traite un document et retourne un résultat.",
     ],
     "de": [
         "Der Dienst wiederholt die Anfrage nach einer kurzen Pause.",
         "Ein Punkt beendet den Satz; das At-Zeichen ist ein Symbol.",
-        "Die Anwendung verarbeitet ein Dokument und liefert ein Ergebnis.",
+        "Die Anwendung verarbeitet ein Dokument und liefert ein Ergebnis.",  # codespell:ignore dokument
     ],
     "ja": [
         "サービスは短い待機の後にリクエストを再試行します。",
