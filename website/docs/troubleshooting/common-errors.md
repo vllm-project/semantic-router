@@ -38,6 +38,84 @@ vllm-sr config validate --config config.yaml
 Follow the field path in the validation error. Do not add missing fields to a
 random nested block; canonical fields are location-sensitive.
 
+## Entrypoint / Recipe Validation
+
+`vllm-sr validate` includes a repair hint for common multi-recipe wiring errors.
+
+### Unknown recipe
+
+```text
+Entrypoint references unknown recipe 'missing-recipe'
+Hint: Change this to the name of a recipe defined under recipes.
+```
+
+Broken:
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: missing-recipe
+recipes:
+  - name: production
+```
+
+Corrected:
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+recipes:
+  - name: production
+```
+
+### Duplicate recipe name
+
+```text
+Duplicate recipe name 'production'
+Hint: Rename one recipe so every recipe has a unique name.
+```
+
+Give each recipe a distinct `name`, then update entrypoints that refer to the
+renamed recipe:
+
+```yaml
+recipes:
+  - name: production
+  - name: staging
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+```
+
+### Model or reserved alias collision
+
+```text
+Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
+Hint: Use a distinct entrypoint model name; do not reuse a configured model or
+reserved alias such as vllm-sr/auto.
+```
+
+Broken:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: production
+```
+
+Corrected:
+
+```yaml
+entrypoints:
+  - model_names: [customer-production]
+    recipe: production
+```
+
+See the
+[entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
+and [recipes tutorial](../tutorials/global/recipes.md) for complete examples.
+
 ### `failed to read config file`
 
 The process cannot open the path it received. Check:

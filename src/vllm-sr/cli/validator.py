@@ -599,3 +599,5 @@ def print_validation_errors(errors: List[ValidationError]):
     terminal_error("Configuration validation failed")
     for i, validation_error in enumerate(errors, 1):
         echo(f"  {i}. {validation_error}", err=True)
+        if validation_error.hint:
+            echo(f"     Hint: {validation_error.hint}", err=True)
