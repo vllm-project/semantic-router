@@ -61,7 +61,6 @@ domains:
       - .github/ISSUE_TEMPLATE/**
       - .github/actions/**
       - .github/workflows/**
-      - .golangci-version
       - .mergify.yml
       - .pre-commit-config.yaml
       - .prowlabels.yaml

@@ -4,13 +4,13 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - .golangci-version
+      - tools/linter/go/golangci-lint.version
       - tools/docker/Dockerfile.precommit
       - .github/workflows/precommit-publish.yml
   push:
     branches: [main]
     paths:
-      - .golangci-version
+      - tools/linter/go/golangci-lint.version
       - tools/docker/Dockerfile.precommit
       - .github/workflows/precommit-publish.yml
   workflow_dispatch:

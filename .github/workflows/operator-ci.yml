@@ -57,7 +57,8 @@ jobs:
 
       - name: Resolve golangci-lint version
         id: golangci_lint
-        run: echo "version=v$(cat .golangci-version)" >> "$GITHUB_OUTPUT"
+        working-directory: ${{ github.workspace }}
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7

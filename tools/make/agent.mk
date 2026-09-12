@@ -12,7 +12,7 @@ CHANGED_FILES_PATH ?=
 BASE_REF ?=
 HARNESS_BOOTSTRAP_DONE ?=
 
-AGENT_GOLANGCI_LINT_VERSION ?= $(shell cat $(CURDIR)/.golangci-version)
+AGENT_GOLANGCI_LINT_VERSION ?= $(shell cat $(CURDIR)/tools/linter/go/golangci-lint.version)
 AGENT_MARKDOWNLINT_VERSION ?= 0.43.0
 AGENT_NODE_VERSION ?= 22.17.0
 
