@@ -55,8 +55,8 @@ func TestRouterLearningProtectionCannotRestoreModelOutsideDecisionCandidates(t *
 	if selected == nil || selected.Model != "cheap" {
 		t.Fatalf("expected learning to stay inside decision candidates, got %#v", selected)
 	}
-	if method != "single" {
-		t.Fatalf("expected base method single, got %q", method)
+	if method != string(selection.MethodStatic) {
+		t.Fatalf("expected base method static, got %q", method)
 	}
 	assertCandidateBoundaryRelease(t, ctx)
 	assertLearningIdentityDiagnostics(t, ctx)

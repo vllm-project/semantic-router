@@ -15,7 +15,7 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 
 	response := router.handleRouterReplayAPI(
 		"GET",
-		"/v1/router_replay?recipe=beta&decision=decision-b&cache_status=streamed&limit=10",
+		"/api/v1/observability/replays?recipe=beta&decision=decision-b&cache_status=streamed&limit=10",
 	)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
@@ -34,7 +34,7 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	router := newReplayAggregateTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay/aggregate")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate aggregate response")
 	}
@@ -103,7 +103,7 @@ func TestHandleRouterReplayAggregateAPIAppliesFilters(t *testing.T) {
 
 	response := router.handleRouterReplayAPI(
 		"GET",
-		"/v1/router_replay/aggregate?cache_status=cached&search=alpha",
+		"/api/v1/observability/replays/aggregate?cache_status=cached&search=alpha",
 	)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate aggregate response")

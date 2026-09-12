@@ -190,9 +190,6 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		}, nil
 	}
 
-	// Use signal-driven architecture: evaluate all signals first
-	// Check if we should force evaluate all signals (for eval scenarios)
-	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
 	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
@@ -201,7 +198,7 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		input.priorUserMessages,
 		input.nonUserMessages,
 		input.hasAssistantReply,
-		forceEvaluateAll,
+		false,
 		"",
 		nil,
 		input.conversationFacts,

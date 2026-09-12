@@ -72,6 +72,7 @@ const ConfigSchemaReferencePage: React.FC = () => {
         const params = new URLSearchParams({ view: selectionKind })
         if (selectionKind === 'section') {
           params.set('path', selectionValue)
+          params.set('expanded', 'true')
         } else {
           const [kind, ...nameParts] = selectionValue.split(':')
           params.set('kind', kind)

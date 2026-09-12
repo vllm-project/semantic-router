@@ -336,3 +336,54 @@ func TestFactCheckSignalHonorsCallerContextWhileQueued(t *testing.T) {
 		})
 	}
 }
+
+type closingStubPIIInference struct {
+	MockPIIInference
+	closed int
+}
+
+func (s *closingStubPIIInference) Close() error {
+	s.closed++
+	return nil
+}
+
+// The admission wrapper must forward Close like the other wrappers do: after
+// #3268 every PII inference is wrapped, so a remote PII backend that owns a
+// connector is only released on reload if the wrapper passes Close through.
+func TestAdmittedPIIInferenceForwardsClose(t *testing.T) {
+	backend := &closingStubPIIInference{}
+	if err := (admittedPIIInference{backend: backend}).Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if backend.closed != 1 {
+		t.Fatalf("backend closed %d times, want 1", backend.closed)
+	}
+	if err := (admittedPIIInference{backend: &MockPIIInference{}}).Close(); err != nil {
+		t.Fatalf("Close on a backend without Close: %v", err)
+	}
+}
+
+// Reload path: BuildClassifier wraps the remote PII backend in the admission
+// gate; Classifier.Close must still reach the backend underneath.
+func TestClassifierCloseReachesWrappedRemotePIIBackend(t *testing.T) {
+	classifier, err := BuildClassifier(remotePIIConfig(), nil, testPIIMapping(), nil)
+	if err != nil {
+		t.Fatalf("BuildClassifier: %v", err)
+	}
+	admitted, ok := classifier.piiInference.(admittedPIIInference)
+	if !ok {
+		t.Fatalf("piiInference = %T, want the admission wrapper", classifier.piiInference)
+	}
+	if _, ok := admitted.backend.(*piiHTTPBackend); !ok {
+		t.Fatalf("wrapped backend = %T, want *piiHTTPBackend", admitted.backend)
+	}
+	stub := &closingStubPIIInference{}
+	admitted.backend = stub
+	classifier.piiInference = admitted
+	if err := classifier.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if stub.closed != 1 {
+		t.Fatalf("wrapped remote PII backend closed %d times on reload, want 1", stub.closed)
+	}
+}

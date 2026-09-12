@@ -82,6 +82,10 @@ type RequestContext struct {
 	ContextCompressionSkipReason  string
 	StartTime                     time.Time
 	ProcessingStartTime           time.Time
+	RoutingLatency                time.Duration
+	RequestCost                   float64
+	RequestCostCurrency           string
+	RequestCostPriced             bool
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
@@ -177,6 +181,10 @@ type RequestContext struct {
 
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
+
+	// RequestDemandSnapshots retains at most one content-free demand estimate for
+	// each stable request stage. It is observe-only until final admission lands.
+	RequestDemandSnapshots []routerreplay.RequestDemandSnapshot
 
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords        []string // Matched keyword rule names

@@ -18,21 +18,21 @@ func TestOpenAPISpecUsesRouteBodyMetadata(t *testing.T) {
 	apiServer := &ClassificationAPIServer{}
 	spec := apiServer.generateOpenAPISpec()
 
-	upload := spec.Paths["/v1/files"].Post
+	upload := spec.Paths["/api/v1/storage/files"].Post
 	if upload == nil || upload.RequestBody == nil {
-		t.Fatalf("expected /v1/files POST request body metadata")
+		t.Fatalf("expected /api/v1/storage/files POST request body metadata")
 	}
 	if _, ok := upload.RequestBody.Content[string(requestBodyMultipart)]; !ok {
-		t.Fatalf("expected /v1/files POST to use multipart request body metadata")
+		t.Fatalf("expected /api/v1/storage/files POST to use multipart request body metadata")
 	}
 	if _, ok := upload.RequestBody.Content[string(requestBodyJSON)]; ok {
-		t.Fatalf("did not expect /v1/files POST to advertise JSON request body metadata")
+		t.Fatalf("did not expect /api/v1/storage/files POST to advertise JSON request body metadata")
 	}
 	if _, ok := upload.Responses["413"]; !ok {
-		t.Fatalf("expected /v1/files POST to document request-size limit response")
+		t.Fatalf("expected /api/v1/storage/files POST to document request-size limit response")
 	}
 
-	search := spec.Paths["/v1/vector_stores/{id}/search"].Post
+	search := spec.Paths["/api/v1/storage/vector-stores/{id}/search"].Post
 	if search == nil || search.RequestBody == nil {
 		t.Fatalf("expected vector-store search request body metadata")
 	}
@@ -40,7 +40,7 @@ func TestOpenAPISpecUsesRouteBodyMetadata(t *testing.T) {
 		t.Fatalf("expected vector-store search to document %d byte limit, got %q", maxVectorStoreJSONBodySize, search.RequestBody.Description)
 	}
 
-	intent := spec.Paths["/api/v1/classify/intent"].Post
+	intent := spec.Paths["/api/v1/diagnostics/classify/intent"].Post
 	intentSchema := intent.RequestBody.Content[string(requestBodyJSON)].Schema
 	if intentSchema == nil || intentSchema.Properties["text"].Type != "string" {
 		t.Fatalf("expected intent body schema to come from services.IntentRequest, got %+v", intentSchema)
@@ -49,10 +49,22 @@ func TestOpenAPISpecUsesRouteBodyMetadata(t *testing.T) {
 		t.Fatalf("text is optional when messages supply the signal input, got required=%v", intentSchema.Required)
 	}
 
-	configPatch := spec.Paths["/config/router"].Patch
+	configPatch := spec.Paths["/api/v1/config"].Patch
 	configSchema := configPatch.RequestBody.Content[string(requestBodyJSON)].Schema
 	if configSchema == nil || configSchema.Properties["yaml"].Type != "string" {
 		t.Fatalf("expected config body schema to come from RouterConfigUpdateRequest, got %+v", configSchema)
+	}
+	if _, exists := configSchema.Properties["dsl"]; exists {
+		t.Fatalf("canonical Router config mutation unexpectedly exposes DSL: %+v", configSchema)
+	}
+	if configSchema.AdditionalProperties != false {
+		t.Fatalf("strict config decoder must publish additionalProperties=false, got %+v", configSchema)
+	}
+
+	recipePut := spec.Paths["/api/v1/config/recipes/{name}"].Put
+	recipeSchema := recipePut.RequestBody.Content[string(requestBodyJSON)].Schema
+	if recipeSchema == nil || recipeSchema.AdditionalProperties != false {
+		t.Fatalf("strict recipe decoder must publish a closed request schema, got %+v", recipeSchema)
 	}
 }
 
@@ -60,7 +72,7 @@ func TestOpenAPISpecDerivesPathParametersFromRoutes(t *testing.T) {
 	apiServer := &ClassificationAPIServer{}
 	spec := apiServer.generateOpenAPISpec()
 
-	detach := spec.Paths["/v1/vector_stores/{id}/files/{file_id}"].Delete
+	detach := spec.Paths["/api/v1/storage/vector-stores/{id}/files/{file_id}"].Delete
 	if detach == nil {
 		t.Fatalf("expected vector-store file detach operation")
 	}
@@ -71,13 +83,13 @@ func TestOpenAPISpecDerivesPathParametersFromRoutes(t *testing.T) {
 		t.Fatalf("expected sanitized operation ID, got %q", detach.OperationID)
 	}
 
-	listFiles := spec.Paths["/v1/files"].Get
+	listFiles := spec.Paths["/api/v1/storage/files"].Get
 	if listFiles == nil {
 		t.Fatalf("expected file list operation")
 	}
 	for _, parameter := range listFiles.Parameters {
 		if parameter.In == "path" {
-			t.Fatalf("expected no path parameters for /v1/files, got %+v", listFiles.Parameters)
+			t.Fatalf("expected no path parameters for /api/v1/storage/files, got %+v", listFiles.Parameters)
 		}
 	}
 }
@@ -90,10 +102,10 @@ func TestOpenAPISpecDoesNotAdvertiseMemoryIdentityQueryParameter(t *testing.T) {
 		name      string
 		operation *OpenAPIOperation
 	}{
-		{name: "list", operation: spec.Paths["/v1/memory"].Get},
-		{name: "delete by scope", operation: spec.Paths["/v1/memory"].Delete},
-		{name: "get", operation: spec.Paths["/v1/memory/{id}"].Get},
-		{name: "delete", operation: spec.Paths["/v1/memory/{id}"].Delete},
+		{name: "list", operation: spec.Paths[apiStorageMemoriesPath].Get},
+		{name: "delete by scope", operation: spec.Paths[apiStorageMemoriesPath].Delete},
+		{name: "get", operation: spec.Paths[apiStorageMemoriesPath+"/{id}"].Get},
+		{name: "delete", operation: spec.Paths[apiStorageMemoriesPath+"/{id}"].Delete},
 	}
 
 	for _, tc := range tests {
@@ -133,16 +145,28 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 	server := &ClassificationAPIServer{}
 	spec := server.generateOpenAPISpec()
 
-	eval := spec.Paths["/api/v1/eval"].Post
+	eval := spec.Paths["/api/v1/routing/preview"].Post
 	requireOpenAPIParameter(t, eval.Parameters, "trace", "query", false, "boolean")
-	recipe := spec.Paths["/config/router/recipes/{name}"].Put
+	if eval.RequestBody == nil || eval.RequestBody.Content["application/json"].Schema == nil {
+		t.Fatal("routing preview request schema is missing")
+	}
+	if got := eval.RequestBody.Content["application/json"].Schema.AdditionalProperties; got != false {
+		t.Fatalf("routing preview request schema must reject unknown fields, got %#v", got)
+	}
+	configPatch := spec.Paths["/api/v1/config"].Patch
+	requireOpenAPIParameter(t, configPatch.Parameters, "If-Match", "header", true, "string")
+	configPut := spec.Paths["/api/v1/config"].Put
+	requireOpenAPIParameter(t, configPut.Parameters, "If-Match", "header", true, "string")
+	rollback := spec.Paths["/api/v1/config/rollback"].Post
+	requireOpenAPIParameter(t, rollback.Parameters, "If-Match", "header", true, "string")
+	recipe := spec.Paths["/api/v1/config/recipes/{name}"].Put
 	requireOpenAPIParameter(t, recipe.Parameters, "If-Match", "header", true, "string")
-	outcome := spec.Paths["/v1/router/outcomes"].Post
+	outcome := spec.Paths["/api/v1/observability/outcomes"].Post
 	requireOpenAPIParameter(t, outcome.Parameters, "Idempotency-Key", "header", false, "string")
-	replay := spec.Paths["/v1/router_replay"].Get
+	replay := spec.Paths["/api/v1/observability/replays"].Get
 	requireOpenAPIParameter(t, replay.Parameters, "cache_status", "query", false, "string")
 	requireOpenAPIParameter(t, replay.Parameters, "showDetails", "query", false, "boolean")
-	trajectory := spec.Paths["/v1/router_replay/trajectory"].Get
+	trajectory := spec.Paths["/api/v1/observability/replays/trajectory"].Get
 	requireOpenAPIParameter(t, trajectory.Parameters, "session_id", "query", true, "string")
 }
 
@@ -152,7 +176,10 @@ func TestOpenAPISpecPublishesProgressiveOperationQuery(t *testing.T) {
 	if operation == nil {
 		t.Fatal("OpenAPI discovery operation is missing")
 	}
-	want := map[string]bool{"path": false, "method": false}
+	want := map[string]bool{
+		"path": false, "method": false, "capability": false,
+		"audience": false, "plane": false, "visibility": false,
+	}
 	for _, parameter := range operation.Parameters {
 		if _, ok := want[parameter.Name]; ok && parameter.In == "query" {
 			want[parameter.Name] = true
@@ -169,11 +196,11 @@ func TestOpenAPISpecPublishesRoutePolicyMetadata(t *testing.T) {
 	server := &ClassificationAPIServer{}
 	spec := server.generateOpenAPISpec()
 
-	read := spec.Paths["/config/router"].Get
+	read := spec.Paths["/api/v1/config"].Get
 	if read == nil || read.Permission != PermConfigRead || read.Sensitivity != SensitivitySecretView {
 		t.Fatalf("config read policy metadata = %+v", read)
 	}
-	write := spec.Paths["/config/router"].Patch
+	write := spec.Paths["/api/v1/config"].Patch
 	if write == nil || write.Permission != PermConfigWrite || write.Sensitivity != SensitivityMutation || write.AuditAction != AuditActionConfigPatch {
 		t.Fatalf("config patch policy metadata = %+v", write)
 	}
@@ -190,7 +217,7 @@ func TestOpenAPISpecPublishesRuntimeBearerAuthentication(t *testing.T) {
 	if security := spec.Paths["/health"].Get.Security; len(security) != 0 {
 		t.Fatalf("health must remain public, got security=%+v", security)
 	}
-	security := spec.Paths["/config/router"].Get.Security
+	security := spec.Paths["/api/v1/config"].Get.Security
 	if len(security) != 2 {
 		t.Fatalf("config auth alternatives = %+v, want anonymous and bearer", security)
 	}
@@ -230,7 +257,7 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 
 func TestOpenAPISpecEndpointCanReturnOneOperation(t *testing.T) {
 	apiServer := newDocumentationTestServer()
-	req := httptest.NewRequest(http.MethodGet, "/openapi.json?path=%2Fconfig%2Frouter&method=patch", nil)
+	req := httptest.NewRequest(http.MethodGet, "/openapi.json?path=%2Fapi%2Fv1%2Fconfig&method=patch", nil)
 	rr := httptest.NewRecorder()
 
 	apiServer.handleOpenAPISpec(rr, req)
@@ -245,12 +272,40 @@ func TestOpenAPISpecEndpointCanReturnOneOperation(t *testing.T) {
 	if len(spec.Paths) != 1 {
 		t.Fatalf("expected one selected path, got %d", len(spec.Paths))
 	}
-	selected := spec.Paths["/config/router"]
+	selected := spec.Paths["/api/v1/config"]
 	if selected.Patch == nil {
 		t.Fatal("expected selected PATCH operation")
 	}
 	if selected.Get != nil || selected.Put != nil {
 		t.Fatalf("expected only PATCH, got %+v", selected)
+	}
+}
+
+func TestOpenAPISpecEndpointCanFilterForAgentConfigOperations(t *testing.T) {
+	apiServer := newDocumentationTestServer()
+	req := httptest.NewRequest(http.MethodGet, "/openapi.json?capability=config&audience=agent", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleOpenAPISpec(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var spec OpenAPISpec
+	if err := json.Unmarshal(rr.Body.Bytes(), &spec); err != nil {
+		t.Fatalf("failed to unmarshal filtered OpenAPI spec: %v", err)
+	}
+	if len(spec.Paths) == 0 {
+		t.Fatal("expected filtered config operations")
+	}
+	for path, operations := range spec.Paths {
+		for _, operation := range []*OpenAPIOperation{operations.Get, operations.Post, operations.Patch, operations.Put, operations.Delete} {
+			if operation == nil {
+				continue
+			}
+			if !slices.Contains(operation.Tags, "config") || !slices.Contains(operation.Audiences, APIAudienceAgent) {
+				t.Fatalf("operation %s has wrong semantic metadata: %+v", path, operation)
+			}
+		}
 	}
 }
 
@@ -285,15 +340,15 @@ func TestOpenAPISpecEndpointRejectsUnknownSelection(t *testing.T) {
 func assertRecipeConfigOpenAPIPaths(t *testing.T, spec OpenAPISpec) {
 	t.Helper()
 
-	collection := spec.Paths["/config/router/recipes"]
+	collection := spec.Paths["/api/v1/config/recipes"]
 	if collection.Get == nil {
-		t.Fatal("expected /config/router/recipes GET to be documented")
+		t.Fatal("expected /api/v1/config/recipes GET to be documented")
 	}
-	validation := spec.Paths["/config/router/recipes/validate"]
+	validation := spec.Paths["/api/v1/config/recipes/validate"]
 	if validation.Post == nil || validation.Post.RequestBody == nil {
 		t.Fatal("expected recipe validation POST body to be documented")
 	}
-	item := spec.Paths["/config/router/recipes/{name}"]
+	item := spec.Paths["/api/v1/config/recipes/{name}"]
 	if item.Get == nil || item.Put == nil || item.Delete == nil {
 		t.Fatalf("expected recipe item GET, PUT, and DELETE operations, got %+v", item)
 	}
@@ -343,18 +398,18 @@ func assertOpenAPIPathsAbsent(t *testing.T, spec OpenAPISpec, absent []string) {
 func assertRouterConfigOpenAPIPath(t *testing.T, spec OpenAPISpec) {
 	t.Helper()
 
-	routerPath, exists := spec.Paths["/config/router"]
+	routerPath, exists := spec.Paths["/api/v1/config"]
 	if !exists {
-		t.Fatalf("expected /config/router to be documented in OpenAPI spec")
+		t.Fatalf("expected /api/v1/config to be documented in OpenAPI spec")
 	}
 	if routerPath.Patch == nil || routerPath.Put == nil || routerPath.Get == nil {
-		t.Fatalf("expected /config/router to document GET, PATCH, and PUT, got %+v", routerPath)
+		t.Fatalf("expected /api/v1/config to document GET, PATCH, and PUT, got %+v", routerPath)
 	}
 	if _, ok := routerPath.Patch.Responses["413"]; !ok {
-		t.Fatalf("expected /config/router PATCH to document 413 request body limit response")
+		t.Fatalf("expected /api/v1/config PATCH to document 413 request body limit response")
 	}
 	if routerPath.Patch.RequestBody == nil || routerPath.Patch.RequestBody.Description == "" {
-		t.Fatalf("expected /config/router PATCH to document request body constraints")
+		t.Fatalf("expected /api/v1/config PATCH to document request body constraints")
 	}
 }
 
@@ -397,22 +452,25 @@ func documentedOpenAPIPaths() []string {
 		"/ready",
 		"/startup-status",
 		"/api/v1",
-		"/api/v1/classify/batch",
-		"/api/v1/eval",
-		"/api/v1/nli",
-		"/api/v1/embeddings",
-		"/api/v1/similarity/batch",
+		"/api/v1/diagnostics/classify/batch",
+		"/api/v1/routing/preview",
+		"/api/v1/diagnostics/nli",
+		"/api/v1/diagnostics/embeddings",
+		"/api/v1/diagnostics/similarity/batch",
 		"/openapi.json",
 		"/docs",
-		"/config/router",
-		"/config/router/rollback",
-		"/config/router/versions",
-		"/config/router/recipes",
-		"/config/router/recipes/validate",
-		"/config/router/recipes/{name}",
-		"/config/hash",
-		"/v1/memory",
-		"/v1/vector_stores",
-		"/v1/files",
+		"/api/v1/config",
+		"/api/v1/config/schema",
+		"/api/v1/config/validate",
+		"/api/v1/config/plan",
+		"/api/v1/config/rollback",
+		"/api/v1/config/versions",
+		"/api/v1/config/recipes",
+		"/api/v1/config/recipes/validate",
+		"/api/v1/config/recipes/{name}",
+		"/api/v1/config/hash",
+		"/api/v1/storage/memories",
+		"/api/v1/storage/vector-stores",
+		"/api/v1/storage/files",
 	}
 }
