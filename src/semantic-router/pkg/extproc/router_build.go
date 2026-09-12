@@ -233,9 +233,8 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg)
-	if components.memoryStore != nil {
-		components.resources.add(components.memoryStore.Close)
+	if err := components.buildMemoryRuntime(createMemoryStore); err != nil {
+		return nil, err
 	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
@@ -257,25 +256,39 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 }
 
 func (components *routerComponents) buildEarlyResources(mappings *classifierMappings) error {
+	return components.buildEarlyResourcesWith(mappings, createRouterClassifier, createSemanticCache)
+}
+
+func (components *routerComponents) buildEarlyResourcesWith(
+	mappings *classifierMappings,
+	buildClassifier func(
+		*config.RouterConfig,
+		*classifierMappings,
+	) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error),
+	buildCache func(*config.RouterConfig) (cache.CacheBackend, error),
+) error {
 	var err error
-	components.semanticCache, err = createSemanticCache(components.cfg)
+	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = buildClassifier(components.cfg, mappings)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+	components.resources.add(components.recipeClassifiers.Close)
+
+	// Cache dimensions may be resolved from a loaded native embedding model.
+	// Keep cache construction after classifier runtime initialization so a cold
+	// router does not query the native contract before the model is available.
+	components.semanticCache, err = buildCache(components.cfg)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 	if components.semanticCache != nil {
 		components.resources.add(components.semanticCache.Close)
 	}
-
-	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg)
-	if err != nil {
-		return rollbackResources(components.resources, err)
-	}
-
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, mappings)
-	if err != nil {
-		return rollbackResources(components.resources, err)
-	}
-	components.resources.add(components.recipeClassifiers.Close)
 	return nil
 }
 

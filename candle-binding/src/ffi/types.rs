@@ -417,6 +417,32 @@ impl Default for EmbeddingModelsInfoResult {
     }
 }
 
+/// Dimension contract for one loaded embedding model.
+///
+/// The arrays are allocated by the native binding and must be released with
+/// `free_embedding_dimension_contract` after the caller has copied them.
+#[repr(C)]
+#[derive(Debug)]
+pub struct EmbeddingDimensionContractResult {
+    pub model_name: *mut c_char,
+    pub native_dimension: i32,
+    pub supported_dimensions: *mut i32,
+    pub num_supported_dimensions: i32,
+    pub error: bool,
+}
+
+impl Default for EmbeddingDimensionContractResult {
+    fn default() -> Self {
+        Self {
+            model_name: std::ptr::null_mut(),
+            native_dimension: 0,
+            supported_dimensions: std::ptr::null_mut(),
+            num_supported_dimensions: 0,
+            error: true,
+        }
+    }
+}
+
 /// Hallucination span detected by token-level classifier
 #[repr(C)]
 #[derive(Debug)]
@@ -582,8 +608,13 @@ impl Default for MultiModalEmbeddingResult {
 }
 
 /// Validate that a C structure pointer is not null and properly aligned
+///
+/// # Safety
+///
+/// The caller must provide a pointer value whose provenance permits checking
+/// its address. This function does not dereference the pointer.
 pub unsafe fn validate_c_struct_ptr<T>(ptr: *const T) -> bool {
-    !ptr.is_null() && (ptr as usize) % std::mem::align_of::<T>() == 0
+    !ptr.is_null() && (ptr as usize).is_multiple_of(std::mem::align_of::<T>())
 }
 
 /// Get the size of any C structure for ABI compatibility checking
