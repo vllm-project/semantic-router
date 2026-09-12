@@ -1,7 +1,10 @@
 package extproc
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -9,6 +12,182 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
+
+// TestProgressStreamAbortBeforeEOSRecordsTerminalOutcome covers the three ways
+// an ExtProc stream can end without reaching EOS. Each must leave exactly one
+// non-attributable fact so the count-bounded window stays current.
+func TestProgressStreamAbortBeforeEOSRecordsTerminalOutcome(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"cancel", context.Canceled},
+		{"eof", io.EOF},
+		{"error", errors.New("stream reset by peer")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sessiontelemetry.ResetRouterSessionMemoryForTesting()
+			t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+			router := &OpenAIRouter{}
+			ctx := &RequestContext{
+				SessionID:           tc.name,
+				RequestID:           "request",
+				RequestModel:        "cheap",
+				IsStreamingResponse: true,
+			}
+			cfg := selection.DefaultProgressGateConfig()
+			cfg.Enabled = true
+			configureProgressEvidence(ctx, cfg, time.Now())
+
+			// The receive loop can surface more than one error for a single
+			// stream, so the capture must stay idempotent.
+			_ = router.handleProcessReceiveError(ctx, tc.err)
+			_ = router.handleProcessReceiveError(ctx, tc.err)
+
+			if !ctx.StreamingAborted {
+				t.Fatal("pre-EOS termination must mark the stream aborted")
+			}
+			window := sessiontelemetry.RecentTurnOutcomes(progressEvidenceStateKey(ctx), time.Now())
+			if len(window) != 1 {
+				t.Fatalf("pre-EOS termination must record exactly one outcome, got %+v", window)
+			}
+			if window[0].ModelAttributable {
+				t.Fatalf("an aborted stream must stay non-attributable: %+v", window[0])
+			}
+		})
+	}
+}
+
+// TestProgressCompletedStreamDoesNotGainAbortOutcome guards the other side: a
+// stream that already recorded its EOS turn must not be double counted.
+func TestProgressCompletedStreamDoesNotGainAbortOutcome(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SessionID:           "completed",
+		RequestID:           "request",
+		RequestModel:        "cheap",
+		IsStreamingResponse: true,
+	}
+	cfg := selection.DefaultProgressGateConfig()
+	cfg.Enabled = true
+	configureProgressEvidence(ctx, cfg, time.Now())
+
+	// The EOS branch records the turn before the stream closes.
+	recordSessionTurn(ctx, responseUsageMetrics{completionTokens: 7, completionTokensReported: true}, sessiontelemetry.TurnPricing{})
+	ctx.StreamingComplete = true
+
+	_ = router.handleProcessReceiveError(ctx, io.EOF)
+
+	window := sessiontelemetry.RecentTurnOutcomes(progressEvidenceStateKey(ctx), time.Now())
+	if len(window) != 1 {
+		t.Fatalf("completed stream gained an extra outcome: %+v", window)
+	}
+	if window[0].Category != sessiontelemetry.TurnProgress {
+		t.Fatalf("abort path overwrote the completed outcome: %+v", window[0])
+	}
+	if ctx.StreamingAborted {
+		t.Fatal("a completed stream must not be marked aborted")
+	}
+}
+
+// gateRejectedRouter enables an enforcing progress gate whose hard filters
+// reject every candidate for the request, so any selector path that runs the
+// learning stage ends up with a fail-closed rejection on the context.
+func gateRejectedRouter(t *testing.T, sessionID string) (*OpenAIRouter, *RequestContext) {
+	t.Helper()
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeConversation)}
+	router.Config.RouterLearning.Protection.Tuning.ProgressGate = &config.ProgressGateTuning{
+		Enabled: extprocBoolPtr(true),
+		Mode:    selection.GateModeEnforce,
+	}
+	// The gate re-checks the request's hard filters, so a model that cannot
+	// satisfy the context is dropped before any switch can be proposed.
+	for _, model := range []string{"cheap", "frontier"} {
+		params := router.Config.ModelConfig[model]
+		params.ContextWindowSize = 32
+		router.Config.ModelConfig[model] = params
+	}
+
+	ctx := routerLearningRequestContext(sessionID, sessionID)
+	ctx.VSRContextTokenCount = 128
+	return router, ctx
+}
+
+// TestSingleCandidatePathPropagatesGateHardRejection locks the fail-closed rule
+// on the path that skips the selector entirely.
+func TestSingleCandidatePathPropagatesGateHardRejection(t *testing.T) {
+	router, ctx := gateRejectedRouter(t, "single-candidate-rejection")
+	selCtx := &selection.SelectionContext{
+		SessionID:       "single-candidate-rejection",
+		DecisionName:    "only-choice",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}
+
+	selected, _, err := router.selectModelFromCandidates(selCtx, nil, ctx)
+
+	if !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("error = %v, want ErrNoEligibleCandidates", err)
+	}
+	if selected != nil {
+		t.Fatalf("a gate-rejected single candidate was dispatched: %#v", selected)
+	}
+}
+
+// TestFallbackPathPropagatesGateHardRejection covers the diagnostic fallback,
+// which has no error return of its own and previously dropped the rejection.
+func TestFallbackPathPropagatesGateHardRejection(t *testing.T) {
+	router, ctx := gateRejectedRouter(t, "fallback-rejection")
+	registry := selection.NewRegistry()
+	registry.Register(
+		selection.MethodStatic,
+		selectionResultSelector{err: errors.New("selector unavailable")},
+	)
+	router.ModelSelector = registry
+	selCtx := &selection.SelectionContext{
+		SessionID:       "fallback-rejection",
+		DecisionName:    "two-candidates",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}, {Model: "frontier"}},
+	}
+
+	selected, _, err := router.selectModelFromCandidates(selCtx, nil, ctx)
+
+	if !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("error = %v, want ErrNoEligibleCandidates", err)
+	}
+	if selected != nil {
+		t.Fatalf("a gate-rejected fallback was dispatched: %#v", selected)
+	}
+}
+
+// TestSelectorPathsKeepDefaultBehaviorWhenGateDisabled guards the blast radius:
+// with no gate configured both paths keep returning the selected model.
+func TestSelectorPathsKeepDefaultBehaviorWhenGateDisabled(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeConversation)}
+	ctx := routerLearningRequestContext("gate-disabled", "gate-disabled")
+	selCtx := &selection.SelectionContext{
+		SessionID:       "gate-disabled",
+		DecisionName:    "only-choice",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}
+
+	selected, _, err := router.selectModelFromCandidates(selCtx, nil, ctx)
+	if err != nil {
+		t.Fatalf("disabled gate changed selection: %v", err)
+	}
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("disabled gate must return the candidate, got %#v", selected)
+	}
+}
 
 func TestProgressWindowConfiguredBeforeFirstSwitch(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
