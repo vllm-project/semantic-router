@@ -1,0 +1,34 @@
+id: snowflake-cortex
+display_name: Snowflake Cortex AI
+description: Frontier models hosted and governed inside your Snowflake perimeter.
+category: model_api
+support_tier: native
+# No default_base_url: the host is account-specific. Operators configure
+# ProviderInstance.base_url as https://<account>.snowflakecomputing.com/api/v2/cortex/v1
+# (precedent: azure-openai). The resolver strips a protocol's /v1 prefix whenever a
+# base path is configured, so the operator base URL must include /api/v2/cortex/v1
+# for requests to resolve to /api/v2/cortex/v1/chat/completions and
+# /api/v2/cortex/v1/messages.
+protocols:
+- openai/chat-completions@1
+- anthropic/messages@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- anthropic/messages@1#create
+# Cortex REST API does not document /v1/models, so list_models is not declared.
+# anthropic-version is provider-global default_headers (applied to every
+# protocol); Snowflake ignores it on the chat/completions path. Messages API
+# follows the Anthropic spec and expects it.
+default_headers:
+  anthropic-version: '2023-06-01'
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: monogram
+  monogram: SF
+  monochrome: true
+conformance:
+  status: unverified
