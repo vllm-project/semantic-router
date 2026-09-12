@@ -74,7 +74,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/Vela-1.0-Encoder-307M",
 		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M",
-		Revision:         "25aff2199ef373c1a99db72b770e013f70242b78",
+		Revision:         "1bf99f17b30b039b8ffa87687dea5a3a6e7430fe",
 		Aliases:          []string{"Vela-1.0-Encoder-307M"},
 		Purpose:          PurposeEncoder,
 		Description:      "Build specialized, multilingual routing capabilities with up to 32K context. Use the Embedding model for search and retrieval.",
@@ -86,7 +86,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/Vela-1.0-Encoder-307M-FactCheck",
 		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck",
-		Revision:         "9ec8128299dd942d13d5ec46d4348d7b4ea9b9ad",
+		Revision:         "61901ed9b9350124d322f77ccfdcadb032c5f69c",
 		Aliases:          []string{"Vela-1.0-Encoder-307M-FactCheck"},
 		Purpose:          PurposeHallucinationSentinel,
 		Description:      "Identify requests that need factual verification, with up to 32K input. It does not verify factual claims.",
@@ -98,7 +98,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/Vela-1.0-Encoder-307M-Domain",
 		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M-Domain",
-		Revision:         "67e64ab889d5128caf925c769cc5570efdce18d3",
+		Revision:         "78ea2f84c3f35e3b3ddf6cbdcd137357952d280d",
 		Aliases:          []string{"Vela-1.0-Encoder-307M-Domain"},
 		Purpose:          PurposeDomainClassification,
 		Description:      "Identify a request's subject across 14 domains for routing to relevant expertise. Supports 32K input; the published ONNX variant is FP32 with batch size 1.",
@@ -110,7 +110,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/Vela-1.0-Encoder-307M-PII",
 		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M-PII",
-		Revision:         "86d35f9a3af83cd1a26bacba1fef7d235f5e8b6b",
+		Revision:         "81f9bccfa4563f534adcfce3dc34e221369223f3",
 		Aliases:          []string{"Vela-1.0-Encoder-307M-PII"},
 		Purpose:          PurposePIIDetection,
 		Description:      "Locate personal information across 17 entity types with 35 BIO labels. Supports 32K input; overlapping windows are recommended for long scans. The published ONNX variant is FP32 with batch size 1.",
@@ -122,7 +122,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/Vela-1.0-Encoder-307M-Modality",
 		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M-Modality",
-		Revision:         "2fe15218aec1e7f5bec4689d8eb9db977f61f783",
+		Revision:         "8ad837c2851591790c3ecce873a242392faf8f44",
 		Aliases:          []string{"Vela-1.0-Encoder-307M-Modality"},
 		Purpose:          PurposeModalityDetection,
 		Description:      "Classify written requests into text generation, image generation, or both. This is a text classifier. Supports 32K input; the published ONNX variant is FP32 with batch size 1.",
