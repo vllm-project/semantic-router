@@ -1,0 +1,872 @@
+{
+  "protocol": "feedback-current-turn-training-review-v1",
+  "source": "microsoft/WildFeedback",
+  "source_revision": "8b1a3e530b949d6aacfad6ba8912e209a05bc846",
+  "source_sha256": "2caea8361756b35a512b2ebef93245df1e81d982a3602460f75a4445fc16d305",
+  "reviewer": "assistant full-text review, not an independent human panel",
+  "source_flags_are_weak_not_human_gold": true,
+  "selection": "92 hash-stratified prior weak positives reviewed before initial external final scoring;15 train-only quality-judgment candidates from source semantics after that final summary, without inspecting final inputs or predictions",
+  "rule": "Use only visible current user text. Supplied content tasks are NO_FEEDBACK; unclear or mixed dominant intent is excluded. Remove all weak family variants but add only exact reviewed utterances.",
+  "candidate_files_sha256": [
+    "0b163fe1d13ae90513ff499e8f738457f4cc203f15b6634e85b9c35aab553ea2",
+    "edf7f496fb3297fc51964a83ed430dbf2889b2ef34da9b809a61a4879653263d"
+  ],
+  "items": [
+    {
+      "id": "wildfeedback:807906",
+      "group_id": "wildfeedback:conversation:71454",
+      "text_sha256": "790fe2529fc0a0eb7f418bbda3e18618d7369d006449a609f28ff0b959afa917",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Complete economics multiple-choice question; explanation is requested content"
+    },
+    {
+      "id": "wildfeedback:869884",
+      "group_id": "wildfeedback:conversation:76703",
+      "text_sha256": "2f33812af4b17679fb06c9c7b9e356ac0ffc31eaefb12ed13f995a301617da64",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Self-contained movie-description task, not disappointment with assistant"
+    },
+    {
+      "id": "wildfeedback:890122",
+      "group_id": "wildfeedback:conversation:78453",
+      "text_sha256": "5ccda77cc64ad79b19b5b6ec2dea75cdf6fb9a0e46026118d2a5cbb3d16f5bb4",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": null,
+      "reason": "Mathematical presentation change and clarification cannot be separated from this text alone"
+    },
+    {
+      "id": "wildfeedback:637626",
+      "group_id": "wildfeedback:conversation:57192",
+      "text_sha256": "8cc02c5a331fbb9f105b86d2953430a5186af73574eacd79b33ab7df0562b8d5",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:700884",
+      "group_id": "wildfeedback:conversation:62733",
+      "text_sha256": "48a047ed3a1600dc8a4f8bcb450259fe4e25f3d5df7cf607d081b9c4f70e28c9",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "A supplied professional statement is the object to explain"
+    },
+    {
+      "id": "wildfeedback:390310",
+      "group_id": "wildfeedback:conversation:34139",
+      "text_sha256": "1a6424c6c7024955484b1781b7aab605e5f09d33bd586890300e49431d7412f6",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:45456",
+      "group_id": "wildfeedback:conversation:4171",
+      "text_sha256": "65365b5dbacc6d11a2fc467ea2eb10700cbe79b8b8695601231a4c421baf88ac",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:766874",
+      "group_id": "wildfeedback:conversation:68013",
+      "text_sha256": "9ec5f4869ed73e61caec033c9ae4282f3f417da1a0f975a70ac6065fe5ba546c",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": null,
+      "reason": "Word-count expansion does not establish confusion rather than output revision"
+    },
+    {
+      "id": "wildfeedback:719982",
+      "group_id": "wildfeedback:conversation:64277",
+      "text_sha256": "d10ff3c4446695297f8c0d6822f497622bdc1bf68a0b2bef568ebf14b8d99af5",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Supplied research-method paragraph requests explanation"
+    },
+    {
+      "id": "wildfeedback:261284",
+      "group_id": "wildfeedback:conversation:22645",
+      "text_sha256": "2e48c0cd089c7288122bb9382e4170f34e5f09e380803397f1ed4a8ccceb45b4",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "New graph-construction problem"
+    },
+    {
+      "id": "wildfeedback:452106",
+      "group_id": "wildfeedback:conversation:39845",
+      "text_sha256": "425a3363de9b49161625b48c6ae68b85efec9ed8204e8255fab4f1a930135817",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:97096",
+      "group_id": "wildfeedback:conversation:8764",
+      "text_sha256": "eaaf169a8017b8a1fdffab2c3a27fe8da57caf1f9eed85e63d6421d2bb8d3f15",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:329646",
+      "group_id": "wildfeedback:conversation:28525",
+      "text_sha256": "df239f2fbabf7eaad66537f98cdad8e0d94c35beb851a398433b9638e12ea51e",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Supplied invoice sentence asks for translation"
+    },
+    {
+      "id": "wildfeedback:500804",
+      "group_id": "wildfeedback:conversation:44130",
+      "text_sha256": "e14138a8647692efd3003ce21ed73977d09f89ea4a878b0dfda90f2a6608b749",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Supplied runtime error asks its meaning"
+    },
+    {
+      "id": "wildfeedback:781860",
+      "group_id": "wildfeedback:conversation:69295",
+      "text_sha256": "859e3c870393d89d179417e7632fcf3783d981418d515262759f77486f6b3a6c",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Complete research-application question asks for a new answer"
+    },
+    {
+      "id": "wildfeedback:123744",
+      "group_id": "wildfeedback:conversation:11081",
+      "text_sha256": "e022767304921438737b9c6861778d8a77763466d81f9f393748051c4dc64f3d",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "A named shell command asks for its meaning"
+    },
+    {
+      "id": "wildfeedback:401210",
+      "group_id": "wildfeedback:conversation:35153",
+      "text_sha256": "f05abde7ca247dc983162f04faff160c85e0f88dcb30ea112ed55503f255094c",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:35462",
+      "group_id": "wildfeedback:conversation:3237",
+      "text_sha256": "9198ad68150d0f1c9ea71e27e86ffb678a3b7c9e03fe43df52b38b0fe1225042",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:262766",
+      "group_id": "wildfeedback:conversation:22768",
+      "text_sha256": "d0f8effb70ee5236751a48fd65f01ea1ce141b2e8d21b01b94faa2dd405a0764",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:83606",
+      "group_id": "wildfeedback:conversation:7581",
+      "text_sha256": "5dc3487f57ff712614383f621f22bdc3b2031d845bd651106bc4ba49c6b2bd56",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NEED_CLARIFICATION",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:579360",
+      "group_id": "wildfeedback:conversation:51508",
+      "text_sha256": "ad24e1acb2ba43debc311fb3565fca3305177d0ccf3aa8efd8d8aa3ab032077d",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Supplied stack trace asks for meaning"
+    },
+    {
+      "id": "wildfeedback:81854",
+      "group_id": "wildfeedback:conversation:7429",
+      "text_sha256": "9f7265e1c9af0bbf6af25380a8241f9c4055b328c483762d153a4567253918cb",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "A named event asks for its meaning"
+    },
+    {
+      "id": "wildfeedback:70936",
+      "group_id": "wildfeedback:conversation:6495",
+      "text_sha256": "9b07d26ffe53610a6e9fa8dd5d762a0bce0405829008fca1ad6d369347880d97",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Supplied business message asks translation and editing"
+    },
+    {
+      "id": "wildfeedback:193498",
+      "group_id": "wildfeedback:conversation:16977",
+      "text_sha256": "7883f2f60f3204070b88631980a7f1ab4cbca97893e98cc14118da6b41e3d3c8",
+      "original_label": "NEED_CLARIFICATION",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "A supplied term asks for meaning"
+    },
+    {
+      "id": "wildfeedback:964878",
+      "group_id": "wildfeedback:conversation:84715",
+      "text_sha256": "8a07db27dff711189176bd397d6542c764b794dc1731a2256b52ed60767a8243",
+      "original_label": "SAT",
+      "reviewed_label": null,
+      "reason": "Box no longer moving could be success or a new failure; desired behavior is unavailable"
+    },
+    {
+      "id": "wildfeedback:46122",
+      "group_id": "wildfeedback:conversation:4237",
+      "text_sha256": "01f9d02639bdf205db48fea8c0099291dee5526dc57c68acf0a3560c586e6d87",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:162482",
+      "group_id": "wildfeedback:conversation:14377",
+      "text_sha256": "b083c7d5e889dc516f0d84d7ab67d09dfb818c7c1012a1c0d2cc913c28790283",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:95650",
+      "group_id": "wildfeedback:conversation:8634",
+      "text_sha256": "02dabf044d7ec996d9fa30b6a8619b1006e2264959306069661f203620d0b367",
+      "original_label": "SAT",
+      "reviewed_label": null,
+      "reason": "Gratitude plus new conversation request is mixed intent"
+    },
+    {
+      "id": "wildfeedback:696630",
+      "group_id": "wildfeedback:conversation:62372",
+      "text_sha256": "538641239e967ee1adbd27dc550b561e3aa4db424c0cb3c6d4c2a9d99ea03ff2",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:886146",
+      "group_id": "wildfeedback:conversation:78075",
+      "text_sha256": "12af0881ebfdb5ff3054cddcd84d373c686d77ae6d559ad1df0fafabf2ce4d77",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:170244",
+      "group_id": "wildfeedback:conversation:14996",
+      "text_sha256": "5312ae1573177c7bc71d31c3b2edcc2097fe4f60ddeaaa06dcfff8e6fbd7ec44",
+      "original_label": "SAT",
+      "reviewed_label": null,
+      "reason": "Satisfaction plus chapter continuation and expansion is mixed intent"
+    },
+    {
+      "id": "wildfeedback:111038",
+      "group_id": "wildfeedback:conversation:10019",
+      "text_sha256": "383a9d46c0896ac5a08110a41ddd5d869a41dbe63905ae60d45bd60a64dec285",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:302650",
+      "group_id": "wildfeedback:conversation:26175",
+      "text_sha256": "470d70817e18ba814225225c5f186518a66a4bd8a693014df2522d5da40260cf",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:157138",
+      "group_id": "wildfeedback:conversation:13936",
+      "text_sha256": "63958fa9360e8a5df251a276b6ab942982d0dd03882fc86528203a336d35f6ab",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:687840",
+      "group_id": "wildfeedback:conversation:61661",
+      "text_sha256": "be3504a8957a1c502a620924be92505625c4da7925c45b3aff28a601ef522717",
+      "original_label": "SAT",
+      "reviewed_label": null,
+      "reason": "Gratitude plus a new topic request is mixed intent"
+    },
+    {
+      "id": "wildfeedback:117760",
+      "group_id": "wildfeedback:conversation:10579",
+      "text_sha256": "53eb11dd61c8f3362795f9b6e561be67cbdc692d1f61492d8210886d84683bdc",
+      "original_label": "SAT",
+      "reviewed_label": null,
+      "reason": "Satisfaction and continuing difficulty coexist without clear dominant intent"
+    },
+    {
+      "id": "wildfeedback:330400",
+      "group_id": "wildfeedback:conversation:28592",
+      "text_sha256": "8cb7c552ac73405a0fb6456d974693fb7cf40644c2c79e9bf5b30e565632181a",
+      "original_label": "SAT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Reply to a supplied message; gratitude belongs to the quoted correspondent"
+    },
+    {
+      "id": "wildfeedback:697556",
+      "group_id": "wildfeedback:conversation:62439",
+      "text_sha256": "b9ec277995cd556bbc82be8500e45ff72f739b2500df9779548fe8549d9d0973",
+      "original_label": "SAT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Translate supplied medical product description; praise describes the product"
+    },
+    {
+      "id": "wildfeedback:483170",
+      "group_id": "wildfeedback:conversation:42583",
+      "text_sha256": "8cb914957c029e62558df5afea14f36d6154f0ced5997b378e5e0e547465edb1",
+      "original_label": "SAT",
+      "reviewed_label": null,
+      "reason": "Positive description of supplied restaurant content is not clearly feedback on an assistant response"
+    },
+    {
+      "id": "wildfeedback:307888",
+      "group_id": "wildfeedback:conversation:26610",
+      "text_sha256": "6f24d0c5d855e8c5b67394cfdc0ca5a4eb81d6ff0a65a7015e7c8e926def68d4",
+      "original_label": "SAT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Write a reply to the supplied business email"
+    },
+    {
+      "id": "wildfeedback:572930",
+      "group_id": "wildfeedback:conversation:50896",
+      "text_sha256": "dff11f9dbcceff66ed5c205514b7a12f62329ecb919695430a4a7e2b0311ae67",
+      "original_label": "SAT",
+      "reviewed_label": "SAT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:572898",
+      "group_id": "wildfeedback:conversation:50893",
+      "text_sha256": "03f9bcf5ac11d8e85ce91ed7d0f2c4e82b360f8115306f4298c24fe7ff7efc3c",
+      "original_label": "SAT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Compose a response to the supplied buyer message"
+    },
+    {
+      "id": "wildfeedback:138208",
+      "group_id": "wildfeedback:conversation:12298",
+      "text_sha256": "1efb9b619c3770ccaa09ab62ef169d27435f5cb456b2223588c0e8592d4e7266",
+      "original_label": "SAT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Translation request; courtesy thanks is not satisfaction with an answer"
+    },
+    {
+      "id": "wildfeedback:115432",
+      "group_id": "wildfeedback:conversation:10381",
+      "text_sha256": "76df63fca96e301e4faf63276666d45d54ca0ced29a0feefe75646c76d5a11a5",
+      "original_label": "SAT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Translate a supplied acknowledgment; thanks belongs to original text"
+    },
+    {
+      "id": "wildfeedback:742700",
+      "group_id": "wildfeedback:conversation:66088",
+      "text_sha256": "c8fc553c70291253f912ba948a916044cd15a86cb455552a70836cfd9525514b",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Rewrite explicitly supplied source sentence"
+    },
+    {
+      "id": "wildfeedback:619134",
+      "group_id": "wildfeedback:conversation:55353",
+      "text_sha256": "4b0898f49360c52628f61b328b62888b64c9f11c0f7416a6e154bd443dd2ad92",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:198280",
+      "group_id": "wildfeedback:conversation:17367",
+      "text_sha256": "ada9ac70055540449fb8287ec262b745f94397b23bb6fbf813abc68d347bc6c3",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Rewrite explicitly supplied source paragraph"
+    },
+    {
+      "id": "wildfeedback:337054",
+      "group_id": "wildfeedback:conversation:29167",
+      "text_sha256": "c2fad5dff4816d599ce649c6b45c291d1966bdbc88c0bc6adbdfe0b3b2d8cdfc",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:91050",
+      "group_id": "wildfeedback:conversation:8218",
+      "text_sha256": "bc26d1106f44d328e4cf71df5aa13e6bac2519a4e6a79858a2f326fdc87b8e4c",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Continue a scene using new plot instructions, no evaluation of prior answer"
+    },
+    {
+      "id": "wildfeedback:526636",
+      "group_id": "wildfeedback:conversation:46363",
+      "text_sha256": "d35b4e86605bfc7c32e855bf62dbfe609bd41dcde61e2ba9f7d1125c5ac49cca",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:597156",
+      "group_id": "wildfeedback:conversation:53253",
+      "text_sha256": "71f95b1d27ba3835f27e64e65b5a22c68298bca32a5fecb6f02e22f549c3d919",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": null,
+      "reason": "Requests contradictory shorter/longer edit, intended direction unknown"
+    },
+    {
+      "id": "wildfeedback:432076",
+      "group_id": "wildfeedback:conversation:38012",
+      "text_sha256": "c2993e0df30c7c772d498e0e9278327ee2df077dbfb668ee440a90253c3c7426",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Explicit continuing compiler failure is corrective feedback; rewrite is the requested remedy"
+    },
+    {
+      "id": "wildfeedback:642266",
+      "group_id": "wildfeedback:conversation:57676",
+      "text_sha256": "ee75a8fa171caf3d96266dfde0118e6c31a93a6dce74e47e852de5d8d78f6bf9",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:71906",
+      "group_id": "wildfeedback:conversation:6577",
+      "text_sha256": "a48dfab88aa44eed735cf8cb1158c125a6784be3c7073487accc491fc4275233",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:639230",
+      "group_id": "wildfeedback:conversation:57347",
+      "text_sha256": "c68adddcbc7b29738afcb61dad3e3ed9c3112efe373392e08efceff8d4dcb1b2",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Self-contained travel-planning request"
+    },
+    {
+      "id": "wildfeedback:281974",
+      "group_id": "wildfeedback:conversation:24372",
+      "text_sha256": "296542ec703d7cfe24076b7a177667d786423bbcdb33d606632d8367bd663070",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Edit explicitly supplied tutorial description"
+    },
+    {
+      "id": "wildfeedback:478302",
+      "group_id": "wildfeedback:conversation:42180",
+      "text_sha256": "3ac792e0b11d199be175d0c8ae837ebc0981c0884beabb22cd6bae4bd41245e3",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Forward-looking instructions for subsequent questions; no feedback on prior answer"
+    },
+    {
+      "id": "wildfeedback:881402",
+      "group_id": "wildfeedback:conversation:77649",
+      "text_sha256": "7c82f21be5a9d5a2a53569c2ad14e3d98fc442f0e269a900104a35c7002088d9",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Paraphrase the supplied scientific sentence"
+    },
+    {
+      "id": "wildfeedback:859484",
+      "group_id": "wildfeedback:conversation:75783",
+      "text_sha256": "57462d71c56ae42f81bebba0814ba5c40b9d26686d02e05931e322610987b0de",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Paraphrase the supplied scientific sentence"
+    },
+    {
+      "id": "wildfeedback:151748",
+      "group_id": "wildfeedback:conversation:13438",
+      "text_sha256": "9a7a78c2f3abab7f92846c46673d91ff3a1011ea7e4e9c9cc9c273f5f5586694",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Summarize supplied study paragraph"
+    },
+    {
+      "id": "wildfeedback:744258",
+      "group_id": "wildfeedback:conversation:66208",
+      "text_sha256": "9018f4a3b820066122d6aed85493c5e6f43a2356640394bf7182984472d2939c",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:185666",
+      "group_id": "wildfeedback:conversation:16314",
+      "text_sha256": "481500b8d3db1fad8272c0246509e272ead14915c7f2a2964450e504f1a00ca2",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Rewrite supplied scientific sentence"
+    },
+    {
+      "id": "wildfeedback:478528",
+      "group_id": "wildfeedback:conversation:42198",
+      "text_sha256": "3243a24fb35d2aef5190c9d0e4a8fcbe6917e6dbb160946a084d6e99e45fe20b",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": null,
+      "reason": "Bilingual brief-answer instruction lacks evidence of whether it revises a prior response"
+    },
+    {
+      "id": "wildfeedback:220294",
+      "group_id": "wildfeedback:conversation:19209",
+      "text_sha256": "6f348b6f9fe81c0e87ae1df40043df9de6a9b32e8420f0e38ecf2a6824ed5273",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:730004",
+      "group_id": "wildfeedback:conversation:65076",
+      "text_sha256": "3d4e00abe5e6375b75b594be74839de578f51396bea91412e3f464f8d324855a",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:813920",
+      "group_id": "wildfeedback:conversation:71950",
+      "text_sha256": "7e91bfafc879ee51454820cc3e548daabebb06657f42a0507dcd91ba1a9b73d5",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Paraphrase supplied scientific paragraph"
+    },
+    {
+      "id": "wildfeedback:329498",
+      "group_id": "wildfeedback:conversation:28513",
+      "text_sha256": "fd8d21a8182700ae99df038aab3cd2f67db3b8de9747d815001d41f5b624ba59",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:72812",
+      "group_id": "wildfeedback:conversation:6657",
+      "text_sha256": "ee33b1748230cbeef08eb86e26af2d533a412b09eab8a342e48a09df04525e98",
+      "original_label": "WANT_DIFFERENT",
+      "reviewed_label": "WANT_DIFFERENT",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:978432",
+      "group_id": "wildfeedback:conversation:85802",
+      "text_sha256": "f4459690be527233c87f3b31436f0e0dff00c022a5246e815722fe6a42feae4d",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:569738",
+      "group_id": "wildfeedback:conversation:50579",
+      "text_sha256": "7281654d8473164210608ed6963e3dc26ce75dcab7ebb4b2395acc1de537f3bc",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Explain supplied runtime error rather than asserting assistant made it"
+    },
+    {
+      "id": "wildfeedback:187238",
+      "group_id": "wildfeedback:conversation:16437",
+      "text_sha256": "1bf2e4a50fb2f506127f7954aa2efb242bcdab58d166a064dbec98f9d850cf09",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:834028",
+      "group_id": "wildfeedback:conversation:73707",
+      "text_sha256": "a73d77b98b394ce19ce85e15ce658b2d79a2915cf0d6bb3b468d38c6f4e60e10",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Self-contained evacuation quiz; false is in an answer option"
+    },
+    {
+      "id": "wildfeedback:31124",
+      "group_id": "wildfeedback:conversation:2849",
+      "text_sha256": "0c217add030a8a970cfd9c3da49ec0397e316a48997db74b62a1dd53976fc108",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:102852",
+      "group_id": "wildfeedback:conversation:9276",
+      "text_sha256": "a8393cc12453f8fca799b9202f66f02bc651a7e1b356cb0e606aa6a2167f25f6",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:547396",
+      "group_id": "wildfeedback:conversation:48362",
+      "text_sha256": "d84e75eabaadab01897a7bb6ba159d9b674300e9c08a73cf7d37f03ffff348b6",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:655380",
+      "group_id": "wildfeedback:conversation:58938",
+      "text_sha256": "4194822a4707b1067fc786d7f5a03c84812da6e61d9e68a382592c7cea00c188",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:51196",
+      "group_id": "wildfeedback:conversation:4767",
+      "text_sha256": "453bc9f588b7622bbb03b7eb4ef404f9815d478a3fd5fba121447b4115578021",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:683600",
+      "group_id": "wildfeedback:conversation:61287",
+      "text_sha256": "d48cc68a76d11bb3e32c3c3dc0a32a1100f1f919c9a94dbfd60282b48cef7ba2",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:698448",
+      "group_id": "wildfeedback:conversation:62516",
+      "text_sha256": "708d728fe006b21e15ed66667bfe90c955a8333d4e22861ebfc4c32c103f89ed",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:955814",
+      "group_id": "wildfeedback:conversation:83993",
+      "text_sha256": "f80341a44e8aa15353bbd18fcadfb7bd1f7f02a4284a6cf1a6198eb1f35abcca",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:70900",
+      "group_id": "wildfeedback:conversation:6494",
+      "text_sha256": "b52e3e185a21e86ffc381406c114b6641e1f8ecec688256f53ce457a2cabea4c",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Optimize a supplied component; error wording appears inside code data"
+    },
+    {
+      "id": "wildfeedback:176432",
+      "group_id": "wildfeedback:conversation:15533",
+      "text_sha256": "db87ce9a3360dd467d9558cc62e6c73c73db467dd4f3628612c98482aff47aa8",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:640516",
+      "group_id": "wildfeedback:conversation:57484",
+      "text_sha256": "003901dd14e2dcb4893569104401871f0d48e873a7f0e377f927e2243dae8f71",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:52828",
+      "group_id": "wildfeedback:conversation:4948",
+      "text_sha256": "2d084362bb04c86d12735c01e0526805b72fc21b031240cd116fa3806d1025ec",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Grammar-check supplied invoice sentence"
+    },
+    {
+      "id": "wildfeedback:516942",
+      "group_id": "wildfeedback:conversation:45609",
+      "text_sha256": "4cea25673bc1d55d84922bbbaa85d3b4fb68e38138f636c8b10323e42d70450d",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Troubleshoot supplied compiler diagnostic with no prior-answer attribution"
+    },
+    {
+      "id": "wildfeedback:58614",
+      "group_id": "wildfeedback:conversation:5463",
+      "text_sha256": "4055d06849d1e572200dc4b2011cd34a299448e669638a9a6806d57880661f19",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:24882",
+      "group_id": "wildfeedback:conversation:2278",
+      "text_sha256": "de6d3ddba488a00bab4ceafe6436905cc2843f81960ecc50e37e1a7ac48e02ad",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Grammar-edit supplied product description"
+    },
+    {
+      "id": "wildfeedback:70922",
+      "group_id": "wildfeedback:conversation:6495",
+      "text_sha256": "a9beadffa1f94b677466768393b5d9431d387e7ff1a70df2e053ed0dbdd7e754",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Explain and grammar-check supplied email sentence"
+    },
+    {
+      "id": "wildfeedback:78316",
+      "group_id": "wildfeedback:conversation:7137",
+      "text_sha256": "751e7b16acd28d5cfb240987308874a420871595f200cceb47ba2880337985cf",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Verify supplied macro correctness; question is not an assertion of prior-answer error"
+    },
+    {
+      "id": "wildfeedback:563528",
+      "group_id": "wildfeedback:conversation:49979",
+      "text_sha256": "f2f827a5e2d6db2c3f4dec5b9a6f656904f1877ed45b3d6561ab2b51f19f22ac",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "WRONG_ANSWER",
+      "reason": "Visible user text refers back to an answer or expresses direct evaluation, clarification, or revision consistent with the original label"
+    },
+    {
+      "id": "wildfeedback:881440",
+      "group_id": "wildfeedback:conversation:77653",
+      "text_sha256": "e05e341d56f462385b66e9cd5b231b61ff59c3c6b621bd8a2fae0fb47d165871",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Grammar-check supplied scientific sentence"
+    },
+    {
+      "id": "wildfeedback:152714",
+      "group_id": "wildfeedback:conversation:13525",
+      "text_sha256": "222e27b55093153ed4d125e4fb5e85d2f4cfc6988f8bca1ce6a0d520a3b9ed0b",
+      "original_label": "WRONG_ANSWER",
+      "reviewed_label": "NO_FEEDBACK",
+      "reason": "Diagnose supplied code and compiler error without prior-answer attribution"
+    },
+    {
+      "id": "wildfeedback:284548",
+      "group_id": "wildfeedback:conversation:24611",
+      "text_sha256": "558dca687adb9c1b13ab5e28ad6e19e621c6c11a8b5e585ce5a1219112febda4",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:774902",
+      "group_id": "wildfeedback:conversation:68683",
+      "text_sha256": "46c6dd5766ed8feb5f035b78f997ff04b8013a27fe3171e6f021b347da327697",
+      "original_label": null,
+      "reviewed_label": "SAT",
+      "reason": "Explicit unqualified approval of the correctness of the previous answer"
+    },
+    {
+      "id": "wildfeedback:840806",
+      "group_id": "wildfeedback:conversation:74265",
+      "text_sha256": "e1173d26f8e34e0c0c4bdede506da6a98192c5b782ca89a01aba17d577f88c48",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:503736",
+      "group_id": "wildfeedback:conversation:44395",
+      "text_sha256": "13c589d5f4917a1229789a65f380c4efb1628577ed4207ccfed887ecc728ee52",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:814390",
+      "group_id": "wildfeedback:conversation:71996",
+      "text_sha256": "0ff89d1e6392b65e19a653673b72ad2bc18be0226971485f129aac7d94549166",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:1007696",
+      "group_id": "wildfeedback:conversation:88185",
+      "text_sha256": "30199e75d5738252c1fb16d5a01b872ecea4e57236cd3f9403bf0f53ec9fbe65",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:14074",
+      "group_id": "wildfeedback:conversation:1283",
+      "text_sha256": "7e5232baf2a7e7691ff93d23333eba4745e8aeb424919dea02cdbffda8a88af5",
+      "original_label": null,
+      "reviewed_label": "SAT",
+      "reason": "Explicit unqualified approval of the correctness of the previous answer"
+    },
+    {
+      "id": "wildfeedback:975056",
+      "group_id": "wildfeedback:conversation:85524",
+      "text_sha256": "b5aafde573c1caf0bc141209ad3dde9635e32068e3a7571c00516175e2924f3a",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:882574",
+      "group_id": "wildfeedback:conversation:77754",
+      "text_sha256": "d09f3fd8df6aa9d6a9e64a79b58140cf56c7ddca1f81ff1c6ca01e680e75da01",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:569154",
+      "group_id": "wildfeedback:conversation:50521",
+      "text_sha256": "12ba071d35b16e21de89b81bfbe410ebfd4714fa42c4037206fe27eb70e74394",
+      "original_label": null,
+      "reviewed_label": "SAT",
+      "reason": "Explicit unqualified approval of the correctness of the previous answer"
+    },
+    {
+      "id": "wildfeedback:794948",
+      "group_id": "wildfeedback:conversation:70355",
+      "text_sha256": "aee397d669112b39f24b37fd0108e9350b608461eb4e2188abd6db31085496dd",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:956064",
+      "group_id": "wildfeedback:conversation:84014",
+      "text_sha256": "30410805101d62e6693083abb2a1ca94e55afe73bc419c530858d8d2379aa19a",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:683190",
+      "group_id": "wildfeedback:conversation:61254",
+      "text_sha256": "f75f667c801e0a75a9a5f6a2f1e43232f23545578da48573cd5a291b5d419fcd",
+      "original_label": null,
+      "reviewed_label": "SAT",
+      "reason": "Explicit unqualified approval of the correctness of the previous answer"
+    },
+    {
+      "id": "wildfeedback:179836",
+      "group_id": "wildfeedback:conversation:15842",
+      "text_sha256": "2099358604e2d67fc75ccfd08b46a95fa4e69b2e019b189e2889d2c292d1cf70",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    },
+    {
+      "id": "wildfeedback:159294",
+      "group_id": "wildfeedback:conversation:14110",
+      "text_sha256": "21832d48bac16a314d1c09bcb3bbbe61c8670f5cf26abf52725f8e177dff978c",
+      "original_label": null,
+      "reviewed_label": null,
+      "reason": "Mixed gratitude with a new request, unresolved qualification, or ambiguous meaning; not a clean satisfaction label from visible current text"
+    }
+  ]
+}

@@ -1,0 +1,1131 @@
+{
+  "version": "vela-feedback-answer-quality-v1",
+  "license": "CC0-1.0",
+  "authorship": "Original assistant-authored and individually reviewed bilingual contrasts; not an independent human annotation panel.",
+  "evidence_scope": "Authored training/development semantic contrasts only; not a natural-distribution benchmark or final evaluation.",
+  "input_protocol": "Only the complete current user text is classified. The assistant history is not supplied or invented. Quoted or transformed evaluation text is task data, not feedback to the router.",
+  "label_rules": {
+    "SAT": "Explicitly endorses the preceding answer as correct, relevant, complete, clear, or useful; no requested revision or unresolved question.",
+    "NEED_CLARIFICATION": "Explicitly refers to a preceding answer and asks to understand its meaning or reasoning; does not assert that it is wrong.",
+    "WRONG_ANSWER": "Explicitly identifies an error, contradiction, omission of a required condition, or execution failure in the preceding answer.",
+    "WANT_DIFFERENT": "Requests a different format, voice, organization, audience, or alternative for the preceding answer without asserting an error or a lack of understanding.",
+    "NO_FEEDBACK": "A complete new request, including work on quoted/fictional evaluation wording, with no actual assessment or revision of the preceding answer."
+  },
+  "precedence": "A requested reformulation is WANT_DIFFERENT even when prefaced by approval. Explicit error correction is WRONG_ANSWER. A request to resolve misunderstanding is NEED_CLARIFICATION. Cases requiring absent conversation to distinguish these are excluded.",
+  "family_plan_sha256": "69c6bd185941018c6fd584b7b41ea549495ead853747ac570a902b598da7bebd",
+  "split_policy": "Family assignments and label protocol frozen before authoring model comparisons. All five intentions and both translations stay in one family and one partition; no training/development prediction used.",
+  "final_data_read": false,
+  "model_predictions_used": false,
+  "families": [
+    {
+      "family_id": "museum_label",
+      "split": "train",
+      "intent": "Assessing whether a museum object label is accurate and relevant",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The answer keeps the object, its maker, and its period distinct. It covers what a visitor needs without making claims the label cannot support.",
+          "zh": "这段回答把器物、制作者和所属时期分清楚了，游客需要的信息也都涵盖到了，没有超出展签证据乱下结论。",
+          "rationale": "Approves factual restraint and coverage of the preceding answer; no revision is requested."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "In your label explanation, I cannot tell whether \"attributed to\" refers to the maker or the collection. Could you unpack that wording?",
+          "zh": "你解释展签时说的“归于”究竟指制作者还是藏品所属机构？这处措辞我还没理解，能展开说明吗？",
+          "rationale": "Explicitly asks to resolve the meaning of wording in the prior explanation, without asserting an error."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your answer identifies the donor as the maker, but the supplied label lists them as different people. That identification is incorrect.",
+          "zh": "你把捐赠者认成了制作者，但我提供的展签写的是两个人。这个认定是错误的。",
+          "rationale": "Directly identifies a mistaken attribution in the preceding answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep the facts in your answer, but recast the museum label as three short lines for a small display case.",
+          "zh": "保留回答中的事实，把这段博物馆展签改成三行短句，方便放进小展柜。",
+          "rationale": "Requests a format revision of an existing answer rather than additional explanation or error correction."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Design a museum visitor survey with separate questions about whether a display label is accurate, relevant, and easy to understand.",
+          "zh": "设计一份博物馆游客问卷，分别询问展签是否准确、切题和容易理解。",
+          "rationale": "The entire message supplies a new survey-writing task; quality words are survey criteria, not feedback."
+        }
+      ]
+    },
+    {
+      "family_id": "nut_free_recipe",
+      "split": "train",
+      "intent": "Assessing adherence to a stated recipe ingredient constraint",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "This recipe answer actually respects the no-nuts constraint and explains the substitutions clearly. The instructions are complete enough to follow.",
+          "zh": "这份食谱回答确实遵守了不用坚果的要求，替代食材也解释清楚了，步骤完整，可以照着做。",
+          "rationale": "Endorses constraint adherence and completeness of the delivered recipe without requesting changes."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "You say to add the substitute \"after it sets.\" I am not sure which mixture you mean in that recipe step. Can you clarify?",
+          "zh": "你说要“凝固后”再加入替代食材，但那一步到底指哪份混合物，我没弄明白。能解释一下吗？",
+          "rationale": "Points to an ambiguous referent in the previous recipe and asks for clarification."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The recipe you gave me includes almond paste despite my explicit no-nuts requirement. It does not satisfy the request.",
+          "zh": "你给的食谱用了杏仁酱，违反了我明确提出的不放坚果的要求，并没有满足请求。",
+          "rationale": "States a concrete failure to follow a required ingredient constraint."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The ingredient choices in your answer suit me. Please turn the prose instructions into a preparation timeline.",
+          "zh": "回答里选的食材适合我。请把文字步骤改成备料和制作的时间线。",
+          "rationale": "Approval is followed by an explicit reorganization request, making revision the dominant intent."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Translate this review into Chinese: \"The recipe answer is clear, but it ignores the ingredient restriction.\"",
+          "zh": "把这条评论翻译成英文：“食谱回答很清楚，但忽略了食材限制。”",
+          "rationale": "Evaluation language is explicitly the supplied translation payload; the user is not judging the current answer."
+        }
+      ]
+    },
+    {
+      "family_id": "watercolor_layers",
+      "split": "train",
+      "intent": "Assessing the clarity and sequence of watercolor instructions",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The response explains the order of the watercolor layers and why each one dries first. That connects the steps to the result instead of merely listing them.",
+          "zh": "回答把水彩各层的顺序和为什么要先晾干讲明白了，说明了步骤如何影响结果，而不只是罗列操作。",
+          "rationale": "Positively assesses the explanatory depth and coherence of the preceding response."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I still do not understand what you mean by \"lifting\" in the watercolor explanation. Are you removing paint or adding water?",
+          "zh": "水彩解释里说的“提色”我还是不明白，是去掉颜料，还是往上加水？",
+          "rationale": "Asks for the intended meaning of a term in the answer; it is not a standalone new painting question."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your numbered answer tells me to paint the final detail before the background layer, even though the stated example requires the reverse order.",
+          "zh": "你的编号步骤让我先画最后的细节，再铺背景，但所述例子要求的顺序恰好相反。",
+          "rationale": "Identifies a concrete sequence error in the answer, rather than a preference about presentation."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "I understand your watercolor explanation. Rewrite it as a short conversation between an instructor and a beginner.",
+          "zh": "你的水彩解释我已经理解了。把它改成指导老师和初学者之间的一小段对话吧。",
+          "rationale": "Understanding is explicit; the request changes the answer format."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write a fictional workshop scene in which a student says, \"Those painting instructions finally make sense,\" and the teacher asks what helped.",
+          "zh": "写一个虚构的绘画课堂场景：学生说“这些画法说明终于讲明白了”，老师追问是哪一点起了作用。",
+          "rationale": "The praise belongs to a fictional character in a newly requested scene, not the current user feedback."
+        }
+      ]
+    },
+    {
+      "family_id": "chess_analysis",
+      "split": "train",
+      "intent": "Assessing an explanation of a supplied chess position",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The analysis addresses the position I supplied, explains both candidate moves, and gives reasons for its conclusion. It is a relevant and well-supported answer.",
+          "zh": "分析针对的是我提供的局面，解释了两个候选走法，也说明了结论的理由，回答切题且有依据。",
+          "rationale": "Explicitly approves relevance, coverage, and reasoning without asking for another analysis."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "When your analysis says that the move \"wins a tempo,\" I cannot see what extra move is being gained. Could you explain that part?",
+          "zh": "你的分析说这步棋“赢了一个先手”，但我看不出究竟多出了哪一步机会。能解释这部分吗？",
+          "rationale": "Requests an explanation of a reasoning term from the prior answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your analysis moves the bishop through an occupied square in the position I supplied. That line is not legal.",
+          "zh": "你分析的变化让象穿过了原局面中被占据的格子，这条走法不合法。",
+          "rationale": "Asserts a specific execution or rule error in the generated analysis."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The analysis is understandable. Give the same conclusion in plain language without move notation.",
+          "zh": "分析可以理解。请不用棋谱记号，用普通语言表达同一个结论。",
+          "rationale": "Requests another presentation of an understood answer, not clarification of an unresolved claim."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Create a checklist for reviewing a chess article, including whether its move sequences are legal and its explanations support its conclusions.",
+          "zh": "拟一份棋类文章审阅清单，包括走法是否合法、解释是否支持结论等项目。",
+          "rationale": "A complete checklist-design request uses assessment criteria as task content."
+        }
+      ]
+    },
+    {
+      "family_id": "catalog_search",
+      "split": "train",
+      "intent": "Assessing a library catalog search explanation",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "That answer distinguishes title, subject, and author searches without mixing them up. The examples match the library-catalog question I asked.",
+          "zh": "这个回答区分了书名、主题和作者检索，没有把它们混在一起，例子也符合我问的馆藏检索问题。",
+          "rationale": "Expresses a positive judgment of correctness and relevance of the prior explanation."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I am lost at the part of your answer about \"controlled vocabulary.\" How does that differ from the words I type into the catalog?",
+          "zh": "你的回答讲到“受控词表”时我就跟不上了，它和我在目录里输入的词有什么区别？",
+          "rationale": "Explicitly locates a comprehension gap in the previous response."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "You answered as if I had asked for a list of authors, but I asked how to search by subject. The response misses the actual question.",
+          "zh": "你按索要作者名单来回答，可我问的是如何按主题检索。回答偏离了真正的问题。",
+          "rationale": "Explicitly reports that the answer failed the requested task, rather than initiating a new catalog question."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep your distinctions between catalog fields and present them in a compact comparison table.",
+          "zh": "保留你对目录字段的区分，把它们整理成一张紧凑的对照表。",
+          "rationale": "Requests reformatting of already delivered content."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "For a librarian training handout, write two examples of respectful comments explaining that a search explanation is incomplete.",
+          "zh": "为图书馆员培训讲义写两条礼貌评论，说明某份检索解释不够完整。",
+          "rationale": "The user requests example comments as new writing material; no current answer is being criticized."
+        }
+      ]
+    },
+    {
+      "family_id": "sewing_allowance",
+      "split": "train",
+      "intent": "Assessing a sewing pattern explanation",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The answer clearly separates the cutting line from the stitching line. Its explanation is consistent with the pattern and removes the ambiguity I had.",
+          "zh": "回答清楚地区分了裁剪线和缝合线，解释与纸样一致，也消除了我原来的疑惑。",
+          "rationale": "States that the delivered explanation is consistent and resolves the user's uncertainty."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your answer uses both \"seam allowance\" and \"hem allowance.\" I cannot tell whether the instruction applies to the same edge. Could you explain?",
+          "zh": "你的回答同时提到了“缝份”和“折边量”，我分不清这条说明是不是针对同一条边。能解释一下吗？",
+          "rationale": "Asks to disambiguate the preceding explanation without declaring it incorrect."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The pattern says the allowance is already included, but your answer adds it again. That would change the requested size.",
+          "zh": "纸样注明已经包含缝份，你的回答却又加了一遍，这会改变要求的尺寸。",
+          "rationale": "Identifies a concrete duplicate allowance error in the prior answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Your sewing explanation is clear. Make a version that uses numbered captions beneath a sequence of illustrations.",
+          "zh": "你的缝纫解释很清楚。再做一版，改成一组插图下面的编号图注。",
+          "rationale": "Positive feedback is subordinate to the explicit request for an alternate format."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Explain what makes a sewing instruction easy to follow, using one invented clear example and one invented confusing example.",
+          "zh": "解释怎样的缝纫说明比较容易照着操作，并各编一个清楚和令人困惑的例子。",
+          "rationale": "The message asks a new general educational question about writing quality, not about a preceding answer."
+        }
+      ]
+    },
+    {
+      "family_id": "radio_script",
+      "split": "train",
+      "intent": "Assessing a short community-radio script",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The script answer stays focused on the community notice and gives listeners the necessary details in a sensible order. It is ready to use.",
+          "zh": "这份广播稿回答始终围绕社区通知展开，把听众需要的信息按合理顺序交代了，可以直接使用。",
+          "rationale": "Approves relevance, organization, and readiness of the answer."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I cannot tell whether the pause marked in your radio script comes before or after the address. Could you clarify the cue?",
+          "zh": "你广播稿中标的停顿是在地址之前还是之后，我没看懂。能说明一下这个提示吗？",
+          "rationale": "Requests clarification of a cue in the existing script."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your script changes the event location from the community hall to the library. That is not the location in my brief.",
+          "zh": "你的广播稿把活动地点从社区礼堂改成了图书馆，和我给的材料不一致。",
+          "rationale": "States a factual mismatch between the answer and supplied constraints."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep the details from your script, but make the delivery more conversational and remove the opening jingle cue.",
+          "zh": "保留稿子里的信息，把播报语气改得更像聊天，并去掉开场音效提示。",
+          "rationale": "Requests stylistic and structural revision without claiming misunderstanding or factual failure."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write a radio-production exercise whose prompt asks students to discuss whether a script is accurate, concise, and suitable for its audience.",
+          "zh": "写一道广播制作练习题，让学生讨论一份稿子是否准确、简洁并适合受众。",
+          "rationale": "Assessment language belongs to the requested exercise; the input is a complete new task."
+        }
+      ]
+    },
+    {
+      "family_id": "accessible_walk",
+      "split": "train",
+      "intent": "Assessing a walking itinerary against accessibility constraints",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The answer uses the step-free route throughout and includes the rest stops I asked for. It respects the stated constraints rather than offering a generic walk.",
+          "zh": "回答全程采用无台阶路线，也包含了我要求的休息点，遵守了具体限制，而不是泛泛给一条步行线路。",
+          "rationale": "Endorses compliance and task specificity of the existing route answer."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your route note says to use the \"lower entrance.\" I do not understand which entrance that refers to on the map. Could you clarify?",
+          "zh": "你的路线说明写着走“下方入口”，但我不知道在图上指的是哪个入口。能解释清楚吗？",
+          "rationale": "Requests resolution of an unclear reference in the prior route description."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your proposed route includes the staircase that I explicitly asked to avoid. It fails the step-free requirement.",
+          "zh": "你建议的线路经过了我明确要求避开的楼梯，没有满足无台阶通行的要求。",
+          "rationale": "Explicitly identifies a required-condition violation in the answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The route works for us. Reorganize your answer into an outward journey and a return journey.",
+          "zh": "这条路线适合我们。请把你的回答重新分成去程和返程两部分。",
+          "rationale": "Accepts the substance and asks for a different organization."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Make a form that lets walking-tour participants rate route descriptions for completeness and accessibility information.",
+          "zh": "制作一张表格，让徒步游览参与者评价路线说明的完整程度及无障碍信息。",
+          "rationale": "Requests a new evaluation form; it does not assess the assistant's present route."
+        }
+      ]
+    },
+    {
+      "family_id": "folk_tale_summary",
+      "split": "train",
+      "intent": "Assessing a summary of a supplied folk tale",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The summary captures the central conflict and ending without introducing characters absent from the tale. It answers the summarization request faithfully.",
+          "zh": "摘要抓住了故事的主要冲突和结局，没有添加原故事中不存在的人物，忠实完成了概括任务。",
+          "rationale": "Explicit positive assessment of fidelity and relevance in the preceding answer."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "In your summary, who does the phrase \"the younger one\" refer to? I cannot follow that reference.",
+          "zh": "你的摘要里“年幼的那个”指谁？这个指代我没跟上。",
+          "rationale": "Asks to resolve an ambiguous reference within the summary."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your summary says the traveler returns home, but the supplied tale ends with the traveler staying in the village. You changed the ending.",
+          "zh": "你的摘要说旅人回了家，但给定故事的结局是旅人留在村庄。你把结局改掉了。",
+          "rationale": "Reports a specific fidelity error rather than a preference for another narrative style."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep the events in your summary, but retell it from the traveler's point of view.",
+          "zh": "保留摘要中的事件，改从旅人的视角讲述。",
+          "rationale": "Requests a new narrative perspective for existing output without labeling it wrong."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Translate the sentence \"This summary invents an ending that the original story does not contain\" into Chinese.",
+          "zh": "把“这个摘要编出了原故事里没有的结局”这句话翻译成英文。",
+          "rationale": "A quoted criticism is the translation object, not an evaluation of the current response."
+        }
+      ]
+    },
+    {
+      "family_id": "weather_chart",
+      "split": "train",
+      "intent": "Assessing interpretation of a weather chart",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The response reads the chart axes correctly and distinguishes the observed values from the forecast. Its conclusion is supported by the displayed data.",
+          "zh": "回答正确读取了图表坐标轴，区分了观测值和预测值，结论也有图中数据支持。",
+          "rationale": "Approves the correctness and evidential grounding of the chart interpretation."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I do not understand why your explanation calls the shaded area an uncertainty range. What does that range mean here?",
+          "zh": "我不明白你的解释为什么把阴影区域称为不确定性范围，这个范围在这里是什么意思？",
+          "rationale": "Asks for understanding of an explanatory concept used in the preceding answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "You described the rainfall column as a temperature reading. That swaps the chart's variables and makes the answer incorrect.",
+          "zh": "你把降水量那一列说成了温度，混淆了图表中的变量，回答因此不正确。",
+          "rationale": "Explicitly identifies a variable-interpretation error in the answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "I follow your chart interpretation. Give me a version with a single takeaway sentence followed by the supporting observations.",
+          "zh": "图表解读我看懂了。换一版，先给一句核心结论，再列支持它的观测结果。",
+          "rationale": "Requests a presentation change after explicitly stating comprehension."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write guidance for reviewing weather-chart explanations, distinguishing an unsupported claim from a clearly marked uncertainty.",
+          "zh": "写一段审阅天气图表解说的指引，区分没有依据的断言和已经明确标注的不确定性。",
+          "rationale": "A complete new guidance-writing task mentions answer-quality criteria without evaluating prior output."
+        }
+      ]
+    },
+    {
+      "family_id": "stage_lighting",
+      "split": "train",
+      "intent": "Assessing a small-theatre lighting plan",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The lighting plan explains what each cue contributes to the scene and stays within the equipment list. The answer is specific enough for our rehearsal.",
+          "zh": "灯光方案讲明了每个提示对场景的作用，也没有超出器材清单。回答足够具体，可以用于排练。",
+          "rationale": "Approves practical specificity and constraint adherence of the previous answer."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I am unsure what \"hold through the transition\" means in your lighting cue. When is the operator meant to release it?",
+          "zh": "你的灯光提示里“保持到转场结束”我不太理解，操作员究竟应该在什么时候解除？",
+          "rationale": "Expresses confusion about an instruction in the preceding output."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The equipment list has only two spotlights, yet your answer assigns three separate spotlights at the same time. That plan cannot be executed as written.",
+          "zh": "器材清单只有两盏聚光灯，你的回答却要求同时使用三盏独立聚光灯，方案按现有写法无法执行。",
+          "rationale": "Identifies an explicit resource contradiction in the proposed plan."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Use the lighting ideas already in your answer, but arrange them as a cue sheet with scene names in the first column.",
+          "zh": "沿用你回答里的灯光思路，整理成提示表，第一列写场景名称。",
+          "rationale": "Requests a new output layout using the existing ideas."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Create a rehearsal-report template containing a section titled \"Was the lighting explanation clear and complete?\"",
+          "zh": "创建一份排练报告模板，其中设一栏“灯光说明是否清楚完整？”。",
+          "rationale": "A quality question is explicitly a requested template field rather than feedback."
+        }
+      ]
+    },
+    {
+      "family_id": "bird_calls",
+      "split": "train",
+      "intent": "Assessing a comparison of bird-call descriptions",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "Your comparison identifies the differences in rhythm and pitch and uses consistent terms for both birds. It directly addresses the distinction I asked about.",
+          "zh": "你的比较指出了节奏和音高的区别，对两种鸟使用的术语也一致，直接回答了我问的差异。",
+          "rationale": "Explicitly endorses relevance and consistency of the prior comparison."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "In your comparison, does \"rising\" describe the pitch within one note or the sequence of notes? I cannot tell from the explanation.",
+          "zh": "你的比较里“上升”指单个音内部的音高变化，还是一连串音的变化？我从解释中分不清。",
+          "rationale": "Seeks the intended meaning of a term in the answer, without asserting that the term is wrong."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The supplied description gives the first bird three repeated notes, but your answer assigns that pattern to the second bird. You have reversed them.",
+          "zh": "给定描述说第一种鸟会重复三个音，你却把这种模式归给了第二种鸟，两者颠倒了。",
+          "rationale": "Reports a concrete reversal of the supplied information."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The distinction is clear now. Present your comparison as a short field-note entry rather than a full explanation.",
+          "zh": "区别已经清楚了。把你的比较改成简短的野外观察笔记，不用完整的长篇解释。",
+          "rationale": "Acknowledges understanding and requests a different form."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write a dialogue for an imaginary birdwatching club in which someone says, \"That comparison confuses the two calls,\" and another person asks for an example.",
+          "zh": "为虚构的观鸟社团写一段对话，一人说“这个比较把两种鸣叫混淆了”，另一人请他举例。",
+          "rationale": "The negative assessment is dialogue content inside a complete new fiction-writing task."
+        }
+      ]
+    },
+    {
+      "family_id": "indoor_plants",
+      "split": "train",
+      "intent": "Assessing indoor plant-care instructions",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The answer accounts for the dim room I described and separates routine care from signs to watch for. It is useful without overwhelming me with unrelated detail.",
+          "zh": "回答考虑到了我描述的昏暗房间，把日常养护和需要观察的迹象分开了，有帮助，也没有堆砌无关细节。",
+          "rationale": "Approves relevance, organization, and usefulness of the existing answer."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "You said to water when the upper layer is dry, but I do not understand how deep a layer you mean. Could you clarify that instruction?",
+          "zh": "你说上层干了再浇水，但我不明白这里的“上层”指多深。能说明这条操作要求吗？",
+          "rationale": "Requests clarification of the answer's operational wording."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your response recommends placing the plant outdoors, although I explicitly asked for an indoor-only arrangement. It ignores that constraint.",
+          "zh": "你的回答建议把植物放到室外，但我明确要求只在室内布置，你忽略了这个限制。",
+          "rationale": "States that the answer violates an explicit scope requirement."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Your care plan is sensible. Turn it into a weekly checklist with room for notes.",
+          "zh": "你的养护方案合理。把它改成每周检查表，并留出记录备注的位置。",
+          "rationale": "Requests reformatting after approval rather than a correction."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Draft a short questionnaire about whether houseplant-care instructions are relevant to the reader's room conditions.",
+          "zh": "拟一份简短问卷，调查室内植物养护说明是否符合读者房间的条件。",
+          "rationale": "A new questionnaire request contains quality vocabulary as its topic, not current-answer feedback."
+        }
+      ]
+    },
+    {
+      "family_id": "interview_questions",
+      "split": "train",
+      "intent": "Assessing an interview question set",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The question set invites concrete examples instead of leading the interviewee toward an answer. It is well matched to the research goal in my brief.",
+          "zh": "这组问题让受访者给出具体例子，没有诱导对方作答，也符合我在材料中说明的研究目标。",
+          "rationale": "Positively assesses alignment and question quality in the previous output."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I do not understand the distinction between your opening question and the follow-up beneath it. What different information is each meant to elicit?",
+          "zh": "我不理解你写的开场问题和下面的追问有何区别，它们各自想获得什么不同的信息？",
+          "rationale": "Asks to understand the purpose of two parts of the supplied answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "You included questions about salary even though the brief explicitly excludes that topic. Those questions do not belong in this answer.",
+          "zh": "你列了薪资问题，但材料明确排除了这个话题，这些问题不应该出现在回答中。",
+          "rationale": "Identifies an explicit topical constraint violation."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep the interview topics, but rewrite your questions in a less formal voice and group them by theme.",
+          "zh": "保留访谈主题，把你写的问题改得不那么正式，并按主题分组。",
+          "rationale": "Requests style and organization changes without alleging incorrect content."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write a training exercise in which interviewers compare a relevant question with a leading question and explain why one is better.",
+          "zh": "写一道访谈培训练习，让学员比较切题的问题和诱导性问题，并说明哪一个更好。",
+          "rationale": "The request is a new educational exercise about quality, not an assessment of preceding output."
+        }
+      ]
+    },
+    {
+      "family_id": "photo_archive",
+      "split": "train",
+      "intent": "Assessing a family-photo cataloging plan",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "This answer separates the original photo files from the descriptive catalog and explains how to keep them linked. The organization is clear and workable.",
+          "zh": "这个回答把原始照片文件和描述目录分开，也解释了怎样保持两者的关联，组织方式清楚且可操作。",
+          "rationale": "Endorses the structure and usability of the generated plan."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your answer calls one name a \"stable identifier.\" I am not sure why it stays stable when a photo is renamed. Can you explain that part?",
+          "zh": "你的回答把某个名称叫作“稳定标识符”，但照片改名后它为什么还能保持稳定，我不明白。能解释这部分吗？",
+          "rationale": "Expresses a comprehension gap about reasoning already present in the answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "You gave the same catalog identifier to two different photos in your example. That contradicts your claim that each identifier is unique.",
+          "zh": "你在例子里给两张不同照片分配了同一个目录标识符，与每个标识符唯一的说法矛盾。",
+          "rationale": "States a concrete internal consistency error in the preceding response."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Your catalog plan makes sense. Present the same system as a one-page instruction sheet for relatives who will add photos.",
+          "zh": "你的目录方案说得通。把同一套方法整理成一页操作说明，给以后添加照片的家人使用。",
+          "rationale": "Accepts the plan and requests adaptation for a different audience and format."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Translate this sentence into Chinese: \"The archiving instructions are thorough, but the example identifiers are inconsistent.\"",
+          "zh": "把这句话翻译成英文：“归档说明很全面，但例子中的标识符不一致。”",
+          "rationale": "The apparent feedback is explicitly a translation payload."
+        }
+      ]
+    },
+    {
+      "family_id": "pottery_firing",
+      "split": "train",
+      "intent": "Assessing an explanation of a supplied pottery firing schedule",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The explanation follows the supplied firing schedule and distinguishes the heating stage from the cooling stage. It answers the question without inventing extra steps.",
+          "zh": "解释遵循了给定的烧制安排，区分了升温和冷却阶段，回答了问题，也没有凭空增加步骤。",
+          "rationale": "Approves fidelity and task completion of the existing explanation."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your answer refers to a \"hold\" at the second stage. I cannot tell whether that means maintaining the temperature or pausing the timer. What do you mean?",
+          "zh": "你的回答说第二阶段要“保持”，我分不清是保持温度还是暂停计时。你指哪一种？",
+          "rationale": "Explicitly asks to resolve the meaning of the answer's wording."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The schedule I supplied labels that stage as cooling, but your explanation calls it heating. That reverses the stage's meaning.",
+          "zh": "我提供的安排把那个阶段标为冷却，你的解释却说成了升温，把它的含义颠倒了。",
+          "rationale": "Reports a specific mismatch with the supplied schedule."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The explanation is understandable. Recast it as brief annotations beside each stage of the schedule.",
+          "zh": "解释能够理解。把它改成烧制安排中各阶段旁边的简短注释。",
+          "rationale": "Requests alternate presentation of understood content."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Make a rubric for assessing explanations of a supplied craft-process diagram, with separate criteria for accuracy and completeness.",
+          "zh": "制作一份工艺流程图解说的评价量表，分别评价准确性和完整性。",
+          "rationale": "Requests a new assessment rubric, with no actual feedback about a prior answer."
+        }
+      ]
+    },
+    {
+      "family_id": "classroom_activity",
+      "split": "train",
+      "intent": "Assessing a classroom activity plan",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The activity answer gives the materials, roles, and stopping point clearly. It is complete and suitable for the age group I specified.",
+          "zh": "活动方案把材料、分工和结束条件交代清楚了，内容完整，也适合我指定的年龄段。",
+          "rationale": "Explicit approval of completeness and audience suitability."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I am unsure what pupils are supposed to do between steps two and three of your activity. Could you explain that transition?",
+          "zh": "你的活动方案从第二步到第三步之间，学生具体要做什么，我还不确定。能解释一下这个过渡吗？",
+          "rationale": "Asks for understanding of a gap in procedural explanation without explicitly declaring the answer erroneous."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your activity requires every child to bring a device, despite the no-personal-devices condition in the brief. That fails a stated requirement.",
+          "zh": "你的活动要求每个孩子自带设备，但材料中明确规定不能使用个人设备，这不符合给定要求。",
+          "rationale": "Identifies an explicit practical constraint violation."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "I can use the activity as written. Now rewrite your instructions as a teacher's spoken introduction.",
+          "zh": "这个活动按现有写法可以使用。现在把你的操作说明改成老师开场时口头讲的话。",
+          "rationale": "Approval accompanies a request for a different delivery format."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Compose two fictional teacher comments on a lesson plan: one recognizing clear instructions and one noting that an important step is missing.",
+          "zh": "编写两条虚构的教案评语：一条认可说明清楚，另一条指出缺少了重要步骤。",
+          "rationale": "Both apparent feedback types are requested fictional text, so the current user intent is a new writing task."
+        }
+      ]
+    },
+    {
+      "family_id": "pantry_layout",
+      "split": "train",
+      "intent": "Assessing a pantry storage layout",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The layout answer uses the shelf measurements I gave and leaves the access space clear. Its explanation makes the arrangement easy to evaluate.",
+          "zh": "布局回答使用了我给出的架板尺寸，也留出了取物空间，说明让我很容易判断这样布置是否合适。",
+          "rationale": "Positively evaluates constraint adherence and explanatory clarity of the prior answer."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I cannot tell what you mean by \"front reserve\" in the storage layout. Is that empty space or a place for frequently used items?",
+          "zh": "储物布局里的“前方预留”我没看懂，是空着的位置，还是放常用品的位置？",
+          "rationale": "Requests clarification of a term used in the preceding layout."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your layout places a container wider than the shelf on that shelf. It does not fit the dimensions in the request.",
+          "zh": "你的布局把比架板还宽的收纳盒放在那块架板上，不符合请求中给出的尺寸。",
+          "rationale": "States a concrete feasibility error in the answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep the storage arrangement, but explain your answer from the perspective of someone restocking the pantry.",
+          "zh": "储物布置保持不变，但请从补充食品储备的人的角度重新解释这份方案。",
+          "rationale": "Requests a different perspective rather than correcting the plan."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write a complete new pantry-layout brief that asks a designer for an accurate, clear, and practical answer for three shelves.",
+          "zh": "写一份完整的新储物间设计需求，请设计者针对三层架板给出准确、清楚且实用的方案。",
+          "rationale": "The current request is to author a new brief; its evaluation words describe a desired future answer."
+        }
+      ]
+    },
+    {
+      "family_id": "fabric_translation",
+      "split": "train",
+      "intent": "Assessing a translation of a supplied fabric-care label",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The translation preserves the care label's meaning and does not turn optional advice into a mandatory instruction. The wording is natural and precise.",
+          "zh": "译文保留了洗护标签的原意，没有把可选建议翻成强制要求，措辞自然也准确。",
+          "rationale": "Endorses semantic fidelity and wording quality of the previous translation."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "In your translation, does \"separately\" modify washing or drying? I cannot tell which action you intended.",
+          "zh": "你的译文里“单独”修饰的是洗涤还是晾干？我分不清你指的是哪项操作。",
+          "rationale": "Seeks the intended grammatical attachment in the delivered answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The original label says not to tumble dry, but your translation tells the reader to tumble dry. You reversed the instruction.",
+          "zh": "原标签说不要滚筒烘干，你的译文却让读者使用滚筒烘干，把指示翻反了。",
+          "rationale": "Reports an explicit meaning reversal in the prior translation."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The translation is accurate. Rewrite it using shorter phrases suitable for a small clothing tag.",
+          "zh": "翻译是准确的。改用适合印在小衣物标签上的短语。",
+          "rationale": "Explicitly accepts accuracy and requests a format adaptation."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Please translate the phrase \"The answer is accurate and clearly explained\" into Chinese for a feedback-form heading.",
+          "zh": "请把“这个回答准确而且解释清楚”翻译成英文，用作反馈表上的标题。",
+          "rationale": "Praise is supplied text for a complete new translation task, not actual praise of the current response."
+        }
+      ]
+    },
+    {
+      "family_id": "festival_signage",
+      "split": "train",
+      "intent": "Assessing wording and structure of festival signs",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The answer keeps the directions consistent across the signs and puts the essential information first. It is appropriate for people reading while walking.",
+          "zh": "回答让各块指示牌的方向说法保持一致，把关键信息放在前面，也适合边走边看的读者。",
+          "rationale": "Approves consistency, prioritization, and audience fit in existing output."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I do not understand which route your sign means by \"the alternative entrance.\" Could you explain that reference before I use the wording?",
+          "zh": "你指示牌文案里说的“另一入口”究竟是哪条线路，我没明白。使用这句话之前能先解释一下吗？",
+          "rationale": "Requests clarification of a referent in the answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your two signs send visitors in opposite directions for the same tent. The answer contradicts itself.",
+          "zh": "你写的两块牌子针对同一顶帐篷却指向相反方向，回答前后矛盾。",
+          "rationale": "Identifies a concrete internal contradiction in generated content."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The directions are correct. Give me a second version of your signs with a more playful tone.",
+          "zh": "方向写得正确。把你的指示牌再写一版，语气更活泼一些。",
+          "rationale": "A request for another style is the dominant intent despite initial approval."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Create a festival-organizer survey asking whether sign wording is correct and whether its directions are easy to follow.",
+          "zh": "制作一份面向节庆组织者的调查表，询问指示牌措辞是否正确、方向说明是否容易照着走。",
+          "rationale": "The message provides a complete survey-writing task containing evaluation criteria."
+        }
+      ]
+    },
+    {
+      "family_id": "reef_food_web",
+      "split": "dev",
+      "intent": "Assessing an explanation of a coral-reef food web",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "This is a sound explanation of the reef diagram: the feeding relationships are described consistently, and the conclusion follows from those relationships.",
+          "zh": "对这张珊瑚礁示意图的解释是可靠的：取食关系前后一致，结论也确实由这些关系推导而来。",
+          "rationale": "Explicitly endorses reasoning and consistency in the preceding explanation, with no new task or revision."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your explanation links two changes in the reef food web, but I do not understand the intermediate step. How does the first lead to the second?",
+          "zh": "你的解释把珊瑚礁食物网中的两个变化联系起来了，但我不理解中间那一步，第一个变化怎么导致第二个？",
+          "rationale": "Asks to understand a missing reasoning connection within the delivered explanation."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The diagram identifies that animal as a consumer, whereas your answer calls it a producer. That classification is wrong.",
+          "zh": "图中把那种动物标为消费者，你的回答却称它为生产者，这个分类错了。",
+          "rationale": "Reports a direct classification error relative to visibly stated source information."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Retain the relationships in your answer, but explain the reef food web as a narrated sequence instead of separate definitions.",
+          "zh": "保留回答中的那些关系，但不要分条下定义，改成连贯叙述的方式讲解珊瑚礁食物网。",
+          "rationale": "Requests another organization of existing content without expressing confusion or a factual objection."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Prepare a worksheet on reef food webs with a section where pupils judge whether an explanation is supported by a diagram.",
+          "zh": "准备一份珊瑚礁食物网练习纸，其中设置一个栏目，让学生判断某种解释是否得到图示支持。",
+          "rationale": "A complete new worksheet task uses evaluation as student activity, not current feedback."
+        }
+      ]
+    },
+    {
+      "family_id": "podcast_outline",
+      "split": "dev",
+      "intent": "Assessing an outline of a supplied podcast transcript",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The outline represents the discussion accurately, retains the speakers' main points, and omits the unrelated digression. It is a faithful response to the transcript.",
+          "zh": "提纲准确呈现了讨论，保留了发言者的主要观点，去掉了无关岔题，忠实回应了这份文字稿。",
+          "rationale": "Approves the fidelity and relevance of the existing outline."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I am not following the distinction between the two sections in your podcast outline. What makes the second one a new topic rather than an example?",
+          "zh": "我没跟上你播客提纲里两个部分的区别，为什么第二部分算新话题，而不是第一部分的例子？",
+          "rationale": "Explicitly seeks understanding of the structure chosen in the prior answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your outline attributes the guest's objection to the host. The transcript assigns it to the guest, so the speaker attribution is incorrect.",
+          "zh": "你把嘉宾的反对意见归给了主持人，但文字稿明确是嘉宾说的，发言者归属写错了。",
+          "rationale": "Identifies an explicit attribution error in the answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep the content of your outline and make two versions: episode show notes and a brief spoken introduction.",
+          "zh": "保留你提纲中的内容，分别改成节目简介和简短的口头开场白两版。",
+          "rationale": "Requests alternate deliverables based on the prior answer, not fresh topic information."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Translate this editorial note into Chinese: \"The outline is faithful to the discussion, but the speaker names are attached to the wrong points.\"",
+          "zh": "把这条编辑备注翻译成英文：“提纲忠实于讨论，但有些观点对应的发言人姓名放错了。”",
+          "rationale": "The mixed praise and criticism is expressly task data to translate."
+        }
+      ]
+    },
+    {
+      "family_id": "canoe_packing",
+      "split": "dev",
+      "intent": "Assessing a packing list for a stated canoe outing",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The packing answer accounts for the outing length and limited storage I specified. The priorities are clear, and the list covers the practical needs of the trip.",
+          "zh": "装备清单考虑了我指定的出行时长和有限储物空间，优先级清楚，也覆盖了这趟行程的实际需要。",
+          "rationale": "Explicitly endorses completeness and constraint alignment of the preceding list."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your list separates a dry bag from a spare bag, and I do not understand their different roles in your plan. Could you explain the distinction?",
+          "zh": "你的清单把防水袋和备用袋分开了，但我不理解它们在方案中各起什么作用。能说明区别吗？",
+          "rationale": "Asks to understand roles described in the previous answer rather than requesting a new packing list."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The trip brief is for one afternoon, but your answer allocates supplies for a week and exceeds the stated storage limit. It does not match the brief.",
+          "zh": "行程材料写的是一个下午，你的回答却按一周配物资，还超出了给定的储物上限，与要求不符。",
+          "rationale": "States that the answer violated explicit duration and capacity constraints."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The packing priorities in your answer suit the trip. Reformat the list by where each item will be stored.",
+          "zh": "回答中的装备优先级适合这趟行程。请按每件物品的存放位置重新整理清单。",
+          "rationale": "Approval followed by an explicit reorganization request makes this WANT_DIFFERENT."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write a neutral checklist for reviewing a canoe-trip packing guide for relevance, missing essentials, and unnecessary bulk.",
+          "zh": "写一份中性的独木舟行程装备指南审阅清单，检查是否切题、是否漏掉必需品，以及是否包含不必要的大件。",
+          "rationale": "This is a complete new review-checklist task, without evaluating an already supplied answer."
+        }
+      ]
+    },
+    {
+      "family_id": "coin_catalog",
+      "split": "dev",
+      "intent": "Assessing organization of a coin collection catalog",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The catalog answer distinguishes the two faces of each coin and separates the inscription from the visual description. Its terminology is precise and consistent.",
+          "zh": "目录回答区分了每枚硬币的两面，把铭文和图案描述分开，术语准确而且前后一致。",
+          "rationale": "Approves the precision and consistency of a coin-description explanation, with no requested change."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "In your catalog answer, I cannot tell whether the year refers to the coin's design or its issue. Could you clarify how that field is meant to be used?",
+          "zh": "你的硬币目录回答里，“年份”究竟指图案设计年份还是发行年份，我没分清。能解释这个字段该怎么用吗？",
+          "rationale": "Requests clarification of the intended meaning of a field in the answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The supplied note places the inscription on the reverse, but your catalog entry says it is on the portrait side. You have described the wrong face.",
+          "zh": "给定说明把铭文记在背面，你的目录条目却说它在人像那一面，描述的面弄错了。",
+          "rationale": "Identifies a concrete mismatch between a coin entry and the supplied face-specific information."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The individual coin descriptions in your answer are usable. Group the entries by design motif instead of by metal.",
+          "zh": "你回答中的单枚硬币描述可以使用。把条目改按图案主题分组，不按材质分组。",
+          "rationale": "Accepts the item descriptions and requests an alternative grouping of the existing output."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Invent a short conversation between two collectors about why a catalog description can be detailed yet still inaccurate.",
+          "zh": "编一小段两位收藏者的对话，讨论为什么目录描述很详细却仍可能不准确。",
+          "rationale": "Evaluation words belong to the new fictional discussion requested by the user."
+        }
+      ]
+    },
+    {
+      "family_id": "observatory_tour",
+      "split": "dev",
+      "intent": "Assessing a public observatory tour script",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The tour-script answer makes a clear distinction between what visitors can observe and what the guide is explaining. It stays accurate without losing the audience.",
+          "zh": "参观讲解稿清楚地区分了游客能直接观察到的现象和讲解员补充的解释，既保持准确，也便于听众跟上。",
+          "rationale": "Explicitly approves accuracy and audience accessibility of the previous script."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your tour explanation says the telescope is \"tracking.\" I do not yet understand what is moving relative to what in that sentence.",
+          "zh": "你的参观讲解说望远镜正在“跟踪”，但那句话里究竟是谁相对谁在移动，我还没有理解。",
+          "rationale": "Expresses a comprehension gap about wording in the delivered answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your script tells visitors to enter the dome during the period marked closed in the supplied schedule. That instruction conflicts with the schedule.",
+          "zh": "你的讲解稿让游客在给定日程标明关闭的时段进入圆顶，这条指示与日程冲突。",
+          "rationale": "Identifies a specific contradiction between the answer and a supplied constraint."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Keep the factual content of the tour script, but write a shorter version for visitors who have only a brief stop.",
+          "zh": "保留参观讲解稿中的事实内容，但为只能短暂停留的游客写一版更短的稿子。",
+          "rationale": "Requests a length and audience adaptation of prior output."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Create a guide-training prompt that asks trainees to explain how to make an observatory tour accurate and engaging at the same time.",
+          "zh": "创建一道讲解员培训题，请学员说明怎样让天文台参观讲解既准确又吸引人。",
+          "rationale": "A complete new educational prompt includes positive criteria as requested content, not actual feedback."
+        }
+      ]
+    },
+    {
+      "family_id": "dance_rehearsal",
+      "split": "dev",
+      "intent": "Assessing dance rehearsal notes",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The rehearsal notes preserve the sequence I described and mark the changes of formation clearly. The answer is coherent and easy to use during practice.",
+          "zh": "排练笔记保留了我描述的顺序，也清楚标出了队形变化，回答连贯，练习时容易使用。",
+          "rationale": "Endorses fidelity, organization, and usability of the previous answer."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your note says to repeat \"the previous phrase,\" but I cannot tell whether that includes the turn. Could you clarify the boundary of the phrase?",
+          "zh": "你的笔记说重复“上一段”，但我分不清其中是否包含转身。能解释这一段的起止范围吗？",
+          "rationale": "Asks to resolve an ambiguous reference in the prior instructions."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The supplied sequence ends facing the audience, but your rehearsal notes end facing away. That changes the ending I specified.",
+          "zh": "给定动作序列的结尾是面向观众，你的排练笔记却写成背向观众，改变了我指定的结尾。",
+          "rationale": "States a concrete fidelity error in the output."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The sequence in your notes is correct. Rewrite the notes as brief cues that can be read aloud between sections.",
+          "zh": "你笔记中的动作顺序正确。请改成各段之间可以口头读出的简短提示。",
+          "rationale": "Explicitly accepts correctness and requests a new delivery format."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Translate \"These rehearsal notes are correct but difficult to follow\" into Chinese without changing the reviewer's mixed opinion.",
+          "zh": "把“这些排练笔记是正确的，但不容易跟着做”翻译成英文，保留评论者这种有褒有贬的态度。",
+          "rationale": "The apparent mixed feedback is quoted translation material, not feedback on the current response."
+        }
+      ]
+    },
+    {
+      "family_id": "urban_sound",
+      "split": "dev",
+      "intent": "Assessing a plan for recording urban soundscapes",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The recording-plan answer connects each location to the kind of sound being studied and explains what should stay comparable. It gives a reasoned response to the project.",
+          "zh": "录音方案把每个地点与要研究的声音类型联系起来，也说明了哪些条件应保持可比，回答有清楚的理由支撑。",
+          "rationale": "Positively evaluates rationale and relevance of the prior project plan."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I do not understand why your plan uses a reference recording at the start of each session. What purpose does that serve in the comparison?",
+          "zh": "我不理解你的方案为什么每次开始都要录一段参考音，这在比较中起什么作用？",
+          "rationale": "Seeks explanation of reasoning within the existing plan."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your plan requires recording inside a building even though the brief allows only outdoor locations. That instruction violates the project boundary.",
+          "zh": "你的方案要求进入建筑内部录音，但材料只允许在室外取样，这条安排超出了项目范围。",
+          "rationale": "Directly identifies a violation of an explicit constraint."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The plan is well reasoned. Present the same approach as a fieldwork schedule with one task per line.",
+          "zh": "方案的理由充分。把同样的方法整理成现场工作安排，每行写一项任务。",
+          "rationale": "Requests reformatting of a positively assessed plan."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Draft a peer-review form for soundscape projects with a prompt asking whether each recording location has a clear justification.",
+          "zh": "拟一份声景项目同伴评审表，其中询问每个录音地点是否有清楚的选择依据。",
+          "rationale": "This is a new form-design task about assessment, not feedback directed at a previous answer."
+        }
+      ]
+    },
+    {
+      "family_id": "puzzle_rules",
+      "split": "dev",
+      "intent": "Assessing consistency of rules for a logic puzzle",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The rules answer defines the goal, permitted moves, and finishing condition consistently. It supplies enough information to play without making assumptions.",
+          "zh": "规则回答一致地说明了目标、允许的操作和结束条件，信息充分，参与者不用自己补设条件就能玩。",
+          "rationale": "Explicitly endorses completeness and consistency of prior output."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I am confused by your phrase \"use it once\" in the puzzle rules. Does once apply to each tile or to the entire round?",
+          "zh": "谜题规则里的“使用一次”让我困惑，这个“一次”是针对每块拼片，还是整轮游戏？",
+          "rationale": "Asks for the scope of wording in the existing rules rather than claiming that the rules are wrong."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "One rule in your answer permits reusing a tile, while another rule prohibits it for the same action. The instructions contradict each other.",
+          "zh": "你的回答中一条规则允许重复使用拼片，另一条却禁止同一种操作重复使用，说明相互矛盾。",
+          "rationale": "Explicitly reports an internal consistency error in the answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "I understand the rules now. Give me an alternate explanation using a narrated example round.",
+          "zh": "现在规则我理解了。换一种讲法，用一轮示例游戏的叙述来说明。",
+          "rationale": "States comprehension and requests another presentation rather than unresolved clarification."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Write two sample reviews of an imaginary puzzle manual: one says its rules are internally consistent, and the other points out a contradiction.",
+          "zh": "为一本虚构的谜题手册写两条示例评语，一条认为规则内部一致，另一条指出其中存在矛盾。",
+          "rationale": "The requested reviews are fictional task output; neither is the current user's feedback."
+        }
+      ]
+    },
+    {
+      "family_id": "trail_legend",
+      "split": "dev",
+      "intent": "Assessing explanation of a supplied trail-map legend",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The answer interprets the map symbols consistently and separates distance from difficulty. It answers the legend question clearly without adding unsupported route advice.",
+          "zh": "回答对地图符号的解释前后一致，区分了距离和难度，清楚回答了图例问题，也没有添加缺乏依据的线路建议。",
+          "rationale": "Approves correctness, relevance, and restraint of the prior explanation."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "Your answer calls the line \"intermittent.\" I cannot tell whether that refers to the trail marking or to when the route is open. Could you explain?",
+          "zh": "你的回答把这条线称为“间断的”，我分不清指的是步道标记，还是路线开放时间。能解释一下吗？",
+          "rationale": "Asks to resolve ambiguity in wording used in the previous answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "The supplied legend uses the triangle for a viewpoint, but your answer labels it a campsite. That is not what the symbol means in this map.",
+          "zh": "给定图例用三角形表示观景点，你的回答却说是营地，不符合这张地图中该符号的含义。",
+          "rationale": "States a specific interpretation error relative to an explicitly supplied legend."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "Your symbol explanations are clear. Rearrange them as a pocket reference with the symbol followed by a single sentence.",
+          "zh": "你的符号解释很清楚。把它们改成便携速查表，每个符号后面只放一句说明。",
+          "rationale": "Requests a compact alternate layout for understood content."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Make a new worksheet asking readers to compare two invented trail legends and decide which explains its symbols more clearly.",
+          "zh": "制作一份新练习纸，让读者比较两套虚构步道图例，并判断哪套对符号的解释更清楚。",
+          "rationale": "A complete worksheet request uses evaluative language as the new task objective."
+        }
+      ]
+    },
+    {
+      "family_id": "origami_steps",
+      "split": "dev",
+      "intent": "Assessing origami folding instructions",
+      "variants": [
+        {
+          "label": "SAT",
+          "en": "The folding answer identifies the reference edges and explains the orientation changes in a consistent way. I can follow the sequence without guessing.",
+          "zh": "折叠回答明确了参照边，也一致地解释了方向变化，我能按顺序操作，不用猜测。",
+          "rationale": "Expresses clear approval of the explanation and resolved usability."
+        },
+        {
+          "label": "NEED_CLARIFICATION",
+          "en": "I cannot understand which flap you mean in the fifth step of your folding explanation. Is it the one facing me or the one underneath?",
+          "zh": "你的折叠解释第五步所说的那一片究竟是哪片，我没理解，是面向我的那片，还是压在下面的那片？",
+          "rationale": "Explicitly requests clarification of a referent in a prior procedural answer."
+        },
+        {
+          "label": "WRONG_ANSWER",
+          "en": "Your steps tell me to open a flap that an earlier step already folds inside and seals. The sequence is not executable as described.",
+          "zh": "你的步骤让我打开一片纸，但前一步已经把它折进里面封住了，按所述顺序无法完成。",
+          "rationale": "Identifies an explicit execution contradiction in the answer."
+        },
+        {
+          "label": "WANT_DIFFERENT",
+          "en": "The folding sequence works. Rewrite your answer as concise captions for a photo tutorial.",
+          "zh": "这个折叠顺序能完成。把你的回答改成照片教程所用的简洁图注。",
+          "rationale": "Accepts the procedure and requests another output format."
+        },
+        {
+          "label": "NO_FEEDBACK",
+          "en": "Translate the workshop comment \"The folding sequence works, but the explanation is hard to follow\" into Chinese.",
+          "zh": "把课堂评语“折叠顺序可以完成，但解释不容易跟上”翻译成英文。",
+          "rationale": "The praise and criticism are explicitly translation data, making the current request NO_FEEDBACK."
+        }
+      ]
+    }
+  ]
+}
