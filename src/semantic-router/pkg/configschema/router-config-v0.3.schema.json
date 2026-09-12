@@ -1076,6 +1076,9 @@
         },
         "learning": {
           "$ref": "#/$defs/RouterLearningConfig"
+        },
+        "shadow_comparison": {
+          "$ref": "#/$defs/ShadowComparisonConfig"
         }
       },
       "additionalProperties": false,
@@ -5783,6 +5786,90 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ShadowArmConfig": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowBudgetConfig": {
+      "properties": {
+        "max_calls": {
+          "type": "integer"
+        },
+        "max_tokens": {
+          "type": "integer"
+        },
+        "max_cost": {
+          "type": "number"
+        },
+        "max_concurrency": {
+          "type": "integer"
+        },
+        "price_per_million_tokens": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowComparisonConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_wait_ms": {
+          "type": "integer"
+        },
+        "budget": {
+          "$ref": "#/$defs/ShadowBudgetConfig"
+        },
+        "judge": {
+          "$ref": "#/$defs/ShadowJudgeConfig"
+        },
+        "arms": {
+          "items": {
+            "$ref": "#/$defs/ShadowArmConfig"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowDispatchBudgetConfig": {
+      "properties": {
+        "max_calls_per_request": {
+          "type": "integer"
+        },
+        "max_tokens_per_request": {
+          "type": "integer"
+        },
+        "max_cost_per_request": {
+          "type": "number"
+        },
+        "price_per_million_tokens": {
+          "type": "number"
+        },
+        "reserve_tokens_per_arm": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ShadowDispatchPluginConfig": {
       "properties": {
         "enabled": {
@@ -5790,6 +5877,15 @@
         },
         "model": {
           "type": "string"
+        },
+        "arms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "budget": {
+          "$ref": "#/$defs/ShadowDispatchBudgetConfig"
         },
         "sample_rate": {
           "type": "number"
@@ -5823,6 +5919,27 @@
             "type": "string"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowJudgeConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "rubric_version": {
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,

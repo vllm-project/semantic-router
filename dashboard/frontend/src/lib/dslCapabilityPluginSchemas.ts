@@ -6,6 +6,39 @@ const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
   shadow_dispatch: [
     { key: 'enabled', label: 'Enabled', type: 'boolean' },
     { key: 'model', label: 'Shadow Model', type: 'string', placeholder: 'candidate-model' },
+    {
+      key: 'arms',
+      label: 'Additional Shadow Arms',
+      type: 'string[]',
+      placeholder: 'candidate-arm',
+      description: 'Extra candidate models beyond `model`, all under one aggregate budget',
+    },
+    {
+      key: 'budget',
+      label: 'Aggregate Budget',
+      type: 'object',
+      fields: [
+        {
+          key: 'max_calls_per_request',
+          label: 'Max Calls / Request',
+          type: 'number',
+          placeholder: '0',
+        },
+        {
+          key: 'max_tokens_per_request',
+          label: 'Max Tokens / Request',
+          type: 'number',
+          placeholder: '0',
+        },
+        { key: 'max_cost_per_request', label: 'Max Cost / Request', type: 'number' },
+        {
+          key: 'price_per_million_tokens',
+          label: 'Price per Million Tokens',
+          type: 'number',
+        },
+        { key: 'reserve_tokens_per_arm', label: 'Reserve Tokens / Arm', type: 'number' },
+      ],
+    },
     { key: 'sample_rate', label: 'Sample Rate', type: 'number', placeholder: '0.05' },
     { key: 'max_concurrency', label: 'Max Concurrency', type: 'number', placeholder: '2' },
     { key: 'max_queue_depth', label: 'Max Queue Depth', type: 'number', placeholder: '8' },

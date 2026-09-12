@@ -261,6 +261,15 @@ type ShadowDispatchPluginConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 	// Model is the configured logical model that receives the shadow copy.
 	Model string `json:"model" yaml:"model"`
+	// Arms lists additional shadow models beyond Model. Every configured arm
+	// receives the same approved request under one aggregate budget, so a
+	// single decision can compare several candidates on live traffic.
+	Arms []string `json:"arms,omitempty" yaml:"arms,omitempty"`
+	// Budget bounds aggregate shadow resource use across all arms of this
+	// decision for a single request (issue #3376). A zero field is unlimited
+	// or, for tokens/cost without ReserveTokensPerArm, accounted on
+	// completion only.
+	Budget ShadowDispatchBudgetConfig `json:"budget,omitempty" yaml:"budget,omitempty"`
 	// SampleRate is the fraction of eligible requests that are shadowed, in
 	// [0, 1]. nil means every eligible request; 0 disables dispatch while
 	// keeping the plugin declared.
@@ -295,6 +304,28 @@ type ShadowDispatchPluginConfig struct {
 	// x-user-*-key headers) cannot be listed. Names match case-insensitively.
 	// Empty by default.
 	ForwardHeaders []string `json:"forward_headers,omitempty" yaml:"forward_headers,omitempty"`
+}
+
+// ShadowDispatchBudgetConfig bounds aggregate shadow resource use across all
+// arms of one decision for a single request (issue #3376). Hard limits are
+// checked at admission; soft limits (tokens/cost) are reconciled on arm
+// completion. A zero value means that dimension is unlimited.
+type ShadowDispatchBudgetConfig struct {
+	// MaxCallsPerRequest caps how many arms may be admitted for one request.
+	MaxCallsPerRequest int64 `json:"max_calls_per_request,omitempty" yaml:"max_calls_per_request,omitempty"`
+	// MaxTokensPerRequest caps aggregate accounted tokens across admitted
+	// arms. Without ReserveTokensPerArm the cap can only be enforced on
+	// reconciliation (all arms start together), so set ReserveTokensPerArm to
+	// make it a hard admission limit.
+	MaxTokensPerRequest int64 `json:"max_tokens_per_request,omitempty" yaml:"max_tokens_per_request,omitempty"`
+	// MaxCostPerRequest caps aggregate spend; requires PricePerMillionTokens.
+	MaxCostPerRequest float64 `json:"max_cost_per_request,omitempty" yaml:"max_cost_per_request,omitempty"`
+	// PricePerMillionTokens converts accounted tokens to cost.
+	PricePerMillionTokens float64 `json:"price_per_million_tokens,omitempty" yaml:"price_per_million_tokens,omitempty"`
+	// ReserveTokensPerArm, when set, reserves that many tokens per arm at
+	// admission so concurrent arms cannot collectively overshoot
+	// MaxTokensPerRequest/MaxCostPerRequest. 0 disables admission reservation.
+	ReserveTokensPerArm int64 `json:"reserve_tokens_per_arm,omitempty" yaml:"reserve_tokens_per_arm,omitempty"`
 }
 
 // GetPlugin returns the plugin entry for a specific plugin type.

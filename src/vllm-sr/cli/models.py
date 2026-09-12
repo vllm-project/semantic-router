@@ -1176,6 +1176,23 @@ SHADOW_CREDENTIAL_HEADERS = frozenset(
 )
 
 
+class ShadowDispatchBudgetConfig(BaseModel):
+    """Aggregate shadow resource bounds for one request (issue #3376).
+
+    Mirrors the Router's ShadowDispatchBudgetConfig. A zero field is
+    unlimited; without reserve_tokens_per_arm, token/cost caps can only be
+    enforced on completion (all arms start together).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_calls_per_request: int = Field(default=0, ge=0)
+    max_tokens_per_request: int = Field(default=0, ge=0)
+    max_cost_per_request: float = Field(default=0.0, ge=0.0)
+    price_per_million_tokens: float = Field(default=0.0, ge=0.0)
+    reserve_tokens_per_arm: int = Field(default=0, ge=0)
+
+
 class ShadowDispatchPluginConfig(BaseModel):
     """Configuration for shadow_dispatch plugin.
 
@@ -1191,6 +1208,17 @@ class ShadowDispatchPluginConfig(BaseModel):
     enabled: bool
     model: Optional[str] = Field(
         default=None, description="Configured logical model receiving the shadow copy"
+    )
+    arms: Optional[list[str]] = Field(
+        default=None,
+        description=(
+            "Additional shadow candidate models beyond `model`. Every arm "
+            "receives the same approved request under one aggregate budget"
+        ),
+    )
+    budget: Optional[ShadowDispatchBudgetConfig] = Field(
+        default=None,
+        description="Aggregate shadow resource bounds for one request",
     )
     sample_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     max_concurrency: int = Field(default=2, ge=0)
@@ -1233,8 +1261,11 @@ class ShadowDispatchPluginConfig(BaseModel):
 
     @model_validator(mode="after")
     def require_model_when_enabled(self):
-        if self.enabled and not (self.model or "").strip():
-            raise ValueError("shadow_dispatch model is required when enabled")
+        # Mirrors the Router's ShadowDispatchPluginConfig.Validate: `model` or
+        # at least one arm is required when enabled.
+        has_model = (self.model or "").strip() != "" or bool(self.arms)
+        if self.enabled and not has_model:
+            raise ValueError("shadow_dispatch model or arms are required when enabled")
         return self
 
 
