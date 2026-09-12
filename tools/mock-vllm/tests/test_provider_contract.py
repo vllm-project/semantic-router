@@ -223,7 +223,12 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
         "chat_template_kwargs": {"enable_thinking": True},
         "max_tokens": 64,
     }
-    headers = {"x-vsr-test-session-id": session_id}
+    headers = {
+        "authorization": "Bearer must-not-be-recorded",
+        "x-unrelated-header": "must-not-be-recorded",
+        "x-vsr-e2e-added": "observable",
+        "x-vsr-test-session-id": session_id,
+    }
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://simulator"
     ) as client:
@@ -232,6 +237,10 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
         observed = await client.get("/debug/last-request", headers=headers)
     assert observed.status_code == HTTPStatus.OK
     assert observed.json()["body"] == body
+    assert observed.json()["headers"] == {
+        "x-vsr-e2e-added": "observable",
+        "x-vsr-test-session-id": session_id,
+    }
 
 
 @pytest.mark.asyncio

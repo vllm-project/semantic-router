@@ -122,6 +122,42 @@ config:
             threshold: 0.72
             on_error: skip
             escalation_order: small_to_large
+      - name: plugin_request_mutations_decision
+        description: Deterministic route for provider-boundary plugin mutation coverage (issue #3180).
+        priority: 550
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: plugin_request_mutations
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: "E2E plugin contract: system prompt applied."
+              mode: replace
+          - type: request_params
+            configuration:
+              blocked_params:
+                - frequency_penalty
+                - presence_penalty
+              max_tokens_limit: 64
+              max_n: 1
+              strip_unknown: true
+          - type: header_mutation
+            configuration:
+              add:
+                - name: x-vsr-e2e-added
+                  value: added-by-router
+              update:
+                - name: x-vsr-e2e-updated
+                  value: updated-by-router
+              delete:
+                - x-vsr-e2e-deleted
       - name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
         priority: 500
@@ -687,6 +723,11 @@ config:
           keywords:
             - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
           case_sensitive: false
+        - name: plugin_request_mutations
+          operator: OR
+          keywords:
+            - __PLUGIN_REQUEST_MUTATIONS__
+          case_sensitive: true
         - name: retention_probe_keywords
           operator: OR
           keywords:
