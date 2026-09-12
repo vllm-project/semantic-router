@@ -81,6 +81,40 @@ func TestRouterLearningRuntimeIgnoresNonModelOutcomes(t *testing.T) {
 	}
 }
 
+func TestRouterLearningRuntimeRecordsModelOutcomeWithoutUpdatingExperience(t *testing.T) {
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	rt := newRouterLearningRuntime(nil, recorder, nil)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:            "replay-record-only",
+		Decision:      "domain_code",
+		DecisionTier:  4,
+		SelectedModel: "model-a",
+	}); err != nil {
+		t.Fatalf("add replay record: %v", err)
+	}
+
+	result := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:   "replay-record-only",
+		Source:     routerruntime.RouterOutcomeSourceUser,
+		Target:     routerruntime.RouterOutcomeTargetModel,
+		TargetRef:  "model-a",
+		Verdict:    routerruntime.RouterOutcomeVerdictGoodFit,
+		Score:      1,
+		RecordOnly: true,
+	})
+	if result.Updated != 0 || !result.Recorded {
+		t.Fatalf("record-only result = %#v, want persisted without an experience update", result)
+	}
+	if got := rt.experienceSnapshot("domain_code", 4, "model-a").GoodFitCount; got != 0 {
+		t.Fatalf("record-only feedback changed model experience: good-fit count = %d", got)
+	}
+	record, found := recorder.GetRecord("replay-record-only")
+	if !found || len(record.Outcomes) != 1 {
+		t.Fatalf("record-only feedback was not persisted: found=%v outcomes=%#v", found, record.Outcomes)
+	}
+}
+
 func TestRouterLearningRuntimeRejectsMissingReplay(t *testing.T) {
 	rt := newRouterLearningRuntime(nil, nil, nil)
 	result := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{

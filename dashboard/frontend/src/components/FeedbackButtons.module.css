@@ -40,7 +40,10 @@
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, transform 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    transform 0.2s;
 }
 
 .btn:hover:not(:disabled) {
@@ -75,6 +78,14 @@
   font-weight: 500;
   white-space: nowrap;
   margin-left: 0.25rem;
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.sentLabel a {
+  color: inherit;
+  text-decoration: underline;
 }
 
 .spinner {

@@ -84,6 +84,9 @@ func (rt *routerLearningRuntime) updateOwnedModelOutcome(
 			Message: "failed to append outcome to owned routing event",
 		}
 	}
+	if outcome.RecordOnly {
+		return routerruntime.RouterOutcomeResult{Recorded: true}
+	}
 	decisionName, decisionTier := rt.resolveOutcomeDecisionContext(outcome)
 	rt.recordModelExperience(decisionName, decisionTier, model, verdict, outcome.Score)
 	return routerruntime.RouterOutcomeResult{Updated: 1, Recorded: true}

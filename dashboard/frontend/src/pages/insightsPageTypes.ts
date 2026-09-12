@@ -97,6 +97,14 @@ export interface ProjectionTrace {
   mappings?: ProjectionTraceMapping[]
 }
 
+export interface InsightsOutcome {
+  timestamp?: string
+  source: string
+  target: string
+  target_ref?: string
+  verdict: string
+}
+
 export interface InsightsRecord {
   id: string
   timestamp: string
@@ -113,6 +121,7 @@ export interface InsightsRecord {
   reasoning_mode?: string
   confidence_score?: number
   selection_method?: string
+  outcomes?: InsightsOutcome[]
   signals: Signal
   projections?: string[]
   projection_scores?: Record<string, number>
