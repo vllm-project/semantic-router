@@ -24,6 +24,7 @@ unknown-field behavior.
 `provider_boundary.py` owns HTTP validation and bounded request observation;
 `chat_request.py` contains the small typed view used by deterministic Chat
 responses. The provider contract itself remains in `provider_contract.py`.
+`workflow_chat.py` owns Router Flow planner/worker chat replies.
 `classify.py` serves the `prompt_guard` `http_classify` stand-in on `/classify`;
 it scores only the first window of the posted text, so the response-jailbreak E2E
 can tell a whole-response scan from a first-chunk-only one.

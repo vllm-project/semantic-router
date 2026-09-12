@@ -86,10 +86,11 @@ func (r *OpenAIRouter) createLooper(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (looper.Looper, error) {
-	l, err := looper.FactoryWithClient(
+	l, err := looper.FactoryWithClientAndWorkflowState(
 		&r.Config.Looper,
 		decision.Algorithm.Type,
 		r.looperModelClient(),
+		r.WorkflowStateService,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{

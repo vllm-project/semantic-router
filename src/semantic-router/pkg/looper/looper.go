@@ -23,6 +23,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
+	"time"
 
 	"github.com/openai/openai-go"
 
@@ -138,6 +140,99 @@ type ManagedLooper interface {
 	io.Closer
 }
 
+// WorkflowStateService is an opaque handle to a shared workflow tool-state
+// store. Create one per router generation with NewWorkflowStateService and pass
+// it to FactoryWithWorkflowState so independent HTTP turns share pause/resume
+// state. Safe for concurrent use.
+type WorkflowStateService struct {
+	store  workflowToolStateStore
+	ttl    time.Duration
+	wg     sync.WaitGroup
+	mu     sync.RWMutex
+	closed bool
+}
+
+// Acquire tries to get a read lease on the service. Returns false if closed.
+//
+// Safety invariant: wg.Add(1) is called while holding RLock. This is safe
+// because Close() sets s.closed = true under a write lock *before* calling
+// wg.Wait(). Once closed is true, no new Add(1) can happen, so Wait() will
+// observe a stable counter. Do not add a second Close() codepath without
+// preserving this ordering.
+func (s *WorkflowStateService) Acquire() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return false
+	}
+	s.wg.Add(1)
+	return true
+}
+
+// Release releases a read lease on the service.
+func (s *WorkflowStateService) Release() {
+	if s != nil {
+		s.wg.Done()
+	}
+}
+
+// Store returns the underlying state store. Safe to use only while holding a lease.
+func (s *WorkflowStateService) Store() workflowToolStateStore {
+	if s == nil {
+		return nil
+	}
+	return s.store
+}
+
+// NewWorkflowStateService creates a shared workflow state store from the
+// looper configuration. The returned service should be stored on the router
+// and passed into every FactoryWithWorkflowState call.
+func NewWorkflowStateService(cfg *config.LooperConfig) *WorkflowStateService {
+	if cfg == nil {
+		return nil
+	}
+	flow := workflowFlowRuntimeConfig(cfg)
+	return &WorkflowStateService{
+		store: newWorkflowToolStateStoreFromConfig(flow),
+		ttl:   flow.State.WithDefaults().TTL(),
+	}
+}
+
+// CommitStorePolicy applies this generation's store policy after the router
+// swap commits. File-backed stores are shared across overlapping generations,
+// so TTL must not change while a candidate is only warming up.
+func (s *WorkflowStateService) CommitStorePolicy() {
+	if s == nil {
+		return
+	}
+	if store, ok := s.store.(*workflowFileToolStateStore); ok {
+		store.replaceTTL(s.ttl)
+	}
+}
+
+// Close releases resources held by the state service (e.g. Redis connections).
+func (s *WorkflowStateService) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	s.mu.Unlock()
+
+	s.wg.Wait()
+	if s.store != nil {
+		return s.store.Close()
+	}
+	return nil
+}
+
 // UnsupportedAlgorithmError reports an algorithm that cannot be constructed
 // by the Looper runtime.
 type UnsupportedAlgorithmError struct {
@@ -199,4 +294,48 @@ func constructorFor(algorithmType string) (algorithmConstructor, error) {
 		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
 	}
 	return constructor, nil
+}
+
+// FactoryWithWorkflowState creates a Looper and, for workflows, shares the
+// generation-owned tool-state store across independent requests.
+func FactoryWithWorkflowState(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	stateService *WorkflowStateService,
+) (ManagedLooper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	client, err := NewConnectorClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	binding := ownClient(client)
+	if algorithmType == config.DecisionAlgorithmWorkflows {
+		return newWorkflowsLooperWithService(cfg, binding, stateService), nil
+	}
+	return constructor(cfg, binding), nil
+}
+
+// FactoryWithClientAndWorkflowState reuses the supplied client and, for
+// workflows, the generation-owned tool-state store.
+func FactoryWithClientAndWorkflowState(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	client *Client,
+	stateService *WorkflowStateService,
+) (Looper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("looper client is required")
+	}
+	binding := borrowClient(client)
+	if algorithmType == config.DecisionAlgorithmWorkflows {
+		return newWorkflowsLooperWithService(cfg, binding, stateService), nil
+	}
+	return constructor(cfg, binding), nil
 }

@@ -733,6 +733,20 @@ func TestClassificationStubs(t *testing.T) {
 		}
 	})
 
+	t.Run("ClassifyMmBert32KFeedbackWithProbs", func(t *testing.T) {
+		result, err := ClassifyMmBert32KFeedbackWithProbs("test text")
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f, probabilities=%v", result.Class, result.Confidence, result.Probabilities)
+		}
+	})
+
+	t.Run("ClassifyFeedbackTextWithProbs", func(t *testing.T) {
+		result, err := ClassifyFeedbackTextWithProbs("test text")
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f, probabilities=%v", result.Class, result.Confidence, result.Probabilities)
+		}
+	})
+
 	t.Run("ClassifyMmBert32KFactcheck", func(t *testing.T) {
 		result, err := ClassifyMmBert32KFactcheck("test text")
 		if err == nil {

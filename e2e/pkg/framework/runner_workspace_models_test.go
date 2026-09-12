@@ -2,9 +2,13 @@ package framework
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/cluster"
 )
@@ -76,3 +80,13 @@ func (p *stubProfile) Teardown(context.Context, *TeardownOptions) error { return
 func (p *stubProfile) GetTestCases() []string { return nil }
 
 func (p *stubProfile) GetServiceConfig() ServiceConfig { return ServiceConfig{} }
+
+func TestSkipMissingLocalImageDeployment(t *testing.T) {
+	notFound := apierrors.NewNotFound(schema.GroupResource{Resource: "deployments"}, "mock-vllm")
+	if !skipMissingLocalImageDeployment(notFound) {
+		t.Fatal("expected a missing deployment to be skipped")
+	}
+	if skipMissingLocalImageDeployment(fmt.Errorf("connection refused")) {
+		t.Fatal("expected other lookup errors to fail the restart")
+	}
+}

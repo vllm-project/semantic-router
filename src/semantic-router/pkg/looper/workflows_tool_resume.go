@@ -166,6 +166,7 @@ func workflowPendingStateForResumedModel(
 	streaming bool,
 ) *workflowPendingToolState {
 	return &workflowPendingToolState{
+		RecipeName:                  state.RecipeName,
 		DecisionName:                state.DecisionName,
 		Mode:                        state.Mode,
 		Template:                    state.Template,
@@ -224,6 +225,7 @@ func hydrateResumedWorkflowInterrupt(
 ) {
 	interrupt.state.Plan = state.Plan
 	interrupt.state.PlannerResp = state.PlannerResp
+	interrupt.state.RecipeName = state.RecipeName
 	interrupt.state.DecisionName = state.DecisionName
 	interrupt.state.Mode = state.Mode
 	interrupt.state.Template = state.Template
