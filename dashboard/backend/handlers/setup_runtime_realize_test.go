@@ -80,15 +80,15 @@ func TestManagedSetupRealizesImportedConfigBeforePublishingOwnedPath(t *testing.
 	patch := createValidSetupPatch()
 	patch["global"] = map[string]interface{}{"services": map[string]interface{}{"router_replay": map[string]interface{}{"enabled": false}}}
 	imported := importSetupRuntimePatch(t, configPath, resolver, patch)
-	// The typed import roundtrip emits an empty management object. It must not
-	// turn absent listener intent into an explicit standalone loopback bind.
+	// Import must retain absent listener intent, so CLI realization can choose
+	// its container-reachable default instead of an explicit standalone bind.
 	var document map[string]interface{}
 	if err := json.Unmarshal(imported, &document); err != nil {
 		t.Fatal(err)
 	}
-	management := document["global"].(map[string]interface{})["services"].(map[string]interface{})["management_api"]
-	if len(management.(map[string]interface{})) != 0 {
-		t.Fatalf("fixture no longer exercises empty management roundtrip: %#v", management)
+	management, exists := document["global"].(map[string]interface{})["services"].(map[string]interface{})["management_api"]
+	if exists {
+		t.Fatalf("import authored absent management listener: %#v", management)
 	}
 	before, err := os.ReadFile(configPath)
 	if err != nil {
@@ -122,6 +122,113 @@ func TestManagedSetupRealizesImportedConfigBeforePublishingOwnedPath(t *testing.
 	if _, statErr := os.Stat(filepath.Join(filepath.Dir(configPath), ".vllm-sr")); !os.IsNotExist(statErr) {
 		t.Fatalf("nested runtime state created: %v", statErr)
 	}
+}
+
+// The real managed materializer sits between the raw-preserving HTTP
+// transports. Exercise both directions: defaults must not become authored
+// listener intent, and realized false/zero settings must survive publication.
+func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
+	cases := sparseTransportGlobalCases()
+	cases = append(cases,
+		struct {
+			name   string
+			global any
+		}{name: "empty management", global: map[string]any{
+			"services": map[string]any{"management_api": map[string]any{}, "router_replay": map[string]any{"enabled": false}},
+		}},
+		struct {
+			name   string
+			global any
+		}{name: "explicit listener false and zero", global: map[string]any{
+			"router": map[string]any{"clear_route_cache": false, "model_selection": map[string]any{"enabled": false}},
+			"services": map[string]any{
+				"management_api": map[string]any{"bind_address": "0.0.0.0", "port": 9099},
+				"response_api":   map[string]any{"enabled": false},
+				"router_replay":  map[string]any{"enabled": false, "ttl_seconds": 0},
+			},
+		}},
+	)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			configPath, resolver := managedSetupRuntime(t)
+			patch := createValidSetupPatch()
+			patch["global"] = tc.global
+			imported := importSetupRuntimePatch(t, configPath, resolver, patch)
+			assertManagedSetupAuthoredGlobal(t, tc.global, imported)
+			before := setupFilesystemSnapshot(t, filepath.Dir(filepath.Dir(configPath)))
+			validated := requireTransportHTTPResult(t, SetupValidateHandler(configPath, resolver), "/api/setup/validate",
+				mustJSONRaw(t, SetupConfigRequest{Config: imported}))
+			if !reflect.DeepEqual(before, setupFilesystemSnapshot(t, filepath.Dir(filepath.Dir(configPath)))) || !resolver.Active() {
+				t.Fatal("validation changed setup or runtime files")
+			}
+			var result SetupValidateResponse
+			if err := json.Unmarshal(validated.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if !result.Valid || !result.CanActivate {
+				t.Fatalf("managed candidate is not activatable: %+v", result)
+			}
+			assertManagedSetupAuthoredGlobal(t, tc.global, result.Config)
+			requireTransportHTTPResult(t, SetupActivateHandler(configPath, false, filepath.Dir(filepath.Dir(configPath)), resolver), "/api/setup/activate",
+				mustJSONRaw(t, SetupConfigRequest{Config: result.Config}))
+			published, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertManagedSetupAuthoredGlobal(t, tc.global, published)
+			assertTransportGlobalParity(t, result.Config, published)
+			parsed, err := routerconfig.Parse(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if parsed.ManagementAPI.BindAddress != "0.0.0.0" || resolver.Active() {
+				t.Fatalf("activation did not publish reachable runtime: listener=%+v setup=%v", parsed.ManagementAPI, resolver.Active())
+			}
+			// Sparse overrides still inherit the Router's model catalog defaults.
+			defaults, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion([]byte("version: v0.3\nglobal: {}\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(routerconfig.CanonicalGlobalFromRouterConfig(parsed).ModelCatalog, routerconfig.CanonicalGlobalFromRouterConfig(defaults).ModelCatalog) {
+				t.Fatal("realized sparse global lost effective Router model defaults")
+			}
+		})
+	}
+}
+
+func assertManagedSetupAuthoredGlobal(t *testing.T, authored any, encoded []byte) {
+	t.Helper()
+	// Normalize Go map/slice spellings to the same YAML value representation.
+	raw, err := yaml.Marshal(authored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected any
+	if err := yaml.Unmarshal(raw, &expected); err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal(encoded, &document); err != nil {
+		t.Fatal(err)
+	}
+	var check func(string, any, any)
+	check = func(path string, want, got any) {
+		t.Helper()
+		if fields, ok := want.(map[string]any); ok {
+			actual, ok := got.(map[string]any)
+			if !ok {
+				t.Fatalf("%s must remain a mapping, got %#v", path, got)
+			}
+			for key, value := range fields {
+				check(path+"."+key, value, actual[key])
+			}
+			return
+		}
+		if !reflect.DeepEqual(want, got) {
+			t.Fatalf("%s changed from authored %#v to %#v", path, want, got)
+		}
+	}
+	check("global", expected, document["global"])
 }
 
 func TestManagedSetupRealizationFailurePreservesBootstrap(t *testing.T) {
@@ -173,22 +280,24 @@ func TestManagedSetupPreservesExplicitManagementAndMissingGlobalDefaults(t *test
 			if err != nil {
 				t.Fatal(err)
 			}
+			expected, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(mustJSONRaw(t, patch))
+			if err != nil {
+				t.Fatal(err)
+			}
 			if explicit {
-				var expected routerconfig.ManagementAPIConfig
-				raw, marshalErr := yaml.Marshal(explicitManagement)
-				if marshalErr != nil {
-					t.Fatal(marshalErr)
+				// Authored fields stay exact while the effective view includes
+				// the Router's built-in roles and normalized model references.
+				if !reflect.DeepEqual(published.Global.Services.ManagementAPI, expected.ManagementAPI) {
+					t.Fatalf("effective management changed: got %+v want %+v", published.Global.Services.ManagementAPI, expected.ManagementAPI)
 				}
-				if decodeErr := yaml.Unmarshal(raw, &expected); decodeErr != nil {
-					t.Fatal(decodeErr)
+				raw, err := os.ReadFile(configPath)
+				if err != nil {
+					t.Fatal(err)
 				}
-				if !reflect.DeepEqual(published.Global.Services.ManagementAPI, expected) {
-					t.Fatalf("explicit management changed: got %+v want %+v", published.Global.Services.ManagementAPI, expected)
-				}
+				assertManagedSetupAuthoredGlobal(t, patch["global"], raw)
 			} else {
-				defaults := routerconfig.DefaultCanonicalGlobal()
-				if !reflect.DeepEqual(published.Global.ModelCatalog, defaults.ModelCatalog) {
-					t.Fatal("CLI listener realization lost Router model defaults for absent global")
+				if !reflect.DeepEqual(published.Global.ModelCatalog, routerconfig.CanonicalGlobalFromRouterConfig(expected).ModelCatalog) {
+					t.Fatal("CLI listener realization lost effective Router model defaults for absent global")
 				}
 				if published.Global.Services.ManagementAPI.BindAddress != "0.0.0.0" {
 					t.Fatalf("Router defaults replaced realized listener: %+v", published.Global.Services.ManagementAPI)

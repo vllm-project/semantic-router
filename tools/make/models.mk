@@ -4,6 +4,12 @@
 
 ##@ Models
 
+test-model-selection-parity: ## Compare Python-trained selectors with the current Rust C ABI
+	@cargo test --locked --manifest-path ml-binding/Cargo.toml
+	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
+
+.PHONY: test-model-selection-parity
+
 test-training-contracts: ## Run dependency-light model training contract tests
 	@python3 -m unittest discover -s src/training/tests -p 'test_*.py'
 	@python3 -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'

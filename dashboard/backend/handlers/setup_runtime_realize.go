@@ -1,11 +1,5 @@
 package handlers
 
-import (
-	"gopkg.in/yaml.v3"
-
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-)
-
 // Setup imports contain routing intent, even when their destination is already
 // the runtime-owned path. Realize that candidate before publication; the normal
 // sync path intentionally leaves an already-realized runtime file untouched.
@@ -20,7 +14,10 @@ func realizeSetupCandidateConfig(configPath string, candidate *setupConfigFile, 
 			return nil, err
 		}
 	}
-	raw, err := marshalYAMLBytes(candidate.CanonicalConfig)
+	// The typed global holds effective Router defaults. Only the authored
+	// override may become CLI input, or its absent listener becomes explicit
+	// loopback intent and omitted false values can revert to defaults.
+	raw, err := marshalYAMLBytes(candidate.canonicalTransport())
 	if err != nil {
 		return nil, err
 	}
@@ -28,14 +25,10 @@ func realizeSetupCandidateConfig(configPath string, candidate *setupConfigFile, 
 	if err != nil {
 		return nil, err
 	}
-	var result setupConfigFile
-	if candidate.Global == nil {
-		// Preserve setup's full Router defaults without turning its missing
-		// listener into authored standalone intent before CLI realization.
-		defaults := routerconfig.DefaultCanonicalGlobal()
-		result.Global = &defaults
-	}
-	if err := yaml.Unmarshal(realized, &result); err != nil {
+	// Resolve defaults for validation while retaining the realized raw global
+	// for HTTP responses and publication, including explicit false and zero.
+	result, err := decodeYAMLTaggedBytes[setupConfigFile](realized)
+	if err != nil {
 		return nil, err
 	}
 	return &result, nil
