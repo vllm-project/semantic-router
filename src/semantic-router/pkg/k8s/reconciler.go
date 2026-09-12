@@ -43,6 +43,7 @@ import (
 type Reconciler struct {
 	client         client.Client
 	scheme         *runtime.Scheme
+	runtimeManager manager.Manager
 	namespace      string
 	converter      *CRDConverter
 	staticConfig   *config.RouterConfig
@@ -104,22 +105,11 @@ func NewReconciler(cfg ReconcilerConfig) (*Reconciler, error) {
 	reconciler := &Reconciler{
 		client:         mgr.GetClient(),
 		scheme:         scheme,
+		runtimeManager: mgr,
 		namespace:      cfg.Namespace,
 		converter:      NewCRDConverter(),
 		staticConfig:   cfg.StaticConfig,
 		onConfigUpdate: cfg.OnConfigUpdate,
-	}
-
-	// Start the manager in a goroutine
-	go func() {
-		if err := mgr.Start(context.Background()); err != nil {
-			logging.Errorf("Failed to start manager: %v", err)
-		}
-	}()
-
-	// Wait for cache to sync
-	if !mgr.GetCache().WaitForCacheSync(context.Background()) {
-		return nil, fmt.Errorf("failed to wait for cache sync")
 	}
 
 	return reconciler, nil
@@ -127,17 +117,75 @@ func NewReconciler(cfg ReconcilerConfig) (*Reconciler, error) {
 
 // Start starts watching for CRD changes
 func (r *Reconciler) Start(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	logging.Infof("Starting Kubernetes reconciler in namespace %s", r.namespace)
+	runCtx, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+
+	managerDone := make(chan error, 1)
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		managerDone <- r.runtimeManager.Start(runCtx)
+	}()
+	cacheSynced := make(chan bool, 1)
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		cacheSynced <- r.runtimeManager.GetCache().WaitForCacheSync(runCtx)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-managerDone:
+		if ctx.Err() != nil {
+			return nil
+		}
+		return runtimeManagerExitError(err)
+	case synced := <-cacheSynced:
+		if !synced {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return errors.New("failed to wait for cache sync")
+		}
+	}
 
 	// Initial sync
-	if err := r.reconcile(ctx); err != nil {
-		logging.Warnf("Initial reconciliation failed (will retry on CRD changes): %v", err)
+	if err := r.reconcile(runCtx); err != nil {
+		if runCtx.Err() == nil {
+			logging.Warnf("Initial reconciliation failed (will retry on CRD changes): %v", err)
+		}
 	}
 
 	// Start watch loops
-	go r.watchLoop(ctx)
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		r.watchLoop(runCtx)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-managerDone:
+		if ctx.Err() != nil {
+			return nil
+		}
+		return runtimeManagerExitError(err)
+	}
+}
 
-	return nil
+func runtimeManagerExitError(err error) error {
+	if err == nil {
+		return errors.New("kubernetes runtime manager stopped unexpectedly")
+	}
+	return fmt.Errorf("kubernetes runtime manager: %w", err)
 }
 
 // Stop stops the reconciler

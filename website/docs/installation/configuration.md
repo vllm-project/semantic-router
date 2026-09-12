@@ -102,6 +102,19 @@ remote call is visible through `llm_remote_connector_*` and
 `llm_complexity_*` metrics, and a scorer failure is recorded on every
 complexity rule's signal errors rather than dropped.
 
+PII attaches the same block under
+`global.model_catalog.modules.classifier.pii`. It reads one contract,
+`token_spans.v1`, so `contract` may be omitted. The remote model returns entity
+spans as code-point offsets into the exact request string it was sent, and
+every label it returns must exist in the configured `pii_mapping_path`; a
+response the contract rejects is a backend failure rather than a clean "no PII"
+result. `on_error` beside the backend selects what such a failure, or a
+provider-declared `truncated_at`, does to the rule that consumed it: `allow`
+(the default) treats the content as not matching, `block` matches it as
+`classification_error`. Spans returned before a declared truncation still
+count under both policies. A backend is mutually exclusive with the local
+`use_mmbert_32k` selector.
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.
@@ -164,7 +177,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
 | `confidence` — looper algorithm | `confidence` tries candidate models in order and stops when response confidence reaches a configured threshold. | [`config/fragments/algorithm/looper/confidence.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/confidence.yaml) | [Guide](../tutorials/algorithm/looper/confidence) |
-| `fusion` — looper algorithm | `fusion` asks several models to analyze a request and a judge model to synthesize one final answer. | [`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml) | [Guide](../tutorials/algorithm/looper/fusion) |
+| `fusion` — looper algorithm | `fusion` asks several models to answer a request and a judge model to synthesize one final answer. | [`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml) | [Guide](../tutorials/algorithm/looper/fusion) |
 | `ratings` — looper algorithm | `ratings` calls every candidate model and returns one OpenAI-compatible choice per successful model. `max_concurrent` limits parallel work; it does not limit the total number of candidates executed. | [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml) | [Guide](../tutorials/algorithm/looper/ratings) |
 | `remom` — looper algorithm | `remom` runs several candidate models across bounded rounds and synthesizes their responses into one answer. | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [Guide](../tutorials/algorithm/looper/remom) |
 | `workflows` — looper algorithm | `workflows` runs a bounded, multi-step Router Flow behind one OpenAI-compatible model name. | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [Guide](../tutorials/algorithm/looper/workflows) |
@@ -284,7 +297,7 @@ recipe signals, decisions, route plugins, cache, learning, and session routing.
 ## Validate and serve
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
@@ -426,6 +439,9 @@ The canonical document can be authored or applied through several interfaces:
 
 [Configuration Workflows](configuration-workflows) explains which interface
 owns which part of the document and how to avoid competing sources of truth.
+[Configuration Contract](configuration-contract) describes the generated
+machine-readable schema, Router discovery and validation APIs, and the safe
+authoring loop for tools and agents.
 
 ## Reference sources
 
@@ -437,6 +453,8 @@ owns which part of the document and how to avoid competing sources of truth.
   shared runtime configuration.
 - [Unified Config Contract v0.3](../proposals/unified-config-contract-v0-3)
   records the design behind the current contract.
+- [Configuration Contract](configuration-contract) is the live discovery and
+  validation contract for the current Router build.
 
 Avoid copying the exhaustive example as an application config. Start with the
 smallest document that describes the deployment, then add only the capabilities

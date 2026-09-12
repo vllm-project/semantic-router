@@ -83,7 +83,7 @@ Add model cards, decisions, and entrypoints that reference these provider
 names, then validate the complete document:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## 3. Deploy Semantic Router

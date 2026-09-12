@@ -28,7 +28,7 @@ func TestExportedRoutesMatchCatalogOrder(t *testing.T) {
 		t.Fatalf("expected %d exported routes, got %d", len(want), len(got))
 	}
 	for i, route := range want {
-		if got[i].Path != route.Path || got[i].Method != route.Method || got[i].Description != route.Description {
+		if got[i].Path != route.Path || got[i].Method != route.Method || got[i].Description != route.Description || !reflect.DeepEqual(got[i].Contract, route.EndpointContract) {
 			t.Fatalf("route %d mismatch: expected %#v, got %#v", i, route, got[i])
 		}
 	}

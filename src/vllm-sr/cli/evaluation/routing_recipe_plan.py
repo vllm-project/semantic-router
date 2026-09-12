@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing_extensions import Self
 
+from cli.config_schema import routing_surface_catalog
 from cli.evaluation.manifest_identity import (
     routing_recipe_plan_digest,
 )
@@ -19,33 +20,12 @@ _MAX_ROUTING_RECIPE_ARMS = 64
 _MAX_RUNTIME_INPUT_ID_LENGTH = 128
 _SIGNAL_PART_COUNT = 2
 _KB_METRIC_PART_COUNT = 3
-_LABELED_SIGNAL_TYPES = frozenset({"classifier", "complexity"})
 _ROUTING_RECIPE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SIGNAL_SURFACES = tuple(routing_surface_catalog()["signals"])
 _SUPPORTED_SIGNAL_TYPES = frozenset(
-    {
-        "authz",
-        "classifier",
-        "complexity",
-        "context",
-        "conversation",
-        "domain",
-        "embedding",
-        "event",
-        "fact_check",
-        "hallucination",
-        "jailbreak",
-        "kb",
-        "keyword",
-        "language",
-        "metadata",
-        "modality",
-        "pii",
-        "preference",
-        "reask",
-        "structure",
-        "user_feedback",
-    }
+    surface["type"] for surface in _SIGNAL_SURFACES if surface["decision_referenceable"]
 )
+_SIGNAL_SURFACE_BY_TYPE = {surface["type"]: surface for surface in _SIGNAL_SURFACES}
 
 StrictPositiveInt = Annotated[int, Field(strict=True, ge=1)]
 
@@ -73,7 +53,15 @@ def _valid_runtime_input_id(value: str, *, projection: bool) -> bool:
         return len(parts) == _KB_METRIC_PART_COUNT
     if signal_type not in _SUPPORTED_SIGNAL_TYPES:
         return False
-    return len(parts) == _SIGNAL_PART_COUNT or signal_type in _LABELED_SIGNAL_TYPES
+    if len(parts) == _SIGNAL_PART_COUNT:
+        return True
+    surface = _SIGNAL_SURFACE_BY_TYPE[signal_type]
+    qualifier = surface.get("reference_qualifier")
+    if qualifier == "label":
+        return True
+    if qualifier == "fixed_suffix":
+        return parts[2] in surface.get("reference_suffixes", ())
+    return False
 
 
 class RoutingRecipeInputSpec(_RoutingRecipeModel):

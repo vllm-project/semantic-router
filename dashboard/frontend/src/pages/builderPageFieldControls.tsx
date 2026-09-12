@@ -1,70 +1,64 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { createPortal } from "react-dom";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
-import type { FieldSchema } from "@/lib/dslMutations";
+import type { FieldSchema } from '@/lib/dslMutations'
+import ProductCheckbox from '@/components/ProductCheckbox'
 
-import styles from "./BuilderPage.module.css";
-import { StructuredFieldEditor } from "./builderPageStructuredFieldControls";
+import styles from './BuilderPage.module.css'
+import { JsonFieldEditor } from './builderPageJsonFieldEditor'
+import { StructuredFieldEditor } from './builderPageStructuredFieldControls'
 
 export const CustomSelect: React.FC<{
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-  placeholder?: string;
-}> = ({ value, options, onChange, placeholder = "— select —" }) => {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+  placeholder?: string
+}> = ({ value, options, onChange, placeholder = '— select —' }) => {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number; width: number }>({
     top: 0,
     left: 0,
     width: 0,
-  });
+  })
 
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-  }, [open]);
+    if (!open || !triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+  }, [open])
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return
     const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (triggerRef.current?.contains(target)) return;
-      if (dropdownRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+      const target = e.target as Node
+      if (triggerRef.current?.contains(target)) return
+      if (dropdownRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open]);
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open])
 
   return (
     <div className={styles.customSelect} ref={triggerRef}>
       <div
-        className={
-          open ? styles.customSelectTriggerOpen : styles.customSelectTrigger
-        }
+        className={open ? styles.customSelectTriggerOpen : styles.customSelectTrigger}
         onClick={() => setOpen(!open)}
       >
         <span>{value || placeholder}</span>
         <svg
-          className={`${styles.customSelectChevron} ${open ? styles.customSelectChevronOpen : ""}`}
+          className={`${styles.customSelectChevron} ${open ? styles.customSelectChevronOpen : ''}`}
           viewBox="0 0 16 16"
           fill="none"
           stroke="currentColor"
@@ -79,7 +73,7 @@ export const CustomSelect: React.FC<{
             ref={dropdownRef}
             className={styles.customSelectDropdown}
             style={{
-              position: "fixed",
+              position: 'fixed',
               top: pos.top,
               left: pos.left,
               width: pos.width,
@@ -89,13 +83,11 @@ export const CustomSelect: React.FC<{
               <div
                 key={opt}
                 className={
-                  opt === value
-                    ? styles.customSelectOptionActive
-                    : styles.customSelectOption
+                  opt === value ? styles.customSelectOptionActive : styles.customSelectOption
                 }
                 onClick={() => {
-                  onChange(opt);
-                  setOpen(false);
+                  onChange(opt)
+                  setOpen(false)
                 }}
               >
                 {opt === value ? (
@@ -106,63 +98,53 @@ export const CustomSelect: React.FC<{
                     stroke="currentColor"
                     strokeWidth="2"
                   >
-                    <path
-                      d="M3 8.5l3 3 7-7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                    <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 ) : (
                   <span className={styles.customSelectPlaceholder} />
                 )}
-                {opt || "(none)"}
+                {opt || '(none)'}
               </div>
             ))}
           </div>,
           document.body,
         )}
     </div>
-  );
-};
+  )
+}
 
 export const FieldEditor: React.FC<{
-  schema: FieldSchema;
-  value: unknown;
-  onChange: (value: unknown) => void;
+  schema: FieldSchema
+  value: unknown
+  onChange: (value: unknown) => void
 }> = ({ schema, value, onChange }) => {
   switch (schema.type) {
-    case "string":
+    case 'string':
       return (
         <div className={styles.fieldGroup}>
           <label className={styles.fieldLabel}>
-            {schema.label}{" "}
-            {schema.required && (
-              <span style={{ color: "var(--color-danger)" }}>*</span>
-            )}
+            {schema.label}{' '}
+            {schema.required && <span style={{ color: 'var(--color-danger)' }}>*</span>}
           </label>
           <input
             className={styles.fieldInput}
-            value={(value as string) ?? ""}
+            value={(value as string) ?? ''}
             onChange={(e) => onChange(e.target.value)}
             placeholder={schema.placeholder}
           />
           {schema.description && (
-            <span
-              style={{ fontSize: "0.625rem", color: "var(--color-text-muted)" }}
-            >
+            <span style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>
               {schema.description}
             </span>
           )}
         </div>
-      );
-    case "number":
+      )
+    case 'number':
       return (
         <div className={styles.fieldGroup}>
           <label className={styles.fieldLabel}>
-            {schema.label}{" "}
-            {schema.required && (
-              <span style={{ color: "var(--color-danger)" }}>*</span>
-            )}
+            {schema.label}{' '}
+            {schema.required && <span style={{ color: 'var(--color-danger)' }}>*</span>}
           </label>
           <input
             className={styles.fieldInput}
@@ -170,64 +152,55 @@ export const FieldEditor: React.FC<{
             step="any"
             min={schema.min}
             max={schema.max}
-            value={value !== undefined && value !== null ? String(value) : ""}
+            value={value !== undefined && value !== null ? String(value) : ''}
             onChange={(e) => {
-              const v = e.target.value;
-              onChange(v === "" ? undefined : Number(v));
+              const v = e.target.value
+              onChange(v === '' ? undefined : Number(v))
             }}
             placeholder={schema.placeholder}
           />
         </div>
-      );
-    case "boolean":
+      )
+    case 'boolean':
       return (
         <div className={styles.fieldGroup}>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
+          <span className={styles.fieldLabel}>{schema.label}</span>
+          <label className={styles.booleanControl}>
+            <ProductCheckbox
               checked={!!value}
               onChange={(e) => onChange(e.target.checked)}
-              style={{ accentColor: "var(--color-primary)" }}
+              aria-label={schema.label}
             />
-            <span
-              className={styles.fieldLabel}
-              style={{ textTransform: "none" }}
-            >
-              {schema.label}
-            </span>
+            <span>{value ? 'Enabled' : 'Disabled'}</span>
           </label>
+          {schema.description ? (
+            <span className={styles.fieldDescription}>{schema.description}</span>
+          ) : null}
         </div>
-      );
-    case "select":
+      )
+    case 'select':
       return (
         <div className={styles.fieldGroup}>
           <label className={styles.fieldLabel}>
-            {schema.label}{" "}
-            {schema.required && (
-              <span style={{ color: "var(--color-danger)" }}>*</span>
-            )}
+            {schema.label}{' '}
+            {schema.required && <span style={{ color: 'var(--color-danger)' }}>*</span>}
           </label>
           <CustomSelect
-            value={(value as string) ?? ""}
+            value={(value as string) ?? ''}
             options={schema.options ?? []}
             onChange={(v) => onChange(v || undefined)}
             placeholder="— select —"
           />
         </div>
-      );
-    case "string[]":
-    case "string[][]":
-    case "object":
-    case "object[]":
-    case "key-value":
-    case "rule":
+      )
+    case 'json':
+      return <JsonFieldEditor schema={schema} value={value} onChange={onChange} />
+    case 'string[]':
+    case 'string[][]':
+    case 'object':
+    case 'object[]':
+    case 'key-value':
+    case 'rule':
       return (
         <StructuredFieldEditor
           schema={schema}
@@ -242,16 +215,15 @@ export const FieldEditor: React.FC<{
             />
           )}
         />
-      );
-    case "number[]": {
-      let arr: number[] = [];
+      )
+    case 'number[]': {
+      let arr: number[] = []
       if (Array.isArray(value)) {
-        arr = value.map(Number).filter((n) => !isNaN(n));
-      } else if (typeof value === "string") {
+        arr = value.map(Number).filter((n) => !isNaN(n))
+      } else if (typeof value === 'string') {
         try {
-          const parsed = JSON.parse(value);
-          if (Array.isArray(parsed))
-            arr = parsed.map(Number).filter((n) => !isNaN(n));
+          const parsed = JSON.parse(value)
+          if (Array.isArray(parsed)) arr = parsed.map(Number).filter((n) => !isNaN(n))
         } catch {
           /* ignore */
         }
@@ -265,77 +237,77 @@ export const FieldEditor: React.FC<{
           placeholder={schema.placeholder}
           description={schema.description}
         />
-      );
+      )
     }
     default:
-      return null;
+      return null
   }
-};
+}
 
 export const StringArrayEditor: React.FC<{
-  label: string;
-  required?: boolean;
-  value: string[];
-  onChange: (value: string[]) => void;
-  placeholder?: string;
+  label: string
+  required?: boolean
+  value: string[]
+  onChange: (value: string[]) => void
+  placeholder?: string
 }> = ({ label, required, value, onChange, placeholder }) => {
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState('')
 
   const addItem = useCallback(() => {
-    const v = inputValue.trim();
+    const v = inputValue.trim()
     if (v && !value.includes(v)) {
-      onChange([...value, v]);
-      setInputValue("");
+      onChange([...value, v])
+      setInputValue('')
     }
-  }, [inputValue, value, onChange]);
+  }, [inputValue, value, onChange])
 
   const removeItem = useCallback(
     (idx: number) => {
-      onChange(value.filter((_, i) => i !== idx));
+      onChange(value.filter((_, i) => i !== idx))
     },
     [value, onChange],
-  );
+  )
 
   return (
     <div className={styles.fieldGroup}>
       <label className={styles.fieldLabel}>
-        {label}{" "}
-        {required && <span style={{ color: "var(--color-danger)" }}>*</span>}
+        {label} {required && <span style={{ color: 'var(--color-danger)' }}>*</span>}
       </label>
       <div
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.25rem",
-          minHeight: "1.5rem",
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.25rem',
+          minHeight: '1.5rem',
         }}
       >
         {value.map((item, idx) => (
           <span
             key={idx}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.25rem",
-              padding: "0.125rem 0.5rem",
-              fontSize: "var(--text-xs)",
-              background: "var(--color-bg-tertiary)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              fontFamily: "var(--font-mono)",
-              color: "var(--color-text)",
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              padding: '0.125rem 0.5rem',
+              fontSize: 'var(--text-xs)',
+              background: 'var(--color-bg-tertiary)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--color-text)',
             }}
           >
             {item}
             <button
+              type="button"
               onClick={() => removeItem(idx)}
               style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
                 padding: 0,
-                color: "var(--color-text-muted)",
-                fontSize: "0.75rem",
+                color: 'var(--color-text-muted)',
+                fontSize: '0.75rem',
                 lineHeight: 1,
               }}
             >
@@ -344,76 +316,74 @@ export const StringArrayEditor: React.FC<{
           </span>
         ))}
       </div>
-      <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+      <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
         <input
           className={styles.fieldInput}
           style={{ flex: 1 }}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder={placeholder}
-          onKeyDown={(e) =>
-            e.key === "Enter" && (e.preventDefault(), addItem())
-          }
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem())}
         />
         <button
+          type="button"
           className={styles.toolbarBtn}
           onClick={addItem}
           disabled={!inputValue.trim()}
-          style={{ padding: "0.375rem 0.5rem", fontSize: "var(--text-xs)" }}
+          style={{ padding: '0.375rem 0.5rem', fontSize: 'var(--text-xs)' }}
         >
           + Add
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
 export const NumberArrayEditor: React.FC<{
-  label: string;
-  required?: boolean;
-  value: number[];
-  onChange: (value: number[]) => void;
-  placeholder?: string;
-  description?: string;
+  label: string
+  required?: boolean
+  value: number[]
+  onChange: (value: number[]) => void
+  placeholder?: string
+  description?: string
 }> = ({ label, required, value, onChange, placeholder, description }) => {
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState('')
 
   const addItem = useCallback(() => {
-    const v = inputValue.trim();
-    if (v === "") return;
-    const num = Number(v);
-    if (isNaN(num)) return;
-    onChange([...value, num]);
-    setInputValue("");
-  }, [inputValue, value, onChange]);
+    const v = inputValue.trim()
+    if (v === '') return
+    const num = Number(v)
+    if (isNaN(num)) return
+    onChange([...value, num])
+    setInputValue('')
+  }, [inputValue, value, onChange])
 
   const removeItem = useCallback(
     (idx: number) => {
-      onChange(value.filter((_, i) => i !== idx));
+      onChange(value.filter((_, i) => i !== idx))
     },
     [value, onChange],
-  );
+  )
 
   return (
     <div className={styles.fieldGroup}>
       <label className={styles.fieldLabel}>
-        {label}{" "}
-        {required && <span style={{ color: "var(--color-danger)" }}>*</span>}
+        {label} {required && <span style={{ color: 'var(--color-danger)' }}>*</span>}
       </label>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "0.25rem",
-          minHeight: "1.75rem",
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.25rem',
+          minHeight: '1.75rem',
         }}
       >
         <span
           style={{
-            fontSize: "var(--text-xs)",
-            color: "var(--color-text-muted)",
-            fontFamily: "var(--font-mono)",
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-text-muted)',
+            fontFamily: 'var(--font-mono)',
           }}
         >
           [
@@ -422,28 +392,29 @@ export const NumberArrayEditor: React.FC<{
           <span
             key={idx}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.25rem",
-              padding: "0.125rem 0.5rem",
-              fontSize: "var(--text-xs)",
-              background: "var(--color-bg-tertiary)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              fontFamily: "var(--font-mono)",
-              color: "var(--color-text)",
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              padding: '0.125rem 0.5rem',
+              fontSize: 'var(--text-xs)',
+              background: 'var(--color-bg-tertiary)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--color-text)',
             }}
           >
             {item}
             <button
+              type="button"
               onClick={() => removeItem(idx)}
               style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
                 padding: 0,
-                color: "var(--color-text-muted)",
-                fontSize: "0.75rem",
+                color: 'var(--color-text-muted)',
+                fontSize: '0.75rem',
                 lineHeight: 1,
               }}
             >
@@ -453,15 +424,15 @@ export const NumberArrayEditor: React.FC<{
         ))}
         <span
           style={{
-            fontSize: "var(--text-xs)",
-            color: "var(--color-text-muted)",
-            fontFamily: "var(--font-mono)",
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-text-muted)',
+            fontFamily: 'var(--font-mono)',
           }}
         >
           ]
         </span>
       </div>
-      <div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+      <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
         <input
           className={styles.fieldInput}
           style={{ flex: 1 }}
@@ -470,42 +441,39 @@ export const NumberArrayEditor: React.FC<{
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder={placeholder}
-          onKeyDown={(e) =>
-            e.key === "Enter" && (e.preventDefault(), addItem())
-          }
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem())}
         />
         <button
+          type="button"
           className={styles.toolbarBtn}
           onClick={addItem}
           disabled={!inputValue.trim() || isNaN(Number(inputValue))}
-          style={{ padding: "0.375rem 0.5rem", fontSize: "var(--text-xs)" }}
+          style={{ padding: '0.375rem 0.5rem', fontSize: 'var(--text-xs)' }}
         >
           + Add
         </button>
       </div>
       {description && (
-        <span
-          style={{ fontSize: "0.625rem", color: "var(--color-text-muted)" }}
-        >
+        <span style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>
           {description}
         </span>
       )}
     </div>
-  );
-};
+  )
+}
 
 export function tryParseValue(raw: string): unknown {
-  const trimmed = raw.trim();
-  if (trimmed === "true") return true;
-  if (trimmed === "false") return false;
-  if (trimmed === "") return "";
-  if (/^-?\d+$/.test(trimmed)) return parseInt(trimmed, 10);
-  if (/^-?\d+\.\d+$/.test(trimmed)) return parseFloat(trimmed);
+  const trimmed = raw.trim()
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
+  if (trimmed === '') return ''
+  if (/^-?\d+$/.test(trimmed)) return parseInt(trimmed, 10)
+  if (/^-?\d+\.\d+$/.test(trimmed)) return parseFloat(trimmed)
   try {
-    const parsed = JSON.parse(trimmed);
-    if (typeof parsed === "object") return parsed;
+    const parsed = JSON.parse(trimmed)
+    if (typeof parsed === 'object') return parsed
   } catch {
     /* not JSON */
   }
-  return raw;
+  return raw
 }

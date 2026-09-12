@@ -54,7 +54,10 @@ log = get_logger(__name__)
 @click.option(
     "--base-url",
     default=None,
-    help="Explicit routed HTTP base URL for a remote or port-forwarded stack.",
+    help=(
+        "Explicit routed listener origin or OpenAI /v1 base URL for a remote "
+        "or port-forwarded stack."
+    ),
 )
 @click.option(
     "--json",
@@ -97,11 +100,11 @@ def chat(
 
     Examples:
 
-        vllm-sr chat "hello"
+        vllm-sr request chat "hello"
 
-        vllm-sr chat --model vllm-sr/auto --prompt "Explain mixture of models"
+        vllm-sr request chat --model vllm-sr/auto --prompt "Explain mixture of models"
 
-        vllm-sr chat --json "hello"
+        vllm-sr request chat --json "hello"
     """
     user_text = (prompt or "").strip() or " ".join(message).strip()
     if not user_text:

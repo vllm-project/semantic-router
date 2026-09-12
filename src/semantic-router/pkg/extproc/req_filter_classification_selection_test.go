@@ -247,8 +247,8 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 	if selected == nil || selected.Model != "model-a" {
 		t.Fatalf("expected model-a, got %#v", selected)
 	}
-	if method != "single" {
-		t.Fatalf("expected single method, got %q", method)
+	if method != string(selection.MethodStatic) {
+		t.Fatalf("expected static method, got %q", method)
 	}
 
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("single-candidate-session", time.Now())
@@ -257,6 +257,27 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 	}
 	if snapshot.CurrentModel != "model-a" {
 		t.Fatalf("expected current model model-a, got %q", snapshot.CurrentModel)
+	}
+}
+
+func TestSelectModelFromCandidatesPreservesConfiguredAlgorithmForSingleCandidate(t *testing.T) {
+	router := &OpenAIRouter{}
+	selected, method, err := router.selectModelFromCandidates(
+		&selection.SelectionContext{
+			DecisionName:    "only-choice",
+			CandidateModels: []config.ModelRef{{Model: "model-a"}},
+		},
+		&config.AlgorithmConfig{Type: config.DecisionAlgorithmMultiFactor},
+		&RequestContext{},
+	)
+	if err != nil {
+		t.Fatalf("selectModelFromCandidates() error = %v", err)
+	}
+	if selected == nil || selected.Model != "model-a" {
+		t.Fatalf("expected model-a, got %#v", selected)
+	}
+	if method != string(selection.MethodMultiFactor) {
+		t.Fatalf("expected multi_factor method, got %q", method)
 	}
 }
 

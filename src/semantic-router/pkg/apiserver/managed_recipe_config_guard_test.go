@@ -48,14 +48,14 @@ func assertManagedStateBlocksWriters(t *testing.T, stateName string) {
 
 func managedConfigWriterTestCases(server *ClassificationAPIServer) []configWriterTestCase {
 	return []configWriterTestCase{
-		{name: "router patch", request: httptest.NewRequest(http.MethodPatch, "/config/router", bytes.NewBufferString(`{}`)), handle: server.handleConfigPatch},
-		{name: "router put", request: httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewBufferString(`{}`)), handle: server.handleConfigPut},
-		{name: "router rollback", request: httptest.NewRequest(http.MethodPost, "/config/router/rollback", bytes.NewBufferString(`{}`)), handle: server.handleConfigRollback},
-		{name: "recipe put", request: requestWithPathValue(http.MethodPut, "/config/router/recipes/named", "name", "named"), handle: server.handlePutRecipe},
-		{name: "recipe delete", request: requestWithPathValue(http.MethodDelete, "/config/router/recipes/named", "name", "named"), handle: server.handleDeleteRecipe},
-		{name: "kb create", request: httptest.NewRequest(http.MethodPost, "/config/kbs", bytes.NewBufferString(`{}`)), handle: server.handleCreateKnowledgeBase},
-		{name: "kb update", request: requestWithPathValue(http.MethodPut, "/config/kbs/named", "name", "named"), handle: server.handleUpdateKnowledgeBase},
-		{name: "kb delete", request: requestWithPathValue(http.MethodDelete, "/config/kbs/named", "name", "named"), handle: server.handleDeleteKnowledgeBase},
+		{name: "router patch", request: httptest.NewRequest(http.MethodPatch, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPatch},
+		{name: "router put", request: httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPut},
+		{name: "router rollback", request: httptest.NewRequest(http.MethodPost, "/api/v1/config/rollback", bytes.NewBufferString(`{}`)), handle: server.handleConfigRollback},
+		{name: "recipe put", request: requestWithPathValue(http.MethodPut, "/api/v1/config/recipes/named", "name", "named"), handle: server.handlePutRecipe},
+		{name: "recipe delete", request: requestWithPathValue(http.MethodDelete, "/api/v1/config/recipes/named", "name", "named"), handle: server.handleDeleteRecipe},
+		{name: "kb create", request: httptest.NewRequest(http.MethodPost, "/api/v1/storage/knowledge-bases", bytes.NewBufferString(`{}`)), handle: server.handleCreateKnowledgeBase},
+		{name: "kb update", request: requestWithPathValue(http.MethodPut, "/api/v1/storage/knowledge-bases/named", "name", "named"), handle: server.handleUpdateKnowledgeBase},
+		{name: "kb delete", request: requestWithPathValue(http.MethodDelete, "/api/v1/storage/knowledge-bases/named", "name", "named"), handle: server.handleDeleteKnowledgeBase},
 	}
 }
 
@@ -97,7 +97,7 @@ func TestRecipeStoreConfigLockRejectsCrossProcessContention(t *testing.T) {
 	rr := httptest.NewRecorder()
 	server.handleConfigPut(
 		rr,
-		httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewBufferString(`{}`)),
+		httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewBufferString(`{}`)),
 	)
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409: %s", rr.Code, rr.Body.String())

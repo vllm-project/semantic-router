@@ -131,7 +131,7 @@
 - id: independent/muse-spark-1-3-humanitys-last-exam@1.0.0
   model: meta/muse-spark-1.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Muse Spark 1.3 (max)
@@ -387,7 +387,7 @@
 - id: independent/muse-spark-1-3-xhigh-humanitys-last-exam@1.0.0
   model: meta/muse-spark-1.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Muse Spark 1.3 (xhigh)
@@ -549,7 +549,7 @@
 - id: independent/muse-spark-1-2-humanitys-last-exam@1.0.0
   model: meta/muse-spark-1.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Muse Spark 1.2 (xhigh)
@@ -824,7 +824,7 @@
 - id: independent/muse-glimmer-humanitys-last-exam@1.0.0
   model: meta/muse-glimmer-30b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Muse Glimmer (high)
@@ -842,7 +842,7 @@
 - id: meta/muse-glimmer-30b-model-card-humanitys-last-exam@1.0.0
   model: meta/muse-glimmer-30b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: Muse Glimmer 30B
@@ -1152,7 +1152,7 @@
 - id: independent/llama-4-maverick-humanitys-last-exam@1.0.0
   model: meta/llama-4-maverick-17b-128e-instruct
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Llama 4 Maverick
@@ -1296,7 +1296,7 @@
 - id: independent/llama-4-scout-humanitys-last-exam@1.0.0
   model: meta/llama-4-scout-17b-16e-instruct
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Llama 4 Scout

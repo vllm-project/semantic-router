@@ -47,18 +47,44 @@ rewriter keeps the weights as it finds them and, for an FP32 graph, adds fp32↔
 `CKFlashAttention` node. A rewrite of the FP32 `model.onnx` must therefore be
 named `model_fa.onnx`; `model_fa_fp16.onnx` needs an FP16 input graph. The
 script refuses an fp16 name for an FP32 graph, because `find_onnx_models`
-ranks candidates by name alone. `make ck-rewrite-test` runs the rewriter's
+ranks candidates by name alone. A recognized RoPE position-to-sin/cos branch
+may keep its FP32 frequency constant and calculations before casting to FP16;
+this numerical constant is not counted as an encoder or classifier weight.
+`make ck-rewrite-test` runs the rewriter's
 unit tests (`scripts/test_rewrite_graph.py`); the changed-file gate runs them
 for any change under this directory.
 
-The matcher expects the attention subgraph of the FP32 `model.onnx` export:
-`Softmax` fed by `Add(MatMul(Mul(q), Mul(k)), mask)` and consumed directly by
-the AV `MatMul`. The published `model_sdpa_fp16.onnx` graphs differ (a NaN
-guard of `IsNaN` and `Where` between `Softmax` and the AV `MatMul`, or the
-scale applied after the QK `MatMul`) and are reported as
-`No attention blocks found`, so an FP16 FA artifact cannot be produced from
-them until the matcher covers that shape
-(vllm-project/semantic-router#3256).
+The matcher accepts `Softmax` fed by
+`Add(MatMul(Mul(q), Mul(k)), mask)`, including the published intent FP16
+export's `Where(IsNaN(probabilities), 0, probabilities)` guard before the AV
+`MatMul` and its reshape/transpose/reshape K path. A post-QK scaling export
+is not supported; unmatched or partially matched graphs are refused.
+
+Local/global attention is determined from the mask's positional comparisons,
+not exporter tensor names or layer frequency. The inclusive ModernBERT
+condition `abs(query_position - key_position) <= 64` becomes CK windows
+`(64, 64)`. For the 22-layer intent model with global attention every third
+layer, expect **8 global and 14 local nodes**. `--local-attention` checks the
+source window; it does not override it. Unknown mask comparisons are refused.
+The matcher also accepts the Transformers 4.57.6 / Torch 2.10 token export's
+`Where(bool(1-padding), negative, 1-padding)` and separate local-window fill,
+with the key-padding broadcast axes checked explicitly.
+The old dense mask computation is removed after all layers are rewritten;
+each custom op receives one `[B, 1, 1, S]` padding bias.
+
+Recognized FP16 masked mean-pooling heads accumulate and divide in FP32 before
+casting back to the head dtype, preventing long-sequence sum overflow. This
+does not add pooling to token-classification graphs or change their output rank.
+
+Check the original SDPA graph's task and output rank against the native Hugging
+Face model before using it as a correctness reference: a sequence-classification
+export cannot validate a token-classification task. Re-export the native task
+when they disagree; changing output shape metadata does not fix its computation.
+Existing published FA artifacts may contain different window assignments and
+must not be used to validate a new rewrite. Run the Python graph tests and the
+GPU SDPA tests (including local windows, one-dimensional padding bias, mixed
+batch lengths, and non-tile-aligned lengths) before model-level comparison.
+Graph tests alone do not establish GPU correctness or 32K task accuracy.
 
 ## Load the custom op
 
