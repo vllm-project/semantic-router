@@ -128,16 +128,16 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
 
 # The CK flash-attention graph rewriter is a Python script under onnx-binding;
-# its unit tests need onnx, which the agent venv does not carry by default.
+# Its tests also execute blocked FP32 graphs with the CPU runtime.
 CK_REWRITE_SCRIPTS_DIR ?= onnx-binding/ort-ck-flash-attn/scripts
-CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0
+CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0 onnxruntime==1.24.2
 
 ck-rewrite-deps: harness-venv-install ## Install the CK graph rewriter test dependencies into the harness venv
-	@"$(AGENT_PYTHON)" -c "import onnx" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
+	@"$(AGENT_PYTHON)" -c "import onnx, onnxruntime" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
 
 ck-rewrite-test: ck-rewrite-deps ## Run the CK flash-attention graph rewriter unit tests
 	@$(LOG_TARGET)
-	@cd $(CK_REWRITE_SCRIPTS_DIR) && "$(AGENT_PYTHON)" -m unittest test_rewrite_graph test_stable_pooling
+	@cd $(CK_REWRITE_SCRIPTS_DIR) && "$(AGENT_PYTHON)" -m unittest test_rewrite_graph test_stable_pooling test_rewrite_blocked_attention
 
 # Run every MULTIMODAL_MODEL_PATH-gated test against a local model copy:
 # the candle-binding Go tests (including the network-dependent image-encode

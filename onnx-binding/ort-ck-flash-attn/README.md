@@ -91,6 +91,46 @@ GPU SDPA tests (including local windows, one-dimensional padding bias, mixed
 batch lengths, and non-tile-aligned lengths) before model-level comparison.
 Graph tests alone do not establish GPU correctness or 32K task accuracy.
 
+## Bound FP32 attention memory
+
+For precision-sensitive classifiers, `scripts/rewrite_blocked_attention.py`
+provides an alternative using standard ONNX operators and FP32 arithmetic:
+
+```bash
+python3 scripts/rewrite_blocked_attention.py \
+  original/model.onnx blocked/model.onnx \
+  --block-size 256 --max-score-bytes 536870912
+```
+
+Each query block attends to the complete key/value sequence. An ONNX `Loop`
+bounds the score tensor by dynamically reducing the query block for the current
+batch, head count, and key length. Local masks use absolute positions, including
+the last partial block. The rewrite preserves the separate Q/K scaling, mask
+fill values, and NaN guard, and removes the original quadratic mask. It reduces
+peak attention storage, not the quadratic computation of global attention.
+The score budget covers one FP32 score tensor; it is not a total device-memory
+limit. Weights, other intermediates, and runtime workspaces require extra memory.
+
+The input must be a recognized FP32 self-attention export with a rank-two binary
+padding mask. Unknown masks, mixed precision, partial attention matches, and
+existing control flow are rejected. The output uses an external weight file
+beside the graph; keep both files together. This variant does not require the
+CK custom-op library. It does require runtime support for `Loop` and its body
+operators.
+
+Add `--batch-size 1` when qualifying only the Router's single-request token-ID
+path. This fixes both input batch dimensions so ONNX Runtime rejects larger
+batches. It does not split inputs or change attention math. Native HF batching
+and a separate dynamic ONNX variant require their own evidence.
+
+`make ck-rewrite-test` executes dynamic-shape, padding, local-window, and tail
+comparisons on the CPU runtime. For every checkpoint, separately compare full
+probabilities and task decisions against the native reference at each supported
+length and batch size. Different FP32 kernels can still produce different
+rounding. Check the runtime profile to confirm that attention inside the loop
+executes on the requested GPU. A successful rewrite alone qualifies neither an
+execution provider nor a model artifact.
+
 ## Load the custom op
 
 The Semantic Router ONNX binding reads `ORT_CK_FLASH_ATTN_LIB`:
