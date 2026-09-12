@@ -1,0 +1,444 @@
+- id: ai2/olmo-3-32b-base-model-card-mmlu-pro@1.0.0
+  model: ai2/olmo-3-32b-base
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3 32B Base
+    source_kind: official_model_card
+    model_revision: c2b61dae89a1ad10e4ad5653d0e46b590902607b
+    dataset_variant: MMLU-Pro MC
+  metrics:
+    accuracy: 0.496
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md
+    redistributable: true
+- id: ai2/olmo-3-32b-base-model-card-bbh@1.0.0
+  model: ai2/olmo-3-32b-base
+  benchmark: maveriq/bigbenchhard@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3 32B Base
+    source_kind: official_model_card
+    model_revision: c2b61dae89a1ad10e4ad5653d0e46b590902607b
+  metrics:
+    accuracy: 0.776
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md
+    redistributable: true
+- id: ai2/olmo-3-32b-base-model-card-bigcodebench@1.0.0
+  model: ai2/olmo-3-32b-base
+  benchmark: bigcode-project/bigcodebench@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3 32B Base
+    source_kind: official_model_card
+    model_revision: c2b61dae89a1ad10e4ad5653d0e46b590902607b
+  metrics:
+    pass_at_1: 0.439
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md
+    redistributable: true
+- id: ai2/olmo-3-32b-base-model-card-medmcqa@1.0.0
+  model: ai2/olmo-3-32b-base
+  benchmark: openlifescienceai/medmcqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3 32B Base
+    source_kind: official_model_card
+    model_revision: c2b61dae89a1ad10e4ad5653d0e46b590902607b
+    dataset_variant: MedMCQA MC
+  metrics:
+    accuracy: 0.576
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md
+    redistributable: true
+- id: ai2/olmo-3-32b-base-model-card-medqa@1.0.0
+  model: ai2/olmo-3-32b-base
+  benchmark: gbaker/medqa-usmle@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3 32B Base
+    source_kind: official_model_card
+    model_revision: c2b61dae89a1ad10e4ad5653d0e46b590902607b
+    dataset_variant: MedQA MC
+  metrics:
+    accuracy: 0.538
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-think-model-card-math@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: OLMo 3.1 32B Think
+    source_kind: official_model_card
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+    maximum_output_tokens: 32768
+  metrics:
+    accuracy: 0.962
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-think-model-card-aime-2024@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    variant: OLMo 3.1 32B Think
+    source_kind: official_model_card
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+    maximum_output_tokens: 32768
+  metrics:
+    pass_at_1: 0.806
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-think-model-card-aime-2025@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    variant: OLMo 3.1 32B Think
+    source_kind: official_model_card
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+    maximum_output_tokens: 32768
+  metrics:
+    pass_at_1: 0.781
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-think-model-card-ifeval@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: OLMo 3.1 32B Think
+    source_kind: official_model_card
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+    maximum_output_tokens: 32768
+  metrics:
+    accuracy: 0.938
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-think-model-card-gpqa@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: OLMo 3.1 32B Think
+    source_kind: official_model_card
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+    maximum_output_tokens: 32768
+  metrics:
+    accuracy: 0.575
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-instruct-model-card-math@1.0.0
+  model: ai2/olmo-3-1-32b-instruct
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3.1 32B Instruct
+    source_kind: official_model_card
+    model_revision: ac0587e4a7744a551c059d8cd17ba220bc940dae
+  metrics:
+    accuracy: 0.934
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-instruct-model-card-aime-2024@1.0.0
+  model: ai2/olmo-3-1-32b-instruct
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3.1 32B Instruct
+    source_kind: official_model_card
+    model_revision: ac0587e4a7744a551c059d8cd17ba220bc940dae
+  metrics:
+    pass_at_1: 0.678
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-instruct-model-card-aime-2025@1.0.0
+  model: ai2/olmo-3-1-32b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3.1 32B Instruct
+    source_kind: official_model_card
+    model_revision: ac0587e4a7744a551c059d8cd17ba220bc940dae
+  metrics:
+    pass_at_1: 0.579
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-instruct-model-card-ifeval@1.0.0
+  model: ai2/olmo-3-1-32b-instruct
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3.1 32B Instruct
+    source_kind: official_model_card
+    model_revision: ac0587e4a7744a551c059d8cd17ba220bc940dae
+  metrics:
+    accuracy: 0.888
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md
+    redistributable: true
+- id: ai2/olmo-3-1-32b-instruct-model-card-gpqa@1.0.0
+  model: ai2/olmo-3-1-32b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: OLMo 3.1 32B Instruct
+    source_kind: official_model_card
+    model_revision: ac0587e4a7744a551c059d8cd17ba220bc940dae
+  metrics:
+    accuracy: 0.486
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md
+    redistributable: true
+- id: independent/olmo-3-1-32b-think-mmlu-pro@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: OLMo 3.1 32B Think
+    source_model_slug: olmo-3-1-32b-think
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    run_kind: independent
+    source_kind: independent_evaluation
+    evaluation_harness: Artificial Analysis
+    dataset_release: v1
+    task_count: 12000
+    task_artifact: https://artificialanalysis.ai/evaluations/mmlu-pro
+    cost_usd: null
+    latency_ms: null
+  metrics:
+    accuracy: 0.763
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/mmlu-pro
+    redistributable: true
+- id: independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: OLMo 3.1 32B Think
+    source_model_slug: olmo-3-1-32b-think
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    run_kind: independent
+    source_kind: independent_evaluation
+    evaluation_harness: Artificial Analysis
+    dataset_release: diamond
+    task_count: 198
+    task_artifact: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    cost_usd: null
+    latency_ms: null
+  metrics:
+    accuracy: 0.590909090909091
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: enabled
+  subject:
+    source_model: OLMo 3.1 32B Think
+    source_model_slug: olmo-3-1-32b-think
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    run_kind: independent
+    source_kind: independent_evaluation
+    evaluation_harness: Artificial Analysis
+    dataset_release: v1
+    task_count: 2500
+    task_artifact: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    cost_usd: null
+    latency_ms: null
+  metrics:
+    accuracy: 0.0625579240037071
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: OLMo 3.1 32B Think
+    source_model_slug: olmo-3-1-32b-think
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    run_kind: independent
+    source_kind: independent_evaluation
+    evaluation_harness: Artificial Analysis
+    dataset_release: v6
+    task_count: 1055
+    task_artifact: https://artificialanalysis.ai/evaluations/livecodebench
+    cost_usd: null
+    latency_ms: null
+  metrics:
+    pass_at_1: 0.695238095238095
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/livecodebench
+    redistributable: true
+- id: independent/olmo-3-1-32b-think-scicode@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: OLMo 3.1 32B Think
+    source_model_slug: olmo-3-1-32b-think
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    run_kind: independent
+    source_kind: independent_evaluation
+    evaluation_harness: Artificial Analysis
+    dataset_release: test
+    task_count: 288
+    task_artifact: https://artificialanalysis.ai/evaluations/scicode
+    cost_usd: null
+    latency_ms: null
+  metrics:
+    score: 0.293
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0
+  model: ai2/olmo-3-1-32b-think
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: OLMo 3.1 32B Think
+    source_model_slug: olmo-3-1-32b-think
+    model_revision: 832c3f543499af8fe68b88359501de9cb7840544
+    run_kind: independent
+    source_kind: independent_evaluation
+    evaluation_harness: Artificial Analysis
+    dataset_release: v2.1
+    task_count: 89
+    task_artifact: https://github.com/harbor-framework/terminal-bench-2-1
+    cost_usd: null
+    latency_ms: null
+  metrics:
+    resolved: 0.0
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true

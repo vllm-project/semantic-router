@@ -115,11 +115,11 @@ without duplicating its intrinsic identity. Virtual recipes are materialized
 from packaged assets and keep their own evaluation directory.
 
 The built-in physical inventory is curated at the creator-company level. The
-current baseline contains 84 physical cards from 22 mainstream creators and
+current baseline contains 99 physical cards from 23 mainstream creators and
 five separately stored virtual cards. For each creator, prefer roughly the
 latest three generations or representative product lines over accumulating a
 shallow long tail of lesser-known creators. This policy is about Model Cards,
-not serving endpoints: the 60 `ProviderDefinition` resources remain broad so
+not serving endpoints: the 61 `ProviderDefinition` resources remain broad so
 Add Model and handwritten custom models can use a known runtime contract even
 when that provider has no curated built-in model mapping. `ModelCard.publisher`
 is the creator; a `ProviderDefinition` is the runtime API contract for the
