@@ -32,7 +32,8 @@ func Evaluate(candidate []byte, opts EvaluateOptions) EvaluateResult {
 		return result
 	}
 
-	if _, err := ParseYAMLBytesWithoutEnvExpansion(candidate); err != nil {
+	_, err = ParseYAMLBytesWithoutEnvExpansion(candidate)
+	if err != nil {
 		result.Errors = append(result.Errors, classifyEvaluationError(err))
 		attachDiff(&result, raw, opts)
 		return result

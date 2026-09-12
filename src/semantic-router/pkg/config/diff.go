@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -275,11 +276,11 @@ func comparableYAMLValue(value any) any {
 	case int64:
 		return typed
 	case uint:
-		return int64(typed)
+		return signedIfFits(uint64(typed))
 	case uint32:
 		return int64(typed)
 	case uint64:
-		return int64(typed)
+		return signedIfFits(typed)
 	case float32:
 		return float64(typed)
 	case map[string]interface{}, []interface{}:
@@ -287,4 +288,11 @@ func comparableYAMLValue(value any) any {
 	default:
 		return typed
 	}
+}
+
+func signedIfFits(value uint64) any {
+	if value > uint64(math.MaxInt64) {
+		return value
+	}
+	return int64(value)
 }
