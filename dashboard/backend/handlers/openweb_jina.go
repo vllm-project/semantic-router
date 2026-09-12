@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
 type openWebFetchedContent struct {
@@ -36,7 +38,12 @@ func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat stri
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	// Explicit proxy mode: the destination is the fixed Jina reader host, not
+	// the caller's URL, which travels as a path segment and is fetched from
+	// Jina's network rather than ours. The shared policy still applies, so the
+	// reader host itself is subject to the same address and redirect rules and
+	// a DNS answer that pointed it inward would be refused.
+	resp, err := outboundPolicy(timeout).NewClient().Do(req)
 	if err != nil {
 		return nil, wrapOpenWebRequestError(err)
 	}
@@ -45,7 +52,7 @@ func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat stri
 	log.Printf("[OpenWeb:Jina] Response status: %d, elapsed: %v", resp.StatusCode, time.Since(startTime))
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := safefetch.ReadBounded(resp.Body, openWebMaxResponseBytes)
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -88,10 +95,13 @@ func newJinaRequest(targetURL string, timeout time.Duration, outputFormat string
 }
 
 func parseJinaResponse(body io.Reader, outputFormat string, targetURL string) (openWebFetchedContent, error) {
+	// Bound before parsing. The reader is a third party, so its response size
+	// is not ours to trust in either format.
+	bounded := io.LimitReader(body, openWebMaxResponseBytes)
 	if outputFormat == "json" {
-		return parseJinaJSONResponse(body, targetURL)
+		return parseJinaJSONResponse(bounded, targetURL)
 	}
-	return parseJinaMarkdownResponse(body, targetURL)
+	return parseJinaMarkdownResponse(bounded, targetURL)
 }
 
 func parseJinaJSONResponse(body io.Reader, targetURL string) (openWebFetchedContent, error) {
