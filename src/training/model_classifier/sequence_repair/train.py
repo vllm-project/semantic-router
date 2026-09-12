@@ -14,6 +14,13 @@ from pathlib import Path
 from .data import assert_disjoint, file_receipts, label_counts, read_records
 from .evaluate import evaluate_records
 from .model import load_model, save_adapter
+from .selection import (
+    BINARY_FP_SELECTION,
+    binary_checkpoint_key,
+    binary_selection_support,
+    fit_binary_operating_point,
+    validate_selection_options,
+)
 
 
 def microbatch_loss(logits, labels, accumulation_steps):
@@ -185,15 +192,21 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--eval-every", type=int, default=100)
     parser.add_argument(
+        "--evaluation-dtype", choices=["bfloat16", "float32"], default="bfloat16"
+    )
+    parser.add_argument(
         "--selection",
         choices=[
             "macro-f1",
             "length-macro-f1",
             "source-macro-f1",
             "source-present-macro-f1",
+            BINARY_FP_SELECTION,
         ],
         default="macro-f1",
     )
+    parser.add_argument("--positive-label")
+    parser.add_argument("--selection-false-positive-budget", type=float)
     parser.add_argument("--balanced-sampling", action="store_true")
     parser.add_argument("--length-balanced-sampling", action="store_true")
     parser.add_argument("--source-balanced-sampling", action="store_true")
@@ -230,12 +243,20 @@ def main():
     )
     if model.config.problem_type != "single_label_classification":
         raise ValueError("This training loop requires single-label targets")
+    validate_selection_options(
+        args.selection,
+        label_to_id,
+        args.positive_label,
+        args.selection_false_positive_budget,
+    )
     if args.max_length > model.config.max_position_embeddings:
         raise ValueError("Training budget exceeds checkpoint position capacity")
     rows, dev = read_records(args.train, label_to_id), read_records(
         args.dev, label_to_id
     )
     assert_disjoint(rows, dev)
+    if args.selection == BINARY_FP_SELECTION:
+        binary_selection_support(dev, label_to_id, args.positive_label)
     train, rejected, pools = [], [], defaultdict(list)
     for row in rows:
         encoded = tokenizer(row["text"], truncation=False, padding=False)
@@ -324,6 +345,7 @@ def main():
             Path(__file__).read_bytes()
         ).hexdigest(),
         "selection": args.selection,
+        "evaluation_dtype": args.evaluation_dtype,
         "test_used": False,
         "precision": "FP32 parameters and explicit FP32 mean CE / BF16 autocast",
         "attention": "sdpa",
@@ -331,6 +353,15 @@ def main():
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
         "trainable_parameters": sum(parameter.numel() for parameter in parameters),
     }
+    if args.selection == BINARY_FP_SELECTION:
+        metadata["binary_selection"] = {
+            "positive_label": args.positive_label,
+            "false_positive_budget": args.selection_false_positive_budget,
+            "support": binary_selection_support(dev, label_to_id, args.positive_label),
+            "implementation_sha256": hashlib.sha256(
+                Path(__file__).with_name("selection.py").read_bytes()
+            ).hexdigest(),
+        }
     (args.output / "run.json").write_text(json.dumps(metadata, indent=2) + "\n")
     print(
         json.dumps(
@@ -344,14 +375,38 @@ def main():
         flush=True,
     )
     best = -1.0
+    best_key = None
     drawn = Counter()
 
     def evaluate_checkpoint(step):
-        nonlocal best
-        metrics, _predictions = evaluate_records(
-            model, tokenizer, dev, label_to_id, id_to_label, args.max_length
+        nonlocal best, best_key
+        metrics, predictions = evaluate_records(
+            model,
+            tokenizer,
+            dev,
+            label_to_id,
+            id_to_label,
+            args.max_length,
+            dtype=args.evaluation_dtype,
         )
-        score = selection_score(metrics, args.selection)
+        operating_point = None
+        if args.selection == BINARY_FP_SELECTION:
+            operating_point = fit_binary_operating_point(
+                dev,
+                predictions,
+                label_to_id,
+                args.positive_label,
+                args.selection_false_positive_budget,
+            )
+            metrics["binary_fp_budget"] = operating_point
+            key = binary_checkpoint_key(operating_point)
+            score = operating_point["recall"] if key is not None else -1.0
+            (args.output / f"dev-predictions-step-{step}.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in predictions)
+            )
+        else:
+            score = selection_score(metrics, args.selection)
+            key = (score,)
         (args.output / f"sampling-step-{step}.json").write_text(
             json.dumps(sampling_exposure([row for row, _ in train], drawn), indent=2)
             + "\n"
@@ -371,8 +426,9 @@ def main():
             ),
             flush=True,
         )
-        if score > best:
+        if key is not None and (best_key is None or key > best_key):
             best = score
+            best_key = key
             save_adapter(
                 model,
                 tokenizer,
@@ -387,6 +443,11 @@ def main():
                         "score": score,
                         "metric": args.selection,
                         "test_used": False,
+                        **(
+                            {"operating_point": operating_point}
+                            if operating_point is not None
+                            else {}
+                        ),
                     },
                     indent=2,
                 )
@@ -511,6 +572,11 @@ def main():
             args.base_id,
             args.base_revision,
         )
+        if best_key is None:
+            raise ValueError(
+                "No checkpoint met the development FP budget; last adapter and "
+                "infeasibility receipts were retained without selecting a best adapter"
+            )
     print(
         json.dumps(
             {

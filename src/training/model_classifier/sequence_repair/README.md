@@ -108,6 +108,29 @@ gold support within each source, then gives sources equal weight. It is useful
 when an expanded taxonomy has sources that observe different label subsets.
 Errors on observed labels still count, and all complete-ontology metrics remain
 in the report. Existing selection modes and sampling are unchanged.
+
+For an explicitly binary task, add `--selection binary-fp-budget-recall
+--positive-label unsafe --selection-false-positive-budget 0.1` to select by
+positive recall while at most 10% of negative development examples trigger.
+Both labels must have development support. Each checkpoint fits a single
+threshold using `p(unsafe) >= threshold` within `[0, 1]`; tied scores stay
+together. Ties prefer fewer false positives, then a higher threshold, then the
+earlier checkpoint. The runner saves per-step probabilities and an operating
+point with the threshold, support, confusion counts, feasibility, and evidence
+hash. `selection.json` also contains the selected operating point. Argmax F1
+remains in the report. A saturated negative probability of 1 can make the
+budget infeasible; such a checkpoint is not selected, and a run with no
+feasible checkpoint fails after retaining its last adapter and diagnostics.
+This is empirical development calibration, not a guarantee of deployment FP
+rate. Freeze the selected threshold with the model before separate test
+evaluation; this option neither reads test data nor changes runtime defaults.
+Use `--evaluation-dtype float32` when selecting for FP32 deployment. The default
+`bfloat16` retains the existing development autocast behavior; CPU evaluation
+remains FP32. `run.json` records this choice and per-step metrics record actual
+forward precision. This flag affects evaluation only; training still uses BF16
+autocast with FP32 parameters and loss accumulation. Compare checkpoints and
+baselines using the same evaluation precision before freezing a threshold.
+
 Source balancing samples a source first, optional length balancing then samples a
 length, and optional label balancing then samples a label. These flags do not
 copy rows or move groups between splits. An explicit `--source-weights`
