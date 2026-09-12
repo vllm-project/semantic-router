@@ -92,7 +92,9 @@ class HarnessMakeContractTests(unittest.TestCase):
             "AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit", PRECOMMIT_MAKE
         )
 
-    def test_precommit_native_builds_do_not_replace_host_toolchain_outputs(self) -> None:
+    def test_precommit_native_builds_do_not_replace_host_toolchain_outputs(
+        self,
+    ) -> None:
         for binding in ("candle-binding", "onnx-binding", "ml-binding", "nlp-binding"):
             self.assertIn(f"-v /app/{binding}/target \\", PRECOMMIT_MAKE)
         self.assertIn("$$CONTAINER_CMD run --rm", PRECOMMIT_MAKE)
