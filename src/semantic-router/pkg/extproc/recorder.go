@@ -98,6 +98,7 @@ func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse)
 // recordRoutingLatency records the routing latency metric
 func (r *OpenAIRouter) recordRoutingLatency(ctx *RequestContext) {
 	routingLatency := time.Since(ctx.ProcessingStartTime)
+	ctx.RoutingLatency = routingLatency
 	metrics.RecordModelRoutingLatency(routingLatency.Seconds())
 }
 
@@ -549,6 +550,27 @@ func (r *OpenAIRouter) recordRouterReplayResponseJailbreak(ctx *RequestContext) 
 	}
 }
 
+// responseStageStreamingNotEnforced is the enforcement a streamed response
+// gets: none. Its answer exists as a whole for the first time when the bytes
+// are already with the client, so no plugin can act on the observation.
+const responseStageStreamingNotEnforced = "not_enforced_streaming"
+
+// recordResponseStageEnforcement records what acted on a response-stage
+// observation. A buffered response names the action the selected decision's
+// plugin applies, or nothing when the decision carries no enabled plugin. A
+// streamed response names no action at all, because none ran: saying so is the
+// point, since an "action" the record names but nothing applied would read as
+// enforcement that happened.
+func recordResponseStageEnforcement(outcome *routerreplay.Outcome, ctx *RequestContext, action string) {
+	if ctx.IsStreamingResponse {
+		outcome.Metadata["enforcement"] = responseStageStreamingNotEnforced
+		return
+	}
+	if action != "" {
+		outcome.Metadata["action"] = action
+	}
+}
+
 func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRule, now time.Time, action string) routerreplay.Outcome {
 	key := signalKey(config.SignalTypeJailbreak, rule.Name)
 	outcome := routerreplay.Outcome{
@@ -565,9 +587,7 @@ func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRu
 	if ctx.VSRSelectedDecisionName != "" {
 		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
 	}
-	if action != "" {
-		outcome.Metadata["action"] = action
-	}
+	recordResponseStageEnforcement(&outcome, ctx, action)
 	if code, failed := ctx.VSRSignalErrors[key]; failed {
 		outcome.Verdict = "unavailable"
 		outcome.Reason = code
@@ -642,9 +662,7 @@ func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRu
 	if ctx.VSRSelectedDecisionName != "" {
 		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
 	}
-	if action != "" {
-		outcome.Metadata["action"] = action
-	}
+	recordResponseStageEnforcement(&outcome, ctx, action)
 	if code, failed := ctx.VSRSignalErrors[key]; failed {
 		outcome.Verdict = "unavailable"
 		outcome.Reason = code

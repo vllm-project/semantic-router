@@ -280,7 +280,7 @@ func validateStoredExecutionAttestationFields(entry executionAttestationEntry, e
 }
 
 func unattemptedRoutingDecisionUnavailable(entry executionAttestationEntry) bool {
-	return entry.Operation == workerBrokerRouterEvaluate && !entry.Success && entry.StatusCode == nil &&
+	return entry.Operation == workerBrokerRoutingPreview && !entry.Success && entry.StatusCode == nil &&
 		entry.RoutingRecipeDecision != nil && entry.RoutingRecipeDecision.SelectionStatus == "unavailable"
 }
 
@@ -293,7 +293,7 @@ func validateStoredExecutionAttestationOperation(entry executionAttestationEntry
 			entry.InputTokens != nil || entry.OutputTokens != nil || entry.RoutingRecipeDecision != nil {
 			return fmt.Errorf("%w: model discovery attestation is invalid", ErrInvalid)
 		}
-	case workerBrokerRouterEvaluate:
+	case workerBrokerRoutingPreview:
 		if entry.TrackID != "routing" || !evidenceIDPattern.MatchString(entry.CaseID) ||
 			!evidenceIDPattern.MatchString(entry.AttemptID) || entry.RequestedModel == nil ||
 			entry.FetchedAt == nil || entry.RoutingRecipeDecision == nil || entry.ResponseContentDigest != nil ||

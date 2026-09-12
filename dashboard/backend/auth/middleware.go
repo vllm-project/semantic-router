@@ -230,10 +230,13 @@ func routerPermission(method, path string) (string, bool) {
 		return PermConfigWrite, true
 	case path == "/api/models/verify":
 		return PermEvalRun, true
-	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
+	case path == "/api/router/api/v1/observability/outcomes" && method == http.MethodPost:
 		return PermFeedbackSubmit, true
-	case strings.HasPrefix(path, "/api/router/v1/router_replay"):
+	case strings.HasPrefix(path, "/api/router/api/v1/observability/replays"):
 		return PermReplayRead, true
+	case path == "/api/router/api/v1/storage/knowledge-bases" ||
+		strings.HasPrefix(path, "/api/router/api/v1/storage/knowledge-bases/"):
+		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
 	case strings.HasPrefix(path, "/api/router/api/v1/response-cache/"):
 		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
 	case path == "/api/router/api/v1/context-compression/preview":

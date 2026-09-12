@@ -29,14 +29,7 @@ type routingFragmentDocument struct {
 	Global      *globalFragment                    `yaml:"global,omitempty"`
 }
 
-type setupModeConfig struct {
-	Mode bool `yaml:"mode,omitempty"`
-}
-
-type setupConfigFile struct {
-	routerconfig.CanonicalConfig `yaml:",inline"`
-	Setup                        *setupModeConfig `yaml:"setup,omitempty"`
-}
+type setupConfigFile = routerconfig.CanonicalConfigDocument
 
 func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
 	var value T

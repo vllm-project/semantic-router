@@ -18,7 +18,9 @@ __all__ = [
     "abstention_curve",
     "calibration_metrics",
     "classification_metrics",
+    "discrimination",
     "latency_percentiles",
+    "operating_points",
 ]
 
 
@@ -176,6 +178,153 @@ def abstention_curve(
             }
         )
     return {"curve": curve}
+
+
+def operating_points(
+    y_true: Sequence[int],
+    probabilities: Sequence[Sequence[float]],
+    label_mapping: dict[str, int],
+    positive_labels: Sequence[str],
+    thresholds: Sequence[float] = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95),
+) -> list[dict[str, Any]]:
+    """Score the decision a gate artifact's threshold actually makes.
+
+    A gate does not act on the argmax. It sums the probability mass on
+    ``positive_labels`` and compares that sum to its configured threshold, so
+    that sum is the quantity whose recall and false-positive rate decide how
+    much traffic is blocked. ``abstention_curve`` answers a different question,
+    about the confidence of whichever class won, and cannot stand in for it.
+
+    ``false_positive_rate`` is the share of safe rows the gate flags, so safe
+    class recall is one minus it. A rate is ``None`` when the split carries no
+    row on that side, which is the honest reading for a benign-only set.
+    """
+    if len(y_true) != len(probabilities):
+        raise ValueError("labels and probabilities must align")
+    if not y_true:
+        raise ValueError("an evaluation needs at least one row")
+
+    columns = [label_mapping[name] for name in positive_labels if name in label_mapping]
+    if not columns:
+        return []
+
+    risk = [sum(row[column] for column in columns) for row in probabilities]
+    positive = [true in columns for true in y_true]
+    positives = sum(positive)
+    negatives = len(y_true) - positives
+
+    points: list[dict[str, Any]] = []
+    for threshold in thresholds:
+        flagged = [score >= threshold for score in risk]
+        flagged_count = sum(flagged)
+        hits = sum(
+            1
+            for gate, is_positive in zip(flagged, positive, strict=True)
+            if gate and is_positive
+        )
+        misfires = flagged_count - hits
+        points.append(
+            {
+                "threshold": threshold,
+                "positive_labels": list(positive_labels),
+                "flagged_rate": flagged_count / len(y_true),
+                "recall": hits / positives if positives else None,
+                "false_positive_rate": misfires / negatives if negatives else None,
+                "precision": hits / flagged_count if flagged_count else None,
+            }
+        )
+    return points
+
+
+def discrimination(
+    y_true: Sequence[int],
+    probabilities: Sequence[Sequence[float]],
+    label_mapping: dict[str, int],
+    positive_labels: Sequence[str],
+    fpr_budget: float = 0.01,
+) -> dict[str, Any] | None:
+    """Separate the positive class without fixing a threshold.
+
+    Accuracy and the operating points both depend on where the threshold sits
+    and on how many positives the split carries, so neither compares two
+    artifacts that were built to different threshold conventions. These two do.
+    ``roc_auc`` is the chance a positive row outranks a negative one, and
+    ``recall_at_fpr_budget`` is the most recall available while flagging no more
+    than ``fpr_budget`` of safe rows, which is the operating point a deployment
+    is actually allowed.
+
+    Returns ``None`` when the split carries only one side, because separation is
+    undefined there.
+    """
+    if len(y_true) != len(probabilities):
+        raise ValueError("labels and probabilities must align")
+    if not 0.0 < fpr_budget <= 1.0:
+        raise ValueError("fpr_budget must lie in (0, 1]")
+
+    columns = [label_mapping[name] for name in positive_labels if name in label_mapping]
+    if not columns:
+        return None
+    scored = [
+        (sum(row[column] for column in columns), true in columns)
+        for row, true in zip(probabilities, y_true, strict=True)
+    ]
+    positives = sum(1 for _, is_positive in scored if is_positive)
+    negatives = len(scored) - positives
+    if not positives or not negatives:
+        return None
+
+    return {
+        "positive_labels": list(positive_labels),
+        "roc_auc": _roc_auc(scored, positives, negatives),
+        "fpr_budget": fpr_budget,
+        "recall_at_fpr_budget": _recall_at_fpr(
+            scored, positives, negatives, fpr_budget
+        ),
+    }
+
+
+def _roc_auc(scored: list[tuple[float, bool]], positives: int, negatives: int) -> float:
+    """Rank form of the area, which handles ties by sharing their mean rank."""
+    ordered = sorted(scored, key=lambda entry: entry[0])
+    rank_sum = 0.0
+    index = 0
+    while index < len(ordered):
+        stop = index
+        while stop + 1 < len(ordered) and ordered[stop + 1][0] == ordered[index][0]:
+            stop += 1
+        mean_rank = (index + stop) / 2.0 + 1.0
+        rank_sum += mean_rank * sum(
+            1 for _, is_positive in ordered[index : stop + 1] if is_positive
+        )
+        index = stop + 1
+    return (rank_sum - positives * (positives + 1) / 2.0) / (positives * negatives)
+
+
+def _recall_at_fpr(
+    scored: list[tuple[float, bool]],
+    positives: int,
+    negatives: int,
+    fpr_budget: float,
+) -> float | None:
+    """Most recall reachable while the false-positive rate stays in budget.
+
+    The sweep only reads a threshold between two distinct scores, so a tie
+    cannot be split to buy recall the gate could not actually deliver.
+    """
+    ordered = sorted(scored, key=lambda entry: entry[0], reverse=True)
+    hits = 0
+    misfires = 0
+    best: float | None = None
+    for index, (score, is_positive) in enumerate(ordered):
+        if is_positive:
+            hits += 1
+        else:
+            misfires += 1
+        if index + 1 < len(ordered) and ordered[index + 1][0] == score:
+            continue
+        if misfires / negatives <= fpr_budget:
+            best = max(best or 0.0, hits / positives)
+    return best
 
 
 def latency_percentiles(samples_ms: Sequence[float]) -> dict[str, float]:

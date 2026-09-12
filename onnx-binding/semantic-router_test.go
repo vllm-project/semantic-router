@@ -11,6 +11,11 @@ import (
 	"testing"
 )
 
+var (
+	_ func(string) (ClassResultWithProbs, error) = ClassifyMmBert32KFeedbackWithProbs
+	_ func(string) (ClassResultWithProbs, error) = ClassifyFeedbackTextWithProbs
+)
+
 // Test constants
 const (
 	TestText1        = "I love machine learning"
@@ -995,9 +1000,13 @@ func TestTypeDefinitions(t *testing.T) {
 			Class:         0,
 			Confidence:    0.8,
 			Probabilities: []float32{0.8, 0.15, 0.05},
+			NumClasses:    3,
 		}
 		if len(result.Probabilities) != 3 {
 			t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
+		}
+		if result.NumClasses != len(result.Probabilities) {
+			t.Errorf("Expected NumClasses to match probabilities, got %d", result.NumClasses)
 		}
 	})
 

@@ -22,10 +22,10 @@ const (
 // Type is the plugin identifier; the authoritative supported set is registered in
 // routing_surface_catalog (and DSL/compiler surfaces), not duplicated here.
 type DecisionPlugin struct {
-	Type string `yaml:"type" json:"type"`
+	Type string `yaml:"type" json:"type" jsonschema:"required"`
 
 	// Configuration stores the plugin payload as normalized structured bytes.
-	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty"`
+	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty" jsonschema:"required"`
 }
 
 // ResponseCacheSemanticConfig controls the semantic lookup tier.

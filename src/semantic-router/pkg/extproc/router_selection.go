@@ -643,8 +643,8 @@ func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) (look
 	})
 
 	cancel := func() {
-		for _, f := range cancelFuncs {
-			f()
+		for i := len(cancelFuncs) - 1; i >= 0; i-- {
+			cancelFuncs[i]()
 		}
 	}
 	return storage, cancel
@@ -689,20 +689,14 @@ func maybePopulateFromReplay(
 	if !ltCfg.PopulateFromReplay || reader == nil {
 		return
 	}
-	// Same #1843 exposure as the periodic populator below: this one-shot
-	// call also parses replay-store entries, and it runs on every router
-	// build, including config reloads of a live router.
-	goSafely("lookup_table_populator_initial", func() {
-		populateFromReplay(storage, reader)
-	})
-
-	if ltCfg.PopulateInterval == "" {
-		return
-	}
-	interval, err := config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
-	if err != nil {
-		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
-		return
+	var interval time.Duration
+	if ltCfg.PopulateInterval != "" {
+		var err error
+		interval, err = config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
+		if err != nil {
+			logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
+			interval = 0
+		}
 	}
 	*cancelFuncs = append(*cancelFuncs, startLookupTablePopulator(storage, reader, interval))
 }
@@ -726,8 +720,8 @@ func applyLookupTableOverrides(ltCfg config.LookupTableConfig, storage lookuptab
 
 // populateFromReplay fetches all records from the replay reader and runs the
 // builder synchronously. Errors are logged but do not prevent startup.
-func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Reader) {
-	records, err := reader.List(context.Background())
+func populateFromReplay(ctx context.Context, storage lookuptable.LookupTableStorage, reader store.Reader) {
+	records, err := reader.List(ctx)
 	if err != nil {
 		logging.Errorf("[RouterSelection] Failed to list replay records for lookup table population: %v", err)
 		return
@@ -747,42 +741,41 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 	})
 }
 
-// defaultPopulateInterval is the fallback cadence used when
-// startLookupTablePopulator is given a non-positive interval, so a
-// misconfigured value can neither panic time.NewTicker nor silently disable
-// periodic replay re-derivation.
-const defaultPopulateInterval = 15 * time.Minute
-
-// startLookupTablePopulator launches a background goroutine that periodically
-// re-derives lookup table entries from the replay store.
-// The returned cancel function stops the goroutine. A non-positive interval is
-// defensively replaced with defaultPopulateInterval (time.NewTicker panics on a
-// non-positive duration).
+// startLookupTablePopulator derives entries once and repeats when interval is positive.
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
-	if interval <= 0 {
-		logging.Warnf("[RouterSelection] Non-positive lookup table populate interval %s; using default %s", interval, defaultPopulateInterval)
-		interval = defaultPopulateInterval
-	}
 	ctx, cancel := context.WithCancel(context.Background())
-	// goSafely so a panic in populateFromReplay (e.g. malformed
-	// replay-store entry) is logged instead of crashing the whole
-	// router process — see #1843.
+	done := make(chan struct{})
 	goSafely("lookup_table_populator", func() {
+		defer close(done)
+		populateFromReplay(ctx, storage, reader)
+		if interval <= 0 {
+			return
+		}
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			select {
 			case <-ticker.C:
-				populateFromReplay(storage, reader)
+				populateFromReplay(ctx, storage, reader)
 			case <-ctx.Done():
 				return
 			}
 		}
 	})
-	logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
-		"interval": interval.String(),
-	})
-	return cancel
+	if interval > 0 {
+		logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
+			"interval": interval.String(),
+		})
+	}
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 func closeRecipeModelSelectors(registries map[config.RecipeName]*selection.Registry) error {

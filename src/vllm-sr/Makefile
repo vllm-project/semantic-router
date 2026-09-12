@@ -114,7 +114,7 @@ dev-serve:
 # Development test - validate config and render router/envoy outputs
 dev-test: install
 	@echo "Testing canonical configuration rendering..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 	python -m cli.main config router --config $(CONFIG_FILE) >/dev/null
 	python -m cli.main config envoy --config $(CONFIG_FILE) >/dev/null
 	@echo ""
@@ -218,7 +218,7 @@ install:
 # Configuration commands
 validate: install
 	@echo "Validating configuration..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 
 config-router: install
 	@echo "Printing canonical router configuration..."

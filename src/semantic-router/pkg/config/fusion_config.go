@@ -11,6 +11,9 @@ const (
 	DefaultFusionJudgePromptVersion = "fusion-v1"
 	FusionOnErrorSkip               = "skip"
 	FusionOnErrorFail               = "fail"
+	FusionAnalysisModeSeparate      = "separate"
+	FusionAnalysisModeOneCall       = "one_call"
+	FusionAnalysisModeNone          = "none"
 
 	// Grounding reference modes select what panel responses are scored against.
 	FusionGroundingReferenceHybrid  = "hybrid"  // detector against context if present, else cross-model NLI
@@ -37,6 +40,7 @@ const (
 type FusionAlgorithmConfig struct {
 	Model                        string                 `yaml:"model,omitempty" json:"model,omitempty"`
 	AnalysisModels               []string               `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
+	AnalysisMode                 string                 `yaml:"analysis_mode,omitempty" json:"analysis_mode,omitempty"`
 	AnalysisOverrides            []FusionModelOverride  `yaml:"analysis_overrides,omitempty" json:"analysis_overrides,omitempty"`
 	MaxConcurrent                int                    `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
 	MaxCompletionTokens          int                    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
@@ -169,6 +173,9 @@ func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	if cfg == nil {
 		return nil
 	}
+	if err := validateFusionAnalysisMode(cfg.AnalysisMode, cfg.AnalysisTemplate); err != nil {
+		return err
+	}
 	if err := validateFusionOnError(cfg.OnError); err != nil {
 		return err
 	}
@@ -192,6 +199,35 @@ func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	}
 	if err := ValidateFusionGroundingConfig(cfg.Grounding); err != nil {
 		return err
+	}
+	return nil
+}
+
+// EffectiveFusionAnalysisMode returns the normalized analysis execution mode.
+// The separate analysis stage is the compatibility default.
+func EffectiveFusionAnalysisMode(mode string) string {
+	normalized := strings.TrimSpace(mode)
+	if normalized == "" {
+		return FusionAnalysisModeSeparate
+	}
+	return normalized
+}
+
+func validateFusionAnalysisMode(mode, analysisTemplate string) error {
+	effectiveMode := EffectiveFusionAnalysisMode(mode)
+	switch effectiveMode {
+	case FusionAnalysisModeSeparate, FusionAnalysisModeOneCall, FusionAnalysisModeNone:
+	default:
+		return fmt.Errorf(
+			"analysis_mode must be one of %q, %q, or %q, got %q",
+			FusionAnalysisModeSeparate,
+			FusionAnalysisModeOneCall,
+			FusionAnalysisModeNone,
+			mode,
+		)
+	}
+	if effectiveMode != FusionAnalysisModeSeparate && strings.TrimSpace(analysisTemplate) != "" {
+		return fmt.Errorf("analysis_template requires analysis_mode=%q", FusionAnalysisModeSeparate)
 	}
 	return nil
 }
