@@ -118,7 +118,7 @@ func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal %s: %w", field.name, err)
 		}
-		*field.target = encoded
+		*field.target = sanitizePostgresJSON(encoded)
 	}
 	return nil
 }
@@ -137,6 +137,11 @@ func preparePostgresInsertRecord(record Record) (Record, error) {
 	if record.LifecycleState == "" {
 		record.LifecycleState = LifecycleInProgress
 	}
+	record.RequestBody = sanitizePostgresText(record.RequestBody)
+	record.ResponseBody = sanitizePostgresText(record.ResponseBody)
+	record.Prompt = sanitizePostgresText(record.Prompt)
+	record.ToolDefinitions = sanitizePostgresText(record.ToolDefinitions)
+	record.TerminalReason = sanitizePostgresText(record.TerminalReason)
 	return record, nil
 }
 
