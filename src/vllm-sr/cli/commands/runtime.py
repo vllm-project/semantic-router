@@ -41,7 +41,7 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
-from cli.terminal import fields, heading, success
+from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -167,6 +167,7 @@ def _deploy_serve_backend(
 
 def _execute_serve(
     config: str,
+    replace_active_config: bool,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
@@ -205,6 +206,7 @@ def _execute_serve(
                 source_setup_mode=source_setup_mode,
                 platform=platform,
                 recipe_env_bindings=recipe_env_bindings,
+                replace_active_config=replace_active_config,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -253,6 +255,14 @@ def _execute_serve(
     default="config.yaml",
     show_default=True,
     help="Path to the Router configuration.",
+)
+@click.option(
+    "--replace-active-config",
+    is_flag=True,
+    help=(
+        "Replace this local Docker stack's active runtime config from --config, "
+        "discarding Dashboard edits."
+    ),
 )
 @click.option(
     "--image",
@@ -365,6 +375,7 @@ def _execute_serve(
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
     config: str,
+    replace_active_config: bool,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
@@ -385,6 +396,7 @@ def serve(
 ) -> None:
     _execute_serve(
         config,
+        replace_active_config,
         image,
         router_image,
         envoy_image,
@@ -550,7 +562,7 @@ def dashboard(
 
     Examples:
         vllm-sr dashboard                   # Docker dashboard
-        vllm-sr dashboard --target k8s      # Show K8s dashboard URL
+        vllm-sr dashboard --target k8s      # Show K8s address and port forward
         vllm-sr dashboard --no-open
     """
     apply_container_runtime_override(runtime)
@@ -561,6 +573,17 @@ def dashboard(
     dashboard_url = backend.get_dashboard_url()
     if dashboard_url is None:
         raise ValueError("Dashboard URL could not be determined")
+
+    if resolve_target(target) == "k8s":
+        # The Kubernetes address is a ClusterIP, reachable from inside the
+        # cluster only, so a browser on this machine cannot open it.
+        heading("Dashboard")
+        fields((("In cluster", dashboard_url),))
+        port_forward = backend.get_dashboard_port_forward()
+        if port_forward is not None:
+            heading("Local access")
+            echo(f"  {port_forward}")
+        return
 
     if no_open:
         heading("Dashboard")

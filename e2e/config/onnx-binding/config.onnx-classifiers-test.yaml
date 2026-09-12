@@ -126,6 +126,8 @@ global:
       semantic:
         use_cpu: true
         mmbert_model_path: onnx-binding/mmbert-32k-yarn-onnx
+        embedding_config:
+          model_type: mmbert
     modules:
       classifier:
         domain:
@@ -200,6 +202,4 @@ global:
     tools:
       enabled: true
       tools_db_path: config/runtime/tools/tools_db.json
-      model_type: mmbert
-      target_dim: 0
       similarity_threshold: 0.7

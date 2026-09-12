@@ -140,7 +140,7 @@ curl --fail --location \
   --output balance.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml
 
-vllm-sr validate --config balance.yaml
+vllm-sr config validate --config balance.yaml
 vllm-sr serve --config balance.yaml
 ```
 

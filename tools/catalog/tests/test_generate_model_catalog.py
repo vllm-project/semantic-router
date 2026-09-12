@@ -1074,6 +1074,43 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             self.assertTrue(subject.get("source_model"))
             self.assertRegex(subject.get("source_model_slug", ""), catalog.SLUG)
 
+    def test_fireworks_serverless_model_ids_are_not_stale(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        fireworks = providers["fireworks"]
+        expected_mappings = {
+            "meta/muse-glimmer-30b": "accounts/fireworks/models/muse-glimmer-30b",
+            "moonshot/kimi-k3": "accounts/fireworks/models/kimi-k3",
+            "thinking-machines/inkling": "accounts/fireworks/models/inkling",
+        }
+        actual_mappings = {
+            binding["catalog"]: binding["id"] for binding in fireworks["models"]
+        }
+        self.assertEqual(actual_mappings, expected_mappings)
+
+    def test_fireworks_serverless_mappings_have_no_duplicates(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        fireworks = providers["fireworks"]
+        bindings = fireworks["models"]
+        native_ids = [binding["id"] for binding in bindings]
+        self.assertEqual(len(native_ids), len(set(native_ids)))
+        model_protocol_pairs = [
+            (binding["catalog"], protocol)
+            for binding in bindings
+            for protocol in binding["protocols"]
+        ]
+        self.assertEqual(len(model_protocol_pairs), len(set(model_protocol_pairs)))
+
+    def test_fireworks_models_use_supported_protocols(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        fireworks = providers["fireworks"]
+        expected_protocols = {"openai/chat-completions@1"}
+        self.assertEqual(expected_protocols, set(fireworks["protocols"]))
+        for binding in fireworks["models"]:
+            self.assertEqual(set(binding["protocols"]), expected_protocols)
+
 
 if __name__ == "__main__":
     unittest.main()

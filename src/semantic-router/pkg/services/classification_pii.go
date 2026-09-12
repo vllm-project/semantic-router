@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -25,11 +26,17 @@ type PIIOptions struct {
 
 // PIIResponse represents the response from PII detection
 type PIIResponse struct {
-	HasPII                 bool        `json:"has_pii"`
-	Entities               []PIIEntity `json:"entities"`
-	MaskedText             string      `json:"masked_text,omitempty"`
-	SecurityRecommendation string      `json:"security_recommendation"`
-	ProcessingTimeMs       int64       `json:"processing_time_ms"`
+	HasPII   bool        `json:"has_pii"`
+	Entities []PIIEntity `json:"entities"`
+	// ScanIncomplete reports that the classifier saw only part of the text,
+	// because a remote token_spans.v1 backend declared a truncation. The
+	// entities below are real, but has_pii: false then means "nothing found in
+	// the part that was read", not "nothing to find". Absent when the scan was
+	// complete, which every local backend always is.
+	ScanIncomplete         bool   `json:"scan_incomplete,omitempty"`
+	MaskedText             string `json:"masked_text,omitempty"`
+	SecurityRecommendation string `json:"security_recommendation"`
+	ProcessingTimeMs       int64  `json:"processing_time_ms"`
 }
 
 // PIIEntity represents a detected PII entity
@@ -74,12 +81,17 @@ func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (
 	} else {
 		detections, err = classifier.ClassifyPIIWithDetails(ctx, req.Text)
 	}
-	if err != nil {
+	// A declared truncation is not a failed call: the spans it returned are
+	// valid for the part the provider read. It is reported rather than
+	// swallowed, so a caller cannot read a partial scan as a clean one.
+	incomplete := errors.Is(err, classification.ErrTokenSpansTruncated)
+	if err != nil && !incomplete {
 		return nil, fmt.Errorf("PII detection failed: %w", err)
 	}
 
 	processingTime := time.Since(start).Milliseconds()
 	response := s.buildPIIResponse(req.Text, detections, req.Options)
+	response.ScanIncomplete = incomplete
 	response.ProcessingTimeMs = processingTime
 	return response, nil
 }

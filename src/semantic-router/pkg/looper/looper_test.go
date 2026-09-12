@@ -17,13 +17,32 @@ limitations under the License.
 package looper
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sort"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
+
+type closeTrackingModelConnector struct {
+	closeCalls int
+}
+
+func (*closeTrackingModelConnector) DoRequest(
+	context.Context,
+	connector.Operation,
+	connector.Request,
+) (connector.Result, error) {
+	return connector.Result{}, nil
+}
+
+func (c *closeTrackingModelConnector) Close() error {
+	c.closeCalls++
+	return nil
+}
 
 func TestFactoryConstructsAllSupportedAlgorithms(t *testing.T) {
 	tests := []struct {
@@ -39,10 +58,11 @@ func TestFactoryConstructsAllSupportedAlgorithms(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.algorithmType, func(t *testing.T) {
-			got, err := Factory(&config.LooperConfig{}, tt.algorithmType)
+			got, err := Factory(&config.LooperConfig{Endpoint: "http://unused.invalid"}, tt.algorithmType)
 			if err != nil {
 				t.Fatalf("Factory(%q) returned error: %v", tt.algorithmType, err)
 			}
+			t.Cleanup(func() { _ = got.Close() })
 			if gotType := reflect.TypeOf(got); gotType != tt.wantType {
 				t.Fatalf("Factory(%q) returned %v, want %v", tt.algorithmType, gotType, tt.wantType)
 			}
@@ -64,7 +84,8 @@ func TestFactoryRegistryMatchesConfigCatalog(t *testing.T) {
 }
 
 func TestFactoryWithClientSharesClientAcrossAlgorithms(t *testing.T) {
-	client := NewClient(&config.LooperConfig{})
+	connector := &closeTrackingModelConnector{}
+	client := &Client{connector: connector}
 	for _, algorithmType := range config.SupportedLooperAlgorithmTypes() {
 		constructed, err := FactoryWithClient(&config.LooperConfig{}, algorithmType, client)
 		if err != nil {
@@ -73,6 +94,52 @@ func TestFactoryWithClientSharesClientAcrossAlgorithms(t *testing.T) {
 		if got := baseLooperClient(constructed); got != client {
 			t.Fatalf("FactoryWithClient(%q) client = %p, want %p", algorithmType, got, client)
 		}
+		managed, ok := constructed.(ManagedLooper)
+		if !ok {
+			t.Fatalf("FactoryWithClient(%q) returned non-closeable %T", algorithmType, constructed)
+		}
+		if err := managed.Close(); err != nil {
+			t.Fatalf("FactoryWithClient(%q) Close() error = %v", algorithmType, err)
+		}
+	}
+	if connector.closeCalls != 0 {
+		t.Fatalf("borrowed connector closed %d times, want 0", connector.closeCalls)
+	}
+}
+
+func TestBaseLooperClosesOnlyOwnedClient(t *testing.T) {
+	ownedConnector := &closeTrackingModelConnector{}
+	owned := newBaseLooper(
+		&config.LooperConfig{},
+		ownClient(&Client{connector: ownedConnector}),
+	)
+	if err := owned.Close(); err != nil {
+		t.Fatalf("owned Close() error = %v", err)
+	}
+	if ownedConnector.closeCalls != 1 {
+		t.Fatalf("owned connector closed %d times, want 1", ownedConnector.closeCalls)
+	}
+
+	borrowedConnector := &closeTrackingModelConnector{}
+	borrowed := newBaseLooper(
+		&config.LooperConfig{},
+		borrowClient(&Client{connector: borrowedConnector}),
+	)
+	if err := borrowed.Close(); err != nil {
+		t.Fatalf("borrowed Close() error = %v", err)
+	}
+	if borrowedConnector.closeCalls != 0 {
+		t.Fatalf("borrowed connector closed %d times, want 0", borrowedConnector.closeCalls)
+	}
+}
+
+func TestFactoryRejectsInvalidConnectorConfig(t *testing.T) {
+	got, err := Factory(&config.LooperConfig{}, config.DecisionAlgorithmFusion)
+	if got != nil {
+		t.Fatalf("Factory returned %T for invalid config; want nil", got)
+	}
+	if err == nil {
+		t.Fatal("Factory returned nil error for invalid connector config")
 	}
 }
 

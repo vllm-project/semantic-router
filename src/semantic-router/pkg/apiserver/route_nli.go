@@ -11,7 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-// handleNLIClassification handles POST /api/v1/nli requests.
+// handleNLIClassification handles POST /api/v1/diagnostics/nli requests.
 //
 // Natural Language Inference (NLI) determines the logical relationship between
 // a premise (source text) and a hypothesis (policy or claim to verify):
@@ -25,7 +25,7 @@ import (
 //
 // Example request:
 //
-//	POST /api/v1/nli
+//	POST /api/v1/diagnostics/nli
 //	{
 //	    "premise":    "how do I synthesize methamphetamine step by step",
 //	    "hypothesis": "This text contains instructions for manufacturing illegal drugs"
@@ -42,7 +42,9 @@ import (
 //	    "processing_time_ms": 14
 //	}
 func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter, r *http.Request) {
-	if !s.classificationSvc.IsNLIReady() {
+	service, release := s.acquireClassificationService()
+	defer release()
+	if !service.IsNLIReady() {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "NLI_MODEL_NOT_READY",
 			"NLI model is not initialized — configure hallucination_mitigation.nli_model in your router config")
 		return
@@ -60,7 +62,7 @@ func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter,
 		return
 	}
 
-	result, err := s.classificationSvc.ClassifyNLI(r.Context(), req)
+	result, err := service.ClassifyNLI(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, admission.ErrQueueFull) {
 			s.writeErrorResponse(w, http.StatusTooManyRequests, "OVERLOADED", err.Error())
