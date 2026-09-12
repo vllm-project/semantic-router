@@ -108,7 +108,10 @@ routing:
     route = _model_route(rendered, "frontier")
     assert route["route"]["cluster"] == "frontier_cluster"
     assert route["route"]["host_rewrite_literal"] == "api.openai.com"
-    assert route["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    )
     headers = {
         header["header"]["key"]: header["header"]["value"]
         for header in route.get("request_headers_to_add", [])
@@ -279,7 +282,10 @@ routing: {}
 
     route = _model_route(rendered, "frontier-responses")
     assert route["route"]["cluster"] == "frontier_responses_cluster"
-    assert route["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    )
     headers = {
         header["header"]["key"]: header["header"]["value"]
         for header in route.get("request_headers_to_add", [])
@@ -348,7 +354,11 @@ routing:
     )
     route = _model_route(rendered, "frontier")
     assert route["route"]["host_rewrite_literal"] == "gateway.example.test"
-    assert route["route"]["regex_rewrite"]["substitution"] == "/openai/v1\\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"]
+        == "/openai/v1\\1"
+    )
 
 
 def test_catalog_provider_projection_rejects_missing_model_mapping(tmp_path):
@@ -567,7 +577,11 @@ routing: {{}}
     }
     route = _model_route(rendered, "local-model")
     assert route["route"]["host_rewrite_literal"] == expected_authority
-    assert route["route"]["regex_rewrite"]["substitution"] == "/v1" + r"\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"]
+        == "/v1" + r"\1"
+    )
     assert ("transport_socket" in cluster) is expected_https
 
 
