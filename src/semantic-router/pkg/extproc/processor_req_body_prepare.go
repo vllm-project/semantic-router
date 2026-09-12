@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
@@ -74,28 +75,8 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightToken = inflight.Begin(selectedModel)
-	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
-		ctx.InflightToken = 0
-		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
-		r.updateRouterReplayStatus(ctx, 200, false)
-		r.attachRouterReplayResponse(
-			ctx,
-			resp.GetImmediateResponse().GetBody(),
-			true,
-		)
-		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
-		return requestDecisionState{}, resp
-	}
-	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
-		ctx.InflightToken = 0
-		return requestDecisionState{}, resp
-	}
-	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
-		ctx.InflightToken = 0
-		return requestDecisionState{}, resp
+	if response := r.runPostDecisionImmediateStages(originalModel, selectedModel, decisionName, ctx); response != nil {
+		return requestDecisionState{}, response
 	}
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
 		inflight.End(selectedModel, ctx.InflightToken)
@@ -108,6 +89,53 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		reasoningDecision: reasoningDecision,
 		selectedModel:     selectedModel,
 	}, nil
+}
+
+func (r *OpenAIRouter) runPostDecisionImmediateStages(
+	originalModel string,
+	selectedModel string,
+	decisionName string,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	targetModel := selectedModel
+	if targetModel == "" {
+		targetModel = originalModel
+	}
+	if err := validateDynamoBackendPool(r.Config, targetModel, ctx, ctx.ProtocolEnvelope); err != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
+		metrics.RecordRequestError(targetModel, "unsupported_dynamo_nvext_backend")
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return r.createErrorResponse(http.StatusBadRequest, err.Error())
+	}
+	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
+		r.updateRouterReplayStatus(ctx, 200, false)
+		r.attachRouterReplayResponse(
+			ctx,
+			resp.GetImmediateResponse().GetBody(),
+			true,
+		)
+		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
+		return resp
+	}
+	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return resp
+	}
+	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return resp
+	}
+	return nil
 }
 
 // respondDecisionUnresolved builds the fail_request 503 and finalizes the

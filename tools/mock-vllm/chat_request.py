@@ -27,6 +27,8 @@ class ChatRequest(BaseModel):
     tool_choice: Any = None
     logprobs: bool | None = False
     top_logprobs: int | None = None
+    nvext: dict[str, Any] | None = None
+    cache_salt: str | None = None
 
 
 def build_chat_content(request: ChatRequest) -> str:

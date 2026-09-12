@@ -41,39 +41,44 @@ type Limits struct {
 	// SourceEnvelopeBytes is deliberately independent from BodyBytes. Source
 	// preservation is optional fidelity state and must never cause a second
 	// copy of a large accepted request or response.
-	SourceEnvelopeBytes  int
-	ModelBytes           int
-	Instructions         int
-	Messages             int
-	Candidates           int
-	Alternatives         int
-	OutputItems          int
-	ContentBlocks        int
-	Citations            int
-	CitationURLBytes     int
-	CitationTitleBytes   int
-	JSONDepth            int
-	ToolResultDepth      int
-	Tools                int
-	ToolNameBytes        int
-	ToolDescriptionBytes int
-	IdentifierBytes      int
-	SchemaBytes          int
-	MetadataBytes        int
-	MetadataEntries      int
-	MetadataKeyBytes     int
-	MetadataValueBytes   int
-	ToolArgumentsBytes   int
-	ReasoningEffortBytes int
-	StopSequences        int
-	StopBytes            int
-	TextBytes            int
-	MediaReferenceBytes  int
-	MediaDataBytes       int
-	SSEFrameBytes        int
-	UnfinishedArguments  int
-	Events               int
-	Diagnostics          int
+	SourceEnvelopeBytes    int
+	ModelBytes             int
+	Instructions           int
+	Messages               int
+	Candidates             int
+	Alternatives           int
+	OutputItems            int
+	ContentBlocks          int
+	Citations              int
+	CitationURLBytes       int
+	CitationTitleBytes     int
+	JSONDepth              int
+	ToolResultDepth        int
+	Tools                  int
+	ToolNameBytes          int
+	ToolDescriptionBytes   int
+	IdentifierBytes        int
+	SchemaBytes            int
+	MetadataBytes          int
+	MetadataEntries        int
+	MetadataKeyBytes       int
+	MetadataValueBytes     int
+	ToolArgumentsBytes     int
+	ReasoningEffortBytes   int
+	DynamoNVExtBytes       int
+	DynamoNVExtStreamBytes int
+	DynamoNVExtItems       int
+	DynamoNVExtStringBytes int
+	DynamoNVExtTokenIDs    int
+	StopSequences          int
+	StopBytes              int
+	TextBytes              int
+	MediaReferenceBytes    int
+	MediaDataBytes         int
+	SSEFrameBytes          int
+	UnfinishedArguments    int
+	Events                 int
+	Diagnostics            int
 }
 
 func DefaultPolicy() Policy {
@@ -91,6 +96,8 @@ func DefaultPolicy() Policy {
 			IdentifierBytes: 1024, SchemaBytes: 4 << 20, MetadataBytes: 64 << 10,
 			MetadataEntries: 256, MetadataKeyBytes: 256, MetadataValueBytes: 8 << 10,
 			ToolArgumentsBytes: 4 << 20, ReasoningEffortBytes: 32,
+			DynamoNVExtBytes: 256 << 10, DynamoNVExtStreamBytes: 4 << 20, DynamoNVExtItems: 256,
+			DynamoNVExtStringBytes: 16 << 10, DynamoNVExtTokenIDs: 65_536,
 			StopSequences: 16, StopBytes: 64 << 10, TextBytes: 16 << 20,
 			MediaReferenceBytes: 16 << 10, MediaDataBytes: 48 << 20,
 			SSEFrameBytes: 1 << 20, UnfinishedArguments: 4 << 20,
@@ -134,6 +141,10 @@ type Envelope struct {
 	Response       []byte
 	SourceStop     string
 	ResponseRender ResponseRenderContext
+	// Dynamo carries bounded, provider-specific wire fidelity. It is separate
+	// from the neutral Request and Response contracts and is never trusted
+	// identity or authorization state.
+	Dynamo *DynamoEnvelope
 }
 
 func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy Policy, response bool) bool {

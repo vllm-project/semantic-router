@@ -8,6 +8,9 @@ import (
 )
 
 func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoRequestEnvelope(envelope, llmprotocol.OpenAIChatV1, policy); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIChatV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
@@ -40,6 +43,9 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		return nil, diagnostics, validationErr
 	}
 	wire := encodeChatBaseRequest(request)
+	if err := applyDynamoChatRequestEnvelope(&wire, envelope.Dynamo, policy); err != nil {
+		return nil, diagnostics, err
+	}
 	if encodeErr := appendChatMessages(&wire, request); encodeErr != nil {
 		return nil, diagnostics, encodeErr
 	}
@@ -57,6 +63,30 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 	}
 	body, encodeErr := marshalWire(wire)
 	return body, diagnostics, encodeErr
+}
+
+func applyDynamoChatRequestEnvelope(wire *chatRequestWire, envelope *llmprotocol.DynamoEnvelope, policy llmprotocol.Policy) error {
+	if envelope == nil {
+		return nil
+	}
+	if envelope.RequestTopLevelCacheSalt != nil {
+		if policy.Limits.DynamoNVExtStringBytes > 0 && len(*envelope.RequestTopLevelCacheSalt) > policy.Limits.DynamoNVExtStringBytes {
+			return llmprotocol.NewError(
+				llmprotocol.ErrorInvalidRequest, "dynamo_nvext_string_limit",
+				"Dynamo top-level cache_salt exceeds the configured limit", nil,
+			)
+		}
+		wire.CacheSalt = envelope.RequestTopLevelCacheSalt
+	}
+	if envelope.RequestNVExt == nil {
+		return nil
+	}
+	encoded, err := encodeDynamoRequestNVExt(envelope.RequestNVExt, policy)
+	if err != nil {
+		return err
+	}
+	wire.NVExt = encoded
+	return nil
 }
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {

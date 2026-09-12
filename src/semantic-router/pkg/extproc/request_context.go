@@ -100,6 +100,14 @@ type RequestContext struct {
 	// this request (e.g. response headers not processed). The cache-write path
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
+	// UpstreamBackendName and UpstreamBackendType identify the physical endpoint
+	// Envoy actually selected. They come from trusted xDS host metadata attached
+	// to the first response-path ext_proc message, not from caller headers.
+	UpstreamBackendName string
+	UpstreamBackendType string
+	// AllowDynamoExtensions is computed once when upstream response metadata is
+	// captured. Every response nvext/event consults this cached boundary decision.
+	AllowDynamoExtensions bool
 
 	// TTFT tracking
 	TTFTRecorded bool

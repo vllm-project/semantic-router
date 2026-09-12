@@ -154,6 +154,16 @@
       }
     },
     {
+      "name": "nvext",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_dynamo_nvext_translation"
+        }
+      }
+    },
+    {
       "name": "parallel_tool_calls",
       "outcome": {
         "status": "ok",

@@ -41,7 +41,7 @@
         "verbosity",
         "web_search_options"
       ],
-      "extension_request_fields": ["chat_template_kwargs", "reasoning_budget_tokens"],
+      "extension_request_fields": ["cache_salt", "chat_template_kwargs", "nvext", "reasoning_budget_tokens"],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {
         "add_generation_prompt": ["boolean"],
@@ -109,6 +109,7 @@
         "error",
         "kv_transfer_params",
         "metrics",
+        "nvext",
         "prompt_logprobs",
         "prompt_routed_experts",
         "prompt_text",
@@ -162,7 +163,7 @@
         "truncation",
         "user"
       ],
-      "extension_request_fields": ["auto_store"],
+      "extension_request_fields": ["auto_store", "nvext"],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {
         "cache_salt": ["string", "null"],
@@ -228,7 +229,7 @@
         "usage",
         "user"
       ],
-      "extension_response_fields": ["conversation_id", "store"],
+      "extension_response_fields": ["conversation_id", "nvext", "store"],
       "official_usage_fields": [
         "compute_units",
         "input_tokens",

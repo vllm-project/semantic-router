@@ -115,6 +115,9 @@ spec:
               clusterName: semantic-router
             timeout: 60s
           message_timeout: 60s
+          response_attributes:
+          - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]'
+          - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]'
           processing_mode:
             request_body_mode: BUFFERED
             request_header_mode: SEND
@@ -142,6 +145,42 @@ spec:
                     port_value: 50051
         name: semantic-router
         type: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  # The response-api profile uses a Kubernetes Service backend, which Envoy
+  # Gateway normally discovers through EDS. Replace that test-only cluster
+  # with a static DNS assignment so the selected endpoint carries the same
+  # trusted identity metadata as the generated standalone Envoy config.
+  - name: httproute/default/response-api/rule/0
+    operation:
+      op: replace
+      path: /type
+      value: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  - name: httproute/default/response-api/rule/0
+    operation:
+      op: remove
+      path: /eds_cluster_config
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  - name: httproute/default/response-api/rule/0
+    operation:
+      op: add
+      path: /load_assignment
+      value:
+        cluster_name: httproute/default/response-api/rule/0
+        endpoints:
+        - lb_endpoints:
+          - endpoint:
+              address:
+                socket_address:
+                  address: mock-vllm.default.svc.cluster.local
+                  port_value: 8000
+              hostname: mock-vllm.default.svc.cluster.local
+            metadata:
+              filter_metadata:
+                semantic-router:
+                  backend_name: test-endpoint
+                  backend_type: dynamo
+            load_balancing_weight: 1
     type: type.googleapis.com/envoy.config.cluster.v3.Cluster
   targetRef:
     group: gateway.networking.k8s.io

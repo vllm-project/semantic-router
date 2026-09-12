@@ -11,6 +11,11 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 	wire responsesEventWire,
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
+	var err error
+	event, err = decoder.withResponsesDynamoNVExt(event, wire.Response)
+	if err != nil {
+		return nil, nil, err
+	}
 	switch wire.Type {
 	case "response.created", "response.queued", "response.in_progress":
 		if decoder.started {
@@ -39,6 +44,48 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 		}
 	}
 	return decoder.emitResponsesEvent(event)
+}
+
+func (decoder *responsesStreamDecoder) withResponsesDynamoNVExt(
+	event llmprotocol.Event,
+	response *responsesResponseWire,
+) (llmprotocol.Event, error) {
+	if response == nil {
+		return event, nil
+	}
+	nvext, err := decoder.decodeResponsesDynamoNVExt(response.NVExt)
+	if err != nil {
+		return llmprotocol.Event{}, err
+	}
+	event.DynamoNVExt = nvext
+	return event, nil
+}
+
+func (decoder *responsesStreamDecoder) decodeResponsesDynamoNVExt(
+	raw json.RawMessage,
+) (*llmprotocol.DynamoResponseNVExt, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	if decoder.context.Source != llmprotocol.OpenAIResponsesV1 || decoder.context.Target != llmprotocol.OpenAIResponsesV1 {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_nvext_translation",
+			"Dynamo nvext stream resources cannot be translated across wire formats", nil,
+		)
+	}
+	limit := decoder.policy.Limits.DynamoNVExtStreamBytes
+	if limit > 0 && (decoder.dynamoNVExtBytes > limit || len(raw) > limit-decoder.dynamoNVExtBytes) {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable, "dynamo_nvext_stream_size_limit",
+			"upstream Dynamo nvext stream exceeds the configured cumulative limit", nil,
+		)
+	}
+	extension, err := decodeDynamoResponseNVExt(raw, decoder.policy)
+	if err != nil {
+		return nil, err
+	}
+	decoder.dynamoNVExtBytes += len(raw)
+	return extension, nil
 }
 
 func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesEventWire) error {

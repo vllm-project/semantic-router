@@ -31,7 +31,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "tool_choice", "tools", "top_logprobs", "top_p", "user",
 				"verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
+			extensions: fields("cache_salt", "chat_template_kwargs", "nvext", "reasoning_budget_tokens"),
 		},
 		{
 			name: "OpenAI Responses",
@@ -44,7 +44,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "text", "tool_choice", "tools", "top_logprobs", "top_p",
 				"truncation", "user",
 			),
-			extensions: fields("auto_store"),
+			extensions: fields("auto_store", "nvext"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -90,7 +90,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
+			extensions: fields("cache_salt", "chat_template_kwargs", "nvext", "reasoning_budget_tokens"),
 			transport:  fields("stream_options"),
 		},
 		{
@@ -107,7 +107,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"service_tier", "top_logprobs",
 			),
 			transport:  fields("stream_options"),
-			extensions: fields("auto_store"),
+			extensions: fields("auto_store", "nvext"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -144,7 +144,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			),
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
-				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
+				"nvext", "prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
 				"remote_host", "remote_port",
 			),
 		},
@@ -159,7 +159,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"safety_identifier", "service_tier", "status", "temperature", "text", "tool_choice",
 				"tools", "top_logprobs", "top_p", "truncation", "usage", "user",
 			),
-			extensions: fields("conversation_id", "store"),
+			extensions: fields("conversation_id", "nvext", "store"),
 		},
 		{
 			name: "Anthropic Messages",
