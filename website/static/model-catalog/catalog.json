@@ -1459,6 +1459,11 @@
       ],
       "profiles": [
         {
+          "description": "Source-published MedMCQA multiple-choice accuracy using the evaluated model's documented setup.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        },
+        {
           "description": "Validation accuracy averaged across the original answer order and the two published Medmarks v1 shuffle seeds.",
           "display_name": "Medmarks v1 three-order average",
           "id": "medmarks-v1-three-order-average"
@@ -1488,6 +1493,11 @@
         }
       ],
       "profiles": [
+        {
+          "description": "Source-published MedQA USMLE four-option accuracy using the evaluated model's documented setup.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        },
         {
           "description": "Test accuracy averaged across the original answer order and the two published Medmarks v1 shuffle seeds.",
           "display_name": "Medmarks v1 three-order average",
@@ -1614,12 +1624,42 @@
       ],
       "profiles": [
         {
+          "description": "Source-published BIG-Bench Hard accuracy using the model card's documented standard setup.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        },
+        {
           "description": "Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and dataset revision remain on the evaluation record.",
           "display_name": "RMCB EACL 2026 valid-output test",
           "id": "rmcb-eacl-2026-valid-output-test"
         }
       ],
       "source": "https://github.com/suzgunmirac/BIG-Bench-Hard"
+    },
+    {
+      "default_profile": "published-standard",
+      "display_name": "BigCodeBench",
+      "domain": "code_generation",
+      "id": "bigcode-project/bigcodebench@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "pass_at_1",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Source-published BigCodeBench pass@1 with the evaluated model variant retained on the record.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        }
+      ],
+      "source": "https://github.com/bigcode-project/bigcodebench"
     },
     {
       "default_profile": "published-standard",
@@ -1833,6 +1873,555 @@
     }
   ],
   "evaluations": [
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-32b-base-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.496
+      },
+      "model": "ai2/olmo-3-32b-base",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MMLU-Pro MC",
+        "model_revision": "c2b61dae89a1ad10e4ad5653d0e46b590902607b",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3 32B Base"
+      }
+    },
+    {
+      "benchmark": "maveriq/bigbenchhard@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-32b-base-model-card-bbh@1.0.0",
+      "metrics": {
+        "accuracy": 0.776
+      },
+      "model": "ai2/olmo-3-32b-base",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "c2b61dae89a1ad10e4ad5653d0e46b590902607b",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3 32B Base"
+      }
+    },
+    {
+      "benchmark": "bigcode-project/bigcodebench@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-32b-base-model-card-bigcodebench@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.439
+      },
+      "model": "ai2/olmo-3-32b-base",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "c2b61dae89a1ad10e4ad5653d0e46b590902607b",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3 32B Base"
+      }
+    },
+    {
+      "benchmark": "openlifescienceai/medmcqa@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-32b-base-model-card-medmcqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.576
+      },
+      "model": "ai2/olmo-3-32b-base",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MedMCQA MC",
+        "model_revision": "c2b61dae89a1ad10e4ad5653d0e46b590902607b",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3 32B Base"
+      }
+    },
+    {
+      "benchmark": "gbaker/medqa-usmle@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3-1125-32B/blob/c2b61dae89a1ad10e4ad5653d0e46b590902607b/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-32b-base-model-card-medqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.538
+      },
+      "model": "ai2/olmo-3-32b-base",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MedQA MC",
+        "model_revision": "c2b61dae89a1ad10e4ad5653d0e46b590902607b",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3 32B Base"
+      }
+    },
+    {
+      "benchmark": "hendrycks/math@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-think-model-card-math@1.0.0",
+      "metrics": {
+        "accuracy": 0.962
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Think"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-think-model-card-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.806
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Think"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-think-model-card-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.781
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Think"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-think-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.938
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Think"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think/blob/832c3f543499af8fe68b88359501de9cb7840544/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-think-model-card-gpqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.575
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Think"
+      }
+    },
+    {
+      "benchmark": "hendrycks/math@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-instruct-model-card-math@1.0.0",
+      "metrics": {
+        "accuracy": 0.934
+      },
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "ac0587e4a7744a551c059d8cd17ba220bc940dae",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-instruct-model-card-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.678
+      },
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "ac0587e4a7744a551c059d8cd17ba220bc940dae",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-instruct-model-card-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.579
+      },
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "ac0587e4a7744a551c059d8cd17ba220bc940dae",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Instruct"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-instruct-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.888
+      },
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "ac0587e4a7744a551c059d8cd17ba220bc940dae",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Instruct"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct/blob/ac0587e4a7744a551c059d8cd17ba220bc940dae/README.md",
+        "verification": "claimed"
+      },
+      "id": "ai2/olmo-3-1-32b-instruct-model-card-gpqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.486
+      },
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "ac0587e4a7744a551c059d8cd17ba220bc940dae",
+        "source_kind": "official_model_card",
+        "variant": "OLMo 3.1 32B Instruct"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/mmlu-pro",
+        "verification": "imported"
+      },
+      "id": "independent/olmo-3-1-32b-think-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.763
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_release": "v1",
+        "evaluation_harness": "Artificial Analysis",
+        "latency_ms": null,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "run_kind": "independent",
+        "source_kind": "independent_evaluation",
+        "source_model": "OLMo 3.1 32B Think",
+        "source_model_slug": "olmo-3-1-32b-think",
+        "task_artifact": "https://artificialanalysis.ai/evaluations/mmlu-pro",
+        "task_count": 12000
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/gpqa-diamond",
+        "verification": "imported"
+      },
+      "id": "independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.590909090909091
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_release": "diamond",
+        "evaluation_harness": "Artificial Analysis",
+        "latency_ms": null,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "run_kind": "independent",
+        "source_kind": "independent_evaluation",
+        "source_model": "OLMo 3.1 32B Think",
+        "source_model_slug": "olmo-3-1-32b-think",
+        "task_artifact": "https://artificialanalysis.ai/evaluations/gpqa-diamond",
+        "task_count": 198
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-text-only",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "verification": "imported"
+      },
+      "id": "independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.0625579240037071
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_release": "v1",
+        "evaluation_harness": "Artificial Analysis",
+        "latency_ms": null,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "run_kind": "independent",
+        "source_kind": "independent_evaluation",
+        "source_model": "OLMo 3.1 32B Think",
+        "source_model_slug": "olmo-3-1-32b-think",
+        "task_artifact": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "task_count": 2500
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "independent-code-generation",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/livecodebench",
+        "verification": "imported"
+      },
+      "id": "independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.695238095238095
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_release": "v6",
+        "evaluation_harness": "Artificial Analysis",
+        "latency_ms": null,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "run_kind": "independent",
+        "source_kind": "independent_evaluation",
+        "source_model": "OLMo 3.1 32B Think",
+        "source_model_slug": "olmo-3-1-32b-think",
+        "task_artifact": "https://artificialanalysis.ai/evaluations/livecodebench",
+        "task_count": 1055
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/scicode",
+        "verification": "imported"
+      },
+      "id": "independent/olmo-3-1-32b-think-scicode@1.0.0",
+      "metrics": {
+        "score": 0.293
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_release": "test",
+        "evaluation_harness": "Artificial Analysis",
+        "latency_ms": null,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "run_kind": "independent",
+        "source_kind": "independent_evaluation",
+        "source_model": "OLMo 3.1 32B Think",
+        "source_model_slug": "olmo-3-1-32b-think",
+        "task_artifact": "https://artificialanalysis.ai/evaluations/scicode",
+        "task_count": 288
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/terminalbench-v2-1",
+        "verification": "imported"
+      },
+      "id": "independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.0
+      },
+      "model": "ai2/olmo-3-1-32b-think",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_release": "v2.1",
+        "evaluation_harness": "Artificial Analysis",
+        "latency_ms": null,
+        "model_revision": "832c3f543499af8fe68b88359501de9cb7840544",
+        "run_kind": "independent",
+        "source_kind": "independent_evaluation",
+        "source_model": "OLMo 3.1 32B Think",
+        "source_model_slug": "olmo-3-1-32b-think",
+        "task_artifact": "https://github.com/harbor-framework/terminal-bench-2-1",
+        "task_count": 89
+      }
+    },
     {
       "benchmark": "hpai-bsc/careqa@1.0.0",
       "benchmark_profile": "medmarks-v1-three-order-average",
@@ -37144,6 +37733,994 @@
     }
   ],
   "index_results": [
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "ai2/olmo-3-32b-base-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.496,
+          "status": "available",
+          "value": 0.496,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 49.6
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [
+        "ai2/olmo-3-32b-base-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 49.6,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.496,
+          "status": "available",
+          "value": 0.496,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ai2/olmo-3-32b-base",
+      "provenance": [
+        "ai2/olmo-3-32b-base-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/olmo-3-1-32b-think-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.763,
+          "status": "available",
+          "value": 0.763,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 76.3
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [
+        "independent/olmo-3-1-32b-think-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 76.3,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.590909090909091,
+          "status": "available",
+          "value": 0.590909090909091,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.0625579240037071,
+          "status": "available",
+          "value": 0.0625579240037071,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "frontier_reasoning": 6.25579240037071,
+        "scientific_reasoning": 59.09090909090911
+      },
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [
+        "independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0",
+        "independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 32.67335074563991,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "independent-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.695238095238095,
+          "status": "available",
+          "value": 0.695238095238095,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/olmo-3-1-32b-think-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.293,
+          "status": "available",
+          "value": 0.293,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "competitive_programming": 69.5238095238095,
+        "scientific_coding": 29.299999999999997
+      },
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [
+        "independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0",
+        "independent/olmo-3-1-32b-think-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 49.411904761904744,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.0,
+          "status": "available",
+          "value": 0.0,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 0.0
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [
+        "independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 0.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.763,
+          "status": "available",
+          "value": 0.763,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": 0.32673350745639906,
+          "status": "available",
+          "value": 0.32673350745639906,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": 0.49411904761904746,
+          "status": "available",
+          "value": 0.49411904761904746,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.0,
+          "status": "available",
+          "value": 0.0,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ai2/olmo-3-1-32b-think",
+      "provenance": [
+        "independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0",
+        "independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0",
+        "independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0",
+        "independent/olmo-3-1-32b-think-mmlu-pro@1.0.0",
+        "independent/olmo-3-1-32b-think-scicode@1.0.0",
+        "independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 38.21172125063691,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "ai2/olmo-3-1-32b-instruct-model-card-gpqa@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.486,
+          "status": "available",
+          "value": 0.486,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [
+        "ai2/olmo-3-1-32b-instruct-model-card-gpqa@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ai2/olmo-3-1-32b-instruct",
+      "provenance": [
+        "ai2/olmo-3-1-32b-instruct-model-card-gpqa@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
     {
       "components": [
         {
@@ -86206,6 +87783,151 @@
     {
       "capabilities": [
         "chat",
+        "long_context"
+      ],
+      "description": "Fully open 32B base language model from Ai2's OLMo 3 family.",
+      "display_name": "OLMo 3 32B Base",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/allenai/Olmo-3-1125-32B",
+        "type": "open_weights"
+      },
+      "family": "olmo-3",
+      "id": "ai2/olmo-3-32b-base",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 65536
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "32B",
+      "presentation": {
+        "logo": "package:ai2",
+        "monochrome": false,
+        "monogram": "O"
+      },
+      "publisher": "Ai2 / OLMo",
+      "revision": "c2b61dae89a1ad10e4ad5653d0e46b590902607b",
+      "tags": [
+        "open_weights",
+        "base_model",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Ai2",
+        "source": "https://huggingface.co/allenai/Olmo-3-1125-32B",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "long_context"
+      ],
+      "description": "Fully open 32B reasoning model from Ai2's OLMo 3.1 family.",
+      "display_name": "OLMo 3.1 32B Think",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think",
+        "type": "open_weights"
+      },
+      "family": "olmo-3",
+      "id": "ai2/olmo-3-1-32b-think",
+      "kind": "physical",
+      "knowledge_cutoff": "2024-12-01",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 65536,
+        "max_output_tokens": 32768
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "32B",
+      "presentation": {
+        "logo": "package:ai2",
+        "monochrome": false,
+        "monogram": "O"
+      },
+      "publisher": "Ai2 / OLMo",
+      "revision": "832c3f543499af8fe68b88359501de9cb7840544",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Ai2",
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "long_context"
+      ],
+      "description": "Fully open 32B instruction-tuned model from Ai2's OLMo 3.1 family.",
+      "display_name": "OLMo 3.1 32B Instruct",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct",
+        "type": "open_weights"
+      },
+      "family": "olmo-3",
+      "id": "ai2/olmo-3-1-32b-instruct",
+      "kind": "physical",
+      "knowledge_cutoff": "2024-12-01",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 65536
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "32B",
+      "presentation": {
+        "logo": "package:ai2",
+        "monochrome": false,
+        "monogram": "O"
+      },
+      "publisher": "Ai2 / OLMo",
+      "revision": "ac0587e4a7744a551c059d8cd17ba220bc940dae",
+      "tags": [
+        "open_weights",
+        "instruction_tuned",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Ai2",
+        "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "tools",
         "structured_output",
         "long_context"
@@ -95555,6 +97277,51 @@
             "source": "https://huggingface.co/ai21labs/AI21-Jamba-Reasoning-3B",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "ai2/olmo-3-32b-base",
+          "id": "allenai/Olmo-3-1125-32B",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/allenai/Olmo-3-1125-32B",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
+          }
+        },
+        {
+          "catalog": "ai2/olmo-3-1-32b-think",
+          "id": "allenai/Olmo-3.1-32B-Think",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Think",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
+          }
+        },
+        {
+          "catalog": "ai2/olmo-3-1-32b-instruct",
+          "id": "allenai/Olmo-3.1-32B-Instruct",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/allenai/Olmo-3.1-32B-Instruct",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
           }
         },
         {
