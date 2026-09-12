@@ -160,6 +160,9 @@ def main():
     parser.add_argument("--selection-minimum-support", type=int, default=1)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--eval-every", type=int, default=150)
+    parser.add_argument(
+        "--evaluation-dtype", choices=["bfloat16", "float32"], default="bfloat16"
+    )
     parser.add_argument("--seed", type=int, default=20260913)
     args = parser.parse_args()
     if (
@@ -266,6 +269,7 @@ def main():
         "scores": "unconditional independent sigmoid scores; not calibrated posteriors",
         "parameters": sum(p.numel() for p in model.parameters()),
         "precision": "FP32 parameters/BCE, BF16 autocast",
+        "evaluation_dtype": args.evaluation_dtype,
         "attention": "sdpa",
         "test_used": False,
         "arguments": vars(args),
@@ -461,7 +465,12 @@ def main():
                 json.dumps(coverage, indent=2) + "\n"
             )
             metrics, probabilities = evaluate(
-                model, tokenizer, dev, labels, args.max_length
+                model,
+                tokenizer,
+                dev,
+                labels,
+                args.max_length,
+                dtype=args.evaluation_dtype,
             )
             (output / f"dev-step-{step}.json").write_text(
                 json.dumps(metrics, indent=2) + "\n"
