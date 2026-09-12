@@ -81,6 +81,48 @@ The Dashboard edits the same v0.3 document as YAML. Use one authoring owner for
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
+## Routing capabilities
+
+Author-declared model capabilities drive capability-aware dispatch: a request
+whose required capability the originally selected backend cannot express is
+rerouted to the first qualified model in the decision whose declared
+capabilities cover it. Declare them on a model card:
+
+```yaml
+routing:
+  modelCards:
+    - name: image-backend
+      capabilities: [image_generation]
+```
+
+The protocol capability vocabulary is defined by the `llmprotocol` package,
+and a declaration falls into one of the following states for capability-aware
+dispatch:
+
+1. **No declaration** — the model is unannotated and stays eligible on wire
+   expressibility alone.
+2. **Task/modality declaration only** — names like `image_input`,
+   `image_output`, `image_generation`, `audio_input`, `audio_output`,
+   `video_input`, `video_output`, `file_input`, `file_output`; these steer the
+   declared-capability filter during rerouting.
+3. **Transport/accounting declaration only** — names like `tools`,
+   `reasoning`, `streaming`, `structured_json` parse successfully but carry no
+   task bit, so they are treated as unannotated for task filtering and the
+   model stays eligible on wire expressibility; those capabilities are
+   verified against wire codec expressibility, not the model declaration.
+4. **Partially recognized declaration** — a name outside the protocol
+   vocabulary (e.g. `vision`, `long_context`) contributes nothing to the
+   model's task bits and does not void any recognized names in the same
+   declaration. A card declaring `[image_input, vision]` is filtered on
+   `image_input` alone: it stays eligible for image requests and is rejected
+   for audio, which it never declared.
+5. **Unrecognized declaration** — a declaration whose names all fall outside
+   the protocol vocabulary cannot be verified against it. Such a model fails
+   closed: it is never chosen as a capability-reroute candidate, because the
+   router cannot honor capability words it does not recognize. This differs
+   from an unannotated model, which stays eligible on wire expressibility
+   alone.
+
 ## Validate the result
 
 ```bash

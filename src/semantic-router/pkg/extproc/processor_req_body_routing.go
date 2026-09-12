@@ -87,9 +87,11 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	ctx.SemanticRequest = request
 	// Per-model accounting (token tracking, TTFB, usage attribution) keys off
 	// the model that actually serves the request. A capability reroute may
-	// redirect this request to a sibling modelRef, so RequestModel must be the
-	// final dispatch model, not the decision-selected one.
+	// redirect this request to a sibling modelRef, so RequestModel and the
+	// client-visible selected-model header must be the final dispatch model,
+	// not the decision-selected one.
 	ctx.RequestModel = dispatch.logicalModel
+	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -134,9 +136,23 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 }
 
 // declaredModelCapabilities parses a model's configured capability
-// declarations. A model with no declaration (or an unparsable one) is treated
-// as unannotated and stays eligible on wire expressibility alone; the declared
-// filter only steers among annotated candidates.
+// declarations into three distinct states:
+//
+//  1. absent — no declaration at all; ok=false. The model is unannotated and
+//     is judged on wire expressibility alone.
+//  2. valid — at least one name recognizes to a protocol capability; the
+//     recognized task/modality bits steer the declared filter while
+//     unknown names contribute no bit. A transport/accounting-only
+//     declaration (tools, streaming, ...) recognizes fully yet carries no
+//     task bit, so it narrows nothing.
+//  3. invalid — a declaration whose names all fail to recognize; ok=true with
+//     an empty set. The operator asserted capability words the router cannot
+//     verify, so the model fails closed instead of being treated as
+//     unannotated: the declared filter must not grant eligibility that the
+//     operator never expressed.
+//
+// The distinction between 2 and 3 is observable to the caller on the returned
+// set: (non-empty, true) vs (empty, true).
 func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
 	if r == nil || r.Config == nil {
 		return llmprotocol.CapabilitySet{}, false
@@ -145,10 +161,15 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 	if !ok || len(params.Capabilities) == 0 {
 		return llmprotocol.CapabilitySet{}, false
 	}
-	declared, err := llmprotocol.ParseCapabilities(params.Capabilities)
-	if err != nil {
-		return llmprotocol.CapabilitySet{}, false
-	}
+	// ParseCapabilities preserves the recognized subset when it meets an
+	// unrecognized name, and reports an error naming them. For a valid
+	// declaration the subset carries the recognized bits; for an invalid one
+	// the subset is empty and the caller fails closed. The parse error itself
+	// is informational at this routing seam — the capability vocabulary
+	// boundary is a workgroup decision, not validated here — while strict
+	// callers that must reject unknown names still get it from
+	// ParseCapabilities directly.
+	declared, _ := llmprotocol.ParseCapabilities(params.Capabilities)
 	return declared, true
 }
 
@@ -190,6 +211,7 @@ func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
 		"to":          model,
 		"wire_format": candidate.targetFormat,
 	})
+	metrics.RecordModelRouting(selected.logicalModel, model)
 	return candidate, true
 }
 
@@ -216,7 +238,15 @@ func (r *OpenAIRouter) findQualifiedRerouteModel(
 // qualifiedRerouteCandidate reports the model's wire format when the model can
 // express every required capability, or "" when it cannot serve the request.
 // Expressibility is judged on the wire format's codec capability set first,
-// then narrowed by the model's own declared capabilities when annotated.
+// then narrowed by the model's declared capabilities:
+//
+//   - absent declaration — unannotated, stays eligible on wire expressibility;
+//   - valid declaration (at least one recognized name) — off-spec task bits
+//     (image/audio/video/file in/out, hosted generation) narrow eligibility;
+//     a transport/accounting-only declaration neither narrows nor rejects;
+//   - invalid declaration (names all unrecognized) — fails closed and is never
+//     a qualified candidate, because the operator's asserted capabilities
+//     cannot be verified against the protocol vocabulary.
 func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmprotocol.CapabilitySet) llmprotocol.WireFormat {
 	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
 	if err != nil {
@@ -225,8 +255,20 @@ func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmproto
 	if set, ok := r.codecCapabilitiesForFormat(format); !ok || !set.Contains(required) {
 		return ""
 	}
-	if declared, ok := r.declaredModelCapabilities(model); ok && !declared.Contains(required.TaskCapabilities()) {
-		return ""
+	if declared, ok := r.declaredModelCapabilities(model); ok {
+		if declared.Empty() {
+			// Invalid declaration: the operator asserted capability names the
+			// protocol cannot recognize. Fail closed — do not hand this model
+			// a task the declaration never verifiably expressed.
+			return ""
+		}
+		// Only task/modality annotations steer capability filtering. A model
+		// annotated with transport/accounting names alone (tools, reasoning,
+		// streaming, structured_json, ...) carries no task bit and stays
+		// eligible on wire expressibility exactly like an unannotated model.
+		if tasks := declared.TaskCapabilities(); !tasks.Empty() && !tasks.Contains(required.TaskCapabilities()) {
+			return ""
+		}
 	}
 	return format
 }

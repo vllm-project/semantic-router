@@ -365,14 +365,16 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	if ctx.RequestModel != imageBackend {
 		t.Fatalf("ctx.RequestModel = %q, want %q (rerouted images serving model for token/ttfb/usage attribution)", ctx.RequestModel, imageBackend)
 	}
+	if ctx.VSRSelectedModel != imageBackend {
+		t.Fatalf("ctx.VSRSelectedModel = %q, want %q (selected-model header reflects the final dispatch model)", ctx.VSRSelectedModel, imageBackend)
+	}
 }
 
 // A pure image request that omits tool_choice is defaulted to auto by
 // applyRequestSemanticDefaults (engine.DecodeRequest). That default must not
 // be rejected: auto (with no function tools) may only invoke the hosted
 // image_generation operation, so the request reroutes to the images sibling
-// and the final dispatch model flows through request state (Xun review
-// 5122438902).
+// and the final dispatch model flows through request state.
 func TestPrepareProviderDispatchOmitsToolChoiceReroutesToImages(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	imageBackend := "image-backend"
@@ -412,7 +414,7 @@ func TestPrepareProviderDispatchOmitsToolChoiceReroutesToImages(t *testing.T) {
 // An explicit tool_choice: none forbids all tools, including the hosted
 // image_generation operation, so the request must NOT be rerouted to an
 // images sibling: no image backend call may occur for a request whose caller
-// forbade all tools (Xun review 5119851642).
+// forbade all tools.
 func TestPrepareProviderDispatchNoneToolChoiceDoesNotRerouteToImages(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	imageBackend := "image-backend"
