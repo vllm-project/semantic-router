@@ -7,8 +7,10 @@ the router.  Useful for confidence-based routing optimization.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import math
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 from typing import Any
 
 
@@ -31,12 +33,33 @@ class OfflineAnalyzer:
 
     Constructor args:
         severity_fn: (item) -> int, severity weight for loss function.
-        epsilon: margin added to candidate thresholds.
     """
 
-    def __init__(self, severity_fn: Callable[[Any], int], epsilon: float = 0.001):
+    def __init__(self, severity_fn: Callable[[Any], int]):
         self.severity_fn = severity_fn
-        self.epsilon = epsilon
+
+    @staticmethod
+    def _threshold_candidates(conf_values: Sequence[float]) -> list[float]:
+        """Return one threshold representative for every policy region.
+
+        With the escalation rule ``confidence < threshold``, policy behavior
+        changes only when a threshold crosses an observed confidence value.
+        Testing one midpoint between each pair of adjacent scores therefore
+        covers every distinct policy on the observed data without relying on
+        an arbitrary epsilon that could skip a narrow interval.
+        """
+        ordered = sorted(set(conf_values))
+        if not ordered:
+            return [0.0]
+
+        candidates = [0.0]
+        for lower, upper in pairwise(ordered):
+            midpoint = lower + (upper - lower) / 2
+            if midpoint <= lower or midpoint >= upper:
+                midpoint = math.nextafter(lower, upper)
+            candidates.append(midpoint)
+        candidates.append(1.0)
+        return candidates
 
     def compute_threshold_fix(
         self,
@@ -111,8 +134,8 @@ class OfflineAnalyzer:
         if not items:
             return {"strategy": "AVOID", "threshold": 0.0, "net": 0}
 
-        conf_values = sorted({confidence_fn(q) for q in items})
-        candidates = [0.0] + [c + self.epsilon for c in conf_values] + [1.001]
+        conf_values = [confidence_fn(q) for q in items]
+        candidates = self._threshold_candidates(conf_values)
 
         best_threshold = 0.0
         best_accuracy = sum(1 for q in items if correct_small_fn(q))
@@ -138,7 +161,10 @@ class OfflineAnalyzer:
 
             all_candidates.append(
                 {
-                    "threshold": round(tau, 4),
+                    # Keep the exact candidate for policy evaluation.  A
+                    # presentation-only rounding here could collapse two
+                    # close thresholds back into the same policy region.
+                    "threshold": tau,
                     "correct": correct,
                     "accuracy": round(100 * correct / len(items), 1),
                     "escalation_rate": round(100 * esc_rate, 1),
@@ -168,7 +194,7 @@ class OfflineAnalyzer:
         baseline = sum(1 for q in items if correct_small_fn(q))
         return {
             "strategy": strategy,
-            "optimal_threshold": round(best_threshold, 4),
+            "optimal_threshold": best_threshold,
             "best_accuracy": best_accuracy,
             "best_accuracy_pct": round(100 * best_accuracy / len(items), 1),
             "baseline_accuracy": baseline,
