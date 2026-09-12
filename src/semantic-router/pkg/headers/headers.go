@@ -177,6 +177,18 @@ const (
 	VSRRetentionKeepCurrentModel = "x-vsr-retention-keep-current-model"
 	VSRRetentionPreferPrefix     = "x-vsr-retention-prefer-prefix"
 
+	// VSRKVTransferStatus reports whether the upstream backend applied cross-model
+	// KV reuse for this response. Emitted by the vLLM KVConnector plugin on the
+	// target pod; consumed by extproc for metrics and registry updates (issue #2976).
+	// Values: KVTransferStatusApplied, KVTransferStatusFallbackReprefill, or
+	// KVTransferStatusUnsupported. Absent ⇒ treat as unsupported (safe default).
+	VSRKVTransferStatus = "x-vsr-kv-transfer-status"
+
+	// KVTransferStatus* are valid values for VSRKVTransferStatus.
+	KVTransferStatusApplied           = "applied"
+	KVTransferStatusFallbackReprefill = "fallback_reprefill"
+	KVTransferStatusUnsupported       = "unsupported"
+
 	// RouterReplayID carries the identifier for a captured replay record.
 	// Value: opaque replay token
 	RouterReplayID = "x-vsr-replay-id"
@@ -411,6 +423,24 @@ const (
 
 	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
 	VSRFusionDepth = "x-vsr-fusion-depth"
+)
+
+// VSR Cross-Model KV Transfer Request Headers (issue #2976)
+// Injected by the KVTransfer Coordinator on upstream dispatch when a model switch
+// is eligible for cross-model KV reuse. Consumed by the vLLM KVConnector plugin
+// on the target pod. See tools/agent/docs/plans/pl-0043-cross-model-kv-transfer.md.
+const (
+	// VSRKVSourcePod is the gRPC address of the pod holding the source model's KV cache.
+	// Example: "10.0.1.5:8000"
+	VSRKVSourcePod = "x-vsr-kv-source-pod"
+
+	// VSRKVCacheID is the opaque session/cache identifier for the source KV block.
+	// Example: "sess-abc123"
+	VSRKVCacheID = "x-vsr-kv-cache-id"
+
+	// VSRKVMapperID names the published ridge-mapper artifact for the source→target pair.
+	// Example: "qwen3-14b-32b-v1"
+	VSRKVMapperID = "x-vsr-kv-mapper-id"
 )
 
 // Looper Response Headers

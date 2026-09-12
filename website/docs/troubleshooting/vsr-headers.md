@@ -136,6 +136,27 @@ clients should not use them as commands.
 Unset fields are omitted. Cache hits do not emit these headers because no
 decision was evaluated for that response.
 
+## Cross-model KV transfer headers (issue #2976)
+
+When the router attempts cross-model KV reuse on a model switch, it injects
+request-side hints on the upstream call. The target vLLM KVConnector plugin
+reports the outcome on the response. These headers are internal to the router
+and inference pool; clients should not depend on them.
+
+**Request (router → backend):**
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-kv-source-pod` | gRPC address of the pod holding the source model's KV cache. |
+| `x-vsr-kv-cache-id` | Opaque session or cache identifier for the source KV block. |
+| `x-vsr-kv-mapper-id` | Published ridge-mapper artifact for the source→target model pair. |
+
+**Response (backend → router):**
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-kv-transfer-status` | `applied`, `fallback_reprefill`, or `unsupported`. Absent ⇒ `unsupported`. |
+
 ## Cost headers
 
 On a buffered (non-streaming) response, the router prices the usage the model
