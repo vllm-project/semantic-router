@@ -60,6 +60,26 @@ intent and safety classifiers, LoRA classifiers, and MLP selection. Call each
 model's initialization function before inference and release returned native
 resources as documented by the wrapper.
 
+## Embedding capabilities
+
+`EmbeddingCapabilitiesFor` is safe before model initialization. Model identity,
+batching, modalities, and device families describe the compiled binding.
+`DimensionStateNotLoaded` means the model's dimensions are unavailable;
+`NativeDimension` is zero and `SupportedDimensions` is empty in that state.
+An empty list never grants unrestricted dimension support.
+
+Query again after model preparation to obtain `DimensionStateAvailable`,
+the model's explicit `NativeDimension`, and its declared `SupportedDimensions`.
+These values come from the same model configuration and Matryoshka declarations
+used by the native implementation. The list includes the native width; its order
+does not define the default. Resolve and capture these facts during construction,
+outside request handling. This query does not change inference validation policy.
+
+The Go wrapper copies the dimension buffer and releases its native allocation.
+Direct C callers must use `candle_free_embedding_capabilities_v1` before reusing
+or discarding a result. V1 identifies the ABI descriptor, not a task-contract
+identity or version.
+
 ## Troubleshooting
 
 - `library 'candle_semantic_router' not found`: build the release library and

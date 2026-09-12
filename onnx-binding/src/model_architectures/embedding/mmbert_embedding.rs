@@ -658,6 +658,11 @@ impl MmBertEmbeddingModel {
         &self.config
     }
 
+    /// Declared widths used by this model's Matryoshka implementation.
+    pub fn matryoshka_dimensions(&self) -> Vec<usize> {
+        self.matryoshka_config.dimensions.clone()
+    }
+
     /// Get the tokenizer
     pub fn tokenizer(&self) -> &Tokenizer {
         &self.tokenizer
