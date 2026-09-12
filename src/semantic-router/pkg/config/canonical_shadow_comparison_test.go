@@ -76,9 +76,8 @@ providers:
   models:
     - name: private
       api_format: openai
-      endpoint:
-        host: 127.0.0.1
-        port: 8000
+      backend_refs:
+        - endpoint: http://127.0.0.1:8000
 routing: {}
 global:
   router:
