@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -26,9 +26,11 @@ const (
 
 // FeedbackResult represents the result of user feedback classification
 type FeedbackResult struct {
-	FeedbackType string  `json:"feedback_type"` // feedback type label from model's id2label
-	Confidence   float32 `json:"confidence"`
-	Class        int     `json:"class"` // class index from model
+	FeedbackType        string  `json:"feedback_type"` // feedback type label from model's id2label
+	Confidence          float32 `json:"confidence"`
+	ConfidenceAvailable bool    `json:"confidence_available"`
+	PolicyDefault       string  `json:"policy_default,omitempty"`
+	Class               int     `json:"class"` // class index from model
 }
 
 // FeedbackMapping maps feedback types to class indices
@@ -39,12 +41,12 @@ type FeedbackMapping struct {
 
 // FeedbackDetector handles user feedback classification from follow-up messages
 type FeedbackDetector struct {
-	config       *config.FeedbackDetectorConfig
-	mapping      *FeedbackMapping
-	initialized  bool
-	useMmBERT32K bool // Track if mmBERT-32K is used for inference
-	gate         admission.Admissioner
-	mu           sync.RWMutex
+	backend     *ownedSequenceBackend
+	config      *config.FeedbackDetectorConfig
+	mapping     *FeedbackMapping
+	initialized bool
+	gate        admission.Admissioner
+	mu          sync.RWMutex
 }
 
 // SetAdmissioner installs the deployment's admission gate for model inference.
@@ -55,13 +57,20 @@ func (d *FeedbackDetector) SetAdmissioner(gate admission.Admissioner) {
 }
 
 // NewFeedbackDetector creates a new feedback detector
-func NewFeedbackDetector(cfg *config.FeedbackDetectorConfig) (*FeedbackDetector, error) {
+func NewFeedbackDetector(cfg *config.FeedbackDetectorConfig, models ...*classifierModelRuntime) (*FeedbackDetector, error) {
 	if cfg == nil {
 		return nil, nil // Disabled
 	}
 
+	runtime := consumerModelRuntime(models)
+	adapter := "modernbert"
+	if cfg.UseMmBERT32K {
+		adapter = "mmbert32k"
+	}
+	spec := runtime.localSpec("feedback_detector", cfg.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.UseCPU)
 	detector := &FeedbackDetector{
-		config: cfg,
+		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec},
+		config:  cfg,
 	}
 
 	return detector, nil
@@ -148,26 +157,15 @@ func (d *FeedbackDetector) Initialize() error {
 		return err
 	}
 
-	backend := "modernbert"
-
-	// Check if mmBERT-32K is configured (takes precedence)
-	if d.config.UseMmBERT32K {
-		err := candle.InitMmBert32KFeedbackClassifier(d.config.ModelID, d.config.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize mmBERT-32K feedback detector from %s: %w", d.config.ModelID, err)
-		}
-		backend = "mmbert_32k"
-		d.useMmBERT32K = true
-	} else {
-		err := candle.InitFeedbackDetector(d.config.ModelID, d.config.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize feedback detector ML model from %s: %w", d.config.ModelID, err)
-		}
+	d.backend.labels = indexedNativeLabels(d.mapping.IdxToLabel)
+	d.backend.normalizeLabel = normalizeFeedbackLabel
+	if err := d.backend.Init(d.config.ModelID, d.config.UseCPU, len(d.mapping.IdxToLabel)); err != nil {
+		return err
 	}
 
 	d.initialized = true
 	logging.ComponentEvent("classifier", "feedback_detector_initialized", map[string]interface{}{
-		"backend":   backend,
+		"backend":   d.backend.spec.Deployment.Provider,
 		"model_ref": d.config.ModelID,
 	})
 
@@ -185,17 +183,19 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 
 	if text == "" {
 		return &FeedbackResult{
-			FeedbackType: FeedbackLabelSatisfied,
-			Confidence:   1.0,
-			Class:        0,
+			FeedbackType:  FeedbackLabelSatisfied,
+			PolicyDefault: "empty_text",
+			Class:         0,
 		}, nil
 	}
 
-	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResultWithProbs, error) {
-		if d.useMmBERT32K {
-			return candle.ClassifyMmBert32KFeedbackWithProbs(text)
+	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (tasks.ClassResultWithProbs, error) {
+		distribution, err := d.backend.Classify(ctx, text)
+		if err != nil {
+			return tasks.ClassResultWithProbs{}, err
 		}
-		return candle.ClassifyFeedbackTextWithProbs(text)
+		class, confidence := deriveArgmax(distribution.Probabilities)
+		return tasks.ClassResultWithProbs{Class: class, Confidence: confidence, Probabilities: distribution.Probabilities, NumClasses: len(distribution.Probabilities)}, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("feedback detection failed: %w", err)
@@ -218,9 +218,10 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 		len(text), feedbackType, confidence)
 
 	return &FeedbackResult{
-		FeedbackType: feedbackType,
-		Confidence:   confidence,
-		Class:        result.Class,
+		FeedbackType:        feedbackType,
+		Confidence:          confidence,
+		ConfidenceAvailable: true,
+		Class:               result.Class,
 	}, nil
 }
 
@@ -236,7 +237,7 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 // returned no probability for it, the model's own prediction is kept, since a
 // satisfied reading nothing supports is the defect this replaces.
 func (d *FeedbackDetector) applyThreshold(
-	feedbackType string, result candle.ClassResultWithProbs, threshold float32,
+	feedbackType string, result tasks.ClassResultWithProbs, threshold float32,
 ) (string, float32) {
 	if result.Confidence >= threshold {
 		return feedbackType, result.Confidence
@@ -266,4 +267,17 @@ func (d *FeedbackDetector) GetMapping() *FeedbackMapping {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.mapping
+}
+
+func (d *FeedbackDetector) Close() error {
+	if d == nil {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.initialized = false
+	if d.backend != nil {
+		return d.backend.Close()
+	}
+	return nil
 }

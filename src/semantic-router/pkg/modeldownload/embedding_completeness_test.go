@@ -15,7 +15,7 @@ const (
 )
 
 func newEmbeddingOnlyConfig() *config.RouterConfig {
-	return &config.RouterConfig{
+	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
 			testEmbeddingModelPath: testEmbeddingRepoID,
 		},
@@ -25,6 +25,9 @@ func newEmbeddingOnlyConfig() *config.RouterConfig {
 			},
 		},
 	}
+	cfg.EmbeddingConfig.ModelType = "mmbert"
+	cfg.Tools.Enabled = true
+	return cfg
 }
 
 func findSpecByPath(specs []ModelSpec, localPath string) (ModelSpec, bool) {
@@ -38,9 +41,6 @@ func findSpecByPath(specs []ModelSpec, localPath string) (ModelSpec, bool) {
 
 func requireCandleEmbeddingRuntime(t *testing.T) {
 	t.Helper()
-	if compiledEmbeddingRuntime != "candle" {
-		t.Skip("Candle-specific contract")
-	}
 }
 
 // TestBuildModelSpecsRequiresEmbeddingModelWeightsAndTokenizer guards #2172:
@@ -158,7 +158,7 @@ const (
 )
 
 func newCandleEmbeddingConfig() *config.RouterConfig {
-	return &config.RouterConfig{
+	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
 			testEmbeddingModelPath:  testEmbeddingRepoID,
 			testQwen3ModelPath:      "llm-semantic-router/mom-embedding-pro",
@@ -174,6 +174,14 @@ func newCandleEmbeddingConfig() *config.RouterConfig {
 			},
 		},
 	}
+	cfg.EmbeddingConfig.ModelType = "qwen3"
+	cfg.Tools.Enabled = true
+	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.EmbeddingModel = "mmbert"
+	cfg.Memory.Enabled = true
+	cfg.Memory.EmbeddingModel = "gemma"
+	cfg.VectorStore = &config.VectorStoreConfig{Enabled: true, EmbeddingModel: "multimodal"}
+	return cfg
 }
 
 // TestBuildModelSpecsRequiresCandleRuntimeFilesPerModel guards #2531: every candle

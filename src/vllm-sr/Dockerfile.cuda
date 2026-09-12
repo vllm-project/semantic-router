@@ -227,7 +227,7 @@ COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
 RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
     mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-    cargo build --release \
+    cargo build --release --lib --locked \
       --no-default-features \
       --features cuda-dynamic \
       --target x86_64-unknown-linux-gnu && \
@@ -239,7 +239,7 @@ COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
 RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-    cargo build --release \
+    cargo build --release --lib --locked \
       --no-default-features \
       --features cuda-dynamic \
       --target x86_64-unknown-linux-gnu
@@ -251,8 +251,7 @@ RUN mkdir -p /build/out && \
     ls -la /build/out/ && \
     file /build/out/libonnx_semantic_router.so
 
-# Stage 2: Build Go semantic router. Identical to Dockerfile.rocm; uses the
-# onnx build tag and go.onnx.mod.
+# Stage 2: Build the same multi-provider Go module as the CPU/ROCm images.
 FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
 WORKDIR /build
@@ -264,8 +263,10 @@ COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
-COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/../onnx-binding/
+COPY candle-binding/go.mod candle-binding/*.go /build/../candle-binding/
+COPY --from=rust-builder /build/out/ /build/../candle-binding/target/release/
+COPY onnx-binding/go.mod /build/../onnx-binding/
+COPY onnx-binding/instance/ /build/../onnx-binding/instance/
 COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
 
 COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
@@ -274,15 +275,21 @@ COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
 COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
+COPY openvino-binding/go.mod openvino-binding/*.go /build/../openvino-binding/
 COPY src/semantic-router/ .
+COPY tools/docker/check-native-abi.sh /build/check-native-abi.sh
+RUN bash /build/check-native-abi.sh \
+    /usr/local/lib/libcandle_semantic_router.so \
+    /usr/local/lib/libonnx_semantic_router.so
+
 
 RUN if [ "$TARGETARCH" != "amd64" ]; then \
       echo "CUDA vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
     fi && \
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
     CGO_CFLAGS="-I/build/../onnx-binding" \
-    CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
-    go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd
+    CGO_LDFLAGS="-L/build/../candle-binding/target/release -lcandle_semantic_router -L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
+    go build -buildvcs=false -ldflags="-w -s" -o router ./cmd
 
 # Stage 3: Final router runtime image (CUDA 12.4 + ONNX Runtime GPU)
 # ============================================================================
@@ -367,8 +374,7 @@ COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so \
     LD_LIBRARY_PATH=/usr/local/lib:/opt/onnxruntime/capi:/usr/local/cuda/lib64
 
-# Force ONNX backend (vs candle) for this image. The router supports either
-# at runtime; ROCm/CUDA images make sense only with AI_BINDING=onnx.
+# Keep the historical launcher setting; task bindings select each provider.
 ENV AI_BINDING=onnx
 
 WORKDIR /app

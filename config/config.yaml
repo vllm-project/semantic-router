@@ -151,6 +151,8 @@ evaluation:
         score: 0.79
 routing:
   strategy: priority
+  # Optional recipe-local consumer bindings to named model deployments.
+  model_bindings: {}
   modelCards:
     - name: qwen3-8b
       display_name: Qwen3 8B reference model
@@ -2203,6 +2205,8 @@ global:
             key_prefix: "vllm-sr:flow:state:"
 
   model_catalog:
+    # Named physical deployments and their shared admission budgets.
+    deployments: {}
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro

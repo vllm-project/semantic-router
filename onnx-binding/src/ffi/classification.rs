@@ -140,7 +140,7 @@ fn get_tok_classifiers() -> &'static Mutex<HashMap<String, MmBertTokenClassifier
 ///
 /// # Returns
 /// true on success, false on error
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn init_sequence_classifier(
     name: *const c_char,
     model_path: *const c_char,
@@ -202,7 +202,7 @@ pub extern "C" fn init_sequence_classifier(
 ///
 /// # Returns
 /// true on success, false on error
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn init_token_classifier(
     name: *const c_char,
     model_path: *const c_char,
@@ -256,7 +256,7 @@ pub extern "C" fn init_token_classifier(
 }
 
 /// Check if a classifier is loaded
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
@@ -288,7 +288,7 @@ pub extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
 ///
 /// # Returns
 /// 0 on success, -1 on error
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn classify_text(
     classifier_name: *const c_char,
     text: *const c_char,
@@ -373,7 +373,7 @@ pub extern "C" fn classify_text(
 ///
 /// # Returns
 /// 0 on success, -1 on error
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn detect_pii(
     classifier_name: *const c_char,
     text: *const c_char,
@@ -477,7 +477,7 @@ pub extern "C" fn detect_pii(
 // ============================================================================
 
 /// Free classification result
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn free_classification_result(result: *mut ClassificationResultFFI) {
     if result.is_null() {
         return;
@@ -502,7 +502,7 @@ pub extern "C" fn free_classification_result(result: *mut ClassificationResultFF
 }
 
 /// Free PII result
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
     if result.is_null() {
         return;
@@ -548,7 +548,7 @@ pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
 ///
 /// # Returns
 /// 0 on success, -1 on error
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn classify_batch(
     classifier_name: *const c_char,
     texts: *const *const c_char,

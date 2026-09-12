@@ -66,12 +66,13 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
-	Embeddings CanonicalEmbeddingModels   `yaml:"embeddings"`
-	System     CanonicalSystemModels      `yaml:"system"`
-	External   []ExternalModelConfig      `yaml:"external,omitempty"`
-	KBs        []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
-	Modules    CanonicalModelModules      `yaml:"modules"`
-	Admission  map[string]AdmissionConfig `yaml:"admission,omitempty"`
+	Deployments map[string]ModelDeployment `yaml:"deployments,omitempty"`
+	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
+	System      CanonicalSystemModels      `yaml:"system"`
+	External    []ExternalModelConfig      `yaml:"external,omitempty"`
+	KBs         []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
+	Modules     CanonicalModelModules      `yaml:"modules"`
+	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -221,6 +222,9 @@ func normalizeSparseCanonicalCategoryOverride(
 	resolved *CanonicalGlobal,
 	rawOverride *StructuredPayload,
 ) error {
+	if err := normalizeCanonicalPromptGuardBackend(&resolved.ModelCatalog.Modules.PromptGuard.PromptGuardConfig, rawOverride); err != nil {
+		return err
+	}
 	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
 	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
 		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
@@ -375,6 +379,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
+	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
 	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
 	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), modelCatalog.KBs...)
@@ -488,4 +493,26 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 		return "", fmt.Errorf("model_ref %q is not configured in global.model_catalog.system", ref)
 	}
 	return modelID, nil
+}
+
+// Explicit backend overrides clear only inherited defaults; a legacy protocol
+// in canonical input must be converted by the migration command.
+func normalizeCanonicalPromptGuardBackend(model *PromptGuardConfig, rawOverride *StructuredPayload) error {
+	if rawOverride == nil || rawOverride.IsEmpty() {
+		return nil
+	}
+	var global map[string]interface{}
+	if err := rawOverride.DecodeInto(&global); err != nil {
+		return err
+	}
+	catalog := nestedStringMap(global["model_catalog"])
+	modules := nestedStringMap(catalog["modules"])
+	raw := nestedStringMap(modules["prompt_guard"])
+	if protocol, ok := raw["protocol"].(string); ok && strings.TrimSpace(protocol) != "" {
+		return fmt.Errorf("global.model_catalog.modules.prompt_guard.protocol is legacy; run vllm-sr config migrate to declare a named backend")
+	}
+	if hasRawKey(raw, "backend") && !hasRawKey(raw, "variant") {
+		model.Variant = ""
+	}
+	return nil
 }

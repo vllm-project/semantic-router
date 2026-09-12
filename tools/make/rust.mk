@@ -201,6 +201,7 @@ test-jailbreak-classifier: $(if $(CI),rust-ci,rust) ## Test jailbreak classifier
 
 # Build the Rust library (with CUDA by default, Flash Attention optional)
 # Set ENABLE_FLASH_ATTN=1 to enable Flash Attention: make rust ENABLE_FLASH_ATTN=1
+rust: build-onnx-binding
 rust: ## Ensure Rust is installed and build the Rust library with CUDA support (Flash Attention optional via ENABLE_FLASH_ATTN=1)
 	@$(LOG_TARGET)
 	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
@@ -244,6 +245,7 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support (
 	cargo build --release'
 
 # Build the Rust library without CUDA (for CI/CD environments)
+rust-ci: build-onnx-binding
 rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
 	@$(LOG_TARGET)
 	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \

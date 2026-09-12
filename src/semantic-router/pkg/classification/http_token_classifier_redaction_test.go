@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -68,11 +69,11 @@ func TestTokenSpansErrorsCarryNoProviderOrInputText(t *testing.T) {
 			if tc.model != "" {
 				cfg.ModelName = tc.model
 			}
-			backend, err := newHTTPTokenClassifierInference(cfg, testPIIMapping(), time.Second)
+			backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), time.Second)
 			if err != nil {
-				t.Fatalf("newHTTPTokenClassifierInference: %v", err)
+				t.Fatalf("newPIIHTTPTokenClassifierInference: %v", err)
 			}
-			_, err = backend.ClassifyTokens(input)
+			_, err = backend.classifyTokens(context.Background(), input)
 			if err == nil {
 				t.Fatal("expected an error")
 			}

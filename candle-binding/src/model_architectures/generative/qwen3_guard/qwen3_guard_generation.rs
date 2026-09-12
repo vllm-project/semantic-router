@@ -203,7 +203,7 @@ fn prefix_cache_error(source: &str) -> UnifiedError {
     }
 }
 
-fn cached_guard_suffix(text: &str, mode: &str) -> String {
+pub(super) fn cached_guard_suffix(text: &str, mode: &str) -> String {
     let user_label = if mode == "output" {
         "ASSISTANT"
     } else {

@@ -14,6 +14,7 @@ build: $(if $(CI),rust-ci,rust) build-router
 # Production builds (default) only accept user_id from auth headers (x-authz-user-id)
 build-router: ## Build the router binary
 build-router: $(if $(CI),rust-ci,rust)
+	@bash tools/docker/check-native-abi.sh candle-binding/target/release/libcandle_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so) onnx-binding/target/release/libonnx_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 ifdef DEV
@@ -26,20 +27,22 @@ endif
 run-router: ## Run the router with the specified config
 run-router: build-router
 	@echo "Running router with config: ${CONFIG_FILE}"
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
 
 # Run the router with e2e config for testing
 run-router-e2e: ## Run the router with e2e config for testing
 run-router-e2e: build-router download-models
 	@echo "Running router with e2e config: e2e/config/config.e2e.yaml"
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=e2e/config/config.e2e.yaml
 
 # Build the ONNX binding Rust library
-build-onnx-binding: ## Build the ONNX Runtime binding (mmBERT 32K support)
+ONNX_FEATURES ?= dynamic
+
+build-onnx-binding: ## Build independent ORT instances (ONNX_FEATURES=migraphx-dynamic for AMD)
 	@echo "Building ONNX binding Rust library..."
-	@cd onnx-binding && cargo build --release
+	@cd onnx-binding && cargo build --release --lib --locked --no-default-features --features $(ONNX_FEATURES)
 	@echo "ONNX binding built successfully"
 
 # Build the ml-binding Rust library (required by router-onnx at runtime)
@@ -48,24 +51,13 @@ build-ml-binding: ## Build the ml-binding Rust library
 	@cd ml-binding && cargo build --release
 	@echo "ml-binding built successfully"
 
-# Build the router with ONNX binding support
-# Uses -modfile=go.onnx.mod (candle-binding => ../../onnx-binding)
-# Uses -tags=onnx to select onnx-binding CGO flags at compile time
-build-router-onnx: ## Build the router binary with ONNX binding
-build-router-onnx: build-onnx-binding build-ml-binding
-	@$(LOG_TARGET)
-	@mkdir -p bin
-	@cd src/semantic-router && \
-		CGO_LDFLAGS="-L../../onnx-binding/target/release" \
-		go build -modfile=go.onnx.mod -tags=onnx,milvus -o ../../bin/router-onnx ./cmd
-	@echo "Router built with ONNX binding support"
+# Compatibility name: providers are selected by prepared task bindings.
+# The normal Go module includes both native modules; no module substitution.
+build-router-onnx: build-router ## Build the same multi-provider router under its legacy filename
+	@cp bin/router bin/router-onnx
 
-# Run the router with ONNX binding (uses mmBERT 32K via ONNX Runtime)
-run-router-onnx: ## Run the router with ONNX binding (mmBERT embedding model)
-run-router-onnx: build-router-onnx
-	@echo "Running router with ONNX binding..."
-	@echo "Config: $${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml}"
-	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/ml-binding/target/release && \
+run-router-onnx: build-router-onnx ## Run with per-task Candle/ORT bindings (set ORT_DYLIB_PATH)
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
 
 # Unit test semantic-router
@@ -74,7 +66,7 @@ run-router-onnx: build-router-onnx
 test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false / SKIP_QDRANT_TESTS=false to enable)
 test-semantic-router: build-router
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
 	export SKIP_QDRANT_TESTS=$${SKIP_QDRANT_TESTS:-true} && \
 	export SKIP_REDIS_TESTS=$${SKIP_REDIS_TESTS:-true} && \
@@ -248,7 +240,7 @@ bench-hallucination-full:
 run-router-hallucination: ## Run the router with hallucination detection enabled
 run-router-hallucination: build-router download-models
 	@echo "Running router with hallucination detection config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=e2e/config/config.hallucination.yaml
 
 # Test hallucination detection models by verifying router startup and model loading
@@ -264,7 +256,7 @@ test-hallucination-detection: build-router download-models
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
@@ -351,7 +343,7 @@ test-hallucination-detection-manual: build-router download-models
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
@@ -442,7 +434,7 @@ test-image-gen:
 run-router-modality: ## Run router with modality routing config (AR + Diffusion + Both)
 run-router-modality: build-router
 	@echo "Running router with modality routing config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=e2e/config/config.modality-routing.yaml --enable-system-prompt-api=true
 
 # Test modality routing — sends prompts for AR, DIFFUSION, and BOTH through Envoy

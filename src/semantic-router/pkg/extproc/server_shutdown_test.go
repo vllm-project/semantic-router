@@ -18,6 +18,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -90,7 +91,7 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 		<-releaseReloadCh
 		return modelruntime.EmbeddingRuntimeState{}, nil
 	}
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		resources := newResourceScope()
 		resources.add(func() error {
 			close(candidateResourcesClosed)

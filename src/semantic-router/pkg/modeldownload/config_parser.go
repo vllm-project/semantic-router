@@ -1,7 +1,6 @@
 package modeldownload
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -93,84 +92,6 @@ func isModelDirectory(path string) bool {
 	return true
 }
 
-// BuildModelSpecs builds ModelSpec list from config and registry
-func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
-	// Extract shared/default paths plus paths owned by request-reachable named
-	// recipes. Declared but unmapped recipes remain validated by config and
-	// classifier construction without forcing unused model snapshots onto disk.
-	paths := filterDisabledOptionalModelPaths(cfg, extractProvisioningModelPaths(cfg))
-	requiredFilesByModel := ExtractRequiredFilesByModel(cfg)
-	addEmbeddingModelRequiredFiles(cfg, requiredFilesByModel)
-	excludePatternsByModel := runtimeEmbeddingModelExcludePatterns(cfg)
-
-	// Allow empty paths for API-only configurations
-	if len(paths) == 0 {
-		return []ModelSpec{}, nil
-	}
-
-	// Get model registry from config
-	registry := cfg.MoMRegistry
-	if len(registry) == 0 {
-		return nil, fmt.Errorf("mom_registry is empty in configuration")
-	}
-
-	// Build specs
-	var specs []ModelSpec
-	for _, path := range paths {
-		repoID, ok := registry[path]
-		if !ok {
-			return nil, fmt.Errorf("model path %s not found in mom_registry", path)
-		}
-
-		requiredFiles := append([]string{}, DefaultRequiredFiles...)
-		for _, extra := range requiredFilesByModel[path] {
-			if extra != "" && !slices.Contains(requiredFiles, extra) {
-				requiredFiles = append(requiredFiles, extra)
-			}
-		}
-
-		specs = append(specs, ModelSpec{
-			LocalPath:       path,
-			RepoID:          repoID,
-			Revision:        "main",
-			RequiredFiles:   requiredFiles,
-			ExcludePatterns: excludePatternsByModel[config.ResolveModelPath(path)],
-		})
-	}
-
-	return specs, nil
-}
-
-func extractProvisioningModelPaths(cfg *config.RouterConfig) []string {
-	if cfg == nil {
-		return nil
-	}
-
-	paths := make([]string, 0)
-	seen := make(map[string]bool)
-
-	// Canonical configs mirror the default recipe into the flat routing fields.
-	// Strip the normalized recipe registry before walking shared/default state so
-	// named recipes can be added back according to request reachability.
-	sharedAndDefault := *cfg
-	sharedAndDefault.Recipes = nil
-	sharedAndDefault.Entrypoints = nil
-	if !cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
-		sharedAndDefault.Signals = config.Signals{}
-		sharedAndDefault.Projections = config.Projections{}
-		sharedAndDefault.Decisions = nil
-	}
-	extractFromValue(reflect.ValueOf(&sharedAndDefault), &paths, seen)
-
-	for _, recipe := range cfg.ReachableRoutingRecipes() {
-		if recipe == nil || recipe.Name == config.DefaultRecipeName {
-			continue
-		}
-		extractFromValue(reflect.ValueOf(recipe.Profile), &paths, seen)
-	}
-	return paths
-}
-
 // embeddingModelWeightFiles are the files the candle embedding runtime loads to bring a
 // semantic embedding model up. They are deliberately stricter than the nested-weight
 // heuristic in IsModelComplete: a directory holding only config.json + onnx/ (the layout
@@ -242,30 +163,6 @@ func candleEmbeddingModelExcludePatterns(cfg *config.RouterConfig) map[string][]
 		excluded[resolved] = append([]string(nil), onnxWeightExcludePatterns...)
 	}
 	return excluded
-}
-
-// addEmbeddingModelRequiredFiles applies the completeness contract of the
-// embedding runtime compiled into this binary. The public "candle" backend
-// name is intentionally stable when an ONNX build replaces candle-binding at
-// link time, so the contract must be selected at compile time too.
-func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return
-	}
-
-	for path, files := range runtimeEmbeddingModelRequiredFiles(cfg) {
-		if path == "" || !strings.HasPrefix(path, "models/") {
-			continue
-		}
-
-		existing := requiredFilesByModel[path]
-		for _, fileName := range files {
-			if !slices.Contains(existing, fileName) {
-				existing = append(existing, fileName)
-			}
-		}
-		requiredFilesByModel[path] = existing
-	}
 }
 
 // ExtractRequiredFilesByModel derives per-model completeness requirements from

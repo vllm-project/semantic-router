@@ -3,45 +3,41 @@ package classification
 import (
 	"context"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
-// This file documents the three-tier classifier-backend abstraction from the
-// #2587 pluggable classifier backend mechanism (docs/plans in the main
-// worktree). Each tier is matched to a model output shape rather than forcing
-// every classifier through one universal interface:
-//
-//   - SequenceClassifierBackend (classifier_jailbreak_init.go) - text -> full
-//     label/probability distribution. Implemented and wired for jailbreak
-//     this round; category and hallucination-binary are intended future
-//     consumers.
-//   - ScoringBackend (below) - text -> a single continuous score, for
-//     regression-style models such as a query-difficulty scorer. Implemented
-//     by the complexity signal's score.v1 backend
-//     (complexity_remote_backend.go).
-//   - TokenClassifierBackend (below) - text -> spans, for PII / GLiGuard-style
-//     entity extraction. Implemented by HTTPTokenClassifierInference
-//     (http_token_classifier.go) speaking token_spans.v1; PII is the first
-//     consumer, hallucination (#2928) the intended second.
+// SequenceClassificationResult is the engine-neutral complete distribution in
+// a prepared binding's label order. Consumers derive argmax or positive-label
+// risk from this distribution rather than synthesizing it from a selected ID.
+type SequenceClassificationResult = tasks.LabelDistribution
 
-// ScoringBackend is implemented by classifier backends that report a single
-// continuous score for a piece of text, rather than a label distribution
-// (e.g. a trained query-difficulty model). A ScoringBackend's output is
-// expected to plug into existing threshold-based decision logic unchanged -
-// it does not carry a label of its own.
-//
-// Score takes the caller's context so a request that is abandoned cancels the
-// outbound call rather than running on to the backend's own deadline.
+// SequenceClassifierBackend reports every label's probability, preserving the
+// caller's cancellation and deadline across native and remote adapters.
+type SequenceClassifierBackend interface {
+	Classify(ctx context.Context, text string) (SequenceClassificationResult, error)
+}
+
+// CategoryInference retains the historical top-1 and full-distribution methods.
+// A provider lacking a full distribution returns it absent, never fabricated.
+type CategoryInference interface {
+	Classify(ctx context.Context, text string) (tasks.ClassResult, error)
+	ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error)
+}
+
+// PIIInference returns byte-aligned spans in the exact input and an explicit
+// error for partial input. PII policy is applied outside the model adapter.
+type PIIInference = TokenClassifierBackend
+
+// ScoringBackend reports a raw continuous score. The prepared task/binding
+// supplies units, direction and boundaries; this value is not a probability
+// unless the model's contract explicitly says so.
 type ScoringBackend interface {
 	Score(ctx context.Context, text string) (float64, error)
 }
 
-// TokenClassifierBackend is implemented by classifier backends that return
-// per-span entities within a text, rather than a single label or score (e.g.
-// PII entity extraction or a GLiGuard-style zero-shot span classifier).
-// Entity offsets are byte offsets into the exact input string, matching the
-// native Candle path; wire formats that count in code points convert once at
-// the adapter boundary.
+// TokenClassifierBackend reports spans with UTF-8 byte offsets into the exact
+// input. Wire formats using code points convert once at the adapter boundary.
+// Entity labels and outside labels belong to the task, not the engine or PII.
 type TokenClassifierBackend interface {
-	ClassifyTokens(text string) ([]candle_binding.TokenEntity, error)
+	ClassifyTokens(ctx context.Context, text string) (tasks.TokenClassificationResult, error)
 }

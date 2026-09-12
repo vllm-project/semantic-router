@@ -210,7 +210,7 @@ func TestHandleUploadFileUsesResolvedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestHandleUploadFileHonorsPublishedConfigMutation(t *testing.T) {
+func TestHandleUploadFileKeepsActiveConfigUntilGenerationPublication(t *testing.T) {
 	apiServer, _ := newFileUploadServer(t)
 	apiServer.config = vectorStoreUploadConfig(1, ".pdf")
 
@@ -236,7 +236,14 @@ func TestHandleUploadFileHonorsPublishedConfigMutation(t *testing.T) {
 	apiServer.publishConfigMutation(vectorStoreUploadConfig(1, ".txt"))
 
 	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("candidate formats applied before publication, got %d: %s", rr.Code, rr.Body.String())
+	}
+	active := vectorStoreUploadConfig(1, ".txt")
+	apiServer.runtimeRegistry.UpdateConfig(active)
+	apiServer.runtimeConfig = newLiveRuntimeConfig(apiServer.config, apiServer.runtimeRegistry.CurrentConfig, nil)
+	rr = uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected published formats to apply, got %d: %s", rr.Code, rr.Body.String())
+		t.Fatalf("published generation formats did not apply, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

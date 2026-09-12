@@ -7,9 +7,7 @@ import (
 	"path"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -17,33 +15,13 @@ import (
 func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupstatus.State) []ModelInfo {
 	var models []ModelInfo
 
-	embeddingInfo, err := candle_binding.GetEmbeddingModelsInfo()
+	prepared, release, err := s.acquireEmbeddings()
 	if err != nil {
-		logging.Warnf("Failed to get embedding models info: %v", err)
 		return models
 	}
-
-	for _, model := range embeddingInfo.Models {
-		modelPath := normalizeEmbeddingModelPath(model.ModelPath, model.ModelName)
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelPath)
-		}
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelName)
-		}
-
-		models = append(models, ModelInfo{
-			Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
-			Type:      "embedding",
-			Loaded:    model.IsLoaded,
-			ModelPath: modelPath,
-			Metadata: map[string]string{
-				"model_type":           model.ModelName,
-				"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
-				"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
-				"matryoshka_supported": "true",
-			},
-		})
+	defer release()
+	for _, model := range prepared.Models() {
+		models = append(models, ModelInfo{Name: fmt.Sprintf("%s_embedding_model", model.Name), Type: "embedding", Loaded: true, ModelPath: model.Artifact, Metadata: map[string]string{"model_type": model.Name, "provider": model.Backend, "max_sequence_length": fmt.Sprint(model.MaxTokens), "default_dimension": fmt.Sprint(model.Dimension), "pooling": model.Pooling, "normalization": model.Normalization, "modalities": strings.Join(model.Modalities, ",")}})
 	}
 
 	for i := range models {

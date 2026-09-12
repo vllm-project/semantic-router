@@ -31,7 +31,7 @@ func TestNewMemoryChunkStore_NilStore(t *testing.T) {
 }
 
 func TestNewMemoryChunkStore_ValidStore(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	assert.NotNil(t, extractor, "should return non-nil for valid store")
 }
@@ -41,7 +41,7 @@ func TestNewMemoryChunkStore_ValidStore(t *testing.T) {
 // =============================================================================
 
 func TestProcessResponse_StoresChunk(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
 	err := extractor.ProcessResponse(
@@ -64,7 +64,7 @@ func TestProcessResponse_StoresChunk(t *testing.T) {
 }
 
 func TestProcessResponse_StripsThinkTags(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
 	err := extractor.ProcessResponse(
@@ -83,7 +83,7 @@ func TestProcessResponse_StripsThinkTags(t *testing.T) {
 }
 
 func TestProcessResponse_StripsUnclosedThinkTags(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
 	err := extractor.ProcessResponse(
@@ -104,7 +104,7 @@ func TestProcessResponse_StripsUnclosedThinkTags(t *testing.T) {
 }
 
 func TestProcessResponse_EmptyTurnSkipped(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
 	err := extractor.ProcessResponse(
@@ -119,7 +119,7 @@ func TestProcessResponse_EmptyTurnSkipped(t *testing.T) {
 }
 
 func TestProcessResponse_OnlyUserMessage(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
 	err := extractor.ProcessResponse(
@@ -135,7 +135,7 @@ func TestProcessResponse_OnlyUserMessage(t *testing.T) {
 }
 
 func TestProcessResponse_OnlyAssistantResponse(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
 	err := extractor.ProcessResponse(
@@ -174,7 +174,7 @@ func TestProcessResponse_NilExtractor(t *testing.T) {
 }
 
 func TestProcessResponse_MultipleTurns(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -301,7 +301,7 @@ func TestBuildSessionChunk_WindowLargerThanHistory(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -336,7 +336,7 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -377,7 +377,7 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -403,7 +403,7 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_NilHistory(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
@@ -467,7 +467,7 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 		},
 		{
 			name:       "store error",
-			store:      &failingMemoryStore{InMemoryStore: NewInMemoryStore()},
+			store:      &failingMemoryStore{InMemoryStore: newTestInMemoryStore()},
 			user:       "What should be remembered from this detailed request?",
 			assistant:  "This detailed response should attempt to store a conversation memory.",
 			wantStored: 0,
@@ -480,7 +480,7 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			MemoryExtractionFactsCount.Reset()
 			store := tt.store
 			if store == nil {
-				store = NewInMemoryStore()
+				store = newTestInMemoryStore()
 			}
 			extractor := NewMemoryChunkStore(store)
 			ctx := context.Background()

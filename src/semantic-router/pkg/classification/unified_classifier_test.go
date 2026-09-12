@@ -196,8 +196,8 @@ func TestGetGlobalUnifiedClassifier(t *testing.T) {
 	classifier1 := GetGlobalUnifiedClassifier()
 	classifier2 := GetGlobalUnifiedClassifier()
 
-	if classifier1 != classifier2 {
-		t.Error("Expected same instance from GetGlobalUnifiedClassifier")
+	if classifier1 == classifier2 {
+		t.Error("Expected independent owners from compatibility constructor")
 	}
 	if classifier1 == nil {
 		t.Error("Expected non-nil classifier")

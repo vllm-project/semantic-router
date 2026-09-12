@@ -839,6 +839,49 @@ impl Qwen3MultiLoRAClassifier {
         })
     }
 
+    pub(crate) fn zero_shot_prompt(text: &str, categories: &[String]) -> String {
+        let categories_str = categories.join(", ");
+        let instruction = format!(
+            "You are an expert classifier. Classify the following into exactly ONE category. Respond with ONLY the category name.\n\nCategories: {}\n\nClassify:\n{}\nAnswer:",
+            categories_str, text
+        );
+        format!(
+            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+            instruction
+        )
+    }
+
+    pub(crate) fn input_token_count(
+        &self,
+        text: &str,
+        adapter: Option<&str>,
+        categories: &[String],
+    ) -> Result<usize, String> {
+        let prompt = match adapter {
+            Some(name) => self.format_prompt(text, name).map_err(|e| e.to_string())?,
+            None => Self::zero_shot_prompt(text, categories),
+        };
+        self.tokenizer
+            .encode(prompt, true)
+            .map(|e| e.len())
+            .map_err(|e| e.to_string())
+    }
+
+    pub(crate) fn category_token_lengths(
+        &self,
+        categories: &[String],
+    ) -> Result<Vec<usize>, String> {
+        categories
+            .iter()
+            .map(|label| {
+                self.tokenizer
+                    .encode(format!(" {}", label), false)
+                    .map(|e| e.len())
+                    .map_err(|e| e.to_string())
+            })
+            .collect()
+    }
+
     /// List all loaded adapters
     pub fn list_adapters(&self) -> Vec<String> {
         self.adapters.keys().cloned().collect()
@@ -893,17 +936,7 @@ impl Qwen3MultiLoRAClassifier {
         // Clear KV cache before new classification
         self.base_model.clear_kv_cache();
 
-        // Format prompt for zero-shot classification
-        let categories_str = categories.join(", ");
-        let instruction = format!(
-            "You are an expert classifier. Classify the following into exactly ONE category. Respond with ONLY the category name.\n\nCategories: {}\n\nClassify:\n{}\nAnswer:",
-            categories_str, text
-        );
-
-        let prompt = format!(
-            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
-            instruction
-        );
+        let prompt = Self::zero_shot_prompt(text, &categories);
 
         // Tokenize
         let encoding = self.tokenizer.encode(prompt.as_str(), true).map_err(|e| {
@@ -1036,17 +1069,7 @@ impl Qwen3MultiLoRAClassifier {
         // Clear KV cache before new classification
         self.base_model.clear_kv_cache();
 
-        // Format prompt for zero-shot classification
-        let categories_str = categories.join(", ");
-        let instruction = format!(
-            "You are an expert classifier. Classify the following into exactly ONE category. Respond with ONLY the category name.\n\nCategories: {}\n\nClassify:\n{}\nAnswer:",
-            categories_str, text
-        );
-
-        let prompt = format!(
-            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
-            instruction
-        );
+        let prompt = Self::zero_shot_prompt(text, &categories);
 
         // Tokenize prompt
         let prompt_encoding = self.tokenizer.encode(prompt.as_str(), true).map_err(|e| {

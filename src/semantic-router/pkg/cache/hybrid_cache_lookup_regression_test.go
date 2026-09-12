@@ -21,9 +21,10 @@ var _ = Describe("Hybrid cache cross-model fallback", func() {
 		cfg := &config.MilvusConfig{}
 		cfg.Collection.VectorField.Dimension = 384
 		milvus := &MilvusCache{
-			enabled:        true,
-			config:         cfg,
-			embeddingModel: "bert",
+			enabled:           true,
+			config:            cfg,
+			embeddingModel:    "bert",
+			embeddingProvider: cacheTestEmbeddingProvider(),
 			queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {
 				return queryResult, queryErr
 			},

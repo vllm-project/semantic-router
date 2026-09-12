@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -30,34 +31,81 @@ func buildClassifierWithAdmission(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 	admissionRegistry *admission.Registry,
+	runtimeOptions ...RecipeRuntimeOptions,
 ) (*Classifier, error) {
-	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
-		return nil, err
+	if cfg != nil && cfg.RoutingScope == "" {
+		cfg = cfg.ConfigForRecipe(cfg.DefaultRecipe())
 	}
-	if err := config.ValidatePIIModelBackend(cfg); err != nil {
-		return nil, err
+	var runtime *native.Runtime
+	var runtimeOption RecipeRuntimeOptions
+	if len(runtimeOptions) > 0 {
+		runtimeOption = runtimeOptions[0]
+		runtime = runtimeOption.Runtime
 	}
-	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
+	models, err := newClassifierModelRuntime(cfg, runtime)
 	if err != nil {
 		return nil, err
 	}
-	piiInitializer, piiInference, err := buildPIIDependencies(cfg, piiMapping)
-	if err != nil {
-		return nil, err
+	cfg = models.cfg
+	routingEnabled := models.recipe != config.DefaultRecipeName || cfg.IsRecipeReachableForRouting(config.DefaultRecipeName)
+	if routingEnabled {
+		categoryMapping, piiMapping, jailbreakMapping, err = models.mappings(categoryMapping, piiMapping, jailbreakMapping)
+		if err != nil {
+			return nil, err
+		}
 	}
-	initialOptions := []option{
-		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
-		withPII(piiMapping, piiInitializer, piiInference),
+	if validationErr := config.ValidateCategoryModelBackend(cfg); validationErr != nil {
+		return nil, validationErr
+	}
+	if validationErr := config.ValidatePIIModelBackend(cfg); validationErr != nil {
+		return nil, validationErr
+	}
+	var initialOptions []option
+	if routingEnabled {
+		jailbreakInitializer, jailbreakInference, jailbreakErr := buildJailbreakDependencies(cfg, jailbreakMapping, models)
+		if jailbreakErr != nil {
+			return nil, jailbreakErr
+		}
+		piiInitializer, piiInference, piiErr := buildPIIDependencies(cfg, piiMapping, models)
+		if piiErr != nil {
+			if closer, ok := jailbreakInference.(interface{ Close() error }); ok {
+				_ = closer.Close()
+			}
+			return nil, piiErr
+		}
+		initialOptions = []option{
+			withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
+			withPII(piiMapping, piiInitializer, piiInference),
+		}
 	}
 	if admissionRegistry != nil {
 		initialOptions = append(initialOptions, withAdmissionRegistry(admissionRegistry))
 	}
 	builder := newClassifierOptionBuilder(cfg, initialOptions)
+	transferred := false
+	defer func() {
+		if !transferred {
+			builder.closePending()
+		}
+	}()
+	builder.models = models
+	if cfg.RoutingScope == "" || cfg.RoutingScope == config.DefaultRecipeName {
+		builder.embeddingSet = runtimeOption.Embeddings
+	}
 	options, err := builder.build(categoryMapping)
 	if err != nil {
 		return nil, err
 	}
-	return newClassifierWithOptions(cfg, options...)
+	classifier, err := newClassifierWithOptions(cfg, options...)
+	if err != nil {
+		return nil, err
+	}
+	classifier.models = models
+	classifier.embeddingSet = builder.embeddingSet
+	classifier.ownsEmbeddingSet = builder.ownsEmbeddingSet
+	classifier.embeddingProvider = builder.provider
+	transferred = true
+	return classifier, nil
 }
 
 // NewClassifier preserves the legacy convenience behavior for existing callers
@@ -140,7 +188,7 @@ func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
 		}
 		tasks = append(tasks, modelruntime.Task{
 			Name:       name,
-			BestEffort: true,
+			BestEffort: false,
 			Run: func(context.Context) error {
 				return init()
 			},
@@ -157,6 +205,11 @@ func (c *Classifier) Close() error {
 	if c == nil {
 		return nil
 	}
+	c.closeOnce.Do(func() { c.closeErr = c.closeResources() })
+	return c.closeErr
+}
+
+func (c *Classifier) closeResources() error {
 	var closeErrors []error
 	closeResource := func(name string, resource interface{}) {
 		closer, ok := resource.(interface{ Close() error })
@@ -168,6 +221,16 @@ func (c *Classifier) Close() error {
 		}
 	}
 
+	if c.ownsEmbeddingSet {
+		closeResource("embeddings", c.embeddingSet)
+	}
+	closeResource("cache NLI", c.polarityNLI)
+	closeResource("modality classifier", c.modalityInference)
+	closeResource("fact-check classifier", c.factCheckClassifier)
+	closeResource("feedback detector", c.feedbackDetector)
+	closeResource("hallucination detector", c.hallucinationDetector)
+	closeResource("endpoint hallucination detector", c.endpointHallucinationDetector)
+	closeResource("category classifier", c.categoryInference)
 	closeResource("MCP category classifier", c.mcpCategoryInitializer)
 	closeResource("jailbreak classifier", c.jailbreakInference)
 	closeResource("complexity score backend", c.complexityScoreBackend)
@@ -203,12 +266,12 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.jailbreak", false, c.usesJailbreakClassifier() && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
-	appendTask("classifier.fact_check", true, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
-	appendTask("classifier.hallucination", true, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
+	appendTask("classifier.fact_check", false, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
+	appendTask("classifier.hallucination", false, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
 	// Not best-effort: an NLI polarity mode with an unloadable model must fail
 	// startup rather than silently serve unverified cache hits.
 	appendTask("classifier.semantic_cache_nli", false, c.needsSemanticCacheNLIForRuntime(), c.initializeSemanticCacheNLI)
-	appendTask("classifier.feedback", true, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
+	appendTask("classifier.feedback", false, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 

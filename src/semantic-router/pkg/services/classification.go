@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -27,7 +29,14 @@ type ClassificationService struct {
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
 	configMutex       sync.RWMutex // Protects config access
-	evalSelector      EvalModelSelector
+	// Router generations already lease this service. These locks additionally
+	// drain model calls for standalone compatibility-service replacement.
+	runtimeMutex sync.RWMutex
+	reloadMutex  sync.Mutex
+	runtimeOwner io.Closer // nil when classifiers are borrowed from the router
+	modelPool    *binding.Pool
+	closed       bool
+	evalSelector EvalModelSelector
 }
 
 func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
@@ -58,6 +67,7 @@ func NewRecipeClassificationService(classifiers *classification.RecipeClassifier
 	}
 	return &ClassificationService{
 		classifier:        defaultClassifier,
+		unifiedClassifier: classification.NewUnifiedClassifierFromRecipe(defaultClassifier),
 		recipeClassifiers: classifiers,
 		config:            routerConfig,
 	}
@@ -67,13 +77,16 @@ func NewRecipeClassificationService(classifiers *classification.RecipeClassifier
 func NewClassificationService(classifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
 	return &ClassificationService{
 		classifier:        classifier,
-		unifiedClassifier: nil, // Will be initialized separately
+		unifiedClassifier: classification.NewUnifiedClassifierFromRecipe(classifier),
 		config:            config,
 	}
 }
 
 // NewUnifiedClassificationService creates a new service with unified classifier
 func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedClassifier, legacyClassifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
+	if unifiedClassifier == nil {
+		unifiedClassifier = classification.NewUnifiedClassifierFromRecipe(legacyClassifier)
+	}
 	return &ClassificationService{
 		classifier:        legacyClassifier,
 		unifiedClassifier: unifiedClassifier,
@@ -124,7 +137,11 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 	if unifiedClassifier == nil && legacyClassifier == nil {
 		logging.Warnf("No classifier initialized. Using placeholder service.")
 	}
-	return NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config), nil
+	service := NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config)
+	if legacyClassifier != nil {
+		service.runtimeOwner = legacyClassifier
+	}
+	return service, nil
 }
 
 // GetGlobalClassificationService returns the global classification service instance
@@ -163,6 +180,8 @@ func NewPlaceholderClassificationService() *ClassificationService {
 
 // ClassifyIntent performs intent classification using signal-driven architecture
 func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRequest) (*IntentResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	input, err := req.resolveSignalInput()
@@ -181,9 +200,9 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		processingTime := time.Since(start).Milliseconds()
 		return &IntentResponse{
 			Classification: Classification{
-				Category:         "general",
-				Confidence:       0.5,
-				ProcessingTimeMs: processingTime,
+				Category:            "general",
+				ConfidenceAvailable: confidenceAvailability(false),
+				ProcessingTimeMs:    processingTime,
 			},
 			RecommendedModel: "general-model",
 			RoutingDecision:  "placeholder_response",

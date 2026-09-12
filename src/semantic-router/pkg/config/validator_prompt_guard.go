@@ -21,6 +21,15 @@ func validatePromptGuardBackend(cfg *RouterConfig) error {
 // variant (local) and protocol (remote) are mutually exclusive, and each must
 // name a recognized value.
 func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
+	if cfg.Backend != nil {
+		if cfg.Variant != "" || cfg.Protocol != "" {
+			return fmt.Errorf("prompt_guard.backend is mutually exclusive with variant and legacy protocol")
+		}
+		if err := cfg.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
+			return fmt.Errorf("prompt_guard.%w", err)
+		}
+		return cfg.Backend.Validate()
+	}
 	if cfg.Variant != "" && cfg.Protocol != "" {
 		return fmt.Errorf("prompt_guard: variant %q and protocol %q are mutually exclusive - "+
 			"variant selects a local model, protocol selects a remote one", cfg.Variant, cfg.Protocol)
@@ -61,6 +70,20 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 // failure for every operator deployment. Tracked separately - fixing it means
 // changing how the operator serializes those two fields, not adding a check.
 func validatePromptGuardWiring(cfg *RouterConfig) error {
+	if cfg.PromptGuard.Backend != nil {
+		backend := cfg.PromptGuard.Backend
+		contract := RemoteClassifierContractLabelDistribution
+		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
+			contract = RemoteClassifierContractLabelDecision
+		}
+		if _, err := ResolveRemoteClassifierBackend(cfg, backend, ModelRoleGuardrail, contract); err != nil {
+			return fmt.Errorf("prompt_guard: %w", err)
+		}
+		if cfg.PromptGuard.Enabled && cfg.PromptGuard.JailbreakMappingPath == "" {
+			return fmt.Errorf("prompt_guard.jailbreak_mapping_path is required for an enabled backend")
+		}
+		return nil
+	}
 	if !cfg.PromptGuard.Enabled || cfg.PromptGuard.Protocol == "" {
 		return nil
 	}

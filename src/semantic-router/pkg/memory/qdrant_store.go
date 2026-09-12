@@ -208,7 +208,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbedding(mem.Content, s.embeddingConfig)
+		emb, err = GenerateEmbeddingWithContext(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
@@ -246,7 +246,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, nil
 	}
 
-	emb, err := GenerateEmbedding(opts.Query, s.embeddingConfig)
+	emb, err := GenerateEmbeddingWithContext(ctx, opts.Query, s.embeddingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -329,7 +329,7 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbedding(mem.Content, s.embeddingConfig)
+		emb, err = GenerateEmbeddingWithContext(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}

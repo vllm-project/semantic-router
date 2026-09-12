@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/alecthomas/participle/v2/lexer"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // Position represents a source location.
@@ -321,6 +323,7 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
+	ModelBindings        map[string]config.ModelBinding
 	Strategy             string
 	Entrypoints          []*EntrypointDecl
 	Recipes              []*RecipeDecl

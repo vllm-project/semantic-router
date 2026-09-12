@@ -10,15 +10,21 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	embeddingprovider "github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // getEmbeddingWithModelType is a package-level variable for computing single embeddings.
 // It exists so tests can override it.
 var (
-	getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
+	getEmbeddingWithModelType = func(text, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
+		return nativeEmbeddingResult(candle_binding.GetEmbeddingWithModelType(text, modelType, targetDim))
+	}
 	// getEmbedding2DMatryoshka is the 2D Matryoshka seam used when a target layer is configured.
-	getEmbedding2DMatryoshka = candle_binding.GetEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text, modelType string, targetLayer, targetDim int) (*tasks.EmbeddingResult, error) {
+		return nativeEmbeddingResult(candle_binding.GetEmbedding2DMatryoshka(text, modelType, targetLayer, targetDim))
+	}
 )
 
 // getMultiModalTextEmbedding computes a text embedding via the multimodal model.
@@ -133,6 +139,10 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
 
+	if c.keywordEmbeddingClassifier.provider != nil {
+		return c.keywordEmbeddingClassifier.WarmupCandidateEmbeddings()
+	}
+
 	modelType := strings.ToLower(strings.TrimSpace(c.Config.EmbeddingConfig.ModelType))
 	if modelType == "multimodal" {
 		mmPath := config.ResolveModelPath(c.Config.MultiModalModelPath)
@@ -180,24 +190,27 @@ func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, ph
 	var embedding []float32
 	var err error
 
-	switch backend {
-	case config.EmbeddingBackendOpenAICompatible:
-		if c.provider == nil {
-			return nil, fmt.Errorf("embedding provider is required for backend %q", backend)
+	if c.provider != nil {
+		embedding, err = embeddingprovider.Embed(context.Background(), c.provider, text, embeddingprovider.Options{Dimension: c.optimizationConfig.TargetDimension, Layer: c.optimizationConfig.TargetLayer})
+	} else {
+		switch backend {
+		case config.EmbeddingBackendOpenAICompatible:
+			if c.provider == nil {
+				return nil, fmt.Errorf("embedding provider is required for backend %q", backend)
+			}
+			embedding, err = c.provider.Embed(context.Background(), text)
+		case "openvino":
+			embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
+		case "candle":
+			var output *tasks.EmbeddingResult
+			output, err = getEmbedding2DMatryoshka(text, modelType, c.optimizationConfig.TargetLayer, c.optimizationConfig.TargetDimension)
+			if err == nil {
+				embedding = output.Embedding
+			}
+		default:
+			return nil, fmt.Errorf("unsupported embedding backend %q", backend)
 		}
-		embedding, err = c.provider.Embed(context.Background(), text)
-	case "openvino":
-		embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
-	case "candle":
-		var output *candle_binding.EmbeddingOutput
-		output, err = getEmbedding2DMatryoshka(text, modelType, c.optimizationConfig.TargetLayer, c.optimizationConfig.TargetDimension)
-		if err == nil {
-			embedding = output.Embedding
-		}
-	default:
-		return nil, fmt.Errorf("unsupported embedding backend %q", backend)
 	}
-
 	elapsed := time.Since(start)
 	dim := 0
 	if embedding != nil {

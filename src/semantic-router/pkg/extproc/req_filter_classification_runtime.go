@@ -261,7 +261,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 
-	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy))
+	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy), result.ConfidenceScored)
 	ctx.TraceContext = decisionCtx
 	return result, "", nil
 }
@@ -285,13 +285,18 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 	evaluationConfidence := result.Confidence
 
 	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
-	logging.ComponentDebugEvent("extproc", "decision_evaluated", map[string]interface{}{
-		"request_id":    ctx.RequestID,
-		"decision":      decisionName,
-		"category":      categoryName,
-		"confidence":    evaluationConfidence,
-		"matched_rules": result.MatchedRules,
-	})
+	ctx.VSRSelectedDecisionConfidenceScored = result.ConfidenceScored
+	payload := map[string]interface{}{
+		"request_id":           ctx.RequestID,
+		"decision":             decisionName,
+		"category":             categoryName,
+		"confidence_available": result.ConfidenceScored,
+		"matched_rules":        result.MatchedRules,
+	}
+	if result.ConfidenceScored {
+		payload["confidence"] = evaluationConfidence
+	}
+	logging.ComponentDebugEvent("extproc", "decision_evaluated", payload)
 
 	destination, terminal, actionErr := r.decisionRouteActionDestination(result.Decision, ctx)
 	if actionErr != nil {

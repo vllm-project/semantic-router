@@ -321,6 +321,9 @@ export interface TestQueryResult {
   evaluatedRules?: EvaluatedRule[]
   routingLatency?: number
   warning?: string
+  decisionConfidence?: number | null
+  decisionConfidenceAvailable?: boolean
+  signalErrorMatches?: Record<string, boolean>
   isFallbackDecision?: boolean // True if matched decision is a system fallback
   fallbackReason?: string // Reason for fallback (e.g., "low_confidence", "no_match")
 }
@@ -330,8 +333,9 @@ export interface MatchedSignal {
   name: string
   matched: boolean
   value?: number
-  confidence?: number
-  score?: number
+  confidence?: number | null
+  confidenceAvailable?: boolean
+  score?: number | null
   reason?: string
   needsBackend?: boolean
 }

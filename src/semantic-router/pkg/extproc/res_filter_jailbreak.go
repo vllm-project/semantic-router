@@ -57,17 +57,19 @@ func (r *OpenAIRouter) enforceResponseJailbreakFromSignal(
 	}
 	if !matched {
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "not_detected", 0)
-		logging.Debugf("No jailbreak detected in response: risk=%.3f", ctx.VSRResponseJailbreakRisk)
+		logging.Debugf("No jailbreak detected in response: score_available=%v", ctx.VSRResponseJailbreakScoreAvailable)
 		return nil
 	}
 
 	ctx.ResponseJailbreakDetected = true
 	ctx.ResponseJailbreakType = ctx.VSRResponseJailbreakType
 	ctx.ResponseJailbreakConfidence = ctx.VSRResponseJailbreakRisk
+	ctx.ResponseJailbreakScoreAvailable = ctx.VSRResponseJailbreakScoreAvailable
+	ctx.ResponseJailbreakDecision = ctx.VSRResponseJailbreakDecision
 
 	metrics.RecordPluginExecution("response_jailbreak", decisionName, "detected", 0)
-	logging.Warnf("Response jailbreak detected: type=%s, risk=%.3f, rules=%v, decision=%s",
-		ctx.VSRResponseJailbreakType, ctx.VSRResponseJailbreakRisk, ctx.VSRMatchedResponseJailbreak, decisionName)
+	logging.Warnf("Response jailbreak detected: type=%s, score_available=%v, rules=%v, decision=%s",
+		ctx.VSRResponseJailbreakType, ctx.VSRResponseJailbreakScoreAvailable, ctx.VSRMatchedResponseJailbreak, decisionName)
 
 	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "block" {
 		logging.Infof("Response jailbreak action is 'block', returning error response")
@@ -103,7 +105,7 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 	// Scans the whole response in chunks and thresholds P(jailbreak) rather than
 	// the winning class's confidence, so this surface answers the same question
 	// as the routing signal and the classification API on the same text.
-	isJailbreak, jailbreakType, _, riskScore, err := classifier.CheckForJailbreakRiskWithThreshold(selectionRequestContext(ctx), assistantContent, threshold)
+	verdict, err := classifier.CheckForJailbreakVerdict(selectionRequestContext(ctx), assistantContent, threshold)
 	latency := time.Since(start).Seconds()
 
 	if err != nil {
@@ -112,13 +114,17 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 		return r.responseJailbreakOnClassifyError(ctx, responseJailbreakFailsClosed(classifierConfig(classifier)), decisionName, latency)
 	}
 
-	if isJailbreak {
+	if verdict.Detected {
 		ctx.ResponseJailbreakDetected = true
-		ctx.ResponseJailbreakType = jailbreakType
-		ctx.ResponseJailbreakConfidence = riskScore
+		ctx.ResponseJailbreakType = verdict.Label
+		ctx.ResponseJailbreakDecision = verdict.Decision
+		if verdict.RiskScore != nil {
+			ctx.ResponseJailbreakConfidence = *verdict.RiskScore
+			ctx.ResponseJailbreakScoreAvailable = true
+		}
 
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "detected", latency)
-		logging.Warnf("Response jailbreak detected: type=%s, risk=%.3f", jailbreakType, riskScore)
+		logging.Warnf("Response jailbreak detected: type=%s, probabilities_available=%v", verdict.Label, verdict.RiskScore != nil)
 
 		action := r.getResponseJailbreakAction(ctx.VSRSelectedDecision)
 		if action == "block" {
@@ -128,7 +134,7 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 		logging.Infof("Response jailbreak detected, action is '%s'", action)
 	} else {
 		metrics.RecordPluginExecution("response_jailbreak", decisionName, "not_detected", latency)
-		logging.Debugf("No jailbreak detected in response: risk=%.3f", riskScore)
+		logging.Debugf("No jailbreak detected in response: probabilities_available=%v", verdict.RiskScore != nil)
 	}
 
 	return nil
@@ -165,7 +171,9 @@ func (r *OpenAIRouter) responseJailbreakOnClassifyError(ctx *RequestContext, fai
 
 	ctx.ResponseJailbreakDetected = true
 	ctx.ResponseJailbreakType = classification.JailbreakClassificationErrorType
-	ctx.ResponseJailbreakConfidence = 1.0
+	ctx.ResponseJailbreakConfidence = 0
+	ctx.ResponseJailbreakScoreAvailable = false
+	ctx.ResponseJailbreakDecision = nil
 
 	metrics.RecordPluginExecution("response_jailbreak", decisionName, "fail_closed", latency)
 	logging.Warnf("Response jailbreak classifier failed and prompt_guard.on_error is %q; treating the response as unverified",

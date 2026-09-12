@@ -187,7 +187,7 @@ func (m *MemoryStore) AppendOutcome(ctx context.Context, id string, outcome Outc
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
+func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -198,6 +198,7 @@ func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 
 	rec.HallucinationDetected = detected
 	rec.HallucinationConfidence = confidence
+	applyHallucinationScore(rec, score)
 	rec.HallucinationSpans = cloneStringSlice(spans)
 	rec.HallucinationSpanDetails = cloneHallucinationSpanDetails(spanDetails)
 

@@ -676,3 +676,7 @@ pub fn create_mmbert_compatibility_tokenizer_with_max_length(
     let unified_tokenizer = UnifiedTokenizer::new(tokenizer, config, device)?;
     Ok(Box::new(unified_tokenizer))
 }
+
+/// Token prediction with tokenizer-provided UTF-8 byte offsets:
+/// (token text, class ID, softmax confidence, start byte, end byte).
+pub type TokenPrediction = (String, usize, f32, usize, usize);

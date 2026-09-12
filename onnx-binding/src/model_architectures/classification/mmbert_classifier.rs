@@ -10,6 +10,7 @@
 //! - CPU OpenVINO FP32: ~22ms
 //! - CPU ORT FP32: ~41ms
 
+use crate::core::instance_options::InstanceOptions;
 use crate::core::unified_error::{errors, UnifiedResult};
 use half::f16;
 use ndarray::Array2;
@@ -296,6 +297,45 @@ impl MmBertSequenceClassifier {
             model_path: model_path_str,
             max_sequence_length,
         })
+    }
+
+    /// Load one owned session with an explicit provider and no provider fallback.
+    pub fn load_with_options(options: &InstanceOptions) -> UnifiedResult<Self> {
+        options.validate()?;
+        let config = MmBertClassifierConfig::from_pretrained(&options.model_path)?;
+        let mut tokenizer =
+            Tokenizer::from_file(Path::new(&options.model_path).join("tokenizer.json"))
+                .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        options.configure_tokenizer(
+            &mut tokenizer,
+            MAX_CLASSIFICATION_SEQ_LEN.min(config.max_position_embeddings),
+        )?;
+        // Owned sessions select the standard graph deterministically. Legacy
+        // environment-driven FA ranking must not change an instance's identity.
+        let provider = ClassifierExecutionProvider::Cpu;
+        let candidates = if options.model_file.is_some() {
+            vec![]
+        } else {
+            Self::find_onnx_models(&options.model_path, provider)?
+        };
+        let graph = options.select_graph(candidates)?;
+        let session = options.create_session(&graph)?;
+        Ok(Self {
+            session,
+            tokenizer: Arc::new(tokenizer),
+            config,
+            model_path: options.model_path.clone(),
+        })
+    }
+
+    pub fn tokenizer(&self) -> &Tokenizer {
+        &self.tokenizer
+    }
+    pub fn finish_profiling(&mut self) -> UnifiedResult<Vec<String>> {
+        self.session
+            .end_profiling()
+            .map(|path| vec![path])
+            .map_err(|e| errors::ort_error(&e.to_string()))
     }
 
     /// Find ONNX model candidates in priority order.
@@ -1035,6 +1075,30 @@ impl MmBertTokenClassifier {
             model_path: model_path_str,
             max_sequence_length,
         })
+    }
+
+    /// Own a token-classification session independently of all legacy role slots.
+    pub fn load_with_options(options: &InstanceOptions) -> UnifiedResult<Self> {
+        let sequence = MmBertSequenceClassifier::load_with_options(options)?;
+        Ok(Self {
+            session: sequence.session,
+            tokenizer: sequence.tokenizer,
+            config: sequence.config,
+            model_path: sequence.model_path,
+        })
+    }
+
+    pub fn config(&self) -> &MmBertClassifierConfig {
+        &self.config
+    }
+    pub fn tokenizer(&self) -> &Tokenizer {
+        &self.tokenizer
+    }
+    pub fn finish_profiling(&mut self) -> UnifiedResult<Vec<String>> {
+        self.session
+            .end_profiling()
+            .map(|path| vec![path])
+            .map_err(|e| errors::ort_error(&e.to_string()))
     }
 
     /// Detect PII entities in text

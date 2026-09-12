@@ -31,9 +31,10 @@ func TestQdrantExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 		port = parsed
 	}
 	cache, err := NewQdrantCache(QdrantCacheOptions{
-		Enabled:        true,
-		TTLSeconds:     60,
-		EmbeddingModel: "bert",
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		TTLSeconds:        60,
+		EmbeddingModel:    "bert",
 		Config: &config.QdrantConfig{
 			Host:           host,
 			Port:           port,

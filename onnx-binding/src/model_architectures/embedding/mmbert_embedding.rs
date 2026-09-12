@@ -20,6 +20,7 @@
 //! - **Cross-platform**: Works on Linux, Windows, macOS
 //! - **Optimized inference**: Graph optimizations, operator fusion
 
+use crate::core::instance_options::{InstanceOptions, Provider};
 use crate::core::unified_error::{errors, UnifiedError, UnifiedResult};
 use crate::model_architectures::embedding::pooling::{
     l2_normalize, mean_pool_3d, truncate_dimension,
@@ -296,6 +297,23 @@ impl MmBertEmbeddingModel {
     /// # Returns
     /// * `UnifiedResult<Self>` - The loaded model or an error
     pub fn load<P: AsRef<Path>>(model_path: P, use_cpu: bool) -> UnifiedResult<Self> {
+        Self::load_impl(model_path, use_cpu, None)
+    }
+
+    pub fn load_with_options(options: &InstanceOptions) -> UnifiedResult<Self> {
+        options.validate()?;
+        Self::load_impl(
+            &options.model_path,
+            options.provider == Provider::Cpu,
+            Some(options),
+        )
+    }
+
+    fn load_impl<P: AsRef<Path>>(
+        model_path: P,
+        use_cpu: bool,
+        options: Option<&InstanceOptions>,
+    ) -> UnifiedResult<Self> {
         let model_path_str = model_path.as_ref().display().to_string();
         let model_dir = model_path.as_ref();
 
@@ -322,12 +340,26 @@ impl MmBertEmbeddingModel {
                 ))
             })?;
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        if let Some(options) = options {
+            options.configure_tokenizer(&mut tokenizer, config.max_position_embeddings)?;
+        }
 
         // Find ONNX model candidates (priority order)
-        let onnx_candidates =
-            Self::find_onnx_models(&model_path, &matryoshka_config.layers, use_cpu)?;
+        let onnx_candidates = if options.is_some_and(|o| o.model_file.is_some()) {
+            vec![]
+        } else {
+            Self::find_onnx_models(
+                &model_path,
+                &matryoshka_config.layers,
+                use_cpu || options.is_some(),
+            )?
+        };
+        let onnx_candidates = match options {
+            Some(options) => vec![options.select_graph(onnx_candidates)?],
+            None => onnx_candidates,
+        };
 
         // Create ONNX Runtime session with fallback across candidates.
         // We intentionally prefer GPU-optimized model variants first.
@@ -335,7 +367,11 @@ impl MmBertEmbeddingModel {
         let mut selected_path: Option<std::path::PathBuf> = None;
         let mut last_error: Option<String> = None;
         for onnx_path in onnx_candidates {
-            match Self::create_session(&onnx_path, use_cpu) {
+            let loaded = match options {
+                Some(options) => options.create_session(&onnx_path),
+                None => Self::create_session(&onnx_path, use_cpu),
+            };
+            match loaded {
                 Ok(session) => {
                     selected_path = Some(onnx_path);
                     selected_session = Some(session);
@@ -366,7 +402,7 @@ impl MmBertEmbeddingModel {
 
         // Check for layer-specific ONNX files (for early exit support)
         let (supports_layer_exit, layer_sessions) =
-            Self::load_layer_sessions(&model_path, use_cpu, &matryoshka_config.layers);
+            Self::load_layer_sessions(&model_path, use_cpu, &matryoshka_config.layers, options)?;
 
         Ok(Self {
             session,
@@ -601,16 +637,18 @@ impl MmBertEmbeddingModel {
         model_path: P,
         use_cpu: bool,
         layers: &[usize],
-    ) -> (bool, Vec<Option<Session>>) {
+        options: Option<&InstanceOptions>,
+    ) -> UnifiedResult<(bool, Vec<Option<Session>>)> {
         let mut sessions = Vec::new();
         let mut any_loaded = false;
         let model_dir = model_path.as_ref();
         let onnx_dir = model_dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
+        let has_fa = options.is_none()
+            && std::env::var("ORT_CK_FLASH_ATTN_LIB")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .is_some();
 
         for layer in layers {
             let layer_filename = format!("model_layer_{}.onnx", layer);
@@ -635,12 +673,19 @@ impl MmBertEmbeddingModel {
                     layer,
                     layer_path.display()
                 );
-                match Self::create_session(layer_path, use_cpu) {
+                let loaded = match options {
+                    Some(options) => options.create_session(layer_path),
+                    None => Self::create_session(layer_path, use_cpu),
+                };
+                match loaded {
                     Ok(session) => {
                         sessions.push(Some(session));
                         any_loaded = true;
                     }
                     Err(e) => {
+                        if options.is_some() {
+                            return Err(e);
+                        }
                         println!("WARN: Failed to load layer-{}: {:?}", layer, e);
                         sessions.push(None);
                     }
@@ -650,7 +695,7 @@ impl MmBertEmbeddingModel {
             }
         }
 
-        (any_loaded, sessions)
+        Ok((any_loaded, sessions))
     }
 
     /// Get the model configuration
@@ -904,6 +949,21 @@ impl MmBertEmbeddingModel {
     ) -> UnifiedResult<Array1<f32>> {
         let embeddings = self.encode(&[text], target_layer, target_dim)?;
         Ok(embeddings.row(0).to_owned())
+    }
+
+    pub fn finish_profiling(&mut self) -> UnifiedResult<Vec<String>> {
+        let mut paths = vec![self
+            .session
+            .end_profiling()
+            .map_err(|e| errors::ort_error(&e.to_string()))?];
+        for session in self.layer_sessions.iter_mut().flatten() {
+            paths.push(
+                session
+                    .end_profiling()
+                    .map_err(|e| errors::ort_error(&e.to_string()))?,
+            );
+        }
+        Ok(paths)
     }
 
     /// Get model information for debugging

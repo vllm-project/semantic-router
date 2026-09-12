@@ -53,6 +53,8 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 				},
 			}
 
+			cfg.EmbeddingConfig.ModelType = "mmbert"
+			cfg.Tools.Enabled = true
 			specs, err := BuildModelSpecs(cfg)
 			if err != nil {
 				t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -104,13 +106,15 @@ func TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered(t *testing.T) {
 	cfg := newEmbeddingOnlyConfig()
 	cfg.MoMRegistry[bertModelPath] = "sentence-transformers/all-MiniLM-L12-v2"
 	cfg.BertModelPath = bertModelPath
+	cfg.Memory.Enabled = true
+	cfg.Memory.EmbeddingModel = "bert"
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	spec, ok := findSpecByPath(specs, bertModelPath)
+	spec, ok := findSpecByPath(specs, config.ResolveModelPath(bertModelPath))
 	if !ok {
 		t.Fatalf("BuildModelSpecs() did not produce a spec for %q; got %#v", bertModelPath, specs)
 	}

@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestBuildAdmissionRegistryUsesConfiguredGates(t *testing.T) {
@@ -136,12 +137,12 @@ func TestSharedAdmissionRegistryAcrossClassifiers(t *testing.T) {
 
 type failingCategoryInference struct{}
 
-func (failingCategoryInference) Classify(context.Context, string) (candle_binding.ClassResult, error) {
-	return candle_binding.ClassResult{}, admission.ErrQueueFull
+func (failingCategoryInference) Classify(context.Context, string) (tasks.ClassResult, error) {
+	return tasks.ClassResult{}, admission.ErrQueueFull
 }
 
-func (failingCategoryInference) ClassifyWithProbabilities(context.Context, string) (candle_binding.ClassResultWithProbs, error) {
-	return candle_binding.ClassResultWithProbs{}, admission.ErrQueueFull
+func (failingCategoryInference) ClassifyWithProbabilities(context.Context, string) (tasks.ClassResultWithProbs, error) {
+	return tasks.ClassResultWithProbs{}, admission.ErrQueueFull
 }
 
 func TestDomainInferenceErrorPopulatesSignalErrors(t *testing.T) {
@@ -162,14 +163,14 @@ func TestDomainInferenceErrorPopulatesSignalErrors(t *testing.T) {
 
 type countingCategoryInference struct{ classify, classifyWithProbs int }
 
-func (c *countingCategoryInference) Classify(context.Context, string) (candle_binding.ClassResult, error) {
+func (c *countingCategoryInference) Classify(context.Context, string) (tasks.ClassResult, error) {
 	c.classify++
-	return candle_binding.ClassResult{}, nil
+	return tasks.ClassResult{}, nil
 }
 
-func (c *countingCategoryInference) ClassifyWithProbabilities(context.Context, string) (candle_binding.ClassResultWithProbs, error) {
+func (c *countingCategoryInference) ClassifyWithProbabilities(context.Context, string) (tasks.ClassResultWithProbs, error) {
 	c.classifyWithProbs++
-	return candle_binding.ClassResultWithProbs{}, nil
+	return tasks.ClassResultWithProbs{}, nil
 }
 
 type countingGate struct {
@@ -223,8 +224,8 @@ func TestAdmittedCategoryInferenceForwardsFallbackPolicy(t *testing.T) {
 
 type failingPIIInference struct{}
 
-func (failingPIIInference) ClassifyTokens(context.Context, string) (candle_binding.TokenClassificationResult, error) {
-	return candle_binding.TokenClassificationResult{}, admission.ErrQueueFull
+func (failingPIIInference) ClassifyTokens(context.Context, string) (tasks.TokenClassificationResult, error) {
+	return tasks.TokenClassificationResult{}, admission.ErrQueueFull
 }
 
 func TestPIIInferenceErrorPopulatesSignalErrors(t *testing.T) {
@@ -246,9 +247,9 @@ func TestPIIInferenceErrorPopulatesSignalErrors(t *testing.T) {
 
 type countingPIIInference struct{ calls int }
 
-func (c *countingPIIInference) ClassifyTokens(context.Context, string) (candle_binding.TokenClassificationResult, error) {
+func (c *countingPIIInference) ClassifyTokens(context.Context, string) (tasks.TokenClassificationResult, error) {
 	c.calls++
-	return candle_binding.TokenClassificationResult{}, nil
+	return tasks.TokenClassificationResult{}, nil
 }
 
 func heldWaitGate(t *testing.T) admission.Admissioner {
@@ -365,25 +366,22 @@ func TestAdmittedPIIInferenceForwardsClose(t *testing.T) {
 
 // Reload path: BuildClassifier wraps the remote PII backend in the admission
 // gate; Classifier.Close must still reach the backend underneath.
-func TestClassifierCloseReachesWrappedRemotePIIBackend(t *testing.T) {
+func TestClassifierCloseReachesOwnedRemotePIIBackend(t *testing.T) {
 	classifier, err := BuildClassifier(remotePIIConfig(), nil, testPIIMapping(), nil)
 	if err != nil {
-		t.Fatalf("BuildClassifier: %v", err)
+		t.Fatal(err)
 	}
-	admitted, ok := classifier.piiInference.(admittedPIIInference)
-	if !ok {
-		t.Fatalf("piiInference = %T, want the admission wrapper", classifier.piiInference)
+	inference := classifier.piiInference
+	if !ownsModelAdmission(inference) {
+		t.Fatal("remote PII must own physical admission")
 	}
-	if _, ok := admitted.backend.(*piiHTTPBackend); !ok {
-		t.Fatalf("wrapped backend = %T, want *piiHTTPBackend", admitted.backend)
-	}
-	stub := &closingStubPIIInference{}
-	admitted.backend = stub
-	classifier.piiInference = admitted
 	if err := classifier.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
+		t.Fatal(err)
 	}
-	if stub.closed != 1 {
-		t.Fatalf("wrapped remote PII backend closed %d times on reload, want 1", stub.closed)
+	if _, err := inference.ClassifyTokens(context.Background(), "after retirement"); !errors.Is(err, binding.ErrClosed) {
+		t.Fatalf("retired remote binding remained callable: %v", err)
+	}
+	if err := classifier.Close(); err != nil {
+		t.Fatalf("idempotent close: %v", err)
 	}
 }

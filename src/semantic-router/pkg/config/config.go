@@ -265,10 +265,12 @@ type InlineModels struct {
 	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
 	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
+	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
+	ModelBindings   map[string]ModelBinding `yaml:"model_bindings,omitempty"`
 	Signals         `yaml:",inline"`
 	Projections     Projections          `yaml:"projections,omitempty"`
 	Decisions       []Decision           `yaml:"decisions,omitempty"`

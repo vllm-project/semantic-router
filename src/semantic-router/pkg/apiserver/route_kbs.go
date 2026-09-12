@@ -204,9 +204,11 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 		removeTxn.Commit()
 		committed = true
 	}
-	s.writeJSONResponse(w, http.StatusOK, knowledgeBaseDeleteResponse{
-		Status: "deleted",
-		Name:   name,
+	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, http.StatusOK)
+	s.writeJSONResponse(w, status, knowledgeBaseDeleteResponse{
+		knowledgeBaseActivation: activation,
+		Status:                  "deleted",
+		Name:                    name,
 	})
 }
 
@@ -296,7 +298,9 @@ func (s *ClassificationAPIServer) persistManagedKnowledgeBase(
 		s.writeErrorResponse(w, http.StatusInternalServerError, "KB_READ_ERROR", err.Error())
 		return err
 	}
-	s.writeJSONResponse(w, successStatus, document)
+	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, successStatus)
+	document.knowledgeBaseActivation = activation
+	s.writeJSONResponse(w, status, document)
 	return nil
 }
 

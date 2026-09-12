@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
@@ -237,54 +238,58 @@ type HallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
-	HallucinationConfidence float32 `json:"hallucination_confidence"`
+	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
+	ScoreAvailable          bool    `json:"score_available"`
 	NLILabel                string  `json:"nli_label"`
-	NLIConfidence           float32 `json:"nli_confidence"`
+	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
+	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`
 	Explanation             string  `json:"explanation"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
 type Record struct {
-	ID                    string                 `json:"id"`
-	Timestamp             time.Time              `json:"timestamp"`
-	RequestID             string                 `json:"request_id,omitempty"`
-	SessionID             string                 `json:"session_id,omitempty"`
-	TurnIndex             int                    `json:"turn_index"`
-	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`
-	ConversationID        string                 `json:"conversation_id,omitempty"`
-	Recipe                string                 `json:"recipe,omitempty"`
-	Decision              string                 `json:"decision,omitempty"`
-	DecisionTier          int                    `json:"decision_tier"`
-	DecisionPriority      int                    `json:"decision_priority"`
-	Category              string                 `json:"category,omitempty"`
-	OriginalModel         string                 `json:"original_model,omitempty"`
-	SelectedModel         string                 `json:"selected_model,omitempty"`
-	ReasoningMode         string                 `json:"reasoning_mode,omitempty"`
-	ConfidenceScore       float64                `json:"confidence_score,omitempty"`
-	SelectionMethod       string                 `json:"selection_method,omitempty"`
-	RouteDiagnostics      *RouteDiagnostics      `json:"route_diagnostics,omitempty"`
-	Learning              *LearningDiagnostics   `json:"learning,omitempty"`
-	Outcomes              []Outcome              `json:"outcomes,omitempty"`
-	SessionPolicy         map[string]interface{} `json:"session_policy,omitempty"`
-	Signals               Signal                 `json:"signals"`
-	Projections           []string               `json:"projections,omitempty"`
-	ProjectionScores      map[string]float64     `json:"projection_scores,omitempty"`
-	ProjectionTrace       *projectiontrace.Trace `json:"projection_trace,omitempty"`
-	SignalConfidences     map[string]float64     `json:"signal_confidences,omitempty"`
-	SignalValues          map[string]float64     `json:"signal_values,omitempty"`
-	ToolTrace             *ToolTrace             `json:"tool_trace,omitempty"`
-	RequestBody           string                 `json:"request_body,omitempty"`
-	ResponseBody          string                 `json:"response_body,omitempty"`
-	ResponseStatus        int                    `json:"response_status,omitempty"`
-	LifecycleState        string                 `json:"lifecycle_state"`
-	EndedAt               *time.Time             `json:"ended_at,omitempty"`
-	DurationMS            int64                  `json:"duration_ms,omitempty"`
-	TerminalReason        string                 `json:"terminal_reason,omitempty"`
-	FromCache             bool                   `json:"from_cache,omitempty"`
-	Streaming             bool                   `json:"streaming,omitempty"`
-	RequestBodyTruncated  bool                   `json:"request_body_truncated,omitempty"`
-	ResponseBodyTruncated bool                   `json:"response_body_truncated,omitempty"`
+	ID                       string                 `json:"id"`
+	Timestamp                time.Time              `json:"timestamp"`
+	RequestID                string                 `json:"request_id,omitempty"`
+	SessionID                string                 `json:"session_id,omitempty"`
+	TurnIndex                int                    `json:"turn_index"`
+	PreviousResponseID       string                 `json:"previous_response_id,omitempty"`
+	ConversationID           string                 `json:"conversation_id,omitempty"`
+	Recipe                   string                 `json:"recipe,omitempty"`
+	Decision                 string                 `json:"decision,omitempty"`
+	DecisionTier             int                    `json:"decision_tier"`
+	DecisionPriority         int                    `json:"decision_priority"`
+	Category                 string                 `json:"category,omitempty"`
+	OriginalModel            string                 `json:"original_model,omitempty"`
+	SelectedModel            string                 `json:"selected_model,omitempty"`
+	ReasoningMode            string                 `json:"reasoning_mode,omitempty"`
+	ConfidenceScore          float64                `json:"confidence_score,omitempty"`
+	SelectionMethod          string                 `json:"selection_method,omitempty"`
+	RouteDiagnostics         *RouteDiagnostics      `json:"route_diagnostics,omitempty"`
+	Learning                 *LearningDiagnostics   `json:"learning,omitempty"`
+	Outcomes                 []Outcome              `json:"outcomes,omitempty"`
+	SessionPolicy            map[string]interface{} `json:"session_policy,omitempty"`
+	Signals                  Signal                 `json:"signals"`
+	Projections              []string               `json:"projections,omitempty"`
+	ProjectionScores         map[string]float64     `json:"projection_scores,omitempty"`
+	ProjectionTrace          *projectiontrace.Trace `json:"projection_trace,omitempty"`
+	SignalConfidences        map[string]float64     `json:"signal_confidences,omitempty"`
+	SignalErrorMatches       map[string]bool        `json:"signal_error_matches,omitempty"`
+	ConfidenceScoreAvailable bool                   `json:"confidence_score_available"`
+	SignalValues             map[string]float64     `json:"signal_values,omitempty"`
+	ToolTrace                *ToolTrace             `json:"tool_trace,omitempty"`
+	RequestBody              string                 `json:"request_body,omitempty"`
+	ResponseBody             string                 `json:"response_body,omitempty"`
+	ResponseStatus           int                    `json:"response_status,omitempty"`
+	LifecycleState           string                 `json:"lifecycle_state"`
+	EndedAt                  *time.Time             `json:"ended_at,omitempty"`
+	DurationMS               int64                  `json:"duration_ms,omitempty"`
+	TerminalReason           string                 `json:"terminal_reason,omitempty"`
+	FromCache                bool                   `json:"from_cache,omitempty"`
+	Streaming                bool                   `json:"streaming,omitempty"`
+	RequestBodyTruncated     bool                   `json:"request_body_truncated,omitempty"`
+	ResponseBodyTruncated    bool                   `json:"response_body_truncated,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -292,14 +297,18 @@ type Record struct {
 	PIIEnabled        bool `json:"pii_enabled,omitempty"`
 
 	// Jailbreak Detection Results (request-level)
-	JailbreakDetected   bool    `json:"jailbreak_detected,omitempty"`
-	JailbreakType       string  `json:"jailbreak_type,omitempty"`
-	JailbreakConfidence float32 `json:"jailbreak_confidence,omitempty"`
+	JailbreakDetected       bool                 `json:"jailbreak_detected,omitempty"`
+	JailbreakType           string               `json:"jailbreak_type,omitempty"`
+	JailbreakConfidence     float32              `json:"jailbreak_confidence,omitempty"`
+	JailbreakScoreAvailable bool                 `json:"jailbreak_score_available"`
+	JailbreakDecision       *tasks.LabelDecision `json:"jailbreak_decision,omitempty"`
 
 	// Response Jailbreak Detection Results
-	ResponseJailbreakDetected   bool    `json:"response_jailbreak_detected,omitempty"`
-	ResponseJailbreakType       string  `json:"response_jailbreak_type,omitempty"`
-	ResponseJailbreakConfidence float32 `json:"response_jailbreak_confidence,omitempty"`
+	ResponseJailbreakDetected       bool                 `json:"response_jailbreak_detected,omitempty"`
+	ResponseJailbreakType           string               `json:"response_jailbreak_type,omitempty"`
+	ResponseJailbreakConfidence     float32              `json:"response_jailbreak_confidence,omitempty"`
+	ResponseJailbreakScoreAvailable bool                 `json:"response_jailbreak_score_available"`
+	ResponseJailbreakDecision       *tasks.LabelDecision `json:"response_jailbreak_decision,omitempty"`
 
 	// PII Detection Results
 	PIIDetected bool     `json:"pii_detected,omitempty"`
@@ -342,11 +351,13 @@ type Record struct {
 	ContextTokenCount int `json:"context_token_count,omitempty"`
 
 	// Hallucination Detection
-	HallucinationEnabled     bool                `json:"hallucination_enabled,omitempty"`
-	HallucinationDetected    bool                `json:"hallucination_detected,omitempty"`
-	HallucinationConfidence  float32             `json:"hallucination_confidence,omitempty"`
-	HallucinationSpans       []string            `json:"hallucination_spans,omitempty"`
-	HallucinationSpanDetails []HallucinationSpan `json:"hallucination_span_details,omitempty"`
+	HallucinationEnabled        bool                `json:"hallucination_enabled,omitempty"`
+	HallucinationDetected       bool                `json:"hallucination_detected,omitempty"`
+	HallucinationScoreAvailable bool                `json:"hallucination_score_available"`
+	HallucinationScoreKind      string              `json:"hallucination_score_kind,omitempty"`
+	HallucinationConfidence     float32             `json:"hallucination_confidence,omitempty"`
+	HallucinationSpans          []string            `json:"hallucination_spans,omitempty"`
+	HallucinationSpanDetails    []HallucinationSpan `json:"hallucination_span_details,omitempty"`
 
 	// Usage & Cost
 	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
@@ -409,7 +420,7 @@ type Reader interface {
 // Enricher updates derived signal analysis fields after the initial record write.
 type Enricher interface {
 	// UpdateHallucinationStatus updates hallucination detection results for an existing record.
-	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error
+	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error
 
 	// UpdateUsageCost updates token usage and pricing-derived cost fields for an existing record.
 	UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error
@@ -537,6 +548,9 @@ func cloneSignal(signal Signal) Signal {
 
 func cloneRecord(record Record) Record {
 	cloned := record
+	cloned.SignalErrorMatches = cloneBoolMap(record.SignalErrorMatches)
+	cloned.JailbreakDecision = cloneLabelDecision(record.JailbreakDecision)
+	cloned.ResponseJailbreakDecision = cloneLabelDecision(record.ResponseJailbreakDecision)
 	cloned.RouteDiagnostics = cloneRouteDiagnostics(record.RouteDiagnostics)
 	cloned.Learning = cloneLearningDiagnostics(record.Learning)
 	cloned.Outcomes = cloneOutcomes(record.Outcomes)
@@ -708,4 +722,38 @@ type QdrantConfig struct {
 	APIKey         string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
 	UseTLS         bool   `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
 	CollectionName string `json:"collection_name,omitempty" yaml:"collection_name,omitempty"`
+}
+
+func cloneLabelDecision(value *tasks.LabelDecision) *tasks.LabelDecision {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	cloned.Categories = cloneStringSlice(value.Categories)
+	if value.Score != nil {
+		score := *value.Score
+		cloned.Score = &score
+	}
+	if value.ScoreSemantics != nil {
+		semantics := *value.ScoreSemantics
+		semantics.Minimum = cloneFloat64Ptr(semantics.Minimum)
+		semantics.Maximum = cloneFloat64Ptr(semantics.Maximum)
+		cloned.ScoreSemantics = &semantics
+	}
+	return &cloned
+}
+
+// HallucinationScore records availability independently from numeric zero.
+type HallucinationScore struct {
+	Available bool   `json:"available"`
+	Kind      string `json:"kind,omitempty"`
+}
+
+func applyHallucinationScore(record *Record, score []HallucinationScore) {
+	record.HallucinationScoreAvailable = false
+	record.HallucinationScoreKind = ""
+	if len(score) > 0 {
+		record.HallucinationScoreAvailable = score[0].Available
+		record.HallucinationScoreKind = score[0].Kind
+	}
 }

@@ -14,6 +14,7 @@
 
 pub mod core;
 pub mod ffi;
+pub mod instances;
 pub mod model_architectures;
 
 // Re-export commonly used types

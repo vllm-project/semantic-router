@@ -28,7 +28,7 @@ func TestVLLMClientTimeoutHonorsConfig(t *testing.T) {
 		ModelEndpoint:  config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
 		TimeoutSeconds: 1,
 	})
-	client.baseURL = server.URL
+	setTestVLLMClientURL(client, server.URL)
 
 	start := time.Now()
 	_, err := client.Generate(context.Background(), "classifier", "test", nil)
@@ -55,7 +55,7 @@ func TestVLLMClientTimeoutDefaultsWhenUnset(t *testing.T) {
 	client := newVLLMClientFromConfig(&config.ExternalModelConfig{
 		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
 	})
-	if got := client.httpClient.Timeout; got != 30*time.Second {
+	if got := client.timeout; got != 30*time.Second {
 		t.Fatalf("default client timeout = %v, want 30s", got)
 	}
 }

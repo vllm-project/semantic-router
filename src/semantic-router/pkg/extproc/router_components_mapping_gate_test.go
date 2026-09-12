@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -10,6 +11,26 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestLoadClassifierMappingsUsesProjectedDefaultAndSkipsNamedFallback(t *testing.T) {
+	cfg := newCoreSignalMappingGateConfig(t)
+	root := t.TempDir()
+	mapping := filepath.Join(root, "labels.json")
+	require.NoError(t, os.WriteFile(mapping, []byte(`{"category_to_idx":{"billing":0,"chat":1},"idx_to_category":{"0":"billing","1":"chat"}}`), 0o600))
+	cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"replacement": {Provider: "candle", Artifact: root, Device: "cpu"}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "replacement", Adapter: "auto", Contract: config.RemoteClassifierContractLabelDistribution, MappingPath: mapping}}
+	mappings, err := loadClassifierMappings(cfg)
+	require.NoError(t, err)
+	require.Equal(t, 0, mappings.categoryMapping.CategoryToIdx["billing"])
+	require.NotEqual(t, mapping, cfg.CategoryMappingPath)
+	cfg.RouterOptions.AutoModelNames = []string{}
+	cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "named", Profile: config.RoutingProfile{Decisions: cfg.Decisions, ModelBindings: cfg.ModelBindings}}}
+	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"named-entry"}, Recipe: "named"}}
+	mappings, err = loadClassifierMappings(cfg)
+	require.NoError(t, err)
+	require.Nil(t, mappings.categoryMapping)
+}
 
 func TestLoadClassifierMappingsSkipsUnusedCoreSignals(t *testing.T) {
 	cfg := newCoreSignalMappingGateConfig(t)

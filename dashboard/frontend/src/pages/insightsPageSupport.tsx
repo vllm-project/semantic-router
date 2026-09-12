@@ -314,9 +314,9 @@ export function buildInsightsRecordSections(
       {
         label: 'Confidence score',
         value:
-          record.confidence_score !== undefined
+          record.confidence_score_available === true && typeof record.confidence_score === 'number'
             ? `${(record.confidence_score * 100).toFixed(1)}%`
-            : '-',
+            : 'Score unavailable',
       },
       { label: 'Reasoning mode', value: record.reasoning_mode || '-' },
     ],
@@ -505,7 +505,9 @@ function buildGuardrailsValue(record: InsightsRecord) {
         {record.jailbreak_detected ? (
           <span className={styles.alertDanger}>
             Jailbreak: {record.jailbreak_type || 'detected'} (
-            {((record.jailbreak_confidence || 0) * 100).toFixed(1)}%)
+            {record.jailbreak_score_available === true && typeof record.jailbreak_confidence === 'number'
+              ? `${(record.jailbreak_confidence * 100).toFixed(1)}%`
+              : 'Score unavailable'})
           </span>
         ) : null}
         {record.pii_detected ? (

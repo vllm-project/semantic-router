@@ -152,12 +152,16 @@ routing:
 	}
 }
 
-func TestValidateHotReloadCompatibilityRejectsLocalClassifierChange(t *testing.T) {
+func TestValidateHotReloadCompatibilityAllowsOwnedLocalClassifierChange(t *testing.T) {
 	current := []byte(localClassifierReloadConfig("models/risk-v1"))
 	next := []byte(localClassifierReloadConfig("models/risk-v2"))
 
-	if err := validateHotReloadCompatibility(current, next); err == nil {
-		t.Fatal("expected restart-required local classifier reload error")
+	if err := validateHotReloadCompatibility(current, next); err != nil {
+		t.Fatalf("owned local classifier changes should prepare a candidate: %v", err)
+	}
+	invalid := []byte(strings.ReplaceAll(string(next), "labels: [SAFE, RISKY]", "labels: [SAFE, SAFE]"))
+	if err := validateHotReloadCompatibility(current, invalid); err == nil {
+		t.Fatal("invalid candidate labels should still fail validation")
 	}
 }
 

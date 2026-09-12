@@ -8,6 +8,7 @@ pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier
 pub mod generative_guard; // Qwen3Guard safety classifier
 pub mod init; //  initialization functions
+pub mod instances; // Owned typed model instances
 pub mod memory; //  memory management functions
 #[cfg(feature = "mkl")]
 pub mod mkl_shim; // hgemm_ fallback: static MKL 2020.1 lacks f16 GEMM

@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -178,43 +179,49 @@ func buildReplayRoutingRecord(
 	guardrailsEnabled, jailbreakEnabled, piiEnabled, hallucinationEnabled := replayGuardrailState(ctx)
 	decisionTier, decisionPriority := replayDecisionMetadata(ctx)
 	record := routerreplay.RoutingRecord{
-		RequestID:         ctx.RequestID,
-		SessionID:         ctx.SessionID,
-		TurnIndex:         ctx.TurnIndex,
-		Decision:          decisionName,
-		Recipe:            string(ctx.Routing.RecipeName()),
-		DecisionTier:      decisionTier,
-		DecisionPriority:  decisionPriority,
-		Category:          ctx.VSRSelectedCategory,
-		OriginalModel:     originalModel,
-		SelectedModel:     replaySelectedModel(selectedModel),
-		ReasoningMode:     replayReasoningMode(ctx),
-		ConfidenceScore:   ctx.VSRSelectedDecisionConfidence,
-		SelectionMethod:   ctx.VSRSelectionMethod,
-		RouteDiagnostics:  buildReplayRouteDiagnostics(ctx, originalModel, selectedModel, decisionName, decisionTier, decisionPriority),
-		Learning:          buildReplayLearningDiagnostics(ctx),
-		SessionPolicy:     sessionPolicyMapForReplay(ctx),
-		Signals:           replaySignalState(ctx),
-		Projections:       replayProjectionState(ctx),
-		ProjectionScores:  cloneReplayFloat64Map(ctx.VSRProjectionScores),
-		ProjectionTrace:   cloneProjectionTraceForReplay(ctx.VSRProjectionTrace),
-		SignalConfidences: cloneReplayFloat64Map(ctx.VSRSignalConfidences),
-		SignalValues:      cloneReplayFloat64Map(ctx.VSRSignalValues),
-		ToolTrace:         buildReplayRequestToolTrace(ctx),
-		Streaming:         ctx.ExpectStreamingResponse,
-		FromCache:         ctx.VSRCacheHit,
+		RequestID:                ctx.RequestID,
+		SessionID:                ctx.SessionID,
+		TurnIndex:                ctx.TurnIndex,
+		Decision:                 decisionName,
+		Recipe:                   string(ctx.Routing.RecipeName()),
+		DecisionTier:             decisionTier,
+		DecisionPriority:         decisionPriority,
+		Category:                 ctx.VSRSelectedCategory,
+		OriginalModel:            originalModel,
+		SelectedModel:            replaySelectedModel(selectedModel),
+		ReasoningMode:            replayReasoningMode(ctx),
+		ConfidenceScore:          ctx.VSRSelectedDecisionConfidence,
+		ConfidenceScoreAvailable: ctx.VSRSelectedDecisionConfidenceScored,
+		SelectionMethod:          ctx.VSRSelectionMethod,
+		RouteDiagnostics:         buildReplayRouteDiagnostics(ctx, originalModel, selectedModel, decisionName, decisionTier, decisionPriority),
+		Learning:                 buildReplayLearningDiagnostics(ctx),
+		SessionPolicy:            sessionPolicyMapForReplay(ctx),
+		Signals:                  replaySignalState(ctx),
+		Projections:              replayProjectionState(ctx),
+		ProjectionScores:         cloneReplayFloat64Map(ctx.VSRProjectionScores),
+		ProjectionTrace:          cloneProjectionTraceForReplay(ctx.VSRProjectionTrace),
+		SignalConfidences:        cloneReplayFloat64Map(ctx.VSRSignalConfidences),
+		SignalErrorMatches:       cloneReplayBoolMap(ctx.VSRSignalErrorMatches),
+		SignalValues:             cloneReplayFloat64Map(ctx.VSRSignalValues),
+		ToolTrace:                buildReplayRequestToolTrace(ctx),
+		Streaming:                ctx.ExpectStreamingResponse,
+		FromCache:                ctx.VSRCacheHit,
 
 		GuardrailsEnabled: guardrailsEnabled,
 		JailbreakEnabled:  jailbreakEnabled,
 		PIIEnabled:        piiEnabled,
 
-		JailbreakDetected:   ctx.JailbreakDetected,
-		JailbreakType:       ctx.JailbreakType,
-		JailbreakConfidence: ctx.JailbreakConfidence,
+		JailbreakDetected:       ctx.JailbreakDetected,
+		JailbreakType:           ctx.JailbreakType,
+		JailbreakConfidence:     ctx.JailbreakConfidence,
+		JailbreakScoreAvailable: ctx.JailbreakScoreAvailable,
+		JailbreakDecision:       ctx.JailbreakDecision,
 
-		ResponseJailbreakDetected:   ctx.ResponseJailbreakDetected,
-		ResponseJailbreakType:       ctx.ResponseJailbreakType,
-		ResponseJailbreakConfidence: ctx.ResponseJailbreakConfidence,
+		ResponseJailbreakDetected:       ctx.ResponseJailbreakDetected,
+		ResponseJailbreakType:           ctx.ResponseJailbreakType,
+		ResponseJailbreakConfidence:     ctx.ResponseJailbreakConfidence,
+		ResponseJailbreakScoreAvailable: ctx.ResponseJailbreakScoreAvailable,
+		ResponseJailbreakDecision:       ctx.ResponseJailbreakDecision,
 
 		PIIDetected: ctx.PIIDetected,
 		PIIEntities: ctx.PIIEntities,
@@ -463,8 +470,10 @@ func hallucinationSpanDetailsForReplay(info *EnhancedHallucinationInfo) []router
 			Start:                   span.Start,
 			End:                     span.End,
 			HallucinationConfidence: span.HallucinationConfidence,
+			ScoreAvailable:          span.ScoreAvailable,
 			NLILabel:                span.NLILabel,
 			NLIConfidence:           span.NLIConfidence,
+			NLIScoreAvailable:       span.NLIScoreAvailable,
 			Severity:                span.Severity,
 			Explanation:             span.Explanation,
 		}
@@ -501,6 +510,7 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		ctx.HallucinationConfidence,
 		ctx.HallucinationSpans,
 		hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo),
+		routerreplay.HallucinationScore{Available: ctx.HallucinationScoreAvailable, Kind: ctx.HallucinationScoreKind},
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_hallucination_update_failed", map[string]interface{}{
@@ -591,9 +601,22 @@ func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRu
 	if code, failed := ctx.VSRSignalErrors[key]; failed {
 		outcome.Verdict = "unavailable"
 		outcome.Reason = code
+		outcome.Metadata["score_available"] = "false"
+		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
+			outcome.Metadata["policy_match"] = "true"
+		}
 		return outcome
 	}
-	outcome.Score = ctx.VSRSignalConfidences[key]
+	if value, available := ctx.VSRSignalConfidences[key]; available {
+		outcome.Score = value
+		outcome.Metadata["score_available"] = "true"
+	} else {
+		outcome.Metadata["score_available"] = "false"
+	}
+	if decision := ctx.VSRResponseJailbreakDecision; decision != nil {
+		outcome.Metadata["source_label"] = decision.SourceLabel
+		outcome.Metadata["label"] = decision.Label
+	}
 	for _, matched := range ctx.VSRMatchedResponseJailbreak {
 		if matched == rule.Name {
 			outcome.Verdict = "detected"
@@ -669,7 +692,7 @@ func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRu
 		return outcome
 	}
 	score, observed := ctx.VSRSignalConfidences[key]
-	if !observed {
+	if !observed && ctx.VSRHallucinationEvidence == nil {
 		return outcome
 	}
 	outcome.Verdict = "not_detected"
@@ -677,6 +700,11 @@ func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRu
 	outcome.Score = score
 	if evidence := ctx.VSRHallucinationEvidence; evidence != nil {
 		outcome.Metadata["spans"] = strconv.Itoa(len(evidence.Spans))
+		outcome.Metadata["score_available"] = strconv.FormatBool(evidence.ScoreAvailable)
+		if evidence.ScoreAvailable {
+			outcome.Score = float64(evidence.Confidence)
+			outcome.Metadata["score_kind"] = evidence.ScoreKind
+		}
 	}
 	for _, matched := range ctx.VSRMatchedHallucination {
 		if matched == rule.Name {

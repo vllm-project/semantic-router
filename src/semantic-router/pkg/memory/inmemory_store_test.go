@@ -30,7 +30,8 @@ func init() {
 // since that's the model initialized in init()
 func newTestInMemoryStore() *InMemoryStore {
 	return NewInMemoryStoreWithConfig(EmbeddingConfig{
-		Model: EmbeddingModelBERT,
+		Provider: memoryTestEmbeddingProvider(),
+		Model:    EmbeddingModelBERT,
 	})
 }
 

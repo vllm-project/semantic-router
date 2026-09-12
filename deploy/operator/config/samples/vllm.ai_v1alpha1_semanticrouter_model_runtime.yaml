@@ -1,0 +1,30 @@
+# Model files must be provisioned in the router image or its model volume.
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-model-runtime
+spec:
+  replicas: 1
+  config:
+    model_deployments:
+      local-pii:
+        artifact: models/mmbert32k-pii-detector-merged
+        provider: candle
+        device: cpu
+        precision: native
+        input:
+          max_tokens: 512
+          overflow: reject
+    model_admission:
+      local-pii:
+        max_concurrency: 2
+        max_queue: 8
+        queue_timeout_ms: 1000
+        on_overflow: shed
+    routing:
+      model_bindings:
+        pii_classifier:
+          deployment: local-pii
+          contract: token_spans.v1
+          adapter: mmbert32k
+          mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json

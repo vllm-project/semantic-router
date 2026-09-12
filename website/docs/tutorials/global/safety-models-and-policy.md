@@ -44,9 +44,9 @@ global:
 
 ### Remote prompt guard
 
-Use `protocol` instead of `variant` for a remote guardrail. The two fields are
-mutually exclusive. A remote guardrail also requires an entry under
-`global.model_catalog.external` with `model_role: guardrail`.
+Use `backend` instead of `variant` for a remote guardrail. The backend names
+one entry in `global.model_catalog.external` with `model_role: guardrail`,
+and declares both the wire protocol and the result contract.
 
 ```yaml
 global:
@@ -54,7 +54,10 @@ global:
     modules:
       prompt_guard:
         enabled: true
-        protocol: http_classify
+        backend:
+          protocol: http_classify
+          contract: label_distribution.v1
+          model: guardrail-service
         threshold: 0.7
         positive_labels: [INJECTION]
     external:
@@ -68,10 +71,25 @@ global:
         llm_timeout_seconds: 5
 ```
 
-`http_classify` expects the Router's supported classification contract;
-`http_chat` uses a chat-completions prompt. Both send request text to the
-configured service. Set `max_response_bytes` on the external model entry to
-override the 1 MiB response limit.
+`http_classify` uses `label_distribution.v1` and preserves the reported label
+probabilities. `http_chat` uses a chat-completions prompt with
+`label_decision.v1`: its categorical verdict has no confidence unless the
+service actually supplies a score. Text such as “unsafe” does not imply a
+probability of 1. Both protocols send request text to the named service.
+`backend.deadline_ms` optionally bounds the call. Set `max_response_bytes` on
+the external model entry to override the 1 MiB response limit.
+
+The retired module-level `prompt_guard.protocol` must be migrated explicitly:
+
+```bash
+vllm-sr config migrate --config config.yaml
+```
+
+Migration preserves an existing external model name. For one unnamed
+guardrail entry it assigns `guardrail_classifier`; a name conflict or multiple
+guardrail entries requires you to name the intended service and write its
+backend explicitly. Review the generated `config.migrated.yaml` before
+serving it. The Router does not choose the first matching role at runtime.
 
 The HTTP MCP classifier uses
 `global.model_catalog.modules.classifier.mcp.max_response_bytes`. Its default
@@ -133,7 +151,10 @@ global:
     modules:
       prompt_guard:
         enabled: true
-        protocol: http_classify
+        backend:
+          protocol: http_classify
+          contract: label_distribution.v1
+          model: guardrail-service
         on_error: block
 ```
 

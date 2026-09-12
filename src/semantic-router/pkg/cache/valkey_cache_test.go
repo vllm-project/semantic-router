@@ -12,7 +12,8 @@ import (
 
 func TestValkeyCacheDisabled(t *testing.T) {
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: false,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           false,
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, cache)
@@ -21,8 +22,9 @@ func TestValkeyCacheDisabled(t *testing.T) {
 
 func TestValkeyCacheConfigValidation(t *testing.T) {
 	_, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: true,
-		Config:  nil,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		Config:            nil,
 	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "valkey config is required")
@@ -43,6 +45,7 @@ func TestValkeyCacheEmbeddingModel(t *testing.T) {
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             false,
 		Config:              valkeyConfig,
 		SimilarityThreshold: 0.8,
@@ -52,6 +55,7 @@ func TestValkeyCacheEmbeddingModel(t *testing.T) {
 	assert.Empty(t, cache.embeddingModel)
 
 	cache, err = NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             false,
 		Config:              valkeyConfig,
 		SimilarityThreshold: 0.8,
@@ -106,8 +110,9 @@ func TestValkeyMetricTypeNormalization(t *testing.T) {
 			// NewValkeyCache will fail to connect, but normalization
 			// happens before the connection attempt, mutating cfg.
 			_, _ = NewValkeyCache(ValkeyCacheOptions{
-				Enabled: true,
-				Config:  cfg,
+				EmbeddingProvider: cacheTestEmbeddingProvider(),
+				Enabled:           true,
+				Config:            cfg,
 			})
 			assert.Equal(t, tt.expected, cfg.Index.VectorField.MetricType)
 		})

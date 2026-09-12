@@ -24,6 +24,10 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 			ProcessingTimeMs: processingTime,
 		},
 	}
+	if decisionResult != nil {
+		response.Classification.ConfidenceAvailable = confidenceAvailability(decisionResult.ConfidenceScored)
+	}
+	response.ProbabilitiesAvailable = response.Classification.ConfidenceAvailable == nil || *response.Classification.ConfidenceAvailable
 
 	populateIntentProbabilities(response, category, confidence, req.Options)
 	response.RecommendedModel = resolveRecommendedModel(
@@ -36,6 +40,7 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 	if signals != nil {
 		response.MatchedSignals = buildMatchedSignals(signals)
 		response.SignalErrors = signals.SignalErrors
+		response.SignalErrorMatches = signals.SignalErrorMatches
 		response.AppliedUnknownPolicies = signals.Diagnostics.AppliedUnknownPolicies
 	}
 	if decisionPayload := buildDecisionResultPayload(decisionResult); decisionPayload != nil {
@@ -58,6 +63,7 @@ func (s *ClassificationService) buildEvalResponse(
 		SignalConfidences:      signals.SignalConfidences,
 		SignalValues:           signals.SignalValues,
 		SignalErrors:           signals.SignalErrors,
+		SignalErrorMatches:     signals.SignalErrorMatches,
 		AppliedUnknownPolicies: signals.Diagnostics.AppliedUnknownPolicies,
 	}
 
@@ -123,6 +129,10 @@ func populateIntentProbabilities(
 	if options == nil || !options.ReturnProbabilities {
 		return
 	}
+	if response.Classification.ConfidenceAvailable != nil && !*response.Classification.ConfidenceAvailable {
+		return
+	}
+	response.ProbabilitiesAvailable = true
 	response.Probabilities = map[string]float64{category: confidence}
 }
 
@@ -158,8 +168,9 @@ func buildDecisionResultPayload(decisionResult *decision.DecisionResult) *Decisi
 		return nil
 	}
 	return &DecisionResult{
-		DecisionName: decisionResult.Decision.Name,
-		Confidence:   decisionResult.Confidence,
-		MatchedRules: decisionResult.MatchedRules,
+		DecisionName:        decisionResult.Decision.Name,
+		Confidence:          decisionResult.Confidence,
+		ConfidenceAvailable: confidenceAvailability(decisionResult.ConfidenceScored),
+		MatchedRules:        decisionResult.MatchedRules,
 	}
 }

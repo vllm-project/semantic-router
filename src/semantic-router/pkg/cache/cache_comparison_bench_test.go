@@ -23,6 +23,7 @@ func newInMemoryBench(b *testing.B, size int) LegacyCacheBackend {
 		maxEntries = 1000
 	}
 	return NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		SimilarityThreshold: 0.8,
 		MaxEntries:          maxEntries,
 		TTLSeconds:          300,

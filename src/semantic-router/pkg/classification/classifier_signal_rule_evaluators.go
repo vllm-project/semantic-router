@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -90,7 +90,7 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 		if basicErr != nil {
 			err = basicErr
 		} else {
-			domainResult = candle_binding.ClassResultWithProbs{
+			domainResult = tasks.ClassResultWithProbs{
 				Class:      basicResult.Class,
 				Confidence: basicResult.Confidence,
 			}
@@ -152,8 +152,13 @@ func (c *Classifier) evaluateFactCheckSignal(ctx context.Context, results *Signa
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.FactCheck.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	if signalName != "" && err == nil && factCheckResult != nil {
+	factScoreAvailable := err == nil && factCheckResult != nil && factCheckResult.ConfidenceAvailable
+	results.Metrics.FactCheck.ConfidenceAvailable = &factScoreAvailable
+	if factScoreAvailable {
 		results.Metrics.FactCheck.Confidence = float64(factCheckResult.Confidence)
+	}
+	if factCheckResult != nil {
+		results.Metrics.FactCheck.PolicyDefault = factCheckResult.PolicyDefault
 	}
 
 	logging.Debugf("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
@@ -202,8 +207,13 @@ func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *Si
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.UserFeedback.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	if signalName != "" && err == nil && feedbackResult != nil {
+	feedbackScoreAvailable := err == nil && feedbackResult != nil && feedbackResult.ConfidenceAvailable
+	results.Metrics.UserFeedback.ConfidenceAvailable = &feedbackScoreAvailable
+	if feedbackScoreAvailable {
 		results.Metrics.UserFeedback.Confidence = float64(feedbackResult.Confidence)
+	}
+	if feedbackResult != nil {
+		results.Metrics.UserFeedback.PolicyDefault = feedbackResult.PolicyDefault
 	}
 
 	logging.Debugf("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)

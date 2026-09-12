@@ -1,4 +1,4 @@
-# The route-action profile runs prompt_guard with protocol: http_classify
+# The route-action profile runs prompt_guard with backend.protocol: http_classify
 # against a deliberately unreachable endpoint - it never runs local (candle)
 # jailbreak inference, so it doesn't need the real
 # mmbert32k-jailbreak-detector-merged model weights. It still needs *a*

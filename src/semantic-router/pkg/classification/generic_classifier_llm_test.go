@@ -50,7 +50,7 @@ func TestLLMLabelClassifierReturnsReportedDistribution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newLLMLabelClassifier() error = %v", err)
 	}
-	classifier.(*llmLabelClassifier).client.baseURL = server.URL
+	setTestVLLMClientURL(classifier.(*llmLabelClassifier).client, server.URL)
 
 	result, err := classifier.Classify(context.Background(), "delete production")
 	if err != nil {

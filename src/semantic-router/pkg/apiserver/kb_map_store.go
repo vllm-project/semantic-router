@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 var knowledgeBaseMapEmbeddingFunc = candle_binding.GetEmbeddingWithModelType
@@ -111,16 +113,22 @@ func knowledgeBaseMapModelType(cfg *config.RouterConfig) string {
 }
 
 func (s *ClassificationAPIServer) ensureKnowledgeBaseMapArtifacts(
+	ctx context.Context,
 	cfg *config.RouterConfig,
 	baseDir string,
 	kb config.KnowledgeBaseConfig,
+	prepared *embedding.Set,
 ) (*knowledgeBaseMapArtifacts, error) {
+	provider, err := prepared.Get(knowledgeBaseMapModelType(cfg), 0, 0)
+	if err != nil {
+		return nil, err
+	}
 	definition, err := config.LoadKnowledgeBaseDefinition(baseDir, kb.Source)
 	if err != nil {
 		return nil, err
 	}
 	modelType := knowledgeBaseMapModelType(cfg)
-	signature, err := knowledgeBaseMapSignature(kb, definition, modelType)
+	signature, err := knowledgeBaseMapSignature(kb, definition, modelType+":"+embedding.Identity(provider))
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +136,7 @@ func (s *ClassificationAPIServer) ensureKnowledgeBaseMapArtifacts(
 		return item, nil
 	}
 
-	item, err := buildKnowledgeBaseMapArtifacts(kb, definition, modelType)
+	item, err := buildKnowledgeBaseMapArtifactsWithContext(ctx, kb, definition, modelType, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -137,17 +145,19 @@ func (s *ClassificationAPIServer) ensureKnowledgeBaseMapArtifacts(
 	return item, nil
 }
 
-func buildKnowledgeBaseMapArtifacts(
+func buildKnowledgeBaseMapArtifactsWithContext(
+	ctx context.Context,
 	kb config.KnowledgeBaseConfig,
 	definition config.KnowledgeBaseDefinition,
 	modelType string,
+	providers ...embedding.Provider,
 ) (*knowledgeBaseMapArtifacts, error) {
 	labelNames := sortedKnowledgeBaseLabelNames(definition)
 	if len(labelNames) == 0 {
 		return nil, fmt.Errorf("knowledge base %q has no labels", kb.Name)
 	}
 
-	rawPoints, err := buildKnowledgeBaseRawPoints(definition, labelNames, modelType)
+	rawPoints, err := buildKnowledgeBaseRawPointsWithContext(ctx, definition, labelNames, modelType, providers...)
 	if err != nil {
 		return nil, err
 	}
@@ -197,10 +207,12 @@ func sortedKnowledgeBaseGroupNames(groups map[string][]string) []string {
 	return names
 }
 
-func buildKnowledgeBaseRawPoints(
+func buildKnowledgeBaseRawPointsWithContext(
+	ctx context.Context,
 	definition config.KnowledgeBaseDefinition,
 	labelNames []string,
 	modelType string,
+	providers ...embedding.Provider,
 ) ([]kbRawPoint, error) {
 	rawPoints := make([]kbRawPoint, 0)
 	for labelIndex, labelName := range labelNames {
@@ -210,12 +222,22 @@ func buildKnowledgeBaseRawPoints(
 			if text == "" {
 				continue
 			}
-			output, err := knowledgeBaseMapEmbeddingFunc(text, modelType, 0)
+			var vectorValues []float32
+			var err error
+			if len(providers) > 0 && providers[0] != nil {
+				vectorValues, err = providers[0].Embed(ctx, text)
+			} else {
+				var output *candle_binding.EmbeddingOutput
+				output, err = knowledgeBaseMapEmbeddingFunc(text, modelType, 0)
+				if err == nil {
+					vectorValues = output.Embedding
+				}
+			}
 			if err != nil {
 				return nil, fmt.Errorf("embed exemplar for label %q: %w", labelName, err)
 			}
-			vector := make([]float64, 0, len(output.Embedding))
-			for _, value := range output.Embedding {
+			vector := make([]float64, 0, len(vectorValues))
+			for _, value := range vectorValues {
 				vector = append(vector, float64(value))
 			}
 			rawPoints = append(rawPoints, kbRawPoint{

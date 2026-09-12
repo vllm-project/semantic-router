@@ -16,6 +16,7 @@ import (
 // FusionLooper implements Fusion-style multi-model deliberation:
 // parallel panel responses, judge analysis, then a final synthesized answer.
 type FusionLooper struct {
+	grounding *GroundingBackends
 	*BaseLooper
 }
 

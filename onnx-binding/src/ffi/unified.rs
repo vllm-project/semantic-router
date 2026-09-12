@@ -105,7 +105,7 @@ fn create_default_security() -> CSecurityResult {
 }
 
 /// Initialize unified classifier (stub - not implemented)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn init_unified_classifier_c(
     _intent_model_path: *const c_char,
     _pii_model_path: *const c_char,
@@ -118,7 +118,7 @@ pub extern "C" fn init_unified_classifier_c(
 }
 
 /// Initialize LoRA unified classifier (stub - not implemented)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn init_lora_unified_classifier(
     _intent_model_path: *const c_char,
     _pii_model_path: *const c_char,
@@ -131,7 +131,7 @@ pub extern "C" fn init_lora_unified_classifier(
 }
 
 /// Classify batch with unified classifier (stub)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn classify_unified_batch(
     _texts: *const *const c_char,
     _num_texts: i32,
@@ -146,7 +146,7 @@ pub extern "C" fn classify_unified_batch(
 }
 
 /// Classify batch with LoRA (stub)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn classify_batch_with_lora(
     _texts: *const *const c_char,
     _num_texts: i32,
@@ -161,7 +161,7 @@ pub extern "C" fn classify_batch_with_lora(
 }
 
 /// Free unified batch result
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
     if result.is_null() {
         return;
@@ -190,7 +190,7 @@ pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
 }
 
 /// Free LoRA batch result
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
     if result.is_null() {
         return;

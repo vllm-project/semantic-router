@@ -343,6 +343,18 @@ impl DebertaV3Classifier {
     /// println!("Predicted: {} ({:.1}%)", label, confidence * 100.0);
     /// ```
     pub fn classify_text(&self, text: &str) -> Result<(String, f32)> {
+        let (index, confidence, _) = self.classify_text_with_probabilities(text)?;
+        Ok((
+            self.id2label
+                .get(&index)
+                .cloned()
+                .unwrap_or_else(|| format!("LABEL_{}", index)),
+            confidence,
+        ))
+    }
+
+    /// Return the actual softmax distribution, never reconstructed from top-1.
+    pub fn classify_text_with_probabilities(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
         // Tokenize input
         let result = self.tokenizer.tokenize_for_traditional(text)?;
         let (token_ids_tensor, attention_mask_tensor) = self.tokenizer.create_tensors(&result)?;
@@ -368,13 +380,7 @@ impl DebertaV3Classifier {
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or((0, &0.0));
 
-        let label = self
-            .id2label
-            .get(&predicted_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("LABEL_{}", predicted_idx));
-
-        Ok((label, max_prob))
+        Ok((predicted_idx, max_prob, probs_vec))
     }
 
     /// Classify a batch of texts efficiently

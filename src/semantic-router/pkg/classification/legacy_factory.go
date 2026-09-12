@@ -9,9 +9,20 @@ import (
 
 // NewLegacyClassifierFromConfig loads mapping assets and builds the legacy
 // classifier runtime for callers that still use the non-unified path.
-func NewLegacyClassifierFromConfig(cfg *config.RouterConfig) (*Classifier, error) {
+func NewLegacyClassifierFromConfig(cfg *config.RouterConfig, runtimeOptions ...RecipeRuntimeOptions) (*Classifier, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
+	}
+	plan, err := config.CompileModelBindings(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.RoutingScope == "" {
+		cfg = cfg.ConfigForRecipe(cfg.DefaultRecipe())
+	}
+	cfg, err = config.ProjectRecipeModelBindings(cfg, plan, cfg.RoutingScope)
+	if err != nil {
+		return nil, err
 	}
 
 	categoryMapping, err := loadLegacyCategoryMapping(cfg)
@@ -27,9 +38,13 @@ func NewLegacyClassifierFromConfig(cfg *config.RouterConfig) (*Classifier, error
 		return nil, err
 	}
 
-	classifier, err := NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	classifier, err := buildClassifierWithAdmission(cfg, categoryMapping, piiMapping, jailbreakMapping, nil, runtimeOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
+	}
+	if err := classifier.InitializeRuntime(); err != nil {
+		_ = classifier.Close()
+		return nil, fmt.Errorf("failed to initialize classifier: %w", err)
 	}
 	return classifier, nil
 }

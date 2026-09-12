@@ -228,7 +228,7 @@ impl ModernBertVariant {
 /// Supports both standard ModernBERT and mmBERT (multilingual) variants.
 /// The variant is auto-detected from config.json or can be explicitly specified.
 pub struct TraditionalModernBertClassifier {
-    model: ModernBert,
+    model: Arc<ModernBert>,
     head: Option<FixedModernBertHead>,
     classifier: FixedModernBertClassifier,
     classifier_pooling: ClassifierPooling,
@@ -243,14 +243,14 @@ pub struct TraditionalModernBertClassifier {
 ///
 /// Supports both standard ModernBERT and mmBERT (multilingual) variants.
 pub struct TraditionalModernBertTokenClassifier {
-    model: ModernBert,
+    model: Arc<ModernBert>,
     head: Option<FixedModernBertHead>,
     classifier: FixedModernBertTokenClassifier,
     tokenizer: Box<dyn DualPathTokenizer>,
     device: Device,
     config: Config,
     num_classes: usize,
-    model_path: String,
+    labels: HashMap<String, String>,
     variant: ModernBertVariant,
 }
 
@@ -897,7 +897,7 @@ impl TraditionalModernBertClassifier {
 
         drain_loader_queue(&device);
         Ok(Self {
-            model,
+            model: Arc::new(model),
             head,
             classifier,
             classifier_pooling: ClassifierPooling::MEAN, // Use MEAN pooling as per model config
@@ -1144,7 +1144,7 @@ impl TraditionalModernBertClassifier {
         };
 
         Ok(Self {
-            model,
+            model: Arc::new(model),
             head,
             classifier,
             classifier_pooling,
@@ -1562,14 +1562,15 @@ impl TraditionalModernBertTokenClassifier {
 
         drain_loader_queue(&device);
         Ok(Self {
-            model,
+            model: Arc::new(model),
             head,
             classifier,
             tokenizer,
             device,
             config,
             num_classes,
-            model_path: model_id.to_string(),
+            labels: crate::ffi::classify::load_id2label_from_config(&config_path.to_string_lossy())
+                .unwrap_or_default(),
             variant,
         })
     }
@@ -1649,43 +1650,9 @@ impl TraditionalModernBertTokenClassifier {
         let predictions = logits_squeezed.argmax(D::Minus1)?;
         let predictions_vec = predictions.to_vec1::<u32>()?;
 
-        // Load id2label mapping
-        let config_path = format!(
-            "{}/config.json",
-            self.model_path
-                .trim_end_matches("/model.safetensors")
-                .trim_end_matches("/pytorch_model.bin")
-        );
-        let id2label = match crate::ffi::classify::load_id2label_from_config(&config_path) {
-            Ok(mapping) => mapping,
-            Err(_) => {
-                // Fallback: return individual token results without any label processing
-                for (token_idx, token_probs) in probs_data.iter().enumerate() {
-                    if token_idx < tokenization_result.tokens.len()
-                        && token_idx < tokenization_result.offsets.len()
-                    {
-                        let (predicted_class, &confidence) = token_probs
-                            .iter()
-                            .enumerate()
-                            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-                            .unwrap();
-
-                        let offset = tokenization_result.offsets[token_idx];
-                        let token_text = if offset.0 < text.len()
-                            && offset.1 <= text.len()
-                            && offset.0 < offset.1
-                        {
-                            text[offset.0..offset.1].to_string()
-                        } else {
-                            tokenization_result.tokens[token_idx].clone()
-                        };
-
-                        results.push((token_text, predicted_class, confidence, offset.0, offset.1));
-                    }
-                }
-                return Ok(results);
-            }
-        };
+        // Labels are captured with the binding at load time. Reloading a file on
+        // every request would let an old generation silently adopt new semantics.
+        let id2label = &self.labels;
 
         // Check if labels are BIO format (start with B- or I-) or simple format (like SUPPORTED/HALLUCINATED)
         let is_bio_format = id2label
@@ -1761,6 +1728,9 @@ impl TraditionalModernBertTokenClassifier {
 
     /// Get class labels if available
     pub fn get_class_labels(&self) -> Option<&HashMap<String, String>> {
-        None
+        Some(&self.labels)
     }
 }
+
+mod instances;
+pub use instances::ModernBertBackbone;

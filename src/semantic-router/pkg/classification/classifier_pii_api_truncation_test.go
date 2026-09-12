@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // A provider-declared truncation carries valid spans for the part it saw. The
@@ -34,7 +34,7 @@ func TestPIIDetectionAPIsKeepPartialSpansUnderOnErrorAllow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			classifier, _, mockModel := newTestPIIClassifier()
 			classifier.Config.PIIModel.OnError = tc.onError
-			mockModel.setMockResponse(text, []candle_binding.TokenEntity{email}, ErrTokenSpansTruncated)
+			mockModel.setMockResponse(text, []tasks.TokenEntity{email}, ErrTokenSpansTruncated)
 
 			detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 			assertTruncationOutcome(t, "ClassifyPIIWithDetails", tc.wantErr, err, len(detections) > 0, tc.wantEntities)

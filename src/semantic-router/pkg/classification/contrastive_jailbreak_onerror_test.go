@@ -119,8 +119,11 @@ func TestEvaluateContrastiveJailbreakRule_OnErrorBlockFailsClosedOnEmbedFailure(
 	if results.JailbreakType != JailbreakClassificationErrorType {
 		t.Errorf("JailbreakType = %q, want %q", results.JailbreakType, JailbreakClassificationErrorType)
 	}
-	if results.SignalConfidences["jailbreak:"+rule.Name] != 1.0 {
-		t.Errorf("SignalConfidences = %v, want 1.0", results.SignalConfidences["jailbreak:"+rule.Name])
+	if _, exists := results.SignalConfidences["jailbreak:"+rule.Name]; exists {
+		t.Fatal("policy match fabricated a signal confidence")
+	}
+	if !results.SignalErrorMatches["jailbreak:"+rule.Name] || results.JailbreakScoreAvailable {
+		t.Fatal("policy match must expose its error origin and unavailable score")
 	}
 }
 

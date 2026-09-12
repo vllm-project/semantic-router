@@ -174,6 +174,11 @@ helm-ci-validate: helm-ci-setup
 	@python3 tools/ci/check_backend_target_compatibility.py \
 		--rendered-helm "$(HELM_BACKEND_TARGET_OUTPUT)"
 	@echo "Backend target compatibility rendering verified"
+	@helm template model-runtime-release $(HELM_CHART_PATH) \
+		-f deploy/helm/testdata/model-runtime-values.yaml \
+		> "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
+	@python3 deploy/helm/check-model-runtime.py "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
+	@echo "Model deployment and recipe binding rendering verified"
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards

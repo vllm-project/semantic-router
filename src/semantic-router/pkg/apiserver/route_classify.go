@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -139,7 +140,15 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 		return
 	}
 
-	unifiedResults, err := service.ClassifyBatchUnifiedWithOptions(req.Texts, req.Options)
+	var unifiedResults *services.UnifiedBatchResponse
+	var err error
+	if contextual, ok := service.(interface {
+		ClassifyBatchUnifiedContext(context.Context, []string, interface{}) (*services.UnifiedBatchResponse, error)
+	}); ok {
+		unifiedResults, err = contextual.ClassifyBatchUnifiedContext(r.Context(), req.Texts, req.Options)
+	} else {
+		unifiedResults, err = service.ClassifyBatchUnifiedWithOptions(req.Texts, req.Options)
+	}
 	if err != nil {
 		metrics.RecordBatchClassificationError("unified", "classification_failed")
 		s.writeErrorResponse(w, http.StatusInternalServerError, "UNIFIED_CLASSIFICATION_ERROR", err.Error())
@@ -206,6 +215,7 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(
 
 	return req, true
 }
+
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter, service classificationService) bool {
 	if !service.HasUnifiedClassifier() {
 		metrics.RecordBatchClassificationError("unified", "classifier_unavailable")

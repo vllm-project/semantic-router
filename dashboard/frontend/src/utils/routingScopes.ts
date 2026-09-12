@@ -1,6 +1,7 @@
 export const DEFAULT_ROUTING_SCOPE_ID = 'default'
 
 export interface RoutingProfileLike {
+  model_bindings?: Record<string, unknown>
   signals?: Record<string, unknown>
   projections?: Record<string, unknown>
   decisions?: unknown[]
@@ -75,6 +76,7 @@ export function hasRoutingProfileContent(profile: RoutingProfileLike | undefined
   return (
     countSignalsInProfile(profile).total > 0 ||
     countProjectionsInProfile(profile) > 0 ||
+    Object.keys(profile?.model_bindings ?? {}).length > 0 ||
     arrayCount(profile?.decisions) > 0
   )
 }
@@ -88,10 +90,7 @@ function defaultRoutingProfile(config: RoutingScopedConfigLike): RoutingProfileL
   }
 }
 
-function entrypointNamesForRecipe(
-  config: RoutingScopedConfigLike,
-  recipeName: string,
-): string[] {
+function entrypointNamesForRecipe(config: RoutingScopedConfigLike, recipeName: string): string[] {
   return [
     ...new Set(
       (config.entrypoints ?? [])
@@ -111,7 +110,9 @@ export function listRoutingScopes(config: RoutingScopedConfigLike | null): Routi
   const namedRecipes = recipes.filter((recipe) => recipe.name !== DEFAULT_ROUTING_SCOPE_ID)
   const defaultRouting = explicitDefault?.routing ?? defaultRoutingProfile(config)
   const includeDefault =
-    Boolean(explicitDefault) || hasRoutingProfileContent(defaultRouting) || namedRecipes.length === 0
+    Boolean(explicitDefault) ||
+    hasRoutingProfileContent(defaultRouting) ||
+    namedRecipes.length === 0
 
   const scopes: RoutingScope[] = []
   if (includeDefault) {
@@ -176,6 +177,7 @@ export function applyRoutingScopeProjection<T extends RoutingScopedConfigLike>(
   const next = cloneValue(baseConfig)
   const routing: RoutingProfileLike = {
     ...cloneValue(scope.routing),
+    model_bindings: cloneValue(projectedConfig.routing?.model_bindings),
     signals: cloneValue(projectedConfig.signals ?? projectedConfig.routing?.signals),
     projections: cloneValue(projectedConfig.projections ?? projectedConfig.routing?.projections),
     decisions: cloneValue(projectedConfig.decisions ?? projectedConfig.routing?.decisions ?? []),

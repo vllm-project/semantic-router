@@ -166,6 +166,16 @@ impl LoRATokenClassifier {
         })
     }
 
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+
+    /// Owned task bindings receive the full token predictions and apply their
+    /// policy thresholds above this model boundary.
+    pub fn include_all_predictions(&mut self) {
+        self.confidence_threshold = -1.0;
+    }
+
     /// Load token configuration from model config.json using unified config loader
     fn load_token_config(model_path: &str) -> Result<crate::core::config_loader::TokenConfig> {
         use crate::core::config_loader::{ConfigLoader, TokenConfigLoader};
@@ -184,7 +194,7 @@ impl LoRATokenClassifier {
         let tokens = self.tokenize_with_bert_compatible(text)?;
         let mut results = Vec::new();
 
-        for (i, (token, token_embedding)) in tokens.iter().enumerate() {
+        for (token, token_embedding, start, end) in &tokens {
             // Use real BERT embedding from tokenization
 
             // Add batch dimension: [hidden_size] -> [1, hidden_size]
@@ -226,8 +236,8 @@ impl LoRATokenClassifier {
                     label_id: predicted_id,
                     label_name,
                     confidence,
-                    start_pos: i * token.len(), // Simplified position calculation
-                    end_pos: (i + 1) * token.len(),
+                    start_pos: *start,
+                    end_pos: *end,
                 });
             }
         }
@@ -243,7 +253,7 @@ impl LoRATokenClassifier {
     }
 
     /// BERT-compatible tokenization with embeddings
-    fn tokenize_with_bert_compatible(&self, text: &str) -> Result<Vec<(String, Tensor)>> {
+    fn tokenize_with_bert_compatible(&self, text: &str) -> Result<Vec<TokenEmbedding>> {
         // Use real BERT tokenization through unified tokenizer
         let tokenization_result = self
             .tokenizer
@@ -281,7 +291,8 @@ impl LoRATokenClassifier {
             if i < seq_len {
                 // Extract embedding for this token
                 let token_embedding = token_embeddings.i(i)?; // Shape: [hidden_size]
-                results.push((token.clone(), token_embedding));
+                let (start, end) = tokenization_result.offsets[i];
+                results.push((token.clone(), token_embedding, start, end));
             }
         }
 
@@ -360,3 +371,6 @@ impl std::fmt::Debug for LoRATokenClassifier {
             .finish()
     }
 }
+
+// Token text, hidden state, and original byte range.
+type TokenEmbedding = (String, Tensor, usize, usize);
