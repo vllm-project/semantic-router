@@ -1909,6 +1909,10 @@ func TestEmbeddingConsistency(t *testing.T) {
 		// Check that embeddings are identical (or very close)
 		maxDiff := 0.0
 		for i := range embedding1 {
+			if math.IsNaN(float64(embedding1[i])) || math.IsInf(float64(embedding1[i]), 0) ||
+				math.IsNaN(float64(embedding2[i])) || math.IsInf(float64(embedding2[i]), 0) {
+				t.Fatalf("Invalid embedding value at index %d: %f, %f", i, embedding1[i], embedding2[i])
+			}
 			diff := math.Abs(float64(embedding1[i] - embedding2[i]))
 			if diff > maxDiff {
 				maxDiff = diff
@@ -1922,8 +1926,8 @@ func TestEmbeddingConsistency(t *testing.T) {
 		}
 	})
 
-	t.Run("DifferentDimensionsSharePrefix", func(t *testing.T) {
-		// Test that Matryoshka embeddings are prefixes of full embeddings
+	t.Run("DifferentDimensionsShareNormalizedPrefix", func(t *testing.T) {
+		// Matryoshka truncation preserves the prefix direction and restores unit norm.
 		full768, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
 		if err != nil {
 			t.Fatalf("Failed to get 768-dim embedding: %v", err)
@@ -1934,19 +1938,49 @@ func TestEmbeddingConsistency(t *testing.T) {
 			t.Fatalf("Failed to get 256-dim embedding: %v", err)
 		}
 
-		// Check that first 256 values match
+		for _, embedding := range []struct {
+			values    []float32
+			dimension int
+		}{
+			{full768, 768},
+			{mat256, 256},
+		} {
+			if len(embedding.values) != embedding.dimension {
+				t.Fatalf("Expected %d-dim embedding, got %d", embedding.dimension, len(embedding.values))
+			}
+			normSquared := 0.0
+			for i, value := range embedding.values {
+				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+					t.Fatalf("Invalid %d-dim embedding value at index %d: %f", embedding.dimension, i, value)
+				}
+				normSquared += float64(value) * float64(value)
+			}
+			if norm := math.Sqrt(normSquared); math.Abs(norm-1) > TestEpsilon {
+				t.Fatalf("Expected unit-norm %d-dim embedding, got norm %e", embedding.dimension, norm)
+			}
+		}
+
+		prefixNormSquared := 0.0
+		for _, value := range full768[:len(mat256)] {
+			prefixNormSquared += float64(value) * float64(value)
+		}
+		prefixNorm := math.Sqrt(prefixNormSquared)
+		if prefixNorm <= 0 || math.IsNaN(prefixNorm) || math.IsInf(prefixNorm, 0) {
+			t.Fatalf("Cannot normalize embedding prefix with norm %e", prefixNorm)
+		}
+
 		maxDiff := 0.0
-		for i := 0; i < 256; i++ {
-			diff := math.Abs(float64(full768[i] - mat256[i]))
+		for i, value := range mat256 {
+			diff := math.Abs(float64(full768[i])/prefixNorm - float64(value))
 			if diff > maxDiff {
 				maxDiff = diff
 			}
 		}
 
 		if maxDiff > TestEpsilon {
-			t.Errorf("Matryoshka prefix differs from full embedding: max diff = %e", maxDiff)
+			t.Errorf("Matryoshka embedding differs from normalized prefix: max diff = %e", maxDiff)
 		} else {
-			t.Logf("Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
+			t.Logf("Matryoshka 256 matches normalized prefix of 768 (max diff: %e)", maxDiff)
 		}
 	})
 }
