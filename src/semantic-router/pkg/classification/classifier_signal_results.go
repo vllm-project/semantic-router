@@ -15,6 +15,14 @@ type SignalMetrics struct {
 	ConfidenceAvailable *bool   `json:"confidence_available,omitempty"`
 }
 
+// DomainClassificationResult preserves one domain evaluation before routing
+// thresholds select matches. A failed evaluation has no available confidence.
+type DomainClassificationResult struct {
+	Category            string
+	Confidence          float64
+	ConfidenceAvailable bool
+}
+
 // SignalResults contains all evaluated signal results.
 type SignalResults struct {
 	MatchedKeywordRules       []string
@@ -45,6 +53,9 @@ type SignalResults struct {
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
 	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
+
+	// Nil means the domain evaluator did not run for this request.
+	DomainClassification *DomainClassificationResult
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDecision       *tasks.LabelDecision // Present for categorical verdicts without probabilities

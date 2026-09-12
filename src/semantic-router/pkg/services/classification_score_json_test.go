@@ -14,7 +14,8 @@ func TestIntentPolicyMatchHasNoModelProbability(t *testing.T) {
 	service := &ClassificationService{}
 	signals := &classification.SignalResults{SignalErrorMatches: map[string]bool{"jailbreak:guard": true}}
 	result := &decision.DecisionResult{Decision: &config.Decision{Name: "guard"}, Confidence: 1, ConfidenceScored: false}
-	response := service.buildIntentResponseFromSignals(signals, result, "guard", 1, 0, IntentRequest{Options: &IntentOptions{ReturnProbabilities: true}}, nil, nil)
+	category := resolveIntentCategory(context.Background(), nil, result, signals, "")
+	response := service.buildIntentResponseFromSignals(signals, result, category, IntentRequest{Options: &IntentOptions{ReturnProbabilities: true}}, nil, nil)
 	raw, err := json.Marshal(response)
 	if err != nil {
 		t.Fatal(err)

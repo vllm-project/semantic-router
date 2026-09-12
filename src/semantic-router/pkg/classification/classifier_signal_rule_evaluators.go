@@ -106,11 +106,17 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 			categoryName = c.translateMMLUToGeneric(name)
 		}
 	}
+	results.DomainClassification = &DomainClassificationResult{
+		Category:            categoryName,
+		Confidence:          float64(domainResult.Confidence),
+		ConfidenceAvailable: err == nil && categoryName != "",
+	}
 
 	c.recordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
 
 	// Record metrics
 	results.Metrics.Domain.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+	results.Metrics.Domain.ConfidenceAvailable = &results.DomainClassification.ConfidenceAvailable
 	if categoryName != "" && err == nil {
 		results.Metrics.Domain.Confidence = float64(domainResult.Confidence)
 	}

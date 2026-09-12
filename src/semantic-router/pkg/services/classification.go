@@ -237,22 +237,21 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		}
 	}
 
-	category, confidence := resolveIntentCategory(
+	category := resolveIntentCategory(
 		ctx,
 		classifier,
 		decisionResult,
+		signals,
 		input.evaluationText,
 	)
 
-	processingTime := time.Since(start).Milliseconds()
+	category.ProcessingTimeMs = time.Since(start).Milliseconds()
 
 	// Build response from signals and decision
 	response := s.buildIntentResponseFromSignals(
 		signals,
 		decisionResult,
 		category,
-		confidence,
-		processingTime,
 		req,
 		classifier,
 		runtimeConfig,
