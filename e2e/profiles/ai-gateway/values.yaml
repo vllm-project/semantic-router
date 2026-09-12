@@ -100,6 +100,27 @@ config:
               ttl_turns: 0
               keep_current_model: true
               prefer_prefix_retention: true
+      - name: history_reset_probe_decision
+        description: "Deterministic keyword-gated route carrying a disabled history_reset plugin, used by the history-reset-negative E2E to assert that a configured-but-disabled reset forwards the complete conversation (issue #3343)."
+        priority: 605
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: history_reset_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: history_reset
+            configuration:
+              enabled: false
+              trigger:
+                signal: topic_boundary
+                min_confidence: 0.9
+              scope: eligible_history
+              failure_mode: fail_open
       - name: looper_metrics_probe_decision
         description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
         priority: 610
@@ -732,6 +753,11 @@ config:
           operator: OR
           keywords:
             - __RETENTION_PROBE__
+          case_sensitive: false
+        - name: history_reset_probe_keywords
+          operator: OR
+          keywords:
+            - __HISTORY_RESET_PROBE__
           case_sensitive: false
         - name: looper_metrics_probe_keywords
           operator: OR

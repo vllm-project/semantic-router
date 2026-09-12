@@ -74,6 +74,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightToken = inflight.Begin(selectedModel)
+	bindHistoryResetPolicy(ctx)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		inflight.End(selectedModel, ctx.InflightToken)
 		ctx.InflightToken = 0
@@ -196,6 +197,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
+	prepareContextHistorySteps(ctx, request)
 	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
 		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
 	}

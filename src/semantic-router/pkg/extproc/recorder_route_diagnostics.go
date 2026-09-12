@@ -66,6 +66,7 @@ func buildReplayRouteDiagnostics(
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 	}
+	diagnostics.HistoryReset = historyResetReplayDiagnostics(ctx)
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}

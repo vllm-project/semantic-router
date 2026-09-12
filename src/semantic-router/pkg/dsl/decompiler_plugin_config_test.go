@@ -346,3 +346,61 @@ func findDecisionPluginForTest(t *testing.T, decision config.Decision, pluginTyp
 	}
 	return *plugin
 }
+
+func TestHistoryResetPluginNestedRoundTrip(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "reset",
+				ModelRefs: []config.ModelRef{{Model: "model"}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginHistoryReset,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": false,
+						"trigger": map[string]interface{}{
+							"signal":         "topic_boundary",
+							"min_confidence": 0.9,
+						},
+						"scope":        "eligible_history",
+						"failure_mode": "fail_closed",
+						"limits": map[string]interface{}{
+							"max_history_turns": 64,
+						},
+					}),
+				}},
+			}},
+		},
+	}
+	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
+	assertDecompiledPluginConfigContains(t, dslText, []string{
+		"PLUGIN history_reset",
+		"trigger:",
+		"limits:",
+	})
+	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
+	plugin := findDecisionPluginForTest(
+		t,
+		compiled.Decisions[0],
+		config.DecisionPluginHistoryReset,
+	)
+	var pluginConfig config.HistoryResetPluginConfig
+	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
+		t.Fatalf("history_reset decode error: %v", err)
+	}
+	if pluginConfig.IsEnabled() {
+		t.Fatal("history_reset.enabled = true, want false")
+	}
+	if pluginConfig.Trigger == nil || pluginConfig.Trigger.Signal != "topic_boundary" {
+		t.Fatalf("history_reset trigger = %#v", pluginConfig.Trigger)
+	}
+	confidence, present := pluginConfig.EffectiveMinConfidence()
+	if !present || confidence != 0.9 {
+		t.Fatalf("history_reset min_confidence = %v (present=%v)", confidence, present)
+	}
+	if pluginConfig.EffectiveFailureMode() != config.HistoryResetFailureClosed {
+		t.Fatalf("history_reset failure_mode = %q", pluginConfig.EffectiveFailureMode())
+	}
+	if pluginConfig.EffectiveLimits().MaxHistoryTurns != 64 {
+		t.Fatalf("history_reset limits = %#v", pluginConfig.EffectiveLimits())
+	}
+}

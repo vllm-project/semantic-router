@@ -841,6 +841,25 @@ routing:
                 - target
               max_target_tokens: 16000
             failure_mode: fail_open
+        - type: history_reset
+          configuration:
+            enabled: false
+            trigger:
+              signal: topic_boundary
+              min_confidence: 0.9
+            scope: eligible_history
+            failure_mode: fail_open
+            limits:
+              max_history_turns: 128
+              max_history_bytes: 1048576
+              timeout_ms: 50
+            recovery:
+              enabled: false
+              store: response_cache
+              ttl_seconds: 900
+              max_bytes_per_request: 10485760
+              max_total_bytes: 268435456
+              max_retrievals: 8
         - type: tools
           configuration:
             enabled: true

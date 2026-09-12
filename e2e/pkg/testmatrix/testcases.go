@@ -37,6 +37,9 @@ var BaselineRouterContract = []string{
 	"rule-condition-logic",
 	"decision-fallback-behavior",
 	"plugin-config-variations",
+	// A configured but disabled history_reset forwards the complete
+	// conversation (issue #3343)
+	"history-reset-negative",
 	"chat-completions-progressive-stress",
 	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)

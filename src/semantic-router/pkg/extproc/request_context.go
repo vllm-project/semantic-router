@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -309,6 +310,13 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
+
+	// History reset state. HistoryResetTrigger is the seam a topic-continuity
+	// signal fills; the action treats an absent result as missing evidence.
+	HistoryResetPolicy       *config.HistoryResetPluginConfig
+	HistoryResetTrigger      *historyreset.TriggerResult
+	HistoryResetAction       *historyreset.Action
+	HistoryResetDiagnostics  *historyreset.Diagnostics
 	SemanticResponse         *llmprotocol.Response
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope

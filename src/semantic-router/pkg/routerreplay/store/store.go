@@ -226,10 +226,27 @@ type RouteDiagnostics struct {
 	ContextCompressionQuality      string                   `json:"context_compression_quality,omitempty"`
 	ContextCompressionFallback     string                   `json:"context_compression_fallback,omitempty"`
 	ContextCompressionCostSaved    float64                  `json:"context_compression_cost_saved,omitempty"`
+	HistoryReset                   *HistoryResetDiagnostics `json:"history_reset,omitempty"`
 	RequestDemandSnapshots         []RequestDemandSnapshot  `json:"request_demand_snapshots,omitempty"`
 	Annotations                    map[string]interface{}   `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string        `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies         map[string]string        `json:"applied_unknown_policies,omitempty"`
+}
+
+// HistoryResetDiagnostics records one history-reset evaluation. It carries
+// counts and bounded reason codes only: no message text, tool arguments, or
+// recovery keys ever reach replay storage.
+type HistoryResetDiagnostics struct {
+	Signal            string `json:"signal,omitempty"`
+	TriggerClass      string `json:"trigger_class,omitempty"`
+	Version           string `json:"signal_version,omitempty"`
+	Outcome           string `json:"outcome,omitempty"`
+	Reason            string `json:"reason,omitempty"`
+	ExaminedMessages  int    `json:"examined_messages,omitempty"`
+	RetainedMessages  int    `json:"retained_messages,omitempty"`
+	ProtectedMessages int    `json:"protected_messages,omitempty"`
+	RemovedMessages   int    `json:"removed_messages,omitempty"`
+	RemovedTurns      int    `json:"removed_turns,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
