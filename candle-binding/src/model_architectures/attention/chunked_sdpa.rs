@@ -81,6 +81,12 @@ pub(crate) fn chunked_sdpa_with_key_block(
     let (_b, _heads, q_len, _head_dim) = q.dims4()?;
     let k_len = k.dim(2)?;
     let device = q.device();
+    let out_dtype = q.dtype();
+    let compute_dtype = match out_dtype {
+        DType::F16 | DType::BF16 => DType::F32,
+        dtype => dtype,
+    };
+    let max_floor = f32::MIN as f64;
 
     // Fold the scale into the queries once (cheap, O(seq*d)) before chunking.
     let q = (q * cfg.scale)?.contiguous()?;
@@ -129,20 +135,27 @@ pub(crate) fn chunked_sdpa_with_key_block(
             );
         }
 
-        let q_blk = q.narrow(2, qs, blk)?.contiguous()?; // (b, heads, blk, hd)
+        let q_blk = q
+            .narrow(2, qs, blk)?
+            .to_dtype(compute_dtype)?
+            .contiguous()?; // (b, heads, blk, hd)
         let mut running: Option<(Tensor, Tensor, Tensor)> = None;
         let mut kb = ks;
         while kb < ke {
             let kw = key_block.min(ke - kb);
             let k_t = k
                 .narrow(2, kb, kw)?
+                .to_dtype(compute_dtype)?
                 .transpose(D::Minus2, D::Minus1)?
                 .contiguous()?;
-            let v_win = v.narrow(2, kb, kw)?.contiguous()?;
+            let v_win = v.narrow(2, kb, kw)?.to_dtype(compute_dtype)?.contiguous()?;
 
             let mut scores = q_blk.matmul(&k_t)?;
             if let Some(pad_mask) = pad_mask {
-                scores = scores.broadcast_add(&pad_mask.narrow(D::Minus1, kb, kw)?)?;
+                let pad_slice = pad_mask
+                    .narrow(D::Minus1, kb, kw)?
+                    .to_dtype(compute_dtype)?;
+                scores = scores.broadcast_add(&pad_slice)?;
             }
             if let Some(window) = cfg.window {
                 let band = build_local_band_mask(q_abs_start, blk, kb, kw, window, device)?
@@ -158,14 +171,16 @@ pub(crate) fn chunked_sdpa_with_key_block(
             let block_max = scores.max_keepdim(D::Minus1)?;
             running = Some(match running {
                 None => {
-                    let probs = scores.broadcast_sub(&block_max)?.exp()?;
+                    let safe_max = block_max.maximum(max_floor)?;
+                    let probs = scores.broadcast_sub(&safe_max)?.exp()?;
                     let sum = probs.sum_keepdim(D::Minus1)?;
                     (block_max, sum, probs.matmul(&v_win)?)
                 }
                 Some((prev_max, prev_sum, prev_acc)) => {
                     let new_max = prev_max.maximum(&block_max)?;
-                    let carry = prev_max.broadcast_sub(&new_max)?.exp()?;
-                    let probs = scores.broadcast_sub(&new_max)?.exp()?;
+                    let safe_max = new_max.maximum(max_floor)?;
+                    let carry = prev_max.broadcast_sub(&safe_max)?.exp()?;
+                    let probs = scores.broadcast_sub(&safe_max)?.exp()?;
                     let sum = (prev_sum.mul(&carry)? + probs.sum_keepdim(D::Minus1)?)?;
                     let acc = (prev_acc.broadcast_mul(&carry)? + probs.matmul(&v_win)?)?;
                     (new_max, sum, acc)
@@ -174,7 +189,7 @@ pub(crate) fn chunked_sdpa_with_key_block(
             kb += kw;
         }
         let (_, sum, acc) = running.expect("key range is non-empty");
-        out_blocks.push(acc.broadcast_div(&sum)?);
+        out_blocks.push(acc.broadcast_div(&sum)?.to_dtype(out_dtype)?);
 
         qs = qe;
     }
