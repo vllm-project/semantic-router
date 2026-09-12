@@ -137,11 +137,23 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 			RepoID:          repoID,
 			Revision:        modelRevision(path, repoID),
 			RequiredFiles:   requiredFiles,
-			ExcludePatterns: excludePatternsByModel[config.ResolveModelPath(path)],
+			ExcludePatterns: modelDownloadExcludePatterns(path, repoID, excludePatternsByModel[config.ResolveModelPath(path)]),
 		})
 	}
 
 	return specs, nil
+}
+
+func modelDownloadExcludePatterns(path, repoID string, runtimePatterns []string) []string {
+	patterns := slices.Clone(runtimePatterns)
+	if model := config.GetModelByPath(path); model != nil && model.RepoID == repoID {
+		for _, pattern := range model.DownloadExcludePatterns {
+			if !slices.Contains(patterns, pattern) {
+				patterns = append(patterns, pattern)
+			}
+		}
+	}
+	return patterns
 }
 
 func modelRevision(path, repoID string) string {
