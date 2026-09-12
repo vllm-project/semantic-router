@@ -196,6 +196,39 @@ fn nli_distribution_and_hallucination_answer_window_are_preserved() {
 }
 
 #[test]
+fn hallucination_without_label_metadata_preserves_binary_adapter_contract() {
+    let dir = fixture(&["SUPPORTED", "HALLUCINATED"], 1);
+    let explicit = load(options(&dir), "hallucination").unwrap();
+    let expected = value(explicit.hallucination("hello", "", "é 猫", 0.5).unwrap());
+    let config_path = dir.path().join("config.json");
+    let mut config: Value = serde_json::from_slice(&std::fs::read(&config_path).unwrap()).unwrap();
+    config.as_object_mut().unwrap().remove("id2label");
+    config.as_object_mut().unwrap().remove("label2id");
+    std::fs::write(&config_path, config.to_string()).unwrap();
+
+    let implicit = load(options(&dir), "hallucination").unwrap();
+    assert_eq!(implicit.info.labels, ["SUPPORTED", "HALLUCINATED"]);
+    let actual = value(implicit.hallucination("hello", "", "é 猫", 0.5).unwrap());
+    assert_eq!(actual, expected);
+    assert_eq!(actual["spans"][0]["text"], "é 猫");
+    // Generic token tasks cannot acquire the dedicated detector's semantics.
+    assert!(load(options(&dir), "token").unwrap().info.labels.is_empty());
+}
+
+#[test]
+fn hallucination_rejects_nonbinary_head_without_label_mapping() {
+    let dir = fixture(&["first", "second", "third"], 1);
+    let config_path = dir.path().join("config.json");
+    let mut config: Value = serde_json::from_slice(&std::fs::read(&config_path).unwrap()).unwrap();
+    config.as_object_mut().unwrap().remove("id2label");
+    config.as_object_mut().unwrap().remove("label2id");
+    config["num_labels"] = json!(3);
+    std::fs::write(&config_path, config.to_string()).unwrap();
+    let error = load(options(&dir), "hallucination").err().unwrap();
+    assert!(error.to_string().contains("binary token classifier"));
+}
+
+#[test]
 fn explicit_budget_and_device_reject_invalid_capabilities() {
     let dir = fixture(&["safe", "unsafe"], 0);
     let mut opts = options(&dir);

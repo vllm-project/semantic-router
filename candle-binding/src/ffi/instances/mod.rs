@@ -397,7 +397,7 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
         "configuration: overflow must be truncate or reject"
     );
     ensure!(!generative || overflow == "reject", "capability: generative task inputs use reject overflow to preserve full templates and candidates");
-    let labels = if task == "backbone" {
+    let mut labels = if task == "backbone" {
         vec![]
     } else {
         raw["id2label"]
@@ -421,6 +421,19 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
         ensure!(labels.len() == 3, "capability: NLI requires three labels");
     }
     if task == "hallucination" {
+        let Model::Token(model) = &model else {
+            bail!("capability: hallucination requires token classifier")
+        };
+        ensure!(
+            model.get_num_classes() == 2,
+            "capability: hallucination requires a binary token classifier"
+        );
+        if raw.get("id2label").is_none() {
+            // The maintained detector omits id2label. Its dedicated legacy
+            // adapter defines 0 = SUPPORTED and 1 = HALLUCINATED; preserve
+            // that contract only after loading and checking the binary head.
+            labels = vec!["SUPPORTED".to_owned(), "HALLUCINATED".to_owned()];
+        }
         ensure!(
             labels.len() == 2,
             "capability: hallucination requires two labels"

@@ -154,6 +154,57 @@ func TestOwnedNativeSequenceLifecycle(t *testing.T) {
 	}
 }
 
+// Set this to the maintained binary detector whose config omits id2label.
+// The ordinary hermetic lane exercises the same contract with tiny tensors.
+func TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata(t *testing.T) {
+	path := os.Getenv("CANDLE_INSTANCE_HALLUCINATION_MODEL")
+	if path == "" {
+		t.Skip("set CANDLE_INSTANCE_HALLUCINATION_MODEL to the maintained checkpoint")
+	}
+	data, err := os.ReadFile(filepath.Join(path, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]json.RawMessage
+	if err = json.Unmarshal(data, &config); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := config["id2label"]; present {
+		t.Fatal("this regression requires the maintained artifact without id2label")
+	}
+	model, err := LoadHallucinationDetector(InstanceOptions{ModelPath: path, ModelType: "modernbert", Device: "cpu"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer model.Close()
+	info, err := model.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(info.Labels, []string{"SUPPORTED", "HALLUCINATED"}) {
+		t.Fatalf("dedicated binary adapter labels: %v", info.Labels)
+	}
+	for _, answer := range []string{"Paris is the capital of France.", "Berlin is the capital of France."} {
+		result, callErr := model.Detect("Paris is the capital of France.", "What is the capital of France?", answer, 0.5)
+		if callErr != nil {
+			t.Fatal(callErr)
+		}
+		if result.Input.InputTokens == 0 || result.Input.ProcessedTokens == 0 || result.OffsetUnit != "utf8_bytes" {
+			t.Fatalf("missing native input/offset metadata: %+v", result)
+		}
+		for _, span := range result.Spans {
+			if span.Start < 0 || span.End > len(answer) || span.Start >= span.End || answer[span.Start:span.End] != span.Text || span.Label != "HALLUCINATED" {
+				t.Fatalf("invalid answer span: %+v", span)
+			}
+		}
+		encoded, marshalErr := json.Marshal(result)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		t.Logf("answer=%q output=%s", answer, encoded)
+	}
+}
+
 func TestOwnedNativeHeadBinding(t *testing.T) {
 	a, err := LoadSequenceClassifier(InstanceOptions{ModelPath: ownedModelFixture(t, 0)})
 	if err != nil {

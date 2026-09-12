@@ -1451,6 +1451,10 @@ pub(crate) fn merge_bio_entities(text: &str, tokens: &[BioToken<'_>]) -> Vec<Bio
 }
 
 impl TraditionalModernBertTokenClassifier {
+    pub fn get_num_classes(&self) -> usize {
+        self.num_classes
+    }
+
     /// Create a new traditional ModernBERT token classifier with auto-detected variant
     pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
         // Auto-detect variant from config.json
