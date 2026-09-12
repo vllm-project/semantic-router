@@ -50,8 +50,20 @@ def read_rows(paths, count):
     return rows
 
 
-def masked_loss(logits, targets, mask, accumulation=1):
-    """Mean of per-example mean observed BCE; each example has equal weight."""
+def loss_denominator(mask, normalization="observed"):
+    """Unknown labels contribute zero; normalization only sets example weight."""
+    observed = mask.sum(dim=-1)
+    if bool((observed == 0).any()):
+        raise ValueError("Each example needs observed labels")
+    if normalization == "observed":
+        return observed
+    if normalization == "taxonomy":
+        return observed.new_full(observed.shape, mask.shape[-1])
+    raise ValueError("Unknown masked BCE normalization")
+
+
+def masked_loss(logits, targets, mask, accumulation=1, *, normalization="observed"):
+    """Masked BCE with explicit observed-label or fixed-taxonomy normalization."""
     from torch.nn import functional
 
     if accumulation <= 0 or bool((mask.sum(dim=-1) == 0).any()):
@@ -59,7 +71,9 @@ def masked_loss(logits, targets, mask, accumulation=1):
     losses = functional.binary_cross_entropy_with_logits(
         logits.float(), targets.float(), reduction="none"
     )
-    return ((losses * mask).sum(dim=-1) / mask.sum(dim=-1)).mean() / accumulation
+    return (
+        (losses * mask).sum(dim=-1) / loss_denominator(mask, normalization)
+    ).mean() / accumulation
 
 
 def score_predictions(rows, probabilities, labels, thresholds=None):

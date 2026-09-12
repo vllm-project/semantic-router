@@ -16,6 +16,36 @@ from src.training.model_classifier.safety_classifier.vela_hazard_diagnostics imp
     "Torch optional locally; required on training node",
 )
 class GradientDiagnosticsTests(unittest.TestCase):
+    def test_taxonomy_normalization_preserves_mask_and_accumulation(self):
+        import torch
+
+        targets = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
+        mask = torch.tensor([[1.0, 0.0, 0.0], [1.0, 1.0, 1.0], [1.0, 1.0, 0.0]])
+        values = torch.tensor([[0.2, -0.4, 0.8], [1.2, 0.1, -0.7], [0.3, -0.2, 0.8]])
+        observed = values.clone().requires_grad_()
+        masked_loss(observed, targets, mask).backward()
+        whole = values.clone().requires_grad_()
+        masked_loss(whole, targets, mask, normalization="taxonomy").backward()
+        torch.testing.assert_close(whole.grad[0], observed.grad[0] / 3)
+        torch.testing.assert_close(whole.grad[1], observed.grad[1])
+        torch.testing.assert_close(whole.grad[2], observed.grad[2] * (2 / 3))
+        self.assertEqual(whole.grad[0, 1:].tolist(), [0.0, 0.0])
+        torch.testing.assert_close(
+            whole.grad, logit_loss_gradient(whole, targets, mask, 3, "taxonomy")
+        )
+        split = values.clone().requires_grad_()
+        for indices in [[0], [1, 2]]:
+            loss = masked_loss(
+                split[indices],
+                targets[indices],
+                mask[indices],
+                normalization="taxonomy",
+            ) * (len(indices) / 3)
+            loss.backward()
+        torch.testing.assert_close(whole.grad, split.grad)
+        with self.assertRaisesRegex(ValueError, "normalization"):
+            masked_loss(whole, targets, mask, normalization="invalid")
+
     def test_observed_mean_gradient_matches_autograd(self):
         import torch
 

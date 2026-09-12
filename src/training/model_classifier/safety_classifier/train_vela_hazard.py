@@ -150,6 +150,9 @@ def main():
     parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--microbatch-token-budget", type=int)
     parser.add_argument("--supervision-diagnostics", action="store_true")
+    parser.add_argument(
+        "--loss-normalization", choices=["observed", "taxonomy"], default="observed"
+    )
     parser.add_argument("--selection-minimum-support", type=int, default=1)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--eval-every", type=int, default=150)
@@ -235,7 +238,10 @@ def main():
         "dev": file_receipts(args.dev),
         "rejected": rejected,
         "labels": labels,
-        "objective": "mean per-example masked BCE; no loss for unknown labels",
+        "objective": (
+            f"mean per-example masked BCE normalized by {args.loss_normalization}; "
+            "no loss for unknown labels"
+        ),
         "examples_per_optimizer_step": args.batch_size * args.accumulate,
         "microbatch_token_budget": args.microbatch_token_budget,
         "dropout_trajectory_equivalence": args.microbatch_token_budget is None,
@@ -299,7 +305,9 @@ def main():
     sampled_unique, sampled_sources, sampled_languages = set(), Counter(), Counter()
     positive_exposures = [0] * len(labels)
     diagnostics = (
-        SupervisionDiagnostics(labels) if args.supervision_diagnostics else None
+        SupervisionDiagnostics(labels, args.loss_normalization)
+        if args.supervision_diagnostics
+        else None
     )
 
     def draw_microbatch_indices():
@@ -367,11 +375,17 @@ def main():
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     logits = model(**batch).logits
                     if args.microbatch_token_budget is None:
-                        loss = masked_loss(logits, target, mask, args.accumulate)
-                    else:
-                        loss = masked_loss(logits, target, mask) * (
-                            len(selected) / (args.batch_size * args.accumulate)
+                        loss = masked_loss(
+                            logits,
+                            target,
+                            mask,
+                            args.accumulate,
+                            normalization=args.loss_normalization,
                         )
+                    else:
+                        loss = masked_loss(
+                            logits, target, mask, normalization=args.loss_normalization
+                        ) * (len(selected) / (args.batch_size * args.accumulate))
                 if not bool(torch.isfinite(loss)):
                     raise ValueError("Nonfinite hazard loss")
                 loss.backward()
@@ -444,6 +458,17 @@ def main():
             )
             (output / f"dev-step-{step}.json").write_text(
                 json.dumps(metrics, indent=2) + "\n"
+            )
+            # Keep operating-point evidence even when the AP selector rejects
+            # this checkpoint. These are development predictions, never test.
+            (output / f"dev-probabilities-step-{step}.json").write_text(
+                json.dumps(
+                    [
+                        {"id": row["id"], "probabilities": scores}
+                        for row, scores in zip(dev, probabilities, strict=True)
+                    ]
+                )
+                + "\n"
             )
             score = development_selection_score(
                 metrics, args.selection, args.selection_minimum_support

@@ -2,29 +2,40 @@
 
 from collections import Counter, defaultdict
 
+from .vela_hazard import loss_denominator
 
-def logit_loss_gradient(logits, targets, mask, global_examples):
-    """Exact d(loss)/d(logit) for the trainer's observed-mean BCE objective."""
+
+def logit_loss_gradient(
+    logits, targets, mask, global_examples, normalization="observed"
+):
+    """Exact d(loss)/d(logit) for the trainer's declared masked BCE objective."""
     if global_examples <= 0 or bool((mask.sum(-1) == 0).any()):
         raise ValueError("Positive global examples and observed supervision required")
     return (
         (logits.detach().float().sigmoid() - targets.float())
         * mask
-        / mask.sum(-1, keepdim=True)
+        / loss_denominator(mask, normalization).unsqueeze(-1)
         / global_examples
     )
 
 
 class SupervisionDiagnostics:
-    def __init__(self, labels):
+    def __init__(self, labels, normalization="observed"):
+        if normalization not in {"observed", "taxonomy"}:
+            raise ValueError("Unknown masked BCE normalization")
         self.labels = labels
+        self.normalization = normalization
         self.sources = {}
         self.head_gradient_norm_sums = defaultdict(lambda: [0.0] * len(labels))
         self.gradient_steps = 0
 
     def observe(self, rows, logits, targets, mask, global_examples):
         gradients = (
-            logit_loss_gradient(logits, targets, mask, global_examples).cpu().tolist()
+            logit_loss_gradient(
+                logits, targets, mask, global_examples, self.normalization
+            )
+            .cpu()
+            .tolist()
         )
         for row, gradient in zip(rows, gradients, strict=True):
             source = row["source"]
@@ -87,7 +98,12 @@ class SupervisionDiagnostics:
 
     def snapshot(self):
         return {
-            "objective": "Per-example mean over observed labels, then global-example mean",
+            "objective": (
+                "Per-example mean over observed labels, then global-example mean"
+                if self.normalization == "observed"
+                else "Per-example masked sum divided by taxonomy size, then global-example mean; unknown labels remain zero loss"
+            ),
+            "loss_normalization": self.normalization,
             "logit_gradient_scope": "Exact BCE gradient before clipping; source-wise absolute sums are not signed net encoder gradients",
             "head_gradient_scope": "Actual final classifier row norm before clipping, summed per optimizer step; mixed-source gradients cannot be attributed to one source",
             "gradient_steps": self.gradient_steps,

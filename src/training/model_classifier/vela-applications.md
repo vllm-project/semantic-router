@@ -233,9 +233,16 @@ token budget. Each example retains its global-batch loss weight. This changes
 dropout random-number consumption, so record a new recipe rather than claim
 an identical continuation of a previous run. Keep short development retention
 in checkpoint selection.
-Hazard first averages BCE over each example's observed labels, then weights
+Hazard defaults to `--loss-normalization observed`: it averages BCE over each example's observed labels, then weights
 that example by the complete optimizer-step sample count. Examples with more
 observed categories do not receive extra weight when microbatch sizes differ.
+The explicit `--loss-normalization taxonomy` alternative divides each masked
+sum by the fixed output dimension. It reduces partially annotated examples'
+relative influence without supplying any negative label for an unknown category.
+Treat this as a different training objective and compare it with identical data,
+sampling and initialization. Supervision diagnostics record the actual selected
+objective. Every development checkpoint retains per-row probabilities so that
+AP selection cannot hide a different recall/false-positive operating point.
 Report full-context and chunked/windowed policies as separate systems.
 
 ## Freeze, evaluate, and export
