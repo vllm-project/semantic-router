@@ -102,12 +102,16 @@ func TestReconcileKubernetesConfigValidationDispatch(t *testing.T) {
 	}
 
 	reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
+	reconciler.onConfigUpdate = func(*config.RouterConfig) error {
+		t.Fatal("invalid global config must not be published")
+		return nil
+	}
 	gotErr := reconciler.validateAndUpdate(context.Background(), pool, route)
 	if gotErr == nil {
 		t.Fatal("validateAndUpdate: expected shared K8s config validation error, got nil")
 	}
 	for _, want := range []string{
-		"kubernetes config validation failed:",
+		"failed to normalize canonical config:",
 		"tools.advanced_filtering.candidate_pool_size must be >= 0",
 	} {
 		if !strings.Contains(gotErr.Error(), want) {
@@ -235,8 +239,8 @@ func buildEmbeddingModalityRoute(namespace, ruleName, queryModality string) *v1a
 
 // buildEmbeddingModalityStaticConfig returns the static base RouterConfig
 // the operator would supply to the reconciler. ConfigSource is set to
-// Kubernetes to mirror operator-mode bootstrap, which is the path where
-// validateConfigStructure early-returns and PR-C closes the resulting gap.
+// Kubernetes to mirror operator-mode bootstrap, where routing contracts are
+// deferred until CRDs have been merged.
 func buildEmbeddingModalityStaticConfig(modelType string) *config.RouterConfig {
 	return &config.RouterConfig{
 		ConfigSource: config.ConfigSourceKubernetes,
