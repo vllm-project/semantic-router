@@ -181,15 +181,6 @@ export function boolExprToRuleNode(expr: Record<string, unknown> | null): RuleNo
   }
 }
 
-export function pathEq(a: NodePath, b: NodePath): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index])
-}
-
-export function pathStartsWith(path: NodePath, prefix: NodePath): boolean {
-  if (prefix.length > path.length) return false
-  return prefix.every((value, index) => value === path[index])
-}
-
 export function getNodeAtPath(root: RuleNode, path: NodePath): RuleNode | null {
   if (path.length === 0) return root
   if (!isOperator(root)) return null

@@ -15,23 +15,3 @@
 export function getTranslateAttr(isStreaming: boolean): 'no' | undefined {
   return isStreaming ? 'no' : undefined
 }
-
-/**
- * Get className with notranslate when streaming
- * @param baseClass - Base CSS class name
- * @param isStreaming - Whether content is currently being streamed/animated
- * @returns Combined className string
- */
-export function getNoTranslateClass(baseClass: string, isStreaming: boolean): string {
-  return isStreaming ? `${baseClass} notranslate` : baseClass
-}
-
-/**
- * Props to spread on dynamic elements to prevent translation during streaming
- */
-export function getNoTranslateProps(isStreaming: boolean) {
-  return {
-    translate: getTranslateAttr(isStreaming),
-    className: isStreaming ? 'notranslate' : undefined,
-  }
-}

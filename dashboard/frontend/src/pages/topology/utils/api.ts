@@ -76,45 +76,6 @@ export async function testQueryDryRun(
 }
 
 /**
- * Call backend Simulate API for simulated routing (also uses backend now)
- */
-export async function testQuerySimulate(
-  query: string,
-  model?: string,
-): Promise<TestQueryResult> {
-  const response = await fetch('/api/topology/test-query', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      mode: 'simulate',
-      model,
-    }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Simulate API failed: ${response.statusText}`)
-  }
-
-  const data: TestQueryResponse = await response.json()
-
-  return {
-    query: data.query,
-    mode: data.mode,
-    isAccurate: data.isAccurate,
-    matchedSignals: convertSignals(data.matchedSignals),
-    matchedDecision: data.matchedDecision,
-    matchedModels: data.matchedModels,
-    highlightedPath: data.highlightedPath,
-    evaluatedRules: convertEvaluatedRules(data.evaluatedRules),
-    routingLatency: data.routingLatency,
-    warning: data.warning,
-    isFallbackDecision: data.isFallbackDecision,
-    fallbackReason: data.fallbackReason,
-  }
-}
-
-/**
  * Convert backend signal format to frontend format
  */
 function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSignal[] {

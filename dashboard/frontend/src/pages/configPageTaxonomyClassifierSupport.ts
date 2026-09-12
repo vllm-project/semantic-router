@@ -9,10 +9,6 @@ export interface TaxonomySignalReference {
   match?: 'best' | 'threshold'
 }
 
-export interface TaxonomyClassifierTier {
-  name: string
-}
-
 export interface TaxonomyClassifierCategory {
   name: string
   description?: string
@@ -71,16 +67,6 @@ export interface TaxonomyClassifierDraft {
   }>
 }
 
-export interface TaxonomyTierDraft {
-  name: string
-}
-
-export interface TaxonomyCategoryDraft {
-  name: string
-  description: string
-  exemplars: string[]
-}
-
 export function emptyTaxonomyClassifierDraft(): TaxonomyClassifierDraft {
   return {
     name: '',
@@ -96,20 +82,6 @@ export function emptyTaxonomyClassifierDraft(): TaxonomyClassifierDraft {
     groups: [],
     metrics: [],
     label_thresholds: [],
-  }
-}
-
-export function emptyTaxonomyTierDraft(): TaxonomyTierDraft {
-  return {
-    name: '',
-  }
-}
-
-export function emptyTaxonomyCategoryDraft(): TaxonomyCategoryDraft {
-  return {
-    name: '',
-    description: '',
-    exemplars: [],
   }
 }
 
@@ -137,20 +109,6 @@ export function classifierDraftFromRecord(record: TaxonomyClassifierRecord): Tax
       label,
       threshold,
     })),
-  }
-}
-
-export function tierDraftFromTier(tier: TaxonomyClassifierTier): TaxonomyTierDraft {
-  return {
-    name: tier.name,
-  }
-}
-
-export function categoryDraftFromCategory(category: TaxonomyClassifierCategory): TaxonomyCategoryDraft {
-  return {
-    name: category.name,
-    description: category.description ?? '',
-    exemplars: [...category.exemplars],
   }
 }
 
@@ -381,155 +339,4 @@ export function countMetricsForGroup(record: TaxonomyClassifierRecord, groupName
   return (record.metrics ?? []).filter(
     (metric) => metric.positive_group === groupName || metric.negative_group === groupName
   ).length
-}
-
-function rewriteGroupsOnLabelRename(
-  groups: TaxonomyClassifierDraft['groups'],
-  originalName: string,
-  nextName: string
-) {
-  return groups.map((group) => ({
-    ...group,
-    labels: group.labels
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item) => (item === originalName ? nextName : item)),
-  }))
-}
-
-function rewriteGroupsOnLabelDelete(
-  groups: TaxonomyClassifierDraft['groups'],
-  labelName: string
-) {
-  return groups
-    .map((group) => ({
-      ...group,
-      labels: group.labels
-        .map((item) => item.trim())
-        .filter((item) => item && item !== labelName),
-    }))
-    .filter((group) => group.name.trim())
-}
-
-function rewriteThresholdsOnLabelRename(
-  thresholds: TaxonomyClassifierDraft['label_thresholds'],
-  originalName: string,
-  nextName: string
-) {
-  return thresholds.map((entry) =>
-    entry.label === originalName ? { ...entry, label: nextName } : entry
-  )
-}
-
-function rewriteThresholdsOnLabelDelete(
-  thresholds: TaxonomyClassifierDraft['label_thresholds'],
-  labelName: string
-) {
-  return thresholds.filter((entry) => entry.label !== labelName)
-}
-
-function rewriteMetricsOnGroupRename(
-  metrics: TaxonomyClassifierDraft['metrics'],
-  originalName: string,
-  nextName: string
-) {
-  return metrics.map((metric) => ({
-    ...metric,
-    positive_group: metric.positive_group === originalName ? nextName : metric.positive_group,
-    negative_group: metric.negative_group === originalName ? nextName : metric.negative_group,
-  }))
-}
-
-export function renameTierInDraft(
-  draft: TaxonomyClassifierDraft,
-  originalName: string,
-  nextTier: TaxonomyTierDraft
-): TaxonomyClassifierDraft {
-  const nextName = nextTier.name.trim()
-  return {
-    ...draft,
-    groups: draft.groups.map((group) =>
-      group.name === originalName
-        ? { ...group, name: nextName }
-        : group
-    ),
-    metrics: rewriteMetricsOnGroupRename(draft.metrics, originalName, nextName),
-  }
-}
-
-export function addTierToDraft(
-  draft: TaxonomyClassifierDraft,
-  nextTier: TaxonomyTierDraft
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    groups: [
-      ...draft.groups,
-      {
-        name: nextTier.name.trim(),
-        labels: [],
-      },
-    ],
-  }
-}
-
-export function removeTierFromDraft(
-  draft: TaxonomyClassifierDraft,
-  tierName: string
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    groups: draft.groups.filter((group) => group.name !== tierName),
-  }
-}
-
-export function renameCategoryInDraft(
-  draft: TaxonomyClassifierDraft,
-  originalName: string,
-  nextCategory: TaxonomyCategoryDraft
-): TaxonomyClassifierDraft {
-  const nextName = nextCategory.name.trim()
-  return {
-    ...draft,
-    labels: draft.labels.map((label) =>
-      label.name === originalName
-        ? {
-            name: nextName,
-            description: nextCategory.description.trim(),
-            exemplars: nextCategory.exemplars.map((item) => item.trim()).filter(Boolean),
-          }
-        : label
-    ),
-    groups: rewriteGroupsOnLabelRename(draft.groups, originalName, nextName),
-    label_thresholds: rewriteThresholdsOnLabelRename(draft.label_thresholds, originalName, nextName),
-  }
-}
-
-export function addCategoryToDraft(
-  draft: TaxonomyClassifierDraft,
-  nextCategory: TaxonomyCategoryDraft
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    labels: [
-      ...draft.labels,
-      {
-        name: nextCategory.name.trim(),
-        description: nextCategory.description.trim(),
-        exemplars: nextCategory.exemplars.map((item) => item.trim()).filter(Boolean),
-      },
-    ],
-  }
-}
-
-export function removeCategoryFromDraft(
-  draft: TaxonomyClassifierDraft,
-  categoryName: string
-): TaxonomyClassifierDraft {
-  return {
-    ...draft,
-    labels: draft.labels.filter((label) => label.name !== categoryName),
-    groups: rewriteGroupsOnLabelDelete(draft.groups, categoryName),
-    label_thresholds: rewriteThresholdsOnLabelDelete(draft.label_thresholds, categoryName),
-  }
 }

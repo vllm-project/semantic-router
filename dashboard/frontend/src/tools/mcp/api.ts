@@ -178,17 +178,6 @@ export async function disconnectServer(id: string, signal?: AbortSignal): Promis
 }
 
 /**
- * 获取 MCP 服务器状态
- */
-export async function getServerStatus(id: string, signal?: AbortSignal): Promise<MCPServerState> {
-  const response = await fetch(`${API_BASE}/servers/${encodeURIComponent(id)}/status`, { signal })
-  if (!response.ok) {
-    throw new Error(`Failed to get server status: ${response.statusText}`)
-  }
-  return response.json()
-}
-
-/**
  * 测试 MCP 服务器连接
  */
 export async function testConnection(

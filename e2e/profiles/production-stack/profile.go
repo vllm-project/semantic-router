@@ -34,8 +34,6 @@ const (
 
 	// Namespace constants
 	namespaceSemanticRouter = "vllm-semantic-router-system"
-	namespaceEnvoyGateway   = "envoy-gateway-system"
-	namespaceAIGateway      = "envoy-ai-gateway-system"
 	namespaceDefault        = "default"
 
 	// Deployment name constants

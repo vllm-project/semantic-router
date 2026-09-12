@@ -201,38 +201,6 @@ export function filterAndSortOpenClawRooms<T extends OpenClawRoomLike>(
     })
 }
 
-export interface OpenClawTeamCompositionRow<
-  TTeam extends OpenClawTeamLike,
-  TWorker extends OpenClawWorkerLike,
-> {
-  key: string
-  team: TTeam | null
-  workers: TWorker[]
-}
-
-export function buildOpenClawTeamComposition<
-  TTeam extends OpenClawTeamLike,
-  TWorker extends OpenClawWorkerLike,
->(
-  teams: readonly TTeam[],
-  workers: readonly TWorker[],
-): OpenClawTeamCompositionRow<TTeam, TWorker>[] {
-  const rows = new Map<string, OpenClawTeamCompositionRow<TTeam, TWorker>>()
-  for (const team of teams) rows.set(team.id, { key: team.id, team, workers: [] })
-  for (const worker of workers) {
-    const key = worker.teamId?.trim() || '__unassigned__'
-    if (!rows.has(key)) rows.set(key, { key, team: null, workers: [] })
-    rows.get(key)?.workers.push(worker)
-  }
-  return [...rows.values()]
-    .filter((row) => row.team !== null || row.workers.length > 0)
-    .sort(
-      (left, right) =>
-        right.workers.length - left.workers.length ||
-        compareName(left.team?.name || 'Unassigned', right.team?.name || 'Unassigned'),
-    )
-}
-
 export function paginateOpenClawItems<T>(items: readonly T[], page: number, pageSize: number): T[] {
   const safePage = Math.max(1, page)
   return items.slice((safePage - 1) * pageSize, safePage * pageSize)

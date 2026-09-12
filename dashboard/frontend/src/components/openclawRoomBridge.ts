@@ -69,10 +69,6 @@ export const postRoomContextToFrame = (iframe: HTMLIFrameElement, roomId: string
   target.postMessage(buildRoomBridgeEnvelope('room_context', roomId), '*')
 }
 
-export const publishSurfaceEvent = (roomId: string, payload: Record<string, unknown>): void => {
-  window.parent.postMessage(buildRoomBridgeEnvelope('surface_event', roomId, { payload }), '*')
-}
-
 export const buildRoomSurfaceWSMessage = (
   payload: Record<string, unknown>,
   sender: RoomSurfaceEventSender = {},

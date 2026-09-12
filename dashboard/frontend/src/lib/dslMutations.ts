@@ -656,26 +656,6 @@ function isDSLFieldObject(value: DSLFieldValue): value is DSLFieldObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/**
- * Rename an entity (signal, plugin, backend).
- * Finds the block and replaces the old name with the new name in the header.
- */
-export function renameSignal(
-  src: string,
-  signalType: string,
-  oldName: string,
-  newName: string,
-): string {
-  const block = findBlock(src, 'SIGNAL', signalType, oldName)
-  if (!block) return src
-
-  const newHeader = block.body.replace(
-    new RegExp(`^SIGNAL\\s+${escRe(signalType)}\\s+${escRe(oldName)}`),
-    `SIGNAL ${signalType} ${newName}`,
-  )
-  return src.slice(0, block.start) + newHeader + src.slice(block.end)
-}
-
 // ---------- Helpers ----------
 
 function escRe(s: string): string {

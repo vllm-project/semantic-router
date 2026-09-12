@@ -255,14 +255,6 @@ export function buildLabelRows(
     }))
 }
 
-export function buildKnowledgeBaseCounts(knowledgeBases: TaxonomyClassifierRecord[]) {
-  return {
-    total: knowledgeBases.length,
-    builtin: knowledgeBases.filter((knowledgeBase) => knowledgeBase.builtin).length,
-    custom: knowledgeBases.filter((knowledgeBase) => !knowledgeBase.builtin).length,
-  }
-}
-
 interface KnowledgeBaseColumnArgs {
   selectedKnowledgeBaseName?: string
   isReadonly: boolean

@@ -5,10 +5,6 @@ import type {
 } from '../types/modelCatalog'
 import type { EntrypointConfig } from './configPageSupport'
 
-export function modelCatalogVersionKey(catalog: BuiltInModelCatalogVersion): string {
-  return `${catalog.catalog_version}:${catalog.channel}`
-}
-
 export function modelsForCatalogVersion(
   catalog: BuiltInModelCatalog,
   version: BuiltInModelCatalogVersion,
