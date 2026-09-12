@@ -124,7 +124,7 @@ test-rust-flash-attn-module: rust-flash-attn
 test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal models (BERT, ModernBERT)
 	@$(LOG_TARGET)
 	@echo "Running candle-binding tests with minimal models (BERT, ModernBERT classifiers)..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
 		-run "^Test(OwnedNative.*|InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
 
@@ -141,7 +141,7 @@ test-owned-native: $(if $(CI),rust-ci,rust) harness-venv-install ## Test owned n
 		ORT_DYLIB_PATH="$$("$(AGENT_PYTHON)" -c 'import importlib.util, pathlib; root = pathlib.Path(importlib.util.find_spec("onnxruntime").origin).parent / "capi"; paths = list(root.glob("libonnxruntime.so.*")) + list(root.glob("libonnxruntime.*.dylib")); assert len(paths) == 1, paths; print(paths[0])')"; \
 		export ORT_DYLIB_PATH; \
 	fi; \
-	export LD_LIBRARY_PATH="$(CURDIR)/onnx-binding/target/release:$(CURDIR)/candle-binding/target/release:$(CURDIR)/ml-binding/target/release:$(CURDIR)/nlp-binding/target/release:$${LD_LIBRARY_PATH:-}"; \
+	export $(NATIVE_ENV); \
 	cd onnx-binding; \
 	CGO_ENABLED=1 go test -race -count=1 ./instance; \
 	cd ../src/semantic-router; \
@@ -180,14 +180,13 @@ test-binding-multimodal: $(if $(CI),rust-ci,rust) ## Run the multimodal model-ga
 		exit 1; \
 	fi
 	@echo "Running candle-binding multimodal Go tests..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		export MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race -run "^TestMultiModal" .
 	@echo "Running Go router multimodal integration tests (pkg/classification)..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		export MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} && \
 		cd src/semantic-router && CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(CURDIR)/candle-binding/target/release" \
 		go test -v -run "^TestEmbeddingClassifier_Integration" ./pkg/classification/
 
 # Exploratory lane for the #[ignore] Rust multimodal unit tests. Kept OUT of
@@ -206,32 +205,32 @@ test-binding-multimodal-rust-baseline: $(if $(CI),rust-ci,rust) ## Run the ignor
 test-binding-lora: $(if $(CI),rust-ci,rust) ## Run Go tests with LoRA and advanced embedding models
 	@$(LOG_TARGET)
 	@echo "Running candle-binding tests with LoRA and advanced embedding models..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
 		-run "^Test(BertTokenClassification|BertSequenceClassification|CandleBertClassifier|CandleBertTokenClassifier|CandleBertTokensWithLabels|LoRAUnifiedClassifier|GetEmbeddingSmart|InitEmbeddingModels|GetEmbeddingWithDim|EmbeddingConsistency|EmbeddingPriorityRouting|EmbeddingConcurrency)$$" \
 		|| { echo "⚠️  Warning: Some LoRA/embedding tests failed (may be due to missing restricted models), continuing..."; $(if $(CI),true,exit 1); }
 # Test the Rust library - all tests (conditionally use rust-ci in CI environments)
 test-binding: $(if $(CI),rust-ci,rust) ## Run all Go tests with the Rust static library
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race
 
 # Test with the candle-binding library (conditionally use rust-ci in CI environments)
 test-category-classifier: $(if $(CI),rust-ci,rust) ## Test domain classifier with candle-binding
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		cd src/training/classifier_model_fine_tuning && CGO_ENABLED=1 go run test_linear_classifier.go
 
 # Test the PII classifier (conditionally use rust-ci in CI environments)
 test-pii-classifier: $(if $(CI),rust-ci,rust) ## Test PII classifier with candle-binding
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		cd src/training/pii_model_fine_tuning && CGO_ENABLED=1 go run pii_classifier_verifier.go
 
 # Test the jailbreak classifier (conditionally use rust-ci in CI environments)
 test-jailbreak-classifier: $(if $(CI),rust-ci,rust) ## Test jailbreak classifier with candle-binding
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
 # Build the Rust library (with CUDA by default, Flash Attention optional)

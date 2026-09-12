@@ -1,3 +1,7 @@
+import json
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -109,6 +113,76 @@ class HarnessMakeContractTests(unittest.TestCase):
             'VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-$(AGENT_PYTHON)}"',
             backend,
         )
+
+    def test_native_environment_survives_subdirectory_and_vendor_overrides(
+        self,
+    ) -> None:
+        makefile = """.PHONY: native-env-probe native-env-parent
+native-env-parent:
+	@$(NATIVE_ENV) $(MAKE) --no-print-directory -f tools/make/common.mk -f $(lastword $(MAKEFILE_LIST)) native-env-probe
+native-env-probe:
+	@cd src/semantic-router && $(NATIVE_ENV) python3 -c 'import json, os; print(json.dumps({k: os.environ[k] for k in ("LD_LIBRARY_PATH", "CGO_LDFLAGS")}))'
+"""
+        environment = dict(os.environ)
+        environment["LD_LIBRARY_PATH"] = "/opt/vendor runtime/lib:/opt/openvino/lib"
+        environment["CGO_LDFLAGS"] = "-Wl,--as-needed -L/opt/vendor/lib"
+        directories = [
+            str(REPO_ROOT / binding / "target/release")
+            for binding in (
+                "candle-binding",
+                "onnx-binding",
+                "ml-binding",
+                "nlp-binding",
+            )
+        ]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mk") as fixture:
+            fixture.write(makefile)
+            fixture.flush()
+            for target, depth in (("native-env-probe", 1), ("native-env-parent", 2)):
+                with self.subTest(target=target):
+                    result = subprocess.run(
+                        [
+                            "make",
+                            "--no-print-directory",
+                            "-f",
+                            "tools/make/common.mk",
+                            "-f",
+                            fixture.name,
+                            target,
+                        ],
+                        cwd=REPO_ROOT,
+                        env=environment,
+                        text=True,
+                        capture_output=True,
+                        check=True,
+                    )
+                    actual = json.loads(result.stdout)
+                    self.assertEqual(
+                        actual["LD_LIBRARY_PATH"],
+                        ":".join(
+                            [*(directories * depth), environment["LD_LIBRARY_PATH"]]
+                        ),
+                    )
+                    self.assertEqual(
+                        actual["CGO_LDFLAGS"],
+                        " ".join(
+                            [
+                                *(
+                                    "-L" + directory
+                                    for directory in directories * depth
+                                ),
+                                environment["CGO_LDFLAGS"],
+                            ]
+                        ),
+                    )
+
+    def test_native_search_paths_have_one_make_owner(self) -> None:
+        for path in (REPO_ROOT / "tools/make").glob("*.mk"):
+            if path.name == "common.mk":
+                continue
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if "LD_LIBRARY_PATH=" in line or "CGO_LDFLAGS=" in line:
+                    self.assertNotIn("binding/target/release", line, str(path))
 
 
 if __name__ == "__main__":

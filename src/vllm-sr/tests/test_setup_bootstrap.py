@@ -119,5 +119,5 @@ def test_bootstrap_metadata_still_requires_a_mapping(tmp_path: Path):
     document = build_bootstrap_config()
     document["setup"] = "not metadata"
     config_path.write_text(yaml.safe_dump(document))
-    with pytest.raises(ConfigParseError, match="setup.*valid dictionary"):
+    with pytest.raises(ConfigParseError, match=r"setup.*valid dictionary"):
         parse_user_config(str(config_path), log_summary=False)
