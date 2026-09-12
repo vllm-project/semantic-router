@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 try:
     import torch
@@ -134,6 +136,41 @@ class RerankerPrecisionTest(unittest.TestCase):
             handle.remove()
         self.assertIs(selected, output.last_hidden_state)
         self.assertEqual(calls, [])
+
+    def test_saved_checkpoint_loads_in_eval_with_deterministic_dropout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            backbone = Path(directory) / "backbone"
+            checkpoint = Path(directory) / "checkpoint"
+            self.model.encoder.save_pretrained(backbone)
+            constructed = Matryoshka2DReranker(
+                str(backbone),
+                layer_indices=[1, 2],
+                dim_indices=[8],
+                use_flash_attn=False,
+                torch_dtype=torch.float32,
+            )
+            self.assertTrue(constructed.training)
+            constructed.save_pretrained(str(checkpoint))
+            loaded = Matryoshka2DReranker.from_pretrained(
+                str(checkpoint), use_flash_attn=False, torch_dtype=torch.float32
+            )
+        self.assertFalse(loaded.training)
+        self.assertTrue(all(not module.training for module in loaded.modules()))
+        dropouts = [
+            module
+            for module in loaded.modules()
+            if isinstance(module, torch.nn.Dropout)
+        ]
+        self.assertTrue(dropouts)
+        with torch.inference_mode():
+            expected = loaded(self.ids, self.mask)["logits"]
+            repeated = loaded(self.ids, self.mask)["logits"]
+            with torch.autocast("cpu", dtype=torch.bfloat16):
+                actual = loaded(self.ids, self.mask)["logits"]
+        torch.testing.assert_close(repeated, expected, atol=0, rtol=0)
+        torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+        loaded.train()
+        self.assertTrue(all(module.training for module in loaded.modules()))
 
 
 if __name__ == "__main__":

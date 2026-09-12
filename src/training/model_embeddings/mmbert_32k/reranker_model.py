@@ -335,7 +335,7 @@ class Matryoshka2DReranker(nn.Module):
 
     @classmethod
     def from_pretrained(cls, model_path: str, **kwargs):
-        """Restore an exported encoder and its custom classification heads."""
+        """Restore a checkpoint in evaluation mode; call train() to continue training."""
         heads_path = os.path.join(model_path, "classification_heads.pt")
         if not os.path.isfile(heads_path):
             raise FileNotFoundError(f"Missing trained reranker heads: {heads_path}")
@@ -354,4 +354,4 @@ class Matryoshka2DReranker(nn.Module):
         state = torch.load(heads_path, map_location="cpu", weights_only=True)
         model.layer_heads.load_state_dict(state, strict=True)
         logger.info("Loaded classification heads")
-        return model
+        return model.eval()
