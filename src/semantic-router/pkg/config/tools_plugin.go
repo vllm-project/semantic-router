@@ -40,6 +40,12 @@ type ToolsPluginConfig struct {
 	// used unchanged.  See issue #1832 for the contract scope; implementation
 	// of the strategies and the persisted-priors layer is staged in #1839.
 	DynamicRetrieval *DynamicRetrievalConfig `json:"dynamic_retrieval,omitempty" yaml:"dynamic_retrieval,omitempty"`
+	// TrustedFacts carries disabled-by-default typed facts that distinguish
+	// capability, authorization, availability, and Looper stage roles.
+	// When nil or with Enabled=false, the router behaves exactly as before
+	// this contract was introduced (issue #3476). Existing non-tool routing
+	// and requests without attested context remain unchanged.
+	TrustedFacts *TrustedFactsConfig `json:"trusted_facts,omitempty" yaml:"trusted_facts,omitempty"`
 }
 
 // DynamicRetrievalConfig is the decision-scoped contract for history-aware
@@ -70,6 +76,83 @@ type DynamicRetrievalConfig struct {
 	// back to the semantic-only ranking whenever the history evidence does
 	// not clear MinHistoryConfidence.
 	FallbackOnLowConfidence bool `json:"fallback_on_low_confidence,omitempty" yaml:"fallback_on_low_confidence,omitempty"`
+}
+
+// TrustedFactsConfig is the decision-scoped contract for trusted tool and
+// MCP capability facts (issue #3476). It is intentionally additive: when nil,
+// when Enabled is false, or when omitted, the router behaves exactly as
+// before. Authoritative inputs are limited to operator-owned recipe policy,
+// gateway-attested authorization context, and bounded/fresh runtime
+// availability. Generic client metadata, prompt text, and model output are
+// never authorization sources.
+type TrustedFactsConfig struct {
+	// Enabled gates the entire trusted-facts path. When false, none of the
+	// other fields are consulted and validation skips range checks.
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// Enforcement names the policy strength for candidate/verifier/advisor
+	// and final stages. Must be one of "disabled", "advisory", or
+	// "authoritative". When empty, EffectiveEnforcement returns "advisory"
+	// (observe-only) so enabling the block without a mode never enforces.
+	// Disabled-by-default means a nil or Enabled=false block; an Enabled
+	// block with empty enforcement is intentionally advisory, not disabled.
+	// Production authoritative use must set enforcement explicitly.
+	Enforcement string `json:"enforcement,omitempty" yaml:"enforcement,omitempty"`
+	// TrustSources lists the authoritative sources consulted. Allowed values
+	// are "operator-policy", "gateway-attested", and "runtime-fresh".
+	// Must declare at least one when Enabled. Values such as
+	// "client-metadata", "prompt", or "model-output" are never allowed.
+	TrustSources []string `json:"trust_sources,omitempty" yaml:"trust_sources,omitempty"`
+	// FreshnessSeconds bounds how old runtime availability evidence may be.
+	// 0 disables the freshness check. Must be in [0, 86400] when Enabled,
+	// and must be >0 when trust_sources includes "runtime-fresh" (a
+	// runtime-fresh claim without a bound would accept stale evidence).
+	FreshnessSeconds int `json:"freshness_seconds,omitempty" yaml:"freshness_seconds,omitempty"`
+	// StageRoles lists the Looper stage roles this decision may authorize.
+	// Allowed values are "candidate", "verifier", "advisor", and "final".
+	// Must declare at least one when Enabled.
+	StageRoles []string `json:"stage_roles,omitempty" yaml:"stage_roles,omitempty"`
+}
+
+// Trusted enforcement modes.
+const (
+	TrustedEnforcementDisabled      = "disabled"
+	TrustedEnforcementAdvisory      = "advisory"
+	TrustedEnforcementAuthoritative = "authoritative"
+)
+
+// Trusted trust-source values.
+const (
+	TrustedSourceOperatorPolicy  = "operator-policy"
+	TrustedSourceGatewayAttested = "gateway-attested"
+	TrustedSourceRuntimeFresh    = "runtime-fresh"
+)
+
+// Trusted Looper stage-role values.
+const (
+	TrustedStageCandidate = "candidate"
+	TrustedStageVerifier  = "verifier"
+	TrustedStageAdvisor   = "advisor"
+	TrustedStageFinal     = "final"
+)
+
+// TrustedFactsEnabled reports whether the decision opts in to trusted facts.
+// Returns false for nil receivers and for configurations where the
+// trusted_facts block is unset or disabled.
+func (c *ToolsPluginConfig) TrustedFactsEnabled() bool {
+	if c == nil || c.TrustedFacts == nil {
+		return false
+	}
+	return c.TrustedFacts.Enabled
+}
+
+// EffectiveEnforcement returns the enforcement mode, defaulting to
+// "advisory" (observe-only) when unset so that enabling the block never
+// silently enforces.
+func (t *TrustedFactsConfig) EffectiveEnforcement() string {
+	if t == nil || t.Enforcement == "" {
+		return TrustedEnforcementAdvisory
+	}
+	return t.Enforcement
 }
 
 // DynamicRetrievalWeights holds the combination weights for the hybrid
