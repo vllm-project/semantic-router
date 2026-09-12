@@ -19,6 +19,7 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 		{"Vela-1.0-Encoder-307M-PII", PurposePIIDetection, 35},
 		{"Vela-1.0-Encoder-307M-FactCheck", PurposeHallucinationSentinel, 2},
 		{"Vela-1.0-Encoder-307M-Modality", PurposeModalityDetection, 3},
+		{"Vela-1.0-Encoder-307M-Feedback", PurposeFeedbackDetection, 5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := "models/" + tc.name
