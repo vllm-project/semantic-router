@@ -236,7 +236,7 @@ func (i *modelInventory) addFile(path, artifact, revision string) error {
 	if filepath.Clean(root) != filepath.Clean(artifact) {
 		revision = ""
 	}
-	return i.add(ModelSpec{LocalPath: root, Revision: revision, RequiredFiles: []string{file}, FilesOnly: true, CheckONNX: filepath.Ext(file) == ".onnx"})
+	return i.add(ModelSpec{LocalPath: root, Revision: revision, RequiredFiles: []string{file}, FilesOnly: true, CheckONNX: filepath.Ext(file) == ".onnx", Strict: true})
 }
 
 func (i *modelInventory) add(next ModelSpec) error {

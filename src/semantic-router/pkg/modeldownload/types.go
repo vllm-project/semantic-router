@@ -18,8 +18,9 @@ type ModelSpec struct {
 	FilesOnly bool
 	// CheckONNX verifies declared external tensor files for downloaded graphs.
 	CheckONNX bool
-	// Strict marks explicitly selected deployments: download failure or missing
-	// required files cannot degrade to an older or unavailable artifact.
+	// Strict protects explicitly selected deployments and their companion files:
+	// populated directories require matching immutable revision metadata before
+	// any download; failures cannot degrade to an older or unavailable artifact.
 	Strict bool
 	// Glob patterns passed to `hf download --exclude` so artifacts the configured
 	// runtime never loads are skipped. Empty means the full snapshot is fetched.

@@ -1,6 +1,7 @@
 package modeldownload
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
@@ -362,6 +363,98 @@ func TestReloadCompanionGraphRequiresExternalTensorFiles(t *testing.T) {
 	}
 	if err := ValidateReloadArtifacts(current, next); err == nil {
 		t.Fatal("companion graph could download missing external tensors into the live snapshot")
+	}
+}
+
+func TestRetiredStandaloneCompanionCannotBeDownloaded(t *testing.T) {
+	const revision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	for _, kind := range []string{"mapping", "external_tensor"} {
+		t.Run(kind, func(t *testing.T) {
+			retired, active := t.TempDir(), t.TempDir()
+			writeHFSnapshot(t, retired, revision, "labels.json", "model.onnx", "actual-weights.bin")
+			writeHFSnapshot(t, active, revision)
+			entry := append(protoBytes(1, []byte("location")), protoBytes(2, []byte("actual-weights.bin"))...)
+			if err := os.WriteFile(filepath.Join(retired, "model.onnx"), protoBytes(7, protoBytes(5, protoBytes(13, entry))), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			current := deploymentConfig("candle", active)
+			current.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: active, Revision: revision}
+			previous := deploymentConfig("candle", retired)
+			previous.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: retired, Revision: revision}
+			if err := ValidateReloadArtifacts(previous, current); err != nil {
+				t.Fatalf("could not retire the old artifact: %v", err)
+			}
+			next := deploymentConfig("candle", filepath.Join(t.TempDir(), "unregistered-candidate"))
+			next.MoMRegistry = map[string]string{retired: "test/retired"}
+			binding := next.ModelBindings["domain_classifier"]
+			missingFile := "labels.json"
+			if kind == "mapping" {
+				binding.MappingPath = filepath.Join(retired, missingFile)
+			} else {
+				next.ModelDeployments["new"] = config.ModelDeployment{Provider: "ort", Artifact: next.ModelDeployments["new"].Artifact, Revision: revision}
+				binding.Head = filepath.Join(retired, "model.onnx")
+				missingFile = "actual-weights.bin"
+			}
+			next.ModelBindings["domain_classifier"] = binding
+			specs, err := BuildModelSpecs(next)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(specs) != 1 || specs[0].LocalPath != retired || !specs[0].FilesOnly || specs[0].Revision != "" {
+				t.Fatalf("expected the standalone companion from the real planner, got %#v", specs)
+			}
+
+			// A local CLI stand-in exposes accidental downloads without any network.
+			// Its write represents the full snapshot download's risk to old weights.
+			invoked := filepath.Join(t.TempDir(), "download-invoked")
+			t.Setenv("MODEL_DOWNLOAD_TEST_INVOKED", invoked)
+			command := filepath.Join(t.TempDir(), "hf")
+			script := "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = --local-dir ]; then shift; artifact=$1; fi\n  shift\ndone\nprintf invoked > \"$MODEL_DOWNLOAD_TEST_INVOKED\"\nprintf overwritten > \"$artifact/model.safetensors\"\n"
+			if err := os.WriteFile(command, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			previousCommand := hfCommand
+			hfCommand = command
+			t.Cleanup(func() { hfCommand = previousCommand })
+			if err := ValidateReloadArtifacts(current, next); err != nil {
+				t.Fatalf("complete retired companion rejected: %v", err)
+			}
+			if err := EnsureModels(specs, DownloadConfig{}); err != nil {
+				t.Fatalf("complete companion was not reused: %v", err)
+			}
+			if _, err := os.Stat(invoked); !os.IsNotExist(err) {
+				t.Fatalf("complete companion invoked the CLI: %v", err)
+			}
+
+			if err := os.Remove(filepath.Join(retired, missingFile)); err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateReloadArtifacts(current, next); err != nil {
+				t.Fatalf("preflight unexpectedly treated retired A as current B: %v", err)
+			}
+			missing, err := GetMissingModels(specs)
+			if err != nil || len(missing) != 1 || missing[0].LocalPath != retired {
+				t.Fatalf("missing companion not discovered: %#v, %v", missing, err)
+			}
+			weights := filepath.Join(retired, "model.safetensors")
+			before, err := os.ReadFile(weights)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := EnsureModels(specs, DownloadConfig{}); err == nil {
+				t.Error("missing companion was allowed to download into the retired snapshot")
+			}
+			if _, err := os.Stat(invoked); !os.IsNotExist(err) {
+				t.Errorf("retired companion reached the download CLI: %v", err)
+			}
+			after, err := os.ReadFile(weights)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Errorf("retired weights changed from %q to %q", before, after)
+			}
+		})
 	}
 }
 
