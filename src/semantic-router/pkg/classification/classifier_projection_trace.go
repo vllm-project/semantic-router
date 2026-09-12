@@ -50,6 +50,9 @@ func mergeProjectionTrace(results *SignalResults, p config.Projections) *project
 				Matched:          matched,
 				BoundaryDistance: d,
 			})
+			if matched {
+				md.MatchedOutputs = append(md.MatchedOutputs, output.Name)
+			}
 			if matched && md.SelectedOutput == "" {
 				out := output
 				md.SelectedOutput = out.Name
