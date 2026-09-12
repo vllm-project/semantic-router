@@ -466,7 +466,7 @@ impl MmBertEmbeddingModel {
                     if path.extension().is_some_and(|ext| ext == "onnx")
                         && (!name.starts_with("model_layer_")
                             || name == format!("model_layer_{full_layer}.onnx"))
-                        && (!(use_cpu || !has_fa) || !name.contains("_fa"))
+                        && (!name.contains("_fa") || !use_cpu && has_fa)
                         && !results.iter().any(|p| p == &path)
                     {
                         results.push(path);
