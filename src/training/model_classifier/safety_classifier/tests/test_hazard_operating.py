@@ -3,7 +3,9 @@
 import importlib.util
 import unittest
 
-from ..vela_hazard_operating import select_operating_point
+from src.training.model_classifier.safety_classifier.vela_hazard_operating import (
+    select_operating_point,
+)
 
 
 @unittest.skipUnless(

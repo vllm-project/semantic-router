@@ -3,8 +3,11 @@
 import hashlib
 import unittest
 
-from ..vela_data import LABELS
-from ..vela_reviewed_supervision import repair_weak_rows, reviewed_rows
+from src.training.model_classifier.safety_classifier.vela_data import LABELS
+from src.training.model_classifier.safety_classifier.vela_reviewed_supervision import (
+    repair_weak_rows,
+    reviewed_rows,
+)
 
 
 def record(identifier, group, positive=(), *, label="unsafe"):
