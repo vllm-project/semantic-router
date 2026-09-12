@@ -125,6 +125,14 @@ historical budget retain overlapping scans across the entire input. Choose a
 budget supported by task-level quality and latency measurements; positional
 capacity alone is not evidence of long-text accuracy.
 
+For a prompt-guard checkpoint evaluated with token windows, configure
+`modules.prompt_guard.window.size` and `window.overlap` alongside the total
+`max_sequence_length` budget. This scans the original tokens and retains the
+window with the highest combined positive-label probability. The model's
+window size and decision threshold must be calibrated together; a larger
+position capacity does not replace this inference policy. See
+[Jailbreak Signal](../signal/learned/jailbreak.md#token-windows-for-a-local-classifier).
+
 For native mmBERT embedding signals, set
 `global.model_catalog.embeddings.semantic.embedding_config.full_context: true`
 to use the loaded embedding model's complete context capacity. The default

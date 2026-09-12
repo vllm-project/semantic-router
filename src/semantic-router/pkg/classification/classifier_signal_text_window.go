@@ -276,3 +276,16 @@ func (c *Classifier) jailbreakInputs(text string) []string {
 	}
 	return jailbreakSignalChunks(text)
 }
+
+// Native token windows own tokenization and the total input limit. Decoded
+// text chunks would change both windows and overflow checks. Contrastive rules
+// continue using their existing text-window policy.
+func (c *Classifier) jailbreakModelInputs(text string) []string {
+	if text == "" {
+		return nil
+	}
+	if c != nil && c.Config != nil && c.Config.PromptGuard.Window != nil {
+		return []string{text}
+	}
+	return c.jailbreakInputs(text)
+}

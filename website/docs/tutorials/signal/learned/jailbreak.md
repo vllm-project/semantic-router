@@ -52,6 +52,43 @@ routing:
 
 Use `include_history` for multi-turn attacks, and treat the pattern lists as tuning data for the configured detection method.
 
+### Token windows for a local classifier
+
+For a checkpoint evaluated with overlapping token windows, configure the same
+window policy in the prompt-guard module:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        variant: mmbert32k
+        max_sequence_length: 32768
+        window:
+          size: 128
+          overlap: 63
+```
+
+`size` includes the tokenizer's special tokens; `overlap` counts content
+tokens. For a tokenizer with two special tokens, this example scans 126 content
+tokens at a time with a stride of 63. The runtime tokenizes the complete input
+once, preserves the original token IDs, and resets positions in each window.
+The total input must fit `max_sequence_length`; overflow is an inference
+error, never an uninspected suffix.
+
+Request rules, the detection API, and response scans use the same maximum
+positive-label risk across windows. For multiple positive labels, the runtime
+sums their probabilities within each window before choosing the riskiest
+window. It retains that window's complete distribution for labels and
+confidence. Contrastive rules keep their existing text-window policy.
+
+Omitting `window` preserves whole-input native inference or the existing
+legacy text scan. Window sizes and thresholds must match the checkpoint's
+evaluation; scanning all tokens does not establish understanding of distant
+context. Quoted attacks and instructions whose meaning depends on another
+window require separate evaluation. Token windows are available only for the
+local `mmbert32k` variant.
+
 ### Direction
 
 `direction` selects what a rule scores. The default, `request`, scores the

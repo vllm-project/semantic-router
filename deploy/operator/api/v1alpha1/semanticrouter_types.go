@@ -1417,8 +1417,23 @@ type ToolsConfig struct {
 	FallbackToEmpty bool `json:"fallback_to_empty,omitempty"`
 }
 
-// PromptGuardConfig defines prompt guard configuration
+// PromptGuardConfig defines prompt guard configuration.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || ((!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || ((!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
+	// MaxSequenceLength limits the total tokenized input, including special
+	// tokens. Omission or zero retains the 512-token budget. The model loader
+	// validates the requested budget against the loaded model's capacity.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
+	// Window enables explicit scanning of all input tokens. Omission or null
+	// keeps whole-input inference. Only the local mmbert32k variant supports it.
+	// +nullable
+	// +optional
+	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
@@ -1461,6 +1476,20 @@ type PromptGuardConfig struct {
 	// +kubebuilder:validation:Enum=allow;block
 	// +optional
 	OnError string `json:"on_error,omitempty"`
+}
+
+// PromptGuardWindowConfig scans original content tokens with overlap. The
+// native tokenizer also checks that special tokens leave enough content room.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.overlap) || self.overlap < self.size",message="window.overlap must be smaller than window.size"
+type PromptGuardWindowConfig struct {
+	// Size is the inference window budget, including special tokens.
+	// +kubebuilder:validation:Minimum=1
+	Size int `json:"size"`
+	// Overlap counts content tokens shared by consecutive windows.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Overlap int `json:"overlap,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration

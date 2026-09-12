@@ -21,6 +21,9 @@ func validatePromptGuardBackend(cfg *RouterConfig) error {
 // variant (local) and protocol (remote) are mutually exclusive, and each must
 // name a recognized value.
 func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
+	if err := cfg.ValidateWindow(); err != nil {
+		return err
+	}
 	if cfg.Variant != "" && cfg.Protocol != "" {
 		return fmt.Errorf("prompt_guard: variant %q and protocol %q are mutually exclusive - "+
 			"variant selects a local model, protocol selects a remote one", cfg.Variant, cfg.Protocol)
@@ -38,6 +41,29 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 	if !validPromptGuardVariants[cfg.Variant] {
 		return fmt.Errorf("prompt_guard.variant: unrecognized value %q, must be one of: %s, %s",
 			cfg.Variant, PromptGuardVariantCandle, PromptGuardVariantMmBERT32K)
+	}
+	return nil
+}
+
+// ValidateWindow keeps token-window inference local and explicit. The total
+// input budget remains independent of each inference window's size.
+func (cfg PromptGuardConfig) ValidateWindow() error {
+	if cfg.Window == nil {
+		return nil
+	}
+	if cfg.Protocol != "" || cfg.Variant != PromptGuardVariantMmBERT32K {
+		return fmt.Errorf("prompt_guard.window requires the local mmbert32k variant")
+	}
+	seen := make(map[string]bool)
+	for _, label := range cfg.PositiveLabels {
+		if label == "" || seen[label] {
+			return fmt.Errorf("prompt_guard.positive_labels must be nonempty and unique for windowed inference")
+		}
+		seen[label] = true
+	}
+	head := SequenceHeadModelConfig{MaxSequenceLength: cfg.MaxSequenceLength, Window: cfg.Window}
+	if err := head.ValidateWindow(); err != nil {
+		return fmt.Errorf("prompt_guard.%w", err)
 	}
 	return nil
 }

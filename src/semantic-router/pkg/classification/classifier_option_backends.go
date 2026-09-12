@@ -92,6 +92,14 @@ func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 }
 
 func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *JailbreakMapping) (JailbreakInitializer, SequenceClassifierBackend, error) {
+	if cfg.PromptGuard.Window != nil {
+		if jailbreakMapping == nil {
+			// No reachable model consumer loaded a mapping for this recipe.
+			return nil, nil, nil
+		}
+		backend, err := newWindowedJailbreakBackend(cfg.PromptGuard, jailbreakMapping)
+		return backend, backend, err
+	}
 	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg, jailbreakMapping)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)

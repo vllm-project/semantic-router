@@ -71,7 +71,7 @@ func (c *Classifier) evaluateJailbreakSignal(ctx context.Context, results *Signa
 	// Step 2: Run classifier inference exactly once per unique content piece.
 	jailbreakCache := make(map[string][]cachedJailbreakResult, len(classifierContents))
 	for _, content := range classifierContents {
-		chunks := c.jailbreakInputs(content)
+		chunks := c.jailbreakModelInputs(content)
 		cached := make([]cachedJailbreakResult, 0, len(chunks))
 		for _, chunk := range chunks {
 			result, err := c.jailbreakInference.Classify(ctx, chunk)
