@@ -73,12 +73,12 @@ func recordDownloadedModelRevision(spec ModelSpec) (result error) {
 }
 
 func supersededONNXArtifacts(spec ModelSpec) ([]string, error) {
-	root, err := filepath.EvalSymlinks(spec.LocalPath)
-	if err != nil {
-		return nil, err
+	root, rootErr := filepath.EvalSymlinks(spec.LocalPath)
+	if rootErr != nil {
+		return nil, rootErr
 	}
 	var stale []string
-	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	scanErr := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -132,5 +132,5 @@ func supersededONNXArtifacts(spec ModelSpec) ([]string, error) {
 		stale = append(stale, relative)
 		return nil
 	})
-	return stale, err
+	return stale, scanErr
 }
