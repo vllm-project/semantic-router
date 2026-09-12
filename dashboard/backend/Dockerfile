@@ -32,7 +32,7 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
     fi
 
 # Stage 1: Build frontend with Node.js
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
 WORKDIR /workspace/dashboard/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
@@ -46,7 +46,7 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
 WORKDIR /app/wizmap
 COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
