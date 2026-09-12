@@ -32,9 +32,10 @@ type responsePayloadResult struct {
 
 const (
 	// unknownPayloadTTL is responsePayloadResult.ttlMillis when no PTTL was
-	// asked for, or when Redis answered that the key is already gone. Both are
-	// "this payload contributes nothing to how long its conversation index must
-	// live", and Redis's own -2 is the natural spelling of that.
+	// asked for. Redis's own -2 is borrowed for it because that reply means
+	// the same thing to a lifetime consumer — nothing to measure — but a
+	// successful result never carries it: a PTTL of -2 behind a GET that
+	// succeeded is reported as redis.Nil instead, see fetchResponsePayloads.
 	unknownPayloadTTL int64 = -2
 
 	// persistentPayloadTTL is the lifetime of a payload Redis reported as
@@ -98,8 +99,22 @@ func fetchResponsePayloads(ctx context.Context, client redis.UniversalClient, ke
 
 	for i, cmd := range cmds {
 		results[i].raw, results[i].err = cmd.Bytes()
-		if withTTL {
-			results[i].ttlMillis, results[i].ttlErr = decodePayloadTTL(ttlCmds[i])
+		if !withTTL {
+			continue
+		}
+		results[i].ttlMillis, results[i].ttlErr = decodePayloadTTL(ttlCmds[i])
+		// GET and PTTL are separate commands even inside one pipeline, so a
+		// payload can expire between them: GET returns the bytes and PTTL
+		// answers -2. That -2 is Redis's definitive statement that the key
+		// no longer exists, and a payload that can no longer be measured is
+		// one this store no longer has. Reporting it as redis.Nil lets every
+		// consumer take its existing not-found path. Passing the sentinel
+		// through instead let a witness repair index the vanished payload
+		// with a non-positive lifetime, which longerIndexLifetime and
+		// conversationIndexAddScript read as "never expires" — an immortal
+		// index for a payload that was already gone.
+		if results[i].err == nil && results[i].ttlErr == nil && results[i].ttlMillis == unknownPayloadTTL {
+			results[i].raw, results[i].err = nil, redis.Nil
 		}
 	}
 	return results

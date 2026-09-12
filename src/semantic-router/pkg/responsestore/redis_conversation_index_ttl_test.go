@@ -212,6 +212,92 @@ func TestWitnessRepairClampsExpiringPayloadLifetime(t *testing.T) {
 	assert.Positive(t, indexGenerationPTTL(t, store, conversationID))
 }
 
+// TestAddResponseToConversationRejectsPayloadGoneBeforeLifetimeRead covers
+// the expiry interleaving inside one pipeline: GET returns the payload, then
+// PTTL answers -2 because the key expired in between. Passing that -2 on as a
+// lifetime let repairResponseWitness persist a conversation index for a
+// payload Redis had already declared gone. The read must report the payload
+// as not found instead, and no index may be created for it.
+func TestAddResponseToConversationRejectsPayloadGoneBeforeLifetimeRead(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_gone_before_lifetime_add"
+	const responseID = "resp_gone_before_lifetime_add"
+	directSetGeneratedResponsePayloadWithTTL(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}, 30*24*time.Hour)
+
+	hook := &pttlValueHook{key: store.buildKey(ResponseKeyPrefix + responseID), value: -2}
+	store.client.AddHook(hook)
+
+	err := store.AddResponseToConversation(ctx, conversationID, responseID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound, "a payload gone before its lifetime was read is not found")
+	assert.True(t, hook.used.Load(), "the repair must have observed the injected -2")
+	assert.Zero(t, exists(t, store, store.conversationIndexKey(conversationID)),
+		"no index may be created, let alone persisted, for a payload Redis reported gone")
+	assert.Zero(t, exists(t, store, store.conversationIndexGenerationKey(conversationID)))
+}
+
+// TestDuplicateRepairRejectsPayloadGoneBeforeLifetimeRead is the same
+// interleaving reached through StoreResponse's duplicate path. The first store
+// leaves a finite index behind; the retry's witness repair, handed a -2
+// lifetime, would have persisted it. The duplicate contract is unchanged and
+// the index keeps the finite expiry it already had.
+func TestDuplicateRepairRejectsPayloadGoneBeforeLifetimeRead(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_gone_before_lifetime_dup"
+	const responseID = "resp_gone_before_lifetime_dup"
+	response := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}
+	require.NoError(t, store.StoreResponse(ctx, response))
+	require.Positive(t, indexPTTL(t, store, conversationID), "precondition: the first store leaves a finite index")
+
+	hook := &pttlValueHook{key: store.buildKey(ResponseKeyPrefix + responseID), value: -2}
+	store.client.AddHook(hook)
+
+	err := store.StoreResponse(ctx, response)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAlreadyExists, "the duplicate contract is unchanged")
+	assert.True(t, hook.used.Load(), "the repair must have observed the injected -2")
+	assert.Positive(t, indexPTTL(t, store, conversationID),
+		"a repair that could not measure the payload must not persist the index")
+	assert.Positive(t, indexGenerationPTTL(t, store, conversationID))
+}
+
+// TestLazyBackfillSkipsPayloadGoneBeforeLifetimeRead pins the same rule on the
+// scan path, which shares the pipelined read. A payload whose PTTL answered
+// -2 is skipped exactly as one whose GET returned nil — the documented benign
+// expiry race, one command later — rather than indexed as a tombstone that
+// would only be pruned on a later read.
+func TestLazyBackfillSkipsPayloadGoneBeforeLifetimeRead(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_gone_before_lifetime_scan"
+	const responseID = "resp_gone_before_lifetime_scan"
+	directSetGeneratedResponsePayloadWithTTL(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}, 30*24*time.Hour)
+
+	hook := &pttlValueHook{key: store.buildKey(ResponseKeyPrefix + responseID), value: -2}
+	store.client.AddHook(hook)
+
+	responses, err := store.ListResponsesByConversation(ctx, conversationID, ListOptions{})
+	require.NoError(t, err, "an expiry race during the scan is benign, not fatal")
+	assert.True(t, hook.used.Load(), "the scan must have observed the injected -2")
+	assert.Empty(t, responses)
+	assert.Zero(t, exists(t, store, store.conversationIndexKey(conversationID)),
+		"a payload gone before its lifetime was read is not indexed")
+}
+
 // TestGeneratedIndexAndSidecarShareMonotonicTTL proves every generated index
 // write projects the longer lifetime onto both co-located keys. Neither the
 // membership nor the witness may expire first.

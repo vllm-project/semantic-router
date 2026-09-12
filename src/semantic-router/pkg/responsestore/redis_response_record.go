@@ -272,8 +272,12 @@ func decodeLegacyPromotionResult(key string, result interface{}, resultErr error
 //
 // Takes an explicit client because the scan paths run per Cluster master.
 func promoteLegacyResponsePayload(ctx context.Context, client redis.UniversalClient, key string, record responseRecord) (string, int64, bool, error) {
+	// A record that already carries a generation has nothing to promote, and
+	// this function has not observed its lifetime. Returning the sentinel here
+	// would hand a caller a non-positive lifetime that longerIndexLifetime
+	// reads as "never expires"; the only safe answer is to refuse.
 	if record.generation != "" {
-		return record.generation, unknownPayloadTTL, true, nil
+		return "", 0, false, fmt.Errorf("%w: response %s already carries generation %s", ErrInvalidInput, key, record.generation)
 	}
 
 	prepared, err := prepareLegacyPromotion(record)
