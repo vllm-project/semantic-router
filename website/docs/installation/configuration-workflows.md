@@ -127,6 +127,20 @@ Choose Kubernetes GPU images, resources, and device plugins through Helm or the
 Operator. The local `--platform amd` and `--platform nvidia` shortcuts do not
 configure Kubernetes scheduling.
 
+The chart runs the Dashboard as its own Deployment and Service, and that
+Deployment is disabled by default. The Router Service carries the gRPC and HTTP
+API ports only, so port 8700 appears in the cluster only after the Dashboard is
+enabled.
+
+```bash
+helm upgrade --install semantic-router \
+  oci://ghcr.io/vllm-project/charts/semantic-router \
+  -f values.yaml --set dashboard.enabled=true
+
+kubectl --namespace vllm-semantic-router-system port-forward \
+  svc/semantic-router-dashboard 8700:8700
+```
+
 ## Operator
 
 The Operator renders a canonical config from two Kubernetes-native inputs:
