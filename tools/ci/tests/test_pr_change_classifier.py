@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -51,6 +52,84 @@ class PRChangeClassifierTests(unittest.TestCase):
         for path, jobs in fixtures.items():
             with self.subTest(path=path):
                 self.assert_classification(path, jobs)
+
+    def test_calibration_inputs_select_the_image_calibration_gate(self) -> None:
+        """Every input that can move the calibrated image-routing thresholds
+        must run the calibration job, which feeds the required PR Gate."""
+        for path in (
+            "config/fragments/signal/embedding/image-routing.yaml",
+            "src/semantic-router/cmd/image-routing-calibration/main.go",
+            "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json",
+            "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
+            "e2e/profiles/multimodal-routing/crds/intelligentroute.yaml",
+            # The CRD-mirror test runs only inside the gate, and e2e.mk defines
+            # the make target the gate invokes for it.
+            "e2e/profiles/multimodal-routing/profile_test.go",
+            "tools/make/e2e.mk",
+            "website/static/img/blog/new-screenshot.png",
+            ".github/workflows/image-routing-calibration.yml",
+            # Scoring implementation: the whole native binding and the whole
+            # classification package, so a refactor cannot move scoring code
+            # out from under a filename-level trigger.
+            "candle-binding/src/model_architectures/embedding/multimodal_embedding.rs",
+            "candle-binding/src/model_architectures/attention/chunked_sdpa.rs",
+            "candle-binding/src/core/similarity.rs",
+            "candle-binding/src/ffi/embedding.rs",
+            "candle-binding/src/ffi/types.rs",
+            "candle-binding/src/model_architectures/unified_interface.rs",
+            "candle-binding/build.rs",
+            "candle-binding/semantic-router.go",
+            "candle-binding/go.mod",
+            "candle-binding/Cargo.lock",
+            "src/semantic-router/pkg/classification/embedding_classifier_scoring.go",
+            "src/semantic-router/pkg/classification/prototype_bank.go",
+            "src/semantic-router/pkg/classification/prototype_clustering.go",
+            "src/semantic-router/pkg/classification/request_image_embedding_cache.go",
+            "src/semantic-router/pkg/classification/classifier_signal_group_similarity.go",
+            "src/semantic-router/pkg/classification/openvino_backend_stub.go",
+            # Config contracts the tool decodes and the classifier consumes.
+            "src/semantic-router/pkg/config/canonical_config.go",
+            "src/semantic-router/pkg/config/embedding_config.go",
+            "src/semantic-router/pkg/config/prototype_scoring_config.go",
+            "src/semantic-router/pkg/config/signal_config.go",
+            "src/semantic-router/pkg/config/canonical_defaults.go",
+            # Dependency manifests and the native build recipe the gate runs.
+            "src/semantic-router/go.mod",
+            "src/semantic-router/go.sum",
+            "Makefile",
+            "tools/make/rust.mk",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("image-calibration", classify([path]).selected_jobs)
+
+    def test_every_calibration_fixture_is_covered_by_the_gate(self) -> None:
+        """The domain is a directory list while the manifest may name any
+        tracked image; a later change to a listed image outside the covered
+        directories would move the calibrated thresholds without running the
+        gate. Every positive, negative, and excluded path must select it."""
+        manifest = json.loads(
+            (
+                REPO_ROOT
+                / "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json"
+            ).read_text()
+        )
+        paths = [entry["image_file"] for entry in manifest["positives"]]
+        paths += manifest["negatives"]
+        paths += [entry["image_file"] for entry in manifest.get("excluded", [])]
+        self.assertGreater(len(paths), 0)
+        uncovered = [
+            path
+            for path in paths
+            if "image-calibration" not in classify([path]).selected_jobs
+        ]
+        self.assertEqual(
+            uncovered, [], "manifest fixtures outside the image-calibration domain"
+        )
+
+    def test_unrelated_router_change_does_not_run_the_calibration_gate(self) -> None:
+        result = classify(["src/semantic-router/pkg/extproc/processor.go"])
+
+        self.assertNotIn("image-calibration", result.selected_jobs)
 
     def test_runtime_cli_surface_has_explicit_integration_escalation(self) -> None:
         self.assert_classification(
@@ -125,7 +204,14 @@ class PRChangeClassifierTests(unittest.TestCase):
 
         self.assertEqual(
             result.selected_jobs,
-            ("quality", "security", "core-tests", "e2e", "recipe-conformance"),
+            (
+                "quality",
+                "security",
+                "core-tests",
+                "image-calibration",
+                "e2e",
+                "recipe-conformance",
+            ),
         )
         self.assertEqual(
             result.profiles,

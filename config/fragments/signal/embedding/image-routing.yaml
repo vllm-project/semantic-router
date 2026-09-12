@@ -1,11 +1,15 @@
 # Opt-in image-modality embedding pack. Inline under
 # routing.signals.embeddings to demo image-routing patterns. Requires
 # the multimodal embedding model.
+#
+# Thresholds are calibrated for llm-semantic-router/multi-modal-embed-small
+# and are not portable to other encoders; see the image-routing section of
+# website/docs/tutorials/signal/learned/embedding.md for provenance.
 routing:
   signals:
     embeddings:
       - name: identifier_document_imagery
-        threshold: 0.10
+        threshold: 0.61
         aggregation_method: max
         query_modality: image
         candidates:
@@ -18,7 +22,7 @@ routing:
           - photograph of a tax document or paystub with personal details
           - photograph of a paper form filled in with personal information
       - name: code_or_terminal_imagery
-        threshold: 0.10
+        threshold: 0.47
         aggregation_method: max
         query_modality: image
         candidates:
@@ -31,7 +35,7 @@ routing:
           - screenshot of an API response or HTTP request body
           - screenshot of a database client or SQL query result
       - name: ambient_office_imagery
-        threshold: 0.10
+        threshold: 0.54
         aggregation_method: max
         query_modality: image
         candidates:

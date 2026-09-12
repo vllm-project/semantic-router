@@ -16,6 +16,10 @@ jobs:
     workflow: .github/workflows/test-and-build.yml
     output: core_test
     full: true
+  image-calibration:
+    workflow: .github/workflows/image-routing-calibration.yml
+    output: image_calibration
+    full: true
   dashboard:
     workflow: .github/workflows/dashboard-test.yml
     output: dashboard
@@ -106,6 +110,36 @@ domains:
       - Cargo.lock
     checks: [make test-semantic-router, make config-schema-check]
     ci_jobs: [core-tests]
+
+  image-calibration:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - config/fragments/signal/embedding/image-routing.yaml
+      - src/semantic-router/cmd/image-routing-calibration/**
+      - e2e/testcases/testdata/image-fixtures/**
+      # The whole profile: the CRD mirror, the chart values, and the package
+      # test that asserts the mirror, which runs only inside this gate.
+      - e2e/profiles/multimodal-routing/**
+      - website/static/img/**
+      - dashboard/frontend/public/**
+      - candle-binding/**
+      - src/semantic-router/pkg/classification/**
+      - src/semantic-router/pkg/config/canonical_config.go
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/embedding_config.go
+      - src/semantic-router/pkg/config/model_config_types.go
+      - src/semantic-router/pkg/config/prototype_scoring_config.go
+      - src/semantic-router/pkg/config/signal_config.go
+      - src/semantic-router/pkg/modelruntime/router_runtime.go
+      - src/semantic-router/go.mod
+      - src/semantic-router/go.sum
+      - Makefile
+      - tools/make/rust.mk
+      # Defines the make target the gate runs for the profile package test.
+      - tools/make/e2e.mk
+    checks: [make test-e2e-profile-multimodal]
+    ci_jobs: [image-calibration]
 
   native-bindings:
     owner: native-bindings
@@ -422,7 +456,12 @@ profiles:
     owner: e2e
     coverage_role: image-modality-embedding-signal-routing
     selection: pr
-    paths: [e2e/profiles/multimodal-routing/**]
+    paths:
+      - e2e/profiles/multimodal-routing/**
+      - e2e/testcases/embedding_signal_image_routing.go
+      - e2e/testcases/testdata/embedding_signal_image_cases.json
+      - e2e/testcases/testdata/image-fixtures/**
+      - config/fragments/signal/embedding/image-routing.yaml
   remote-embedding:
     owner: e2e
     coverage_role: openai-compatible-remote-embedding-provider
