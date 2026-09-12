@@ -40,6 +40,7 @@ func OpenSequenceModel(options SequenceModelOptions) (*SequenceModel, error) {
 	input := C.CString(string(encoded))
 	defer C.free(unsafe.Pointer(input))
 	var nativeError *C.char
+	//nolint:gocritic // cgo generates a redundant pointer identity check for the char** output.
 	handle := C.candle_sequence_model_open(input, &nativeError)
 	if nativeError != nil {
 		defer C.candle_sequence_model_free(nativeError)

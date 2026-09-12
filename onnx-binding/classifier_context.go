@@ -9,6 +9,7 @@ extern bool init_sequence_classifier_with_context(const char* name, const char* 
 extern bool init_token_classifier_with_context(const char* name, const char* path, bool use_gpu, size_t limit);
 */
 import "C"
+
 import (
 	"fmt"
 	"unsafe"
