@@ -77,6 +77,7 @@ var signalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeModality, DisplayName: "Modality", Collection: "modality", ObservationKey: "modality", DecisionReferenceable: true},
 	{Type: SignalTypeAuthz, DisplayName: "Authz", Collection: "role_bindings", ObservationKey: "authz", DecisionReferenceable: true},
 	{Type: SignalTypeJailbreak, DisplayName: "Jailbreak", Collection: "jailbreak", ObservationKey: "jailbreak", DecisionReferenceable: true},
+	{Type: SignalTypeSafety, DisplayName: "Safety", Collection: "safety", ObservationKey: "safety", DecisionReferenceable: true},
 	{Type: SignalTypeHallucination, DisplayName: "Hallucination", Collection: "hallucination", DecisionReferenceable: false},
 	{Type: SignalTypePII, DisplayName: "PII", Collection: "pii", ObservationKey: "pii", DecisionReferenceable: true},
 	{Type: SignalTypeKB, DisplayName: "KB", Collection: "kb", ObservationKey: "kb", DecisionReferenceable: true},

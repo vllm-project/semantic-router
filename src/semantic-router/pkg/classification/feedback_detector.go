@@ -22,11 +22,13 @@ const (
 	FeedbackLabelNeedClarification = "need_clarification"
 	FeedbackLabelWrongAnswer       = "wrong_answer"
 	FeedbackLabelWantDifferent     = "want_different"
+	FeedbackLabelNoFeedback        = "no_feedback"
 )
 
 // FeedbackResult represents the result of user feedback classification
 type FeedbackResult struct {
-	FeedbackType string  `json:"feedback_type"` // feedback type label from model's id2label
+	Abstained    bool    `json:"abstained,omitempty"` // The model prediction did not reach the configured threshold.
+	FeedbackType string  `json:"feedback_type"`       // feedback type label from model's id2label
 	Confidence   float32 `json:"confidence"`
 	Class        int     `json:"class"` // class index from model
 }
@@ -152,7 +154,7 @@ func (d *FeedbackDetector) Initialize() error {
 
 	// Check if mmBERT-32K is configured (takes precedence)
 	if d.config.UseMmBERT32K {
-		err := candle.InitMmBert32KFeedbackClassifier(d.config.ModelID, d.config.UseCPU)
+		err := candle.InitMmBert32KFeedbackClassifierWithMaxSequenceLength(d.config.ModelID, d.config.UseCPU, d.config.MaxSequenceLength)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mmBERT-32K feedback detector from %s: %w", d.config.ModelID, err)
 		}
@@ -183,12 +185,8 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 		return nil, fmt.Errorf("feedback detector not initialized")
 	}
 
-	if text == "" {
-		return &FeedbackResult{
-			FeedbackType: FeedbackLabelSatisfied,
-			Confidence:   1.0,
-			Class:        0,
-		}, nil
+	if strings.TrimSpace(text) == "" {
+		return nil, fmt.Errorf("feedback classification requires non-empty input")
 	}
 
 	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResultWithProbs, error) {
@@ -201,27 +199,38 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 		return nil, fmt.Errorf("feedback detection failed: %w", err)
 	}
 
-	// Get feedback type from mapping loaded from config.json
-	feedbackType := d.mapping.IdxToLabel[fmt.Sprintf("%d", result.Class)]
-	if feedbackType == "" {
-		feedbackType = FeedbackLabelSatisfied // Default fallback
-	}
-
-	// Apply threshold check
 	threshold := d.config.Threshold
 	if threshold <= 0 {
-		threshold = 0.5 // Default threshold
+		threshold = 0.5
 	}
+	prediction, err := d.resultForPrediction(result, threshold)
+	if err != nil {
+		return nil, err
+	}
+	logging.Debugf("Feedback detection: text_len=%d, feedback_type=%s, confidence=%.3f, abstained=%t",
+		len(text), prediction.FeedbackType, prediction.Confidence, prediction.Abstained)
+	return prediction, nil
+}
+
+func (d *FeedbackDetector) resultForPrediction(result candle.ClassResultWithProbs, threshold float32) (*FeedbackResult, error) {
+	feedbackType := d.mapping.IdxToLabel[strconv.Itoa(result.Class)]
+	if feedbackType == "" {
+		return nil, fmt.Errorf("feedback classifier returned unmapped class %d", result.Class)
+	}
+	// Vela's explicit negative class removes the closed-set assumption that
+	// every follow-up must be feedback. Keep the model's real label/probability
+	// even when abstaining; uncertainty is not evidence of satisfaction.
+	for _, label := range d.mapping.IdxToLabel {
+		if label == FeedbackLabelNoFeedback {
+			return &FeedbackResult{
+				FeedbackType: feedbackType, Confidence: result.Confidence,
+				Class: result.Class, Abstained: result.Confidence < threshold,
+			}, nil
+		}
+	}
+	// Preserve the established threshold contract of older four-class models.
 	feedbackType, confidence := d.applyThreshold(feedbackType, result, threshold)
-
-	logging.Debugf("Feedback detection: text_len=%d, feedback_type=%s, confidence=%.3f",
-		len(text), feedbackType, confidence)
-
-	return &FeedbackResult{
-		FeedbackType: feedbackType,
-		Confidence:   confidence,
-		Class:        result.Class,
-	}, nil
+	return &FeedbackResult{FeedbackType: feedbackType, Confidence: confidence, Class: result.Class}, nil
 }
 
 // applyThreshold decides what a prediction below the configured threshold is

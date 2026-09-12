@@ -262,3 +262,53 @@ fn test_mean_pool_large_batch() {
         duration
     );
 }
+
+#[test]
+fn test_mean_pool_long_low_precision() {
+    let device = candle_core::Device::Cpu;
+    for dtype in [DType::F16, DType::BF16, DType::F32, DType::F64] {
+        let hidden = Tensor::from_vec([4f32, -6.].repeat(32768), (1, 32768, 2), &device)
+            .unwrap()
+            .to_dtype(dtype)
+            .unwrap();
+        let mask = Tensor::ones((1, 32768), DType::U32, &device).unwrap();
+        let pooled = mean_pool(&hidden, &mask).unwrap();
+        assert_eq!(pooled.dtype(), dtype);
+        assert_eq!(
+            pooled
+                .to_dtype(DType::F32)
+                .unwrap()
+                .to_vec2::<f32>()
+                .unwrap(),
+            vec![vec![4., -6.]]
+        );
+    }
+}
+
+#[test]
+fn test_mean_pool_padding_and_invalid_rows() {
+    let device = candle_core::Device::Cpu;
+    let hidden = Tensor::from_vec(
+        vec![
+            2f32, 4., 6., 8., 60000., 60000., 60000., 60000., 3., 5., 7., 9.,
+        ],
+        (2, 3, 2),
+        &device,
+    )
+    .unwrap()
+    .to_dtype(DType::F16)
+    .unwrap();
+    let mask = Tensor::new(&[[1u32, 1, 0], [0, 1, 1]], &device).unwrap();
+    let pooled = mean_pool(&hidden, &mask)
+        .unwrap()
+        .to_dtype(DType::F32)
+        .unwrap();
+    assert_eq!(
+        pooled.to_vec2::<f32>().unwrap(),
+        vec![vec![4., 6.], vec![5., 7.]]
+    );
+    let empty_row = Tensor::new(&[[1u32, 0, 0], [0, 0, 0]], &device).unwrap();
+    assert!(mean_pool(&hidden, &empty_row).is_err());
+    let wrong_shape = Tensor::ones((1, 3), DType::U32, &device).unwrap();
+    assert!(mean_pool(&hidden, &wrong_shape).is_err());
+}

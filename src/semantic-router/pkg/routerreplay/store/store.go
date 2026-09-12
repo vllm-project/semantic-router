@@ -26,6 +26,7 @@ type Signal struct {
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
 	Jailbreak     []string `json:"jailbreak,omitempty"`
+	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
 	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
@@ -525,6 +526,7 @@ func cloneSignal(signal Signal) Signal {
 		Modality:      cloneStringSlice(signal.Modality),
 		Authz:         cloneStringSlice(signal.Authz),
 		Jailbreak:     cloneStringSlice(signal.Jailbreak),
+		Safety:        cloneStringSlice(signal.Safety),
 		PII:           cloneStringSlice(signal.PII),
 		KB:            cloneStringSlice(signal.KB),
 		Conversation:  cloneStringSlice(signal.Conversation),

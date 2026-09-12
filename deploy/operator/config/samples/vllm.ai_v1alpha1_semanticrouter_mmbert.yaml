@@ -85,6 +85,11 @@ spec:
     prompt_guard:
       enabled: true
       threshold: "0.7"
+      # Optional local mmbert32k token scanning; omission uses whole input.
+      # max_sequence_length: 32768
+      # window:
+      #   size: 128
+      #   overlap: 63
 
     # Tools auto-selection
     tools:

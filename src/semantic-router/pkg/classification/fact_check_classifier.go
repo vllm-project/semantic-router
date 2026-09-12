@@ -79,7 +79,7 @@ func (c *FactCheckClassifier) Initialize() error {
 
 	// Check if mmBERT-32K is configured (takes precedence)
 	if c.config.UseMmBERT32K {
-		err := candle.InitMmBert32KFactcheckClassifier(c.config.ModelID, c.config.UseCPU)
+		err := candle.InitMmBert32KFactcheckClassifierWithMaxSequenceLength(c.config.ModelID, c.config.UseCPU, c.config.MaxSequenceLength)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mmBERT-32K fact-check model from %s: %w", c.config.ModelID, err)
 		}

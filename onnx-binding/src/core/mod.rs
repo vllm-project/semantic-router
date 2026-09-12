@@ -5,3 +5,5 @@ pub mod tokenization_window;
 pub mod unified_error;
 
 pub use unified_error::{UnifiedError, UnifiedResult};
+
+pub mod sequence_windows;

@@ -129,7 +129,7 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 // result.
 func (c *Classifier) scanJailbreakChunks(ctx context.Context, text string) (result SequenceClassificationResult, scanned bool, lastErr error) {
 	bestRisk := float32(-1)
-	for _, chunk := range jailbreakSignalChunks(text) {
+	for _, chunk := range c.jailbreakModelInputs(text) {
 		chunkResult, err := c.jailbreakInference.Classify(ctx, chunk)
 		if err != nil {
 			logging.Errorf("jailbreak classification failed on one chunk: %v", err)

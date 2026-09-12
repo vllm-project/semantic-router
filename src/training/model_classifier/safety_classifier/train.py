@@ -359,6 +359,7 @@ def _build_model_and_tokenizer(
         lora_dropout=float(lora["dropout"]),
         target_modules=list(lora["target_modules"]),
         bias=lora["bias"],
+        revision=base["revision"],
     )
     model = stack["get_peft_model"](model, peft_config)
     model.print_trainable_parameters()
@@ -419,7 +420,7 @@ def _build_trainer(
 ) -> Any:
     stack = runtime.stack
     trainer_class = synchronized_checkpoint_trainer(stack["Trainer"], runtime.torch)
-    return trainer_class(
+    trainer = trainer_class(
         model=model,
         args=_build_training_arguments(contract, task, args, runtime),
         train_dataset=datasets["train"],
@@ -437,10 +438,17 @@ def _build_trainer(
             )
         ],
     )
+    # ModernBERT's classification forward computes a mean CE loss and ignores
+    # num_items_in_batch. HF 4.57 otherwise omits accumulation normalization.
+    trainer.model_accepts_loss_kwargs = False
+    return trainer
 
 
 def _release_eligible(
-    args: argparse.Namespace, world_size: int, use_bf16: bool
+    args: argparse.Namespace,
+    world_size: int,
+    use_bf16: bool,
+    contract: dict[str, Any] | None = None,
 ) -> bool:
     """Return whether a run used the unmodified release training contract."""
     return bool(
@@ -449,7 +457,11 @@ def _release_eligible(
         and args.learning_rate is None
         and args.per_device_train_batch_size is None
         and args.gradient_accumulation_steps is None
-        and world_size == RELEASE_WORLD_SIZE
+        and (
+            world_size == RELEASE_WORLD_SIZE
+            if contract is None or contract["contract_version"] == 1
+            else world_size > 0
+        )
         and use_bf16
     )
 
@@ -533,7 +545,7 @@ def _write_run_receipts(
         source_manifest_path,
         model,
         runtime,
-        _release_eligible(args, runtime.world_size, runtime.use_bf16),
+        _release_eligible(args, runtime.world_size, runtime.use_bf16, contract),
     )
     _write_json(runtime.output_root / "training_manifest.json", manifest)
     _write_json(runtime.output_root / "training_contract.json", contract)
@@ -588,12 +600,12 @@ def train(args: argparse.Namespace) -> Path:
     validation_metrics = trainer.evaluate(
         datasets["validation"], metric_key_prefix="validation"
     )
-    test_metrics = trainer.evaluate(datasets["test"], metric_key_prefix="test")
     metrics = {
         "train": train_result.metrics,
         "validation": validation_metrics,
-        "test": test_metrics,
     }
+    if contract["training"].get("evaluate_test_after_training", True):
+        metrics["test"] = trainer.evaluate(datasets["test"], metric_key_prefix="test")
     return _save_training_output(
         contract,
         task,

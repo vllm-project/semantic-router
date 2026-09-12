@@ -97,6 +97,7 @@ type CanonicalSignals struct {
 	Modality      []ModalityRule         `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	Safety        []SafetyRule           `yaml:"safety,omitempty"`
 	Hallucination []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PII           []PIIRule              `yaml:"pii,omitempty"`
 	KB            []KBSignalRule         `yaml:"kb,omitempty"`
@@ -473,6 +474,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		ModalityRules:      append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:       append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:     append([]JailbreakRule(nil), signals.Jailbreak...),
+		SafetyRules:        append([]SafetyRule(nil), signals.Safety...),
 		HallucinationRules: append([]HallucinationRule(nil), signals.Hallucination...),
 		PIIRules:           append([]PIIRule(nil), signals.PII...),
 		KBRules:            append([]KBSignalRule(nil), signals.KB...),

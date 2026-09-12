@@ -69,6 +69,7 @@ const (
 	domainEvaluationFailedCode       = "domain_evaluation_failed"
 	factCheckEvaluationFailedCode    = "fact_check_evaluation_failed"
 	userFeedbackEvaluationFailedCode = "user_feedback_evaluation_failed"
+	userFeedbackUncertainCode        = "user_feedback_uncertain"
 	piiEvaluationFailedCode          = "pii_evaluation_failed"
 )
 
@@ -207,6 +208,10 @@ func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *Si
 	}
 
 	logging.Debugf("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
+	c.applyUserFeedbackSignalResult(results, mu, feedbackResult, err)
+}
+
+func (c *Classifier) applyUserFeedbackSignalResult(results *SignalResults, mu *sync.Mutex, feedbackResult *FeedbackResult, err error) {
 	if err != nil {
 		logging.Errorf("user feedback rule evaluation failed: %v", err)
 		names := make([]string, 0, len(c.Config.UserFeedbackRules))
@@ -214,10 +219,16 @@ func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *Si
 			names = append(names, rule.Name)
 		}
 		recordSignalRuleErrors(results, mu, config.SignalTypeUserFeedback, names, userFeedbackEvaluationFailedCode)
-	} else if feedbackResult != nil {
+	} else if feedbackResult != nil && feedbackResult.Abstained {
+		names := make([]string, 0, len(c.Config.UserFeedbackRules))
+		for _, rule := range c.Config.UserFeedbackRules {
+			names = append(names, rule.Name)
+		}
+		recordSignalRuleErrors(results, mu, config.SignalTypeUserFeedback, names, userFeedbackUncertainCode)
+	} else if feedbackResult != nil && feedbackResult.FeedbackType != FeedbackLabelNoFeedback {
 		// Check if this signal is defined in user_feedback_rules
 		for _, rule := range c.Config.UserFeedbackRules {
-			if rule.Name == signalName {
+			if rule.Name == feedbackResult.FeedbackType {
 				// Record signal match
 				c.recordSignalMatch(config.SignalTypeUserFeedback, rule.Name)
 

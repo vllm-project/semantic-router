@@ -27,6 +27,16 @@ func (c *Classifier) evaluateModalitySignal(results *SignalResults, mu *sync.Mut
 	logging.Debugf("[Signal Computation] Modality signal evaluation completed in %v: %s (confidence=%.3f, method=%s)",
 		elapsed, signalName, modalityResult.Confidence, modalityResult.Method)
 
+	if modalityResult.Err != nil {
+		logging.Errorf("modality rule evaluation failed: %v", modalityResult.Err)
+		names := make([]string, 0, len(c.Config.ModalityRules))
+		for _, rule := range c.Config.ModalityRules {
+			names = append(names, rule.Name)
+		}
+		recordSignalRuleErrors(results, mu, config.SignalTypeModality, names, "modality_evaluation_failed")
+		return
+	}
+
 	// Check if this signal name is defined in modality_rules
 	for _, rule := range c.Config.ModalityRules {
 		if strings.EqualFold(rule.Name, signalName) {

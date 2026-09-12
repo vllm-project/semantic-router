@@ -70,12 +70,16 @@ func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses .
 
 // MmBERT32KCategoryInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for intent classification.
 type MmBERT32KCategoryInitializerImpl struct {
-	usedMmBERT32K bool
+	maxSequenceLength int
+	usedMmBERT32K     bool
 }
 
 func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
 	backend := embeddingBackendOverride()
 	if backend == "openvino" {
+		if c.maxSequenceLength != 0 && c.maxSequenceLength != 512 {
+			return fmt.Errorf("the OpenVINO classifier bridge supports only the default 512-token budget")
+		}
 		nc := 0
 		if len(numClasses) > 0 {
 			nc = numClasses[0]
@@ -93,7 +97,7 @@ func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, num
 		}
 	}
 
-	err := candle_binding.InitMmBert32KIntentClassifier(modelID, useCPU)
+	err := candle_binding.InitMmBert32KIntentClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K intent classifier: %w", err)
 	}

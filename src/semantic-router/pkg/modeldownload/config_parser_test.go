@@ -119,6 +119,8 @@ func TestIsModelDirectory(t *testing.T) {
 		expected bool
 	}{
 		{"models/bert-base-uncased", true},
+		{"models/Vela-1.0-Encoder-307M-Safety", true},
+		{"models/Vela-1.0-Encoder-307M-Safety/model.safetensors", false},
 		{"models/gmtrouter.pt", false},
 		{"models/lora_model/adapter_config.json", false},
 		{"models/mapping.json", false},

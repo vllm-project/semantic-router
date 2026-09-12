@@ -26,6 +26,19 @@ use crate::model_architectures::embedding::{
 use candle_nn::VarBuilder;
 use tokenizers::{Tokenizer, TruncationDirection, TruncationParams, TruncationStrategy};
 
+// Training-time truncation and fixed padding are not runtime context policy.
+// The embedding FFI validates the untruncated token count against model capacity.
+fn load_mmbert_tokenizer(path: &str) -> Result<Tokenizer> {
+    let mut tokenizer = Tokenizer::from_file(path).map_err(|e| {
+        E::msg(format!(
+            "Failed to load mmBERT tokenizer from {path}: {e:?}"
+        ))
+    })?;
+    tokenizer.with_truncation(None).map_err(E::msg)?;
+    tokenizer.with_padding(None);
+    Ok(tokenizer)
+}
+
 /// Model factory configuration
 #[derive(Debug, Clone)]
 pub struct ModelFactoryConfig {
@@ -253,12 +266,7 @@ impl ModelFactory {
 
         // Load tokenizer
         let tokenizer_path = format!("{}/tokenizer.json", model_path);
-        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-            E::msg(format!(
-                "Failed to load mmBERT tokenizer from {}: {:?}",
-                tokenizer_path, e
-            ))
-        })?;
+        let tokenizer = load_mmbert_tokenizer(&tokenizer_path)?;
 
         self.mmbert_embedding_model = Some(model);
         self.mmbert_tokenizer = Some(tokenizer);
@@ -776,5 +784,47 @@ impl ConfigurableModel for DualPathModel {
         // DualPathModel has complex factory-based initialization
         // This will be properly implemented when ModelFactory is refactored
         unimplemented!("ConfigurableModel::load will be implemented when ModelFactory is refactored for new interface")
+    }
+}
+
+#[cfg(test)]
+mod tokenizer_contract_tests {
+    use super::load_mmbert_tokenizer;
+    use tokenizers::{
+        models::wordlevel::WordLevel, pre_tokenizers::whitespace::WhitespaceSplit, PaddingParams,
+        PaddingStrategy, Tokenizer, TruncationParams,
+    };
+
+    #[test]
+    fn mmbert_embedding_discards_saved_training_limits() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tokenizer.json");
+        let model = WordLevel::builder()
+            .vocab(
+                [("x".to_owned(), 0), ("[UNK]".to_owned(), 1)]
+                    .into_iter()
+                    .collect(),
+            )
+            .unk_token("[UNK]".to_owned())
+            .build()
+            .unwrap();
+        let mut tokenizer = Tokenizer::new(model);
+        tokenizer.with_pre_tokenizer(Some(WhitespaceSplit));
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: 2,
+                ..Default::default()
+            }))
+            .unwrap();
+        tokenizer.with_padding(Some(PaddingParams {
+            strategy: PaddingStrategy::Fixed(8),
+            ..Default::default()
+        }));
+        tokenizer.save(&path, false).unwrap();
+        let runtime = load_mmbert_tokenizer(path.to_str().unwrap()).unwrap();
+        let encoded = runtime.encode("x x x x x", true).unwrap();
+        assert_eq!(encoded.get_ids().len(), 5);
+        assert_eq!(encoded.get_attention_mask(), &[1, 1, 1, 1, 1]);
+        assert_eq!(encoded.get_offsets().last(), Some(&(8, 9)));
     }
 }

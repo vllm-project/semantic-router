@@ -83,6 +83,7 @@ type SignalMatches struct {
 	ModalityRules      []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
 	AuthzRules         []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
 	JailbreakRules     []string // Jailbreak rule names matched (confidence >= threshold)
+	SafetyRules        []string // Safety rule names matched (confidence >= threshold)
 	PIIRules           []string // PII rule names matched (denied PII types detected)
 	KBRules            []string // KB signal names matched from global.model_catalog.kbs bindings
 	ConversationRules  []string // Conversation-shape signal names matched
@@ -584,6 +585,8 @@ func resolvePolicySignalRules(
 		return signals.AuthzRules, true
 	case config.SignalTypeJailbreak:
 		return signals.JailbreakRules, true
+	case config.SignalTypeSafety:
+		return signals.SafetyRules, true
 	case config.SignalTypePII:
 		return signals.PIIRules, true
 	case config.SignalTypeKB:

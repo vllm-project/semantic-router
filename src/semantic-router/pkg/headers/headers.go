@@ -259,6 +259,9 @@ const (
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
 
+	// VSRMatchedSafety contains matched content safety rule names.
+	VSRMatchedSafety = "x-vsr-matched-safety"
+
 	// VSRMatchedHallucination contains comma-separated list of matched
 	// hallucination rule names. Written in the response body phase, once the
 	// model's answer has been checked against its grounding context.

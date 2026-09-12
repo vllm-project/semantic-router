@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: (devel)
   creationTimestamp: null
   labels:
     app.kubernetes.io/component: manager
@@ -1746,6 +1746,13 @@ spec:
                         type: boolean
                       jailbreak_mapping_path:
                         type: string
+                      max_sequence_length:
+                        description: |-
+                          MaxSequenceLength limits the total tokenized input, including special
+                          tokens. Omission or zero retains the 512-token budget. The model loader
+                          validates the requested budget against the loaded model's capacity.
+                        minimum: 0
+                        type: integer
                       model_id:
                         default: models/mmbert32k-jailbreak-detector-merged
                         type: string
@@ -1796,7 +1803,44 @@ spec:
                         - candle
                         - mmbert32k
                         type: string
+                      window:
+                        description: |-
+                          Window enables explicit scanning of all input tokens. Omission or null
+                          keeps whole-input inference. Only the local mmbert32k variant supports it.
+                        nullable: true
+                        properties:
+                          overlap:
+                            description: Overlap counts content tokens shared by consecutive
+                              windows.
+                            minimum: 0
+                            type: integer
+                          size:
+                            description: Size is the inference window budget, including
+                              special tokens.
+                            minimum: 1
+                            type: integer
+                        required:
+                        - size
+                        type: object
+                        x-kubernetes-validations:
+                        - message: window.overlap must be smaller than window.size
+                          rule: '!has(self.overlap) || self.overlap < self.size'
                     type: object
+                    x-kubernetes-validations:
+                    - message: max_sequence_length requires the local mmbert32k variant
+                      rule: '!has(self.max_sequence_length) || self.max_sequence_length
+                        == 0 || ((!has(self.protocol) || size(self.protocol) == 0)
+                        && (!has(self.variant) || size(self.variant) == 0 || self.variant
+                        == ''mmbert32k''))'
+                    - message: window requires the local mmbert32k variant
+                      rule: '!has(self.window) || ((!has(self.protocol) || size(self.protocol)
+                        == 0) && (!has(self.variant) || size(self.variant) == 0 ||
+                        self.variant == ''mmbert32k''))'
+                    - message: window.size must not exceed max_sequence_length (512
+                        when omitted or zero)
+                      rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
+                        && self.max_sequence_length > 0 ? self.max_sequence_length
+                        : 512)'
                   reasoning_effort:
                     description: |-
                       ReasoningEffort is the default reasoning effort for model bindings that do

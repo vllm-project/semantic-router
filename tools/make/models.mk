@@ -4,14 +4,22 @@
 
 ##@ Models
 
-test-training-contracts: ## Run dependency-light model training contract tests
-	@python3 -m unittest discover -s src/training/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
+.PHONY: onnx-artifact-test
+onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with real CPU inference
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_pack_shared_weights.py'
+
+test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/user_feedback_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/pii_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/sequence_repair/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m pytest -q \
 		src/training/model_eval/test_provenance.py \
 		src/training/model_eval/test_artifact_inventory.py \

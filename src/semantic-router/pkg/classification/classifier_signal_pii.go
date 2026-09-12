@@ -53,7 +53,7 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	// Entity types are returned as "LABEL_{class_id}" and translated by PIIMapping.
 	piiCache := make(map[string][]cachedPIIResult, len(uniqueContents))
 	for _, content := range uniqueContents {
-		chunks := piiSignalChunks(content)
+		chunks := c.piiInputs(content)
 		cached := make([]cachedPIIResult, 0, len(chunks))
 		for _, chunk := range chunks {
 			tokenResult, err := c.piiInference.ClassifyTokens(ctx, chunk)

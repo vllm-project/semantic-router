@@ -1,0 +1,1017 @@
+{
+  "source": "microsoft/WildFeedback",
+  "revision": "8b1a3e530b949d6aacfad6ba8912e209a05bc846",
+  "source_sha256": "2caea8361756b35a512b2ebef93245df1e81d982a3602460f75a4445fc16d305",
+  "review": "single model-assisted review of source NEWTOPIC candidates, not independent human gold",
+  "policy": "Current user text must supply a new task or material without evaluating or revising a prior answer. Ambiguous references and personal contact details are excluded. Source state alone is insufficient.",
+  "items": [
+    {
+      "source_index": 863908,
+      "group_id": "wildfeedback:conversation:76168",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "13d53833dc3f4dafd3b28c4ca34c670012c0a593951b31f6185c9fea1bfc6b6e",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 196156,
+      "group_id": "wildfeedback:conversation:17186",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "5db40ebc16e6e4455262bf2055f708a634421f9cb8fd79d42bea25f3f815e297",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 419142,
+      "group_id": "wildfeedback:conversation:36797",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "7caca5269ef1504e5cad579cd20ea85692dd55a44b3769cd07de6ae40a6d6c2e",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 660836,
+      "group_id": "wildfeedback:conversation:59476",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "3a1efa2b64749ccbf657f68f41c9f0b6b01128ff8e6014de3a5b5ef91a78f733",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 666050,
+      "group_id": "wildfeedback:conversation:59912",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "0927df14ab4139352b9800dc52874190098dea9f8108fe8970424e05130067e6",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 334504,
+      "group_id": "wildfeedback:conversation:28938",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "6c26f1ab4fa7a71777eacff990a2d12b0395bce52e2e3bf7b3fdb7d262a63075",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 340434,
+      "group_id": "wildfeedback:conversation:29461",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "35709d8e2789a1a4a5d6d34cff9d016c1c7a4e46a45c55215fa6018ba537af70",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 863246,
+      "group_id": "wildfeedback:conversation:76114",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "1f8c361b2825216ea9edd5a557de5b547fe2185e91c0c4bf34b2739922525a6e",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 1012112,
+      "group_id": "wildfeedback:conversation:88525",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "60ca53b0008a0a75353e0475ac39702c62b7d03e8dbf6430e8477ca05285ae85",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 286894,
+      "group_id": "wildfeedback:conversation:24846",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "c8a90469096e2f87cf4095bc3ab5d5691d2da6c0dcdc1c7539a2ef0ea3f80f19",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 521466,
+      "group_id": "wildfeedback:conversation:45990",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "d27559e8683a906daf04df8a5ce5a7bf950c25cd68b1f40ce1284673c77bc59e",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 964862,
+      "group_id": "wildfeedback:conversation:84714",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "262fc3815078f24692c0bc8ae4556f1ed35975eb9c7e2e564251be00316a078e",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 157458,
+      "group_id": "wildfeedback:conversation:13963",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "5e4d1abeb83006e5d9a8074ba4b2c6964bb738a4c93e9b97f7278e69bec8081b",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 117986,
+      "group_id": "wildfeedback:conversation:10593",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "4e3807fd608a6db48a14a5896d7d1ef325abd6340799fbd91d0f9265257ff0a7",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 453140,
+      "group_id": "wildfeedback:conversation:39951",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "2719fe74dd053059c789d013d279bd4f8a664d14b2e52991a699e9452b165b4f",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 294386,
+      "group_id": "wildfeedback:conversation:25479",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "10f02f86da20db023105cd1ec41a1c9e72ff92a65b98a052f68a31cdc12c74d2",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 687708,
+      "group_id": "wildfeedback:conversation:61648",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "345aa4f621083547a00f96e631e323108467efb8174fb7d284d6d6c4ff4cfc11",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 592156,
+      "group_id": "wildfeedback:conversation:52779",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "bb824e9b32ee6bee25631096426803652d8a6eabf73112006adbaed89d61f639",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 404440,
+      "group_id": "wildfeedback:conversation:35429",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "f9e86dd0e7597ffb440f80bab5a070cc93ecc4903cca32ccb5beec30ce034573",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 435044,
+      "group_id": "wildfeedback:conversation:38278",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "2c30369443e2995558fa5a9ba253bab3e76b85c62350f7273319134d076fc04e",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 443778,
+      "group_id": "wildfeedback:conversation:39093",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "8f264299a44730d52e12d34d56b9b0b0c3b2a960eb87bf46759c03d6743748e4",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 250914,
+      "group_id": "wildfeedback:conversation:21813",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "4533a573c95559812773cb89c0de7a79587a7e3640d3f1a1bed906ee6cbf5cc7",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 997918,
+      "group_id": "wildfeedback:conversation:87406",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "b5f2351a5ac00326d6666c693af1c66189fccbe6d8e323c17a72b288871b541e",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 90118,
+      "group_id": "wildfeedback:conversation:8127",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "3e0fd7b215efc1baa854c09e130b8649d2af1e42950b54362e95914af4daa034",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 300148,
+      "group_id": "wildfeedback:conversation:25972",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "80d1863094243227ec6f6e7ca055ed2d81e9b28c598c4d3496ca96b91896ff20",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 377058,
+      "group_id": "wildfeedback:conversation:32989",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "72cc979176c2e2c792196affeb3ff58bc7c6cb09d460b25cf4fa9f3ecba710ae",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 253288,
+      "group_id": "wildfeedback:conversation:22002",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "a5e030e799572757afc736a0142e881e50b6c6817b5e5603393af16f18e32bc4",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 906082,
+      "group_id": "wildfeedback:conversation:79836",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "4b2341b6c19901844ccf19827248a1d5a483367cffaa26dffe4a34f5998c759d",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 120438,
+      "group_id": "wildfeedback:conversation:10788",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "5b19a4e80550fa350d04d4329d5f18e7f5416b6e0c068382d97f7bc3210fc074",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 822086,
+      "group_id": "wildfeedback:conversation:72661",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "45ce13cdaf8ba01b6e3cd1df54479acedbdfa7deb831489d09f07d1be93e07ae",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 294284,
+      "group_id": "wildfeedback:conversation:25469",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "b7a2e0b1b3b19b34c72c400a4691c29da57dcfdcd1701fefac705d233c348c79",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 14034,
+      "group_id": "wildfeedback:conversation:1280",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "e66ec072d2decb0beea40f7f434228bf72dbf95b4cf7a62006871eed7bd4a936",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 239972,
+      "group_id": "wildfeedback:conversation:20786",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "c9bc22a93ee345b3ed493cc254cee2854b349a87f6e2a7d28297eea40f627713",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 9004,
+      "group_id": "wildfeedback:conversation:819",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "788cff7a94e6b7986bf3def498c86d8f9a5cfdd5f53e90b4e8795a8939814a88",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 89700,
+      "group_id": "wildfeedback:conversation:8091",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "75bc86dcd7698c74e0c14b55d89413267dd580c7b6b121d3bc0ccea9d4821529",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 912260,
+      "group_id": "wildfeedback:conversation:80355",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "f05d3dd1d3a4c32261ca46f3b3e9e3072c3a7d5e78a08aeaab57768f55a22f94",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 266114,
+      "group_id": "wildfeedback:conversation:23019",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "f9a20f68a61844a73753fd40432ddd5fa6136b8a8e0e3e4d3ca025c7b29127fd",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 739484,
+      "group_id": "wildfeedback:conversation:65814",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "eb659b3782e4c85c697d500ce3e53c5f69f692a62dc2671e24c7ad07c4165449",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 207938,
+      "group_id": "wildfeedback:conversation:18155",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "6f3874e1353bdf66d7cf4fe0d3144cd6741ef5280166f8a8da9c857fe363c8aa",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 555460,
+      "group_id": "wildfeedback:conversation:49183",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "45462110d5b6fde0c7d0b64d0c160f5bdeefc7a629980d4809faec7ee0883ca1",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 694862,
+      "group_id": "wildfeedback:conversation:62233",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "0bc08e2a6db963617b601d5d72a140ff0bc4a043296115a4e59f4d16bb5b6b2a",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 997276,
+      "group_id": "wildfeedback:conversation:87343",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "79119ac588d48851a43261ab6b2085bb14d48bf782a7a92a159e778f1e284f61",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 238974,
+      "group_id": "wildfeedback:conversation:20695",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "fa7bd980708dd70d0598a8069c571d77d55466cb46446e558b6269bcf92e075b",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 83258,
+      "group_id": "wildfeedback:conversation:7554",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "d7dc88706242418922565113733bc97661df41ad4fabcde075cb8f8e699512a5",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 302738,
+      "group_id": "wildfeedback:conversation:26184",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "bf2b573970fe9788e1f1d3207718f5fa4e373f0b5000e5c85ed5543d7d139fbc",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 664132,
+      "group_id": "wildfeedback:conversation:59769",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "1162cc69d0bc56ed4852343b241d958788ad4b8e3273f4430ee1de3be990cf67",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 881554,
+      "group_id": "wildfeedback:conversation:77665",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "690a72c5a55386f6a30cfc497325a49058b6e6a290834715e4badd6f10e929c2",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 830922,
+      "group_id": "wildfeedback:conversation:73428",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "7f96abf54256fa02d12a7e97e608051f664095442a3979504dc328d85823ed92",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 347696,
+      "group_id": "wildfeedback:conversation:30172",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "927a7cc63a723d701c9db654a9561b80e6aac6261a5f0f196a22341bfaf8a633",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 2984,
+      "group_id": "wildfeedback:conversation:272",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "5b9d40007db708aab07926ddf23ad5d52c60b14599bb2fd8032e86a25874d2d9",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 879076,
+      "group_id": "wildfeedback:conversation:77460",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "82b0c1b600ec25688dc0ee542fb3c136491ce891a596bb812901beee91a93879",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 691474,
+      "group_id": "wildfeedback:conversation:61967",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "97e1dc94bac42278b636cfd117e02546f8de9825538670354ca4f97e67950706",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 119448,
+      "group_id": "wildfeedback:conversation:10705",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "7a1ca444118cf66b7f01ca0833b767bfe688869d042d4e7fce6d6180fdcb9db4",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 560196,
+      "group_id": "wildfeedback:conversation:49657",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "6c4f7cb88b9a5a748e71383d1017cdfbc02691173f54c468d4821fff9a671408",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 429192,
+      "group_id": "wildfeedback:conversation:37756",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "2c90ec685bb1a8436f190f193bbaaa0c79482f2569ba91b1d1fe4354bc1105ae",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 497488,
+      "group_id": "wildfeedback:conversation:43814",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "f04103991f53aeeb7b01fd9f6ebdf7b3e6aea9f7956b8e2bd7afe4a353017ad3",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 436622,
+      "group_id": "wildfeedback:conversation:38431",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "e88730f18e80ddbe61f2b9ea5be10b1ca101512bd4a34ad3fbe86216d3429564",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 960452,
+      "group_id": "wildfeedback:conversation:84351",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "b9be7ff79f9402bffbcbb333d7178ad03b3d5d99ebd2ffc18f1806e8d4f08372",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 358978,
+      "group_id": "wildfeedback:conversation:31340",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "e04c534d4658cac45d7dc203190aa7960257d346cb04c38b02ffc7866964e486",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 256322,
+      "group_id": "wildfeedback:conversation:22226",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "660aaf7497e2a26638c7470bb62302ca31d958a6d07a273a93b5aa3f2a8c879a",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 428466,
+      "group_id": "wildfeedback:conversation:37686",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "5d0c0d7708461f0b68932f16e8a0b745d123fd4f8e969949ae1abaec54afecad",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 4076,
+      "group_id": "wildfeedback:conversation:370",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "416a910453fa7de5415c08cbd5f3a53133238894f7039143d5745b027bf30e65",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 823700,
+      "group_id": "wildfeedback:conversation:72801",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "c7db485a97e63a703b49fac177e8dd554390f3950e10a7700e6076d22299da8a",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 685468,
+      "group_id": "wildfeedback:conversation:61459",
+      "split": "validation",
+      "language": "en",
+      "text_sha256": "25ee750c1cfd8b6b462884bb8777b7e224896244719f84270a13dfe63330bede",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 449024,
+      "group_id": "wildfeedback:conversation:39573",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "9c8daee763fa62bcd1bdcc1d3e92d1389d672dc02f97d9bcc28e44da11608d09",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 641874,
+      "group_id": "wildfeedback:conversation:57627",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "b5a36907740c306b2750a67072b4fad3a9ce4de92c1082a94e88eebfef8db1ca",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 208426,
+      "group_id": "wildfeedback:conversation:18193",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "89f0041d1fd18769cb611ee4215d923811f4c66fe4ebc60c3a5c66956384902e",
+      "label": null,
+      "reason": "Unresolved reference to doing the same previous operation"
+    },
+    {
+      "source_index": 729194,
+      "group_id": "wildfeedback:conversation:65013",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "0c9e4b85f94d1ad21719e012d28bc837a8c5f566b369f4eb1d50a1d280690d96",
+      "label": null,
+      "reason": "Japanese content and previous-turn reference outside reviewed language scope"
+    },
+    {
+      "source_index": 302852,
+      "group_id": "wildfeedback:conversation:26194",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "6e19d72ab68699f8ebef1239a89f88eaa8d7eec96f1d3b37798c717d1b42ddd6",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 377804,
+      "group_id": "wildfeedback:conversation:33051",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "39a5edb2428308c7fc648e86dc19493ed3c24b76f9a9c574942f8691cdffe2d4",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 45666,
+      "group_id": "wildfeedback:conversation:4193",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "ea79ee8c598c0b9b9937f2ed5d1721fd6fc9f5786d26fa73148e39e8fc58b8ba",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 77804,
+      "group_id": "wildfeedback:conversation:7096",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "df3ce918d3a0d049d1fefefa13ef254baf7b1c0cc536d945d7097cb91993d65c",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 4032,
+      "group_id": "wildfeedback:conversation:365",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "10197a4ab6dbcee857cd87d27da00bcf8ddaf7484fd060d1ac372ad266ca1fd4",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 456298,
+      "group_id": "wildfeedback:conversation:40238",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "e40374d43d9902002d88f1938b738ceca76b3a2cc7d8aa1ce47e13d7bbbd9efe",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 296984,
+      "group_id": "wildfeedback:conversation:25698",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "37b929719e24cdca0ecf8abb0b7b8084637fcabb02fbd8710f8f06df4e32a58b",
+      "label": null,
+      "reason": "Standalone thanks can be feedback despite NEWTOPIC source flag"
+    },
+    {
+      "source_index": 400926,
+      "group_id": "wildfeedback:conversation:35122",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "4489cad735d0a3169e3e799423107c6a5e29bbc240f50c70d7d9afba1cdca708",
+      "label": null,
+      "reason": "Contains personal contact details; not needed for this task"
+    },
+    {
+      "source_index": 44540,
+      "group_id": "wildfeedback:conversation:4096",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "f704c9c090d31d466cb9c349f65d3a6b5cf8e83aac810d6660c87122d3c4d40a",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 733236,
+      "group_id": "wildfeedback:conversation:65311",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "544eeae9c92ae1eab691367797c12de7be2bd5b66fb379188fa9b6b63a30a9e4",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 195300,
+      "group_id": "wildfeedback:conversation:17116",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "7ed36d09d6cc917dacba80315f3c9c80ef3abc2c0724065d5e0b518c83b6fe42",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 187898,
+      "group_id": "wildfeedback:conversation:16497",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "1d61aa23f4444e7ebb5b91b50b63bf1aed9e7961d7d98cac3058cea25342d305",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 432756,
+      "group_id": "wildfeedback:conversation:38074",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "477569cc53bd6502de16b71510aa7fd41561bb99e2fc43cc4ebd9be5fed316be",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 858020,
+      "group_id": "wildfeedback:conversation:75639",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "c741fffa21a706b676bafa6fcd415d894074a94db79a56a4e0931389a5a5b46f",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 937694,
+      "group_id": "wildfeedback:conversation:82440",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "7e952b9cda1a7d4b8b0b42243a6972cf316a6edac63e5e088a8262f57ca1de55",
+      "label": null,
+      "reason": "Japanese content outside reviewed language scope"
+    },
+    {
+      "source_index": 375264,
+      "group_id": "wildfeedback:conversation:32835",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "7319f8a363a53c31f3f7f3e8add9a0684e6eac0483a285a9e40e2a44c5a18b93",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 376794,
+      "group_id": "wildfeedback:conversation:32965",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "bd295f8ee7b077ea7523fde0cd41c61d6a96626e08a0476f672e82ba68167981",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 243324,
+      "group_id": "wildfeedback:conversation:21080",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "f15e7df45e6fdaf128c18df21482f551b3dcedf80fef111d3a04cd1cbc9635e1",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 97446,
+      "group_id": "wildfeedback:conversation:8793",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "4e1c66e7bdb9b59064f13951b6fa11f5a2075d7e3991c0f329097c67bcb760be",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 171036,
+      "group_id": "wildfeedback:conversation:15074",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "dc0a125d0c69eac92ba31bf541925824b2cbc71b4bfa9e8871333190e644ed03",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 192964,
+      "group_id": "wildfeedback:conversation:16929",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "4feb20d3365b46bda4fc4fa03f2fd350fe8cf9e894ef289a8256abfb01df5131",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 127014,
+      "group_id": "wildfeedback:conversation:11354",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "1f68ec3e6bd048dcc5964db2e8176866e80499add25f49307cfeb6d7ef800059",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 293712,
+      "group_id": "wildfeedback:conversation:25414",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "8792a8605b145954cf52f5093d3fc3cfaa14c60111807a544513deeea7ee8c3a",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 418412,
+      "group_id": "wildfeedback:conversation:36733",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "a1f717d74467a27faea0f3a953974f054e0b8f9a18711840fb2aefce4f7eb546",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 639734,
+      "group_id": "wildfeedback:conversation:57398",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "cfef9199b7e68c65a64b9f4f97eca309cd7138d12ca14873d87e88bf3e7a0ab3",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 56660,
+      "group_id": "wildfeedback:conversation:5291",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "24fc315a6469ce37ab1c9cb12f07e0057649b7ca2def8a4bdc7abdf5358fcd65",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 292462,
+      "group_id": "wildfeedback:conversation:25304",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "ecd7339a947c9600d3baff7920269240b299968930f18f564f5ec093b790664c",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 488878,
+      "group_id": "wildfeedback:conversation:43115",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "f20a86534cb592912622647ccbdf6ab3fc72ff251e9169ef34037a3d274af430",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 340226,
+      "group_id": "wildfeedback:conversation:29440",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "d8ccdb9079b45d8ac409a97b845d9c654d5b8aabfa5bf2c0694186b6f338711d",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 36074,
+      "group_id": "wildfeedback:conversation:3295",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "a487f68b242dad10c337a6b19026e83c7427160a2464493b06ad6cce24eaa145",
+      "label": null,
+      "reason": "Explicit correction of a previous misunderstanding"
+    },
+    {
+      "source_index": 565412,
+      "group_id": "wildfeedback:conversation:50167",
+      "split": "train",
+      "language": "en",
+      "text_sha256": "8d312383328246871079c017092bcaa2aefe9c38006af803a23fee558de8bf01",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 1004468,
+      "group_id": "wildfeedback:conversation:87937",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "661fbefa8cea3d8fca78fc526c8ae16547d9e6eefbd017fbc7171f2df33699cb",
+      "label": null,
+      "reason": "Japanese names outside reviewed language scope"
+    },
+    {
+      "source_index": 216086,
+      "group_id": "wildfeedback:conversation:18876",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "2824b60c7124fb0ea6656e9ea908f95d9aaf740385a85219f21fe72b1950cc27",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 114842,
+      "group_id": "wildfeedback:conversation:10332",
+      "split": "train",
+      "language": "zh",
+      "text_sha256": "b1f266ea652537a4c285e549c7e8bf6a987380629855e10c831ee09ece57d5bc",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 317892,
+      "group_id": "wildfeedback:conversation:27462",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "729d1b536fdcf7ceb19ab256c1c6620a7ee458eb7333febb821f732ce8b76881",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 209202,
+      "group_id": "wildfeedback:conversation:18251",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "17dbf759960fd2ec87ba62d29ed3365e98ccd9a617e63ee2cdbfe7adee722845",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 604450,
+      "group_id": "wildfeedback:conversation:54006",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "6f0dd55b12b763542601f1ba7d7ded358d127324ff6c1bf3edc5048e8f55b8f9",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 347394,
+      "group_id": "wildfeedback:conversation:30141",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "9d87e5756e0edf4e670f3ed2dfc7b37b58892b8b0125d7f4240861f487592020",
+      "label": null,
+      "reason": "Japanese content outside reviewed language scope"
+    },
+    {
+      "source_index": 237940,
+      "group_id": "wildfeedback:conversation:20617",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "1ad43de414be07e4199143c8c77398528d28422315537ca8257a1f52e5286e67",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 644344,
+      "group_id": "wildfeedback:conversation:57891",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "676924fa1278bb9d11b7672c4c597a0f173b2b0e894e7f9579e860793c23fb86",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 448902,
+      "group_id": "wildfeedback:conversation:39565",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "5ba98560c6b695fffc79fc27a023470bf7054a4559e38c31561f94b64c881dce",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 1886,
+      "group_id": "wildfeedback:conversation:164",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "e5ada29cf595429c20741c722cd0d770ea4df768695b637643aba4e6c788e9f7",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    },
+    {
+      "source_index": 496806,
+      "group_id": "wildfeedback:conversation:43760",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "ba11327d1e6bc86fbe6c443e90ae1afc87676dded943a506018934bef1d50c58",
+      "label": null,
+      "reason": "Japanese content outside reviewed language scope"
+    },
+    {
+      "source_index": 934298,
+      "group_id": "wildfeedback:conversation:82144",
+      "split": "validation",
+      "language": "zh",
+      "text_sha256": "4f65843994bfd6e050286d289cb73d47b78a3b77984ad51f24e5558aa0be9892",
+      "label": "NO_FEEDBACK",
+      "reason": "Explicit new task or supplied material; no feedback on a preceding answer is observable"
+    }
+  ]
+}

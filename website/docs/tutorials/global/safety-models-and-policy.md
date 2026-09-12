@@ -77,6 +77,68 @@ The HTTP MCP classifier uses
 `global.model_catalog.modules.classifier.mcp.max_response_bytes`. Its default
 is 16 MiB.
 
+### Content safety and prompt attacks
+
+Use `routing.signals.safety` for content risks and `routing.signals.jailbreak`
+for prompt injection, jailbreak and instruction hijacking. A harmful request
+can contain no prompt attack, and an instruction hijack can ask for otherwise
+harmless output.
+
+The [Safety signal guide](../signal/learned/safety.md) covers two complementary
+heads: **Safety** predicts `safe`/`unsafe`; **Hazard** predicts independent risk
+categories. A category-specific rule first requires the Safety score to reach
+its threshold, then checks whether any selected Hazard category reaches its
+own threshold. The router skips Hazard inference when Safety is below threshold.
+
+Omit a rule's `model` to use the native head configured under
+`global.model_catalog.modules.safety`. Set `model` to an external classifier
+name to use `POST /classify` instead. Native heads are independently owned by
+the recipe, shared between its identical rule contracts, and released when the
+recipe closes. Local artifact labels and activation are checked on loading.
+External endpoints must return the complete declared label set. Safety scores
+form a softmax distribution; Hazard scores are independent sigmoid values and
+may sum to more than one.
+
+The [content-safety fragment](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
+shows two HTTP heads with a privacy-specific policy and a general unsafe policy.
+Replace `default-model` with a safety-capable provider alias and configure the endpoint addresses.
+Thresholds are examples, not universal calibration. `rules.on_unknown:
+fail_request` returns HTTP 503 when a required classification fails. A known
+unsafe result selects the configured policy: the example refuses unsafe privacy
+abuse and routes other risks to the backend. General content risk can include a
+person in crisis who needs a supportive response, so it should not automatically
+trigger a blanket refusal.
+
+### Native classifier context
+
+`max_sequence_length` on the domain, PII, prompt-guard, feedback, fact-check and
+modality classifier modules is an explicit native mmBERT input budget. Zero
+retains the historical 512-token budget. Larger values must fit the loaded
+artifact's position capacity. Configure the separate Safety/Hazard head budgets
+under `modules.safety.safety` and `modules.safety.hazard`.
+
+For the supported local classifier paths, a budget above 512 also enables full
+routing text instead of representative sampling or small security windows.
+Over-budget inputs produce an inference error rather than a result computed
+from an unseen truncation. Existing PII/jailbreak configurations with the
+historical budget retain overlapping scans across the entire input. Choose a
+budget supported by task-level quality and latency measurements; positional
+capacity alone is not evidence of long-text accuracy.
+
+For a prompt-guard checkpoint evaluated with token windows, configure
+`modules.prompt_guard.window.size` and `window.overlap` alongside the total
+`max_sequence_length` budget. This scans the original tokens and retains the
+window with the highest combined positive-label probability. The model's
+window size and decision threshold must be calibrated together; a larger
+position capacity does not replace this inference policy. See
+[Jailbreak Signal](../signal/learned/jailbreak.md#token-windows-for-a-local-classifier).
+
+For native mmBERT embedding signals, set
+`global.model_catalog.embeddings.semantic.embedding_config.full_context: true`
+to use the loaded embedding model's complete context capacity. The default
+keeps representative routing samples for latency. This affects the embedding
+signal; unrelated semantic consumers keep their own policies.
+
 ### Remote category/domain classifier
 
 Category/domain classification uses the shared `backend` block. The explicit

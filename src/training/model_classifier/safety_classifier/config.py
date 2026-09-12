@@ -57,8 +57,11 @@ def _validate_datasets(contract: dict[str, Any]) -> None:
 
 def _validate_model(contract: dict[str, Any]) -> None:
     model = _require(contract, "model", "contract")
-    if model.get("max_length") != MODEL_MAX_LENGTH:
-        raise ContractError(f"training-v1 fixes model.max_length at {MODEL_MAX_LENGTH}")
+    expected_length = MODEL_MAX_LENGTH if contract["contract_version"] == 1 else 2048
+    if model.get("max_length") != expected_length:
+        raise ContractError(
+            f"training-v{contract['contract_version']} fixes model.max_length at {expected_length}"
+        )
     if model.get("reference_compile") is not False:
         raise ContractError(
             "model.reference_compile must be false for distributed ROCm"
@@ -95,8 +98,8 @@ def load_contract(path: str | Path = DEFAULT_CONTRACT_PATH) -> dict[str, Any]:
     with contract_path.open(encoding="utf-8") as handle:
         contract = json.load(handle)
 
-    if contract.get("contract_version") != 1:
-        raise ContractError("Only training contract_version=1 is supported")
+    if contract.get("contract_version") not in (1, 2):
+        raise ContractError("Only training contract_version=1 or 2 is supported")
     _validate_metadata(contract)
     _validate_base_model(contract)
     _validate_datasets(contract)

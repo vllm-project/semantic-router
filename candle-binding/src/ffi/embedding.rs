@@ -734,6 +734,10 @@ fn generate_mmbert_embedding(
         .get_mmbert_tokenizer()
         .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
 
+    if tokens_exceed_window(tokenizer, text, model.config().max_position_embeddings)? {
+        return Err("input exceeds the embedding model context window".into());
+    }
+
     // Tokenize
     let encoding = tokenizer
         .encode(text, true)
@@ -785,7 +789,13 @@ fn generate_mmbert_embeddings_batch(
 
     // Batch encode
     let embeddings = model
-        .encode_batch_with_matryoshka(tokenizer, texts, 8192, target_layer, target_dim)
+        .encode_batch_with_matryoshka(
+            tokenizer,
+            texts,
+            model.config().max_position_embeddings,
+            target_layer,
+            target_dim,
+        )
         .map_err(|e| format!("mmBERT batch encoding failed: {:?}", e))?;
 
     // Convert to Vec<Vec<f32>>

@@ -43,3 +43,5 @@ pub mod similarity_test;
 pub mod tokenization_test;
 #[cfg(test)]
 pub mod unified_error_test;
+
+pub mod sequence_windows;

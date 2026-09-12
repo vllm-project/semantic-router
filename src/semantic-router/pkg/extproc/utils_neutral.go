@@ -118,6 +118,7 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	switch message.Role {
 	case llmprotocol.RoleUser:
 		result.UserMessageCount++
+		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
 		recordUserInputModalities(result, message.Content, text)
 		if text != "" {

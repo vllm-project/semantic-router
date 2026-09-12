@@ -24,6 +24,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeModality:      func(results *SignalResults) []string { return results.MatchedModalityRules },
 	config.SignalTypeAuthz:         func(results *SignalResults) []string { return results.MatchedAuthzRules },
 	config.SignalTypeJailbreak:     func(results *SignalResults) []string { return results.MatchedJailbreakRules },
+	config.SignalTypeSafety:        func(results *SignalResults) []string { return results.MatchedSafetyRules },
 	config.SignalTypePII:           func(results *SignalResults) []string { return results.MatchedPIIRules },
 	config.SignalTypeKB:            func(results *SignalResults) []string { return results.MatchedKBRules },
 	config.SignalTypeConversation:  func(results *SignalResults) []string { return results.MatchedConversationRules },

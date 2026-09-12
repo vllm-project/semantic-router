@@ -31,6 +31,12 @@ func (c *Classifier) buildPolicySignalDispatchers(
 	}
 	return []signalDispatch{
 		{
+			config.SignalTypeSafety, "Safety",
+			func() {
+				c.evaluateSafetySignals(requestFacts.Context, results, mu, textForSignal(config.SignalTypeSafety), usedSignals)
+			},
+		},
+		{
 			config.SignalTypeJailbreak, "Jailbreak",
 			func() {
 				c.evaluateJailbreakSignal(

@@ -21,6 +21,8 @@ type BertModel struct {
 }
 
 type CategoryModel struct {
+	// MaxSequenceLength selects the native mmBERT input budget; 0 preserves 512.
+	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
 	// Enabled turns category classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled       *bool   `yaml:"enabled,omitempty"`
@@ -41,6 +43,8 @@ type CategoryModel struct {
 }
 
 type PIIModel struct {
+	// MaxSequenceLength selects the native mmBERT input budget; 0 preserves 512.
+	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
 	// Enabled turns PII classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled        *bool   `yaml:"enabled,omitempty"`
@@ -77,6 +81,9 @@ func (e EmbeddingModels) MinSimilarityThreshold() float32 {
 
 // HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
+	// FullContext sends complete routing text to mmBERT up to its model capacity.
+	// False retains bounded representative sampling for routing latency.
+	FullContext        bool                   `yaml:"full_context,omitempty"`
 	Backend            string                 `yaml:"backend,omitempty"`
 	ModelType          string                 `yaml:"model_type,omitempty"`
 	PreloadEmbeddings  bool                   `yaml:"preload_embeddings"`
@@ -163,12 +170,16 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 }
 
 type PromptGuardConfig struct {
-	Enabled              bool     `yaml:"enabled"`
-	ModelID              string   `yaml:"model_id"`
-	Threshold            float32  `yaml:"threshold"`
-	UseCPU               bool     `yaml:"use_cpu"`
-	JailbreakMappingPath string   `yaml:"jailbreak_mapping_path"`
-	PositiveLabels       []string `yaml:"positive_labels,omitempty"`
+	// MaxSequenceLength selects the native mmBERT input budget; 0 preserves 512.
+	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
+	// Window scans original tokens and retains the window with highest positive-label risk.
+	Window               *SequenceHeadWindowConfig `yaml:"window,omitempty"`
+	Enabled              bool                      `yaml:"enabled"`
+	ModelID              string                    `yaml:"model_id"`
+	Threshold            float32                   `yaml:"threshold"`
+	UseCPU               bool                      `yaml:"use_cpu"`
+	JailbreakMappingPath string                    `yaml:"jailbreak_mapping_path"`
+	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
 
 	// Variant selects a local Candle-backed model variant. Mutually
 	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
@@ -186,6 +197,8 @@ type PromptGuardConfig struct {
 }
 
 type FeedbackDetectorConfig struct {
+	// MaxSequenceLength selects the native mmBERT input budget; 0 preserves 512.
+	MaxSequenceLength   int     `yaml:"max_sequence_length,omitempty"`
 	Enabled             bool    `yaml:"enabled"`
 	ModelID             string  `yaml:"model_id"`
 	Threshold           float32 `yaml:"threshold"`
@@ -306,10 +319,12 @@ type HallucinationMitigationConfig struct {
 }
 
 type FactCheckModelConfig struct {
-	ModelID      string  `yaml:"model_id"`
-	Threshold    float32 `yaml:"threshold"`
-	UseCPU       bool    `yaml:"use_cpu"`
-	UseMmBERT32K bool    `yaml:"use_mmbert_32k"`
+	// MaxSequenceLength selects the native mmBERT input budget; 0 preserves 512.
+	MaxSequenceLength int     `yaml:"max_sequence_length,omitempty"`
+	ModelID           string  `yaml:"model_id"`
+	Threshold         float32 `yaml:"threshold"`
+	UseCPU            bool    `yaml:"use_cpu"`
+	UseMmBERT32K      bool    `yaml:"use_mmbert_32k"`
 }
 
 type HallucinationModelConfig struct {

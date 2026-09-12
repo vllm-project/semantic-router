@@ -13,6 +13,62 @@ The public [mmBERT-32K model guide](../../../../website/docs/training/mmbert-32k
 explains when to use each architecture. This README focuses on running the
 checked training configurations.
 
+## Reproduce Vela text checkpoints
+
+The Vela task-weight continuation uses the run-specific `reproduction/`
+package shipped with `llm-semantic-router/Vela-1.0-Encoder-307M-Embedding`
+and `llm-semantic-router/Vela-1.0-Encoder-307M-Reranker`. Find each published
+checkpoint and its immutable revision in the
+[Vela model collection](https://huggingface.co/collections/llm-semantic-router/vela-10-router-models-6aa555ba70cc6997d6d67798).
+The BGE/AllNLI configurations below are the original training entry points;
+they do not reproduce the Vela MIRACL, semantic-pair, and long-context repair
+mixtures.
+
+Download the chosen checkpoint's reproduction package, using the exact
+revision reported by its model card:
+
+```bash
+export VELA_MODEL=llm-semantic-router/Vela-1.0-Encoder-307M-Embedding
+export VELA_REVISION="REPLACE_WITH_MODEL_CARD_COMMIT_SHA"
+export VELA_SNAPSHOT=/path/to/vela-snapshot
+
+hf download "$VELA_MODEL" --revision "$VELA_REVISION" \
+  --include 'reproduction/*' --local-dir "$VELA_SNAPSHOT"
+cd "$VELA_SNAPSHOT/reproduction"
+python -m pip install --requirement requirements.txt
+export VELA_REPRODUCTION_ROOT="$PWD/data-and-runs"
+python download_inputs.py --root "$VELA_REPRODUCTION_ROOT"
+python train_vela_long_repair_clean.py --help
+```
+
+Install the package's recorded PyTorch accelerator build before its Python
+requirements. Follow `reproduction/README.md` for the complete initial
+training, development selection, clean correction, frozen final evaluation,
+and ONNX export commands. It includes pinned inputs, source hashes, actual
+training arguments, and the explicit intermediate/full-layer representation
+contract. The task models continue their original task weights; shared encoder
+architecture does not imply descent from the newly continued Vela Base weights.
+
+Vela native inference follows the loaded encoder dtype with inference autocast
+disabled. Embedding masked mean and L2 normalization use FP32; reranker heads
+also execute in FP32, including when an outer caller enables autocast. The
+explicit reranker reader enforces this inference boundary while preserving
+legacy behavior for checkpoints without representation metadata. Training may
+use FP32 master weights with BF16 AMP, but checkpoint selection must evaluate a
+separate candidate in the declared deployment precision. Historical AMP
+inference results are a different arithmetic mode and must be labeled as such;
+they cannot establish native or ONNX accuracy in another mode.
+
+The Vela PAWS-X loader defaults to excluding either-sentence empty or `NS`
+placeholders with `strip().casefold()`, using [pawsx_data.py](pawsx_data.py).
+The clean correction records exclusion counts and asserts that sampled pairs
+contain no placeholders. Archived recipes explicitly opt into historical
+sampling only to reproduce their recorded runs; their existing manifests and
+scores remain unchanged. Raw and cleaned PAWS-X evaluations are reported
+separately, with thresholds selected on development data. The BGE/AllNLI and
+BGE/Quora/FEVER loaders in this repository do not load PAWS-X, so this
+dataset-specific placeholder rule is not applied to those sources.
+
 ## Install
 
 Use a Python environment with a compatible PyTorch build, then install the

@@ -387,10 +387,16 @@ func initializeRuntimeDependencies(
 	}, "Failed to write initialization startup status")
 
 	embeddingState, err := modelruntime.PrepareRouterRuntime(ctx, cfg, modelruntime.PrepareRouterRuntimeOptions{
-		Component:                  "router",
-		MaxParallelism:             modelruntime.DefaultParallelism(5),
-		OnEvent:                    logRuntimeLifecycleEvent,
-		InitModalityClassifierFunc: extproc.InitModalityClassifier,
+		Component:      "router",
+		MaxParallelism: modelruntime.DefaultParallelism(5),
+		OnEvent:        logRuntimeLifecycleEvent,
+		InitModalityClassifierFunc: func(path string, cpu bool) error {
+			limit := 0
+			if cfg.ModalityDetector.Classifier != nil {
+				limit = cfg.ModalityDetector.Classifier.MaxSequenceLength
+			}
+			return extproc.InitModalityClassifierWithMaxSequenceLength(path, cpu, limit)
+		},
 	})
 	if err != nil {
 		return embeddingState, err

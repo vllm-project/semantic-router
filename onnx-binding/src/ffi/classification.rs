@@ -140,11 +140,30 @@ fn get_tok_classifiers() -> &'static Mutex<HashMap<String, MmBertTokenClassifier
 ///
 /// # Returns
 /// true on success, false on error
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call.
 #[no_mangle]
-pub extern "C" fn init_sequence_classifier(
+pub unsafe extern "C" fn init_sequence_classifier(
     name: *const c_char,
     model_path: *const c_char,
     use_gpu: bool,
+) -> bool {
+    unsafe { init_sequence_classifier_with_context(name, model_path, use_gpu, 0) }
+}
+
+/// Initialize a classifier with an explicit input budget; 0 retains the default.
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call.
+#[no_mangle]
+pub unsafe extern "C" fn init_sequence_classifier_with_context(
+    name: *const c_char,
+    model_path: *const c_char,
+    use_gpu: bool,
+    max_sequence_length: usize,
 ) -> bool {
     if name.is_null() || model_path.is_null() {
         eprintln!("Error: null pointer in init_sequence_classifier");
@@ -171,7 +190,16 @@ pub extern "C" fn init_sequence_classifier(
         ClassifierExecutionProvider::Cpu
     };
 
-    match MmBertSequenceClassifier::load(&path_str, provider) {
+    let loaded = if max_sequence_length == 0 {
+        MmBertSequenceClassifier::load(&path_str, provider)
+    } else {
+        MmBertSequenceClassifier::load_with_max_sequence_length(
+            &path_str,
+            provider,
+            max_sequence_length,
+        )
+    };
+    match loaded {
         Ok(model) => {
             println!(
                 "INFO: Loaded sequence classifier '{}' from {}",
@@ -202,11 +230,30 @@ pub extern "C" fn init_sequence_classifier(
 ///
 /// # Returns
 /// true on success, false on error
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call.
 #[no_mangle]
-pub extern "C" fn init_token_classifier(
+pub unsafe extern "C" fn init_token_classifier(
     name: *const c_char,
     model_path: *const c_char,
     use_gpu: bool,
+) -> bool {
+    unsafe { init_token_classifier_with_context(name, model_path, use_gpu, 0) }
+}
+
+/// Initialize a classifier with an explicit input budget; 0 retains the default.
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call.
+#[no_mangle]
+pub unsafe extern "C" fn init_token_classifier_with_context(
+    name: *const c_char,
+    model_path: *const c_char,
+    use_gpu: bool,
+    max_sequence_length: usize,
 ) -> bool {
     if name.is_null() || model_path.is_null() {
         eprintln!("Error: null pointer in init_token_classifier");
@@ -233,7 +280,16 @@ pub extern "C" fn init_token_classifier(
         ClassifierExecutionProvider::Cpu
     };
 
-    match MmBertTokenClassifier::load(&path_str, provider) {
+    let loaded = if max_sequence_length == 0 {
+        MmBertTokenClassifier::load(&path_str, provider)
+    } else {
+        MmBertTokenClassifier::load_with_max_sequence_length(
+            &path_str,
+            provider,
+            max_sequence_length,
+        )
+    };
+    match loaded {
         Ok(model) => {
             println!(
                 "INFO: Loaded token classifier '{}' from {}",
@@ -256,8 +312,12 @@ pub extern "C" fn init_token_classifier(
 }
 
 /// Check if a classifier is loaded
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call.
 #[no_mangle]
-pub extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
+pub unsafe extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
     }
@@ -288,8 +348,13 @@ pub extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
 ///
 /// # Returns
 /// 0 on success, -1 on error
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call. Non-null `result` must be aligned, writable,
+/// exclusively accessible, and contain no unfreed result allocations.
 #[no_mangle]
-pub extern "C" fn classify_text(
+pub unsafe extern "C" fn classify_text(
     classifier_name: *const c_char,
     text: *const c_char,
     result: *mut ClassificationResultFFI,
@@ -373,8 +438,13 @@ pub extern "C" fn classify_text(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call. Non-null `result` must be aligned, writable,
+/// exclusively accessible, and contain no unfreed result allocations.
 #[no_mangle]
-pub extern "C" fn detect_pii(
+pub unsafe extern "C" fn detect_pii(
     classifier_name: *const c_char,
     text: *const c_char,
     result: *mut PIIResultFFI,
@@ -477,8 +547,13 @@ pub extern "C" fn detect_pii(
 // ============================================================================
 
 /// Free classification result
+///
+/// # Safety
+/// A non-null `result` must be aligned and exclusively accessible. It must be a
+/// zero-initialized value or a result returned by this library, with its owned
+/// pointers and lengths unchanged and no outstanding aliases to those allocations.
 #[no_mangle]
-pub extern "C" fn free_classification_result(result: *mut ClassificationResultFFI) {
+pub unsafe extern "C" fn free_classification_result(result: *mut ClassificationResultFFI) {
     if result.is_null() {
         return;
     }
@@ -492,7 +567,7 @@ pub extern "C" fn free_classification_result(result: *mut ClassificationResultFF
         }
 
         if !r.probabilities.is_null() && r.num_classes > 0 {
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 r.probabilities,
                 r.num_classes as usize,
             ));
@@ -502,8 +577,13 @@ pub extern "C" fn free_classification_result(result: *mut ClassificationResultFF
 }
 
 /// Free PII result
+///
+/// # Safety
+/// A non-null `result` must be aligned and exclusively accessible. It must be a
+/// zero-initialized value or a result returned by this library, with its owned
+/// pointers and lengths unchanged and no outstanding aliases to those allocations.
 #[no_mangle]
-pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
+pub unsafe extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
     if result.is_null() {
         return;
     }
@@ -548,8 +628,15 @@ pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
 ///
 /// # Returns
 /// 0 on success, -1 on error
+///
+/// # Safety
+/// All non-null string arguments must point to readable, NUL-terminated C strings
+/// for the duration of this call. Non-null `texts` and `results` must point
+/// to arrays of at least `num_texts` elements. Input strings must remain readable;
+/// output elements must be aligned, exclusively writable, and contain no unfreed
+/// result allocations.
 #[no_mangle]
-pub extern "C" fn classify_batch(
+pub unsafe extern "C" fn classify_batch(
     classifier_name: *const c_char,
     texts: *const *const c_char,
     num_texts: i32,
@@ -569,7 +656,7 @@ pub extern "C" fn classify_batch(
     // Parse texts
     let mut text_strs = Vec::with_capacity(num_texts as usize);
     for i in 0..num_texts {
-        let text_ptr = unsafe { *texts.offset(i as isize) };
+        let text_ptr = unsafe { *texts.add(i as usize) };
         if text_ptr.is_null() {
             return -1;
         }
@@ -605,7 +692,7 @@ pub extern "C" fn classify_batch(
                     Box::into_raw(classification.probabilities.into_boxed_slice()) as *mut f32;
 
                 unsafe {
-                    *results.offset(i as isize) = ClassificationResultFFI {
+                    *results.add(i) = ClassificationResultFFI {
                         label: label_cstr.into_raw(),
                         class_id: classification.class_id,
                         confidence: classification.confidence,
@@ -623,7 +710,7 @@ pub extern "C" fn classify_batch(
             eprintln!("Error: batch classification failed: {:?}", e);
             for i in 0..num_texts as usize {
                 unsafe {
-                    *results.offset(i as isize) = ClassificationResultFFI::default();
+                    *results.add(i) = ClassificationResultFFI::default();
                 }
             }
             -1

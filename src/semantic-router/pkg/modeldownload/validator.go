@@ -122,6 +122,12 @@ func GetMissingModels(specs []ModelSpec) ([]ModelSpec, error) {
 			return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
 		}
 
+		if complete {
+			complete, err = hasCurrentModelRevision(spec)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
+			}
+		}
 		if !complete {
 			missing = append(missing, spec)
 		}

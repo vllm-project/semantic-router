@@ -29,6 +29,7 @@ type SignalResults struct {
 	MatchedModalityRules      []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
 	MatchedAuthzRules         []string // Matched authz role names for user-level RBAC routing
 	MatchedJailbreakRules     []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedSafetyRules        []string // Matched safety rule names (confidence >= threshold)
 	MatchedPIIRules           []string // Matched PII rule names (denied PII types detected)
 	MatchedKBRules            []string
 	KBClassifierResults       map[string]*KBClassifyResult
@@ -77,6 +78,7 @@ type SignalMetricsCollection struct {
 	Modality      SignalMetrics `json:"modality"`
 	Authz         SignalMetrics `json:"authz"`
 	Jailbreak     SignalMetrics `json:"jailbreak"`
+	Safety        SignalMetrics `json:"safety"`
 	PII           SignalMetrics `json:"pii"`
 	KB            SignalMetrics `json:"kb"`
 	Conversation  SignalMetrics `json:"conversation"`

@@ -7,6 +7,8 @@ import (
 )
 
 var admissionDeploymentKeys = map[string]bool{
+	"safety":                  true,
+	"hazard":                  true,
 	"prompt_guard":            true,
 	"domain_classifier":       true,
 	"pii_classifier":          true,

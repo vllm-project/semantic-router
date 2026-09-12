@@ -118,6 +118,12 @@ domains:
     verify: [make test-binding-lora]
     ci_jobs: [core-tests]
 
+  onnx-artifact-tools:
+    owner: native-bindings
+    paths: [onnx-binding/scripts/**]
+    checks: [make onnx-artifact-test]
+    ci_jobs: [core-tests]
+
   ck-flash-attn-rewriter:
     owner: native-bindings
     paths: [onnx-binding/ort-ck-flash-attn/**]

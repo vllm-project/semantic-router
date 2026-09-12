@@ -102,6 +102,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/fact-check',
                 'tutorials/signal/learned/hallucination',
                 'tutorials/signal/learned/jailbreak',
+                'tutorials/signal/learned/safety',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
                 'tutorials/signal/learned/reask',

@@ -546,7 +546,45 @@ def rotary_fp32_initializers(graph, out2node):
     return exempt
 
 
-def weight_precision(initializers, *, position_constants=frozenset()):
+def fp32_head_initializers(graph, out2node, blocks):
+    """Find FP32 constants confined to the post-attention output computation.
+
+    No exempt tensor may contribute to any layer's Q, K or V. Unused weights
+    and graph outputs unrelated to attention are not a task head. This check
+    depends on dataflow, not initializer names or optional value_info.
+    """
+
+    def ancestors(names):
+        seen, pending = set(), list(names)
+        while pending:
+            name = pending.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            node = out2node.get(name)
+            if node is not None:
+                pending.extend(node.input)
+        return seen
+
+    attention_outputs = {block["output_tensor"] for block in blocks}
+    attention_inputs = ancestors(attention_outputs)
+    head_paths = set()
+    for output in graph.output:
+        path = ancestors([output.name])
+        if path & attention_outputs:
+            head_paths.update(path)
+    return {
+        tensor.name
+        for tensor in graph.initializer
+        if tensor.data_type == TensorProto.FLOAT
+        and tensor.name in head_paths
+        and tensor.name not in attention_inputs
+    }
+
+
+def weight_precision(
+    initializers, *, position_constants=frozenset(), head_constants=frozenset()
+):
     """Return the one floating-point elem_type every weight tensor shares.
 
     Integer initializers (shapes, gather indices) carry no precision and are
@@ -557,7 +595,9 @@ def weight_precision(initializers, *, position_constants=frozenset()):
     """
     counts = {}
     for tensor in initializers:
-        if tensor.data_type in _FLOAT_TYPES and tensor.name not in position_constants:
+        if tensor.data_type in _FLOAT_TYPES and tensor.name not in (
+            position_constants | head_constants
+        ):
             counts[tensor.data_type] = counts.get(tensor.data_type, 0) + 1
     if not counts:
         raise ValueError("the graph holds no floating-point weight tensors")
@@ -617,7 +657,9 @@ def enforce_output_precision(output_path, model_is_fp16):
         )
 
 
-def rewrite(model_path, output_path, hdim=64, local_attention=128):
+def rewrite(
+    model_path, output_path, hdim=64, local_attention=128, fp32_task_head=False
+):
     model = onnx.load(model_path)
     graph = model.graph
 
@@ -660,8 +702,15 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
     # none would read as FP32, and one activation cannot vouch for every weight.
     try:
         position_constants = rotary_fp32_initializers(graph, out2node)
+        head_constants = (
+            fp32_head_initializers(graph, out2node, blocks) if fp32_task_head else set()
+        )
         model_is_fp16 = (
-            weight_precision(graph.initializer, position_constants=position_constants)
+            weight_precision(
+                graph.initializer,
+                position_constants=position_constants,
+                head_constants=head_constants,
+            )
             == TensorProto.FLOAT16
         )
     except ValueError as exc:
@@ -673,6 +722,8 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
         print("  Model precision: FP32 (adding fp32↔fp16 Cast nodes)")
     if position_constants:
         print(f"  Preserved {len(position_constants)} FP32 RoPE frequency constants")
+    if head_constants:
+        print(f"  Preserved {len(head_constants)} FP32 post-attention head constants")
 
     enforce_output_precision(output_path, model_is_fp16)
 
@@ -962,8 +1013,15 @@ def main():
         default=128,
         help="Local attention window size (default: 128)",
     )
+    parser.add_argument(
+        "--fp32-task-head",
+        action="store_true",
+        help="Preserve FP32 head constants that cannot feed any attention Q/K/V",
+    )
     args = parser.parse_args()
-    rewrite(args.input, args.output, args.hdim, args.local_attention)
+    rewrite(
+        args.input, args.output, args.hdim, args.local_attention, args.fp32_task_head
+    )
 
 
 if __name__ == "__main__":

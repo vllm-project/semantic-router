@@ -58,6 +58,7 @@ type ModalityDetectionConfig struct {
 
 // ModalityClassifierConfig configures the ML-based modality classifier
 type ModalityClassifierConfig struct {
+	MaxSequenceLength int `json:"max_sequence_length,omitempty" yaml:"max_sequence_length,omitempty"`
 	// ModelPath is the path to the merged modality classifier model directory.
 	// Required when method is "classifier" or "hybrid" with a classifier.
 	ModelPath string `json:"model_path,omitempty" yaml:"model_path,omitempty"`

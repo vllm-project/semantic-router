@@ -13,6 +13,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer, get_cosine_schedule_with_warmup
 
+from .foundation_optimization import (
+    accumulation_window_size,
+    optimizer_steps_per_epoch,
+    should_optimizer_step,
+)
 from .reranker_data import RerankerDataset, collate_fn
 from .reranker_evaluation import evaluate_model
 from .reranker_loss import Matryoshka2DLoss
@@ -106,7 +111,10 @@ def _build_loader(args, tokenizer):
 
 
 def _build_optimization(args, model, loader):
-    total_steps = len(loader) * args.epochs // args.gradient_accumulation_steps
+    total_steps = (
+        optimizer_steps_per_epoch(len(loader), args.gradient_accumulation_steps)
+        * args.epochs
+    )
     warmup_steps = int(total_steps * args.warmup_ratio)
     logger.info("Training steps: %s (%s warmup)", total_steps, warmup_steps)
     effective_batch = args.batch_size * args.gradient_accumulation_steps
@@ -140,7 +148,7 @@ def _forward_loss(args, model, batch, matryoshka_loss):
                 labels=batch["labels"],
             )
             loss = outputs["loss"]
-        return loss / args.gradient_accumulation_steps
+        return loss
 
 
 def _log_progress(args, state, scheduler, progress) -> None:
@@ -180,10 +188,15 @@ def _run_training(args, model, tokenizer, loader, optimizer, scheduler, loss):
         progress = tqdm(loader, desc=f"Epoch {epoch + 1}")
         for step, raw_batch in enumerate(progress):
             batch = {key: value.to(device) for key, value in raw_batch.items()}
-            batch_loss = _forward_loss(args, model, batch, loss)
+            window_size = accumulation_window_size(
+                step, len(loader), args.gradient_accumulation_steps
+            )
+            batch_loss = _forward_loss(args, model, batch, loss) / window_size
             batch_loss.backward()
             state.total_loss += batch_loss.item()
-            if (step + 1) % args.gradient_accumulation_steps == 0:
+            if should_optimizer_step(
+                step, len(loader), args.gradient_accumulation_steps
+            ):
                 _optimizer_step(
                     args,
                     model,

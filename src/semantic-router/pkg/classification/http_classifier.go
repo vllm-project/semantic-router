@@ -58,9 +58,10 @@ type sequenceLabelMapping interface {
 // external model (a 14-label category classifier) during #2918, not just a
 // synthetic mock.
 type HTTPClassifierInference struct {
-	connector *connector.Client
-	timeout   time.Duration
-	mapping   sequenceLabelMapping
+	connector  *connector.Client
+	timeout    time.Duration
+	mapping    sequenceLabelMapping
+	multiLabel bool
 }
 
 // NewHTTPClassifierInference creates a new http_classify-backed inference
@@ -184,7 +185,7 @@ func (h *HTTPClassifierInference) Classify(ctx context.Context, text string) (Se
 	if len(scores) == 0 {
 		return SequenceClassificationResult{}, fmt.Errorf("http_classify response contained no labels")
 	}
-	return alignScoresToMapping(h.mapping, scores)
+	return alignScoresToMappingWithMode(h.mapping, scores, h.multiLabel)
 }
 
 const maxClassifyErrorBodyBytes int64 = 8 * 1024
@@ -234,6 +235,12 @@ func (h *HTTPClassifierInference) Close() error {
 // be any classifier's label mapping (JailbreakMapping, CategoryMapping, ...)
 // that satisfies sequenceLabelMapping.
 func alignScoresToMapping(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) (SequenceClassificationResult, error) {
+	return alignScoresToMappingWithMode(mapping, scores, false)
+}
+
+// Independent sigmoid scores require all labels and finite [0,1] values, but
+// have no sum-to-one constraint. Categorical consumers keep strict validation.
+func alignScoresToMappingWithMode(mapping sequenceLabelMapping, scores []httpClassifyLabelScore, multiLabel bool) (SequenceClassificationResult, error) {
 	numClasses := mapping.LabelCount()
 	probabilities := make([]float32, numClasses)
 	seenIdx := make([]bool, numClasses)
@@ -259,7 +266,7 @@ func alignScoresToMapping(mapping sequenceLabelMapping, scores []httpClassifyLab
 			"http_classify response is missing label %q from the configured label mapping (got %v)", missingLabel, seenLabels)
 	}
 
-	if math.Abs(float64(sum)-1.0) > probabilitySumTolerance {
+	if !multiLabel && math.Abs(float64(sum)-1.0) > probabilitySumTolerance {
 		return SequenceClassificationResult{}, fmt.Errorf(
 			"http_classify response scores sum to %v, want ~1.0 (labels: %v)", sum, seenLabels)
 	}

@@ -73,6 +73,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-modality',
   'x-vsr-matched-authz',
   'x-vsr-matched-jailbreak',
+  'x-vsr-matched-safety',
   'x-vsr-matched-hallucination',
   'x-vsr-matched-pii',
   'x-vsr-matched-kb',

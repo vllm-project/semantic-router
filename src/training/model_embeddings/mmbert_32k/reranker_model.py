@@ -6,12 +6,16 @@ import importlib.util
 import json
 import logging
 import os
+from contextlib import nullcontext
 
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional
 from transformers import AutoConfig, AutoModel
+
+from .representation_contract import read_representation_contract
+from .representation_outputs import select_hidden_state
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +144,9 @@ class Matryoshka2DReranker(nn.Module):
         logger.info("Layer indices: %s", self.layer_indices)
         logger.info("Dimension indices: %s", self.dim_indices)
         self.final_norm = _final_normalization(self.encoder)
+        self.representation_contract = read_representation_contract(
+            self.encoder.config, "reranker"
+        )
         self.layer_heads = _build_classification_heads(
             self.layer_indices, self.dim_indices
         )
@@ -183,11 +190,29 @@ class Matryoshka2DReranker(nn.Module):
             truncated = pooled[:, :dimension]
             head = self.layer_heads[str(layer_index)][str(dimension)]
             head_dtype = next(head.parameters()).dtype
+            if self.representation_contract is not None and head_dtype != torch.float32:
+                raise ValueError(
+                    "The explicit Vela reranker contract requires FP32 heads"
+                )
             if truncated.dtype != head_dtype:
                 truncated = truncated.to(head_dtype)
             key = f"layer_{layer_index}_dim_{dimension}"
-            scores[key] = head(truncated).squeeze(-1)
+            context = (
+                torch.autocast(device_type=pooled.device.type, enabled=False)
+                if self.representation_contract is not None
+                else nullcontext()
+            )
+            with context:
+                scores[key] = head(truncated).squeeze(-1)
         return scores
+
+    def _encoder_context(self, input_ids):
+        # Training may use AMP with FP32 master weights. Inference follows the
+        # loaded encoder dtype, as do the portable ONNX exports. Legacy callers
+        # without an explicit contract retain their existing autocast behavior.
+        if self.representation_contract is None or self.training:
+            return nullcontext()
+        return torch.autocast(device_type=input_ids.device.type, enabled=False)
 
     @staticmethod
     def _average_loss(all_scores, labels):
@@ -210,24 +235,37 @@ class Matryoshka2DReranker(nn.Module):
         return_all_scores: bool = False,
     ) -> dict[str, torch.Tensor]:
         """Score selected exits, optionally averaging pointwise losses."""
-        outputs = self.encoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-            return_dict=True,
-        )
-        hidden_states = outputs.hidden_states
         layers = [layer_idx] if layer_idx is not None else self.layer_indices
         dimensions = [dim_idx] if dim_idx is not None else self.dim_indices
         all_scores = {}
-        for layer_index in layers:
-            if layer_index > len(hidden_states) - 1:
-                continue
-            hidden = hidden_states[layer_index]
-            if self.final_norm is not None and layer_index < self.num_layers:
-                hidden = self.final_norm(hidden)
-            pooled = self._pool(hidden, attention_mask)
-            all_scores.update(self._score_dimensions(pooled, layer_index, dimensions))
+        with self._encoder_context(input_ids):
+            outputs = self.encoder(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+            )
+            hidden_states = outputs.hidden_states
+            for layer_index in layers:
+                if layer_index > len(hidden_states) - 1:
+                    continue
+                if self.representation_contract is None:
+                    # Preserve trained legacy heads when metadata is absent.
+                    hidden = hidden_states[layer_index]
+                    if self.final_norm is not None and layer_index < self.num_layers:
+                        hidden = self.final_norm(hidden)
+                else:
+                    hidden = select_hidden_state(
+                        self.encoder,
+                        outputs,
+                        layer_index,
+                        self.representation_contract,
+                        task="reranker",
+                    )
+                pooled = self._pool(hidden, attention_mask)
+                all_scores.update(
+                    self._score_dimensions(pooled, layer_index, dimensions)
+                )
         result = {}
         if labels is not None:
             average_loss = self._average_loss(all_scores, labels)
@@ -297,7 +335,10 @@ class Matryoshka2DReranker(nn.Module):
 
     @classmethod
     def from_pretrained(cls, model_path: str, **kwargs):
-        """Restore an exported encoder and its custom classification heads."""
+        """Restore a checkpoint in evaluation mode; call train() to continue training."""
+        heads_path = os.path.join(model_path, "classification_heads.pt")
+        if not os.path.isfile(heads_path):
+            raise FileNotFoundError(f"Missing trained reranker heads: {heads_path}")
         config_path = os.path.join(model_path, "matryoshka_config.json")
         if os.path.exists(config_path):
             with open(config_path) as handle:
@@ -310,9 +351,7 @@ class Matryoshka2DReranker(nn.Module):
                 }
             )
         model = cls(model_path, **kwargs)
-        heads_path = os.path.join(model_path, "classification_heads.pt")
-        if os.path.exists(heads_path):
-            state = torch.load(heads_path, map_location="cpu", weights_only=True)
-            model.layer_heads.load_state_dict(state)
-            logger.info("Loaded classification heads")
-        return model
+        state = torch.load(heads_path, map_location="cpu", weights_only=True)
+        model.layer_heads.load_state_dict(state, strict=True)
+        logger.info("Loaded classification heads")
+        return model.eval()

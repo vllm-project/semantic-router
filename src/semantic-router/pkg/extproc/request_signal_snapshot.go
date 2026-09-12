@@ -12,6 +12,7 @@ type requestSignalSnapshot struct {
 	PriorUserMessages []string
 	NonUserMessages   []string
 	HasAssistantReply bool
+	LastUserHasText   bool
 	FirstImageURL     string
 	ImageContentCount int
 	// InputModality holds the structural input-modality counts for the

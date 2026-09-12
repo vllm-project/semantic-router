@@ -299,6 +299,17 @@ pub struct FixedModernBertTokenClassifier {
 }
 
 impl FixedModernBertHead {
+    fn load_optional(
+        vb: candle_nn::VarBuilder,
+        config: &Config,
+    ) -> Result<Option<Self>, candle_core::Error> {
+        if vb.contains_tensor("dense.weight") || vb.contains_tensor("norm.weight") {
+            Self::load(vb, config).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn load(vb: candle_nn::VarBuilder, config: &Config) -> Result<Self, candle_core::Error> {
         // Following old architecture pattern - no bias for dense layer
         let dense = candle_nn::Linear::new(
@@ -311,7 +322,7 @@ impl FixedModernBertHead {
             vb.get((config.hidden_size,), "norm.weight")?,
             // Create a zero bias tensor since LayerNorm::new requires it but the model doesn't have one
             candle_core::Tensor::zeros((config.hidden_size,), DType::F32, vb.device())?,
-            1e-12,
+            config.layer_norm_eps,
         );
 
         Ok(Self { dense, layer_norm })
@@ -693,6 +704,20 @@ impl TraditionalModernBertClassifier {
         Ok(max_length)
     }
 
+    pub(super) fn parse_classifier_pooling(
+        config_json: &str,
+    ) -> Result<ClassifierPooling, candle_core::Error> {
+        let config: serde_json::Value =
+            serde_json::from_str(config_json).map_err(candle_core::Error::wrap)?;
+        match config.get("classifier_pooling") {
+            // Preserve the historical default for merged artifacts that omit it.
+            None => Ok(ClassifierPooling::MEAN),
+            Some(value) if value.as_str() == Some("mean") => Ok(ClassifierPooling::MEAN),
+            Some(value) if value.as_str() == Some("cls") => Ok(ClassifierPooling::CLS),
+            Some(_) => candle_core::bail!("classifier_pooling must be mean or cls"),
+        }
+    }
+
     pub(super) fn tokenizer_for_config(
         mut tokenizer: Tokenizer,
         config: &Config,
@@ -802,6 +827,7 @@ impl TraditionalModernBertClassifier {
             let unified_err = config_errors::invalid_json(&config_path, &e.to_string());
             candle_core::Error::from(unified_err)
         })?;
+        let classifier_pooling = Self::parse_classifier_pooling(&config_str)?;
 
         let max_sequence_length = Self::resolve_sequence_length(&config, max_sequence_length)?;
 
@@ -868,7 +894,7 @@ impl TraditionalModernBertClassifier {
             return Err(candle_core::Error::from(unified_err));
         };
         // 7. Load optional head layer
-        let head = FixedModernBertHead::load(model_vb.pp("head"), &config).ok();
+        let head = FixedModernBertHead::load_optional(model_vb.pp("head"), &config)?;
 
         // 8. Load classifier with dynamic class count
         let classifier = FixedModernBertClassifier::load_with_classes(
@@ -900,7 +926,7 @@ impl TraditionalModernBertClassifier {
             model,
             head,
             classifier,
-            classifier_pooling: ClassifierPooling::MEAN, // Use MEAN pooling as per model config
+            classifier_pooling,
             tokenizer: tokenizer_wrapper,
             device,
             config,
@@ -1095,7 +1121,7 @@ impl TraditionalModernBertClassifier {
         };
 
         // Try to load head from classifier (if exists)
-        let head = FixedModernBertHead::load(classifier_vb.pp("head"), &config).ok();
+        let head = FixedModernBertHead::load_optional(classifier_vb.pp("head"), &config)?;
 
         // 8. Load classifier weights from classifier path
         let classifier = FixedModernBertClassifier::load_with_classes(
@@ -1202,16 +1228,36 @@ impl TraditionalModernBertClassifier {
 
     /// classify_internal classifies text using real model inference - REAL IMPLEMENTATION
     fn classify_internal(&self, text: &str) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
-        run_on_inference_pool(&self.device, || self.classify_on_device(text))
+        self.classify_text_with_activation(text, false)
     }
 
-    fn classify_on_device(&self, text: &str) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
+    /// Full categorical (softmax) or independent multi-label (sigmoid) scores.
+    /// The caller must validate this choice against the artifact's task contract.
+    pub fn classify_text_with_activation(
+        &self,
+        text: &str,
+        multi_label: bool,
+    ) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
+        run_on_inference_pool(&self.device, || self.classify_on_device(text, multi_label))
+    }
+
+    fn classify_on_device(
+        &self,
+        text: &str,
+        multi_label: bool,
+    ) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
         // 1. Tokenize input text
         let tokenization_result = self.tokenizer.tokenize(text).map_err(|e| {
             let unified_err = processing_errors::tensor_operation("tokenization", &e.to_string());
             candle_core::Error::from(unified_err)
         })?;
 
+        if tokenization_result.truncated {
+            candle_core::bail!(
+                "input exceeds the classifier's {} token budget",
+                self.tokenizer.get_config().max_length
+            );
+        }
         // 2. Create input tensors
         let (input_ids, attention_mask) = self
             .tokenizer
@@ -1222,8 +1268,34 @@ impl TraditionalModernBertClassifier {
                 candle_core::Error::from(unified_err)
             })?;
 
+        self.classify_tensors_with_activation(&input_ids, &attention_mask, multi_label)
+    }
+
+    /// Classify an unpadded token window, with its special tokens already restored.
+    /// Positions start at zero for every call. No tokenizer can truncate or change it.
+    pub fn classify_tokens_with_activation(
+        &self,
+        ids: &[u32],
+        multi_label: bool,
+    ) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
+        if ids.is_empty() || ids.len() > self.tokenizer.get_config().max_length {
+            candle_core::bail!("token window is empty or exceeds the classifier budget");
+        }
+        run_on_inference_pool(&self.device, || {
+            let input_ids = Tensor::new(ids, &self.device)?.unsqueeze(0)?;
+            let attention_mask = Tensor::ones((1, ids.len()), DType::U32, &self.device)?;
+            self.classify_tensors_with_activation(&input_ids, &attention_mask, multi_label)
+        })
+    }
+
+    fn classify_tensors_with_activation(
+        &self,
+        input_ids: &Tensor,
+        attention_mask: &Tensor,
+        multi_label: bool,
+    ) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
         // 3. Forward pass through ModernBERT model
-        let model_output = self.model.forward(&input_ids, &attention_mask)?;
+        let model_output = self.model.forward(input_ids, attention_mask)?;
 
         // 4. Apply pooling strategy
         let pooled_output = match self.classifier_pooling {
@@ -1259,10 +1331,18 @@ impl TraditionalModernBertClassifier {
             pooled_output
         };
 
-        // 6. Apply classifier to get probabilities (classifier applies softmax internally)
-        let probabilities = self.classifier.forward(&classifier_input)?;
-
-        // 8. Extract prediction (highest probability class)
+        let logits = classifier_input
+            .apply(&self.classifier.classifier)?
+            .to_dtype(DType::F32)?;
+        let flat = logits.flatten_all()?.to_vec1::<f32>()?;
+        if flat.len() != self.num_classes || flat.iter().any(|value| !value.is_finite()) {
+            candle_core::bail!("classifier returned invalid or non-finite logits");
+        }
+        let probabilities = if multi_label {
+            candle_nn::ops::sigmoid(&logits)?
+        } else {
+            candle_nn::ops::softmax(&logits, candle_core::D::Minus1)?
+        };
         let probabilities_vec = probabilities.squeeze(0)?.to_vec1::<f32>()?;
 
         let mut max_prob = 0.0f32;
@@ -1528,19 +1608,7 @@ impl TraditionalModernBertTokenClassifier {
         let model = ModernBert::load(vb.clone(), &config)?;
 
         // Load head (optional) - following old architecture pattern
-        let head = match vb.get(
-            (config.hidden_size, config.hidden_size),
-            "head.dense.weight",
-        ) {
-            Ok(_) => {
-                let head_vb = vb.pp("head");
-                Some(FixedModernBertHead::load(head_vb, &config)?)
-            }
-            Err(_) => {
-                println!("  Head not found in model, using None (this is normal for some ModernBERT models)");
-                None
-            }
-        };
+        let head = FixedModernBertHead::load_optional(vb.pp("head"), &config)?;
 
         // Get number of classes from config.json id2label field (single source of truth)
         // For models that don't include id2label in config.json,
@@ -1620,6 +1688,12 @@ impl TraditionalModernBertTokenClassifier {
     fn classify_tokens_on_device(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
         // Tokenize the text
         let tokenization_result = self.tokenizer.tokenize(text)?;
+        if tokenization_result.truncated {
+            anyhow::bail!(
+                "input exceeds the token classifier's {} token budget",
+                self.tokenizer.get_config().max_length
+            );
+        }
 
         // Create tensors from tokenization result
         let (input_ids, attention_mask) = self.tokenizer.create_tensors(&tokenization_result)?;
@@ -1762,5 +1836,43 @@ impl TraditionalModernBertTokenClassifier {
     /// Get class labels if available
     pub fn get_class_labels(&self) -> Option<&HashMap<String, String>> {
         None
+    }
+}
+
+#[cfg(test)]
+mod head_contract_tests {
+    use super::*;
+    use candle_nn::Module;
+    use std::collections::HashMap;
+
+    #[test]
+    fn head_honors_configured_epsilon_and_rejects_partial_weights() -> candle_core::Result<()> {
+        let config: Config = serde_json::from_value(serde_json::json!({
+            "vocab_size":16,"hidden_size":4,"num_hidden_layers":2,"num_attention_heads":2,
+            "intermediate_size":8,"max_position_embeddings":512,"layer_norm_eps":0.001,
+            "pad_token_id":0,"global_attn_every_n_layers":2,"global_rope_theta":10000.0,
+            "local_attention":4,"local_rope_theta":10000.0
+        }))
+        .unwrap();
+        let device = Device::Cpu;
+        let mut weights = HashMap::new();
+        weights.insert("dense.weight".into(), Tensor::eye(4, DType::F32, &device)?);
+        let partial = VarBuilder::from_tensors(weights.clone(), DType::F32, &device);
+        assert!(FixedModernBertHead::load_optional(partial, &config).is_err());
+        weights.insert("norm.weight".into(), Tensor::ones(4, DType::F32, &device)?);
+        let head = FixedModernBertHead::load(
+            VarBuilder::from_tensors(weights, DType::F32, &device),
+            &config,
+        )?;
+        let input = Tensor::new(&[[0.001f32, 0.002, 0.003, 0.004]], &device)?;
+        let activated = input.gelu()?.to_vec2::<f32>()?.remove(0);
+        let mean = activated.iter().sum::<f32>() / 4.0;
+        let variance = activated.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / 4.0;
+        let actual = head.forward(&input)?.to_vec2::<f32>()?.remove(0);
+        for (x, y) in activated.iter().zip(actual) {
+            let expected = (x - mean) / (variance + config.layer_norm_eps as f32).sqrt();
+            assert!((y - expected).abs() < 1e-5);
+        }
+        Ok(())
     }
 }

@@ -87,6 +87,8 @@ impl Default for TokenizationConfig {
 /// Tokenization result for single text
 #[derive(Debug, Clone)]
 pub struct TokenizationResult {
+    /// True when encoding omitted input beyond the configured token budget.
+    pub truncated: bool,
     /// Token IDs as i32 (for compatibility)
     pub token_ids: Vec<i32>,
     /// Token IDs as u32 (for ModernBERT)
@@ -222,9 +224,9 @@ impl UnifiedTokenizer {
         tokenizer
             .with_truncation(Some(TruncationParams {
                 max_length: self.config.max_length,
-                strategy: self.config.truncation_strategy.clone(),
+                strategy: self.config.truncation_strategy,
                 stride: 0,
-                direction: self.config.truncation_direction.clone(),
+                direction: self.config.truncation_direction,
             }))
             .map_err(E::msg)?;
 
@@ -255,6 +257,7 @@ impl UnifiedTokenizer {
         let offsets = encoding.get_offsets().to_vec();
 
         TokenizationResult {
+            truncated: !encoding.get_overflowing().is_empty(),
             token_ids,
             token_ids_u32,
             attention_mask,

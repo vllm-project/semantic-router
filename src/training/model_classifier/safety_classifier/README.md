@@ -1,5 +1,9 @@
 # mmBERT-32K Safety Classifier Training
 
+For the Vela generation, see the [application recipes](../vela-applications.md).
+They preserve historical recipes below while defining the new data, label,
+training and independent evaluation contracts.
+
 This package trains two hierarchical content-safety classifiers on the current
 mmBERT-32K foundation:
 
@@ -173,3 +177,21 @@ python -m src.training.model_classifier.safety_classifier.release \
 Every published adapter contains `adapter_model.safetensors`; every merged
 repository contains full `model.safetensors` weights. Both include label,
 contract, data, dependency, metric, parity, and file-checksum manifests.
+
+## Explicit v2 candidate recipe
+
+`configs/training-v1.json` remains the historical 512-token recipe. The separate
+`configs/training-v2.json` trains up to 2048 tokens on the pinned 32K backbone,
+keeps the same binary and legacy nine-class hazard IDs, and preserves global
+batch 64 through gradient accumulation. It uses validation to select the best
+checkpoint and leaves final-test inference to a separate frozen-candidate run.
+A device count is not a model-quality criterion in v2.
+
+Pass the v2 contract to both data preparation and training; their contract
+hashes must match. On one GPU the configured microbatch is 8 with eight
+accumulation steps. Training at 2048 does not establish 32K accuracy: evaluate
+4K/8K/16K/32K inputs with relevant content at the beginning, middle, and end,
+including safe quotations and negated harmful requests. Report full-context
+and windowed results separately. The hazard head covers `legacy-9-v1`, not all
+thirteen contemporary hazard categories, and its scores on safe content are
+not themselves an unsafe decision.

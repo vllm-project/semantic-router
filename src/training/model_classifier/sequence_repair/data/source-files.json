@@ -1,0 +1,175 @@
+[
+  {
+    "repo": "CohereLabs/aya_dataset",
+    "revision": "f9ea04583f02a8f86404ff6c58bf75fe637df8a2",
+    "license": "apache-2.0",
+    "file": "README.md",
+    "bytes": 13659,
+    "sha256": "3ac54f63eec84100c155571945da01c7c18cd8ec97ea94639e2b94a6860e8573"
+  },
+  {
+    "repo": "CohereLabs/aya_dataset",
+    "revision": "f9ea04583f02a8f86404ff6c58bf75fe637df8a2",
+    "license": "apache-2.0",
+    "file": "data/train-00000-of-00001.parquet",
+    "bytes": 137195800,
+    "sha256": "51baa85043b569ba117f41516b32d1b0e4e2647fb203a08933f98a556fb1fb06"
+  },
+  {
+    "repo": "poloclub/diffusiondb",
+    "revision": "fb620fbe49fa4420e0734bd9c0df11f51176b61f",
+    "license": "cc0-1.0",
+    "file": "README.md",
+    "bytes": 24993,
+    "sha256": "d4e51a582f661d61647fbd74c7974b8dc1b59a47fed20aa5a9597100875dd38e"
+  },
+  {
+    "repo": "poloclub/diffusiondb",
+    "revision": "fb620fbe49fa4420e0734bd9c0df11f51176b61f",
+    "license": "cc0-1.0",
+    "file": "metadata.parquet",
+    "bytes": 194548652,
+    "sha256": "eecd341187bc91c07f5994ad0660d40228ea025616fd57a509bef8323677c68f"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "README.md",
+    "bytes": 53310,
+    "sha256": "80e44287371de876f7b1dbe613494649ace41082e9a7caff8deb96b9b26421d3"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "en/dev-00000-of-00001.parquet",
+    "bytes": 90574,
+    "sha256": "86e985fb70b49130d751c7c5b255767348a8590793dc794ff0f34f1b8bd2d16f"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "en/test-00000-of-00001.parquet",
+    "bytes": 3910925,
+    "sha256": "5baec81ba97243728cc9557b2cba2f03aaeedf8232473db9f20cf995c6b0a1a9"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "zh/dev-00000-of-00001.parquet",
+    "bytes": 84714,
+    "sha256": "6c1dc5daf941264c1de302acf9088c7ed436d25c22e311d583271c81e7c4056e"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "zh/test-00000-of-00001.parquet",
+    "bytes": 3618771,
+    "sha256": "e1ba0c287b650043b8686fa5c506d1f2718b098a7f88f724ade55a76f0062ae7"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "es/dev-00000-of-00001.parquet",
+    "bytes": 97926,
+    "sha256": "f4c4420525ef97f7a88da1bf6d8169c0faa70f49de6c779c04db94e8f278fac1"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "es/test-00000-of-00001.parquet",
+    "bytes": 4327396,
+    "sha256": "efbcc4ce1cf14f2f43f7b05be49a9a1153b2893c59d2f660c3bb58679801dccb"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "fr/dev-00000-of-00001.parquet",
+    "bytes": 100882,
+    "sha256": "bb3dd1fdd13509b0c8342af49470bbceca9cae2bb32f6e3f589de93aa4c2a82e"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "fr/test-00000-of-00001.parquet",
+    "bytes": 4550854,
+    "sha256": "e602201459c29c5dbacf9a3d80cfe2524496f8e0c0b51b6326ef4205bad3405e"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "de/dev-00000-of-00001.parquet",
+    "bytes": 100678,
+    "sha256": "242f31aca9cfdcc7c87f6a77eef6ced0c7967153400898e10dc264a196116d76"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "de/test-00000-of-00001.parquet",
+    "bytes": 4543635,
+    "sha256": "b58a0d5994e756dabef96eb804693be153953052276d3e0b7d57bb2f2798854a"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "ja/dev-00000-of-00001.parquet",
+    "bytes": 98924,
+    "sha256": "63c3fd6d20d016e7dc0df1d9b830ab5d93f9150450a24ec992a4662f2a80fefc"
+  },
+  {
+    "repo": "CohereLabs/Global-MMLU",
+    "revision": "0e619dbeb34206cd48705a1a0ea7fb21cae09993",
+    "license": "apache-2.0",
+    "file": "ja/test-00000-of-00001.parquet",
+    "bytes": 4363616,
+    "sha256": "b56ad153180d4368757891796dfad0e1a76ebeb3f7b2500b1ac63789d4e4dfe7"
+  },
+  {
+    "repo": "databricks/databricks-dolly-15k",
+    "revision": "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a",
+    "license": "cc-by-sa-3.0",
+    "file": "README.md",
+    "bytes": 8199,
+    "sha256": "db06c60090a11b20e79d1933b2f316f781605f07761ff2ae2795d6523e3e960b"
+  },
+  {
+    "repo": "databricks/databricks-dolly-15k",
+    "revision": "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a",
+    "license": "cc-by-sa-3.0",
+    "file": "databricks-dolly-15k.jsonl",
+    "bytes": 13085339,
+    "sha256": "2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec"
+  },
+  {
+    "repo": "TIGER-Lab/MMLU-Pro",
+    "revision": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+    "file": "data/test-00000-of-00001.parquet",
+    "sha256": "0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
+    "role": "historical exposure screening"
+  },
+  {
+    "repo": "TIGER-Lab/MMLU-Pro",
+    "revision": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+    "file": "data/validation-00000-of-00001.parquet",
+    "sha256": "139423c23722e480c807ac4a191409a710cfce4eba744c1d641cf88e730e2078",
+    "role": "historical exposure screening"
+  },
+  {
+    "repo": "LLM-Semantic-Router/category-classifier-supplement",
+    "revision": "c51aed0d3a83a548270e835187cee30615188e60",
+    "file": "data/train-00000-of-00001.parquet",
+    "sha256": "bf5c5e52f9c58f25d0e2a9bc7d23e401db20fde8fac6dece364a6820ed44b7d8",
+    "role": "historical exposure screening"
+  }
+]

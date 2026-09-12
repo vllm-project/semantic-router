@@ -199,6 +199,7 @@ type RequestContext struct {
 	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
 	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
 	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
+	VSRMatchedSafety          []string // Matched safety rule names (confidence >= threshold)
 	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedKB              []string // Matched knowledge-base signal names
 	VSRMatchedConversation    []string // Matched conversation-shape signal names

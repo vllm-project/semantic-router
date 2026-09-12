@@ -13,7 +13,16 @@ TEST_GPU_DEVICE ?= 2
 # Keep this list explicit. Do not include tests whose fixtures initialize
 # models from ../models unless those tests have been converted to skip cleanly.
 RUST_CI_LIB_TESTS ?= \
+	model_architectures::model_factory::tokenizer_contract_tests::mmbert_embedding_discards_saved_training_limits \
 	core::tokenization_test::test_tokenization_config_default \
+	model_architectures::embedding::pooling_test::test_mean_pool_long_low_precision \
+	model_architectures::embedding::pooling_test::test_mean_pool_padding_and_invalid_rows \
+	ffi::sequence_model::tests::sequence_contract_rejects_wrong_label_order_and_activation \
+	ffi::sequence_model::tests::sequence_ffi_returns_owned_errors_for_invalid_arguments \
+	model_architectures::traditional::modernbert::head_contract_tests::head_honors_configured_epsilon_and_rejects_partial_weights \
+	model_architectures::embedding::representation_contract::tests::preserves_legacy_and_rejects_unknown_representation \
+	model_architectures::embedding::mmbert_embedding::early_exit_contract_tests::intermediate_embeddings_preserve_hf_hidden_state_contract \
+	model_architectures::embedding::mmbert_embedding::early_exit_contract_tests::long_context_rotary_preserves_positions_before_half_cast \
 	core::tokenization_window::tests::test_window_ranges_cover_every_token \
 	core::tokenization_window::tests::test_window_ranges_overlap_on_a_short_stride \
 	core::tokenization_window::tests::test_window_ranges_edges \
@@ -24,6 +33,8 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_crosses_default_context_and_query_blocks \
+	model_architectures::traditional::candle_models::modernbert::tests::test_flash_attention_never_changes_requested_precision \
+	model_architectures::traditional::candle_models::modernbert::tests::test_flash_option_keeps_fp32_cpu_attention_unchanged \
 	model_architectures::traditional::modernbert_test::test_candle_context_default_and_explicit_limits \
 	model_architectures::traditional::modernbert_test::test_candle_context_budget_reserves_actual_postprocessor_special_tokens \
 	model_architectures::traditional::modernbert_test::test_candle_context_tokenization_preserves_tail_and_model_padding \
@@ -119,16 +130,16 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
 
 # The CK flash-attention graph rewriter is a Python script under onnx-binding;
-# its unit tests need onnx, which the agent venv does not carry by default.
+# Its tests also execute blocked FP32 graphs with the CPU runtime.
 CK_REWRITE_SCRIPTS_DIR ?= onnx-binding/ort-ck-flash-attn/scripts
-CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0
+CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0 onnxruntime==1.24.2
 
 ck-rewrite-deps: harness-venv-install ## Install the CK graph rewriter test dependencies into the harness venv
-	@"$(AGENT_PYTHON)" -c "import onnx" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
+	@"$(AGENT_PYTHON)" -c "import onnx, onnxruntime" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
 
 ck-rewrite-test: ck-rewrite-deps ## Run the CK flash-attention graph rewriter unit tests
 	@$(LOG_TARGET)
-	@cd $(CK_REWRITE_SCRIPTS_DIR) && "$(AGENT_PYTHON)" -m unittest test_rewrite_graph test_stable_pooling
+	@cd $(CK_REWRITE_SCRIPTS_DIR) && "$(AGENT_PYTHON)" -m unittest test_rewrite_graph test_stable_pooling test_rewrite_blocked_attention
 
 # Run every MULTIMODAL_MODEL_PATH-gated test against a local model copy:
 # the candle-binding Go tests (including the network-dependent image-encode
