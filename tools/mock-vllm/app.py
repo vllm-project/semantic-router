@@ -191,7 +191,7 @@ async def chat_completions(request: Request):
         return error_response
     assert body is not None
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    app.state.request_store.record(session_id, body)
+    app.state.request_store.record(session_id, body, request.headers)
     try:
         req = ChatRequest.model_validate(body)
     except ValidationError as error:
@@ -279,7 +279,7 @@ async def responses(request: Request):
         return error_response
     assert body is not None
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    app.state.request_store.record(session_id, body)
+    app.state.request_store.record(session_id, body, request.headers)
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,
