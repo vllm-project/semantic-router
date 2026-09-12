@@ -68,7 +68,7 @@ display `clamp((elo - 500) / 2000, 0, 1) * 100`. This presentation mapping is
 separate from index aggregation and never rewrites evidence.
 
 Benchmark `tags` are catalog-owned presentation facets. The curated `core` tag
-contains MMLU-Pro, GPQA Diamond, Humanity's Last Exam, LiveCodeBench, SciCode,
+contains MMLU-Pro, GPQA Diamond, HLE 1.0 text-only, LiveCodeBench, SciCode,
 and Terminal-Bench 2.1. Hub surfaces place Core first among semantic filters
 while keeping All as the unfiltered default. SWE-bench Verified and other
 useful measurements remain additional, individually visible evidence.
@@ -80,7 +80,7 @@ silently presented as a run date, and neither field belongs in the minimal
 user-authored evidence surface unless the operator actually knows the run date.
 
 The audit derives exactly six default-index slots for every Model Card and
-every selectable reasoning effort: MMLU-Pro, GPQA Diamond, Humanity's Last Exam
+every selectable reasoning effort: MMLU-Pro, GPQA Diamond, HLE 1.0 text-only
 without tools, LiveCodeBench, SciCode, and Terminal-Bench 2.1. A slot links only
 to an exact model/effort measurement and one of the component's ordered
 compatible profiles. Available, partial, and missing index rows are serialized

@@ -595,7 +595,7 @@ func TestHTTPRouterEvaluatorCallsRealEvalTraceEndpoint(t *testing.T) {
 	if _, err := evaluator.Evaluate(context.Background(), EvalRequest{Text: "hello"}); err != nil {
 		t.Fatalf("Evaluate(): %v", err)
 	}
-	if gotPath != "/api/v1/eval" || gotQuery != "trace=true" {
+	if gotPath != "/api/v1/routing/preview" || gotQuery != "trace=true" {
 		t.Fatalf("request = %s?%s", gotPath, gotQuery)
 	}
 }
