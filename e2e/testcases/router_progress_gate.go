@@ -161,6 +161,23 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 		return nil
 	}
 
+	checkObserve := func(record gateReplayRecord, model string, index int) error {
+		if record.SelectedModel != model {
+			return fmt.Errorf("turn %d: observe want model=%s got %s", index, model, record.SelectedModel)
+		}
+		g := record.SessionPolicy.Gate
+		if g == nil {
+			return nil
+		}
+		if g.Enforced || g.Applied {
+			return fmt.Errorf("turn %d: observe applied a verdict: %+v", index, g)
+		}
+		if g.FinalModel != model {
+			return fmt.Errorf("turn %d: observe final model mismatch: %+v", index, g)
+		}
+		return nil
+	}
+
 	seed, err := turn("session-gate-seed", 1)
 	if err != nil {
 		return err
@@ -183,21 +200,60 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 		return err
 	}
 	if mode == "observe" {
+		// Observe runs the same seven-turn script as enforce: verdicts are
+		// recorded but never applied, so accepted proposals still execute and
+		// the visible model sequence diverges from the enforced run.
 		if second.SessionPolicy.Gate.Applied {
 			return fmt.Errorf("observe modified the proposal: %+v", second.SessionPolicy.Gate)
 		}
 		if err = feedback(second); err != nil {
 			return err
 		}
-		observed, callErr := turn("session-gate-back", 3)
-		if callErr != nil {
-			return callErr
+		for _, step := range []struct {
+			keyword string
+			index   int
+			model   string
+		}{
+			{"session-gate-forward", 3, b},
+			{"session-gate-next", 4, b},
+			{"session-gate-back", 5, a},
+		} {
+			rec, turnErr := turn(step.keyword, step.index)
+			if turnErr != nil {
+				return turnErr
+			}
+			if err = checkObserve(rec, step.model, step.index); err != nil {
+				return err
+			}
+			if err = feedback(rec); err != nil {
+				return err
+			}
 		}
-		if err = check(observed, a, "suppress", "insufficient_evidence", 2); err != nil {
+		if err = gateWait(ctx, 11*time.Second); err != nil {
 			return err
 		}
-		if !observed.SessionPolicy.Gate.LastSwitchKnown || observed.SessionPolicy.Gate.Switches != 1 {
-			return fmt.Errorf("observe lost real switch history: %+v", observed.SessionPolicy.Gate)
+		sixth, err := turn("session-gate-return", 6)
+		if err != nil {
+			return err
+		}
+		if err = checkObserve(sixth, a, 6); err != nil {
+			return err
+		}
+		if err = feedback(sixth); err != nil {
+			return err
+		}
+		if err = gateWait(ctx, 11*time.Second); err != nil {
+			return err
+		}
+		seventh, err := turn("session-gate-next", 7)
+		if err != nil {
+			return err
+		}
+		if err = checkObserve(seventh, b, 7); err != nil {
+			return err
+		}
+		if seventh.SessionPolicy.Gate.Switches != 2 {
+			return fmt.Errorf("observe window switch count: %+v", seventh.SessionPolicy.Gate)
 		}
 		return nil
 	}
