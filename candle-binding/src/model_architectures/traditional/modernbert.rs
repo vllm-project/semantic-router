@@ -4,20 +4,13 @@
 //! that preserves all bug fixes from FixedModernBertClassifier.
 //!
 //! Supports both standard ModernBERT and mmBERT (multilingual ModernBERT) variants:
-//! - ModernBERT: Standard English-focused model, 512 max length
+//! - ModernBERT: Standard English-focused model
 //! - mmBERT: Multilingual model (1800+ languages), 256k vocab, 8192 max length
 //!
 //! The variant is auto-detected from config.json or can be explicitly specified.
 
-/// Maximum input length (in tokens) used for classification inference.
-///
-/// ModernBERT-32K and mmBERT-32K use global attention (full quadratic O(n²))
-/// every `global_attn_every_n_layers` layers (≈7–8 out of 22). At 4000 tokens
-/// those layers allocate ~6–8 GB of activation memory per batch item, which
-/// reliably triggers an OOM kill with no container logs. Classification tasks
-/// (intent, jailbreak, PII, feedback, fact-check) don't benefit from sequences
-/// longer than 512 tokens. This cap matches `max_length` in tokenizer_config.json.
-pub(crate) const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
+/// Existing callers keep a bounded default; longer inputs require explicit opt-in.
+pub(crate) const DEFAULT_CLASSIFICATION_SEQ_LEN: usize = 512;
 
 use crate::core::{
     config_errors, drain_loader_queue, processing_errors, resolve_device, run_on_inference_pool,
@@ -32,7 +25,7 @@ use candle_nn::{ops, LayerNorm, Linear, Module, VarBuilder};
 use super::{ClassifierConfig, ClassifierPooling, Config, ModernBert};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
+use tokenizers::{PaddingParams, PaddingStrategy, PostProcessor, Tokenizer};
 
 use crate::core::tokenization::DualPathTokenizer;
 use crate::model_architectures::traits::*;
@@ -58,7 +51,8 @@ pub enum ModernBertVariant {
 }
 
 impl ModernBertVariant {
-    /// Get the max sequence length for this variant
+    /// Historical variant hint; loaders use config.max_position_embeddings as
+    /// the capacity and an explicit request (default 512) as the input budget.
     pub fn max_length(&self) -> usize {
         match self {
             ModernBertVariant::Standard => 512,
@@ -94,7 +88,8 @@ impl ModernBertVariant {
         }
     }
 
-    /// Check if this variant uses YaRN RoPE scaling
+    /// Whether this variant has a historical YaRN label. This metadata does not
+    /// implement RoPE scaling or override the checkpoint's positional capacity.
     pub fn uses_yarn_scaling(&self) -> bool {
         matches!(
             self,
@@ -609,19 +604,134 @@ impl TraditionalModernBertClassifier {
             }
         }
 
-        // If local_rope_theta is missing, use the same value as global_rope_theta
+        // Local and global layers can have different RoPE parameters.
         if !obj.contains_key("local_rope_theta") {
-            let global_theta = obj
-                .get("global_rope_theta")
+            let local_theta = obj
+                .get("rope_parameters")
+                .and_then(|v| v.get("sliding_attention"))
+                .and_then(|v| v.get("rope_theta"))
                 .and_then(|v| v.as_f64())
+                .or_else(|| obj.get("global_rope_theta").and_then(|v| v.as_f64()))
                 .unwrap_or(160000.0);
             obj.insert(
                 "local_rope_theta".to_string(),
-                serde_json::Value::from(global_theta),
+                serde_json::Value::from(local_theta),
             );
         }
 
         serde_json::to_string(&config_json).unwrap_or_else(|_| config_str.to_string())
+    }
+
+    /// A variant or training metadata cannot enlarge the backbone's declared
+    /// capacity. The same config sets the tokenizer limit and RoPE cache size.
+    pub(super) fn parse_model_config(config_str: &str) -> Result<Config, candle_core::Error> {
+        let raw: serde_json::Value =
+            serde_json::from_str(config_str).map_err(candle_core::Error::wrap)?;
+        // This implementation supports theta-based RoPE, not arbitrary scaling
+        // algorithms. Do not silently discard YaRN frequency/attention factors.
+        let check_rope = |params: &serde_json::Value| -> Result<(), candle_core::Error> {
+            if params.is_null() {
+                return Ok(());
+            }
+            let rope_type = params
+                .get("rope_type")
+                .or_else(|| params.get("type"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("default");
+            if rope_type != "default"
+                || ["factor", "beta_fast", "beta_slow", "attention_factor"]
+                    .iter()
+                    .any(|field| params.get(*field).is_some())
+            {
+                candle_core::bail!(
+                    "unsupported ModernBERT RoPE scaling {rope_type:?}; this loader supports theta-based RoPE"
+                );
+            }
+            Ok(())
+        };
+        if let Some(params) = raw.get("rope_scaling") {
+            check_rope(params)?;
+        }
+        if let Some(params) = raw.get("rope_parameters") {
+            check_rope(params)?;
+            for layer_type in ["full_attention", "sliding_attention"] {
+                if let Some(layer_params) = params.get(layer_type) {
+                    check_rope(layer_params)?;
+                }
+            }
+        }
+        let config: Config = serde_json::from_str(&Self::normalize_config_json(config_str))
+            .map_err(candle_core::Error::wrap)?;
+        if config.max_position_embeddings == 0
+            || u32::try_from(config.max_position_embeddings).is_err()
+        {
+            candle_core::bail!("ModernBERT max_position_embeddings must be a positive u32");
+        }
+        if config.pad_token_id as usize >= config.vocab_size {
+            candle_core::bail!("ModernBERT pad_token_id is outside the vocabulary");
+        }
+        for theta in [config.global_rope_theta, config.local_rope_theta] {
+            if !theta.is_finite() || theta <= 0.0 {
+                candle_core::bail!("ModernBERT RoPE theta must be finite and positive");
+            }
+        }
+        Ok(config)
+    }
+
+    pub(super) fn resolve_sequence_length(
+        config: &Config,
+        requested: Option<usize>,
+    ) -> Result<usize, candle_core::Error> {
+        let max_length =
+            requested.unwrap_or(DEFAULT_CLASSIFICATION_SEQ_LEN.min(config.max_position_embeddings));
+        if max_length == 0 || max_length > config.max_position_embeddings {
+            candle_core::bail!(
+                "max_sequence_length must be between 1 and {}, got {max_length}",
+                config.max_position_embeddings
+            );
+        }
+        Ok(max_length)
+    }
+
+    pub(super) fn tokenizer_for_config(
+        mut tokenizer: Tokenizer,
+        config: &Config,
+        variant: ModernBertVariant,
+        device: Device,
+        max_sequence_length: usize,
+    ) -> Result<Box<dyn DualPathTokenizer>> {
+        let max_sequence_length = Self::resolve_sequence_length(config, Some(max_sequence_length))?;
+        let special_tokens = tokenizer
+            .get_post_processor()
+            .map_or(0, |processor| processor.added_tokens(false));
+        // UnifiedTokenizer configures truncation on its next encode. Validate
+        // now: tokenizers subtracts the special-token count with usize arithmetic.
+        if max_sequence_length < special_tokens {
+            anyhow::bail!(
+                "max_sequence_length {max_sequence_length} is smaller than the tokenizer's {special_tokens} special tokens"
+            );
+        }
+        let pad_token = tokenizer
+            .id_to_token(config.pad_token_id)
+            .unwrap_or_else(|| variant.pad_token().to_string());
+        // Exported fixed padding can exceed the backbone capacity even after
+        // truncation. UnifiedTokenizer supplies batch padding; singles need none.
+        tokenizer.with_padding(None);
+        let tokenizer_config = crate::core::tokenization::TokenizationConfig {
+            max_length: max_sequence_length,
+            add_special_tokens: true,
+            truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
+            truncation_direction: tokenizers::TruncationDirection::Right,
+            pad_token_id: config.pad_token_id,
+            pad_token,
+            tokenization_strategy: variant.tokenization_strategy(),
+            token_data_type: crate::core::tokenization::TokenDataType::U32,
+        };
+        Ok(Box::new(crate::core::tokenization::UnifiedTokenizer::new(
+            tokenizer,
+            tokenizer_config,
+            device,
+        )?))
     }
 
     /// Load from directory with auto-detected variant (Standard or Multilingual/mmBERT)
@@ -641,6 +751,44 @@ impl TraditionalModernBertClassifier {
         use_cpu: bool,
         variant: ModernBertVariant,
     ) -> Result<Self, candle_core::Error> {
+        Self::load_from_directory_with_limit(model_path, use_cpu, variant, None)
+    }
+
+    /// Load a classifier with an explicit input budget bounded by the model config.
+    pub fn load_from_directory_with_max_sequence_length(
+        model_path: &str,
+        use_cpu: bool,
+        max_sequence_length: usize,
+    ) -> Result<Self, candle_core::Error> {
+        let variant = ModernBertVariant::detect_from_config(&format!("{model_path}/config.json"))?;
+        Self::load_from_directory_with_variant_and_max_sequence_length(
+            model_path,
+            use_cpu,
+            variant,
+            max_sequence_length,
+        )
+    }
+
+    pub fn load_from_directory_with_variant_and_max_sequence_length(
+        model_path: &str,
+        use_cpu: bool,
+        variant: ModernBertVariant,
+        max_sequence_length: usize,
+    ) -> Result<Self, candle_core::Error> {
+        Self::load_from_directory_with_limit(
+            model_path,
+            use_cpu,
+            variant,
+            Some(max_sequence_length),
+        )
+    }
+
+    fn load_from_directory_with_limit(
+        model_path: &str,
+        use_cpu: bool,
+        variant: ModernBertVariant,
+        max_sequence_length: Option<usize>,
+    ) -> Result<Self, candle_core::Error> {
         // 1. Determine device
         let device = resolve_device(use_cpu);
         // 2. Load config.json
@@ -650,27 +798,12 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // Pre-process config to handle different HuggingFace config formats
-        // Some models use top-level global_rope_theta/local_rope_theta, others use nested rope_parameters
-        let config_str = Self::normalize_config_json(&config_str);
-
-        let mut config: Config = serde_json::from_str(&config_str).map_err(|e| {
+        let config = Self::parse_model_config(&config_str).map_err(|e| {
             let unified_err = config_errors::invalid_json(&config_path, &e.to_string());
             candle_core::Error::from(unified_err)
         })?;
 
-        // Override max_position_embeddings for Extended32K variant to support full 32K context
-        // The Candle library's ModernBERT uses config.max_position_embeddings to initialize RoPE cache
-        // For Extended32K variant, we need to ensure it's set to 32768 even if config.json has a lower value
-        // NOTE: This override is safe because Extended32K models use YaRN RoPE scaling which dynamically
-        // generates position embeddings for any length up to 32K, even if the base config.json specifies
-        // a lower max_position_embeddings value.
-        if variant == ModernBertVariant::Extended32K {
-            let expected_max_len = variant.max_length(); // 32768
-            if config.max_position_embeddings < expected_max_len {
-                config.max_position_embeddings = expected_max_len;
-            }
-        }
+        let max_sequence_length = Self::resolve_sequence_length(&config, max_sequence_length)?;
 
         // 3. Dynamic class detection from id2label using unified config loader
         let num_classes = Self::load_modernbert_num_classes(model_path)?;
@@ -753,62 +886,14 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // 9. Load training_config.json for 32K models to get actual max_length.
-        // The architectural max from training_config is recorded but then capped at
-        // MAX_CLASSIFICATION_SEQ_LEN. ModernBERT-32K / mmBERT-32K have global-attention
-        // layers that scale O(n²); at 4000 tokens they OOM the container with no logs.
-        // Classification tasks don't benefit from sequences longer than 512 tokens.
-        let model_max_length = if variant == ModernBertVariant::Extended32K {
-            let training_config_path = format!("{}/training_config.json", model_path);
-            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
-                if let Ok(training_config_json) =
-                    serde_json::from_str::<serde_json::Value>(&training_config_str)
-                {
-                    // Use model_max_length from training_config if available
-                    training_config_json
-                        .get("model_max_length")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as usize)
-                        .unwrap_or(variant.max_length())
-                } else {
-                    variant.max_length()
-                }
-            } else {
-                variant.max_length()
-            }
-        } else {
-            variant.max_length()
-        };
-        let effective_max_length = model_max_length.min(MAX_CLASSIFICATION_SEQ_LEN);
-
-        // 10. Create unified tokenizer wrapper with variant-specific config
-        let tokenizer_config = crate::core::tokenization::TokenizationConfig {
-            max_length: effective_max_length,
-            add_special_tokens: true,
-            truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
-            truncation_direction: tokenizers::TruncationDirection::Right,
-            pad_token_id: config.pad_token_id,
-            pad_token: variant.pad_token().to_string(),
-            tokenization_strategy: variant.tokenization_strategy(),
-            token_data_type: crate::core::tokenization::TokenDataType::U32,
-        };
-
-        let tokenizer_wrapper = Box::new(
-            crate::core::tokenization::UnifiedTokenizer::new(
-                tokenizer,
-                tokenizer_config,
-                device.clone(),
-            )
-            .map_err(|e| {
-                let unified_err = model_error!(
-                    ModelErrorType::Tokenizer,
-                    "tokenizer wrapper creation",
-                    format!("Failed to create tokenizer wrapper: {}", e),
-                    model_path
-                );
-                candle_core::Error::from(unified_err)
-            })?,
-        ) as Box<dyn DualPathTokenizer>;
+        let tokenizer_wrapper = Self::tokenizer_for_config(
+            tokenizer,
+            &config,
+            variant,
+            device.clone(),
+            max_sequence_length,
+        )
+        .map_err(candle_core::Error::wrap)?;
 
         drain_loader_queue(&device);
         Ok(Self {
@@ -854,7 +939,9 @@ impl TraditionalModernBertClassifier {
     ///     true, // use_cpu
     /// )?;
     ///
-    /// // Now classify text with 32K context support
+    /// // This compatibility loader keeps the default 512-token input budget.
+    /// // Use load_with_custom_base_model_and_max_sequence_length to opt in to
+    /// // a larger budget supported by the base model's config.json.
     /// let (class_id, confidence) = classifier.classify_text("My email is john@example.com")?;
     /// ```
     pub fn load_with_custom_base_model(
@@ -862,6 +949,38 @@ impl TraditionalModernBertClassifier {
         classifier_path: &str,
         variant: ModernBertVariant,
         use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        Self::load_with_custom_base_model_and_limit(
+            base_model_path,
+            classifier_path,
+            variant,
+            use_cpu,
+            None,
+        )
+    }
+
+    pub fn load_with_custom_base_model_and_max_sequence_length(
+        base_model_path: &str,
+        classifier_path: &str,
+        variant: ModernBertVariant,
+        use_cpu: bool,
+        max_sequence_length: usize,
+    ) -> Result<Self, candle_core::Error> {
+        Self::load_with_custom_base_model_and_limit(
+            base_model_path,
+            classifier_path,
+            variant,
+            use_cpu,
+            Some(max_sequence_length),
+        )
+    }
+
+    fn load_with_custom_base_model_and_limit(
+        base_model_path: &str,
+        classifier_path: &str,
+        variant: ModernBertVariant,
+        use_cpu: bool,
+        max_sequence_length: Option<usize>,
     ) -> Result<Self, candle_core::Error> {
         // 1. Determine device
         let device = if use_cpu {
@@ -877,10 +996,12 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        let config: Config = serde_json::from_str(&base_config_str).map_err(|e| {
+        let config = Self::parse_model_config(&base_config_str).map_err(|e| {
             let unified_err = config_errors::invalid_json(&base_config_path, &e.to_string());
             candle_core::Error::from(unified_err)
         })?;
+
+        let max_sequence_length = Self::resolve_sequence_length(&config, max_sequence_length)?;
 
         // 3. Load number of classes from classifier config.json
         let num_classes = Self::load_modernbert_num_classes(classifier_path)?;
@@ -992,58 +1113,14 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // 9. Determine effective max length (for Extended32K, check training_config.json).
-        // Always cap at MAX_CLASSIFICATION_SEQ_LEN — see comment in load_from_directory_with_variant.
-        let model_max_length_custom = if variant == ModernBertVariant::Extended32K {
-            let training_config_path = format!("{}/training_config.json", base_model_path);
-            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
-                if let Ok(training_config_json) =
-                    serde_json::from_str::<serde_json::Value>(&training_config_str)
-                {
-                    training_config_json
-                        .get("model_max_length")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as usize)
-                        .unwrap_or_else(|| variant.max_length())
-                } else {
-                    variant.max_length()
-                }
-            } else {
-                variant.max_length()
-            }
-        } else {
-            variant.max_length()
-        };
-        let effective_max_length = model_max_length_custom.min(MAX_CLASSIFICATION_SEQ_LEN);
-
-        // 10. Create unified tokenizer wrapper with variant-specific config
-        let tokenizer_config = crate::core::tokenization::TokenizationConfig {
-            max_length: effective_max_length,
-            add_special_tokens: true,
-            truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
-            truncation_direction: tokenizers::TruncationDirection::Right,
-            pad_token_id: config.pad_token_id,
-            pad_token: variant.pad_token().to_string(),
-            tokenization_strategy: variant.tokenization_strategy(),
-            token_data_type: crate::core::tokenization::TokenDataType::U32,
-        };
-
-        let tokenizer_wrapper = Box::new(
-            crate::core::tokenization::UnifiedTokenizer::new(
-                tokenizer,
-                tokenizer_config,
-                device.clone(),
-            )
-            .map_err(|e| {
-                let unified_err = model_error!(
-                    ModelErrorType::Tokenizer,
-                    "tokenizer wrapper creation",
-                    format!("Failed to create tokenizer wrapper: {}", e),
-                    base_model_path
-                );
-                candle_core::Error::from(unified_err)
-            })?,
-        ) as Box<dyn DualPathTokenizer>;
+        let tokenizer_wrapper = Self::tokenizer_for_config(
+            tokenizer,
+            &config,
+            variant,
+            device.clone(),
+            max_sequence_length,
+        )
+        .map_err(candle_core::Error::wrap)?;
 
         // 11. Determine classifier pooling from classifier config
         let classifier_config_path = format!("{}/config.json", classifier_path);
@@ -1088,9 +1165,11 @@ impl TraditionalModernBertClassifier {
         Self::load_from_directory_with_variant(model_path, use_cpu, ModernBertVariant::Multilingual)
     }
 
-    /// Load mmBERT-32K (YaRN-scaled multilingual) model from directory
-    /// Convenience method that explicitly loads as Multilingual32K variant
-    /// This variant supports 32K context length with YaRN RoPE scaling (theta=160000)
+    /// Load an mmBERT-32K checkpoint with the default 512-token input budget.
+    /// Convenience method that explicitly loads as Multilingual32K variant.
+    /// Use load_from_directory_with_max_sequence_length to request a larger
+    /// budget. Capacity and RoPE parameters come from the checkpoint config;
+    /// the variant name does not enable a scaling algorithm.
     /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
     pub fn load_mmbert_32k_from_directory(
         model_path: &str,
@@ -1387,39 +1466,58 @@ impl TraditionalModernBertTokenClassifier {
         use_cpu: bool,
         variant: ModernBertVariant,
     ) -> Result<Self> {
+        Self::new_with_limit(model_id, use_cpu, variant, None)
+    }
+
+    pub fn new_with_max_sequence_length(
+        model_id: &str,
+        use_cpu: bool,
+        max_sequence_length: usize,
+    ) -> Result<Self> {
+        let variant = ModernBertVariant::detect_from_config(&format!("{model_id}/config.json"))?;
+        Self::new_with_variant_and_max_sequence_length(
+            model_id,
+            use_cpu,
+            variant,
+            max_sequence_length,
+        )
+    }
+
+    pub fn new_with_variant_and_max_sequence_length(
+        model_id: &str,
+        use_cpu: bool,
+        variant: ModernBertVariant,
+        max_sequence_length: usize,
+    ) -> Result<Self> {
+        Self::new_with_limit(model_id, use_cpu, variant, Some(max_sequence_length))
+    }
+
+    fn new_with_limit(
+        model_id: &str,
+        use_cpu: bool,
+        variant: ModernBertVariant,
+        max_sequence_length: Option<usize>,
+    ) -> Result<Self> {
         let device = resolve_device(use_cpu);
 
         // Load model configuration
         let config_path = std::path::Path::new(model_id).join("config.json");
         let config_str = std::fs::read_to_string(&config_path)
             .map_err(|e| E::msg(format!("Failed to read config.json: {}", e)))?;
-        // Pre-process config to handle different HuggingFace config formats
-        let config_str = TraditionalModernBertClassifier::normalize_config_json(&config_str);
-        let config: Config = serde_json::from_str(&config_str)
-            .map_err(|e| E::msg(format!("Failed to parse config.json: {}", e)))?;
+        let config = TraditionalModernBertClassifier::parse_model_config(&config_str)?;
+        let max_sequence_length =
+            TraditionalModernBertClassifier::resolve_sequence_length(&config, max_sequence_length)?;
 
-        // Load tokenizer
         let tokenizer_path = std::path::Path::new(model_id).join("tokenizer.json");
         let base_tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| E::msg(format!("Failed to load tokenizer: {}", e)))?;
-
-        // Create dual-path compatible tokenizer based on variant.
-        // Always cap at MAX_CLASSIFICATION_SEQ_LEN — see comment at the top of this file.
-        let tokenizer = match variant {
-            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
-                crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
-                    base_tokenizer,
-                    device.clone(),
-                    MAX_CLASSIFICATION_SEQ_LEN,
-                )?
-            }
-            ModernBertVariant::Standard | ModernBertVariant::Extended32K => {
-                crate::core::tokenization::create_modernbert_compatibility_tokenizer(
-                    base_tokenizer,
-                    device.clone(),
-                )?
-            }
-        };
+        let tokenizer = TraditionalModernBertClassifier::tokenizer_for_config(
+            base_tokenizer,
+            &config,
+            variant,
+            device.clone(),
+            max_sequence_length,
+        )?;
 
         // Load model weights
         let weights_path = std::path::Path::new(model_id).join("model.safetensors");
