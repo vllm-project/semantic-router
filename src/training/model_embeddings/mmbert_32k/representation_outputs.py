@@ -22,6 +22,10 @@ def select_hidden_state(encoder, outputs, layer: int, contract: dict, *, task: s
     mode = contract[
         "final_normalization" if layer == total else "intermediate_normalization"
     ]
+    if layer == total and mode == NORMALIZATION_FINAL:
+        # Reuse the encoder's result rather than running final_norm again after
+        # a caller has left its autocast context.
+        return outputs.last_hidden_state
     # HF 4.57.6 stores even hidden_states[-1] BEFORE final_norm.
     raw = outputs.hidden_states[layer]
     return encoder.final_norm(raw) if mode == NORMALIZATION_FINAL else raw

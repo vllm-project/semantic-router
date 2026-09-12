@@ -49,6 +49,16 @@ training arguments, and the explicit intermediate/full-layer representation
 contract. The task models continue their original task weights; shared encoder
 architecture does not imply descent from the newly continued Vela Base weights.
 
+Vela native inference follows the loaded encoder dtype with inference autocast
+disabled. Embedding masked mean and L2 normalization use FP32; reranker heads
+also execute in FP32, including when an outer caller enables autocast. The
+explicit reranker reader enforces this inference boundary while preserving
+legacy behavior for checkpoints without representation metadata. Training may
+use FP32 master weights with BF16 AMP, but checkpoint selection must evaluate a
+separate candidate in the declared deployment precision. Historical AMP
+inference results are a different arithmetic mode and must be labeled as such;
+they cannot establish native or ONNX accuracy in another mode.
+
 The Vela PAWS-X loader defaults to excluding either-sentence empty or `NS`
 placeholders with `strip().casefold()`, using [pawsx_data.py](pawsx_data.py).
 The clean correction records exclusion counts and asserts that sampled pairs

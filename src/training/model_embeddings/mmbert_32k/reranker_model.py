@@ -6,6 +6,7 @@ import importlib.util
 import json
 import logging
 import os
+from contextlib import nullcontext
 
 import numpy as np
 import torch
@@ -189,11 +190,29 @@ class Matryoshka2DReranker(nn.Module):
             truncated = pooled[:, :dimension]
             head = self.layer_heads[str(layer_index)][str(dimension)]
             head_dtype = next(head.parameters()).dtype
+            if self.representation_contract is not None and head_dtype != torch.float32:
+                raise ValueError(
+                    "The explicit Vela reranker contract requires FP32 heads"
+                )
             if truncated.dtype != head_dtype:
                 truncated = truncated.to(head_dtype)
             key = f"layer_{layer_index}_dim_{dimension}"
-            scores[key] = head(truncated).squeeze(-1)
+            context = (
+                torch.autocast(device_type=pooled.device.type, enabled=False)
+                if self.representation_contract is not None
+                else nullcontext()
+            )
+            with context:
+                scores[key] = head(truncated).squeeze(-1)
         return scores
+
+    def _encoder_context(self, input_ids):
+        # Training may use AMP with FP32 master weights. Inference follows the
+        # loaded encoder dtype, as do the portable ONNX exports. Legacy callers
+        # without an explicit contract retain their existing autocast behavior.
+        if self.representation_contract is None or self.training:
+            return nullcontext()
+        return torch.autocast(device_type=input_ids.device.type, enabled=False)
 
     @staticmethod
     def _average_loss(all_scores, labels):
@@ -216,34 +235,37 @@ class Matryoshka2DReranker(nn.Module):
         return_all_scores: bool = False,
     ) -> dict[str, torch.Tensor]:
         """Score selected exits, optionally averaging pointwise losses."""
-        outputs = self.encoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-            return_dict=True,
-        )
-        hidden_states = outputs.hidden_states
         layers = [layer_idx] if layer_idx is not None else self.layer_indices
         dimensions = [dim_idx] if dim_idx is not None else self.dim_indices
         all_scores = {}
-        for layer_index in layers:
-            if layer_index > len(hidden_states) - 1:
-                continue
-            if self.representation_contract is None:
-                # Preserve trained legacy heads when metadata is absent.
-                hidden = hidden_states[layer_index]
-                if self.final_norm is not None and layer_index < self.num_layers:
-                    hidden = self.final_norm(hidden)
-            else:
-                hidden = select_hidden_state(
-                    self.encoder,
-                    outputs,
-                    layer_index,
-                    self.representation_contract,
-                    task="reranker",
+        with self._encoder_context(input_ids):
+            outputs = self.encoder(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+            )
+            hidden_states = outputs.hidden_states
+            for layer_index in layers:
+                if layer_index > len(hidden_states) - 1:
+                    continue
+                if self.representation_contract is None:
+                    # Preserve trained legacy heads when metadata is absent.
+                    hidden = hidden_states[layer_index]
+                    if self.final_norm is not None and layer_index < self.num_layers:
+                        hidden = self.final_norm(hidden)
+                else:
+                    hidden = select_hidden_state(
+                        self.encoder,
+                        outputs,
+                        layer_index,
+                        self.representation_contract,
+                        task="reranker",
+                    )
+                pooled = self._pool(hidden, attention_mask)
+                all_scores.update(
+                    self._score_dimensions(pooled, layer_index, dimensions)
                 )
-            pooled = self._pool(hidden, attention_mask)
-            all_scores.update(self._score_dimensions(pooled, layer_index, dimensions))
         result = {}
         if labels is not None:
             average_loss = self._average_loss(all_scores, labels)
