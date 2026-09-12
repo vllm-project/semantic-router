@@ -71,6 +71,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	r.applySignalResultsToContext(ctx, signals)
 	ensureContextTokenCount(ctx, signalInput)
 	logSignalEvaluationResults(ctx, signalLatency, signals)
+	logSignalPhaseTiming(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
 	return signals, nil
@@ -152,6 +153,56 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 	})
 }
 
+// logSignalPhaseTiming emits an info-level per-request breakdown of the signal
+// phase so production logs support end-to-end latency decomposition without
+// enabling debug logging. Every signal evaluator already records its own
+// ExecutionTimeMs into SignalMetricsCollection; signals that were not
+// evaluated (0 ms) are omitted to keep the line compact. Together with
+// routing_decision.routing_latency_ms and decision_phase_timing it allows
+// per-request joins on request_id.
+func logSignalPhaseTiming(ctx *RequestContext, signalLatencyMs int64, signals *classification.SignalResults) {
+	fields := map[string]interface{}{
+		"request_id":      ctx.RequestID,
+		"signal_phase_ms": signalLatencyMs,
+	}
+	if signals != nil && signals.Metrics != nil {
+		// Fixed order (Go map iteration is randomized); keep in sync with
+		// classification.SignalMetricsCollection.
+		timings := []struct {
+			name string
+			ms   float64
+		}{
+			{"keyword", signals.Metrics.Keyword.ExecutionTimeMs},
+			{"embedding", signals.Metrics.Embedding.ExecutionTimeMs},
+			{"domain", signals.Metrics.Domain.ExecutionTimeMs},
+			{"fact_check", signals.Metrics.FactCheck.ExecutionTimeMs},
+			{"user_feedback", signals.Metrics.UserFeedback.ExecutionTimeMs},
+			{"reask", signals.Metrics.Reask.ExecutionTimeMs},
+			{"preference", signals.Metrics.Preference.ExecutionTimeMs},
+			{"language", signals.Metrics.Language.ExecutionTimeMs},
+			{"context", signals.Metrics.Context.ExecutionTimeMs},
+			{"structure", signals.Metrics.Structure.ExecutionTimeMs},
+			{"complexity", signals.Metrics.Complexity.ExecutionTimeMs},
+			{"modality", signals.Metrics.Modality.ExecutionTimeMs},
+			{"authz", signals.Metrics.Authz.ExecutionTimeMs},
+			{"jailbreak", signals.Metrics.Jailbreak.ExecutionTimeMs},
+			{"pii", signals.Metrics.PII.ExecutionTimeMs},
+			{"kb", signals.Metrics.KB.ExecutionTimeMs},
+			{"conversation", signals.Metrics.Conversation.ExecutionTimeMs},
+			{"event", signals.Metrics.Event.ExecutionTimeMs},
+			{"metadata", signals.Metrics.Metadata.ExecutionTimeMs},
+			{"classifier", signals.Metrics.Classifier.ExecutionTimeMs},
+			{"input_modality", signals.Metrics.InputModality.ExecutionTimeMs},
+		}
+		for _, timing := range timings {
+			if timing.ms > 0 {
+				fields[timing.name+"_signal_ms"] = timing.ms
+			}
+		}
+	}
+	logging.ComponentEvent("extproc", "signal_phase_timing", fields)
+}
+
 func (r *OpenAIRouter) runDecisionEngine(
 	originalModel string,
 	ctx *RequestContext,
@@ -161,6 +212,13 @@ func (r *OpenAIRouter) runDecisionEngine(
 	// llm_decision_evaluation_latency_seconds and llm_decision_match_total are
 	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
 	// emit them here or both metrics will be double-counted.
+	decisionStart := time.Now()
+	defer func() {
+		logging.ComponentEvent("extproc", "decision_phase_timing", map[string]interface{}{
+			"request_id":  ctx.RequestID,
+			"decision_ms": time.Since(decisionStart).Milliseconds(),
+		})
+	}()
 	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
 	classifier := r.classifierForRequest(ctx)
 	if classifier == nil {

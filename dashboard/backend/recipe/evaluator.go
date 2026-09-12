@@ -86,7 +86,7 @@ func (e *HTTPRouterEvaluator) Evaluate(ctx context.Context, request EvalRequest)
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
-	endpoint := strings.TrimRight(e.BaseURL, "/") + "/api/v1/eval?trace=true"
+	endpoint := strings.TrimRight(e.BaseURL, "/") + "/api/v1/routing/preview?trace=true"
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.New("router eval URL is invalid")

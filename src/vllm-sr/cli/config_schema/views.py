@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import Any
 from urllib.parse import quote_plus
 
-SCHEMA_ENDPOINT = "/config/router/schema"
+SCHEMA_ENDPOINT = "/api/v1/config/schema"
 SUPPORTED_VIEWS = ("full", "index", "section", "surface")
 
 
@@ -19,6 +19,7 @@ def schema_view(
     path: str | None = None,
     surface_kind: str | None = None,
     surface_name: str | None = None,
+    expanded: bool = False,
 ) -> dict[str, Any]:
     """Return one full, index, section, or routing-surface representation."""
 
@@ -28,7 +29,7 @@ def schema_view(
     if normalized_view == "index":
         return _index(document)
     if normalized_view == "section":
-        return _section(document, path or "")
+        return _section(document, path or "", expanded=expanded)
     if normalized_view == "surface":
         return _surface(document, surface_kind or "", surface_name or "")
     raise ValueError(
@@ -103,7 +104,10 @@ def _index(document: dict[str, Any]) -> dict[str, Any]:
             },
             {
                 "name": "section",
-                "description": "One config path with only its transitive schema definitions.",
+                "description": (
+                    "Compact field directory for one config path; request "
+                    "expanded=true for its self-contained JSON Schema."
+                ),
                 "href": f"{SCHEMA_ENDPOINT}?view=section&path={{path}}",
             },
             {
@@ -122,7 +126,7 @@ def _index(document: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _section(document: dict[str, Any], path: str) -> dict[str, Any]:
+def _section(document: dict[str, Any], path: str, *, expanded: bool) -> dict[str, Any]:
     segments = [segment.strip() for segment in path.replace("/", ".").split(".")]
     segments = [segment for segment in segments if segment]
     if not segments:
@@ -141,11 +145,107 @@ def _section(document: dict[str, Any], path: str) -> dict[str, Any]:
                 f"at {'.'.join(traversed)!r}"
             )
         node = child
-    return _focused(
-        document,
-        node,
-        {"view": "section", "path": ".".join(segments)},
-    )
+    normalized_path = ".".join(segments)
+    if expanded:
+        return _focused(
+            document,
+            node,
+            {"view": "section", "path": normalized_path, "detail": "expanded"},
+        )
+    return _section_summary(document, node, normalized_path)
+
+
+def _section_summary(
+    document: dict[str, Any], node: dict[str, Any], path: str
+) -> dict[str, Any]:
+    root = _resolve(document, node)
+    field_root = root
+    if root.get("type") == "array":
+        field_root = _resolve(document, root.get("items", {}))
+
+    required = set(field_root.get("required", []))
+    properties = field_root.get("properties", {})
+    fields = []
+    for name in sorted(properties):
+        child = properties[name]
+        if not isinstance(child, dict):
+            continue
+        resolved = _resolve(document, child)
+        child_path = f"{path}.{name}"
+        field = {
+            "name": name,
+            "path": child_path,
+            "type": _schema_type(document, child),
+            "required": name in required,
+            "href": (f"{SCHEMA_ENDPOINT}?view=section&path={quote_plus(child_path)}"),
+        }
+        if description := resolved.get("description") or child.get("description"):
+            field["description"] = description
+        _copy_constraints(resolved, field)
+        fields.append(field)
+
+    summary = {
+        "x-vllm-sr-view": {
+            "view": "section",
+            "path": path,
+            "detail": "summary",
+        },
+        "shape": _schema_type(document, node),
+        "title": field_root.get("title") or root.get("title") or _display_name(path),
+        "fields": fields,
+        "expanded_href": (
+            f"{SCHEMA_ENDPOINT}?view=section&path={quote_plus(path)}&expanded=true"
+        ),
+    }
+    if description := field_root.get("description") or root.get("description"):
+        summary["description"] = description
+    _copy_constraints(root, summary)
+    return summary
+
+
+def _schema_type(document: dict[str, Any], node: dict[str, Any]) -> str:
+    resolved = _resolve(document, node)
+    node_type = resolved.get("type")
+    if isinstance(node_type, list):
+        return " | ".join(str(value) for value in node_type)
+    if node_type == "array":
+        item = resolved.get("items")
+        item_type = _schema_type(document, item) if isinstance(item, dict) else "value"
+        return f"array<{item_type}>"
+    if isinstance(node_type, str):
+        return node_type
+    for alternatives_key in ("oneOf", "anyOf"):
+        alternatives = resolved.get(alternatives_key)
+        if not isinstance(alternatives, list):
+            continue
+        types = []
+        for alternative in alternatives:
+            if not isinstance(alternative, dict):
+                continue
+            alternative_type = _schema_type(document, alternative)
+            if alternative_type not in types:
+                types.append(alternative_type)
+        if types:
+            return " | ".join(types)
+    if "const" in resolved:
+        constant = resolved["const"]
+        if constant is None:
+            return "null"
+        if isinstance(constant, bool):
+            return "boolean"
+        if isinstance(constant, str):
+            return "string"
+        if isinstance(constant, (int, float)):
+            return "number"
+    if isinstance(resolved.get("properties"), dict):
+        return "object"
+    return "value"
+
+
+def _copy_constraints(source: dict[str, Any], target: dict[str, Any]) -> None:
+    for key in ("const", "default", "enum", "minimum", "maximum"):
+        if key in source:
+            target[key] = deepcopy(source[key])
 
 
 def _surface(document: dict[str, Any], kind: str, name: str) -> dict[str, Any]:

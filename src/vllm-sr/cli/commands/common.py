@@ -24,6 +24,8 @@ def exit_with_logged_error(
                 if interrupt_message:
                     log.info(interrupt_message)
                 sys.exit(0)
+            except click.exceptions.Exit:
+                raise
             except click.ClickException:
                 raise
             except Exception as exc:

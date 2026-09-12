@@ -15,6 +15,7 @@ func (s *ClassificationAPIServer) handleConfigSchema(w http.ResponseWriter, r *h
 		Path:        r.URL.Query().Get("path"),
 		SurfaceKind: r.URL.Query().Get("kind"),
 		SurfaceName: r.URL.Query().Get("name"),
+		Expanded:    r.URL.Query().Get("expanded") == "true",
 	})
 	if err != nil {
 		var viewError *configschema.ViewError

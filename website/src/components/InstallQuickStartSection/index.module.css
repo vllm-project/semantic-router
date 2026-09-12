@@ -22,6 +22,65 @@
   text-wrap: balance;
 }
 
+.audienceTabs {
+  display: grid;
+  width: fit-content;
+  margin: 0 auto 1rem;
+  padding: 0.2rem;
+  grid-template-columns: repeat(2, minmax(7rem, 1fr));
+  border: 1px solid var(--site-border);
+  border-radius: 0.68rem;
+  background: var(--site-surface-alt);
+}
+
+.audienceTab {
+  display: inline-flex;
+  min-height: 2.1rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  padding: 0.4rem 0.78rem;
+  border: 0;
+  border-radius: 0.49rem;
+  background: transparent;
+  color: var(--site-muted-bright);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  transition:
+    background var(--site-transition-fast),
+    color var(--site-transition-fast),
+    box-shadow var(--site-transition-fast);
+}
+
+.audienceTab:hover {
+  color: var(--site-text-strong);
+}
+
+.audienceTab:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+.audienceTabActive,
+.audienceTabActive:hover {
+  background: var(--site-bg);
+  color: var(--site-text-strong);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
+}
+
+.audienceIcon {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+  stroke-width: 1.8;
+}
+
+.audienceTabActive .audienceIcon {
+  color: var(--site-accent-strong);
+}
+
 /* Carries the surface the install card used to have, so the command reads as a
  * deliberate object rather than a bare input. */
 .commandShell {
@@ -48,6 +107,11 @@
 .commandShell:hover {
   border-color: var(--site-hover-border);
   box-shadow: var(--site-hover-glow);
+}
+
+.commandShellAgent {
+  max-width: 58rem;
+  align-items: start;
 }
 
 .commandPrompt {
@@ -92,6 +156,13 @@
   color: var(--site-brand-blue);
 }
 
+.copyButton svg {
+  display: block;
+  width: 0.92rem;
+  height: 0.92rem;
+  stroke-width: 1.8;
+}
+
 .command {
   display: block;
   overflow-x: auto;
@@ -106,6 +177,12 @@
   scrollbar-width: thin;
 }
 
+.agentPrompt {
+  overflow: visible;
+  white-space: normal;
+  word-break: normal;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -115,14 +192,14 @@
   margin-top: 1.25rem;
 }
 
-.guideLink:global(.pill) {
+.guideLink.guideLink {
   border-color: var(--site-brand-blue) !important;
   background: var(--site-brand-blue) !important;
   color: #030303 !important;
   box-shadow: 0 10px 24px rgba(48, 162, 255, 0.16) !important;
 }
 
-.guideLink:global(.pill):hover {
+.guideLink.guideLink:hover {
   border-color: var(--site-brand-blue-light) !important;
   background: var(--site-brand-blue-light) !important;
   color: #030303 !important;
@@ -130,7 +207,7 @@
   transform: translateY(-1px);
 }
 
-.docsLink:global(.pill):hover {
+.docsLink.docsLink:hover {
   border-color: var(--site-hover-border) !important;
   background: var(--site-hover-surface-bg-soft) !important;
   color: var(--site-brand-blue) !important;
@@ -148,6 +225,10 @@
     font-size: 0.82rem;
   }
 
+  .agentPrompt {
+    word-break: normal;
+  }
+
   .actions {
     display: grid;
     grid-template-columns: 1fr;
@@ -160,7 +241,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .guideLink:global(.pill):hover {
+  .guideLink.guideLink:hover {
     transform: none;
   }
 }
