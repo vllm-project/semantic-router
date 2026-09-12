@@ -33,9 +33,8 @@ type configVersionSource string
 
 const (
 	configVersionSourceAPI      configVersionSource = "api"
-	configVersionSourceDSL      configVersionSource = "dsl"
 	configVersionSourceRollback configVersionSource = "rollback"
-	configVersionSourceLegacy   configVersionSource = "legacy"
+	configVersionSourceUnknown  configVersionSource = "unknown"
 )
 
 // configVersionPattern accepts the timestamp version and its collision suffix.
@@ -48,26 +47,27 @@ var configVersionPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}(?:-[0-9]{3,9})
 type RouterConfigUpdateRequest struct {
 	// YAML is the router config YAML payload.
 	YAML string `json:"yaml"`
-	// DSL is the original DSL source (archived for audit trail).
-	DSL string `json:"dsl,omitempty"`
+}
+
+type routerConfigRollbackRequest struct {
+	Version string `json:"version"`
 }
 
 // RouterConfigUpdateResponse is the JSON response for a router config mutation.
 type RouterConfigUpdateResponse struct {
-	Status        string `json:"status"`
-	Version       string `json:"version"`
-	ETag          string `json:"etag,omitempty"`
-	RuntimeStatus string `json:"runtime_status,omitempty"`
-	RuntimeHash   string `json:"runtime_hash,omitempty"`
-	Message       string `json:"message,omitempty"`
+	Status               string `json:"status"`
+	Version              string `json:"version"`
+	ETag                 string `json:"etag,omitempty"`
+	ActivationStatus     string `json:"activation_status,omitempty"`
+	GeneratedRuntimeHash string `json:"generated_runtime_hash,omitempty"`
+	Message              string `json:"message,omitempty"`
 }
 
 type configHashResponse struct {
-	// Hash remains the source-document hash for backward compatibility.
-	Hash        string `json:"hash"`
-	RuntimeHash string `json:"runtime_hash"`
-	ActiveHash  string `json:"active_hash,omitempty"`
-	Status      string `json:"status"`
+	SourceConfigHash     string `json:"source_config_hash"`
+	GeneratedRuntimeHash string `json:"generated_runtime_hash"`
+	ActiveRuntimeHash    string `json:"active_runtime_hash,omitempty"`
+	ActivationStatus     string `json:"activation_status"`
 }
 
 // RouterConfigVersionEntry represents a backup version entry.
@@ -78,7 +78,7 @@ type RouterConfigVersionEntry struct {
 	Filename  string              `json:"filename"`
 }
 
-// handleConfigRollback handles POST /config/router/rollback.
+// handleConfigRollback handles POST /api/v1/config/rollback.
 func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 	if s.configPath == "" {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
@@ -117,7 +117,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	if !ok {
 		return
 	}
-	if !checkConfigPrecondition(w, r, existingData, false) {
+	if !checkConfigPrecondition(w, r, existingData) {
 		return
 	}
 
@@ -199,10 +199,7 @@ func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
 		)
 		return nil, false
 	}
-	if err := config.ValidateLocalClassifierReload(
-		currentCfg,
-		backupCfg,
-	); err != nil {
+	if err := validateParsedHotReloadCompatibility(currentCfg, backupCfg); err != nil {
 		s.writeErrorResponse(
 			w,
 			http.StatusConflict,
@@ -229,17 +226,17 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 	if runtimeStatus == "pending" {
 		statusCode = http.StatusAccepted
 		status = "accepted"
-		message = fmt.Sprintf("Rolled back to version %s on disk; runtime activation is pending. Poll /config/hash until status is active.", version)
+		message = fmt.Sprintf("Rolled back to version %s on disk; runtime activation is pending. Poll /api/v1/config/hash until activation_status is active.", version)
 	}
 	w.Header().Set("ETag", etag)
 	configCleanupBackups(backupDir)
 	s.writeJSONResponse(w, statusCode, RouterConfigUpdateResponse{
-		Status:        status,
-		Version:       version,
-		ETag:          etag,
-		RuntimeStatus: runtimeStatus,
-		RuntimeHash:   runtimeHash,
-		Message:       message,
+		Status:               status,
+		Version:              version,
+		ETag:                 etag,
+		ActivationStatus:     runtimeStatus,
+		GeneratedRuntimeHash: runtimeHash,
+		Message:              message,
 	})
 }
 
@@ -259,10 +256,8 @@ func (s *ClassificationAPIServer) syncRollbackRuntime(
 }
 
 func (s *ClassificationAPIServer) parseRollbackVersion(w http.ResponseWriter, r *http.Request) (string, bool) {
-	var req struct {
-		Version string `json:"version"`
-	}
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	var req routerConfigRollbackRequest
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return "", false
 	}
@@ -280,7 +275,7 @@ func (s *ClassificationAPIServer) parseRollbackVersion(w http.ResponseWriter, r 
 	return req.Version, true
 }
 
-// handleConfigVersions handles GET /config/router/versions.
+// handleConfigVersions handles GET /api/v1/config/versions.
 func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ *http.Request) {
 	if s.configPath == "" {
 		s.writeJSONResponse(w, http.StatusOK, []RouterConfigVersionEntry{})
@@ -352,7 +347,7 @@ func nextConfigVersion(backupDir string, now time.Time) string {
 	}
 }
 
-// handleConfigGet handles GET /config/router and returns the current router config as JSON.
+// handleConfigGet handles GET /api/v1/config and returns the current router config as JSON.
 // Access requires config.read; plaintext secrets require secret_view (otherwise redacted).
 func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	if s.configPath == "" {
@@ -416,7 +411,7 @@ func configVersionSourcePath(backupDir, version string) string {
 }
 
 func writeConfigVersionSource(backupDir, version string, source configVersionSource) {
-	if err := os.WriteFile(configVersionSourcePath(backupDir, version), []byte(source+"\n"), 0o644); err != nil {
+	if err := writePrivateConfigArtifact(configVersionSourcePath(backupDir, version), []byte(source+"\n")); err != nil {
 		logging.Warnf("Failed to write config backup source metadata: %v", err)
 	}
 }
@@ -425,8 +420,12 @@ func recordConfigBackup(backupDir, version string, data []byte, source configVer
 	if len(data) == 0 {
 		return
 	}
+	if err := ensurePrivateConfigBackupDir(backupDir); err != nil {
+		logging.Warnf("Failed to prepare private config backup directory: %v", err)
+		return
+	}
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := os.WriteFile(backupFile, data, 0o644); err != nil {
+	if err := writePrivateConfigArtifact(backupFile, data); err != nil {
 		logging.Warnf("Failed to create config backup: %v", err)
 		return
 	}
@@ -434,16 +433,30 @@ func recordConfigBackup(backupDir, version string, data []byte, source configVer
 	logging.Infof("Config backup created: %s", backupFile)
 }
 
+func ensurePrivateConfigBackupDir(backupDir string) error {
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(backupDir, 0o700)
+}
+
+func writePrivateConfigArtifact(path string, data []byte) error {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
+}
+
 func readConfigVersionSource(backupDir, version string) configVersionSource {
 	data, err := os.ReadFile(configVersionSourcePath(backupDir, version))
 	if err != nil {
-		return configVersionSourceLegacy
+		return configVersionSourceUnknown
 	}
 	switch source := configVersionSource(strings.TrimSpace(string(data))); source {
-	case configVersionSourceAPI, configVersionSourceDSL, configVersionSourceRollback:
+	case configVersionSourceAPI, configVersionSourceRollback:
 		return source
 	default:
-		return configVersionSourceLegacy
+		return configVersionSourceUnknown
 	}
 }
 
@@ -477,9 +490,9 @@ func (s *ClassificationAPIServer) handleConfigHash(w http.ResponseWriter, _ *htt
 		status = "unknown"
 	}
 	s.writeJSONResponse(w, http.StatusOK, configHashResponse{
-		Hash:        hex.EncodeToString(hash[:]),
-		RuntimeHash: runtimeHash,
-		ActiveHash:  activeHash,
-		Status:      status,
+		SourceConfigHash:     hex.EncodeToString(hash[:]),
+		GeneratedRuntimeHash: runtimeHash,
+		ActiveRuntimeHash:    activeHash,
+		ActivationStatus:     status,
 	})
 }

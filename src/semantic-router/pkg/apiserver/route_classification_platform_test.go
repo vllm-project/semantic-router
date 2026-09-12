@@ -4,16 +4,66 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
+
+type combinedClassificationGeneration struct {
+	classificationService
+	calls []string
+}
+
+type blockingBodyReader struct {
+	reader  *bytes.Reader
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (r *blockingBodyReader) Read(p []byte) (int, error) {
+	r.once.Do(func() {
+		close(r.started)
+		<-r.release
+	})
+	return r.reader.Read(p)
+}
+
+func (s *combinedClassificationGeneration) ClassifyIntent(
+	context.Context,
+	services.IntentRequest,
+) (*services.IntentResponse, error) {
+	s.calls = append(s.calls, "intent")
+	return &services.IntentResponse{}, nil
+}
+
+func (s *combinedClassificationGeneration) DetectPII(
+	context.Context,
+	services.PIIRequest,
+) (*services.PIIResponse, error) {
+	s.calls = append(s.calls, "pii")
+	return &services.PIIResponse{}, nil
+}
+
+func (s *combinedClassificationGeneration) CheckSecurity(
+	context.Context,
+	services.SecurityRequest,
+) (*services.SecurityResponse, error) {
+	s.calls = append(s.calls, "security")
+	return &services.SecurityResponse{}, nil
+}
 
 func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
 	tempDir := t.TempDir()
@@ -35,7 +85,7 @@ func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
 		configPath:        configPath,
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	rr := httptest.NewRecorder()
 
 	apiServer.handleConfigGet(rr, req)
@@ -76,7 +126,7 @@ func TestHandleCombinedClassificationReturnsAllSubResponses(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/combined", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/combined", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	apiServer.handleCombinedClassification(rr, req)
@@ -91,6 +141,125 @@ func TestHandleCombinedClassificationReturnsAllSubResponses(t *testing.T) {
 	}
 	if response.Intent == nil || response.PII == nil || response.Security == nil {
 		t.Fatalf("expected combined response to include all sub-responses, got %+v", response)
+	}
+}
+
+func TestHandleCombinedClassificationUsesOneGeneration(t *testing.T) {
+	oldGeneration := &combinedClassificationGeneration{}
+	newGeneration := &combinedClassificationGeneration{}
+	acquires := 0
+	releases := 0
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: newLiveClassificationService(nil, nil, func() (classificationService, func(), bool) {
+			acquires++
+			if acquires == 1 {
+				return oldGeneration, func() { releases++ }, true
+			}
+			return newGeneration, func() { releases++ }, true
+		}),
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/classify/combined",
+		bytes.NewBufferString(`{"text":"keep one generation"}`),
+	)
+	rr := httptest.NewRecorder()
+	apiServer.handleCombinedClassification(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if acquires != 1 || releases != 1 {
+		t.Fatalf("generation lease acquired %d times and released %d times, want once each", acquires, releases)
+	}
+	if got, want := oldGeneration.calls, []string{"intent", "pii", "security"}; !slices.Equal(got, want) {
+		t.Fatalf("old generation calls = %v, want %v", got, want)
+	}
+	if len(newGeneration.calls) != 0 {
+		t.Fatalf("new generation handled part of the request: %v", newGeneration.calls)
+	}
+}
+
+func TestHandleBatchClassificationUsesConfigAndServiceFromOneGeneration(t *testing.T) {
+	oldConfig := &config.RouterConfig{}
+	oldConfig.API.BatchClassification.MaxBatchSize = 2
+	newConfig := &config.RouterConfig{}
+	newConfig.API.BatchClassification.MaxBatchSize = 1
+	oldService := &services.ClassificationService{}
+	newService := &services.ClassificationService{}
+
+	registry := routerruntime.NewRegistry(nil)
+	routerService := extproc.NewRouterService(nil)
+	t.Cleanup(func() { _ = routerService.Close() })
+	publish := func(
+		cfg *config.RouterConfig,
+		service *services.ClassificationService,
+	) func(extproc.AcquireFunc) {
+		return func(acquire extproc.AcquireFunc) {
+			registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+				Config:                cfg,
+				ClassificationService: service,
+				AcquireClassification: routerruntime.AcquireClassification(acquire),
+			})
+		}
+	}
+	if err := routerService.Swap(
+		&extproc.OpenAIRouter{Config: oldConfig, ClassificationService: oldService},
+		publish(oldConfig, oldService),
+	); err != nil {
+		t.Fatalf("publish old generation: %v", err)
+	}
+
+	body := &blockingBodyReader{
+		reader:  bytes.NewReader([]byte(`{"texts":["one","two"]}`)),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	defer func() {
+		select {
+		case <-body.release:
+		default:
+			close(body.release)
+		}
+	}()
+	apiServer := &ClassificationAPIServer{
+		runtimeConfig:   newLiveRuntimeConfig(oldConfig, registry.CurrentConfig, nil),
+		runtimeRegistry: registry,
+	}
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/batch", body)
+		w := httptest.NewRecorder()
+		apiServer.handleBatchClassification(w, req)
+		response <- w
+	}()
+	select {
+	case <-body.started:
+	case <-time.After(time.Second):
+		t.Fatal("batch handler did not start reading the request body")
+	}
+
+	if err := routerService.Swap(
+		&extproc.OpenAIRouter{Config: newConfig, ClassificationService: newService},
+		publish(newConfig, newService),
+	); err != nil {
+		t.Fatalf("swap router generation: %v", err)
+	}
+	close(body.release)
+	var w *httptest.ResponseRecorder
+	select {
+	case w = <-response:
+	case <-time.After(time.Second):
+		t.Fatal("batch handler did not finish after request body release")
+	}
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf(
+			"status = %d, want %d from old generation classifier: %s",
+			w.Code,
+			http.StatusServiceUnavailable,
+			w.Body.String(),
+		)
 	}
 }
 
@@ -142,7 +311,7 @@ func TestHandleClassificationMetricsReportsCounts(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/classification", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/observability/classification-metrics", nil)
 	rr := httptest.NewRecorder()
 
 	apiServer.handleClassificationMetrics(rr, req)

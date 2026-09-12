@@ -49,10 +49,10 @@ Use it to improve quality, cost, latency, privacy, and safety without hard-codin
 ### Install
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 ```
 
-For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
+For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
 ### Online playground
 

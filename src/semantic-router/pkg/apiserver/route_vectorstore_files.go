@@ -22,7 +22,7 @@ func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	id := strings.TrimSuffix(path, "/files")
 	if id == "" || id == path {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
@@ -56,7 +56,7 @@ func (s *ClassificationAPIServer) handleListVectorStoreFiles(w http.ResponseWrit
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	id := strings.TrimSuffix(path, "/files")
 	if id == "" || id == path {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
@@ -79,7 +79,7 @@ func (s *ClassificationAPIServer) handleDetachFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	parts := strings.SplitN(path, "/files/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID and file ID are required")

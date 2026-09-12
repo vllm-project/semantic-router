@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:1f19eaa468e8d12a457af2785d741c9528573c27e5621cec712f9c63e54d75ba"
+const builtInCatalogDigest = "sha256:1b9e5d354f7ee9e9d3949e9e8a3122a6fc9972ebdc4083b4f5e4f6c8266b6afe"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -83,7 +83,7 @@ const builtInCatalogJSON = `{
       ]
     },
     {
-      "default_profile": "no-tools",
+      "default_profile": "text-only",
       "display_name": "Humanity's Last Exam",
       "domain": "frontier_reasoning",
       "id": "cais/humanitys-last-exam@1.0.0",
@@ -100,9 +100,19 @@ const builtInCatalogJSON = `{
       ],
       "profiles": [
         {
-          "description": "Text-only evaluation without browsing, code execution, or retrieval tools.",
-          "display_name": "No tools",
-          "id": "no-tools"
+          "description": "The 2,158-question May 2025 text-only subset, evaluated without browsing, code execution, or retrieval tools.",
+          "display_name": "Text-only",
+          "id": "text-only"
+        },
+        {
+          "description": "Independently measured pass@1 over the same 2,158-question text-only subset for the exact model variant and reasoning effort.",
+          "display_name": "Independent text-only run",
+          "id": "independent-text-only"
+        },
+        {
+          "description": "Published evaluation without tools whose modality subset is not explicitly the frozen 2,158 text-only questions; visible as evidence but excluded from Intelligence 1.0.",
+          "display_name": "Published without tools",
+          "id": "published-no-tools"
         },
         {
           "description": "Evaluation where the model may use tools; visible as evidence but excluded from the default index.",
@@ -113,11 +123,6 @@ const builtInCatalogJSON = `{
           "description": "Published result whose tool policy is not stated; visible but excluded from the default index.",
           "display_name": "Published setup unspecified",
           "id": "published-unspecified"
-        },
-        {
-          "description": "Independently measured HLE result for the named model variant and reasoning effort.",
-          "display_name": "Independent standard run",
-          "id": "independent-standard"
         }
       ],
       "source": "https://agi.safe.ai/",
@@ -2118,7 +2123,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -2233,7 +2238,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -2348,7 +2353,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -2486,7 +2491,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -2624,7 +2629,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -2739,7 +2744,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -2854,7 +2859,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -2969,7 +2974,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -3134,7 +3139,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -3341,7 +3346,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -3598,7 +3603,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -3805,7 +3810,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -4039,7 +4044,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -4271,7 +4276,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -4478,7 +4483,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -4735,7 +4740,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -4942,7 +4947,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -5176,7 +5181,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -5429,7 +5434,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -5732,7 +5737,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -5983,7 +5988,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -7487,7 +7492,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -7668,7 +7673,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -8162,7 +8167,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -8346,7 +8351,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -8530,7 +8535,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -8740,7 +8745,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -8878,7 +8883,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -9016,7 +9021,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -9250,7 +9255,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -9274,7 +9279,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -9574,7 +9579,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -9758,7 +9763,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -9782,7 +9787,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -10065,7 +10070,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -10181,7 +10186,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -10423,7 +10428,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -10653,7 +10658,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -10860,7 +10865,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -11067,7 +11072,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -11301,7 +11306,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -11508,7 +11513,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -11715,7 +11720,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -11922,7 +11927,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12129,7 +12134,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12338,7 +12343,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12453,7 +12458,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -12678,7 +12683,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12841,7 +12846,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -13121,7 +13126,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -13447,7 +13452,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -13654,7 +13659,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -14004,7 +14009,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -14027,7 +14032,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -14422,7 +14427,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -14606,7 +14611,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -15960,7 +15965,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -16167,7 +16172,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -16282,7 +16287,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -16441,7 +16446,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -16705,7 +16710,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -16912,7 +16917,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -17073,7 +17078,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -17211,7 +17216,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -17449,7 +17454,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -17658,7 +17663,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -17915,7 +17920,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -17938,7 +17943,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -18125,7 +18130,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -18261,7 +18266,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -18399,7 +18404,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -18491,7 +18496,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -18649,7 +18654,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -18787,7 +18792,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -18971,7 +18976,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -19278,7 +19283,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -19462,7 +19467,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -19668,7 +19673,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -19875,7 +19880,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -20059,7 +20064,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -20128,7 +20133,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -20283,6 +20288,30 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://github.com/NVIDIA-NeMo/Nemotron/blob/907d408c67cb70e9f1ed28fb67702e7bd36e3239/docs/nemotron/super3/quantization.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3-super-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.7825
+      },
+      "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_release": "v6",
+        "problem_window": "2024-08_to_2025-05",
+        "source_kind": "official_reproducibility_documentation",
+        "variant": "NVIDIA-Nemotron-3-Super-120B-A12B-BF16"
+      }
+    },
+    {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "evidence": {
@@ -20378,7 +20407,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -20541,7 +20570,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -20656,7 +20685,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -20794,7 +20823,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -21001,7 +21030,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -21208,7 +21237,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -21465,7 +21494,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -21672,7 +21701,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -21879,7 +21908,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -22107,7 +22136,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -22314,7 +22343,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -22521,7 +22550,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -22755,7 +22784,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -22962,7 +22991,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -23146,7 +23175,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -23374,7 +23403,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -23581,7 +23610,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -23765,7 +23794,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -23999,7 +24028,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -24206,7 +24235,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -24390,7 +24419,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -24618,7 +24647,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -24825,7 +24854,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -25009,7 +25038,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -25193,7 +25222,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -25377,7 +25406,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -25469,7 +25498,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -25631,7 +25660,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -25723,7 +25752,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -25934,7 +25963,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -26141,7 +26170,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -26325,7 +26354,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -26486,7 +26515,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -26604,7 +26633,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -26723,7 +26752,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -26770,7 +26799,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -26872,7 +26901,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -26974,7 +27003,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -27076,7 +27105,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -27178,7 +27207,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -27585,7 +27614,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -27769,7 +27798,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -27953,7 +27982,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -28137,7 +28166,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -28321,7 +28350,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -28505,7 +28534,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -28528,7 +28557,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -28783,7 +28812,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -28990,7 +29019,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -29247,7 +29276,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -29270,7 +29299,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -29596,7 +29625,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -29619,7 +29648,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -29972,7 +30001,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -30367,7 +30396,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -30484,7 +30513,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -30600,7 +30629,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -30856,7 +30885,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -31132,7 +31161,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -31316,7 +31345,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -31454,7 +31483,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -31708,7 +31737,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -31918,7 +31947,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -31941,7 +31970,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -32316,7 +32345,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -32339,7 +32368,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -32548,7 +32577,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -32861,7 +32890,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -33022,7 +33051,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -33137,7 +33166,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -33275,7 +33304,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -33509,7 +33538,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -33716,7 +33745,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -33923,7 +33952,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -34157,7 +34186,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -34364,7 +34393,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -34600,7 +34629,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -34738,7 +34767,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -34761,7 +34790,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -35037,7 +35066,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -35267,7 +35296,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -35405,7 +35434,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -35428,7 +35457,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -35708,7 +35737,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -36034,7 +36063,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -36356,7 +36385,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -36540,7 +36569,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -36655,7 +36684,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
+      "benchmark_profile": "published-no-tools",
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
@@ -36792,7 +36821,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -36930,7 +36959,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "independent-text-only",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -37161,8 +37190,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -37316,8 +37345,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -37472,10 +37501,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/jamba-reasoning-3b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -37640,8 +37669,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -37796,10 +37825,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/jamba-1-7-large-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -37964,8 +37993,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -38120,10 +38149,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nova-2-0-lite-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -38297,10 +38326,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nova-2-0-lite-reasoning-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -38466,10 +38495,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nova-2-0-lite-reasoning-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -38635,10 +38664,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nova-2-0-lite-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -38803,8 +38832,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -38959,10 +38988,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nova-premier-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -39128,10 +39157,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nova-pro-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -39297,10 +39326,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-fable-5-1-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -39479,10 +39508,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-fable-5-1-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -39661,10 +39690,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-fable-5-1-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -39843,10 +39872,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-fable-5-1-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -40025,10 +40054,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-fable-5-1-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -40207,10 +40236,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-opus-5-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -40389,10 +40418,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-opus-5-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -40571,10 +40600,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-opus-5-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -40753,10 +40782,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-opus-5-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -40935,10 +40964,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-opus-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -41116,8 +41145,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -41271,8 +41300,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -41426,8 +41455,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -41581,8 +41610,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -41746,10 +41775,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-sonnet-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -41927,8 +41956,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -42082,8 +42111,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -42237,8 +42266,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -42392,8 +42421,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -42548,10 +42577,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-fable-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -42731,8 +42760,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -42898,8 +42927,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -43053,8 +43082,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -43208,8 +43237,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -43372,8 +43401,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -43528,10 +43557,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/claude-opus-4-8-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -43706,8 +43735,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -43873,8 +43902,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -44037,8 +44066,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -44197,8 +44226,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -44361,8 +44390,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -44521,8 +44550,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -44677,10 +44706,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/ernie-4.5-300b-a47b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -44850,8 +44879,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -45005,8 +45034,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -45169,8 +45198,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -45324,8 +45353,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -45488,8 +45517,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -45644,33 +45673,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "bytedance/seed-2.0-pro-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.324,
-          "status": "available",
-          "value": 0.324,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 32.4,
-        "scientific_reasoning": 88.9
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "bytedance/seed-2.0-pro",
       "provenance": [
-        "bytedance/seed-2.0-pro-model-card-gpqa-diamond@1.0.0",
-        "bytedance/seed-2.0-pro-model-card-humanitys-last-exam@1.0.0"
+        "bytedance/seed-2.0-pro-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
-      "score": 60.650000000000006,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -45741,9 +45763,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.6065,
-          "status": "available",
-          "value": 0.6065,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -45761,16 +45783,15 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.4,
+      "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "bytedance/seed-2.0-pro",
       "provenance": [
-        "bytedance/seed-2.0-pro-model-card-gpqa-diamond@1.0.0",
-        "bytedance/seed-2.0-pro-model-card-humanitys-last-exam@1.0.0"
+        "bytedance/seed-2.0-pro-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
       "score": null,
-      "status": "partial"
+      "status": "missing"
     },
     {
       "components": [
@@ -45821,8 +45842,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -45981,8 +46002,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -46137,10 +46158,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/north-mini-code-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -46313,8 +46334,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -46469,10 +46490,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/command-a-plus-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -46650,8 +46671,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -46806,10 +46827,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/tiny-aya-global-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -46976,8 +46997,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -47135,8 +47156,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -47290,8 +47311,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -47453,10 +47474,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v4-pro-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -47643,8 +47664,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -47799,10 +47820,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v4-flash-0420-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -47983,10 +48004,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v4-flash-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -48174,10 +48195,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v3-2-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -48351,10 +48372,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v3-2-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -48527,10 +48548,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -48717,8 +48738,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -48872,8 +48893,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -49035,10 +49056,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v3-0324-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -49225,8 +49246,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -49388,10 +49409,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-v3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -49586,10 +49607,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/deepseek-r1-0120-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -49769,10 +49790,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemini-3-8-flash-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -49951,10 +49972,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemini-3-8-flash-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -50133,10 +50154,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemini-3-8-flash-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -50315,10 +50336,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemini-3-7-flash-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -50497,10 +50518,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemini-3-7-flash-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -50679,10 +50700,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemini-3-7-flash-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -50860,8 +50881,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -51015,8 +51036,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -51170,8 +51191,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -51326,10 +51347,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemini-3-6-flash-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -51515,10 +51536,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemma-4-31b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -51706,10 +51727,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemma-4-31b-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -51882,8 +51903,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -52045,10 +52066,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemma-3-27b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -52235,8 +52256,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -52398,10 +52419,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gemma-3-12b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -52580,8 +52601,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -52735,8 +52756,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -52890,8 +52911,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -53045,8 +53066,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -53201,10 +53222,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/muse-spark-1-3-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -53383,10 +53404,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/muse-spark-1-3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -53564,8 +53585,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -53719,8 +53740,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -53874,8 +53895,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -54029,8 +54050,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -54185,10 +54206,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/muse-spark-1-2-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -54366,8 +54387,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -54521,8 +54542,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -54677,10 +54698,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/muse-glimmer-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -54858,8 +54879,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -55013,8 +55034,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -55176,10 +55197,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/llama-4-maverick-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -55366,8 +55387,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -55529,10 +55550,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/llama-4-scout-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -55711,8 +55732,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -55875,8 +55896,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -56040,8 +56061,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -56195,8 +56216,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -56350,8 +56371,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -56505,8 +56526,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -56662,8 +56683,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -56821,8 +56842,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -56977,10 +56998,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/minimax-m3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -57158,8 +57179,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -57313,8 +57334,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -57476,10 +57497,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/minimax-m2-7-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -57667,33 +57688,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.194,
-          "status": "available",
-          "value": 0.194,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 19.400000000000002,
-        "scientific_reasoning": 85.2
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "minimax/minimax-m2.5",
       "provenance": [
-        "minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0",
-        "minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0"
+        "minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "default",
-      "score": 52.300000000000004,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -57768,9 +57782,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.523,
-          "status": "available",
-          "value": 0.523,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -57788,17 +57802,16 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.4,
+      "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "minimax/minimax-m2.5",
       "provenance": [
         "minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0",
-        "minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0",
         "minimax/minimax-m2.5-model-card-scicode@1.0.0"
       ],
       "reasoning_effort": "default",
       "score": null,
-      "status": "partial"
+      "status": "missing"
     },
     {
       "components": [
@@ -57841,10 +57854,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/minimax-m2-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -58010,10 +58023,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mistral-small-4-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -58187,10 +58200,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mistral-small-4-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -58356,10 +58369,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mistral-medium-3-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -58537,8 +58550,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -58693,10 +58706,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mistral-large-3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -58874,8 +58887,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -59037,10 +59050,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mistral-small-3.2-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -59228,10 +59241,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/kimi-k3-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -59409,8 +59422,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -59565,10 +59578,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/kimi-k3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -59747,10 +59760,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/kimi-k2-7-code-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -59931,10 +59944,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/kimi-k2-6-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -60122,10 +60135,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/kimi-k2-6-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -60298,10 +60311,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/kimi-k2-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -60489,10 +60502,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/kimi-k2-5-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -60665,33 +60678,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.1172,
-          "status": "available",
-          "value": 0.1172,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 11.72,
-        "scientific_reasoning": 75.44
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "nvidia/nemotron-3.5-lightning",
       "provenance": [
-        "nvidia/nemotron-3.5-lightning-model-card-gpqa-diamond@1.0.0",
-        "nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0"
+        "nvidia/nemotron-3.5-lightning-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": 43.58,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -60773,9 +60779,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.43579999999999997,
-          "status": "available",
-          "value": 0.43579999999999997,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -60793,12 +60799,11 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.8,
+      "coverage": 0.4,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-3.5-lightning",
       "provenance": [
         "nvidia/nemotron-3.5-lightning-model-card-gpqa-diamond@1.0.0",
-        "nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0",
         "nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0",
         "nvidia/nemotron-3.5-lightning-model-card-scicode@1.0.0",
         "nvidia/nemotron-3.5-lightning-model-card-terminal-bench-2-1@1.0.0"
@@ -60847,8 +60852,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -61002,8 +61007,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -61165,33 +61170,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.261,
-          "status": "available",
-          "value": 0.261,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 26.1,
-        "scientific_reasoning": 87.9
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "nvidia/nemotron-3-ultra",
       "provenance": [
-        "nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0",
-        "nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0"
+        "nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0"
       ],
       "reasoning_effort": "high",
-      "score": 57.00000000000001,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -61280,9 +61278,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.5700000000000001,
-          "status": "available",
-          "value": 0.5700000000000001,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -61300,20 +61298,19 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 1.0,
+      "coverage": 0.6000000000000001,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-3-ultra",
       "provenance": [
         "nvidia/nemotron-3-ultra-livecodebench-v6@1.0.0",
         "nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0",
-        "nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0",
         "nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0",
         "nvidia/nemotron-3-ultra-nvfp4-model-card-scicode@1.0.0",
         "nvidia/nemotron-3-ultra-nvfp4-model-card-terminal-bench@1.0.0"
       ],
       "reasoning_effort": "high",
-      "score": 64.19,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -61356,10 +61353,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nvidia-nemotron-3-ultra-550b-a55b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -61537,8 +61534,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -61692,8 +61689,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -61855,10 +61852,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -61887,14 +61884,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
           "benchmark_profiles": [
             "independent-code-generation",
             "published-code-generation"
           ],
+          "evaluation": "nvidia/nemotron-3-super-livecodebench-v6@1.0.0",
           "metric": "pass_at_1",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.7825,
+          "status": "available",
+          "value": 0.7825,
           "weight": 0.5
         },
         {
@@ -61912,15 +61911,20 @@ const builtInCatalogJSON = `{
           "weight": 0.5
         }
       ],
-      "coverage": 0.5,
+      "coverage": 1.0,
+      "domains": {
+        "competitive_programming": 78.25,
+        "scientific_coding": 42.05
+      },
       "index": "vllm-sr/coding@1.0.0",
       "model": "nvidia/nemotron-3-super",
       "provenance": [
+        "nvidia/nemotron-3-super-livecodebench-v6@1.0.0",
         "nvidia/nemotron-3-super-model-card-scicode@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": null,
-      "status": "partial"
+      "score": 60.14999999999999,
+      "status": "available"
     },
     {
       "components": [
@@ -61970,9 +61974,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/coding@1.0.0",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.6014999999999999,
+          "status": "available",
+          "value": 0.6014999999999999,
           "weight": 0.2
         },
         {
@@ -61983,19 +61987,20 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.8,
+      "coverage": 1.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-3-super",
       "provenance": [
         "independent/nvidia-nemotron-3-super-120b-a12b-gpqa-diamond@1.0.0",
         "independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0",
         "independent/nvidia-nemotron-3-super-120b-a12b-terminalbench-v2-1@1.0.0",
+        "nvidia/nemotron-3-super-livecodebench-v6@1.0.0",
         "nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0",
         "nvidia/nemotron-3-super-model-card-scicode@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": null,
-      "status": "partial"
+      "score": 56.64334839097096,
+      "status": "available"
     },
     {
       "components": [
@@ -62038,10 +62043,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nemotron-3-nano-omni-30b-a3b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -62214,8 +62219,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -62369,8 +62374,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -62524,8 +62529,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -62687,33 +62692,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.177,
-          "status": "available",
-          "value": 0.177,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 17.7,
-        "scientific_reasoning": 76.1
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
       "provenance": [
-        "nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0",
-        "nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0"
+        "nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
-      "score": 46.9,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -62788,9 +62786,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.469,
-          "status": "available",
-          "value": 0.469,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -62808,12 +62806,11 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
       "provenance": [
         "nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0",
-        "nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0",
         "nvidia/nemotron-cascade-2-model-card-mmlu-pro@1.0.0",
         "nvidia/nemotron-cascade-2-model-card-scicode@1.0.0"
       ],
@@ -62869,10 +62866,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -63059,8 +63056,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -63215,10 +63212,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-6-astra-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -63397,10 +63394,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -63579,10 +63576,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-6-astra-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -63761,10 +63758,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -63943,10 +63940,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-6-astra-max-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -64126,8 +64123,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -64286,10 +64283,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-sol-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -64468,10 +64465,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-sol-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -64650,10 +64647,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-sol-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -64832,10 +64829,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-sol-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -65014,10 +65011,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-sol-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -65196,10 +65193,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-sol-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -65374,8 +65371,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -65542,10 +65539,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-terra-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -65719,10 +65716,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-terra-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -65896,10 +65893,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-terra-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -66078,10 +66075,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-terra-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -66260,10 +66257,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-terra-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -66442,10 +66439,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-terra-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -66620,8 +66617,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -66788,10 +66785,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-luna-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -66965,10 +66962,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-luna-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -67142,10 +67139,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-luna-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -67319,10 +67316,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-luna-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -67501,10 +67498,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-luna-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -67683,10 +67680,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-6-luna-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -67861,8 +67858,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -68029,10 +68026,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-5-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -68206,10 +68203,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-5-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -68383,10 +68380,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-5-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -68560,10 +68557,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -68737,10 +68734,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-5-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -68914,33 +68911,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.414,
-          "status": "available",
-          "value": 0.414,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 41.4,
-        "scientific_reasoning": 93.60000000000001
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "openai/gpt-5.5",
       "provenance": [
-        "openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0",
-        "openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0"
+        "openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
-      "score": 67.5,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -69018,9 +69008,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.675,
-          "status": "available",
-          "value": 0.675,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -69038,13 +69028,12 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.5",
       "provenance": [
         "openai/gpt-5.5-later-comparison-terminal-bench@1.0.0",
-        "openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0",
-        "openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0"
+        "openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
       "score": null,
@@ -69091,10 +69080,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-4-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -69259,8 +69248,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -69414,8 +69403,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -69570,10 +69559,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-4-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -69747,10 +69736,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-5-4-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -69916,33 +69905,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.398,
-          "status": "available",
-          "value": 0.398,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 39.800000000000004,
-        "scientific_reasoning": 92.80000000000001
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "openai/gpt-5.4",
       "provenance": [
-        "openai/gpt-5.4-comparison-gpqa-diamond@1.0.0",
-        "openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0"
+        "openai/gpt-5.4-comparison-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
-      "score": 66.3,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -70013,9 +69995,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.6629999999999999,
-          "status": "available",
-          "value": 0.6629999999999999,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -70033,16 +70015,15 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.4,
+      "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.4",
       "provenance": [
-        "openai/gpt-5.4-comparison-gpqa-diamond@1.0.0",
-        "openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0"
+        "openai/gpt-5.4-comparison-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
       "score": null,
-      "status": "partial"
+      "status": "missing"
     },
     {
       "components": [
@@ -70085,10 +70066,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-oss-120b-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -70262,33 +70243,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.086,
-          "status": "available",
-          "value": 0.086,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 8.6,
-        "scientific_reasoning": 73.1
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "openai/gpt-oss-120b",
       "provenance": [
-        "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0",
-        "openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0"
+        "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "medium",
-      "score": 40.849999999999994,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -70359,9 +70333,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.4084999999999999,
-          "status": "available",
-          "value": 0.4084999999999999,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -70379,16 +70353,15 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.4,
+      "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-oss-120b",
       "provenance": [
-        "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0",
-        "openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0"
+        "openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "medium",
       "score": null,
-      "status": "partial"
+      "status": "missing"
     },
     {
       "components": [
@@ -70438,10 +70411,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-oss-120b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -70629,10 +70602,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-oss-20b-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -70798,33 +70771,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.07,
-          "status": "available",
-          "value": 0.07,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 7.000000000000001,
-        "scientific_reasoning": 66.0
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "openai/gpt-oss-20b",
       "provenance": [
-        "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0",
-        "openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0"
+        "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "medium",
-      "score": 36.5,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -70895,9 +70861,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.365,
-          "status": "available",
-          "value": 0.365,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -70915,16 +70881,15 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.4,
+      "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-oss-20b",
       "provenance": [
-        "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0",
-        "openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0"
+        "openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "medium",
       "score": null,
-      "status": "partial"
+      "status": "missing"
     },
     {
       "components": [
@@ -70974,10 +70939,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/gpt-oss-20b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -71164,8 +71129,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -71319,8 +71284,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -71475,10 +71440,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-8-max-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -71657,10 +71622,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-8-27b-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -71839,10 +71804,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-8-27b-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -72021,10 +71986,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-8-27b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -72210,8 +72175,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -72365,8 +72330,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -72521,10 +72486,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-8-flash-next-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -72710,8 +72675,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -72865,8 +72830,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -73021,10 +72986,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-8-2-4t-a95b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -73202,8 +73167,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -73357,8 +73322,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -73513,10 +73478,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-7-max-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -73690,10 +73655,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-6-27b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -73867,10 +73832,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-6-27b-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -74052,8 +74017,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -74213,10 +74178,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-6-35b-a3b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -74390,10 +74355,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-6-35b-a3b-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -74573,8 +74538,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -74738,10 +74703,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -74928,8 +74893,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -75091,10 +75056,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -75281,8 +75246,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -75444,10 +75409,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -75642,10 +75607,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -75832,8 +75797,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -75987,8 +75952,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -76143,10 +76108,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/step-3.7-flash-high-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -76319,8 +76284,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -76475,10 +76440,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/step-3.5-flash-enabled-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -76643,8 +76608,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -76799,10 +76764,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/step3-vl-10b-enabled-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -76968,33 +76933,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.434,
-          "status": "available",
-          "value": 0.434,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 43.4,
-        "scientific_reasoning": 92.30000000000001
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "tencent/hy4-preview",
       "provenance": [
-        "tencent/hy4-preview-model-card-gpqa-diamond@1.0.0",
-        "tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0"
+        "tencent/hy4-preview-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "high",
-      "score": 67.85,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -77072,9 +77030,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.6785,
-          "status": "available",
-          "value": 0.6785,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -77092,12 +77050,11 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "tencent/hy4-preview",
       "provenance": [
         "tencent/hy4-preview-model-card-gpqa-diamond@1.0.0",
-        "tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0",
         "tencent/hy4-preview-model-card-terminal-bench@1.0.0"
       ],
       "reasoning_effort": "high",
@@ -77144,8 +77101,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -77300,10 +77257,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/hy3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -77476,8 +77433,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -77631,8 +77588,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -77795,8 +77752,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -77955,8 +77912,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -78110,8 +78067,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -78265,8 +78222,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -78420,8 +78377,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -78575,8 +78532,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -78731,10 +78688,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/inkling-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -78912,8 +78869,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -79067,8 +79024,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -79222,8 +79179,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -79377,8 +79334,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -79532,8 +79489,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -79687,8 +79644,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -79843,33 +79800,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.316,
-          "status": "available",
-          "value": 0.316,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 31.6,
-        "scientific_reasoning": 89.5
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "thinking-machines/inkling-small",
       "provenance": [
-        "thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0",
-        "thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0"
+        "thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "max",
-      "score": 60.550000000000004,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -79947,9 +79897,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.6055,
-          "status": "available",
-          "value": 0.6055,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -79967,12 +79917,11 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "thinking-machines/inkling-small",
       "provenance": [
         "thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0",
-        "thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0",
         "thinking-machines/inkling-small-model-card-terminal-bench@1.0.0"
       ],
       "reasoning_effort": "max",
@@ -80019,8 +79968,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -80175,10 +80124,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-6-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -80357,10 +80306,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-6-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -80539,10 +80488,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-6-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -80721,10 +80670,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-6-xhigh-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -80902,8 +80851,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -81057,8 +81006,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -81213,10 +81162,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-5-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -81395,10 +81344,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-3-low-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -81564,10 +81513,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-3-medium-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -81733,10 +81682,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -81910,10 +81859,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/grok-4-3-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -82087,10 +82036,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mimo-v2-5-pro-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -82269,10 +82218,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mimo-v2-5-pro-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -82438,10 +82387,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mimo-v2-5-0424-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -82614,8 +82563,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -82777,10 +82726,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mimo-v2-flash-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -82947,10 +82896,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/mimo-v2-flash-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -83123,8 +83072,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -83278,8 +83227,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -83434,10 +83383,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/glm-5-3-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -83615,8 +83564,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -83779,8 +83728,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -83934,8 +83883,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -84090,10 +84039,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/glm-5-3-flash-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -84271,8 +84220,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -84427,10 +84376,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/glm-5-2-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -84609,10 +84558,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/glm-5-2-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -84786,33 +84735,26 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
-          "evaluation": "zai/glm-5.2-model-card-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.405,
-          "status": "available",
-          "value": 0.405,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 40.5,
-        "scientific_reasoning": 91.2
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "zai/glm-5.2",
       "provenance": [
-        "zai/glm-5.2-model-card-gpqa-diamond@1.0.0",
-        "zai/glm-5.2-model-card-humanitys-last-exam@1.0.0"
+        "zai/glm-5.2-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
-      "score": 65.85000000000001,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -84890,9 +84832,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.6585000000000001,
-          "status": "available",
-          "value": 0.6585000000000001,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
@@ -84910,12 +84852,11 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "zai/glm-5.2",
       "provenance": [
         "zai/glm-5.2-model-card-gpqa-diamond@1.0.0",
-        "zai/glm-5.2-model-card-humanitys-last-exam@1.0.0",
         "zai/glm-5.2-model-card-terminal-bench@1.0.0"
       ],
       "reasoning_effort": "unspecified",
@@ -84970,10 +84911,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/glm-5-1-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -85161,10 +85102,10 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "evaluation": "independent/glm-5-1-non-reasoning-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
@@ -85329,8 +85270,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -85484,8 +85425,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -85639,8 +85580,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -85794,8 +85735,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -85949,8 +85890,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalized": null,
@@ -86115,8 +86056,8 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
           "benchmark_profiles": [
-            "independent-standard",
-            "no-tools"
+            "independent-text-only",
+            "text-only"
           ],
           "metric": "accuracy",
           "normalization": {
@@ -91437,7 +91378,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522",
+        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
         "authority": "vllm-sr-maintainers",
         "status": "reproduced",
         "verified_at": "2026-09-04"
@@ -91529,7 +91470,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522",
+        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
         "authority": "vllm-sr-maintainers",
         "status": "reproduced",
         "verified_at": "2026-09-04"
@@ -91622,7 +91563,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522",
+        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
         "authority": "vllm-sr-maintainers",
         "status": "reproduced",
         "verified_at": "2026-09-04"
@@ -91752,7 +91693,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522",
+        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
         "authority": "vllm-sr-maintainers",
         "status": "reproduced",
         "verified_at": "2026-09-04"
@@ -91847,7 +91788,7 @@ const builtInCatalogJSON = `{
         "tool_isolation"
       ],
       "verification": {
-        "asset_sha256": "sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522",
+        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
         "authority": "vllm-sr-maintainers",
         "status": "reproduced",
         "verified_at": "2026-09-04"

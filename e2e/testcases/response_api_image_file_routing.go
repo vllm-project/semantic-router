@@ -36,7 +36,7 @@ func init() {
 }
 
 // testResponseAPIImageFileID pins the Response API image file_id contract
-// end to end: an image uploaded through POST /v1/files (purpose=vision) and
+// end to end: an image uploaded through POST /api/v1/storage/files (purpose=vision) and
 // referenced by file_id in an input_image part must select the image decision
 // AND arrive at the selected backend as inlined image bytes, while a file_id
 // the router file store does not hold must fail with a client 400.
@@ -192,7 +192,7 @@ func uploadVisionImage(ctx context.Context, session *fixtures.ServiceSession) (s
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, session.BaseURL()+"/v1/files", &form)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, session.BaseURL()+"/api/v1/storage/files", &form)
 	if err != nil {
 		return "", err
 	}
@@ -207,17 +207,17 @@ func uploadVisionImage(ctx context.Context, session *fixtures.ServiceSession) (s
 		return "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("POST /v1/files returned HTTP %d: %s", resp.StatusCode, truncateString(string(body), 500))
+		return "", fmt.Errorf("POST /api/v1/storage/files returned HTTP %d: %s", resp.StatusCode, truncateString(string(body), 500))
 	}
 
 	var record struct {
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(body, &record); err != nil {
-		return "", fmt.Errorf("decode /v1/files response: %w", err)
+		return "", fmt.Errorf("decode /api/v1/storage/files response: %w", err)
 	}
 	if record.ID == "" {
-		return "", fmt.Errorf("POST /v1/files returned no file id: %s", truncateString(string(body), 500))
+		return "", fmt.Errorf("POST /api/v1/storage/files returned no file id: %s", truncateString(string(body), 500))
 	}
 	return record.ID, nil
 }

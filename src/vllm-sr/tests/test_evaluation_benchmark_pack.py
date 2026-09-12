@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli.commands.eval import eval
+from cli.commands.benchmark import benchmark
 from cli.evaluation import suite_store_install
 from cli.evaluation.canonical import canonical_json_bytes
 from cli.evaluation.constants import SCHEMA_VERSION, TRACK_IDS
@@ -167,7 +167,7 @@ def test_benchmark_install_accepts_data_only_pack_and_projects_catalog(
     runner = CliRunner()
 
     installed = runner.invoke(
-        eval,
+        benchmark,
         ["benchmark-install", "--pack", str(pack), "--suite-store", str(store)],
     )
 
@@ -188,7 +188,7 @@ def test_benchmark_install_accepts_data_only_pack_and_projects_catalog(
     }
 
     catalog_result = runner.invoke(
-        eval,
+        benchmark,
         ["catalog", "--suite-store", str(store)],
     )
     assert catalog_result.exit_code == 0, catalog_result.output
@@ -243,13 +243,13 @@ def test_benchmark_pack_without_a_hidden_route_stays_replay_only(
     runner = CliRunner()
 
     installed = runner.invoke(
-        eval,
+        benchmark,
         ["benchmark-install", "--pack", str(pack), "--suite-store", str(store)],
     )
     assert installed.exit_code == 0, installed.output
 
     catalog_result = runner.invoke(
-        eval,
+        benchmark,
         ["catalog", "--suite-store", str(store)],
     )
     assert catalog_result.exit_code == 0, catalog_result.output
@@ -282,7 +282,7 @@ def test_benchmark_pack_without_a_hidden_multimodal_answer_stays_replay_only(
     manifest = NormalizedSuiteStore(store).install_pack(pack)
 
     catalog_result = CliRunner().invoke(
-        eval,
+        benchmark,
         ["catalog", "--suite-store", str(store)],
     )
 
@@ -314,7 +314,7 @@ def test_benchmark_pack_admits_only_complete_platform_live_tracks(
     manifest = NormalizedSuiteStore(store).install_pack(pack)
 
     catalog_result = CliRunner().invoke(
-        eval,
+        benchmark,
         ["catalog", "--suite-store", str(store)],
     )
     assert catalog_result.exit_code == 0, catalog_result.output
@@ -355,7 +355,7 @@ def test_benchmark_install_rejects_dirty_or_executable_packs(tmp_path: Path) -> 
     )
 
     dirty = CliRunner().invoke(
-        eval,
+        benchmark,
         [
             "benchmark-install",
             "--pack",
@@ -372,7 +372,7 @@ def test_benchmark_install_rejects_dirty_or_executable_packs(tmp_path: Path) -> 
     _write_pack(executable_pack, extra_manifest={"runner": "python benchmark.py"})
     _commit_pack(executable_pack)
     executable = CliRunner().invoke(
-        eval,
+        benchmark,
         [
             "benchmark-install",
             "--pack",
@@ -408,7 +408,7 @@ def test_benchmark_install_rejects_ambiguous_yaml(
     _commit_pack(pack)
 
     result = CliRunner().invoke(
-        eval,
+        benchmark,
         [
             "benchmark-install",
             "--pack",
@@ -471,7 +471,7 @@ def test_benchmark_install_rejects_unknown_bundle_files(tmp_path: Path) -> None:
     _commit_pack(pack)
 
     result = CliRunner().invoke(
-        eval,
+        benchmark,
         [
             "benchmark-install",
             "--pack",
@@ -497,7 +497,7 @@ def test_benchmark_install_rejects_ignored_pack_data(tmp_path: Path) -> None:
     _git(pack, "commit", "--quiet", "-m", "ignore fixture")
 
     result = CliRunner().invoke(
-        eval,
+        benchmark,
         [
             "benchmark-install",
             "--pack",

@@ -66,7 +66,7 @@ func TestWorkerHTTPBrokerBudgetsConsecutiveSuccessAndErrorBodies(t *testing.T) {
 
 	responseForStatus := func(status int) workerBrokerResponse {
 		response, _ := broker.readUpstreamResponse(
-			workerBrokerRouterEvaluate,
+			workerBrokerRoutingPreview,
 			&http.Response{
 				StatusCode: status,
 				Header:     make(http.Header),
