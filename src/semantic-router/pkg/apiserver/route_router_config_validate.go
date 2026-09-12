@@ -20,7 +20,7 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 	r *http.Request,
 ) {
 	var req RouterConfigUpdateRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}

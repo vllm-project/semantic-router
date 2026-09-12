@@ -149,7 +149,7 @@ metrics, candidate variants, experiment estimates, suggested changes, and
 experience seed packs:
 
 ```bash
-vllm-sr eval recipe-learning \
+vllm-sr optimize recipe-learning \
   --endpoint http://localhost:8080 \
   --recipe-file config.yaml \
   --output-dir ./router-learning-report

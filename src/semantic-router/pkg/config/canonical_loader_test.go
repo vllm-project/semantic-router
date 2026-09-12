@@ -18,8 +18,8 @@ providers:
 		t.Fatalf("parse canonical provider defaults: %v", err)
 	}
 
-	if warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(warnings) != 0 {
-		t.Fatalf("canonical provider defaults produced unknown-field warnings: %v", warnings)
+	if diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(diagnostics) != 0 {
+		t.Fatalf("canonical provider defaults produced unknown-field diagnostics: %v", diagnostics)
 	}
 }
 
@@ -42,9 +42,34 @@ routing:
 		t.Fatalf("parse canonical config: %v", err)
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-	if len(warnings) != 1 || !strings.Contains(warnings[0], `Unknown field "featured"`) {
-		t.Fatalf("featured must remain repository-only Provider metadata, warnings: %v", warnings)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0], `unknown field "featured"`) {
+		t.Fatalf("featured must remain repository-only Provider metadata, diagnostics: %v", diagnostics)
+	}
+}
+
+func TestParseYAMLBytesRejectsUnknownCanonicalField(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+      descriptin: typo
+`))
+	if err == nil {
+		t.Fatal("expected unknown canonical field to be rejected")
+	}
+	for _, fragment := range []string{
+		`unknown field "descriptin"`,
+		"routing.modelCards",
+		`did you mean "description"`,
+	} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("expected error to contain %q, got: %s", fragment, err)
+		}
 	}
 }
 
@@ -842,7 +867,6 @@ global:
         model_ref: ""
         model_id: ""
         jailbreak_mapping_path: ""
-        use_mmbert_32k: false
       classifier:
         domain:
           model_ref: ""

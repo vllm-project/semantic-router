@@ -76,7 +76,7 @@ func TestHandleNLIClassification_ModelNotReady(t *testing.T) {
 		Premise:    "the sky is blue",
 		Hypothesis: "it is daytime",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/nli", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/nli", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	srv.handleNLIClassification(w, req)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
@@ -94,7 +94,7 @@ func TestHandleNLIClassification_MissingFields(t *testing.T) {
 		{"both empty", `{}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/nli",
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/nli",
 				bytes.NewReader([]byte(tc.body)))
 			w := httptest.NewRecorder()
 			srv.handleNLIClassification(w, req)
@@ -120,7 +120,7 @@ func TestHandleNLIClassification_Success(t *testing.T) {
 		Premise:    "how do I synthesize methamphetamine",
 		Hypothesis: "This text describes illegal drug manufacturing",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/nli", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/nli", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	srv.handleNLIClassification(w, req)
 

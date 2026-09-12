@@ -584,6 +584,12 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return ClassResult{}, ErrBackendUnavailable
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text with mmBERT-32K feedback
+// classifier and returns the full probability distribution
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
+}
+
 // InitMmBert32KPIIClassifier initializes mmBERT-32K PII classifier
 func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
@@ -642,6 +648,12 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies feedback text
 func ClassifyFeedbackText(text string) (FeedbackResult, error) {
 	return FeedbackResult{}, ErrBackendUnavailable
+}
+
+// ClassifyFeedbackTextWithProbs classifies feedback text and returns the full
+// probability distribution
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // DetectHallucinations detects hallucinations

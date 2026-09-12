@@ -15,9 +15,17 @@ Use YAML when configuration belongs in source control or an existing deployment
 pipeline:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config init --output config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
+
+`config init` writes the packaged minimal canonical template and refuses to
+replace an existing file unless `--force` is explicit. When a Router is already
+running, start from `vllm-sr config get` instead so unrelated active settings
+are preserved. A model becomes a routing candidate only after the same model
+name appears in `providers.models`, `routing.modelCards`, and the applicable
+decision's `modelRefs`.
 
 The local runtime derives stack-specific service addresses in runtime-owned
 state without rewriting the source file. Concurrent `serve` and `stop`
@@ -102,7 +110,7 @@ configOverride:
 ```
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 
 helm upgrade --install semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
@@ -112,7 +120,7 @@ helm upgrade --install semantic-router \
 `vllm-sr serve --target k8s --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command
 rejects an empty or setup-only document and does not inject local-Docker service
-addresses or knowledge-base paths. Run `vllm-sr validate` first so schema and
+addresses or knowledge-base paths. Run `vllm-sr config validate` first so schema and
 reference errors fail before deployment.
 
 Choose Kubernetes GPU images, resources, and device plugins through Helm or the

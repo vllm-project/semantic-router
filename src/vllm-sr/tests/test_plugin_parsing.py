@@ -14,7 +14,7 @@ from cli.models import (
     ToolsPluginConfig,
 )
 from cli.config_migration import migrate_config_data
-from cli.parser import parse_user_config
+from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
 
 
@@ -397,12 +397,11 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            # Check that error mentions router_replay
-            error_messages = [str(e) for e in errors]
-            assert any("router_replay" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError) as exc_info:
+                parse_user_config(temp_path)
+            message = str(exc_info.value)
+            assert "configuration.max_records" in message
+            assert "configuration.capture_request_body" in message
         finally:
             os.unlink(temp_path)
 
@@ -451,12 +450,9 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            # Check that the alias normalized to the canonical plugin.
-            error_messages = [str(e) for e in errors]
-            assert any("response_cache" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError) as exc_info:
+                parse_user_config(temp_path)
+            assert "configuration.enabled" in str(exc_info.value)
         finally:
             os.unlink(temp_path)
 
@@ -740,10 +736,8 @@ providers:
         temp_path = _write_config(config_yaml)
 
         try:
-            config = parse_user_config(temp_path)
-            errors = validate_user_config(config)
-            assert len(errors) > 0
-            error_messages = [str(e) for e in errors]
-            assert any("rag" in msg.lower() for msg in error_messages)
+            with pytest.raises(ConfigParseError) as exc_info:
+                parse_user_config(temp_path)
+            assert "configuration.top_k" in str(exc_info.value)
         finally:
             os.unlink(temp_path)
