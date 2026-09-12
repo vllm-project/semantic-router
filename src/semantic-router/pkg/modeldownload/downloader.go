@@ -131,7 +131,7 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
 	}
 
-	if err := recordModelRevision(spec); err != nil {
+	if err := recordDownloadedModelRevision(spec); err != nil {
 		return fmt.Errorf("record downloaded model revision: %w", err)
 	}
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)

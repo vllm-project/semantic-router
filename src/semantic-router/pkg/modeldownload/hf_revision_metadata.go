@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ func verifyHFModelRevision(spec ModelSpec) (map[string]string, error) {
 		return nil, err
 	}
 	verified := make(map[string]string, len(files))
+	hasWeights := false
 	for _, name := range files {
 		etag, err := hfArtifactETag(spec, name)
 		if err != nil {
@@ -36,8 +38,27 @@ func verifyHFModelRevision(spec ModelSpec) (map[string]string, error) {
 			return nil, fmt.Errorf("%w: %s: %w", errUnverifiedModelRevision, name, err)
 		}
 		verified[name] = etag
+		hasWeights = hasWeights || primaryRevisionWeight(spec, name)
+	}
+	if !hasWeights {
+		return nil, fmt.Errorf("%w: no verified runtime weights", errUnverifiedModelRevision)
 	}
 	return verified, nil
+}
+
+func primaryRevisionWeight(spec ModelSpec, name string) bool {
+	// A bundled LoRA or auxiliary dense head cannot establish the root model's
+	// completeness. Sharded native weights are rooted by their verified index;
+	// nonstandard layouts can declare their primary weights explicitly.
+	if filepath.Dir(name) != "." && !strings.HasPrefix(name, "onnx/") && !slices.Contains(spec.RequiredFiles, name) {
+		return false
+	}
+	for _, pattern := range modelWeightPatterns {
+		if matched, _ := filepath.Match(pattern, filepath.Base(name)); matched {
+			return true
+		}
+	}
+	return false
 }
 
 // Validate present weights, tokenizer/config companions, external ONNX data,

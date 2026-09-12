@@ -86,7 +86,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/Vela-1.0-Encoder-307M-FactCheck",
 		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck",
-		Revision:         "df7827283d0182b23f0140336a0be200d3e14ca4",
+		Revision:         "9ec8128299dd942d13d5ec46d4348d7b4ea9b9ad",
 		Aliases:          []string{"Vela-1.0-Encoder-307M-FactCheck"},
 		Purpose:          PurposeHallucinationSentinel,
 		Description:      "Identify requests that need factual verification, with up to 32K input. It does not verify factual claims.",
