@@ -6,13 +6,14 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 HARNESS_MAKE = (REPO_ROOT / "tools/make/agent.mk").read_text(encoding="utf-8")
 PRECOMMIT_MAKE = (REPO_ROOT / "tools/make/pre-commit.mk").read_text(encoding="utf-8")
+DASHBOARD_MAKE = (REPO_ROOT / "tools/make/dashboard.mk").read_text(encoding="utf-8")
 PRECOMMIT_CONFIG = yaml.safe_load(
     (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
 )
 
 
-def target_block(name: str) -> str:
-    lines = HARNESS_MAKE.splitlines()
+def target_block(name: str, source: str = HARNESS_MAKE) -> str:
+    lines = source.splitlines()
     start = next(
         index for index, line in enumerate(lines) if line.startswith(f"{name}:")
     )
@@ -98,6 +99,16 @@ class HarnessMakeContractTests(unittest.TestCase):
         for binding in ("candle-binding", "onnx-binding", "ml-binding", "nlp-binding"):
             self.assertIn(f"-v /app/{binding}/target \\", PRECOMMIT_MAKE)
         self.assertIn("$$CONTAINER_CMD run --rm", PRECOMMIT_MAKE)
+
+    def test_dashboard_workers_use_the_installed_cli_environment_by_default(
+        self,
+    ) -> None:
+        backend = target_block("dashboard-test-backend", DASHBOARD_MAKE)
+        self.assertIn("dashboard-test-backend: vllm-sr-install-cli", backend)
+        self.assertIn(
+            'VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-$(AGENT_PYTHON)}"',
+            backend,
+        )
 
 
 if __name__ == "__main__":
