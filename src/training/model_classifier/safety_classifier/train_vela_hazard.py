@@ -17,6 +17,7 @@ from ..sequence_repair.data import assert_disjoint, file_receipts
 from ..sequence_repair.model import load_model, save_adapter
 from ..sequence_repair.train import token_budget_microbatches
 from .vela_hazard import evaluate, masked_loss, read_rows
+from .vela_hazard_diagnostics import SupervisionDiagnostics
 
 SAFE_SAMPLE_FRACTION = 0.3
 
@@ -90,6 +91,35 @@ def sample_grouped(pools, rng, source_weights=None):
     return rng.choice(rng.choice(positive))
 
 
+def development_selection_score(metrics, selection, minimum_support=1):
+    """Exclude insufficiently supported label APs from checkpoint selection only."""
+    if minimum_support < 1:
+        raise ValueError("Selection support must be positive")
+    groups = (
+        list(metrics["breakdowns"]["source"].values())
+        if selection == "source-macro-ap"
+        else [metrics]
+    )
+    scores = []
+    for group in groups:
+        if minimum_support == 1:
+            score = group["macro_ap"]
+        else:
+            values = [
+                item["ap"]
+                for item in group["per_label"].values()
+                if item["ap"] is not None
+                and min(item["positive_support"], item["negative_support"])
+                >= minimum_support
+            ]
+            score = sum(values) / len(values) if values else None
+        if score is not None:
+            scores.append(score)
+    if not scores:
+        raise ValueError("No development label has sufficient selection support")
+    return sum(scores) / len(scores)
+
+
 def main():
     import torch
 
@@ -119,6 +149,8 @@ def main():
     parser.add_argument("--accumulate", type=int, default=4)
     parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--microbatch-token-budget", type=int)
+    parser.add_argument("--supervision-diagnostics", action="store_true")
+    parser.add_argument("--selection-minimum-support", type=int, default=1)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--eval-every", type=int, default=150)
     parser.add_argument("--seed", type=int, default=20260913)
@@ -130,6 +162,7 @@ def main():
             args.accumulate,
             args.max_length,
             args.eval_every,
+            args.selection_minimum_support,
         )
         <= 0
         or args.learning_rate <= 0
@@ -232,6 +265,7 @@ def main():
             for path in [
                 Path(__file__),
                 Path(__file__).with_name("vela_hazard.py"),
+                Path(__file__).with_name("vela_hazard_diagnostics.py"),
                 Path(__file__).parent.parent / "sequence_repair/model.py",
                 Path(__file__).parent.parent / "sequence_repair/data.py",
                 Path(__file__).parent.parent / "sequence_repair/train.py",
@@ -264,6 +298,9 @@ def main():
     best = -1.0
     sampled_unique, sampled_sources, sampled_languages = set(), Counter(), Counter()
     positive_exposures = [0] * len(labels)
+    diagnostics = (
+        SupervisionDiagnostics(labels) if args.supervision_diagnostics else None
+    )
 
     def draw_microbatch_indices():
         return [
@@ -338,7 +375,17 @@ def main():
                 if not bool(torch.isfinite(loss)):
                     raise ValueError("Nonfinite hazard loss")
                 loss.backward()
+                if diagnostics is not None:
+                    diagnostics.observe(
+                        [row for row, _ in selected],
+                        logits,
+                        target,
+                        mask,
+                        args.batch_size * args.accumulate,
+                    )
                 total += float(loss.detach())
+            if diagnostics is not None:
+                diagnostics.observe_head_gradients(model)
             norm = torch.nn.utils.clip_grad_norm_(
                 parameters, 1.0, error_if_nonfinite=True
             )
@@ -368,6 +415,10 @@ def main():
             if step % 10 == 0:
                 print(json.dumps(log), flush=True)
         if step % args.eval_every == 0 or step == args.steps:
+            if diagnostics is not None:
+                (output / f"supervision-step-{step}.json").write_text(
+                    json.dumps(diagnostics.snapshot(), indent=2) + "\n"
+                )
             coverage = {
                 "step": step,
                 "draws": sum(sampled_sources.values()),
@@ -394,16 +445,9 @@ def main():
             (output / f"dev-step-{step}.json").write_text(
                 json.dumps(metrics, indent=2) + "\n"
             )
-            score = metrics["macro_ap"]
-            if args.selection == "source-macro-ap":
-                source_scores = [
-                    item["macro_ap"]
-                    for item in metrics["breakdowns"]["source"].values()
-                    if item["macro_ap"] is not None
-                ]
-                if not source_scores:
-                    raise ValueError("No development sources support AP selection")
-                score = sum(source_scores) / len(source_scores)
+            score = development_selection_score(
+                metrics, args.selection, args.selection_minimum_support
+            )
             print(
                 json.dumps(
                     {
@@ -432,6 +476,7 @@ def main():
                             "step": step,
                             "score": score,
                             "selection": args.selection,
+                            "selection_minimum_support": args.selection_minimum_support,
                             "test_used": False,
                         }
                     )

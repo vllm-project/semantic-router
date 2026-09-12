@@ -98,13 +98,31 @@ the repository root. Download only the source files required by a builder.
   data is synthetic translation/adaptation, not twelve independent natural
   benchmarks. Its jailbreak tag is never converted into a PromptGuard target.
 
-For Hazard, the versioned `safety_classifier.vela_hazard_supervision` projection
-excludes training-only unsafe `jailbreaking` rows: new generated attacks do not
-independently validate every inherited fine-grained category. It retains safe
-negatives and the generic/adapted source projections, without turning unknown
-risks into negative labels. This protocol refuses development/test rows and
-records every exclusion. Preserve the original full development/test benchmark;
-generic and adapted labels still carry synthetic annotation limitations.
+Hazard's historical `safety_classifier.vela_hazard_supervision` v3 projection
+remains reproducible. The subsequent `safety_classifier.vela_hazard_partial` v4
+projection quarantines all generated `jailbreaking` rows and unsafe `adapted`
+rows because the generation process does not establish reliable binary and
+exhaustive category annotations. Generic unsafe rows retain only positive
+categories also supported by the original AEGIS training prompt; all other
+categories are unknown. Generic/adapted safe rows retain full negative masks.
+These and unchanged AEGIS labels remain weak source supervision, not individually
+verified clean negatives. Both versions refuse development/test input and record
+exclusions. Never overwrite the original raw development/test labels.
+
+Use the [content-risk rubric](safety_classifier/configs/hazard-rubric-v1.json)
+for separate, explicitly reviewed development. It distinguishes harmful action
+and current crisis from education, prevention and support; insufficient context
+remains unknown. Review a source-stratified selection before looking at new
+candidate predictions and preserve every raw-to-reviewed change. Low-support
+classes cannot be certified or calibrated by a small reviewed subset.
+For such development data, set Hazard's explicit
+`--selection-minimum-support 10` to exclude classes with fewer than ten positive
+or negative observations from checkpoint selection AP. All raw per-class metrics
+remain recorded. The default of one preserves existing selection behavior.
+`safety_classifier.vela_hard_negatives` supplies a small original contrast corpus
+with fixed train/development semantic families and paired translations. These
+authored examples supplement source supervision; they are not independent
+natural-user evidence.
 
 For example:
 
@@ -177,6 +195,13 @@ sampling sequence. Each evaluation checkpoint records actual source draws,
 unique-row coverage, language draws and positive-label exposures. Select total
 steps using these counts and loss curves; repeated sampling is not an epoch.
 Pass the actual `--base-id` as well as `--base-revision` when using a new encoder.
+For partial supervision, `--supervision-diagnostics` additionally records
+observed-label-count distributions, positive/negative/unknown exposures and
+exact loss gradients with respect to each logit, broken down by source. It also
+records actual final-head row gradient norms before clipping. Source-wise
+absolute logit gradients are not signed encoder gradients, and source draw
+weights are not the effective positive/negative loss ratio: one observed label
+gets more weight per example than one of twelve observed labels.
 
 Both loops use FP32 parameters and loss, BF16 GPU autocast, and explicit
 normalization over the global batch. This avoids a Transformers loss-
@@ -201,13 +226,16 @@ Measure actual tokens, not characters or padding length. Evaluate 4K, 8K, 16K
 and 32K inputs at the head, middle and tail. A 32K encoder config states position
 capacity; training at 2K does not establish long-task accuracy. Mixed-length
 curricula can use `--length-balanced-sampling` with a 32768 budget and small
-microbatches. The shared sequence loop also supports the explicit
-`--microbatch-token-budget 32768`: it samples the same global batch first,
+microbatches. Both the shared sequence loop and the Hazard loop support the explicit
+`--microbatch-token-budget 32768`: each samples the same global batch first,
 then groups examples by actual length so that each microbatch fits the padded
 token budget. Each example retains its global-batch loss weight. This changes
 dropout random-number consumption, so record a new recipe rather than claim
 an identical continuation of a previous run. Keep short development retention
 in checkpoint selection.
+Hazard first averages BCE over each example's observed labels, then weights
+that example by the complete optimizer-step sample count. Examples with more
+observed categories do not receive extra weight when microbatch sizes differ.
 Report full-context and chunked/windowed policies as separate systems.
 
 ## Freeze, evaluate, and export
