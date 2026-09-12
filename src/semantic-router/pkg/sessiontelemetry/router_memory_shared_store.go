@@ -202,17 +202,14 @@ func persistRouterSessionState(sessionID string) {
 		return
 	}
 	defer release()
-	s := globalRouterSessionMemory
-	s.mu.Lock()
-	st := s.sessions[sessionID]
-	gateConfigured := st != nil && st.outcomeWindowSize > 0
-	s.mu.Unlock()
-	if gateConfigured {
-		st.outcomeSaveMu.Lock()
-		defer st.outcomeSaveMu.Unlock()
-	}
 	snapshot, ok := GetRouterSessionSnapshot(sessionID, time.Now())
 	if !ok {
+		return
+	}
+	// A store that can merge keeps concurrent writers' facts; the plain Save
+	// path is the fallback for stores without that capability.
+	if merger, ok := store.(RouterSessionStateMerger); ok {
+		_ = merger.Merge(snapshot, routerMemoryTTL)
 		return
 	}
 	_ = store.Save(snapshot, routerMemoryTTL)
@@ -338,6 +335,62 @@ func (s *redisRouterSessionStore) Save(snapshot RouterSessionSnapshot, ttl time.
 		ttl = s.ttl
 	}
 	return s.client.Set(ctx, s.keyPrefix+snapshot.SessionID, payload, ttl).Err()
+}
+
+// redisMergeAttempts bounds the optimistic-concurrency retries. Each attempt is
+// one WATCH round trip, so a hot session still finishes inside the configured
+// store timeout instead of blocking the request path.
+const redisMergeAttempts = 4
+
+// Merge folds the local snapshot into the stored one under a compare-and-swap.
+// A whole-snapshot SET would let two replicas that loaded the same session
+// overwrite each other and lose the outcomes and switch history the shared
+// store exists to recover, so the read-modify-write is retried whenever the
+// watched key changed underneath it.
+func (s *redisRouterSessionStore) Merge(local RouterSessionSnapshot, ttl time.Duration) error {
+	if local.SessionID == "" {
+		return nil
+	}
+	if s.ttl > 0 {
+		ttl = s.ttl
+	}
+	key := s.keyPrefix + local.SessionID
+
+	var lastErr error
+	for attempt := 0; attempt < redisMergeAttempts; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+		err := s.client.Watch(ctx, func(tx *redis.Tx) error {
+			merged := local
+			stored, err := tx.Get(ctx, key).Bytes()
+			switch {
+			case errors.Is(err, redis.Nil):
+			case err != nil:
+				return err
+			default:
+				var remote RouterSessionSnapshot
+				if unmarshalErr := json.Unmarshal(stored, &remote); unmarshalErr == nil {
+					merged = mergeRouterSessionSnapshots(remote, local)
+				}
+			}
+			payload, err := json.Marshal(merged)
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, key, payload, ttl)
+				return nil
+			})
+			return err
+		}, key)
+		cancel()
+
+		if errors.Is(err, redis.TxFailedErr) {
+			lastErr = err
+			continue
+		}
+		return err
+	}
+	return lastErr
 }
 
 func (s *redisRouterSessionStore) Close() error {
