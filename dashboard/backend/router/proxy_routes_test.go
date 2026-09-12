@@ -17,7 +17,7 @@ func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	registerProxyRoutes(mux, &config.Config{})
+	registerProxyRoutes(mux, &config.Config{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
 	_, pattern := mux.Handler(req)
@@ -52,6 +52,7 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
+		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
 	req := httptest.NewRequest(http.MethodGet, "/api/router/v1/models", nil)
@@ -83,6 +84,7 @@ func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
@@ -127,6 +129,7 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
+		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
 	req := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes?authToken=query-user-jwt", nil)
@@ -159,6 +162,7 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)

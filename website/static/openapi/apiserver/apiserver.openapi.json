@@ -3793,6 +3793,9 @@
                   "reason": {
                     "type": "string"
                   },
+                  "record_only": {
+                    "type": "boolean"
+                  },
                   "replay_id": {
                     "type": "string"
                   },

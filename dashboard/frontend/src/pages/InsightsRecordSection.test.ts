@@ -15,6 +15,7 @@ describe('insight record section layout', () => {
 
   it('keeps summary sections compact', () => {
     expect(getInsightsRecordSectionPresentation('Lifecycle')).toEqual({ size: 'compact' })
+    expect(getInsightsRecordSectionPresentation('Outcomes')).toEqual({ size: 'compact' })
     expect(getInsightsRecordSectionPresentation('Usage & Cost')).toEqual({ size: 'compact' })
   })
 

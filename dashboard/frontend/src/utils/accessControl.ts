@@ -11,6 +11,7 @@ const CONFIG_WRITE_PERMISSION = 'config.write'
 const EVALUATION_READ_PERMISSION = 'evaluation.read'
 const EVALUATION_RUN_PERMISSION = 'evaluation.run'
 const EVALUATION_WRITE_PERMISSION = 'evaluation.write'
+const FEEDBACK_SUBMIT_PERMISSION = 'feedback.submit'
 const LOGS_READ_PERMISSION = 'logs.read'
 const ML_PIPELINE_MANAGE_PERMISSION = 'mlpipeline.manage'
 const MCP_READ_PERMISSION = 'mcp.read'
@@ -64,6 +65,10 @@ export function canWriteEvaluation(user?: PermissionUser | null): boolean {
 
 export function canRunEvaluation(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, EVALUATION_RUN_PERMISSION)
+}
+
+export function canSubmitFeedback(user?: PermissionUser | null): boolean {
+  return canAccessWithPermission(user, FEEDBACK_SUBMIT_PERMISSION, READ_CAPABLE_ROLES)
 }
 
 export function canManageMCP(user?: PermissionUser | null): boolean {

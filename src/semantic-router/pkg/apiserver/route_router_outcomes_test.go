@@ -37,6 +37,7 @@ func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {
 		Metadata: map[string]string{
 			"run_id": " run-1 ",
 		},
+		RecordOnly: true,
 	})
 	if validationErr != nil {
 		t.Fatalf("expected valid outcome, got %v", validationErr)
@@ -44,7 +45,8 @@ func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {
 	if outcome.ReplayID != "replay-1" ||
 		outcome.TargetRef != "model-a" ||
 		outcome.Score != 0.75 ||
-		outcome.Metadata["run_id"] != "run-1" {
+		outcome.Metadata["run_id"] != "run-1" ||
+		!outcome.RecordOnly {
 		t.Fatalf("unexpected normalized outcome: %#v", outcome)
 	}
 }

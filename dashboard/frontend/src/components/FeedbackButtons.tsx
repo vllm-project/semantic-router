@@ -15,6 +15,8 @@ interface FeedbackButtonsProps {
   modelId: string
   /** Router Replay record id for the routed response */
   replayId: string
+  /** Link to the matching Router Replay record after a successful rating. */
+  insightsHref?: string
   /** Optional category/decision name */
   category?: string
   /** Optional query for context */
@@ -62,6 +64,7 @@ function ThumbDownIcon() {
 const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   modelId,
   replayId,
+  insightsHref,
   category,
   query,
   onSuccess,
@@ -209,7 +212,12 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
           )}
         </button>
       </div>
-      {submitted && <span className={styles.sentLabel}>Feedback Sent!</span>}
+      {submitted && (
+        <span className={styles.sentLabel}>
+          Feedback Sent!
+          {insightsHref ? <a href={insightsHref}>View in Insights</a> : null}
+        </span>
+      )}
       {errorMessage && (
         <div className={styles.error} role="alert">
           {errorMessage}
