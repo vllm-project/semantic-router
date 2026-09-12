@@ -128,6 +128,26 @@ Do not add consumer field allowlists, copies of signal/algorithm/plugin
 inventories, or a consumer-only semantic rule. A rule that determines whether
 the Router can run belongs in Go first.
 
+### Startup and Kubernetes reconciliation
+
+The Router checks static global settings during every config load, including
+when `global.router.config_source` is `kubernetes`. Invalid cache, memory,
+embedding, classifier backend, learning, tool-filtering, and admission settings
+fail startup before runtime resources are created.
+
+File-based configuration also validates the complete routing graph at load
+time. Kubernetes defers routing contracts until `IntelligentPool` and
+`IntelligentRoute` have been merged. Reconciliation then rechecks global
+settings and validates routing references, recipe compatibility, and signal
+rules before activating the candidate. Invalid candidates report
+`ValidationFailed` on the CRDs and leave the active configuration in place.
+
+Validator registration and stage selection live together in
+`src/semantic-router/pkg/config/validator_dispatch.go`. Register a new global
+validator there so both startup and reconciliation execute it; only checks
+that require CRD routing state belong in the deferred routing groups. Keep
+each rule's implementation in its configuration family's validator.
+
 ## Agent authoring loop
 
 An automation or deployment agent should:
