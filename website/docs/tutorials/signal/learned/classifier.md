@@ -102,7 +102,7 @@ in `model_bindings`; this replaces the rule's `model` or `model_path` selector.
 Local and sequence rules support local sequence deployments or HTTP
 `http_classify`, while LLM rules retain their scored extraction instructions
 and require HTTP `http_chat`. All use `label_distribution.v1`, with the rule's
-ordered `labels` as the mapping. See [Models and bindings](../../../installation/runtime/models-and-bindings.md).
+ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process.md).
 
 The local path processes request text inside the Router. Both `llm` and
 `sequence_classifier` send that text to their configured external model, so

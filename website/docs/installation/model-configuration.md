@@ -93,8 +93,6 @@ Model Card identities, and backend-pool compatibility before startup.
 
 ## Configure models used by Router tasks
 
-The classifiers, safety models, and embeddings used by the Router have their
-own execution configuration. Use [Router Runtime](native-backends.md) to
-choose an engine and hardware, then [Models and bindings](runtime/models-and-bindings.md)
-to assign a deployment to a recipe. That section owns the local and external
-model examples, input limits, artifact provisioning, and lifecycle behavior.
+For classifiers, safety checks, and embeddings used inside the Router, start
+with [Router Runtime](native-backends.md). It covers in-process and external
+models, their configuration, and operations.

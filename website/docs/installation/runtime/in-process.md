@@ -1,25 +1,59 @@
 ---
-title: In-Process Inference
-description: Run Router classifiers and embeddings with owned local model instances.
+title: In-process models
+description: Choose local engines and hardware, configure a classifier, and run it.
 ---
 
-# In-process inference
+Run models inside the Router when you want local inference without another
+model service. Install the CLI and a matching image using the
+[installation guide](../installation.md).
 
-Use a local deployment when the Router should execute the model in its own
-process. Each task receives a prepared handle with a known input and output
-contract. Candle and ORT can coexist; choosing an engine does not replace the
-other binding for the whole process.
+## Choose an engine and model
 
-## Run a generic sequence classifier
+| Engine | Hardware | Model format |
+| --- | --- | --- |
+| Candle | CPU (`cpu`), NVIDIA (`cuda:0`), Apple Metal (`metal:0`) | Compatible checkpoint weights; `native` or `fp32` precision |
+| ONNX Runtime | CPU (`cpu`) | ONNX graph; `precision: native` |
+| ONNX Runtime with MIGraphX | AMD GPU (`migraphx:N`) | Compatible ONNX graph; `native` or `fp16` precision |
+| ML and NLP engines | CPU | Trained selectors or keyword-matching configuration |
 
-Provide a complete compatible sequence checkpoint at `models/email-classifier`.
-This example assumes its label order is `BENIGN`, `PHISHING`; use the actual
-labels of your trained model. A PEFT adapter directory alone is not a complete
-checkpoint. The local image must contain the Candle binding, and any enabled
-maintained default models must also be provisioned.
+Candle supports GPU index 0. BERT, merged BERT LoRA, and LoRA token models do
+not support Metal. ORT accepts CPU and MIGraphX devices; use Candle for the NVIDIA and Metal
+options above. The existing OpenVINO primary embedding integration remains a
+separate platform setup, without a deployment provider or cache/window API.
 
-Save this canonical configuration as `config.yaml`. Replace the downstream
-endpoint with your reachable answer model:
+| Model family | Supported uses |
+| --- | --- |
+| ModernBERT / mmBERT | Sequence and token classification; mmBERT text embeddings |
+| BERT and merged BERT LoRA | Sequence/token classification; BERT text embeddings |
+| DeBERTa | Sequence classification |
+| Task-specific hallucination and NLI models | Grounding and sentence-pair checks with Candle |
+| Qwen3 and Gemma embedding models | Text embeddings with Candle |
+| Compatible multimodal models | Their available text, image, and audio encoders |
+| MLP, KNN, K-means, SVM | Model selection from embedding features, on CPU |
+| BM25 and N-gram | Keyword matching, on CPU |
+| TextRank, TF-IDF, and heuristics | Prompt compression and rules in Go |
+
+ORT supports exported mmBERT classifiers and mmBERT or multimodal embedding
+graphs. Local classifiers accept at most **512 tokens**, including special
+tokens; embedding limits depend on the model. A classifier needs a head and
+labels trained for its task, such as domain, prompt guard, PII, fact-check,
+feedback, or output modality. Qwen3/Gemma embedding models do not provide a
+local generative classifier.
+
+For setup of other local features, see [Embeddings](embeddings.md),
+[Safety models](safety.md), [MLP selection](../../tutorials/algorithm/selection/mlp.md),
+and [Keyword signals](../../tutorials/signal/heuristic/keyword.md).
+
+## Configure a classifier
+
+The example below uses a custom email classifier on CPU. Before starting:
+
+- Put a complete compatible checkpoint at `models/email-classifier`.
+- Replace `BENIGN` and `PHISHING` with the checkpoint's labels, in their trained order.
+- Replace the answer model's endpoint with one the Router can reach.
+
+A **deployment** specifies the model files and engine. A **binding** connects
+that deployment to the `email-risk` classifier rule. Save this as `config.yaml`:
 
 ```yaml
 version: v0.3
@@ -74,124 +108,35 @@ global:
           overflow: reject
 ```
 
+## Start and test
+
 ```bash
 vllm-sr config validate --config config.yaml
-make vllm-sr-dev
-vllm-sr serve --config config.yaml --image-pull-policy never
+vllm-sr serve --config config.yaml
 curl -sS http://localhost:8899/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{"model":"auto","messages":[{"role":"user","content":"Review this email requesting a password reset."}]}'
 ```
 
-Validation checks the declaration; startup checks the real checkpoint, labels,
-and engine. Both matching and nonmatching requests use the configured answer
-model in this minimal example. The decision shows how to consume a model score;
-add your intended model selection or plugin action separately.
+The rule matches when the classifier's phishing score is at least 0.8. This
+example sends both matching and nonmatching requests to the same answer model;
+change the decision's model or plugins to apply your policy.
 
-## Select ORT for a compatible graph
+## Change the engine or model
 
-For an exported mmBERT sequence graph, replace only the deployment and adapter
-in that example:
+For an exported mmBERT ONNX model, change the deployment to `provider: ort`,
+point `artifact` at its complete ONNX directory, and set the binding's
+`adapter: mmbert` and `head: onnx/model.onnx`. Choose a device from the table above.
 
-```yaml
-global:
-  model_catalog:
-    deployments:
-      email-risk-cpu:
-        artifact: models/email-classifier-onnx
-        provider: ort
-        device: cpu
-        precision: native
-        input:
-          max_tokens: 512
-          overflow: reject
-routing:
-  model_bindings:
-    classifier.email-risk:
-      deployment: email-risk-cpu
-      contract: label_distribution.v1
-      adapter: mmbert
-      head: onnx/model.onnx
-```
+Custom model directories need no registry entry. Include the checkpoint or
+ONNX graph, tokenizer, configuration, labels, and any external tensor files.
+For LoRA models, supply complete merged weights rather than adapter deltas alone.
+Registered models are downloaded by the normal serve workflow. Pin `revision`
+and use a new directory when replacing a model that is already in use.
 
-The artifact must contain the graph's actual tokenizer/config and any external
-tensor files. For the owned AMD path, use `device: migraphx:0` in an image with
-the matching runtime libraries. `precision: fp16` is an explicit MIGraphX
-conversion request, not the default. See [Engines and hardware](engines-and-hardware.md).
+Bindings apply to one recipe. Put them in that recipe's `routing` block to
+change its model without changing other recipes. See the
+[configuration reference](../../api/configuration-schema.mdx) for all fields.
 
-MIGraphX classifiers execute at their fixed effective task budget, capped at
-512 tokens. Embeddings have a separate contract: owned MIGraphX mmBERT
-embeddings require an explicit positive `input.max_tokens`, which fixes their
-tensor length within the embedding model's own limit. Preparation warms every
-advertised ORT embedding layer before readiness. Use the complete
-[MIGraphX embedding example](embeddings.md#choose-a-local-model) rather than
-carrying the classifier's 512-token limit over to an embedding model.
-
-## Share an encoder only when it is actually shareable
-
-Candle's modern BERT family can load one headless backbone and bind compatible
-sequence or token heads. The head directory supplies its real head weights,
-config, and tokenizer metadata. The runtime validates compatibility and shares
-the physical encoder only when resource identity agrees. Different recipe
-handles have independent lifetimes and task interpretation.
-
-ORT heads are complete graphs. Two graphs are not treated as a shared encoder
-merely because they came from the same training run. Independent artifacts,
-devices, precision, or incompatible task options remain independent resources.
-
-Combined classification executes real task forwards for each input. It does
-not promise a joint forward or a vectorized cross-task batch. The legacy
-traditional “unified” placeholder is not a supported inference capability.
-
-## LoRA checkpoints
-
-The supported Router LoRA composition uses complete merged BERT or modern
-BERT-family checkpoints for its sequence/token tasks. BERT uses its merged
-`bert_lora` adapter path. Unknown architectures and unmerged adapter-delta
-artifacts fail capability checks; a directory name containing “merged” does
-not establish its file format.
-
-The low-level Qwen multi-LoRA implementation reports that loaded adapter
-deltas are not applied by its forward path. It is not registered as a Router
-local model-binding task. Do not use that API or a PEFT-only directory as
-proof that a fine-tuned Router classifier is executing. See the
-[training guide](../../training/mmbert-safety-classifier.md) for checkpoint
-preparation and validation.
-
-## ML selectors and NLP
-
-KNN, K-means, SVM, and MLP consume embedding features under the existing
-`global.router.model_selection.ml` configuration and decision algorithm.
-They do not use classifier deployment bindings. A trained selector must use
-the same feature space as the runtime embedding provider.
-
-The MLP selector loads a pretrained JSON artifact from
-`global.router.model_selection.ml.mlp.pretrained_path`. Router construction
-currently uses CPU even though a low-level GPU constructor and a `device`
-configuration field exist. Changing that field does not enable GPU execution.
-For a trained 768-dimensional selector, its global settings are:
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        models_path: models/model-selection
-        embedding_dim: 768
-        mlp:
-          pretrained_path: models/model-selection/mlp_model.json
-```
-
-Select `algorithm: {type: mlp}` on the consuming decision and supply eligible
-model references and a matching embedding provider. The
-[MLP guide](../../tutorials/algorithm/selection/mlp.md) covers training and
-candidate selection.
-
-BM25 and N-gram keyword matching use owned `nlp-binding` handles on CPU.
-Their relevance scores retain their own units. Prompt compression combines
-classical TextRank, position, TF-IDF, and novelty scoring in Go; its estimated
-token budget does not expand a native classifier's real tokenizer limit.
-Keyword heuristics and compression retain their existing signals/modules; they
-are not automatically converted into transformer deployments. See
-[Keyword signals](../../tutorials/signal/heuristic/keyword.md) and
-[Model selection](../../tutorials/algorithm/overview.md).
+For a source build, use `make vllm-sr-dev`, then add
+`--image-pull-policy never` to the serve command.

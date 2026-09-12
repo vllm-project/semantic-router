@@ -157,6 +157,14 @@ const config: Config = {
       {
         redirects: [
           {
+            from: '/docs/installation/runtime/engines-and-hardware',
+            to: '/docs/installation/runtime/in-process',
+          },
+          {
+            from: '/docs/installation/runtime/models-and-bindings',
+            to: '/docs/installation/runtime/in-process',
+          },
+          {
             from: '/docs/tutorials/global/safety-models-and-policy',
             to: '/docs/installation/runtime/safety',
           },

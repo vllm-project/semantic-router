@@ -1,23 +1,21 @@
 ---
-title: Safety Models
-description: Configure safety inference and preserve the distinction between model evidence and policy actions.
+title: Safety models
+description: Configure prompt guard, PII, and hallucination checks and choose how to handle failures.
 ---
 
-# Safety models
+Safety models detect risks; routing decisions and plugins determine the action.
+Enabling a model alone does not block or redact a request.
 
-Safety inference produces evidence for signals and plugins. Decisions determine
-what to do with it. Deployments select execution; module and route settings
-retain thresholds, matching, and failure policy.
-
-Identity, authorization, and rate limits are shared services rather than model
-runtime tasks. Configure those through [Security hardening](../security-hardening.md)
-and [Authorization signals](../../tutorials/signal/heuristic/authz.md).
+| Check | What it detects | Configure the action |
+| --- | --- | --- |
+| Prompt guard | Prompt injection and jailbreaks | [Jailbreak signals](../../tutorials/signal/learned/jailbreak.md) |
+| PII | Personal information in text | [PII signals](../../tutorials/signal/learned/pii.md) |
+| Hallucination | Answer claims unsupported by supplied context | [Hallucination plugin](../../tutorials/plugin/hallucination.md) |
+| Fact-check | Whether a request needs factual verification | [Fact-check signals](../../tutorials/signal/learned/fact-check.md) |
 
 ## Prompt guard
 
-The maintained local default uses the `mmbert32k` variant. Its Router task
-still has a 512-token maximum. Merge this module fragment when the selected
-checkpoint and mapping are available:
+To enable the maintained local guard, merge this into your configuration:
 
 ```yaml
 global:
@@ -30,58 +28,28 @@ global:
         on_error: block
 ```
 
-Use a recipe's `prompt_guard` binding to select a different supported local
-model or the [named external guard](external.md#bind-a-named-guardrail-service).
-A binding does not create the consuming jailbreak rule or blocking plugin.
-Configure that policy in the recipe.
-
-Sequence guards preserve the model's complete label distribution and the
-configured positive labels. Chat guards preserve their categorical decision.
-A returned “unsafe” verdict does not imply confidence `1.0`; an unreported
-score remains unavailable. Negative labels are matched explicitly, so the
-word `unsafe` is not accidentally treated as containing a safe verdict.
-
-## Classifier failure is not a model score
-
-A failed or invalid guardrail inference records a signal error and evaluates
-to `Unknown`. A consuming decision's root `rules.on_unknown` resolves it as
-`no_match`, `match`, or `fail_request`. A global `fail_request` resolution
-rejects the request even if another decision matches.
-
-When that root policy is absent, the existing `prompt_guard.on_error` applies:
-`allow` maps the failure to no match; `block` maps it to a policy match. The
-failure itself has **no probability**. Diagnostics retain
-`signal_error_matches`; unavailable confidence is JSON `null` with its
-availability flag false. Consumers must not convert it to zero or one.
-
-A request is blocked only if its consuming decision acts on that result.
-For response scanning, the `response_jailbreak` plugin's action remains
-`block`, `header`, or `none`. Generic classifier condition-level `on_error`
-is a separate compatibility policy; see
-[Classifier signals](../../tutorials/signal/learned/classifier.md).
+Then add the jailbreak signal and decision that should handle a match. To use
+a separately hosted model, follow [External services](external.md).
+The recipe's `prompt_guard` binding selects the model; the threshold and
+routing policy remain in their existing settings.
 
 ## PII
 
-`pii_classifier` uses `token_spans.v1`, with labels mapped to configured PII
-types. Local token adapters retain real scores, BIO entity boundaries, UTF-8
-byte offsets, and input/truncation metadata. The PII consumer excludes outside
-labels before applying its configured thresholds. It does not fabricate a
-score for an unscored entity.
+Use a complete token-classification checkpoint with the matching PII label map.
+Select it through the recipe's `pii_classifier` binding with
+`contract: token_spans.v1`. Set its deployment and adapter as in
+[In-process models](in-process.md), and provide the checkpoint's
+`mapping_path`. The [PII guide](../../tutorials/signal/learned/pii.md) covers
+entity thresholds and redaction.
 
-Remote PII must implement the [span protocol](external.md#pii-spans-and-grounding-inputs).
-A malformed or partial result is not equivalent to an empty complete scan.
-Use a complete compatible token checkpoint and mapping, such as the explicit
-[PII binding example](models-and-bindings.md#declare-one-local-deployment).
-Keep PII actions and response redaction in their consuming recipe/plugin.
+External PII services must return scored entities and valid Unicode text
+positions. An invalid response is an error, not an empty successful scan.
 
-## Grounding and NLI
+## Hallucination detection
 
-The local hallucination detector takes **context, question, and answer**.
-It preserves the answer portion of its supported input window and returns
-answer-relative hallucination spans. The separate NLI explainer takes a
-**premise and hypothesis**, preserves the hypothesis, and returns the
-entailment/neutral/contradiction distribution. These are not ordinary
-single-text token and sequence requests.
+The local detector checks an answer against its context and question. An
+optional NLI explainer checks whether a premise supports a hypothesis.
+Enable the maintained models with:
 
 ```yaml
 global:
@@ -98,43 +66,24 @@ global:
           threshold: 0.9
 ```
 
-The system aliases resolve to their catalog artifacts unless a recipe binding
-overrides them. Both dedicated local tasks currently use Candle; ORT and
-HTTP NLI are not implemented. Native classification input is bounded by the
-actual task limit and at most 512 tokens, including its paired/structured
-preprocessing.
+These local models use Candle. A remote chat service can replace the detector;
+NLI still requires a supported local explainer. Configure how context is
+supplied and how detected spans are handled in the
+[hallucination guide](../../tutorials/plugin/hallucination.md).
 
-The external hallucination detector uses its existing `backend: endpoint`
-settings or an HTTP deployment binding with `adapter: http_chat`. It does not
-supply a local NLI explainer. Chat-derived spans retain unavailable confidence;
-an explanation string is not a scored entailment result. Route features that
-require NLI must have an actual supported explainer or follow their configured
-failure policy.
+## Handle failures and missing scores
 
-## Fact-check, feedback, and modality
+A model error produces an unknown result. The decision's `rules.on_unknown`
+chooses `no_match`, `match`, or `fail_request`. Without that setting, prompt
+guard uses `on_error`: `allow` means no match, while `block` means a policy match.
+The consuming decision still determines the resulting action.
 
-Fact-check and feedback are sequence tasks with their own declared mappings.
-Their empty-input policy defaults retain the established label and expose
-`policy_default: empty_text`, `confidence: null`, and
-`confidence_available: false`. Disabled or unavailable inference also does
-not supply a model probability.
+A chat verdict or policy fallback may have no confidence score. Diagnostics
+show `confidence: null` with `confidence_available: false`; this is different
+from a model score of zero. Test both model matches and service failures when
+setting the policy.
 
-The output-modality task classifies `AR`, `DIFFUSION`, or `BOTH`. Its optional
-keyword/hybrid decision rules remain consumer policy. Image/audio embedding
-capability is a separate feature of an embedding checkpoint; an output-modality
-classifier does not imply that capability.
+For custom safety checkpoints, see the
+[training and export guide](../../training/mmbert-safety-classifier.md).
 
-## Choose and validate artifacts
-
-Keep model files, label order, thresholds, and intended data domain together
-when changing a safety model. A model or directory name is not evidence that
-a checkpoint is merged or that its labels match a task. Custom complete local
-artifacts do not require registry registration, but preparation still checks
-actual architecture, tensors, tokenizer, and labels.
-
-The [mmBERT safety training guide](../../training/mmbert-safety-classifier.md)
-covers training and export. Newly trained models and unmerged adapters are not
-automatically installed or certified by this runtime. Use a generic classifier
-for a compatible separately trained label head; do not assume a new built-in
-`safety.<name>` binding exists. Verify representative positive, negative,
-Unicode, boundary-length, and failure cases before changing production policy.
+For access control and rate limits, see [Security hardening](../security-hardening.md).

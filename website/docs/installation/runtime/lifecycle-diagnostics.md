@@ -1,153 +1,92 @@
 ---
-title: Lifecycle and Diagnostics
-description: Prepare, admit, inspect, reload, and close Router model generations safely.
+title: Operations and troubleshooting
+description: Check readiness, limit model concurrency, and update running models.
 ---
 
-# Lifecycle and diagnostics
+Use these checks after configuring an [in-process model](in-process.md) or
+[external service](external.md).
 
-The Router publishes a configuration only after its required models and
-consumers prepare successfully. Requests keep the generation they acquired;
-a failed candidate leaves the previous generation available.
+## Check startup
 
-## Preparation and resource ownership
+```bash
+vllm-sr config validate --config config.yaml
+vllm-sr serve --config config.yaml
+curl -fsS http://localhost:8080/startup-status
+```
 
-Preparation resolves default API consumers and reachable recipes, projects
-each recipe's explicit model bindings, provisions their required artifacts,
-then opens typed task handles. It validates actual architecture, graph/head,
-label order, input limits, dimensions, layers, and modalities. Unreachable
-module defaults are not substitute models for an overridden consumer.
+Validation checks the configuration. Startup then loads or connects the models
+and checks the capabilities needed by enabled features. GPU kernel compilation
+can make the first startup slower than later requests.
 
-Owned MIGraphX sequence/token classifiers use a fixed tensor length equal to
-their effective task budget: at most 512 tokens, including special tokens,
-and smaller when the model or deployment requires it. Short inputs are padded
-with the tokenizer's pad ID and an attention mask; reported input usage and
-token spans describe the real input, not padding. This bounds the classifier's
-execution shape without increasing its accepted context length.
+| Problem | What to check |
+| --- | --- |
+| Model cannot load | Complete checkpoint or ONNX files, tokenizer, labels, and mounted paths |
+| Engine or device unavailable | Image and host match the selected CPU/GPU runtime |
+| Label mismatch | Checkpoint label order and the rule's labels or mapping file |
+| Unsupported embedding layer or dimension | Export the requested layer and match the consumer or stored index |
+| Remote inference fails | Endpoint, credentials, timeout, response format, and response-size limit |
+| Confidence is `null` | The result has no model score; see [Safety models](safety.md#handle-failures-and-missing-scores) |
 
-Preparation runs a real classifier warmup before publishing the candidate.
-MIGraphX can compile kernels during that first forward, so a cold preparation
-can take substantially longer than subsequent inference. Keep this compilation
-in startup/reload readiness checks; a warmup failure leaves the previous
-generation available. The maintained ROCm images establish their
-[compiler policy](engines-and-hardware.md#deployment-device-and-precision-matrix)
-at process startup and do not mutate it between model instances.
+## AMD startup problems
 
-Resource sharing follows actual execution identity. Compatible Candle modern
-heads can share their encoder; independent ORT graphs are complete resources.
-The pool owns shared native resources. Bindings own their task handles and
-HTTP connectors; external model processes remain owned by their services.
-Remote bindings share an admission reservation for the same operation, not
-necessarily one connector object. Consumers own or borrow their task views. A final resource close waits for admitted native work to finish.
-Cancellation can end the caller's wait without pretending a synchronous native
-kernel has stopped or unloading the memory it still uses.
+Use the maintained ROCm image so ORT and MIGraphX libraries match. It includes
+ORT 1.22.1 / MIGraphX 2.13 and sets `MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention`.
+Keep that setting with this image; it disables MLIR attention fusion.
 
-## Bound capacity
+| Error or symptom | Action |
+| --- | --- |
+| `IsNaN` unsupported in the SDPA graph | Use the compatible standard `onnx/model.onnx` graph |
+| Missing GPU embedding budget | Set a positive deployment `input.max_tokens`; see [Embeddings](embeddings.md#amd-gpu) |
+| Model fails during GPU preparation | Check the graph and vendor libraries; requested GPU execution does not fall back to CPU |
+| Unexpectedly slow first startup | Allow time for compilation and warmup of every requested embedding layer |
 
-Admission can be keyed by a named deployment or an existing system model key:
+Unset these process variables and configure precision in the deployment instead:
+
+```text
+ORT_MIGRAPHX_FP16_ENABLE
+ORT_MIGRAPHX_BF16_ENABLE
+ORT_MIGRAPHX_FP8_ENABLE
+ORT_MIGRAPHX_INT8_ENABLE
+ORT_MIGRAPHX_MODEL_CACHE_PATH
+```
+
+Any nonempty value, including `0`, is rejected because it can override the
+configured precision or compiled model. The maintained images leave them unset.
+
+## Limit concurrent inference
+
+For the `email-risk-cpu` deployment in [In-process models](in-process.md),
+this allows two calls and a queue of eight, with a one-second queue timeout:
 
 ```yaml
 global:
   model_catalog:
     admission:
-      local-pii:
+      email-risk-cpu:
         max_concurrency: 2
         max_queue: 8
         queue_timeout_ms: 1000
         on_overflow: shed
 ```
 
-Declare `local-pii` as a deployment as shown in
-[Models and bindings](models-and-bindings.md#declare-one-local-deployment).
-Omitting admission retains the existing ungated behavior. `shed` rejects excess
-work; `wait` waits for queue capacity and requires a nonzero queue bound;
-`fail_open` bypasses the gate when full. Use the policy that matches the
-consumer's failure handling. Shared physical resources also share capacity;
-renaming a deployment does not create another copy of an HTTP endpoint.
+`shed` rejects excess work, `wait` waits for a queue slot, and `fail_open`
+bypasses the limit when full. `wait` requires a nonzero queue size. Omit the
+admission setting for unbounded admission. Uses of the same shared model also
+share its capacity; request deadlines include queue time.
 
-A deadline covers queue wait and execution as one operation. Queue expiration,
-request cancellation, unavailable capabilities, invalid outputs, and native
-errors remain typed failures. They do not become successful zero scores.
+## Update a running model
 
-## Reload and rollback
+Put a replacement model revision in a new directory, update its configuration,
+then reload through the Dashboard or your existing management workflow.
+The Router prepares the replacement before activating it. Failed preparation
+leaves the current configuration running; existing requests finish before
+old model resources are released.
 
-A reload prepares the candidate before switching the current generation.
-Existing requests drain on their prior generation; new requests acquire the
-published one. A failed model load, label mismatch, unsupported layer/device,
-or capability error rolls back the candidate's owned resources.
+A Dashboard change may be saved but still pending. For updates that return
+`202`, poll `GET /api/router/api/v1/config/hash` through the Dashboard and wait
+for `active_runtime_hash` to equal the update's `generated_runtime_hash`.
+A competing change returns `409` while the first update is pending.
 
-Keep pinned model revisions in distinct artifact directories. Standard cache
-metadata must agree with the requested revision before a populated directory
-can be reused. A reload cannot overwrite files still used by an active or
-retired generation. See [Artifact provisioning](models-and-bindings.md#provision-model-files).
-
-Management updates can be **saved but pending** while preparation runs. KB
-writes return `202` when that whole-generation publication is pending; poll
-`GET /api/router/api/v1/config/hash` through the Dashboard proxy and compare the exact
-`generated_runtime_hash` from the mutation with `active_runtime_hash` before reporting activation. A second mutation while the source is
-pending returns `409` without replacing the first candidate.
-
-KB document updates write a new asset version so the old generation can still
-read its complete labels/documents. Deletion removes the candidate's config
-reference rather than deleting a live generation's asset. Old asset versions
-are currently retained; this change does not introduce automatic storage GC.
-The [API contract](../../api/apiserver.md) defines the mutation responses.
-
-## Read scores honestly
-
-Distributions retain every declared label and their original score meaning.
-Token spans retain actual scores and Unicode offsets. A categorical guard
-verdict, an error-policy match, a disabled model, or an empty-input policy
-default does not acquire a confidence merely because an API has such a field.
-
-Intent/decision diagnostics use nullable confidence and explicit availability;
-unavailable probability maps are omitted. The intent API's `probabilities`
-is currently a signal summary containing only the selected category and its
-score, not the full model vector. Validate complete distributions through the
-typed model result. Replay carries the corresponding
-availability flags. Error-policy matches remain visible through
-`signal_error_matches`. Display “score unavailable” rather than replacing
-`null` with zero or one. Fact-check/feedback empty-text policy defaults are
-identified separately by `policy_default: empty_text`.
-
-## Validate a deployment
-
-```bash
-vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml --image-pull-policy never
-curl -fsS http://localhost:8080/startup-status
-```
-
-Validation checks the canonical declaration. Preparation proves that the
-configured image and files can produce the required task handles. Diagnostic
-requests prove actual execution for those inputs. For GPU claims, retain the
-execution-provider profile and verify that the required work did not fall back
-to CPU. Keep model/runtime revisions alongside output tolerances and examples.
-
-Test model changes with normal and boundary inputs, Unicode spans, unavailable
-scores, malformed remote responses, admission saturation, and reload while
-requests are active. Compare complete distributions or vectors, not only a
-top label. Persistent indexes also need compatibility checks after an embedding
-change.
-
-## Native regression checks
-
-From a configured source checkout:
-
-```bash
-make test-rust-ci
-make test-owned-native CI=true
-```
-
-`test-rust-ci` includes the owned Candle instance tests and the early-layer
-normalization tensor check. `test-owned-native` builds Candle and ORT and runs
-real tiny ONNX instance tests with Go's race detector plus native classification
-assembly tests for mapping rollback, two local rules, and projected startup.
-It also checks the ROCm image default with implicit ORT and explicit Candle
-forwards in one process, plus the matching model-download format contract.
-Set `ORT_DYLIB_PATH` to an installed compatible runtime; otherwise the harness
-installs the official CPU `onnxruntime==1.22.0` wheel in its environment.
-
-The regular `make test` CI path includes these checks, and
-`test-binding-minimal` includes the owned-native binding tests. Tiny fixtures
-verify ownership and contracts; they do not replace maintained-checkpoint
-parity, GPU execution profiles, or sustained local `vllm-sr serve` reload tests.
+Knowledge-base updates keep old asset versions for active readers. Old versions
+are retained on disk; automatic removal is not provided. See the
+[management API reference](../../api/apiserver.md) for request and response details.

@@ -363,14 +363,24 @@ const sidebars: SidebarsConfig = {
         {
           type: 'category',
           label: 'Router Runtime',
+          link: { type: 'doc', id: 'installation/native-backends' },
           items: [
-            'installation/native-backends',
-            'installation/runtime/engines-and-hardware',
-            'installation/runtime/models-and-bindings',
-            'installation/runtime/in-process',
-            'installation/runtime/external',
-            'installation/runtime/safety',
-            'installation/runtime/embeddings',
+            {
+              type: 'category',
+              label: 'Run models',
+              items: [
+                'installation/runtime/in-process',
+                'installation/runtime/external',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Model guides',
+              items: [
+                'installation/runtime/embeddings',
+                'installation/runtime/safety',
+              ],
+            },
             'installation/runtime/lifecycle-diagnostics',
           ],
         },
