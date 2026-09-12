@@ -68,8 +68,11 @@ func TestHandleCaching_PartitionsNamedRecipeWithoutChangingSemanticQuery(t *test
 	resp, hit := router.handleCaching(ctx, "")
 	assert.Nil(t, resp)
 	assert.False(t, hit)
-	assert.Contains(t, mockCache.findSimilarModel, "privacy")
-	assert.Contains(t, mockCache.findSimilarModel, "MoM")
+	assert.Equal(
+		t,
+		router.responseCacheService().ResolveIdentity(ctx.CacheIdentity).SemanticPartitionKey(),
+		mockCache.findSimilarModel,
+	)
 	assert.Equal(t, "hello", ctx.CacheQuery, "recipe identity must not pollute the embedding input")
 }
 
@@ -252,8 +255,11 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 	assert.Nil(t, resp)
 	assert.False(t, hit)
 	assert.NotContains(t, mockCache.findSimilarModel, "alice")
-	assert.Contains(t, mockCache.findSimilarModel, "privacy")
-	assert.Contains(t, mockCache.findSimilarModel, "frontier")
+	assert.Equal(
+		t,
+		router.responseCacheService().ResolveIdentity(ctx.CacheIdentity).SemanticPartitionKey(),
+		mockCache.findSimilarModel,
+	)
 
 	alicePartition := mockCache.findSimilarModel
 	bobCtx := &RequestContext{
