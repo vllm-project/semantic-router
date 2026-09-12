@@ -14,17 +14,24 @@ type fusionJudgeOutcome struct {
 	iterations       int
 }
 
+// firstJudgeOrdinal is the call ordinal the first judge stage takes. It
+// continues the sequence the panel dispatched, so no stage derives a number
+// from panelResponses: that slice is the usable, grounding-filtered panel and
+// is smaller than the attempt count whenever a reply was unusable or filtered.
 func (l *FusionLooper) runFusionJudgeStages(
 	ctx context.Context,
 	req *Request,
 	cfg fusionExecutionConfig,
 	panelResponses []*ModelResponse,
 	groundingScores []groundingScore,
+	firstJudgeOrdinal int,
 ) (fusionJudgeOutcome, error) {
 	switch cfg.AnalysisMode {
 	case config.FusionAnalysisModeSeparate:
-		analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, panelResponses, groundingScores)
-		finalResp, err := l.runFusionFinal(ctx, req, cfg, panelResponses, analysis, groundingScores)
+		analysis, analysisResp := l.runFusionAnalysis(
+			ctx, req, cfg, panelResponses, groundingScores, firstJudgeOrdinal)
+		finalResp, err := l.runFusionFinal(
+			ctx, req, cfg, panelResponses, analysis, groundingScores, firstJudgeOrdinal+1)
 		return fusionJudgeOutcome{
 			analysis:         analysis,
 			analysisResponse: analysisResp,
@@ -32,7 +39,8 @@ func (l *FusionLooper) runFusionJudgeStages(
 			iterations:       2,
 		}, err
 	case config.FusionAnalysisModeOneCall, config.FusionAnalysisModeNone:
-		finalResp, err := l.runFusionSingleJudge(ctx, req, cfg, panelResponses, groundingScores)
+		finalResp, err := l.runFusionSingleJudge(
+			ctx, req, cfg, panelResponses, groundingScores, firstJudgeOrdinal)
 		return fusionJudgeOutcome{finalResponse: finalResp, iterations: 1}, err
 	default:
 		return fusionJudgeOutcome{}, fmt.Errorf("unsupported fusion analysis_mode %q", cfg.AnalysisMode)
@@ -45,6 +53,7 @@ func (l *FusionLooper) runFusionSingleJudge(
 	cfg fusionExecutionConfig,
 	panelResponses []*ModelResponse,
 	groundingScores []groundingScore,
+	callOrdinal int,
 ) (*ModelResponse, error) {
 	original := extractOriginalContent(req.OriginalRequest)
 	outputContract := requestOutputContract(req.OriginalRequest, req.OutputContract)
@@ -61,7 +70,7 @@ func (l *FusionLooper) runFusionSingleJudge(
 		cfg.Model,
 		true,
 		false,
-		len(panelResponses)+1,
+		callOrdinal,
 		config.FusionModelOverride{},
 	)
 	if err != nil {

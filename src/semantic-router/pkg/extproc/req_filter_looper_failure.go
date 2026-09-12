@@ -34,7 +34,7 @@ type looperFailureEvidence struct {
 	iterations     int
 	usage          looper.TokenUsage
 	executionTrace looper.ExecutionTrace
-	fusionQuorum   *routerreplay.FusionQuorumDiagnostics
+	fusionQuorum   *looper.FusionQuorumOutcome
 }
 
 func (r *OpenAIRouter) looperExecutionErrorResponse(
@@ -56,6 +56,11 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 		evidence.addLogFields(failureFields)
 		evidenceArgs = append(evidenceArgs, evidence)
 	}
+
+	// Terminal below-quorum outcomes are counted here rather than in the
+	// algorithm layer, so a single recorder owns every quorum sample. The
+	// disposition is already terminal on this path, so nothing is promoted.
+	finalizeLooperQuorumOutcome(reqCtx, evidence.fusionQuorum, decision, false)
 
 	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
 	return r.recordLooperFailure(
@@ -79,20 +84,44 @@ func looperFailureEvidenceFromError(err error) (looperFailureEvidence, bool) {
 			executionTrace: evidence.ExecutionTrace,
 		}, true
 	}
-	if evidence, ok := looper.FusionQuorumEvidenceFromError(err); ok {
+	if outcome, ok := looper.FusionQuorumOutcomeFromError(err); ok {
+		evidence, _ := looper.FusionQuorumEvidenceFromError(err)
 		return looperFailureEvidence{
 			algorithm:    config.DecisionAlgorithmFusion,
 			usage:        evidence.Usage,
-			fusionQuorum: fusionQuorumDiagnostics(evidence),
+			fusionQuorum: outcome,
 		}, true
 	}
 	return looperFailureEvidence{}, false
 }
 
-func fusionQuorumDiagnostics(evidence looper.FusionQuorumEvidence) *routerreplay.FusionQuorumDiagnostics {
-	attempts := make([]routerreplay.FusionPanelAttemptDiagnostics, len(evidence.Attempts))
-	for index, attempt := range evidence.Attempts {
-		attempts[index] = routerreplay.FusionPanelAttemptDiagnostics{
+// looperQuorumOutcomeDiagnostics builds the Replay projection for a finalized
+// quorum outcome. Both the served-fallback and terminal-failure paths reach it
+// with the same type, so every path persists the same bounded evidence. The
+// outcome type already excludes provider error text, so nothing is stripped
+// here.
+func looperQuorumOutcomeDiagnostics(
+	outcome *looper.FusionQuorumOutcome,
+) *routerreplay.FusionQuorumDiagnostics {
+	if outcome == nil {
+		return nil
+	}
+	return &routerreplay.FusionQuorumDiagnostics{
+		RequiredCount:  outcome.RequiredCount,
+		UsableCount:    outcome.UsableCount,
+		SelectedPolicy: outcome.SelectedPolicy,
+		FallbackTarget: outcome.FallbackTarget,
+		Disposition:    string(outcome.Disposition),
+		Attempts:       fusionQuorumOutcomeDiagnostics(outcome.Attempts),
+	}
+}
+
+func fusionQuorumOutcomeDiagnostics(
+	attempts []looper.FusionQuorumAttemptOutcome,
+) []routerreplay.FusionPanelAttemptDiagnostics {
+	diagnostics := make([]routerreplay.FusionPanelAttemptDiagnostics, len(attempts))
+	for index, attempt := range attempts {
+		diagnostics[index] = routerreplay.FusionPanelAttemptDiagnostics{
 			Model:            attempt.Model,
 			State:            string(attempt.State),
 			PromptTokens:     attempt.Usage.PromptTokens,
@@ -100,11 +129,7 @@ func fusionQuorumDiagnostics(evidence looper.FusionQuorumEvidence) *routerreplay
 			TotalTokens:      attempt.Usage.TotalTokens,
 		}
 	}
-	return &routerreplay.FusionQuorumDiagnostics{
-		RequiredCount: evidence.RequiredCount,
-		UsableCount:   evidence.UsableCount,
-		Attempts:      attempts,
-	}
+	return diagnostics
 }
 
 func (evidence looperFailureEvidence) addLogFields(fields map[string]interface{}) {
@@ -116,7 +141,7 @@ func (evidence looperFailureEvidence) addLogFields(fields map[string]interface{}
 		fields["iterations"] = evidence.iterations
 	}
 	if evidence.fusionQuorum != nil {
-		fields["fusion_quorum"] = evidence.fusionQuorum
+		fields["fusion_quorum"] = looperQuorumOutcomeDiagnostics(evidence.fusionQuorum)
 	}
 }
 
@@ -175,6 +200,5 @@ func applyLooperFailureEvidence(ctx *RequestContext, evidence looperFailureEvide
 			evidence.fusionQuorum.UsableCount,
 			evidence.fusionQuorum.RequiredCount,
 		))
-		ctx.VSRFusionQuorum = evidence.fusionQuorum
 	}
 }

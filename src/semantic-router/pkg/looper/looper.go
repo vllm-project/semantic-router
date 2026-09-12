@@ -113,6 +113,12 @@ type Response struct {
 	// (extproc, dashboard, metrics) can read totals without re-parsing the body.
 	Usage TokenUsage `json:"usage,omitempty"`
 
+	// QuorumOutcome is set when a Fusion panel ended below its usable-response
+	// quorum and a policy decided what to serve. It lets callers record the
+	// decision in Replay and metrics on the success path, where no error carries
+	// the evidence.
+	QuorumOutcome *FusionQuorumOutcome `json:"-"`
+
 	// LatencyMs is the wall-clock latency, in milliseconds, of the full
 	// looper execution (all model calls plus algorithm overhead). It is set
 	// by ExecuteWithLatency rather than by individual Looper implementations,

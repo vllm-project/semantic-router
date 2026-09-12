@@ -109,6 +109,12 @@ type RouterConfig struct {
 	// validation requests, which must never trigger filesystem reads.
 	SkipExternalAssetValidation bool `yaml:"-" json:"-"`
 
+	// RoutingFragmentOnly marks a config parsed from a routing-only document,
+	// which carries no provider or global state. Validation that depends on
+	// providers is skipped for these so DSL fragments stay decompilable, while
+	// complete configs still get the full contract.
+	RoutingFragmentOnly bool `yaml:"-" json:"-"`
+
 	// Static global configuration.
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`

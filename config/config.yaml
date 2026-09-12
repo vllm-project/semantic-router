@@ -1080,6 +1080,13 @@ routing:
           include_analysis: true
           include_intermediate_responses: true
           on_error: skip
+          # Panel-level policy when usable responses fall below
+          # min_successful_responses: fail (typed error) or fallback (route to
+          # quorum_fallback_target). Independent of on_error, which governs one
+          # failed panel attempt. Recipe-owned; requests cannot override it.
+          # quorum_fallback_target is required by, and only valid with, fallback.
+          quorum_failure_policy: fail
+          quorum_fallback_target: ""
           analysis_template: ""
           synthesis_template: ""
           judge_prompt_version: fusion-v1
