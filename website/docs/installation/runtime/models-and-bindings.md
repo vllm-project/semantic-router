@@ -71,7 +71,7 @@ request. The [external guide](external.md) shows a named HTTP deployment.
 | `external_model` | Exact `external[].name`; required for HTTP, mutually exclusive with `artifact` |
 | `provider` | `candle`, `ort`, or `http` |
 | `device`, `precision` | Local execution request; omit for HTTP |
-| `input.max_tokens` | Additional token budget; zero/omitted retains the task/model limit |
+| `input.max_tokens` | Additional token budget; zero/omitted retains the task/model limit except for owned MIGraphX mmBERT embeddings, which require a positive explicit budget |
 | `input.overflow` | Requested `reject`, `truncate`, or `window`; the adapter must implement it |
 | `contract` | Required result shape for the bound consumer |
 | `adapter` | Native architecture adapter or external wire protocol |

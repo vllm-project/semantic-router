@@ -11,8 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
-	"strings"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
 	ort "github.com/vllm-project/semantic-router/onnx-binding/instance"
@@ -212,7 +210,7 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 				return infoErr
 			}
 			if engine.ort != nil {
-				layers = ortEmbeddingLayers(info, options.ModelPath)
+				layers = append([]int(nil), info.AvailableLayers...)
 			}
 			capability.Embedding = &binding.EmbeddingCapability{Layer: layer, Pooling: "graph_defined", Normalization: "l2", Modalities: []string{"text"}}
 			if engine.multi != nil {
@@ -228,6 +226,26 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 			return fmt.Errorf("%w: %w", binding.ErrInvalidResult, warmErr)
 		}
 		capability.Embedding.Dimension = len(warm.Embedding)
+		// Each advertised ORT exit is a separate graph. Prepare its real output
+		// before publishing, including any provider compilation for that layer.
+		if engine.ort != nil {
+			for _, exit := range layers {
+				if exit == layer {
+					continue
+				}
+				request.Options.Layer = exit
+				output, exitErr := engine.embed(request.Text, request.Options)
+				if exitErr != nil {
+					return fmt.Errorf("prepare embedding layer %d: %w", exit, exitErr)
+				}
+				if exitErr = validateEmbeddingResult(request, output); exitErr != nil {
+					return fmt.Errorf("%w: embedding layer %d: %w", binding.ErrInvalidResult, exit, exitErr)
+				}
+				if len(output.Embedding) != capability.Embedding.Dimension {
+					return fmt.Errorf("%w: embedding layer %d has a different output dimension", binding.ErrInvalidResult, exit)
+				}
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -477,39 +495,6 @@ func candleEmbeddingLayers(modelPath string) []int {
 	for _, layer := range config.MmBertAvailableLayers(modelPath) {
 		if layer > 0 && layer <= architecture.Layers {
 			seen[layer] = true
-		}
-	}
-	layers := make([]int, 0, len(seen))
-	for layer := range seen {
-		layers = append(layers, layer)
-	}
-	sort.Ints(layers)
-	return layers
-}
-
-// Only loaded ORT exit sessions are exposed. An artifact manifest can describe
-// additional graphs that are not present in this prepared execution.
-func ortEmbeddingLayers(info ort.Info, modelPath string) []int {
-	seen := map[int]bool{}
-	for _, session := range info.Sessions {
-		hasExit := false
-		for _, component := range strings.Split(filepath.ToSlash(session.Graph), "/") {
-			if strings.HasPrefix(component, "layer-") {
-				layer, err := strconv.Atoi(strings.TrimPrefix(component, "layer-"))
-				if err == nil && layer > 0 {
-					seen[layer] = true
-					hasExit = true
-				}
-			}
-		}
-		if !hasExit {
-			data, err := os.ReadFile(filepath.Join(modelPath, "config.json"))
-			var architecture struct {
-				Layers int `json:"num_hidden_layers"`
-			}
-			if err == nil && json.Unmarshal(data, &architecture) == nil && architecture.Layers > 0 {
-				seen[architecture.Layers] = true
-			}
 		}
 	}
 	layers := make([]int, 0, len(seen))

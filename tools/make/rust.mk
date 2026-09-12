@@ -147,6 +147,8 @@ test-owned-native: $(if $(CI),rust-ci,rust) harness-venv-install ## Test owned n
 	cd ../src/semantic-router; \
 	CORE_NATIVE_FIXTURES=1 CGO_ENABLED=1 go test -race -count=1 ./pkg/classification \
 		-run '^(TestNativeMappingCandidateKeepsPreviousModel|TestTwoLocalRulesOwnNativeModelsInOneRecipe|TestLegacyStartupUsesProjectedNativeMapping)$$'; \
+	CGO_ENABLED=1 go test -race -count=1 ./pkg/modelruntime/native \
+		-run '^TestORTEmbeddingPreparesEveryAdvertisedLayerBeforePublication$$'; \
 	CGO_ENABLED=1 go test -race -count=1 ./pkg/modelruntime ./pkg/modeldownload \
 		-ldflags='-X github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.defaultModelProvider=ort' \
 		-run '^(TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride|TestImplicitEmbeddingProvisioningFollowsBuildProvider)$$'

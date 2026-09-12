@@ -17,6 +17,21 @@ then opens typed task handles. It validates actual architecture, graph/head,
 label order, input limits, dimensions, layers, and modalities. Unreachable
 module defaults are not substitute models for an overridden consumer.
 
+Owned MIGraphX sequence/token classifiers use a fixed tensor length equal to
+their effective task budget: at most 512 tokens, including special tokens,
+and smaller when the model or deployment requires it. Short inputs are padded
+with the tokenizer's pad ID and an attention mask; reported input usage and
+token spans describe the real input, not padding. This bounds the classifier's
+execution shape without increasing its accepted context length.
+
+Preparation runs a real classifier warmup before publishing the candidate.
+MIGraphX can compile kernels during that first forward, so a cold preparation
+can take substantially longer than subsequent inference. Keep this compilation
+in startup/reload readiness checks; a warmup failure leaves the previous
+generation available. The maintained ROCm images establish their
+[compiler policy](engines-and-hardware.md#deployment-device-and-precision-matrix)
+at process startup and do not mutate it between model instances.
+
 Resource sharing follows actual execution identity. Compatible Candle modern
 heads can share their encoder; independent ORT graphs are complete resources.
 The pool owns shared native resources. Bindings own their task handles and

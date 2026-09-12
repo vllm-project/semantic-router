@@ -36,6 +36,7 @@ struct Instance {
     effective_limit: usize,
     labels: Vec<String>,
     dimension: usize,
+    available_layers: Vec<usize>,
     completed: AtomicU64,
 }
 
@@ -146,6 +147,10 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
         .map_err(|e| errors::tokenization_error(&e.to_string()))?;
     tokenizer.with_padding(None);
     let effective_limit = options.effective_limit(task_limit)?;
+    let available_layers = match &model {
+        Model::Embedding(model) => model.available_exit_layers(),
+        _ => vec![],
+    };
     Ok(insert(Arc::new(Instance {
         model: Mutex::new(model),
         tokenizer,
@@ -156,6 +161,7 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
         effective_limit,
         labels,
         dimension,
+        available_layers,
         completed: AtomicU64::new(0),
     })))
 }
@@ -216,6 +222,7 @@ pub struct InstanceInfo {
     pub overflow: Overflow,
     pub labels: Vec<String>,
     pub dimension: usize,
+    pub available_layers: Vec<usize>,
     pub sessions: Vec<SessionEvidence>,
     /// Counts successfully completed real native inference calls, not loads.
     pub completed_inferences: u64,
@@ -232,6 +239,7 @@ pub fn info(handle: u64) -> UnifiedResult<InstanceInfo> {
         overflow: instance.options.overflow,
         labels: instance.labels.clone(),
         dimension: instance.dimension,
+        available_layers: instance.available_layers.clone(),
         sessions,
         completed_inferences: instance.completed.load(Ordering::Relaxed),
     })
@@ -370,9 +378,7 @@ pub fn encode_text(
     let mut model = instance.model.lock();
     let values = match &mut *model {
         Model::Embedding(model) => {
-            if layer.is_some_and(|layer| {
-                layer != model.num_layers() && !model.available_exit_layers().contains(&layer)
-            }) {
+            if layer.is_some_and(|layer| !instance.available_layers.contains(&layer)) {
                 return Err(errors::config_error(
                     "target_layer",
                     "requested layer has no loaded ONNX session",

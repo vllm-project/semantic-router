@@ -138,8 +138,8 @@ api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI
 	@mkdir -p $(dir $(APISERVER_OPENAPI_JSON))
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		CGO_LDFLAGS="-L$(PWD)/onnx-binding/target/release -L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
+		LD_LIBRARY_PATH="$(PWD)/onnx-binding/target/release:$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o ../../$(APISERVER_OPENAPI_JSON)
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
@@ -148,8 +148,8 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 	@$(LOG_TARGET)
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		CGO_LDFLAGS="-L$(PWD)/onnx-binding/target/release -L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
+		LD_LIBRARY_PATH="$(PWD)/onnx-binding/target/release:$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
 	@python3 tools/agent/scripts/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
@@ -165,12 +165,12 @@ api-docs-check: $(if $(CI),rust-ci,rust) ## Fail if committed api docs artifacts
 	cp "$(APISERVER_REFERENCE_MD)" "$$TMPDIR_CHECK/apiserver.md" && \
 	cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		CGO_LDFLAGS="-L$(PWD)/onnx-binding/target/release -L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
+		LD_LIBRARY_PATH="$(PWD)/onnx-binding/target/release:$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		CGO_LDFLAGS="-L$(PWD)/onnx-binding/target/release -L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
+		LD_LIBRARY_PATH="$(PWD)/onnx-binding/target/release:$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
 	cd ../.. && \
 	python3 tools/agent/scripts/embed_generated_index.py \

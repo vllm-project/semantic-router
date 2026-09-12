@@ -354,6 +354,10 @@ COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /usr/local/lib/
 
+# Pin the ROCm 7.0 compiler policy before model preparation: its MLIR attention
+# fusion produces nonfinite maintained mmBERT outputs. Keep other GPU MLIR ops.
+ENV MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention
+
 ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so \
     LD_LIBRARY_PATH=/usr/local/lib:/opt/rocm/lib:/opt/rocm/lib/migraphx/lib:/opt/onnxruntime/capi \
     ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so

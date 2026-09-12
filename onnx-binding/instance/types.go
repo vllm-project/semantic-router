@@ -85,6 +85,7 @@ type Info struct {
 	Overflow            string            `json:"overflow"`
 	Labels              []string          `json:"labels"`
 	Dimension           int               `json:"dimension"`
+	AvailableLayers     []int             `json:"available_layers"`
 	Sessions            []SessionEvidence `json:"sessions"`
 	CompletedInferences uint64            `json:"completed_inferences"`
 }

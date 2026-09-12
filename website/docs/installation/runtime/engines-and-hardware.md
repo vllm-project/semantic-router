@@ -53,6 +53,23 @@ provider. Missing libraries, incompatible provider options, or unsupported
 execution fail preparation. Provider registration alone does not prove that
 inference ran on a GPU.
 
+The maintained ROCm 7.0 images pin ORT 1.22.1 and MIGraphX 2.13 and set
+`MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention` before model preparation. This
+excludes the vendor's MLIR attention fusion, which produced nonfinite outputs
+for the maintained mmBERT classifier; other GPU MLIR operations remain enabled.
+It is a fixed startup compiler policy, not an instance-level environment change
+or an automatic retry. It does not change graph precision or permit CPU
+fallback. Revalidate the policy when changing the vendor stack.
+
+The validated classification path uses the standard `onnx/model.onnx` graph,
+`precision: native`, and a fixed execution budget. The owned loader prefers
+the standard graph when no explicit head is supplied. The maintained
+`model_sdpa_fp16.onnx` graph still contains an `IsNaN` operation unsupported
+by this ORT provider's capability check; do not treat it as validated by the
+standard-graph result. Explicit graph selection must pass preparation on its
+own. See [Preparation and resource ownership](lifecycle-diagnostics.md#preparation-and-resource-ownership)
+for compilation and input-budget behavior.
+
 For owned MIGraphX deployments, unset these process-level vendor overrides:
 
 ```text

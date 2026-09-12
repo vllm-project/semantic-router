@@ -119,6 +119,14 @@ tensor files. For the owned AMD path, use `device: migraphx:0` in an image with
 the matching runtime libraries. `precision: fp16` is an explicit MIGraphX
 conversion request, not the default. See [Engines and hardware](engines-and-hardware.md).
 
+MIGraphX classifiers execute at their fixed effective task budget, capped at
+512 tokens. Embeddings have a separate contract: owned MIGraphX mmBERT
+embeddings require an explicit positive `input.max_tokens`, which fixes their
+tensor length within the embedding model's own limit. Preparation warms every
+advertised ORT embedding layer before readiness. Use the complete
+[MIGraphX embedding example](embeddings.md#choose-a-local-model) rather than
+carrying the classifier's 512-token limit over to an embedding model.
+
 ## Share an encoder only when it is actually shareable
 
 Candle's modern BERT family can load one headless backbone and bind compatible

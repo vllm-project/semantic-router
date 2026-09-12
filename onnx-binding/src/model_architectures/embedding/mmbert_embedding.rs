@@ -29,6 +29,7 @@ use half::f16;
 use ndarray::{Array1, Array2, Array3};
 use ort::session::Session;
 use ort::value::Tensor;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokenizers::Tokenizer;
@@ -277,14 +278,15 @@ pub struct MmBertEmbeddingModel {
     tokenizer: Arc<Tokenizer>,
     /// Model configuration
     config: MmBertEmbeddingConfig,
-    /// Matryoshka configuration
-    matryoshka_config: MatryoshkaConfig,
     /// Model path
     model_path: String,
-    /// Whether the model supports layer early exit (requires multiple ONNX files)
-    supports_layer_exit: bool,
-    /// Layer-specific sessions (for early exit support)
-    layer_sessions: Vec<Option<Session>>,
+    /// Layer represented by the primary graph; that graph is loaded only once.
+    primary_layer: usize,
+    /// Additional loaded exit graphs, indexed by their actual layer.
+    layer_sessions: BTreeMap<usize, Session>,
+    /// MIGraphX compiles a program for each shape. Fix its tensor shape to an
+    /// explicit deployment budget without padding the tokenizer's real usage.
+    execution_sequence_length: Option<usize>,
 }
 
 impl MmBertEmbeddingModel {
@@ -319,6 +321,18 @@ impl MmBertEmbeddingModel {
 
         // Load configuration
         let config = MmBertEmbeddingConfig::from_pretrained(&model_path)?;
+        let execution_sequence_length = match options {
+            Some(options) if options.provider == Provider::Migraphx => {
+                if options.max_input_tokens.is_none() {
+                    return Err(errors::config_error(
+                        "max_input_tokens",
+                        "owned MIGraphX embeddings require an explicit positive input token budget for their fixed execution shape",
+                    ));
+                }
+                Some(options.effective_limit(config.max_position_embeddings)?)
+            }
+            _ => None,
+        };
 
         // Resolve the early-exit layer list from the model's own manifest
         // (single source of truth) so it never drifts from what is shipped.
@@ -396,22 +410,30 @@ impl MmBertEmbeddingModel {
                 return Err(errors::model_load(&model_path_str, &detail));
             }
         };
-        if let Some(path) = selected_path {
-            println!("INFO: Selected mmBERT ONNX file: {}", path.display());
-        }
+        let selected_path = selected_path.expect("a loaded session has a selected graph");
+        println!(
+            "INFO: Selected mmBERT ONNX file: {}",
+            selected_path.display()
+        );
 
         // Check for layer-specific ONNX files (for early exit support)
-        let (supports_layer_exit, layer_sessions) =
-            Self::load_layer_sessions(&model_path, use_cpu, &matryoshka_config.layers, options)?;
+        let (primary_layer, layer_sessions) = Self::load_layer_sessions(
+            &model_path,
+            use_cpu,
+            &matryoshka_config.layers,
+            options,
+            &selected_path,
+            config.num_hidden_layers,
+        )?;
 
         Ok(Self {
             session,
             tokenizer: Arc::new(tokenizer),
             config,
-            matryoshka_config,
             model_path: model_path_str,
-            supports_layer_exit,
+            primary_layer,
             layer_sessions,
+            execution_sequence_length,
         })
     }
 
@@ -638,9 +660,12 @@ impl MmBertEmbeddingModel {
         use_cpu: bool,
         layers: &[usize],
         options: Option<&InstanceOptions>,
-    ) -> UnifiedResult<(bool, Vec<Option<Session>>)> {
-        let mut sessions = Vec::new();
-        let mut any_loaded = false;
+        primary_path: &Path,
+        mut primary_layer: usize,
+    ) -> UnifiedResult<(usize, BTreeMap<usize, Session>)> {
+        let mut sessions = BTreeMap::new();
+        let primary_path = std::fs::canonicalize(primary_path)
+            .map_err(|_| errors::file_not_found(&primary_path.display().to_string()))?;
         let model_dir = model_path.as_ref();
         let onnx_dir = model_dir.join("onnx");
 
@@ -668,6 +693,12 @@ impl MmBertEmbeddingModel {
             let found = candidates.iter().find(|p| p.exists()).cloned();
 
             if let Some(ref layer_path) = found {
+                let canonical_path = std::fs::canonicalize(layer_path)
+                    .map_err(|_| errors::file_not_found(&layer_path.display().to_string()))?;
+                if canonical_path == primary_path {
+                    primary_layer = *layer;
+                    continue;
+                }
                 println!(
                     "INFO: Loading layer-{} from {}",
                     layer,
@@ -679,23 +710,19 @@ impl MmBertEmbeddingModel {
                 };
                 match loaded {
                     Ok(session) => {
-                        sessions.push(Some(session));
-                        any_loaded = true;
+                        sessions.insert(*layer, session);
                     }
                     Err(e) => {
                         if options.is_some() {
                             return Err(e);
                         }
                         println!("WARN: Failed to load layer-{}: {:?}", layer, e);
-                        sessions.push(None);
                     }
                 }
-            } else {
-                sessions.push(None);
             }
         }
 
-        Ok((any_loaded, sessions))
+        Ok((primary_layer, sessions))
     }
 
     /// Get the model configuration
@@ -715,31 +742,16 @@ impl MmBertEmbeddingModel {
 
     /// Check if layer early exit is supported
     pub fn supports_layer_exit(&self) -> bool {
-        self.supports_layer_exit
+        self.primary_layer != self.config.num_hidden_layers || !self.layer_sessions.is_empty()
     }
 
     /// Get available early exit layers
     pub fn available_exit_layers(&self) -> Vec<usize> {
-        if self.supports_layer_exit {
-            self.matryoshka_config
-                .layers
-                .iter()
-                .enumerate()
-                .filter_map(|(i, &layer)| {
-                    if self
-                        .layer_sessions
-                        .get(i)
-                        .is_some_and(|s: &Option<Session>| s.is_some())
-                    {
-                        Some(layer)
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            vec![self.config.num_hidden_layers]
-        }
+        let mut layers: Vec<_> = self.layer_sessions.keys().copied().collect();
+        layers.push(self.primary_layer);
+        layers.sort_unstable();
+        layers.dedup();
+        layers
     }
 
     /// Generate embeddings with 2D Matryoshka support
@@ -774,6 +786,7 @@ impl MmBertEmbeddingModel {
         // Find max sequence length
         let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
         let max_len = max_len.min(self.config.max_position_embeddings);
+        let max_len = self.execution_sequence_length.unwrap_or(max_len);
 
         // Prepare input tensors
         let batch_size = texts.len();
@@ -784,7 +797,7 @@ impl MmBertEmbeddingModel {
             let seq_len = encoding.len().min(max_len);
             for j in 0..seq_len {
                 input_ids[i * max_len + j] = encoding.get_ids()[j] as i64;
-                attention_mask[i * max_len + j] = 1;
+                attention_mask[i * max_len + j] = encoding.get_attention_mask()[j] as i64;
             }
         }
 
@@ -824,27 +837,9 @@ impl MmBertEmbeddingModel {
         input_ids: &Array2<i64>,
         attention_mask: &Array2<i64>,
     ) -> UnifiedResult<Array2<f32>> {
-        // Select session based on target layer (inline to avoid borrow issues)
-        let session_idx = if let Some(layer) = target_layer {
-            if self.supports_layer_exit {
-                self.matryoshka_config
-                    .layers
-                    .iter()
-                    .position(|&l| l == layer)
-                    .filter(|&idx| self.layer_sessions.get(idx).is_some_and(|s| s.is_some()))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        // Get the appropriate session
-        let session = if let Some(idx) = session_idx {
-            self.layer_sessions[idx].as_mut().unwrap()
-        } else {
-            &mut self.session
-        };
+        let session = target_layer
+            .and_then(|layer| self.layer_sessions.get_mut(&layer))
+            .unwrap_or(&mut self.session);
         let batch_size = input_ids.shape()[0];
         let seq_len = input_ids.shape()[1];
 
@@ -956,7 +951,7 @@ impl MmBertEmbeddingModel {
             .session
             .end_profiling()
             .map_err(|e| errors::ort_error(&e.to_string()))?];
-        for session in self.layer_sessions.iter_mut().flatten() {
+        for session in self.layer_sessions.values_mut() {
             paths.push(
                 session
                     .end_profiling()
@@ -973,7 +968,7 @@ impl MmBertEmbeddingModel {
             self.model_path,
             self.config.hidden_size,
             self.config.num_hidden_layers,
-            self.supports_layer_exit,
+            self.supports_layer_exit(),
             self.available_exit_layers()
         )
     }

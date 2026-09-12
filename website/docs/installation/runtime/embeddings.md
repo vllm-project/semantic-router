@@ -27,26 +27,75 @@ global:
 ```
 
 The catalog path must contain a compatible embedding checkpoint. A recipe can
-instead bind its primary embedding provider explicitly:
+instead bind its primary embedding provider explicitly. This complete example
+uses the maintained ROCm image and a compatible mmBERT ONNX artifact. Replace
+the downstream endpoint and provision the checkpoint before serving:
 
 ```yaml
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    model: answer-model
+  models:
+    - name: answer-model
+      backend_refs:
+        - name: answer
+          endpoint: 127.0.0.1:8000
+          protocol: http
 global:
   model_catalog:
+    embeddings:
+      semantic:
+        embedding_config:
+          model_type: mmbert
+          preload_embeddings: true
+          target_dimension: 768
+          target_layer: 22
     deployments:
       local-embedding:
         artifact: models/mmbert-embed-32k-2d-matryoshka
-        provider: candle
-        device: cpu
+        provider: ort
+        device: migraphx:0
         precision: native
         input:
-          overflow: truncate
+          max_tokens: 1024
+          overflow: reject
 routing:
   model_bindings:
     embedding:
       deployment: local-embedding
       contract: embedding.v1
       adapter: mmbert
+  signals:
+    embeddings:
+      - name: technical-support
+        threshold: 0.75
+        aggregation_method: max
+        candidates:
+          - how to configure the system
+          - troubleshooting an installation error
+  decisions:
+    - name: answer-support
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: embedding
+            name: technical-support
+      modelRefs:
+        - model: answer-model
 ```
+
+Save the example as `config.yaml` and run
+`vllm-sr config validate --config config.yaml` before the
+[local-image serve workflow](in-process.md#run-a-generic-sequence-classifier).
+The 1024-token budget and similarity threshold are configuration examples,
+not measured GPU quality or performance guarantees. Validate the selected
+graph, budget, vectors, and provider profile for your deployment.
 
 Candle supports BERT, Qwen3, Gemma, mmBERT, and the text branch of compatible
 multimodal checkpoints. ORT supports mmBERT and multimodal graphs. Select
@@ -77,12 +126,28 @@ preparation. Its current layered loader also needs the primary full-depth
 graph in addition to a selected early-exit graph. It downloads external tensors
 from real ONNX references rather than assuming a `.data` filename.
 
+Available-layer metadata comes from the native sessions that actually loaded.
+The full-depth graph is loaded once even when it is also a selectable layer.
+Before readiness, the Router executes a warmup for every advertised ORT layer
+and checks its output values and dimension. A failed layer rejects the
+candidate while the previous generation remains available. Cold compilation
+for those layers is part of preparation, not evidence of steady-state latency.
+
 Embedding token limits come from the loaded model and the deployment's
 restriction, not the classification task's 512 cap. Multimodal text has its
 own text-encoder limit. Tokenizer windows use actual token boundaries and
 UTF-8 offsets; a zero window budget selects the prepared effective limit.
 This window API does not enable automatic `input.overflow: window` for a
 classifier that lacks such an adapter.
+
+Owned MIGraphX mmBERT embeddings require an explicit positive
+`input.max_tokens`. Omitting it or setting zero fails preparation. The tensor
+length is fixed to that budget, within the model's actual capacity; the
+maintained 32K checkpoint permits at most 32768 tokens. Shorter inputs use
+padding with a zero attention mask. Token usage and tokenizer windows still
+describe the real input, and special tokens count toward the budget. This is
+separate from the classification task's 512-token cap. Owned CPU and legacy
+embedding execution retain dynamic tensor lengths.
 
 ## Use a remote text provider
 
