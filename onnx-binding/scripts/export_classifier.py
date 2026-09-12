@@ -15,6 +15,7 @@ import onnx
 import onnxruntime as ort
 import torch
 import transformers
+from model_precision import cast_parameters_preserving_buffers
 from onnx_artifacts import external_data_sha256, sha256, strip_debug_annotations
 from transformers import (
     AutoConfig,
@@ -55,6 +56,12 @@ class ClassifierLogits(torch.nn.Module):
             mask = attention_mask.unsqueeze(-1).float()
             pooled = (hidden.float() * mask).sum(1) / mask.sum(1)
         return self.model.classifier(self.model.drop(self.model.head(pooled)))
+
+
+def prepare_classifier(model, token_classification, dtype):
+    """Cast encoder weights without rounding its native position buffers."""
+    cast_parameters_preserving_buffers(model.model, dtype)
+    return ClassifierLogits(model.eval(), token_classification).eval()
 
 
 def make_input(seed_ids, length, batch, pad_token_id):
@@ -213,8 +220,7 @@ def main():
         for key in ("missing_keys", "unexpected_keys", "mismatched_keys", "error_msgs")
     ):
         raise ValueError(f"Incomplete task checkpoint: {loading}")
-    model.model.to(getattr(torch, args.dtype))
-    wrapper = ClassifierLogits(model.eval(), token_task).eval()
+    wrapper = prepare_classifier(model, token_task, getattr(torch, args.dtype))
     reference = wrapper
     if args.dtype == "float16":
         reference = ClassifierLogits(
@@ -284,6 +290,7 @@ def main():
         "dtype": args.dtype,
         "head_dtype": "float32",
         "pooling_accumulation_dtype": "float32",
+        "encoder_buffers": "native dtypes and values preserved",
         "reference_dtype": "float32",
         "output_validation": (
             "all valid-token probabilities and exact BIO argmax; raw logits reported"

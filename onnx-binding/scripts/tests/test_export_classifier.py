@@ -1,5 +1,6 @@
 """Task-head parity and real dynamic exports, independent of remote checkpoints."""
 
+import copy
 import importlib
 import json
 import sys
@@ -26,6 +27,64 @@ except ImportError:
 
 @unittest.skipIf(torch is None, "requires torch, transformers, onnxscript and ORT")
 class ClassifierExportTest(unittest.TestCase):
+    def test_half_export_keeps_native_rope_and_full_precision_task_head(self):
+        torch.set_num_threads(2)
+        for token_task in (False, True):
+            with self.subTest(
+                token_task=token_task
+            ), tempfile.TemporaryDirectory() as directory:
+                torch.manual_seed(29)
+                config = ModernBertConfig(
+                    vocab_size=32,
+                    hidden_size=32,
+                    intermediate_size=64,
+                    num_hidden_layers=2,
+                    num_attention_heads=4,
+                    max_position_embeddings=32768,
+                    local_attention=16,
+                    global_attn_every_n_layers=2,
+                    num_labels=3,
+                    pad_token_id=0,
+                    reference_compile=False,
+                )
+                config._attn_implementation = "sdpa"
+                kind = (
+                    ModernBertForTokenClassification
+                    if token_task
+                    else ModernBertForSequenceClassification
+                )
+                original = kind(config).eval()
+                original.save_pretrained(directory)
+                native = kind.from_pretrained(
+                    directory,
+                    torch_dtype=torch.float16,
+                    attn_implementation="sdpa",
+                    reference_compile=False,
+                ).eval()
+                # The export retains FP32 task weights, independent of encoder precision.
+                native.head = copy.deepcopy(original.head)
+                native.classifier = copy.deepcopy(original.classifier)
+                actual = exporter.prepare_classifier(
+                    copy.deepcopy(original), token_task, torch.float16
+                )
+                for name, buffer in native.model.named_buffers():
+                    exported = dict(actual.model.model.named_buffers())[name]
+                    self.assertEqual(exported.dtype, buffer.dtype)
+                    torch.testing.assert_close(exported, buffer, rtol=0, atol=0)
+                for name, parameter in original.head.named_parameters():
+                    torch.testing.assert_close(
+                        dict(actual.model.head.named_parameters())[name],
+                        parameter,
+                        rtol=0,
+                        atol=0,
+                    )
+                ids, mask = exporter.make_input([1, 6, 7, 2], 129, 2, 0)
+                with torch.inference_mode():
+                    expected = exporter.ClassifierLogits(native, token_task)(ids, mask)
+                    torch.testing.assert_close(
+                        actual(ids, mask), expected, rtol=0, atol=0
+                    )
+
     def test_token_validation_preserves_decisions_and_confidence(self):
         expected = torch.tensor([[5.0, 0.0, -50.0]]).numpy()
         dormant_rounding = expected.copy()

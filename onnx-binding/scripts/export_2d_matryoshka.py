@@ -23,6 +23,7 @@ from torch import nn
 from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from model_precision import cast_parameters_preserving_buffers
 from onnx_artifacts import (
     external_data_sha256,
     prepare_export_directory,
@@ -343,7 +344,9 @@ def main():
             reference_prefix = PhysicalPrefixEncoder(
                 copy.deepcopy(encoder), layer, args.task
             )
-            prefix = copy.deepcopy(reference_prefix).to(dtype)
+            prefix = cast_parameters_preserving_buffers(
+                copy.deepcopy(reference_prefix), dtype
+            )
             directory = output / f"layer-{layer}"
             model = prefix
             reference = reference_prefix
