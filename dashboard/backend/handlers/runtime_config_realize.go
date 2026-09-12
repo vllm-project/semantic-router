@@ -10,9 +10,21 @@ import (
 	"time"
 )
 
+type runtimeMaterialization struct {
+	packageActivation bool
+	managedListener   bool
+	skipKBBootstrap   bool
+}
+
 func realizeRecipeRuntimeConfigWithCLI(raw []byte, targetPath string) ([]byte, error) {
+	return realizeRuntimeConfigWithCLI(raw, targetPath, runtimeMaterialization{packageActivation: true})
+}
+
+// Config output stays in private staged files; CLI options control KB bootstrap.
+// The caller publishes the returned bytes through its config transaction.
+func realizeRuntimeConfigWithCLI(raw []byte, targetPath string, options runtimeMaterialization) ([]byte, error) {
 	parent := filepath.Dir(targetPath)
-	source, err := os.CreateTemp(parent, ".recipe-package-raw-*.yaml")
+	source, err := os.CreateTemp(parent, ".runtime-candidate-raw-*.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +43,7 @@ func realizeRecipeRuntimeConfigWithCLI(raw []byte, targetPath string) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	output, err := os.CreateTemp(parent, ".recipe-package-realized-*.yaml")
+	output, err := os.CreateTemp(parent, ".runtime-candidate-realized-*.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +54,7 @@ func realizeRecipeRuntimeConfigWithCLI(raw []byte, targetPath string) ([]byte, e
 	}
 	cliRoot := detectPythonCLIRoot()
 	if cliRoot == "" {
-		return nil, errors.New("python CLI root not found for Recipe runtime realization")
+		return nil, errors.New("python CLI root not found for runtime config realization")
 	}
 	pythonBinary, err := runtimeSyncPythonBinary()
 	if err != nil {
@@ -52,7 +64,7 @@ func realizeRecipeRuntimeConfigWithCLI(raw []byte, targetPath string) ([]byte, e
 	defer cancel()
 	// #nosec G204 -- pythonBinary is constrained to resolved Python interpreters;
 	// module and argv boundaries are fixed, and config paths are process-owned.
-	args := recipeRuntimeMaterializeArgs(sourcePath, outputPath)
+	args := runtimeMaterializeArgs(sourcePath, outputPath, options)
 	cmd := exec.CommandContext(ctx, pythonBinary, args...)
 	if algorithm := strings.TrimSpace(os.Getenv("VLLM_SR_ALGORITHM_OVERRIDE")); algorithm != "" {
 		cmd.Args = append(cmd.Args, "--algorithm", algorithm)
@@ -68,19 +80,28 @@ func realizeRecipeRuntimeConfigWithCLI(raw []byte, targetPath string) ([]byte, e
 	cmd.Env = append(os.Environ(), "PYTHONPATH="+cliRoot)
 	_, err = cmd.CombinedOutput()
 	if err != nil {
-		return nil, errors.New("recipe runtime realization failed")
+		return nil, errors.New("runtime config realization failed")
 	}
 	return readActivationConfig(outputPath)
 }
 
-func recipeRuntimeMaterializeArgs(sourcePath, targetPath string) []string {
-	return []string{
+func runtimeMaterializeArgs(sourcePath, targetPath string, options runtimeMaterialization) []string {
+	args := []string{
 		"-m",
 		"cli.commands.runtime_materialize",
 		"--source",
 		sourcePath,
 		"--target",
 		targetPath,
-		"--package-activation",
 	}
+	if options.packageActivation {
+		args = append(args, "--package-activation")
+	}
+	if options.managedListener {
+		args = append(args, "--managed-listener")
+	}
+	if options.skipKBBootstrap {
+		args = append(args, "--skip-kb-bootstrap")
+	}
+	return args
 }

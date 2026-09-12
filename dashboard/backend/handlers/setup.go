@@ -141,6 +141,11 @@ func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) 
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate, true)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
+			return
+		}
 
 		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup validation failed: %v", validationErr), http.StatusBadRequest)
@@ -194,6 +199,11 @@ func SetupActivateHandler(
 		candidate, err := buildSetupCandidateConfig(configPath, r.Body, setupResolver)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate, false)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
 			return
 		}
 
