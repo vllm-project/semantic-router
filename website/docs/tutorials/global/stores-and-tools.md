@@ -133,6 +133,55 @@ When an external model with `model_role: memory_rewrite` is configured, its
 `max_response_bytes` limits each query-rewrite response. An omitted or
 non-positive value uses the 1 MiB default.
 
+#### Write path bounds
+
+Automatic persistence resolves `auto_store` in this order: the Responses request
+override, the selected decision's memory plugin, then `global.stores.memory`.
+An explicit `false` disables automatic persistence at that precedence level;
+only an omitted value falls back to the next level.
+
+Response handling does not wait for Memory persistence to complete. Identity
+checks and capacity reservation precede bounded history snapshots; encoding and
+writes run in the background. Other response-path Replay operations remain
+synchronous.
+
+Configure `global.stores.memory.persistence`:
+
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `timeout_seconds` | Seconds from reservation to timeout, including preparation, queue wait, and writing | 30 |
+| `concurrency` | Worker slots, including preparation and writes; 1–64 | 8 |
+| `queue` | Reserved attempts waiting for a worker; 1–1024 | 64 |
+| `shutdown_grace_seconds` | Seconds to drain writes on reload or shutdown before cancellation | 5 |
+
+Omit a field or set it to `0` to take the default. Negative values and values
+above these concurrency or queue limits are rejected during configuration
+validation, before workers or queue storage are allocated at startup or reload.
+
+Each persistence attempt has a shared 1 MiB payload budget for request history,
+retained Responses history, and the current assistant response. Assistant text
+is counted before think-tag stripping. History is also limited to 256
+messages/items and 32 nested content levels; history and the current response
+share a 4096-node structural limit. Bounded length checks run before reserving
+persistence capacity; text assembly and history copying run only after admission.
+Exceeding a limit skips persistence with `skipped` / `history_too_large` and
+`fail_open=true`, without occupying persistence capacity or truncating the model
+response or history. Missing user identity skips preparation. Background contexts
+retain only span context and tracestate.
+
+For requests with a Router Replay record, accepted attempts reserve capacity for
+`scheduled` and one terminal receipt, protecting both from queue saturation.
+Storage errors, shutdown drain expiry, or process crashes can still lose receipts.
+Exhausted persistence or receipt capacity rejects new writes with `queue_full` or
+`receipt_queue_full`; retired pools use `shutting_down`. These remain fail-open
+and are logged by request ID. Monitor
+`llm_plugin_execution_total{plugin_type="memory_persistence", status="rejected"}`.
+
+Timeout and cancellation report one terminal outcome even while queued; cancelled
+jobs do not start. Native embedding calls cannot be interrupted, so active work
+retains its worker slot and resources until exit. Cancellation does not undo
+writes already accepted by a backend.
+
 ### Vector Store
 
 ```yaml

@@ -14,6 +14,7 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if usesSharedReplayStorage(backend) {
 		recorders, replayRecorder, err := initializeSharedReplayRecorders(cfg, backend)
+		shareReplayOutcomeQueue(recorders)
 		return recorders, replayRecorder, replayRecorder != nil, err
 	}
 
@@ -22,7 +23,16 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 		return nil, nil, false, err
 	}
 
+	shareReplayOutcomeQueue(replayRecorders)
 	return replayRecorders, nil, false, nil
+}
+
+func shareReplayOutcomeQueue(recorders map[string]*routerreplay.Recorder) {
+	group := make([]*routerreplay.Recorder, 0, len(recorders))
+	for _, recorder := range recorders {
+		group = append(group, recorder)
+	}
+	routerreplay.ShareOutcomeQueue(group...)
 }
 
 // initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.

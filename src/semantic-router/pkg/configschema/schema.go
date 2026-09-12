@@ -124,6 +124,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 
 	addRecipeRoutingDefinition(schema)
 	setCoreEnums(schema)
+	setMemoryPersistenceBounds(schema)
 
 	pluginRefs, err := addPluginDefinitions(reflector, schema)
 	if err != nil {

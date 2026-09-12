@@ -1,0 +1,232 @@
+"""Offline regressions for the request-correlated persistence E2E assertions."""
+
+import json
+import unittest
+from contextlib import nullcontext
+from pathlib import Path
+from unittest.mock import Mock, patch
+from urllib.parse import urlsplit
+
+from memory_tests import test_persistence_receipts as receipts
+
+
+def outcome(status, phase="terminal", reason="persist_error"):
+    return {
+        "verdict": status,
+        "reason": reason,
+        "metadata": {
+            "kind": "memory_persistence_receipt",
+            "phase": phase,
+            "fail_open": "true",
+        },
+    }
+
+
+class PersistenceReceiptAssertionsTest(unittest.TestCase):
+    def setUp(self):
+        self.case = receipts.MemoryPersistenceReceiptTest()
+        self.case.replay_url = "http://router/api/v1/observability/replays"
+        self.case.metrics_url = "http://router/metrics"
+
+    def test_default_replay_endpoint_matches_management_api_contract(self):
+        with (
+            patch.object(receipts.MemoryFeaturesTest, "setUp"),
+            patch.object(self.case, "_resolve_metrics_url"),
+            patch.dict(receipts.os.environ, {}, clear=True),
+        ):
+            self.case.setUp()
+
+        repository_root = Path(__file__).resolve().parents[3]
+        contract_path = (
+            repository_root / "website/static/openapi/apiserver/apiserver.openapi.json"
+        )
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        record_path = urlsplit(self.case.replay_url).path + "/{id}"
+        self.assertIn(record_path, contract["paths"])
+        self.assertIn("get", contract["paths"][record_path])
+
+    def test_terminal_receipt_is_read_from_the_response_replay_id(self):
+        terminal = outcome("timeout", reason="persist_timeout")
+        response = Mock(status_code=receipts.HTTP_OK)
+        response.json.return_value = {
+            "id": "request-replay",
+            "outcomes": [outcome("scheduled", "scheduled"), terminal],
+        }
+        with patch.object(receipts.requests, "get", return_value=response) as get:
+            actual = self.case._wait_for_terminal_receipt(
+                {"_replay_id": "request-replay"}
+            )
+        self.assertEqual(actual, terminal)
+        get.assert_called_once_with(
+            "http://router/api/v1/observability/replays/request-replay", timeout=10
+        )
+
+    def test_wrong_replay_id_is_rejected(self):
+        response = Mock(status_code=receipts.HTTP_OK)
+        response.json.return_value = {"id": "another-request", "outcomes": []}
+        with (
+            patch.object(receipts.requests, "get", return_value=response),
+            self.assertRaises(AssertionError),
+        ):
+            self.case._wait_for_terminal_receipt({"_replay_id": "request-replay"})
+
+    def test_disabled_receipt_can_arrive_after_response_without_scheduled(self):
+        terminal = outcome("disabled", reason="auto_store_off")
+        terminal["metadata"]["fail_open"] = "false"
+        pending = Mock(status_code=receipts.HTTP_OK)
+        pending.json.return_value = {"id": "request-replay", "outcomes": []}
+        ready = Mock(status_code=receipts.HTTP_OK)
+        ready.json.return_value = {"id": "request-replay", "outcomes": [terminal]}
+        with (
+            patch.object(receipts.requests, "get", side_effect=[pending, ready]),
+            patch.object(receipts.time, "sleep"),
+        ):
+            actual = self.case._wait_for_terminal_receipt(
+                {"_replay_id": "request-replay"}, scheduled=False
+            )
+        self.assertEqual(actual, terminal)
+
+    def test_missing_or_duplicate_terminal_receipts_do_not_pass(self):
+        with self.assertRaises(AssertionError):
+            self.case._wait_for_terminal_receipt({})
+        response = Mock(status_code=receipts.HTTP_OK)
+        response.json.return_value = {
+            "id": "request-replay",
+            "outcomes": [outcome("store_failed"), outcome("timeout")],
+        }
+        with (
+            patch.object(receipts.requests, "get", return_value=response),
+            self.assertRaises(AssertionError),
+        ):
+            self.case._wait_for_terminal_receipt({"_replay_id": "request-replay"})
+
+    def test_oversized_history_e2e_requires_only_the_skipped_terminal(self):
+        self.case.responses_url = "http://router/v1/responses"
+        self.case.test_user = "test-user"
+        self.case.timeout = 5
+        model_response = Mock(
+            status_code=receipts.HTTP_OK,
+            headers={"x-vsr-replay-id": "oversized-replay"},
+        )
+        model_response.json.return_value = {
+            "output": [
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Model output"}],
+                }
+            ]
+        }
+        terminal = outcome("skipped", reason="history_too_large")
+        for scheduled in (False, True):
+            with self.subTest(scheduled=scheduled):
+                replay_response = Mock(status_code=receipts.HTTP_OK)
+                replay_response.json.return_value = {
+                    "id": "oversized-replay",
+                    "outcomes": (
+                        [outcome("scheduled", "scheduled")] if scheduled else []
+                    )
+                    + [terminal],
+                }
+                expected = (
+                    self.assertRaises(AssertionError) if scheduled else nullcontext()
+                )
+                with (
+                    patch.object(
+                        receipts.requests, "post", return_value=model_response
+                    ),
+                    patch.object(
+                        receipts.requests, "get", return_value=replay_response
+                    ),
+                    expected,
+                ):
+                    self.case.test_04_oversized_history_skips_persistence_and_delivers_response()
+
+    def test_missing_terminal_receipt_times_out_with_request_diagnostics(self):
+        response = Mock(status_code=receipts.HTTP_OK)
+        response.json.return_value = {
+            "id": "request-replay",
+            "outcomes": [outcome("scheduled", "scheduled")],
+        }
+        with (
+            patch.object(receipts.requests, "get", return_value=response),
+            patch.object(receipts.time, "monotonic", side_effect=[0, 0, 61]),
+            patch.object(receipts.time, "sleep"),
+            self.assertRaisesRegex(AssertionError, "request-replay.*scheduled"),
+        ):
+            self.case._wait_for_terminal_receipt({"_replay_id": "request-replay"})
+
+    def test_metrics_ignore_other_decisions(self):
+        response = Mock(status_code=receipts.HTTP_OK)
+        response.text = "\n".join(
+            [
+                'llm_plugin_execution_total{plugin_type="memory_persistence",decision_name="default_route",status="completed"} 42',
+                'llm_plugin_execution_total{plugin_type="memory_persistence",decision_name="persistence_receipt_route",status="completed"} 1',
+            ]
+        )
+        with patch.object(receipts.requests, "get", return_value=response):
+            self.assertEqual(self.case._receipt_count("completed"), 1)
+
+    def test_failed_scrape_cannot_be_interpreted_as_zero(self):
+        response = Mock(status_code=503, text="unavailable")
+        with (
+            patch.object(receipts.requests, "get", return_value=response),
+            self.assertRaises(AssertionError),
+        ):
+            self.case._receipt_count("store_failed")
+
+    def test_success_cannot_pass_on_another_requests_completed_counter(self):
+        case = receipts.MemoryPersistenceReceiptTest()
+        case.print_test_header = Mock()
+        case._receipt_count = Mock(return_value=41)
+        case.send_memory_request = Mock(return_value={"_replay_id": "own-request"})
+        case._wait_for_receipt = Mock(return_value=42)
+        case._wait_for_terminal_receipt = Mock(
+            return_value=outcome("timeout", reason="persist_timeout")
+        )
+        with self.assertRaises(AssertionError):
+            case.test_01_successful_store_reports_completed_receipt()
+        case._wait_for_receipt.assert_not_called()
+
+    def test_outage_accepts_only_failure_receipts_and_restores_backend(self):
+        for status in ["store_failed", "timeout", "completed", "skipped", "rejected"]:
+            with self.subTest(status=status):
+                case = receipts.MemoryPersistenceReceiptTest()
+                case.test_user, case.storage_wait = "test-user", 0
+                case.print_test_header = Mock()
+                case.print_test_result = Mock()
+                case._container_available = Mock(return_value=True)
+                case._container_command = Mock()
+                case._receipt_count = Mock(return_value=0)
+                case._wait_for_receipt = Mock(return_value=1)
+                case.send_memory_request = Mock(
+                    return_value={"_output_text": "model output"}
+                )
+                case._wait_for_terminal_receipt = Mock(
+                    return_value=outcome(
+                        status,
+                        reason=receipts.FAILURE_RECEIPTS.get(status, "unexpected"),
+                    )
+                )
+                expected = (
+                    nullcontext()
+                    if status in receipts.FAILURE_RECEIPTS
+                    else self.assertRaises(AssertionError)
+                )
+                with patch.object(receipts.time, "sleep"), expected:
+                    case.test_02_store_failure_keeps_response_fail_open()
+                self.assertEqual(
+                    [call.args[0] for call in case._container_command.call_args_list],
+                    ["stop", "start"],
+                )
+                first_poll = case._wait_for_terminal_receipt.call_args_list[0]
+                self.assertEqual(
+                    first_poll.kwargs["timeout"],
+                    receipts.FAILURE_RECEIPT_BUDGET_SECONDS,
+                )
+                if status in receipts.FAILURE_RECEIPTS:
+                    self.assertEqual(case._wait_for_terminal_receipt.call_count, 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

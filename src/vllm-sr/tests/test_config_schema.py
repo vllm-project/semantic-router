@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from cli.config_schema import routing_surface_catalog, schema_document, surface_types
 from cli.config_schema.validation import validate_config_structure
 from cli.config_schema.views import schema_view
@@ -171,3 +172,68 @@ def test_reference_config_matches_generated_structure() -> None:
         config = safe_load_router_config(stream)
 
     assert validate_config_structure(config) == []
+
+
+@pytest.mark.parametrize(
+    "persistence",
+    [
+        None,
+        {
+            "timeout_seconds": 10,
+            "concurrency": 2,
+            "queue": 8,
+            "shutdown_grace_seconds": 3,
+        },
+    ],
+)
+def test_memory_integration_config_matches_generated_structure(
+    persistence: dict[str, int] | None,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    config_path = repository_root / "e2e" / "config" / "config.memory-user.yaml"
+    with config_path.open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+    if persistence is not None:
+        config["global"]["stores"]["memory"]["persistence"] = persistence
+
+    assert validate_config_structure(config) == []
+
+
+@pytest.mark.parametrize(("field", "maximum"), [("concurrency", 64), ("queue", 1024)])
+@pytest.mark.parametrize(
+    "boundary", ["negative", "zero", "one", "max", "above", "huge"]
+)
+def test_memory_persistence_resource_bounds_in_generated_schema(
+    field: str,
+    maximum: int,
+    boundary: str,
+) -> None:
+    value = {
+        "negative": -1,
+        "zero": 0,
+        "one": 1,
+        "max": maximum,
+        "above": maximum + 1,
+        "huge": 2**63 - 1,
+    }[boundary]
+    config = {
+        "version": "v0.3",
+        "global": {"stores": {"memory": {"persistence": {field: value}}}},
+    }
+    errors = validate_config_structure(config)
+    if 0 <= value <= maximum:
+        assert errors == []
+    else:
+        assert errors
+        assert any(field in error for error in errors)
+
+
+@pytest.mark.parametrize("field", ["timeout_seconds", "shutdown_grace_seconds"])
+def test_memory_persistence_schema_rejects_negative_durations(field: str) -> None:
+    config = {
+        "version": "v0.3",
+        "global": {"stores": {"memory": {"persistence": {field: -1}}}},
+    }
+    errors = validate_config_structure(config)
+    assert errors
+    assert any(field in error for error in errors)

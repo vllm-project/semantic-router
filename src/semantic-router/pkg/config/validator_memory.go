@@ -2,6 +2,13 @@ package config
 
 import "fmt"
 
+const (
+	// MaxMemoryPersistenceConcurrency limits worker allocation at startup and reload.
+	MaxMemoryPersistenceConcurrency = 64
+	// MaxMemoryPersistenceQueue limits queued snapshots at startup and reload.
+	MaxMemoryPersistenceQueue = 1024
+)
+
 // validateMemoryContracts validates the long-term-memory similarity threshold
 // wherever it can be configured: the global memory block
 // (default_similarity_threshold) and each decision's memory plugin
@@ -26,10 +33,34 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	return validateMemorySimilarityThreshold(
+	if err := validateMemorySimilarityThreshold(
 		cfg.Memory.DefaultSimilarityThreshold,
 		"global memory default_similarity_threshold",
-	)
+	); err != nil {
+		return err
+	}
+	return validateMemoryPersistence(cfg.Memory.Persistence)
+}
+
+// Zero values use runtime defaults. Reject invalid resource bounds before any
+// persistence workers or queue entries are allocated.
+func validateMemoryPersistence(cfg MemoryPersistenceConfig) error {
+	if cfg.TimeoutSeconds < 0 {
+		return fmt.Errorf("global memory persistence timeout_seconds must be >= 0, got %d", cfg.TimeoutSeconds)
+	}
+	if cfg.Concurrency < 0 || cfg.Concurrency > MaxMemoryPersistenceConcurrency {
+		return fmt.Errorf("global memory persistence concurrency must be between 0 and %d, got %d", MaxMemoryPersistenceConcurrency, cfg.Concurrency)
+	}
+	if cfg.Queue < 0 || cfg.Queue > MaxMemoryPersistenceQueue {
+		return fmt.Errorf("global memory persistence queue must be between 0 and %d, got %d", MaxMemoryPersistenceQueue, cfg.Queue)
+	}
+	if cfg.ShutdownGraceSeconds < 0 {
+		return fmt.Errorf(
+			"global memory persistence shutdown_grace_seconds must be >= 0, got %d",
+			cfg.ShutdownGraceSeconds,
+		)
+	}
+	return nil
 }
 
 func validateDecisionMemoryContracts(cfg *RouterConfig) error {

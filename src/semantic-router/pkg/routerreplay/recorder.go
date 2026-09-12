@@ -59,7 +59,10 @@ type (
 )
 
 type Recorder struct {
-	storage store.Storage
+	storage   store.Storage
+	outcomes  *outcomeQueue
+	closeOnce sync.Once
+	closeErr  error
 	// operationTimeout bounds audit-store I/O independently from the client
 	// request. It is immutable after construction in production; tests may
 	// shorten it before issuing operations to exercise stalled backends.
@@ -86,6 +89,7 @@ type lifecycleTransition struct {
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
 		storage:              storage,
+		outcomes:             newOutcomeQueue(DefaultOutcomeQueueCapacity, outcomeShutdownGrace),
 		operationTimeout:     DefaultOperationTimeout,
 		lifecycleTransitions: make(map[string]*lifecycleTransition),
 		maxBodyBytes:         DefaultMaxBodyBytes,
@@ -346,7 +350,17 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 }
 
 func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
-	ctx, cancel := r.replayOperationContext()
+	return r.AppendOutcomeContext(context.Background(), id, outcome)
+}
+
+// AppendOutcomeContext lets background dispatchers cancel outstanding receipt
+// I/O at shutdown. The recorder's operation timeout still bounds each write.
+func (r *Recorder) AppendOutcomeContext(parent context.Context, id string, outcome Outcome) error {
+	timeout := r.operationTimeout
+	if timeout <= 0 {
+		timeout = DefaultOperationTimeout
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	return r.storage.AppendOutcome(ctx, id, outcome)
 }
@@ -409,11 +423,6 @@ func (r *Recorder) ListAllRecords() []RoutingRecord {
 		return []RoutingRecord{}
 	}
 	return records
-}
-
-// Releases resources held by the storage backend.
-func (r *Recorder) Close() error {
-	return r.storage.Close()
 }
 
 // replayOperationContext is intentionally independent from a client request:

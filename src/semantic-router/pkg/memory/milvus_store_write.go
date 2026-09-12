@@ -9,6 +9,9 @@ import (
 )
 
 func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	startTime := time.Now()
 	backend := "milvus"
 	operation := "store"
@@ -32,7 +35,7 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 	logging.Debugf("MilvusStore.Store: id=%s, user=%s, type=%s, content_len=%d",
 		memory.ID, memory.UserID, memory.Type, len(memory.Content))
 
-	embedding, err := memoryEmbedding(memory, m.embeddingConfig)
+	embedding, err := memoryEmbedding(ctx, memory, m.embeddingConfig)
 	if err != nil {
 		status = "error"
 		return err
@@ -81,11 +84,11 @@ func (m *MilvusStore) upsert(ctx context.Context, memory *Memory) error {
 	return nil
 }
 
-func memoryEmbedding(memory *Memory, cfg EmbeddingConfig) ([]float32, error) {
+func memoryEmbedding(ctx context.Context, memory *Memory, cfg EmbeddingConfig) ([]float32, error) {
 	if len(memory.Embedding) > 0 {
 		return memory.Embedding, nil
 	}
-	embedding, err := GenerateEmbedding(memory.Content, cfg)
+	embedding, err := GenerateEmbeddingContext(ctx, memory.Content, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
