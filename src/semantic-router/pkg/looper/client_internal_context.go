@@ -13,7 +13,7 @@ import (
 // setInternalRequestHeaders attaches authenticated routing context for the
 // in-process extproc hop. These values are consumed and removed before the
 // physical model backend is invoked.
-func (c *Client) setInternalRequestHeaders(
+func setInternalRequestHeaders(
 	header http.Header,
 	ctx context.Context,
 	options CallOptions,
@@ -47,8 +47,8 @@ func setOptionalInt64Header(header http.Header, name string, value *int64) {
 
 func (c *Client) requestHeaders(
 	ctx context.Context,
+	target ModelTarget,
 	options CallOptions,
-	accessKey string,
 ) http.Header {
 	header := make(http.Header, len(c.headers)+7)
 	header.Set("Content-Type", "application/json")
@@ -60,9 +60,9 @@ func (c *Client) requestHeaders(
 	for name, value := range traceHeaders {
 		header.Set(name, value)
 	}
-	if accessKey != "" {
-		header.Set("Authorization", "Bearer "+accessKey)
+	if target.AccessKey != "" {
+		header.Set("Authorization", "Bearer "+target.AccessKey)
 	}
-	c.setInternalRequestHeaders(header, ctx, options)
+	setInternalRequestHeaders(header, ctx, options)
 	return header
 }

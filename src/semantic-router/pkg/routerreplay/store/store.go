@@ -163,6 +163,23 @@ type LooperDiagnostics struct {
 	DroppedUsage        LooperUsage     `json:"dropped_usage,omitempty"`
 }
 
+// RequestDemandSnapshot is one content-free observation of the request demand
+// at a stable lifecycle boundary. Representation says whether the observation
+// describes semantic or wire form; the closed stage/source vocabularies keep
+// Replay records bounded and comparable without retaining request content.
+type RequestDemandSnapshot struct {
+	Stage                string `json:"stage"`
+	Representation       string `json:"representation"`
+	Model                string `json:"model,omitempty"`
+	PromptTokens         int    `json:"prompt_tokens"`
+	ReservedOutputTokens int    `json:"reserved_output_tokens"`
+	TotalDemandTokens    int    `json:"total_demand_tokens"`
+	TotalDemandKnown     bool   `json:"total_demand_known"`
+	CountingSource       string `json:"counting_source"`
+	OutputReserveSource  string `json:"output_reserve_source"`
+	RequestGeneration    uint64 `json:"request_generation"`
+}
+
 // RouteDiagnostics summarizes the final route, Router Learning protection,
 // and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
@@ -214,6 +231,7 @@ type RouteDiagnostics struct {
 	ContextCompressionQuality        string                   `json:"context_compression_quality,omitempty"`
 	ContextCompressionFallback       string                   `json:"context_compression_fallback,omitempty"`
 	ContextCompressionCostSaved      float64                  `json:"context_compression_cost_saved,omitempty"`
+	RequestDemandSnapshots           []RequestDemandSnapshot  `json:"request_demand_snapshots,omitempty"`
 	Annotations                      map[string]interface{}   `json:"annotations,omitempty"`
 	SignalErrors                     map[string]string        `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies           map[string]string        `json:"applied_unknown_policies,omitempty"`
@@ -593,6 +611,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned := *value
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
+	cloned.RequestDemandSnapshots = append([]RequestDemandSnapshot(nil), value.RequestDemandSnapshots...)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)

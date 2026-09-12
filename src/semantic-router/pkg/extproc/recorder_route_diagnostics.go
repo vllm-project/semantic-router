@@ -62,6 +62,7 @@ func buildReplayRouteDiagnostics(
 		ContextCompressionQuality:        ctx.ContextCompressionQuality,
 		ContextCompressionFallback:       ctx.ContextCompressionFallback,
 		ContextCompressionCostSaved:      ctx.ContextCompressionCostSaved,
+		RequestDemandSnapshots:           cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
 		SignalErrors:                     cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:           ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 		EffectiveMaxOutputTokens:         cloneReplayValue(ctx.EffectiveMaxOutputTokens),

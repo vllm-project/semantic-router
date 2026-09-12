@@ -199,10 +199,7 @@ func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
 		)
 		return nil, false
 	}
-	if err := config.ValidateLocalClassifierReload(
-		currentCfg,
-		backupCfg,
-	); err != nil {
+	if err := validateParsedHotReloadCompatibility(currentCfg, backupCfg); err != nil {
 		s.writeErrorResponse(
 			w,
 			http.StatusConflict,

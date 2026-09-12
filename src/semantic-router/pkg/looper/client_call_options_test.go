@@ -98,12 +98,20 @@ func TestRequestHeadersUsesContextFusionDepthAsFallback(t *testing.T) {
 	client := NewClient(&config.LooperConfig{})
 	ctx := contextWithFusionDepth(context.Background(), 1)
 
-	header := client.requestHeaders(ctx, CallOptions{DecisionName: "decision-a", Iteration: 1}, "")
+	header := client.requestHeaders(
+		ctx,
+		ModelTarget{},
+		CallOptions{DecisionName: "decision-a", Iteration: 1},
+	)
 	if got := header.Get(headers.VSRFusionDepth); got != "1" {
 		t.Fatalf("context %s = %q, want 1", headers.VSRFusionDepth, got)
 	}
 
-	header = client.requestHeaders(ctx, CallOptions{DecisionName: "decision-a", Iteration: 1, FusionDepth: 2}, "")
+	header = client.requestHeaders(
+		ctx,
+		ModelTarget{},
+		CallOptions{DecisionName: "decision-a", Iteration: 1, FusionDepth: 2},
+	)
 	if got := header.Get(headers.VSRFusionDepth); got != "2" {
 		t.Fatalf("explicit %s = %q, want 2", headers.VSRFusionDepth, got)
 	}
@@ -113,13 +121,13 @@ func TestRequestHeadersCarriesPositiveOutputTokenBounds(t *testing.T) {
 	client := NewClient(&config.LooperConfig{})
 	header := client.requestHeaders(
 		context.Background(),
+		ModelTarget{},
 		CallOptions{
 			DecisionName:          "decision-a",
 			Iteration:             1,
 			ClientMaxOutputTokens: looperTestInt64(256),
 			StageMaxOutputTokens:  looperTestInt64(64),
 		},
-		"",
 	)
 	if got := header.Get(headers.VSRLooperClientMaxOutputTokens); got != "256" {
 		t.Fatalf("%s = %q, want 256", headers.VSRLooperClientMaxOutputTokens, got)
@@ -130,13 +138,13 @@ func TestRequestHeadersCarriesPositiveOutputTokenBounds(t *testing.T) {
 
 	header = client.requestHeaders(
 		context.Background(),
+		ModelTarget{},
 		CallOptions{
 			DecisionName:          "decision-a",
 			Iteration:             1,
 			ClientMaxOutputTokens: looperTestInt64(0),
 			StageMaxOutputTokens:  looperTestInt64(-8),
 		},
-		"",
 	)
 	if got := header.Get(headers.VSRLooperClientMaxOutputTokens); got != "" {
 		t.Fatalf("non-positive client bound header = %q", got)

@@ -45,6 +45,7 @@ type (
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
+	RequestDemandSnapshot         = store.RequestDemandSnapshot
 	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
 	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics
 	LooperUsage                   = store.LooperUsage

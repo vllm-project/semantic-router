@@ -1287,6 +1287,14 @@
             }
           },
           {
+            "name": "expanded",
+            "in": "query",
+            "description": "Return a self-contained JSON Schema for view=section instead of its compact field directory.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "kind",
             "in": "query",
             "description": "Surface kind required by view=surface.",

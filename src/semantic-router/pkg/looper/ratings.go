@@ -36,12 +36,12 @@ type RatingsLooper struct {
 
 // NewRatingsLooper creates a new RatingsLooper instance
 func NewRatingsLooper(cfg *config.LooperConfig) *RatingsLooper {
-	return newRatingsLooper(cfg, nil)
+	return newRatingsLooper(cfg, ownClient(NewClient(cfg)))
 }
 
-func newRatingsLooper(cfg *config.LooperConfig, client *Client) *RatingsLooper {
+func newRatingsLooper(cfg *config.LooperConfig, binding clientBinding) *RatingsLooper {
 	return &RatingsLooper{
-		BaseLooper: newBaseLooper(cfg, client),
+		BaseLooper: newBaseLooper(cfg, binding),
 	}
 }
 

@@ -177,6 +177,10 @@ type RequestContext struct {
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 
+	// RequestDemandSnapshots retains at most one content-free demand estimate for
+	// each stable request stage. It is observe-only until final admission lands.
+	RequestDemandSnapshots []routerreplay.RequestDemandSnapshot
+
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords        []string // Matched keyword rule names
 	VSRMatchedEmbeddings      []string // Matched embedding rule names

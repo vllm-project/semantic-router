@@ -161,6 +161,34 @@ func TestValidateHotReloadCompatibilityRejectsLocalClassifierChange(t *testing.T
 	}
 }
 
+func TestValidateHotReloadCompatibilityRejectsEnvoyTopologyChange(t *testing.T) {
+	current := minimalDeployTestConfig("route")
+	next := minimalDeployTestConfig("route")
+	next.VLLMEndpoints[0].Port++
+
+	currentYAML := mustMarshalCanonicalConfigYAML(t, current)
+	nextYAML := mustMarshalCanonicalConfigYAML(t, next)
+	err := validateHotReloadCompatibility(currentYAML, nextYAML)
+	if err == nil {
+		t.Fatal("expected restart-required Envoy topology error")
+	}
+	if !strings.Contains(err.Error(), "deployment workflow") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateHotReloadCompatibilityAllowsRouterPolicyChange(t *testing.T) {
+	current := minimalDeployTestConfig("before")
+	next := minimalDeployTestConfig("after")
+
+	if err := validateHotReloadCompatibility(
+		mustMarshalCanonicalConfigYAML(t, current),
+		mustMarshalCanonicalConfigYAML(t, next),
+	); err != nil {
+		t.Fatalf("routing-only change should be hot-reloadable: %v", err)
+	}
+}
+
 func localClassifierReloadConfig(modelPath string) string {
 	return `
 version: v0.3

@@ -22,6 +22,7 @@ package looper
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/openai/openai-go"
 
@@ -140,6 +141,13 @@ type Looper interface {
 	Execute(ctx context.Context, req *Request) (*Response, error)
 }
 
+// ManagedLooper owns the resources created by Factory and must be closed by
+// its caller. Loopers built with FactoryWithClient borrow the supplied client.
+type ManagedLooper interface {
+	Looper
+	io.Closer
+}
+
 // UnsupportedAlgorithmError reports an algorithm that cannot be constructed
 // by the Looper runtime.
 type UnsupportedAlgorithmError struct {
@@ -150,39 +158,55 @@ func (e *UnsupportedAlgorithmError) Error() string {
 	return fmt.Sprintf("unsupported Looper algorithm %q", e.AlgorithmType)
 }
 
-type algorithmConstructor func(*config.LooperConfig, *Client) Looper
+type algorithmConstructor func(*config.LooperConfig, clientBinding) ManagedLooper
 
 var algorithmConstructors = map[string]algorithmConstructor{
-	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig, client *Client) Looper {
-		return newConfidenceLooper(cfg, client)
+	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newConfidenceLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig, client *Client) Looper {
-		return newFusionLooper(cfg, client)
+	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newFusionLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig, client *Client) Looper {
-		return newRatingsLooper(cfg, client)
+	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newRatingsLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig, client *Client) Looper {
-		return newReMoMLooper(cfg, client)
+	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newReMoMLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig, client *Client) Looper {
-		return newWorkflowsLooper(cfg, client)
+	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newWorkflowsLooper(cfg, binding)
 	},
 }
 
 // Factory creates a Looper instance based on the authoritative config catalog.
-func Factory(cfg *config.LooperConfig, algorithmType string) (Looper, error) {
-	return FactoryWithClient(cfg, algorithmType, NewClient(cfg))
+func Factory(cfg *config.LooperConfig, algorithmType string) (ManagedLooper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	client, err := NewConnectorClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return constructor(cfg, ownClient(client)), nil
 }
 
 // FactoryWithClient creates a Looper that reuses the supplied client.
 func FactoryWithClient(cfg *config.LooperConfig, algorithmType string, client *Client) (Looper, error) {
-	constructor, ok := algorithmConstructors[algorithmType]
-	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
-		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
 	}
 	if client == nil {
 		return nil, fmt.Errorf("looper client is required")
 	}
-	return constructor(cfg, client), nil
+	return constructor(cfg, borrowClient(client)), nil
+}
+
+func constructorFor(algorithmType string) (algorithmConstructor, error) {
+	constructor, ok := algorithmConstructors[algorithmType]
+	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
+		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
+	}
+	return constructor, nil
 }
