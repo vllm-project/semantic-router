@@ -70,6 +70,10 @@ func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (
 		}, nil
 	}
 
+	if !classifier.IsPIIModelReady() {
+		return nil, ErrModelNotReady
+	}
+
 	var detections []classification.PIIDetection
 	var err error
 	if req.Options != nil && req.Options.ConfidenceThreshold > 0 {
