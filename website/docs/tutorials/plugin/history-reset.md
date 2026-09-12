@@ -97,6 +97,51 @@ protected message simply has its proposal rejected.
 A turn is removable only when every one of its messages is eligible and nothing
 retained depends on it. Mixed turns are kept whole.
 
+## Evidence and Failure Behavior
+
+Only an accepted topic change authorizes removal, and the result must be bound
+to the request it describes: the router computes an identity for the resolved
+original history and the live turn, and evidence carrying a different binding
+is treated as stale. Uncertainty never authorizes removal.
+
+| Condition | `fail_open` | `fail_closed` |
+| --- | --- | --- |
+| Accepted change with removable history | Remove the eligible turns | Same |
+| Continuation, or no removable history | Preserve history; normal no-op | Same |
+| Missing, unknown, conflicting, low-confidence, stale, or unsupported-version evidence | Preserve history and record the reason | Reject before provider dispatch |
+| Planning limit exceeded | Preserve history | Reject before provider dispatch |
+| Required recovery unavailable or its write fails | Preserve history | Reject before provider dispatch |
+
+Every outcome records a bounded terminal reason, for example
+`evidence_continuation`, `evidence_stale`, `history_limit_exceeded`, or
+`recovery_write_failed`. A preserved request keeps its enrichment, tools,
+metadata, and generation exactly as they were.
+
+## Recovery
+
+With `recovery.enabled: true`, the removed turns are written to the shared
+context-recovery store *before* the removal commits, and the model is offered a
+reserved retrieval tool whose accepted keys are exactly the ones this request
+issued. A failed or oversized write preserves the history instead of removing
+content that could not be stored.
+
+The stored payload is a versioned envelope that keeps the removed messages in
+order with their roles, content, and tool links, so a retrieval returns the
+original exchange rather than a summary. Retrieval never re-executes historical
+tool calls and never changes durable conversation state.
+
+Recovery is one request-level facility shared with `context_compression`: one
+store, one budget, one reserved tool, one key set. When both plugins enable it,
+their `recovery.store` values must match — configuration validation rejects a
+decision that asks for two different stores — and each remaining bound resolves
+to the stricter of the two.
+
+Required recovery is not supported on streaming requests, because the retrieval
+follow-up has nowhere to run. Such a request preserves its history under
+`fail_open` or is rejected under `fail_closed`, with the
+`streaming_recovery_unsupported` reason. Reset never silently downgrades a
+recoverable removal to an irreversible one.
+
 ## Interaction With Context Compression
 
 Reset runs before compression in the shared context pipeline. Enabling any
@@ -113,3 +158,11 @@ Every configured evaluation records a content-minimized receipt: the trigger
 identity and evidence status, the eligible scope, examined, retained,
 protected, and removed counts, the outcome, the terminal reason, and recovery
 status. Receipts never contain message text, tool arguments, or recovery keys.
+Counts always describe what the router committed, never what a policy proposed.
+
+Router Replay stores the same fields under `history_reset` when replay capture
+is enabled. Independently of replay, the router emits
+`llm_history_reset_evaluations_total` (labelled by decision, outcome, and
+reason), `llm_history_reset_removed_turns`, `llm_history_reset_removed_messages`,
+and `llm_history_reset_recovery_total`. Metric labels stay low cardinality and
+carry no conversation content or recovery keys.

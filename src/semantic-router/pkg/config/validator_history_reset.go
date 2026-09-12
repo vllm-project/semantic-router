@@ -144,3 +144,28 @@ func validateHistoryResetEnablement(typed *HistoryResetPluginConfig, scope strin
 	}
 	return nil
 }
+
+// validateDecisionContextRecoveryAgreement rejects a decision whose context
+// actions ask for different recovery stores. Removal and compression share one
+// request-level store, budget, and retrieval tool, so the router cannot honour
+// two stores; silently preferring one plugin's setting would leave the other's
+// content unreachable.
+func validateDecisionContextRecoveryAgreement(decision *Decision) error {
+	compression := decision.GetContextCompressionConfig()
+	reset := decision.GetHistoryResetConfig()
+	if compression == nil || compression.Recovery == nil || !compression.Recovery.Enabled ||
+		!reset.RequiresRecovery() {
+		return nil
+	}
+	compressionStore := strings.TrimSpace(compression.Recovery.Store)
+	resetStore := strings.TrimSpace(reset.Recovery.Store)
+	if !strings.EqualFold(compressionStore, resetStore) {
+		return fmt.Errorf(
+			"decision %q: context_compression recovery.store %q and history_reset recovery.store %q must match",
+			decision.Name,
+			compressionStore,
+			resetStore,
+		)
+	}
+	return nil
+}
