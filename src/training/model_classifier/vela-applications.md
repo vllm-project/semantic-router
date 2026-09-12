@@ -117,12 +117,26 @@ candidate predictions and preserve every raw-to-reviewed change. Low-support
 classes cannot be certified or calibrated by a small reviewed subset.
 For such development data, set Hazard's explicit
 `--selection-minimum-support 10` to exclude classes with fewer than ten positive
-or negative observations from checkpoint selection AP. All raw per-class metrics
+or negative observations from the checkpoint selection category average. All raw per-class metrics
 remain recorded. The default of one preserves existing selection behavior.
 `safety_classifier.vela_hard_negatives` supplies a small original contrast corpus
 with fixed train/development semantic families and paired translations. These
 authored examples supplement source supervision; they are not independent
 natural-user evidence.
+
+The later `safety_classifier.vela_reviewed_supervision` v5 projection uses the
+explicit [training review](safety_classifier/configs/vela-training-risk-review-v2.json)
+to replace selected source groups with reviewed visible-text supervision. It
+removes all unreviewed variants of those groups without copying a reviewed
+translation's label onto different text. Source-only positive annotations for
+`specialized_advice` and `misinformation` become unknown in Hazard: the source
+definitions frequently include ordinary technical help, fiction and generic
+instruction attacks that differ from this family contract. Safety excludes
+weak unsafe rows supported only by these categories, without relabeling them
+safe. Clear reviewed and independently authored examples remain eligible for
+both categories. Other source supervision stays explicitly weak. This is a
+versioned training repair; raw evaluation labels and earlier runs stay intact.
+The stratified review counts are not estimates of an entire source's error rate.
 
 For example:
 
@@ -182,9 +196,21 @@ python -m src.training.model_classifier.sequence_repair.train \
 
 Hazard instead uses `safety_classifier.train_vela_hazard` with the same base,
 adapter, contract, data and budget arguments. Its selection choices are
-`macro-ap` and `source-macro-ap`; it implements masked BCE and samples safe
+`macro-ap`, `source-macro-ap`, and `fp-budget-macro-f1`; it implements masked BCE and samples safe
 negatives plus positive categories. Do not pass Hazard data through the
 single-label trainer or use softmax to decode its logits.
+
+For deployment with a false-alarm budget, use `--selection fp-budget-macro-f1
+--selection-false-positive-budget 0.05`. At each development checkpoint it fits
+one shared threshold to maximize supported-category macro-F1 while at most 5%
+of explicitly safe development rows trigger any label. All labels, including
+those with insufficient positive support for selection, count toward this
+false-alarm budget. The saved operating point also reports correct known-positive
+category hits, all-label metrics, support and feasibility. A prediction of an
+unrelated hazard does not count as a correct category hit. Fixed 0.5 metrics and
+AP remain available at every checkpoint. This fits an empirical development
+operating point; it does not guarantee the same population false-alarm rate.
+The historical AP selection modes and default remain unchanged.
 
 Hazard also accepts `--source-weights` as a JSON object naming every training
 source with a positive weight. This replaces equal-source selection while

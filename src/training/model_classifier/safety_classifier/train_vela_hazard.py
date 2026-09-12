@@ -18,6 +18,7 @@ from ..sequence_repair.model import load_model, save_adapter
 from ..sequence_repair.train import token_budget_microbatches
 from .vela_hazard import evaluate, masked_loss, read_rows
 from .vela_hazard_diagnostics import SupervisionDiagnostics
+from .vela_hazard_operating import select_operating_point
 
 SAFE_SAMPLE_FRACTION = 0.3
 
@@ -142,8 +143,11 @@ def main():
     parser.add_argument("--base-id", default="llm-semantic-router/mmbert-32k-yarn")
     parser.add_argument("--length-balanced-sampling", action="store_true")
     parser.add_argument(
-        "--selection", choices=["macro-ap", "source-macro-ap"], default="macro-ap"
+        "--selection",
+        choices=["macro-ap", "source-macro-ap", "fp-budget-macro-f1"],
+        default="macro-ap",
     )
+    parser.add_argument("--selection-false-positive-budget", type=float, default=0.05)
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--accumulate", type=int, default=4)
@@ -169,6 +173,8 @@ def main():
         )
         <= 0
         or args.learning_rate <= 0
+        or not math.isfinite(args.selection_false_positive_budget)
+        or not 0 <= args.selection_false_positive_budget < 1
         or (
             args.microbatch_token_budget is not None
             and args.microbatch_token_budget <= 0
@@ -272,6 +278,7 @@ def main():
                 Path(__file__),
                 Path(__file__).with_name("vela_hazard.py"),
                 Path(__file__).with_name("vela_hazard_diagnostics.py"),
+                Path(__file__).with_name("vela_hazard_operating.py"),
                 Path(__file__).parent.parent / "sequence_repair/model.py",
                 Path(__file__).parent.parent / "sequence_repair/data.py",
                 Path(__file__).parent.parent / "sequence_repair/train.py",
@@ -301,7 +308,7 @@ def main():
     model.train()
     parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(parameters, lr=args.learning_rate, weight_decay=0.01)
-    best = -1.0
+    best = -math.inf
     sampled_unique, sampled_sources, sampled_languages = set(), Counter(), Counter()
     positive_exposures = [0] * len(labels)
     diagnostics = (
@@ -470,9 +477,23 @@ def main():
                 )
                 + "\n"
             )
-            score = development_selection_score(
-                metrics, args.selection, args.selection_minimum_support
-            )
+            operating_point = None
+            if args.selection == "fp-budget-macro-f1":
+                operating_point = select_operating_point(
+                    dev,
+                    probabilities,
+                    labels,
+                    false_positive_budget=args.selection_false_positive_budget,
+                    minimum_support=args.selection_minimum_support,
+                )
+                score = operating_point["selection_score"]
+                (output / f"dev-operating-point-step-{step}.json").write_text(
+                    json.dumps(operating_point, indent=2) + "\n"
+                )
+            else:
+                score = development_selection_score(
+                    metrics, args.selection, args.selection_minimum_support
+                )
             print(
                 json.dumps(
                     {
@@ -502,6 +523,7 @@ def main():
                             "score": score,
                             "selection": args.selection,
                             "selection_minimum_support": args.selection_minimum_support,
+                            "operating_point": operating_point,
                             "test_used": False,
                         }
                     )
