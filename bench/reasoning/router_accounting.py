@@ -10,7 +10,8 @@ from __future__ import annotations
 import re
 import statistics
 import urllib.request
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 SELECTED_MODEL_HEADER = "x-vsr-selected-model"
 ROUTING_LATENCY_HEADER = "x-vsr-routing-latency-ms"
@@ -25,10 +26,10 @@ COST_BASIS = "configured pricing (x-vsr-cost), not a provider bill"
 _METRIC_SAMPLE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+(\S+)")
 _METRIC_LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
 
-MetricSamples = Dict[Tuple[str, Tuple[Tuple[str, str], ...]], float]
+MetricSamples = dict[tuple[str, tuple[tuple[str, str], ...]], float]
 
 
-def parse_float(value: Any) -> Optional[float]:
+def parse_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
     try:
@@ -45,15 +46,15 @@ def _field(container: Any, name: str) -> Any:
     return getattr(container, name, None)
 
 
-def usage_detail(usage: Any, group: str, name: str) -> Optional[int]:
+def usage_detail(usage: Any, group: str, name: str) -> int | None:
     """Read a nested usage count such as completion_tokens_details.reasoning_tokens."""
     value = _field(_field(usage, group), name)
     return int(value) if isinstance(value, (int, float)) else None
 
 
 def response_accounting(
-    headers: Optional[Mapping[str, str]], usage: Any, finish_reason: Any
-) -> Dict[str, Any]:
+    headers: Mapping[str, str] | None, usage: Any, finish_reason: Any
+) -> dict[str, Any]:
     """Per-request routing, cost and truncation fields; missing values stay blank."""
     headers = headers or {}
     return {
@@ -70,15 +71,15 @@ def response_accounting(
     }
 
 
-def count_values(values: Iterable[str]) -> Dict[str, int]:
-    counts: Dict[str, int] = {}
+def count_values(values: Iterable[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
     for value in values:
         if value:
             counts[value] = counts.get(value, 0) + 1
     return dict(sorted(counts.items()))
 
 
-def split_summary(models: List[str]) -> Dict[str, Any]:
+def split_summary(models: list[str]) -> dict[str, Any]:
     """Routing split in the same shape as the agentic benchmarks' selected_model_counts."""
     counts = count_values(models)
     return {
@@ -90,7 +91,7 @@ def split_summary(models: List[str]) -> Dict[str, Any]:
     }
 
 
-def _percentile(ordered: List[float], pct: float) -> float:
+def _percentile(ordered: list[float], pct: float) -> float:
     if len(ordered) == 1:
         return ordered[0]
     rank = (len(ordered) - 1) * pct / 100
@@ -100,7 +101,7 @@ def _percentile(ordered: List[float], pct: float) -> float:
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
-def value_summary(values: Iterable[Optional[float]]) -> Dict[str, Any]:
+def value_summary(values: Iterable[float | None]) -> dict[str, Any]:
     ordered = sorted(value for value in values if value is not None)
     if not ordered:
         return {"samples": 0, "mean": None, "p50": None, "p95": None, "max": None}
@@ -113,21 +114,23 @@ def value_summary(values: Iterable[Optional[float]]) -> Dict[str, Any]:
     }
 
 
-def cost_summary(costs: List[Optional[float]], currencies: List[str]) -> Dict[str, Any]:
-    totals: Dict[str, float] = {}
-    priced = 0
-    for cost, currency in zip(costs, currencies):
+def cost_summary(costs: list[float | None], currencies: list[str]) -> dict[str, Any]:
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for cost, currency in zip(costs, currencies, strict=True):
         if cost is None:
             continue
         key = currency or "unknown"
         totals[key] = totals.get(key, 0.0) + cost
-        priced += 1
+        counts[key] = counts.get(key, 0) + 1
+    priced = sum(counts.values())
     return {
         "basis": COST_BASIS,
         "total": {key: round(value, 8) for key, value in sorted(totals.items())},
         "mean_per_priced_request": {
-            key: round(value / priced, 8) for key, value in sorted(totals.items())
+            key: round(value / counts[key], 8) for key, value in sorted(totals.items())
         },
+        "priced_requests_by_currency": dict(sorted(counts.items())),
         "priced_requests": priced,
         "unpriced_requests": len(costs) - priced,
     }
@@ -154,9 +157,9 @@ def scrape_metrics(url: str, timeout: float = 10.0) -> MetricSamples:
         return parse_metrics_text(response.read().decode("utf-8", errors="replace"))
 
 
-def metrics_delta(before: MetricSamples, after: MetricSamples) -> Dict[str, Any]:
+def metrics_delta(before: MetricSamples, after: MetricSamples) -> dict[str, Any]:
     """What the router recorded between two scrapes, including any other traffic."""
-    cost_by_model: Dict[str, Dict[str, float]] = {}
+    cost_by_model: dict[str, dict[str, float]] = {}
     for (name, labels), value in after.items():
         if name != COST_METRIC:
             continue

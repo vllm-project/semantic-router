@@ -303,6 +303,25 @@ def test_summary_reports_cost_routing_latency_and_truncation():
     assert summary["reasoning_tokens"] == 120
 
 
+def test_cost_summary_counts_priced_requests_per_currency():
+    bench = load_benchmark_module()
+    euro = accounting_row("eu", cost=0.01, routing_ms=0.5, finish="stop")
+    euro["cost_currency"] = "EUR"
+    rows = [
+        accounting_row("cloud", cost=0.002, routing_ms=0.5, finish="stop"),
+        accounting_row("cloud", cost=0.004, routing_ms=0.5, finish="stop"),
+        euro,
+        accounting_row("local", cost=None, routing_ms=None, finish="stop"),
+    ]
+
+    summary = bench.cost_summary(rows)
+
+    assert summary["total"] == {"EUR": 0.01, "USD": 0.006}
+    assert summary["priced_requests_by_currency"] == {"EUR": 1, "USD": 2}
+    assert summary["mean_per_priced_request"] == {"EUR": 0.01, "USD": 0.003}
+    assert summary["unpriced_requests"] == 1
+
+
 def test_router_metrics_delta_reports_cost_and_mean_routing_latency():
     bench = load_benchmark_module()
     before = bench.parse_metrics_text(

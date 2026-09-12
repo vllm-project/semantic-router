@@ -12,24 +12,25 @@ Features:
 - Comprehensive metrics and visualization
 """
 
+from __future__ import annotations
+
 import argparse
+import contextlib
 import json
 import os
 import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from openai import OpenAI
 from tqdm import tqdm
 
 from .dataset_factory import DatasetFactory, list_available_datasets
-from .dataset_interface import DatasetInfo, Question, questions_to_dataframe
+from .dataset_interface import Question
 from .router_accounting import (
     cost_summary,
     count_values,
@@ -274,31 +275,31 @@ def get_dataset_optimal_tokens(dataset_info, model_name=None):
         base_tokens = difficulty_tokens.get(difficulty, 200)
 
     # Special case: Qwen3 models need higher tokens for complex reasoning datasets
-    if model_name and "qwen" in model_name.lower():
-        if "mmlu" in dataset_name or "gpqa" in dataset_name:
-            final_tokens = 10240
-            dataset_type = "MMLU" if "mmlu" in dataset_name else "GPQA"
-            print(
-                f"  🎯 Special case: Qwen3 + {dataset_type} = {final_tokens} tokens (fixed requirement)"
-            )
-            return final_tokens
-        # elif "math" in dataset_name:  # DISABLED: dataset not available
-        #     final_tokens = 8000  # Competition math needs extensive proofs
-        #     print(f"  🎯 Special case: Qwen3 + MATH = {final_tokens} tokens (competition math requirement)")
-        #     return final_tokens
+    if (
+        model_name
+        and "qwen" in model_name.lower()
+        and ("mmlu" in dataset_name or "gpqa" in dataset_name)
+    ):
+        final_tokens = 10240
+        dataset_type = "MMLU" if "mmlu" in dataset_name else "GPQA"
+        print(
+            f"  🎯 Special case: Qwen3 + {dataset_type} = {final_tokens} tokens (fixed requirement)"
+        )
+        return final_tokens
+    # Qwen3 + MATH (8000 tokens) is disabled: the dataset is not available.
 
     # Apply model-specific multiplier and round to nearest 50
     final_tokens = int(base_tokens * model_multiplier)
     final_tokens = ((final_tokens + 25) // 50) * 50  # Round to nearest 50
 
     print(
-        f"  🧮 Token calculation: {base_tokens} × {model_multiplier} = {int(base_tokens * model_multiplier)} → {final_tokens} (rounded)"
+        f"  🧮 Token calculation: {base_tokens} x {model_multiplier} = {int(base_tokens * model_multiplier)} → {final_tokens} (rounded)"
     )
 
     return final_tokens
 
 
-def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
+def get_available_models(endpoint: str, api_key: str = "") -> list[str]:
     """Get available models from an endpoint."""
     client = OpenAI(base_url=endpoint, api_key=api_key or None, timeout=300.0)
     try:
@@ -309,7 +310,7 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
         return []
 
 
-def extract_answer(response: Any, question: Optional[Question] = None) -> Optional[str]:
+def extract_answer(response: Any, question: Question | None = None) -> str | None:
     """Extract answer from model response based on question format."""
     # Normalize non-string responses into a string to be robust to providers
     # that return structured content (e.g., lists of parts or dicts).
@@ -320,7 +321,7 @@ def extract_answer(response: Any, question: Optional[Question] = None) -> Option
         try:
             # Handle list-of-parts shapes
             if isinstance(response, list):
-                parts: List[str] = []
+                parts: list[str] = []
                 for part in response:
                     if isinstance(part, dict):
                         if "text" in part and isinstance(part["text"], str):
@@ -365,7 +366,7 @@ def extract_answer(response: Any, question: Optional[Question] = None) -> Option
         return extract_free_form_answer(response)
 
 
-def extract_structured_answer(response: str) -> Optional[str]:
+def extract_structured_answer(response: str) -> str | None:
     """Extract answer from structured 'ANSWER: [value]' format."""
     # Look for "ANSWER: [value]" pattern (case insensitive)
     pattern = re.compile(r"ANSWER:\s*(.+?)(?:\n|$)", re.IGNORECASE)
@@ -378,7 +379,7 @@ def extract_structured_answer(response: str) -> Optional[str]:
     return None
 
 
-def extract_multiple_choice_answer(response: str) -> Optional[str]:
+def extract_multiple_choice_answer(response: str) -> str | None:
     """Extract multiple choice answer (A, B, C, D, etc.)."""
     # Try multiple extraction patterns in order of preference
     patterns = [ANSWER_PATTERN_PRIMARY, ANSWER_PATTERN_FINAL, ANSWER_PATTERN_CONCLUSION]
@@ -404,15 +405,15 @@ def extract_multiple_choice_answer(response: str) -> Optional[str]:
 
     # Fallback 1: Look for standalone letters at end of response
     lines = response.strip().split("\n")
-    for line in reversed(lines[-3:]):  # Check last 3 lines
-        line = line.strip()
+    for raw_line in reversed(lines[-3:]):  # Check last 3 lines
+        line = raw_line.strip()
         if len(line) == 1 and line.upper() in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
             return line.upper()
 
     # Fallback 2: Look for letters in specific contexts (more targeted)
     # Check for patterns like "is E" or "answer E" in last few lines
-    for line in reversed(lines[-3:]):
-        line = line.strip()
+    for raw_line in reversed(lines[-3:]):
+        line = raw_line.strip()
         # Look for letter after common words
         context_match = re.search(
             r"(?:is|answer|option|choice)\s+([A-Z])(?:\s|[.!?]|$)", line, re.IGNORECASE
@@ -430,7 +431,7 @@ def extract_multiple_choice_answer(response: str) -> Optional[str]:
     return None
 
 
-def extract_binary_answer(response: str) -> Optional[str]:
+def extract_binary_answer(response: str) -> str | None:
     """Extract Yes/No answer from response."""
     response_lower = response.lower()
 
@@ -463,7 +464,7 @@ def extract_binary_answer(response: str) -> Optional[str]:
     return None
 
 
-def extract_free_form_answer(response: str) -> Optional[str]:
+def extract_free_form_answer(response: str) -> str | None:
     """Extract free-form answer (numbers, text, etc.)."""
     # For numerical answers, look for numbers with improved patterns
     number_patterns = [
@@ -479,8 +480,8 @@ def extract_free_form_answer(response: str) -> Optional[str]:
 
     # Check last few lines first (most likely to contain final answer)
     lines = response.strip().split("\n")
-    for line in reversed(lines[-3:]):
-        line = line.strip()
+    for raw_line in reversed(lines[-3:]):
+        line = raw_line.strip()
 
         for pattern in number_patterns:
             match = re.search(pattern, line, re.IGNORECASE)
@@ -507,8 +508,8 @@ def extract_free_form_answer(response: str) -> Optional[str]:
     ]
 
     # Check last few lines for text answers
-    for line in reversed(lines[-3:]):
-        line = line.strip()
+    for raw_line in reversed(lines[-3:]):
+        line = raw_line.strip()
 
         for pattern in text_patterns:
             match = re.search(pattern, line, re.IGNORECASE)
@@ -526,8 +527,8 @@ def extract_free_form_answer(response: str) -> Optional[str]:
                     return " ".join(words[:2])  # Take first 2 words for long matches
 
     # Final fallback: extract last meaningful line
-    for line in reversed(lines[-3:]):
-        line = line.strip()
+    for raw_line in reversed(lines[-3:]):
+        line = raw_line.strip()
         if line and not line.startswith(
             (
                 "Question:",
@@ -615,8 +616,8 @@ def call_model_detailed(
     prompt: str,
     max_tokens: int,
     temperature: float,
-    extra_body: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    extra_body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Call the model, keeping router response headers and usage details."""
     try:
         raw = client.chat.completions.with_raw_response.create(
@@ -660,8 +661,8 @@ def call_model(
     prompt: str,
     max_tokens: int,
     temperature: float,
-    extra_body: Optional[Dict[str, Any]] = None,
-) -> Tuple[str, bool, Optional[int], Optional[int], Optional[int]]:
+    extra_body: dict[str, Any] | None = None,
+) -> tuple[str, bool, int | None, int | None, int | None]:
     """Call model with given parameters."""
     result = call_model_detailed(
         client, model, prompt, max_tokens, temperature, extra_body
@@ -676,8 +677,8 @@ def call_model(
 
 
 def build_extra_body_for_model(
-    model_name: str, reasoning: Optional[bool]
-) -> Optional[Dict[str, Any]]:
+    model_name: str, reasoning: bool | None
+) -> dict[str, Any] | None:
     """Return an extra_body dict to toggle reasoning for a given model.
 
     This function matches the exact pattern from reasoning_eval_consolidated.py
@@ -725,9 +726,9 @@ def process_question_single(
     prompt_mode: str,
     max_tokens: int,
     temperature: float,
-    ar_extra_body: Optional[Dict[str, Any]] = None,
-    mode_label: Optional[str] = None,
-) -> Dict[str, Any]:
+    ar_extra_body: dict[str, Any] | None = None,
+    mode_label: str | None = None,
+) -> dict[str, Any]:
     """Process a single question with the model."""
     # Format prompt based on mode
     if prompt_mode == "XC":
@@ -803,7 +804,7 @@ def process_question_single(
 
 
 def evaluate_model_router_transparent(
-    questions: List[Question],
+    questions: list[Question],
     dataset: Any,  # DatasetInterface
     model: str,
     endpoint: str,
@@ -816,7 +817,7 @@ def evaluate_model_router_transparent(
     client = OpenAI(base_url=endpoint, api_key=api_key or None, timeout=300.0)
     print(f"Using model: {model}, endpoint: {endpoint}")
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = []
@@ -853,10 +854,8 @@ def evaluate_model_router_transparent(
             # Collect results from completed futures
             for future in futures:
                 if future.done() and not future.cancelled():
-                    try:
+                    with contextlib.suppress(Exception):  # Skip failed results
                         results.append(future.result())
-                    except Exception:
-                        pass  # Skip failed results
             if not results:
                 print("❌ No router results to save.")
                 raise
@@ -866,7 +865,7 @@ def evaluate_model_router_transparent(
 
 
 def evaluate_model_vllm_multimode(
-    questions: List[Question],
+    questions: list[Question],
     dataset: Any,  # DatasetInterface
     model: str,
     endpoint: str,
@@ -874,7 +873,7 @@ def evaluate_model_vllm_multimode(
     concurrent_requests: int,
     max_tokens: int,
     temperature: float,
-    exec_modes: List[str],
+    exec_modes: list[str],
 ) -> pd.DataFrame:
     """Run vLLM with 2-3 realistic reasoning scenarios.
 
@@ -892,7 +891,7 @@ def evaluate_model_vllm_multimode(
     )
 
     # Debug: Show CoT content status for first few questions
-    print(f"  CoT Debug - Checking first 10 questions:")
+    print("  CoT Debug - Checking first 10 questions:")
     for i, q in enumerate(questions[:10]):
         cot_status = (
             "None"
@@ -906,24 +905,18 @@ def evaluate_model_vllm_multimode(
         print(f"    Q{i+1}: CoT = {cot_status}")
 
     if has_cot_content:
-        print(f"  Dataset has CoT content - using 3 modes: NR, XC, NR_REASONING")
+        print("  Dataset has CoT content - using 3 modes: NR, XC, NR_REASONING")
     else:
         print(
-            f"  Dataset lacks CoT content - using 2 modes: NR, NR_REASONING (skipping XC)"
+            "  Dataset lacks CoT content - using 2 modes: NR, NR_REASONING (skipping XC)"
         )
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     # Define mode variants based on model type and CoT availability
-    model_lower = model.lower()
-    is_deepseek_or_qwen = (
-        (("ds" in model_lower) or ("deepseek" in model_lower))
-        and ("v31" in model_lower or "v3.1" in model_lower or "v3" in model_lower)
-    ) or ("qwen3" in model_lower)
-
     # Base modes (always included)
     # Always use explicit True/False for reasoning-capable models to ensure consistent behavior
-    mode_variants: List[Tuple[str, str, Optional[bool]]] = [
+    mode_variants: list[tuple[str, str, bool | None]] = [
         ("VLLM_NR", "NR", False),  # Plain prompt, reasoning OFF (baseline)
         (
             "VLLM_NR_REASONING",
@@ -939,8 +932,8 @@ def evaluate_model_vllm_multimode(
             1, ("VLLM_XC", "XC", False)
         )  # Insert between NR and NR_REASONING
 
-    def run_variants(q: Question) -> List[Dict[str, Any]]:
-        local_records: List[Dict[str, Any]] = []
+    def run_variants(q: Question) -> list[dict[str, Any]]:
+        local_records: list[dict[str, Any]] = []
         for label, prompt_mode, reasoning_flag in mode_variants:
             extra_body = build_extra_body_for_model(model, reasoning_flag)
             # Debug: print extra_body for first question to verify configuration
@@ -977,10 +970,8 @@ def evaluate_model_vllm_multimode(
             # Collect results from completed futures
             for future in futures:
                 if future.done() and not future.cancelled():
-                    try:
+                    with contextlib.suppress(Exception):  # Skip failed results
                         results.extend(future.result())
-                    except Exception:
-                        pass  # Skip failed results
             if not results:
                 print("❌ No results to save.")
                 raise
@@ -989,12 +980,12 @@ def evaluate_model_vllm_multimode(
     return pd.DataFrame(results)
 
 
-def analyze_results(results_df: pd.DataFrame) -> Dict[str, Any]:
+def analyze_results(results_df: pd.DataFrame) -> dict[str, Any]:
     """Analyze results and compute metrics."""
     valid = results_df[results_df["success"]]
     overall_acc = valid["is_correct"].mean() if not valid.empty else 0.0
 
-    category_metrics: Dict[str, Dict[str, Any]] = {}
+    category_metrics: dict[str, dict[str, Any]] = {}
     for category in valid["category"].unique():
         sub = valid[valid["category"] == category]
         category_metrics[category] = {
@@ -1031,7 +1022,7 @@ def analyze_results(results_df: pd.DataFrame) -> Dict[str, Any]:
     )
 
     # Optional: metrics by mode_label
-    by_mode: Dict[str, Dict[str, Any]] = {}
+    by_mode: dict[str, dict[str, Any]] = {}
     if "mode_label" in valid.columns:
         for label in valid["mode_label"].unique():
             sub = valid[valid["mode_label"] == label]
@@ -1070,21 +1061,21 @@ def analyze_results(results_df: pd.DataFrame) -> Dict[str, Any]:
         "avg_total_tokens": (
             float(avg_total_tokens) if avg_total_tokens is not None else None
         ),
-        "total_questions": int(len(results_df)),
-        "successful_queries": int(len(valid)),
+        "total_questions": len(results_df),
+        "successful_queries": len(valid),
         "failed_queries": int(len(results_df) - len(valid)),
         "by_mode": by_mode,
         **accounting_summary(valid),
     }
 
 
-def _column_values(frame: pd.DataFrame, name: str) -> List[Any]:
+def _column_values(frame: pd.DataFrame, name: str) -> list[Any]:
     if name not in frame.columns:
         return []
     return [None if pd.isna(value) else value for value in frame[name]]
 
 
-def accounting_summary(valid: pd.DataFrame) -> Dict[str, Any]:
+def accounting_summary(valid: pd.DataFrame) -> dict[str, Any]:
     """Which model answered, what it cost, routing time, and truncated answers."""
     if "selected_model" not in valid.columns:
         return {}
@@ -1112,7 +1103,7 @@ def accounting_summary(valid: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def print_accounting(analysis: Dict[str, Any]) -> None:
+def print_accounting(analysis: dict[str, Any]) -> None:
     if analysis.get("selected_model_counts"):
         print(f"Routing split: {analysis['selected_model_counts']}")
     if analysis.get("truncated_responses"):
@@ -1137,7 +1128,7 @@ def print_accounting(analysis: Dict[str, Any]) -> None:
         )
 
 
-def scrape_router_metrics(url: str) -> Optional[Dict[Any, float]]:
+def scrape_router_metrics(url: str) -> dict[Any, float] | None:
     """Read router /metrics; it's optional, so a failure only prints a warning."""
     if not url:
         return None
@@ -1150,7 +1141,7 @@ def scrape_router_metrics(url: str) -> Optional[Dict[Any, float]]:
 
 def save_results(
     results_df: pd.DataFrame,
-    analysis: Dict[str, Any],
+    analysis: dict[str, Any],
     model: str,
     dataset_name: str,
     output_dir: str,
@@ -1190,7 +1181,7 @@ def save_results(
         printable = []
         for category, met in analysis["category_metrics"].items():
             printable.append((category, met.get("accuracy", 0.0)))
-        for category, acc in sorted(printable, key=lambda x: x[1], reverse=True):
+        for category, _acc in sorted(printable, key=lambda x: x[1], reverse=True):
             m = analysis["category_metrics"][category]
             print(
                 f"  {category}: acc={m['accuracy']:.4f}, latency={m['avg_response_time']:.2f}s, tokens={m['avg_total_tokens']}"

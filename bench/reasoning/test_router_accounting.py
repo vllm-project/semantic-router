@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 from bench.reasoning.router_accounting import (
+    cost_summary,
     metrics_delta,
     parse_metrics_text,
     response_accounting,
@@ -87,6 +88,15 @@ def test_metrics_delta_reports_cost_per_model_and_mean_routing_latency():
     assert delta["cost_by_model"] == {"cloud": {"USD": 0.25}, "mid": {"USD": 0.01}}
     assert delta["routing_decisions"] == 4
     assert delta["routing_latency_ms_mean"] == 125.0
+
+
+def test_cost_summary_counts_priced_requests_per_currency():
+    summary = cost_summary([0.002, 0.004, 0.01, None], ["USD", "USD", "EUR", ""])
+
+    assert summary["total"] == {"EUR": 0.01, "USD": 0.006}
+    assert summary["priced_requests_by_currency"] == {"EUR": 1, "USD": 2}
+    assert summary["mean_per_priced_request"] == {"EUR": 0.01, "USD": 0.003}
+    assert summary["unpriced_requests"] == 1
 
 
 def test_analyze_results_reports_split_cost_latency_and_truncation():

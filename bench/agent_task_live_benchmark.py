@@ -2543,19 +2543,21 @@ def percentile(ordered: list[float], pct: float) -> float:
 
 def cost_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     totals: dict[str, float] = {}
-    priced = 0
+    counts: dict[str, int] = {}
     for row in rows:
         if row.get("cost") is None:
             continue
         currency = row.get("cost_currency") or "unknown"
         totals[currency] = totals.get(currency, 0.0) + float(row["cost"])
-        priced += 1
+        counts[currency] = counts.get(currency, 0) + 1
+    priced = sum(counts.values())
     return {
         "basis": COST_BASIS,
         "total": {key: round(value, 8) for key, value in sorted(totals.items())},
         "mean_per_priced_request": {
-            key: round(value / priced, 8) for key, value in sorted(totals.items())
+            key: round(value / counts[key], 8) for key, value in sorted(totals.items())
         },
+        "priced_requests_by_currency": dict(sorted(counts.items())),
         "priced_requests": priced,
         "unpriced_requests": len(rows) - priced,
     }
