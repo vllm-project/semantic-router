@@ -176,6 +176,17 @@ native-env-probe:
                         ),
                     )
 
+    def test_precommit_image_includes_the_ci_helm_toolchain(self) -> None:
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text(
+                encoding="utf-8"
+            )
+        )
+        dockerfile = (REPO_ROOT / "tools/docker/Dockerfile.precommit").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"ARG HELM_VERSION={workflow['env']['HELM_VERSION']}", dockerfile)
+
     def test_native_search_paths_have_one_make_owner(self) -> None:
         for path in (REPO_ROOT / "tools/make").glob("*.mk"):
             if path.name == "common.mk":

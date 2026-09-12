@@ -47,3 +47,15 @@ RUN pip install --break-system-packages \
 
 # Golangci-lint v2.5.0 — matches CI golangci-lint-action version
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
+
+# Helm matches the CI Test And Build toolchain and is required by make check.
+ARG HELM_VERSION=v3.14.0
+RUN helm_arch="$(dpkg --print-architecture)" && \
+    helm_archive="helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz" && \
+    helm_tmp="$(mktemp -d)" && cd "${helm_tmp}" && \
+    curl -fsSLO "https://get.helm.sh/${helm_archive}" && \
+    curl -fsSLO "https://get.helm.sh/${helm_archive}.sha256sum" && \
+    sha256sum -c "${helm_archive}.sha256sum" && \
+    tar -xzf "${helm_archive}" && \
+    install -m 0755 "linux-${helm_arch}/helm" /usr/local/bin/helm && \
+    cd / && rm -rf "${helm_tmp}" && helm version --short
