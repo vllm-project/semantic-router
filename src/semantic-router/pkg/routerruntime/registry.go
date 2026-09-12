@@ -18,7 +18,7 @@ type Registry struct {
 	mu                    sync.RWMutex
 	config                *config.RouterConfig
 	classificationService *services.ClassificationService
-	acquireClassification AcquireClassification
+	acquireGeneration     AcquireClassification
 	memoryStore           memory.Store
 	vectorStore           *VectorStoreRuntime
 	modelSelector         *selection.Registry
@@ -166,30 +166,44 @@ func (r *Registry) ClassificationService() *services.ClassificationService {
 	return r.classificationService
 }
 
+// AcquireClassificationRuntime returns one generation's config and
+// classification service and keeps that generation alive until release runs.
+func (r *Registry) AcquireClassificationRuntime() (
+	*config.RouterConfig,
+	*services.ClassificationService,
+	func(),
+	bool,
+) {
+	if r == nil {
+		return nil, nil, nil, false
+	}
+	r.mu.RLock()
+	cfg := r.config
+	service := r.classificationService
+	if service == nil {
+		r.mu.RUnlock()
+		return nil, nil, nil, false
+	}
+	acquire := r.acquireGeneration
+	if acquire == nil {
+		r.mu.RUnlock()
+		return cfg, service, func() {}, true
+	}
+	release, ok := acquire()
+	r.mu.RUnlock()
+	if !ok {
+		return nil, nil, nil, false
+	}
+	return cfg, service, release, true
+}
+
 // AcquireClassificationService returns the live classification service together
 // with a release function that must be called when the caller is done with it.
 // Holding the reference keeps the owning runtime generation from closing the
 // service mid-call. It reports false when no live service is available.
 func (r *Registry) AcquireClassificationService() (*services.ClassificationService, func(), bool) {
-	if r == nil {
-		return nil, nil, false
-	}
-	r.mu.RLock()
-	service := r.classificationService
-	acquire := r.acquireClassification
-	r.mu.RUnlock()
-	if service == nil {
-		return nil, nil, false
-	}
-	if acquire == nil {
-		// No generation owns this service, so nothing can close it underneath us.
-		return service, func() {}, true
-	}
-	release, ok := acquire()
-	if !ok {
-		return nil, nil, false
-	}
-	return service, release, true
+	_, service, release, ok := r.AcquireClassificationRuntime()
+	return service, release, ok
 }
 
 func (r *Registry) SetClassificationService(service *services.ClassificationService) {
@@ -208,6 +222,31 @@ func (r *Registry) MemoryStore() memory.Store {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.memoryStore
+}
+
+// AcquireMemoryStore returns one generation's memory store and keeps that
+// generation alive until release runs.
+func (r *Registry) AcquireMemoryStore() (memory.Store, func(), bool) {
+	if r == nil {
+		return nil, nil, false
+	}
+	r.mu.RLock()
+	store := r.memoryStore
+	if store == nil {
+		r.mu.RUnlock()
+		return nil, nil, false
+	}
+	acquire := r.acquireGeneration
+	if acquire == nil {
+		r.mu.RUnlock()
+		return store, func() {}, true
+	}
+	release, ok := acquire()
+	r.mu.RUnlock()
+	if !ok {
+		return nil, nil, false
+	}
+	return store, release, true
 }
 
 func (r *Registry) SetMemoryStore(store memory.Store) {
@@ -351,6 +390,7 @@ func (r *Registry) PublishRouterRuntime(
 	}
 	r.classificationService = classificationService
 	r.memoryStore = memoryStore
+	r.acquireGeneration = nil
 	r.mu.Unlock()
 }
 
@@ -363,7 +403,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 		r.config = snapshot.Config
 	}
 	r.classificationService = snapshot.ClassificationService
-	r.acquireClassification = snapshot.AcquireClassification
+	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore
 	r.modelSelector = snapshot.ModelSelector
 	r.learningRuntime = snapshot.LearningRuntime

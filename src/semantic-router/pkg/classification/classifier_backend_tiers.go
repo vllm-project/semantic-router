@@ -20,8 +20,9 @@ import (
 //     by the complexity signal's score.v1 backend
 //     (complexity_remote_backend.go).
 //   - TokenClassifierBackend (below) - text -> spans, for PII / GLiGuard-style
-//     entity extraction. Reserved: no backend implements it and nothing
-//     wires it in yet.
+//     entity extraction. Implemented by HTTPTokenClassifierInference
+//     (http_token_classifier.go) speaking token_spans.v1; PII is the first
+//     consumer, hallucination (#2928) the intended second.
 
 // ScoringBackend is implemented by classifier backends that report a single
 // continuous score for a piece of text, rather than a label distribution
@@ -38,6 +39,9 @@ type ScoringBackend interface {
 // TokenClassifierBackend is implemented by classifier backends that return
 // per-span entities within a text, rather than a single label or score (e.g.
 // PII entity extraction or a GLiGuard-style zero-shot span classifier).
+// Entity offsets are byte offsets into the exact input string, matching the
+// native Candle path; wire formats that count in code points convert once at
+// the adapter boundary.
 type TokenClassifierBackend interface {
 	ClassifyTokens(text string) ([]candle_binding.TokenEntity, error)
 }

@@ -78,7 +78,7 @@ func (r *OpenAIRouter) evaluateHallucinationSignal(ctx *RequestContext, assistan
 		return
 	}
 	for _, rule := range rules {
-		metrics.RecordSignalExtraction(config.SignalTypeHallucination, rule.Name, latency)
+		classifier.RecordSignalExtraction(config.SignalTypeHallucination, rule.Name, latency)
 	}
 	r.publishHallucinationSignal(ctx, rules, evidence, "")
 }

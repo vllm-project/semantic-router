@@ -11,14 +11,35 @@ You may obtain a copy of the License at
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
+
+type blockingGetMemoryStore struct {
+	*mockMemoryStore
+	getStarted chan struct{}
+	allowGet   chan struct{}
+	once       sync.Once
+}
+
+func (s *blockingGetMemoryStore) Get(ctx context.Context, id string) (*memory.Memory, error) {
+	s.once.Do(func() { close(s.getStarted) })
+	select {
+	case <-s.allowGet:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return s.mockMemoryStore.Get(ctx, id)
+}
 
 func TestHandleMemory_StoreNotAvailable(t *testing.T) {
 	server := &ClassificationAPIServer{memoryStore: nil}
@@ -141,6 +162,85 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 	}
 	if listResp.Total != 0 {
 		t.Fatalf("Step 6: Expected 0 memories after delete, got %d", listResp.Total)
+	}
+}
+
+func TestDeleteMemoryUsesOneGenerationAcrossOwnershipCheckAndDelete(t *testing.T) {
+	oldStore := &blockingGetMemoryStore{
+		mockMemoryStore: newMockMemoryStore(),
+		getStarted:      make(chan struct{}),
+		allowGet:        make(chan struct{}),
+	}
+	newStore := newMockMemoryStore()
+	for _, store := range []*mockMemoryStore{oldStore.mockMemoryStore, newStore} {
+		store.addMemory(&memory.Memory{
+			ID:        "memory-1",
+			UserID:    "user-1",
+			Type:      memory.MemoryTypeSemantic,
+			CreatedAt: time.Now(),
+		})
+	}
+	registry := routerruntime.NewRegistry(nil)
+	routerService := extproc.NewRouterService(nil)
+	t.Cleanup(func() { _ = routerService.Close() })
+	publish := func(store memory.Store) func(extproc.AcquireFunc) {
+		return func(acquire extproc.AcquireFunc) {
+			registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+				MemoryStore:           store,
+				AcquireClassification: routerruntime.AcquireClassification(acquire),
+			})
+		}
+	}
+	if err := routerService.Swap(
+		&extproc.OpenAIRouter{MemoryStore: oldStore},
+		publish(oldStore),
+	); err != nil {
+		t.Fatalf("publish old generation: %v", err)
+	}
+	server := &ClassificationAPIServer{runtimeRegistry: registry}
+	mux := newMemoryTestMux(server)
+	defer func() {
+		select {
+		case <-oldStore.allowGet:
+		default:
+			close(oldStore.allowGet)
+		}
+	}()
+
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories/memory-1?user_id=user-1", nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		response <- w
+	}()
+	select {
+	case <-oldStore.getStarted:
+	case <-time.After(time.Second):
+		t.Fatal("memory ownership lookup did not start")
+	}
+
+	if err := routerService.Swap(
+		&extproc.OpenAIRouter{MemoryStore: newStore},
+		publish(newStore),
+	); err != nil {
+		t.Fatalf("swap router generation: %v", err)
+	}
+	close(oldStore.allowGet)
+	var w *httptest.ResponseRecorder
+	select {
+	case w = <-response:
+	case <-time.After(time.Second):
+		t.Fatal("memory delete did not finish after lookup release")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("DELETE status = %d, want %d: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if _, err := oldStore.Get(context.Background(), "memory-1"); err == nil {
+		t.Fatal("old generation retained the deleted memory")
+	}
+	if _, err := newStore.Get(context.Background(), "memory-1"); err != nil {
+		t.Fatalf("new generation memory was deleted: %v", err)
 	}
 }
 
