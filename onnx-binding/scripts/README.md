@@ -26,8 +26,11 @@ rounding a low-variance pooled vector to FP16 before its normalization layer.
 Both graphs accept dynamic batch and sequence lengths. Sequence outputs are
 `[batch, labels]`; token outputs are `[batch, tokens, labels]`.
 
-Verification compares both variants with native FP32 inference. FP32 exports
-must match logits; both variants must match the complete probability vector.
+Verification compares both variants with native FP32 inference. FP32 sequence
+exports must match logits; both variants must match the complete probability vector.
+Token exports must also preserve every valid token's exact BIO argmax. Their raw
+logit differences are reported separately: rounding in low-probability classes
+can change raw logits while preserving probabilities and entity decisions.
 Multi-label heads use independent sigmoid probabilities. Dynamic checks include
 local-attention boundaries and batches with different valid lengths. Padded
 token predictions are excluded, while valid tokens must remain unaffected by

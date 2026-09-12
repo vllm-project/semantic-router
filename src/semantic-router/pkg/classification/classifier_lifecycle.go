@@ -212,12 +212,14 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.safety", false, c.usesRoutingSignalType(config.SignalTypeSafety), c.initializeSafetyClassifiers)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
-	appendTask("classifier.fact_check", true, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
+	// A model that participates in routing is required. API-only models remain
+	// best-effort so unavailable diagnostics do not stop unrelated routes.
+	appendTask("classifier.fact_check", !c.Config.NeedsFactCheckModelForRouting(), c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", true, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
 	// Not best-effort: an NLI polarity mode with an unloadable model must fail
 	// startup rather than silently serve unverified cache hits.
 	appendTask("classifier.semantic_cache_nli", false, c.needsSemanticCacheNLIForRuntime(), c.initializeSemanticCacheNLI)
-	appendTask("classifier.feedback", true, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
+	appendTask("classifier.feedback", !c.Config.NeedsFeedbackModelForRouting(), c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 

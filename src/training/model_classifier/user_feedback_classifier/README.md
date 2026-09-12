@@ -43,7 +43,46 @@ retains genuine feedback outside quotations and excludes confirmed ambiguous
 projections; a quotation alone is not evidence that an example is mislabeled.
 This creates a new training corpus and never rewrites development or test gold.
 
-## Install and Train
+## Train the five-class Vela contract
+
+Prepare separate training and development JSONL files using the source recipes
+above. Each row needs `id`, `text`, `label`, `group_id`, and `source`; long rows
+also record their measured `length_bucket`. Keep translations, template variants,
+and context variants in the same group. Include reviewed `NO_FEEDBACK` examples
+and all four feedback intentions. Retain the old weak development data as a
+separate diagnostic instead of silently treating its labels as gold.
+
+Initialize from a frozen, compatible four-class adapter, then train the entire
+five-class head jointly. The initializer preserves the original four logits,
+but the fifth softmax term changes their probabilities before any training.
+
+```bash
+python -m src.training.model_classifier.user_feedback_classifier.initialize_vela_five_class \
+  --adapter /artifacts/four-class-adapter \
+  --contract /artifacts/four-class-contract.json \
+  --output /artifacts/five-class-initial
+
+python -m src.training.model_classifier.sequence_repair.train \
+  --base /artifacts/vela-base \
+  --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base-revision 5fe5bbb1a88b7fdcc93bb5b9d546c574564eb114 \
+  --adapter /artifacts/five-class-initial \
+  --contract /artifacts/five-class-initial/contract.json \
+  --train /artifacts/feedback-train.jsonl \
+  --dev /artifacts/feedback-development.jsonl \
+  --output /artifacts/feedback-five-class-run \
+  --steps 800 --batch-size 4 --accumulate 2 --learning-rate 0.00001 \
+  --max-length 32768 --microbatch-token-budget 32768 \
+  --balanced-sampling --length-balanced-sampling \
+  --selection macro-f1 --eval-every 100
+```
+
+These are explicit experiment budgets, not a quality guarantee. Select only on
+development data, including each original class and non-feedback false positives.
+Use the shared exporter with `--runtime-task feedback` to write the five-class
+runtime mapping, then evaluate the frozen candidate on independent final data.
+
+## Historical four-class training
 
 ```bash
 pip install -r requirements.txt

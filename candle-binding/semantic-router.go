@@ -5,20 +5,6 @@
 
 package candle_binding
 
-import (
-	"encoding/base64"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"regexp"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
-	"unsafe"
-)
-
 /*
 #cgo LDFLAGS: -L${SRCDIR}/target/release -lcandle_semantic_router -ldl -lm
 #include <stdlib.h>
@@ -468,6 +454,20 @@ extern void* candle_mlp_from_json_with_device_and_dtype(char* json, int device_t
 extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
+
+import (
+	"encoding/base64"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"regexp"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+	"unsafe"
+)
 
 var (
 	initOnce                              sync.Once
@@ -2722,6 +2722,10 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 		entities:     (*C.ModernBertTokenEntity)(unsafe.Pointer(result.entities)),
 		num_entities: result.num_entities,
 	})
+
+	if result.num_entities < 0 || (result.num_entities > 0 && result.entities == nil) {
+		return nil, fmt.Errorf("mmBERT-32K PII token classification failed")
+	}
 
 	if result.num_entities == 0 {
 		return []TokenEntity{}, nil

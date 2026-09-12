@@ -26,6 +26,25 @@ except ImportError:
 
 @unittest.skipIf(torch is None, "requires torch, transformers, onnxscript and ORT")
 class ClassifierExportTest(unittest.TestCase):
+    def test_token_validation_preserves_decisions_and_confidence(self):
+        expected = torch.tensor([[5.0, 0.0, -50.0]]).numpy()
+        dormant_rounding = expected.copy()
+        dormant_rounding[0, 2] += 0.01
+        exporter.verify_task_outputs(dormant_rounding, expected, True, False, "float32")
+        changed_confidence = expected.copy()
+        changed_confidence[0, 0] = 0.1
+        with self.assertRaises(AssertionError):
+            exporter.verify_task_outputs(
+                changed_confidence, expected, True, False, "float32"
+            )
+        # A near tie can flip BIO tags while passing the probability tolerance.
+        tied = torch.tensor([[0.0, 1e-6, -50.0]]).numpy()
+        flipped = tied.copy()
+        flipped[0, :2] = flipped[0, :2][::-1]
+        for dtype in ("float32", "float16"):
+            with self.assertRaises(AssertionError):
+                exporter.verify_task_outputs(flipped, tied, True, False, dtype)
+
     def test_precision_variants_cannot_mix_source_artifacts(self):
         source = {"config.json": "config-a", "model.safetensors": "weights-a"}
         with tempfile.TemporaryDirectory() as directory:

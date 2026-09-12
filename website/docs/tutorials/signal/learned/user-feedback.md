@@ -69,3 +69,8 @@ feedback rules. For these models, a prediction below the detector's configured
 of activating `satisfied`. The standalone classification API preserves the
 predicted label and probability and returns `abstained: true` for this case.
 Existing four-class models retain their earlier threshold behavior.
+
+When a reachable routing decision depends on this signal, its configured model
+must initialize successfully or Router startup fails. A model used only by the
+standalone diagnostics API remains best-effort and does not block unrelated
+routes when it is unavailable.

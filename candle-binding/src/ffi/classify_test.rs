@@ -7,6 +7,20 @@ use rstest::*;
 use std::ffi::{CStr, CString};
 use std::ptr;
 
+#[test]
+fn test_mmbert_pii_invalid_input_is_not_a_clean_scan() {
+    let null_result = classify_mmbert_32k_pii_tokens(ptr::null());
+    assert_eq!(null_result.num_entities, -1);
+    assert!(null_result.entities.is_null());
+    super::memory::free_modernbert_token_result(null_result);
+
+    let invalid_utf8 = [0xff_u8, 0];
+    let result = classify_mmbert_32k_pii_tokens(invalid_utf8.as_ptr().cast());
+    assert_eq!(result.num_entities, -1);
+    assert!(result.entities.is_null());
+    super::memory::free_modernbert_token_result(result);
+}
+
 /// Test load_id2label_from_config function with real model
 #[rstest]
 fn test_classify_load_id2label_from_config(traditional_pii_token_model_path: String) {
