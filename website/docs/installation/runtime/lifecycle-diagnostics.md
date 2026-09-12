@@ -74,6 +74,10 @@ bypasses the limit when full. `wait` requires a nonzero queue size. Omit the
 admission setting for unbounded admission. Uses of the same shared model also
 share its capacity; request deadlines include queue time.
 
+Changing admission settings for a shared model requires stopping and restarting
+the Router. A hot reload with different settings is rejected, and the active
+configuration continues serving.
+
 ## Update a running model
 
 Put a replacement model revision in a new directory, update its configuration,
@@ -90,3 +94,7 @@ A competing change returns `409` while the first update is pending.
 Knowledge-base updates keep old asset versions for active readers. Old versions
 are retained on disk; automatic removal is not provided. See the
 [management API reference](../../api/apiserver.md) for request and response details.
+
+`serve` preserves configuration saved through the Dashboard or API. To replace
+it with a local file, run
+`vllm-sr serve --config config.yaml --replace-active-config`.
