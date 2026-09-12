@@ -246,22 +246,24 @@ func TestStandaloneSetupKeepsRouterListenerDefaultsWithoutRealizer(t *testing.T)
 
 func setupFilesystemSnapshot(t *testing.T, root string) map[string]string {
 	t.Helper()
+	directory, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.Close()
+
 	files := make(map[string]string)
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = fs.WalkDir(directory.FS(), ".", func(relative string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
-		}
-		relative, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
 		}
 		if entry.IsDir() {
 			files[relative] = "directory"
 			return nil
 		}
-		raw, err := os.ReadFile(path)
+		raw, readErr := directory.ReadFile(relative)
 		files[relative] = string(raw)
-		return err
+		return readErr
 	})
 	if err != nil {
 		t.Fatal(err)

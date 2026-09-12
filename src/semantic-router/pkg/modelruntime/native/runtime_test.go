@@ -68,6 +68,85 @@ func TestArtifactFingerprintFramesEachFile(t *testing.T) {
 	}
 }
 
+func TestArtifactFingerprintReadsExternalSnapshotBlobs(t *testing.T) {
+	cache := t.TempDir()
+	snapshot := filepath.Join(cache, "snapshots", "revision")
+	blobs := filepath.Join(cache, "blobs")
+	for _, directory := range []string{snapshot, blobs} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blob := filepath.Join(blobs, "weights")
+	link := filepath.Join(snapshot, "model.safetensors")
+	if err := os.Symlink(filepath.Join("..", "..", "blobs", "weights"), link); err != nil {
+		t.Fatal(err)
+	}
+	plain := t.TempDir()
+	var previous string
+	for _, content := range []string{"first weights", "replacement weights"} {
+		for _, path := range []string{blob, filepath.Join(plain, "model.safetensors")} {
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		linked, err := New(nil).artifactRevision(context.Background(), snapshot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		copied, err := New(nil).artifactRevision(context.Background(), plain)
+		if err != nil || linked != copied || linked == previous {
+			t.Fatalf("external blob content was not fingerprinted: linked=%q copied=%q previous=%q err=%v", linked, copied, previous, err)
+		}
+		previous = linked
+	}
+}
+
+func TestArtifactFingerprintDirectFileAndFailedPreparation(t *testing.T) {
+	artifact := t.TempDir()
+	graph := filepath.Join(artifact, "model.onnx")
+	if err := os.WriteFile(graph, []byte("graph"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "graph.onnx")
+	if err := os.Symlink(graph, alias); err != nil {
+		t.Fatal(err)
+	}
+	fileRevision, err := New(nil).artifactRevision(context.Background(), graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliasRevision, err := New(nil).artifactRevision(context.Background(), alias)
+	if err != nil || aliasRevision != fileRevision {
+		t.Fatalf("direct file alias changed fingerprint: %q, %v", aliasRevision, err)
+	}
+	for _, target := range []string{t.TempDir(), filepath.Join(t.TempDir(), "missing")} {
+		link := filepath.Join(artifact, "invalid")
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatal(err)
+		}
+		runtime := New(nil)
+		if _, hashErr := runtime.artifactRevision(context.Background(), artifact); hashErr == nil || len(runtime.artifacts) != 0 {
+			t.Fatalf("invalid artifact was accepted or cached: %v", hashErr)
+		}
+		if err := os.Remove(link); err != nil {
+			t.Fatal(err)
+		}
+		if _, hashErr := runtime.artifactRevision(context.Background(), artifact); hashErr != nil {
+			t.Fatalf("failed preparation prevented retry: %v", hashErr)
+		}
+	}
+	runtime := New(nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, hashErr := runtime.artifactRevision(ctx, artifact); !errors.Is(hashErr, context.Canceled) || len(runtime.artifacts) != 0 {
+		t.Fatalf("canceled preparation was accepted or cached: %v", hashErr)
+	}
+	if _, hashErr := runtime.artifactRevision(context.Background(), artifact); hashErr != nil {
+		t.Fatalf("canceled preparation prevented retry: %v", hashErr)
+	}
+}
+
 func TestFingerprintReaderStopsAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	reader := contextReader{ctx: ctx, reader: readerFunc(func(p []byte) (int, error) {

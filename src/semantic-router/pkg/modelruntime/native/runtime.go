@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -149,8 +150,26 @@ func (r *Runtime) artifactRevision(ctx context.Context, path string) (string, er
 	if cached, ok := r.artifacts[abs]; ok {
 		return cached, nil
 	}
+	directory, err := os.OpenRoot(filepath.Dir(abs))
+	if err != nil {
+		return "", fmt.Errorf("open model artifact directory: %w", err)
+	}
+	defer directory.Close()
+	start := filepath.Base(abs)
+	info, err := directory.Stat(start)
+	if err != nil {
+		return "", fmt.Errorf("stat model artifact: %w", err)
+	}
+	if info.IsDir() {
+		artifactDirectory, openErr := directory.OpenRoot(start)
+		if openErr != nil {
+			return "", fmt.Errorf("open model artifact: %w", openErr)
+		}
+		defer artifactDirectory.Close()
+		directory, start = artifactDirectory, "."
+	}
 	hash := sha256.New()
-	err = filepath.WalkDir(abs, func(path string, entry os.DirEntry, err error) error {
+	err = fs.WalkDir(directory.FS(), start, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -162,15 +181,11 @@ func (r *Runtime) artifactRevision(ctx context.Context, path string) (string, er
 		}
 		// ONNX external tensors can use arbitrary filenames. Restricting this
 		// to recognized extensions would miss a changed tensor payload.
-		info, err := os.Stat(path)
-		if err != nil {
-			return err
+		rel := filepath.FromSlash(path)
+		if start != "." {
+			rel = "." // A direct graph/file artifact has no directory prefix.
 		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("model artifact entry is not a regular file")
-		}
-		rel, _ := filepath.Rel(abs, path)
-		file, err := os.Open(path)
+		file, err := openArtifactFile(directory, filepath.FromSlash(path), entry.Type())
 		if err != nil {
 			return err
 		}
@@ -189,6 +204,53 @@ func (r *Runtime) artifactRevision(ctx context.Context, path string) (string, er
 	revision := hex.EncodeToString(hash.Sum(nil))
 	r.artifacts[abs] = revision
 	return revision, nil
+}
+
+func openArtifactFile(directory *os.Root, name string, mode fs.FileMode) (*os.File, error) {
+	if mode&os.ModeSymlink != 0 {
+		// HF snapshots intentionally link to ../../blobs. Resolve that explicit
+		// target, then anchor its open to its own parent instead of allowing
+		// arbitrary path-based opens while walking the artifact directory.
+		target, err := directory.Readlink(name)
+		if err != nil {
+			return nil, err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(directory.Name(), filepath.Dir(name), target)
+		}
+		target, err = filepath.EvalSymlinks(target)
+		if err != nil {
+			return nil, err
+		}
+		blobDirectory, err := os.OpenRoot(filepath.Dir(target))
+		if err != nil {
+			return nil, err
+		}
+		defer blobDirectory.Close()
+		directory, name = blobDirectory, filepath.Base(target)
+	}
+	info, err := directory.Stat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("model artifact entry is not a regular file")
+	}
+	file, err := directory.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	// Validate the descriptor being hashed as well as the pre-open check,
+	// which avoids opening known special files such as FIFOs.
+	info, err = file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		_ = file.Close()
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("model artifact entry is not a regular file")
+	}
+	return file, nil
 }
 
 type contextReader struct {
