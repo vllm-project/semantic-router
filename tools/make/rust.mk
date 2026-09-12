@@ -33,6 +33,8 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_crosses_default_context_and_query_blocks \
+	model_architectures::traditional::candle_models::modernbert::tests::test_flash_attention_never_changes_requested_precision \
+	model_architectures::traditional::candle_models::modernbert::tests::test_flash_option_keeps_fp32_cpu_attention_unchanged \
 	model_architectures::traditional::modernbert_test::test_candle_context_default_and_explicit_limits \
 	model_architectures::traditional::modernbert_test::test_candle_context_budget_reserves_actual_postprocessor_special_tokens \
 	model_architectures::traditional::modernbert_test::test_candle_context_tokenization_preserves_tail_and_model_padding \

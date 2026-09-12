@@ -99,6 +99,23 @@ struct ModernBertAttention {
     use_flash_attn: bool,
 }
 
+fn can_use_flash_attention(
+    enabled: bool,
+    is_cuda: bool,
+    uses_local_attention: bool,
+    has_padding: bool,
+    qkv_dtypes: [DType; 3],
+) -> bool {
+    enabled
+        && is_cuda
+        && !uses_local_attention
+        && !has_padding
+        && matches!(
+            qkv_dtypes,
+            [DType::F16, DType::F16, DType::F16] | [DType::BF16, DType::BF16, DType::BF16]
+        )
+}
+
 impl ModernBertAttention {
     fn load(
         vb: VarBuilder,
@@ -181,19 +198,20 @@ impl ModernBertAttention {
         };
 
         // The fixed-length Flash API below has neither a padding mask nor a
-        // sliding window. Only unpadded global layers can use it without changing
-        // model semantics; all other cases use the memory-bounded exact kernel.
-        let xs = if self.use_flash_attn
-            && !uses_local_attention
-            && !has_padding
-            && hidden_states.device().is_cuda()
-        {
+        // sliding window. It also accepts only native F16/BF16 tensors: enabling
+        // the optional kernel must never reduce a model's requested precision.
+        // All other cases use the memory-bounded exact kernel.
+        let xs = if can_use_flash_attention(
+            self.use_flash_attn,
+            hidden_states.device().is_cuda(),
+            uses_local_attention,
+            has_padding,
+            [q.dtype(), k.dtype(), v.dtype()],
+        ) {
             #[cfg(feature = "flash-attn")]
             {
                 // Flash Attention path
                 // Flash Attention expects: [batch, seq_len, num_heads, head_dim]
-                // Flash Attention requires f16/bf16, but we have F32
-                // Convert to f16, run Flash Attention, then convert back to F32
                 // `flash_attn` computes softmax(Q @ K^T . softmax_scale) @ V, so it
                 // applies the scale itself and takes `q` unscaled. The upstream
                 // candle-transformers model pre-scales `q` for its dense path only;
@@ -202,24 +220,10 @@ impl ModernBertAttention {
                 let k_flash = k.transpose(1, 2)?;
                 let v_flash = v.transpose(1, 2)?;
 
-                // Convert to f16 for Flash Attention
-                let q_flash_f16 = q_flash.to_dtype(DType::F16)?;
-                let k_flash_f16 = k_flash.to_dtype(DType::F16)?;
-                let v_flash_f16 = v_flash.to_dtype(DType::F16)?;
-
                 let softmax_scale = 1.0 / (self.attention_head_size as f32).sqrt();
                 // ModernBERT is bidirectional (non-causal)
-                match flash_attn(
-                    &q_flash_f16,
-                    &k_flash_f16,
-                    &v_flash_f16,
-                    softmax_scale,
-                    false,
-                ) {
-                    Ok(attn_output_f16) => {
-                        // Convert back to F32 and transpose back to [batch, num_heads, seq_len, head_dim]
-                        attn_output_f16.to_dtype(DType::F32)?.transpose(1, 2)?
-                    }
+                match flash_attn(&q_flash, &k_flash, &v_flash, softmax_scale, false) {
+                    Ok(attn_output) => attn_output.transpose(1, 2)?,
                     Err(e) => {
                         // Flash Attention failed, fallback to standard attention
                         eprintln!(
@@ -724,6 +728,59 @@ mod tests {
     /// All-real padding mask in the raw `(b, seq)` form the backbone receives.
     fn all_real_mask(b: usize, seq_len: usize, device: &Device) -> Tensor {
         Tensor::ones((b, seq_len), DType::F32, device).unwrap()
+    }
+
+    #[test]
+    fn test_flash_attention_never_changes_requested_precision() {
+        for dtype in [DType::F16, DType::BF16, DType::F32, DType::F64] {
+            let supported = matches!(dtype, DType::F16 | DType::BF16);
+            assert_eq!(
+                can_use_flash_attention(true, true, false, false, [dtype; 3]),
+                supported
+            );
+            for (enabled, is_cuda, local, padding) in [
+                (false, true, false, false),
+                (true, false, false, false),
+                (true, true, true, false),
+                (true, true, false, true),
+            ] {
+                assert!(!can_use_flash_attention(
+                    enabled, is_cuda, local, padding, [dtype; 3]
+                ));
+            }
+        }
+        for dtypes in [
+            [DType::F16, DType::BF16, DType::F16],
+            [DType::BF16, DType::BF16, DType::F32],
+        ] {
+            assert!(!can_use_flash_attention(true, true, false, false, dtypes));
+        }
+    }
+
+    #[test]
+    fn test_flash_option_keeps_fp32_cpu_attention_unchanged() {
+        let device = Device::Cpu;
+        let config = tiny_config();
+        let mut attn = make_test_attention(&config, &device);
+        let hidden = Tensor::full(100_000f32, (2, 33, config.hidden_size), &device).unwrap();
+        let raw_mask = all_real_mask(2, 33, &device);
+        let pad_mask = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+        let reference = attn
+            .forward(&hidden, &pad_mask, false, 4, 16, false)
+            .unwrap();
+        attn.use_flash_attn = true;
+        let actual = attn
+            .forward(&hidden, &pad_mask, false, 4, 16, false)
+            .unwrap();
+        assert_eq!(actual.dtype(), DType::F32);
+        assert_eq!(max_abs_diff(&actual, &reference), 0.0);
+        assert!(actual
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap()
+            .iter()
+            .all(|value| value.is_finite()));
     }
 
     #[test]

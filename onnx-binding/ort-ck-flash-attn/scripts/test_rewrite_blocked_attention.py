@@ -1,5 +1,6 @@
 """Execute tiny FP32 ONNX attention graphs with dynamic batch/sequence shapes."""
 
+import copy
 import unittest
 
 import numpy as np
@@ -425,6 +426,152 @@ class BlockedContracts(unittest.TestCase):
         blocked, _ = rewrite_model(attention_model())
         with self.assertRaises(ValueError):
             rewrite_model(blocked)
+
+
+def instrument(model):
+    model = copy.deepcopy(model)
+    prefix = "__blocked_attention_0_"
+    model.graph.output.append(
+        helper.make_tensor_value_info(prefix + "crop_eligible", TensorProto.BOOL, [])
+    )
+    loop = next(node for node in model.graph.node if node.op_type == "Loop")
+    body = next(attribute.g for attribute in loop.attribute if attribute.name == "body")
+    for name in ("key_start", "key_end"):
+        body.output.append(
+            helper.make_tensor_value_info(
+                prefix + "body_" + name, TensorProto.INT64, []
+            )
+        )
+        output = prefix + name + "_debug_scan"
+        loop.output.append(output)
+        model.graph.output.append(
+            helper.make_tensor_value_info(output, TensorProto.INT64, [None])
+        )
+    onnx.checker.check_model(model)
+    return model
+
+
+@unittest.skipIf(ort is None, "onnxruntime CPU is needed for execution tests")
+class LocalCropNumerics(unittest.TestCase):
+    def check(self, model, inputs, expected_fast, **options):
+        candidate, receipt = rewrite_model(model, **options)
+        runtime = session(instrument(candidate))
+        after, fast, starts, ends = runtime.run(None, inputs)
+        reference = session(model).run(None, inputs)[0]
+        np.testing.assert_allclose(
+            after, reference, atol=2e-6, rtol=2e-6, equal_nan=True
+        )
+        self.assertEqual(bool(fast), expected_fast)
+        if not expected_fast:
+            np.testing.assert_array_equal(starts, np.zeros_like(starts))
+            np.testing.assert_array_equal(
+                ends, np.full_like(ends, inputs["q"].shape[2])
+            )
+        self.assertFalse(receipt["real_model_qualification"])
+        return after, starts, ends
+
+    def test_unpadded_b1_b2_radius64_and_odd_tail(self):
+        for negative in (-np.inf, -np.finfo(np.float32).max):
+            for batch in (1, 2):
+                for length in (1, 63, 64, 65, 255, 256, 257, 513, 769):
+                    with self.subTest(negative=negative, batch=batch, length=length):
+                        inputs = feeds(batch, length)
+                        inputs["attention_mask"][:] = 1
+                        after, starts, ends = self.check(
+                            attention_model(64, negative=negative), inputs, True
+                        )
+                        queries = np.arange(0, length, 256)
+                        np.testing.assert_array_equal(
+                            starts, np.maximum(0, queries - 64)
+                        )
+                        np.testing.assert_array_equal(
+                            ends, np.minimum(length, queries + 256 + 64)
+                        )
+                        self.assertLessEqual(int(np.max(ends - starts)), 256 + 128)
+                        self.assertEqual(after.shape, (batch, 2, length, 4))
+
+    def test_local_padding_falls_back_for_entire_batch(self):
+        for negative in (-np.inf, -np.finfo(np.float32).max, -1e8):
+            for batch in (1, 2):
+                for padding in ("left", "right", "all", "irregular"):
+                    with self.subTest(negative=negative, batch=batch, padding=padding):
+                        inputs = feeds(batch, 513)
+                        if padding != "irregular":
+                            inputs["attention_mask"][:] = 1
+                            region = (
+                                slice(None, 200)
+                                if padding == "left"
+                                else slice(200, None)
+                            )
+                            inputs["attention_mask"][-1, region] = 0
+                            if padding == "all":
+                                inputs["attention_mask"][-1] = 0
+                        self.check(
+                            attention_model(64, negative=negative), inputs, False
+                        )
+
+    def test_nested_finite_fill_preserves_scaling(self):
+        inputs = feeds(2, 513)
+        inputs["attention_mask"][:] = 1
+        inputs["q"] *= 0.001
+        inputs["k"] *= 0.001
+        self.check(attention_model(64, inverted=True, negative=-np.inf), inputs, True)
+        self.check(attention_model(64, negative=-65504.0), inputs, True)
+
+    def test_small_finite_fill_remains_refused_by_shared_matcher(self):
+        with self.assertRaises(ValueError):
+            rewrite_model(attention_model(64, negative=-5.0))
+
+    def test_radius_zero_retains_only_current_query_block_keys(self):
+        inputs = feeds(1, 513)
+        inputs["attention_mask"][:] = 1
+        _, starts, ends = self.check(attention_model(0), inputs, True)
+        np.testing.assert_array_equal(starts, [0, 256, 512])
+        np.testing.assert_array_equal(ends, [256, 512, 513])
+
+    def test_large_qk_and_nonfinite_input_fall_back(self):
+        for field, value in (
+            ("q", 1e20),
+            ("k", 1e20),
+            ("q", np.nan),
+            ("k", np.inf),
+            ("v", np.nan),
+            ("v", np.inf),
+        ):
+            with self.subTest(field=field, value=value):
+                inputs = feeds(1, 513)
+                inputs["attention_mask"][:] = 1
+                inputs[field][0, 0, 11, 1] = value
+                self.check(attention_model(64, negative=-65504.0), inputs, False)
+
+    def test_adaptive_full_key_budget_retained(self):
+        inputs = feeds(2, 257)
+        inputs["attention_mask"][:] = 1
+        _, starts, ends = self.check(
+            attention_model(2), inputs, True, block_size=512, max_score_bytes=16384
+        )
+        queries = np.arange(0, 257, 3)
+        np.testing.assert_array_equal(starts, np.maximum(0, queries - 2))
+        np.testing.assert_array_equal(ends, np.minimum(257, queries + 3 + 2))
+        self.assertLessEqual(int(np.max(ends - starts)), 7)
+
+    def test_global_attention_keeps_complete_keys_and_values(self):
+        for negative in (-np.inf, -np.finfo(np.float32).max):
+            rewritten, _ = rewrite_model(attention_model(negative=negative))
+            self.assertFalse(any("crop_" in node.name for node in rewritten.graph.node))
+            loop = next(node for node in rewritten.graph.node if node.op_type == "Loop")
+            body = next(
+                attribute.g for attribute in loop.attribute if attribute.name == "body"
+            )
+            products = [node for node in body.node if node.op_type == "MatMul"]
+            self.assertEqual([node.input[1] for node in products], ["ks", "v"])
+            self.assertEqual(sum(node.op_type == "Slice" for node in body.node), 1)
+
+    def test_original_is_not_mutated(self):
+        original = attention_model(64)
+        before = original.SerializeToString()
+        rewrite_model(original)
+        self.assertEqual(before, original.SerializeToString())
 
 
 if __name__ == "__main__":

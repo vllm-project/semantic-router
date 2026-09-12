@@ -1,4 +1,7 @@
-"""Bound FP32 self-attention score tensors by looping over queries, never keys.
+"""Bound FP32 attention with query blocks and guarded local key/value cropping.
+
+Global attention and guarded fallback retain complete keys. Local fast paths
+remove only terms whose masked exponential is provably zero in FP32.
 
 This preserves the export's separate Q/K scale operations and mask fill values.
 It is an optional graph variant; numerical and execution-provider qualification
@@ -27,6 +30,7 @@ FLOAT32_BYTES = 4
 ATTENTION_RANK = 4
 MASK_RANK = 2
 MIN_OPSET = 13
+LOCAL_CROP_MAX_FINITE_FILL = -1024.0
 
 
 def _array(graph, producers, name):
@@ -222,6 +226,73 @@ class _Nodes:
         )
 
 
+def _local_crop_guard(outer, q, k, v, depth, integer_mask, local_fill):
+    """Permit removal only for all-valid padding and finite, bounded dot products.
+
+    L1(Q)*L1(K)*depth overbounds every dot product. The extra factor eight
+    covers FP32 accumulation error for depth <= 4096. With the finite-fill
+    threshold below, even opposite-sign extrema leave a > 256 softmax gap,
+    so every removed term has an exactly-zero FP32 exponential. Infinity,
+    NaN, reduction overflow, small mask fills, and any padding use full K/V.
+    V must also be finite: removing 0*NaN/Inf would change invalid-input math.
+    """
+    if np.isneginf(local_fill):
+        limit = np.finfo(np.float32).max / 16.0
+    elif np.isfinite(local_fill) and local_fill <= LOCAL_CROP_MAX_FINITE_FILL:
+        limit = (-float(local_fill) - 256.0) / 4.0
+    else:
+        return outer.constant("crop_eligible", False, np.bool_)
+    limit = np.nextafter(np.float32(limit), np.float32(0))
+    totals = []
+    for tag, value in [("q", q), ("k", k), ("v", v)]:
+        absolute = outer.op("Abs", [value], "crop_" + tag + "_abs")
+        totals.append(
+            outer.op("ReduceSum", [absolute], "crop_" + tag + "_l1", keepdims=0)
+        )
+    product = outer.op("Mul", totals[:2], "crop_l1_product")
+    dimension = outer.op("Cast", [depth], "crop_depth_float", to=TensorProto.FLOAT)
+    factor = outer.op(
+        "Mul",
+        [dimension, outer.constant("crop_roundoff_factor", 8.0, np.float32)],
+        "crop_dimension_factor",
+    )
+    bound = outer.op("Mul", [product, factor], "crop_dot_bound")
+    bounded = outer.op(
+        "LessOrEqual",
+        [bound, outer.constant("crop_limit", limit, np.float32)],
+        "crop_bounded",
+    )
+    value_finite = outer.op(
+        "LessOrEqual",
+        [
+            totals[2],
+            outer.constant("crop_float_max", np.finfo(np.float32).max, np.float32),
+        ],
+        "crop_value_finite",
+    )
+    minimum = outer.op("ReduceMin", [integer_mask], "crop_mask_min", keepdims=0)
+    all_valid = outer.op(
+        "Equal", [minimum, outer.constant("crop_mask_one", 1)], "crop_all_valid"
+    )
+    positive_depth = outer.op(
+        "Greater", [depth, outer.constant("crop_depth_zero", 0)], "crop_positive_depth"
+    )
+    bounded_depth = outer.op(
+        "LessOrEqual",
+        [depth, outer.constant("crop_depth_max", 4096)],
+        "crop_bounded_depth",
+    )
+    eligible = bounded
+    for tag, value in [
+        ("values", value_finite),
+        ("padding", all_valid),
+        ("positive_depth", positive_depth),
+        ("bounded_depth", bounded_depth),
+    ]:
+        eligible = outer.op("And", [eligible, value], "crop_guard_" + tag)
+    return outer.op("Identity", [eligible], "crop_eligible")
+
+
 def _replacement(block, index, radius, padding_fill, local_fill, block_size, elements):
     outer = _Nodes(f"__blocked_attention_{index}_")
     zero = outer.constant("zero", 0)
@@ -314,8 +385,10 @@ def _replacement(block, index, radius, padding_fill, local_fill, block_size, ele
         [padding, float_zero, outer.constant("padding_fill", padding_fill, np.float32)],
         "padding_bias",
     )
-    key_positions = (
-        outer.op("Range", [zero, keys, one], "key_positions") if radius >= 0 else None
+    crop = (
+        _local_crop_guard(outer, q, k, v, depth, integer_mask, local_fill)
+        if radius >= 0
+        else None
     )
 
     body = _Nodes(outer.prefix + "body_")
@@ -326,8 +399,32 @@ def _replacement(block, index, radius, padding_fill, local_fill, block_size, ele
     start_vector = body.op("Unsqueeze", [start, axes0], "start_vector")
     end_vector = body.op("Unsqueeze", [end, axes0], "end_vector")
     sliced_q = body.op("Slice", [q, start_vector, end_vector, axes2], "queries")
-    scores = body.op("MatMul", [sliced_q, k], "scores")
+    selected_k, selected_v = k, v
     bias = padding_bias
+    if radius >= 0:
+        radius_value = body.constant("radius", radius)
+        local_start = body.op("Sub", [start, radius_value], "local_key_start_unclipped")
+        local_start = body.op("Max", [local_start, zero], "local_key_start")
+        local_end = body.op("Add", [end, radius_value], "local_key_end_unclipped")
+        local_end = body.op("Min", [local_end, keys], "local_key_end")
+        key_start = body.op("Where", [crop, local_start, zero], "key_start")
+        key_end = body.op("Where", [crop, local_end, keys], "key_end")
+        key_start_vector = body.op("Unsqueeze", [key_start, axes0], "key_start_vector")
+        key_end_vector = body.op("Unsqueeze", [key_end, axes0], "key_end_vector")
+        axes3 = body.constant("axes3", [3])
+        selected_k = body.op(
+            "Slice", [k, key_start_vector, key_end_vector, axes3], "keys"
+        )
+        selected_v = body.op(
+            "Slice", [v, key_start_vector, key_end_vector, axes2], "values"
+        )
+        bias = body.op(
+            "Slice",
+            [padding_bias, key_start_vector, key_end_vector, axes3],
+            "padding_bias",
+        )
+        key_positions = body.op("Range", [key_start, key_end, one], "key_positions")
+    scores = body.op("MatMul", [sliced_q, selected_k], "scores")
     if radius >= 0:
         positions = body.op("Range", [start, end, one], "query_positions")
         positions = body.op(
@@ -336,12 +433,10 @@ def _replacement(block, index, radius, padding_fill, local_fill, block_size, ele
         keys_row = body.op("Unsqueeze", [key_positions, axes0], "key_row")
         difference = body.op("Sub", [positions, keys_row], "difference")
         distance = body.op("Abs", [difference], "distance")
-        keep = body.op(
-            "LessOrEqual", [distance, body.constant("radius", radius)], "local_keep"
-        )
+        keep = body.op("LessOrEqual", [distance, radius_value], "local_keep")
         bias = body.op(
             "Where",
-            [keep, padding_bias, body.constant("local_fill", local_fill, np.float32)],
+            [keep, bias, body.constant("local_fill", local_fill, np.float32)],
             "local_bias",
         )
     masked = body.op("Add", [scores, bias], "masked")
@@ -351,7 +446,7 @@ def _replacement(block, index, radius, padding_fill, local_fill, block_size, ele
         probability = body.op(
             "Where", [isnan, float_zero, probability], "guarded_probability"
         )
-    result = body.op("MatMul", [probability, v], "result")
+    result = body.op("MatMul", [probability, selected_v], "result")
     length = body.op("Sub", [end, start], "length")
     remaining = body.op("Sub", [chunk, length], "remaining")
     remaining = body.op("Unsqueeze", [remaining, axes0], "remaining_vector")
@@ -583,7 +678,11 @@ def rewrite_model(model, block_size=256, max_score_bytes=DEFAULT_SCORE_BYTES):
         "maximum_score_bytes": max_score_bytes,
         "score_elements_below_int32": True,
         "precision": "float32",
-        "keys_and_values": "complete input for each query block",
+        "keys_and_values": "global: complete; local: guarded absolute query interval plus radius; otherwise complete",
+        "local_crop_guard": "all batch keys valid, finite V, conservative Q/K FP32 bound; otherwise full K/V",
+        "local_crop_version": 2,
+        "memory_cap": "unchanged conservative full-key score cap",
+        "cropped_local_blocks": sum(p[0] >= 0 for p in plans),
         "q_k_scaling": "original separate operations preserved",
         "windows": [p[0] for p in plans],
         "real_model_qualification": False,
