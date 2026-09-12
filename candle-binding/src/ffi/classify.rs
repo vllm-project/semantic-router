@@ -2502,7 +2502,8 @@ pub extern "C" fn classify_mmbert_32k_jailbreak_with_probabilities(
 ///
 /// # Returns
 /// `ModernBertClassificationResult` with:
-/// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
+/// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT;
+///   Vela adds 4=NO_FEEDBACK. A value of -1 indicates an error.
 /// - `confidence`: confidence score (0.0-1.0)
 #[no_mangle]
 pub extern "C" fn classify_mmbert_32k_feedback(
@@ -2550,7 +2551,8 @@ pub extern "C" fn classify_mmbert_32k_feedback(
 ///
 /// # Returns
 /// `ModernBertClassificationResultWithProbs` with:
-/// - `class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
+/// - `class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT;
+///   Vela adds 4=NO_FEEDBACK. A value of -1 indicates an error.
 /// - `confidence`: confidence score of the predicted class (0.0-1.0)
 /// - `probabilities`: caller frees with `free_modernbert_probabilities`
 #[no_mangle]

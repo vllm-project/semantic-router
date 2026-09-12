@@ -173,3 +173,38 @@ Record evaluated token counts and truncation. `FeedbackDetector` defaults to a
 checkpoint capacity. It validates the output mapping instead of silently
 renaming arbitrary classifier outputs. Export fresh ONNX graphs for changed
 weights; never copy an old graph into the new model repository.
+
+### Calibrate Vela's applicability bias
+
+For a five-class Vela checkpoint, `NO_FEEDBACK` is an explicit class with ID 4.
+If a development experiment uses applicability calibration, adjust the actual
+classifier bias so PyTorch and exported inference engines consume the same
+weights. The calibration command tests the fixed grid `0, 0.125, …, 1`, picks
+its smallest feasible value, and verifies the changed model with a second FP32
+forward. The input checkpoint remains unchanged.
+
+```bash
+python -m src.training.model_classifier.user_feedback_classifier.calibrate_vela_bias \
+  --model ./feedback-uncalibrated \
+  --development ./data/development.jsonl ./data/context-development.jsonl \
+  --output ./feedback-calibration \
+  --device cuda
+```
+
+Supply development records using the shared sequence schema: `id`, `group_id`,
+`text`, exact `label`, `source`, and `length_bucket`. The model sees only the
+current user turn. The default experiment requires all five classes and the
+256/4K/8K/16K/32K development buckets; `--required-lengths` records an explicitly
+chosen alternative scope. Every source must reach present-label macro F1 0.85,
+every numeric context bucket macro F1 0.80, and `NO_FEEDBACK` precision and recall
+0.90. Missing support fails qualification.
+
+The output retains every grid result and both actual forward evaluations. A
+qualified candidate is written to `model/` with the complete mapping; if no grid
+point qualifies, evidence is retained and no model is exported. Do not calibrate
+on a final test, expand the grid after seeing its results, or interpret a
+calibrated softmax score as a verified probability of user intent. Freeze the
+result before independently testing ordinary follow-up requests, each feedback
+class, and long contexts. When using a LoRA artifact, apply the same change to
+its saved classifier head and verify that merging reproduces the calibrated
+checkpoint.
