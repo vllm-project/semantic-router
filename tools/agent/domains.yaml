@@ -260,11 +260,15 @@ domains:
       - bench/agentic_routing_experiment.py
       - bench/profiles/router_learning/**
       - bench/test_agentic_routing_experiment.py
+      - src/vllm-sr/cli/evaluation/router_learning_*.py
+      - src/vllm-sr/cli/evaluation/resources/router_learning_core.*.json
+      - src/vllm-sr/tests/*router_learning*.py
+      - dashboard/backend/evaluationplane/*router_learning*.go
       - src/semantic-router/pkg/extproc/router_learning*
       - src/semantic-router/pkg/config/*learning*
       - src/semantic-router/pkg/routerreplay/store/learning_diagnostics.go
       - src/semantic-router/pkg/apiserver/route_router_outcomes.go
-    checks: [make bench-router-learning]
+    checks: [make dashboard-test-router-learning, make bench-router-learning]
     ci_jobs: [router-learning]
 
   paper:

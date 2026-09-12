@@ -111,6 +111,18 @@ class PRChangeClassifierTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn("core-tests", classify([path]).selected_jobs)
 
+    def test_router_learning_parity_covers_runtime_and_replay_changes(self) -> None:
+        paths = (
+            "src/semantic-router/pkg/extproc/router_learning_sampling_score.go",
+            "src/vllm-sr/cli/evaluation/router_learning_policy.py",
+            "src/vllm-sr/cli/evaluation/resources/router_learning_core.v2.json",
+            "src/vllm-sr/tests/test_router_learning_policy_parity.py",
+            "dashboard/backend/evaluationplane/method_router_learning_reducer.go",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIn("router-learning", classify([path]).selected_jobs)
+
     def test_recipe_change_selects_static_conformance_without_e2e(self) -> None:
         result = classify(["config/recipes/privacy/probes.yaml"])
 

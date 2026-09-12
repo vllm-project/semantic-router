@@ -3,9 +3,10 @@ package evaluationplane
 import "fmt"
 
 const (
-	fixtureReplayExecutorID = "fixture-replay.v1"
-	momReplayExecutorID     = "mom-cohort-replay.v1"
-	liveRuntimeExecutorID   = "live-runtime.v1"
+	fixtureReplayExecutorID        = "fixture-replay.v1"
+	momReplayExecutorID            = "mom-cohort-replay.v1"
+	routerLearningReplayExecutorID = "router-learning-replay.v1"
+	liveRuntimeExecutorID          = "live-runtime.v1"
 )
 
 func builtinExecutorContracts() []executorContract {
@@ -27,6 +28,12 @@ func builtinExecutorContracts() []executorContract {
 			TargetProfile: targetProfileRuntime, LineageProfile: lineageRuntime,
 			RequiresFixtureRef: true, EvidenceLevelCeiling: "E0",
 			TrackIDs: []TrackID{"routing", "model_pool", "joint"},
+		},
+		{
+			ID: routerLearningReplayExecutorID, Mode: ModeReplay, SuiteClass: executorSuiteFixture,
+			TargetProfile: targetProfileRecorded, LineageProfile: lineageFixture,
+			RequiresFixtureRef: true, EvidenceLevelCeiling: "E0",
+			TrackIDs: []TrackID{"joint"},
 		},
 		{
 			ID: normalizedSuiteExecutorID, Mode: ModeReplay, SuiteClass: executorSuiteNormalized,

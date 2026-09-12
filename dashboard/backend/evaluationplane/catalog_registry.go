@@ -225,7 +225,7 @@ func (registry *Registry) registerRecordedTargets(installedSuites bool) error {
 		ID: "fixture", Name: "Built-in evaluation sample", Kind: "builtin-fixture",
 		Description:       "A small deterministic replay for checking the full evaluation workflow without calling a live system.",
 		Modes:             []Mode{ModeReplay},
-		AcceptedExecutors: map[Mode][]string{ModeReplay: {fixtureReplayExecutorID}},
+		AcceptedExecutors: map[Mode][]string{ModeReplay: {fixtureReplayExecutorID, routerLearningReplayExecutorID}},
 		EvidenceLevel:     "E0", Healthy: &healthy,
 		Labels: map[string]string{"execution": "local", "network": "none"},
 	}, Contract: targetContract{

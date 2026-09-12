@@ -1,12 +1,13 @@
 package evaluationplane
 
 type methodRecordAttestation struct {
-	Robustness robustnessMethodAttestation
-	AgentTask  agentTaskMethodAttestation
-	Recovery   recoveryMethodAttestation
-	Production productionMethodAttestation
-	HardPolicy hardPolicyMethodAttestation
-	R2Outcomes []CompoundModelBudgetOutcome
+	Robustness     robustnessMethodAttestation
+	AgentTask      agentTaskMethodAttestation
+	Recovery       recoveryMethodAttestation
+	Production     productionMethodAttestation
+	HardPolicy     hardPolicyMethodAttestation
+	RouterLearning routerLearningMethodAttestation
+	R2Outcomes     []CompoundModelBudgetOutcome
 }
 
 type methodRecordReducer struct {
@@ -43,6 +44,10 @@ func (reducer *methodRecordReducer) finalize() (methodRecordAttestation, error) 
 	if err != nil {
 		return methodRecordAttestation{}, err
 	}
+	routerLearning, err := reduceRouterLearningMethod(reducer.records)
+	if err != nil {
+		return methodRecordAttestation{}, err
+	}
 	r2Outcomes := make([]CompoundModelBudgetOutcome, 0)
 	for _, record := range reducer.records {
 		if record.MethodID == nil {
@@ -61,5 +66,6 @@ func (reducer *methodRecordReducer) finalize() (methodRecordAttestation, error) 
 	return methodRecordAttestation{
 		Robustness: robustness, AgentTask: agentTask, Recovery: recovery,
 		Production: production, HardPolicy: hardPolicy, R2Outcomes: r2Outcomes,
+		RouterLearning: routerLearning,
 	}, nil
 }

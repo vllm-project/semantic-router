@@ -113,7 +113,36 @@ func methodMetricExpectations(methods methodRecordAttestation, selectedTracks []
 	}
 	add("safety", "safety.hard_policy_static_passed", "Runtime hard-policy static proof result", "boolean", "higher_is_better", boolFloatPointer(hardPolicy.StaticPassed), hardPolicy.ObservationCount, nil)
 	add("safety", "safety.hard_policy_observation_count", "Hard-policy dynamic observation count", "observations", "higher_is_better", observationCount, hardPolicy.ObservationCount, nil)
+
+	addRouterLearningMetricExpectations(add, methods.RouterLearning)
 	return expected
+}
+
+func addRouterLearningMetricExpectations(add methodMetricExpectationAdder, learning routerLearningMethodAttestation) {
+	for _, policyID := range routerLearningPolicyIDs {
+		policy, present := learning.Policies[policyID]
+		if !present {
+			continue
+		}
+		prefix := "joint.router_learning." + policyID + "."
+		suffix := " (" + policyID + ")"
+		add("joint", prefix+"solve_rate", "Solve rate"+suffix, "fraction", "higher_is_better", policy.SolveRate, policy.RoundCount, policy.SolveRateInterval)
+		add("joint", prefix+"lifecycle_cost_mean_usd", "Mean lifecycle cost"+suffix, "USD/round", "lower_is_better", policy.LifecycleCostMeanUSD, policy.RoundCount, policy.LifecycleCostInterval)
+		add("joint", prefix+"latency_mean_ms", "Mean latency"+suffix, "ms", "lower_is_better", policy.LatencyMeanMS, policy.RoundCount, policy.LatencyInterval)
+		add("joint", prefix+"model_call_mean", "Mean model calls"+suffix, "calls/round", "lower_is_better", policy.ModelCallMean, policy.RoundCount, policy.ModelCallInterval)
+		add("joint", prefix+"protection_violation_rate", "Protection violation rate"+suffix, "fraction", "lower_is_better", policy.ProtectionViolationRate, policy.ProtectedRoundCount, policy.ProtectionViolationInterval)
+		add("joint", prefix+"hard_constraint_violation_rate", "Hard eligibility violation rate"+suffix, "fraction", "lower_is_better", policy.HardConstraintViolationRate, policy.RoundCount, policy.HardConstraintInterval)
+		add("joint", prefix+"propensity_coverage", "Recorded action-propensity coverage"+suffix, "fraction", "higher_is_better", methodFloatPointer(0), policy.RoundCount, nil)
+		add("joint", prefix+"trial_count", "Paired trial count"+suffix, "trials", "higher_is_better", methodFloatPointer(float64(policy.TrialCount)), policy.TrialCount, nil)
+	}
+}
+
+func routerLearningMetricInventoryAttestation() routerLearningMethodAttestation {
+	policies := make(map[string]routerLearningPolicyAttestation, len(routerLearningPolicyIDs))
+	for _, policyID := range routerLearningPolicyIDs {
+		policies[policyID] = routerLearningPolicyAttestation{PolicyID: policyID, TrialCount: 1, RoundCount: 1, ProtectedRoundCount: 1}
+	}
+	return routerLearningMethodAttestation{Policies: policies}
 }
 
 func addProductionMetricExpectations(add methodMetricExpectationAdder, production productionMethodAttestation) {
@@ -166,11 +195,12 @@ func addProductionMetricExpectations(add methodMetricExpectationAdder, productio
 func validateServerReducedMethodMetrics(report Report, methods methodRecordAttestation) error {
 	expected := methodMetricExpectations(methods, report.Run.TrackIDs)
 	allIDs := methodMetricExpectations(methodRecordAttestation{
-		Robustness: robustnessMethodAttestation{PairCount: 1},
-		AgentTask:  agentTaskMethodAttestation{AttemptCount: 1, DistinctTaskCount: 1},
-		Recovery:   recoveryMethodAttestation{PairCount: 1},
-		Production: productionMethodAttestation{AssignmentCount: 1},
-		HardPolicy: hardPolicyMethodAttestation{ObservationCount: 1},
+		Robustness:     robustnessMethodAttestation{PairCount: 1},
+		AgentTask:      agentTaskMethodAttestation{AttemptCount: 1, DistinctTaskCount: 1},
+		Recovery:       recoveryMethodAttestation{PairCount: 1},
+		Production:     productionMethodAttestation{AssignmentCount: 1},
+		HardPolicy:     hardPolicyMethodAttestation{ObservationCount: 1},
+		RouterLearning: routerLearningMetricInventoryAttestation(),
 	}, allTrackIDs)
 	actual := make(map[string]Metric, len(report.Metrics))
 	for _, metric := range report.Metrics {
