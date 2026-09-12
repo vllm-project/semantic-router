@@ -75,7 +75,8 @@ func createPIIInitializer() PIIInitializer {
 
 // MmBERT32KPIIInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for PII detection.
 type MmBERT32KPIIInitializerImpl struct {
-	usedMmBERT32K bool
+	maxSequenceLength int
+	usedMmBERT32K     bool
 }
 
 func (c *MmBERT32KPIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) error {
@@ -83,7 +84,7 @@ func (c *MmBERT32KPIIInitializerImpl) Init(modelID string, useCPU bool, numClass
 		"backend":   "mmbert_32k",
 		"model_ref": modelID,
 	})
-	err := candle_binding.InitMmBert32KPIIClassifier(modelID, useCPU)
+	err := candle_binding.InitMmBert32KPIIClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K PII detector: %w", err)
 	}

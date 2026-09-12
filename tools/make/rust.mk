@@ -14,6 +14,14 @@ TEST_GPU_DEVICE ?= 2
 # models from ../models unless those tests have been converted to skip cleanly.
 RUST_CI_LIB_TESTS ?= \
 	core::tokenization_test::test_tokenization_config_default \
+	model_architectures::embedding::pooling_test::test_mean_pool_long_low_precision \
+	model_architectures::embedding::pooling_test::test_mean_pool_padding_and_invalid_rows \
+	ffi::sequence_model::tests::sequence_contract_rejects_wrong_label_order_and_activation \
+	ffi::sequence_model::tests::sequence_ffi_returns_owned_errors_for_invalid_arguments \
+	model_architectures::traditional::modernbert::head_contract_tests::head_honors_configured_epsilon_and_rejects_partial_weights \
+	model_architectures::embedding::representation_contract::tests::preserves_legacy_and_rejects_unknown_representation \
+	model_architectures::embedding::mmbert_embedding::early_exit_contract_tests::intermediate_embeddings_preserve_hf_hidden_state_contract \
+	model_architectures::embedding::mmbert_embedding::early_exit_contract_tests::long_context_rotary_preserves_positions_before_half_cast \
 	core::tokenization_window::tests::test_window_ranges_cover_every_token \
 	core::tokenization_window::tests::test_window_ranges_overlap_on_a_short_stride \
 	core::tokenization_window::tests::test_window_ranges_edges \

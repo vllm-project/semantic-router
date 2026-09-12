@@ -38,10 +38,16 @@ var (
 	replaceReloadConfig      = config.Replace
 	prepareReloadRuntime     = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
 		return modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
-			Component:                  "extproc",
-			MaxParallelism:             modelruntime.DefaultParallelism(5),
-			OnEvent:                    logReloadRuntimeLifecycleEvent,
-			InitModalityClassifierFunc: InitModalityClassifier,
+			Component:      "extproc",
+			MaxParallelism: modelruntime.DefaultParallelism(5),
+			OnEvent:        logReloadRuntimeLifecycleEvent,
+			InitModalityClassifierFunc: func(path string, cpu bool) error {
+				limit := 0
+				if cfg.ModalityDetector.Classifier != nil {
+					limit = cfg.ModalityDetector.Classifier.MaxSequenceLength
+				}
+				return InitModalityClassifierWithMaxSequenceLength(path, cpu, limit)
+			},
 		})
 	}
 	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {

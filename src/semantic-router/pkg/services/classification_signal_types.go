@@ -57,6 +57,7 @@ type MatchedSignals struct {
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
 	Jailbreak     []string `json:"jailbreak,omitempty"`
+	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
 	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`

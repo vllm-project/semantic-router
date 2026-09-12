@@ -71,7 +71,7 @@ func (c *Classifier) evaluateJailbreakSignal(ctx context.Context, results *Signa
 	// Step 2: Run classifier inference exactly once per unique content piece.
 	jailbreakCache := make(map[string][]cachedJailbreakResult, len(classifierContents))
 	for _, content := range classifierContents {
-		chunks := jailbreakSignalChunks(content)
+		chunks := c.jailbreakInputs(content)
 		cached := make([]cachedJailbreakResult, 0, len(chunks))
 		for _, chunk := range chunks {
 			result, err := c.jailbreakInference.Classify(ctx, chunk)
@@ -112,7 +112,7 @@ func (c *Classifier) evaluateJailbreakRule(rule config.JailbreakRule, jailbreakT
 	case "contrastive":
 		var chunks []string
 		for _, content := range contentToAnalyze {
-			chunks = append(chunks, jailbreakSignalChunks(content)...)
+			chunks = append(chunks, c.jailbreakInputs(content)...)
 		}
 		c.evaluateContrastiveJailbreakRule(rule, chunks, start, results, mu)
 	default:

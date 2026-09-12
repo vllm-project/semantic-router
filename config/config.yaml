@@ -289,6 +289,21 @@ routing:
         description: General fallback traffic.
         mmlu_categories: [other]
 
+    safety:
+      - name: unsafe-content
+        description: Content risk, independent of prompt attacks.
+        model: external-safety
+        labels: [safe, unsafe]
+        unsafe_labels: [unsafe]
+        threshold: 0.5
+        hazard:
+          model: external-hazard
+          labels: [violence, criminal_activity, sexual_content, child_exploitation,
+                   hate, harassment_abuse, regulated_substances, weapons,
+                   self_harm, privacy, specialized_advice, misinformation]
+          categories: [privacy]
+          threshold: 0.6
+
     fact_check:
       - name: needs_fact_check
         description: Prompts with factual claims that should be verified.
@@ -2212,6 +2227,7 @@ global:
         bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
+          full_context: false
           backend: candle
           model_type: mmbert
           preload_embeddings: true
@@ -2236,6 +2252,8 @@ global:
           max_response_bytes: 16777216
           dimensions: 1024
     system:
+      safety: models/Vela-1.0-Encoder-307M-Safety
+      hazard: models/Vela-1.0-Encoder-307M-Hazard
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
@@ -2264,6 +2282,18 @@ global:
         queue_timeout_ms: 250
         on_overflow: shed
     external:
+      - name: external-safety
+        model_role: classification
+        llm_endpoint:
+          address: safety-service
+          port: 8080
+          protocol: http
+      - name: external-hazard
+        model_role: classification
+        llm_endpoint:
+          address: hazard-service
+          port: 8080
+          protocol: http
       - name: external-guardrail
         llm_provider: openai
         model_role: guardrail
@@ -2400,6 +2430,17 @@ global:
             positive_group: escalate
             negative_group: keep
     modules:
+      safety:
+        safety:
+          model_ref: safety
+          model_id: models/Vela-1.0-Encoder-307M-Safety
+          use_cpu: true
+          max_sequence_length: 0
+        hazard:
+          model_ref: hazard
+          model_id: models/Vela-1.0-Encoder-307M-Hazard
+          use_cpu: true
+          max_sequence_length: 0
       prompt_compression:
         enabled: true
         # Built-in profile for scoring/preserve defaults: default, coding, medical,
@@ -2423,6 +2464,7 @@ global:
         threshold: 0.7
         use_cpu: true
         variant: mmbert32k
+        max_sequence_length: 0
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         positive_labels: [jailbreak]
         # allow (default) tolerates a classifier-backend failure and treats the
@@ -2435,6 +2477,7 @@ global:
           # configured; false disables the classifier outright.
           enabled: true
           model_ref: domain_classifier
+          max_sequence_length: 0
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
           use_cpu: true
@@ -2457,6 +2500,7 @@ global:
           # configured; false disables the classifier outright.
           enabled: true
           model_ref: pii_classifier
+          max_sequence_length: 0
           model_id: models/mmbert32k-pii-detector-merged
           threshold: 0.9
           use_cpu: true
@@ -2488,6 +2532,7 @@ global:
         enabled: true
         fact_check:
           model_ref: fact_check_classifier
+          max_sequence_length: 0
           model_id: models/mmbert32k-factcheck-classifier-merged
           threshold: 0.65
           use_cpu: true
@@ -2513,6 +2558,7 @@ global:
       feedback_detector:
         enabled: true
         model_ref: feedback_detector
+        max_sequence_length: 0
         model_id: models/mmbert32k-feedback-detector-merged
         threshold: 0.7
         use_cpu: true
@@ -2524,6 +2570,7 @@ global:
         method: hybrid
         classifier:
           model_path: models/mmbert32k-modality-router-merged
+          max_sequence_length: 0
           use_cpu: true
         keywords:
           - image

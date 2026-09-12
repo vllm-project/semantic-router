@@ -4,25 +4,26 @@ Feedback Detector Inference
 
 Compatible with: https://huggingface.co/llm-semantic-router/feedback-detector
 
-Key insight: Follow-up messages alone contain sufficient signal for classification.
-No conversation context needed—just pass the user's response directly.
+Classifies the supplied follow-up text. Ambiguous feedback may require preceding
+conversation context; confidence is a model score, not a correctness guarantee.
 """
 
-import torch
-from typing import Optional, Dict, Any, List
+# Multilingual examples retain their native scripts and punctuation.
+# ruff: noqa: RUF001
+
 from dataclasses import dataclass
 from pathlib import Path
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from typing import Any
 
+import torch
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-# Label mapping matching feedback-detector
-LABEL2ID = {
-    "SAT": 0,
-    "NEED_CLARIFICATION": 1,
-    "WRONG_ANSWER": 2,
-    "WANT_DIFFERENT": 3,
-}
-ID2LABEL = {v: k for k, v in LABEL2ID.items()}
+if __package__:
+    from .data_contract import ID2LABEL
+else:
+    from data_contract import ID2LABEL
+
+DISPLAY_LIMIT = 45
 
 
 @dataclass
@@ -32,9 +33,9 @@ class FeedbackResult:
     label: str  # SAT, NEED_CLARIFICATION, WRONG_ANSWER, WANT_DIFFERENT
     confidence: float
     is_satisfied: bool
-    all_scores: Dict[str, float]
+    all_scores: dict[str, float]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "label": self.label,
             "confidence": self.confidence,
@@ -60,7 +61,9 @@ class FeedbackDetector:
     def __init__(
         self,
         model_path: str = "llm-semantic-router/feedback-detector",
-        device: Optional[str] = None,
+        device: str | None = None,
+        max_length: int = 512,
+        revision: str | None = None,
     ):
         """
         Initialize the feedback detector.
@@ -72,14 +75,25 @@ class FeedbackDetector:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         print(f"Loading feedback detector from {model_path}...")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, revision=revision)
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_path, revision=revision
+        )
         self.model.to(self.device)
         self.model.eval()
 
-        # Get max length from config
-        self.max_length = getattr(self.model.config, "max_position_embeddings", 512)
-        self.max_length = min(self.max_length, 8192)  # Cap for memory
+        labels = {int(key): value for key, value in self.model.config.id2label.items()}
+        if labels != ID2LABEL:
+            raise ValueError("Feedback checkpoint has an incompatible label mapping")
+        capacity = self.model.config.max_position_embeddings
+        if (
+            isinstance(max_length, bool)
+            or not isinstance(max_length, int)
+            or not 0 < max_length <= capacity
+        ):
+            raise ValueError(f"max_length must be between 1 and {capacity}")
+        self.max_length = max_length
+        self.model.config.reference_compile = False
 
         print(f"  Loaded on {self.device}")
 
@@ -88,17 +102,12 @@ class FeedbackDetector:
         Classify user feedback from follow-up message.
 
         Args:
-            text: User's follow-up message (that's all you need!)
+            text: User's follow-up message, with available context if needed.
 
         Returns:
             FeedbackResult with label, confidence, and scores
         """
-        inputs = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
-        ).to(self.device)
+        inputs = self._encode(text)
 
         with torch.no_grad():
             outputs = self.model(**inputs)
@@ -119,18 +128,12 @@ class FeedbackDetector:
             all_scores=all_scores,
         )
 
-    def classify_batch(self, texts: List[str]) -> List[FeedbackResult]:
+    def classify_batch(self, texts: list[str]) -> list[FeedbackResult]:
         """Classify multiple follow-up messages."""
         if not texts:
             return []
 
-        inputs = self.tokenizer(
-            texts,
-            truncation=True,
-            max_length=self.max_length,
-            padding=True,
-            return_tensors="pt",
-        ).to(self.device)
+        inputs = self._encode(texts)
 
         with torch.no_grad():
             outputs = self.model(**inputs)
@@ -156,6 +159,28 @@ class FeedbackDetector:
             )
 
         return results
+
+    def _encode(self, texts: str | list[str]):
+        """Reject over-budget requests without silently discarding feedback."""
+        inputs = self.tokenizer(
+            texts,
+            truncation=False,
+            padding=isinstance(texts, list),
+            return_tensors="pt",
+        )
+        lengths = inputs["attention_mask"].sum(dim=-1).tolist()
+        over_budget = [
+            (index, length)
+            for index, length in enumerate(lengths)
+            if length > self.max_length
+        ]
+        if over_budget:
+            raise ValueError(
+                f"Feedback input exceeds max_length={self.max_length}, including "
+                f"special tokens: {over_budget}. Increase the explicit budget within "
+                "the checkpoint capacity or shorten the input."
+            )
+        return inputs.to(self.device)
 
     def __call__(self, text: str) -> FeedbackResult:
         """Shortcut for classify()."""
@@ -300,7 +325,9 @@ def demo():
             total_correct += 1
         lang_total += 1
 
-        print(f"   {match} \"{text[:45]}{'...' if len(text) > 45 else ''}\"")
+        print(
+            f"   {match} \"{text[:DISPLAY_LIMIT]}{'...' if len(text) > DISPLAY_LIMIT else ''}\""
+        )
         print(f"      → {result.label} ({result.confidence:.1%})")
 
     # Print last language stats

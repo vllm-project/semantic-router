@@ -39,6 +39,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildKBClassifiersOption,
 		b.buildEventClassifierOption,
 		b.buildGenericClassifiersOption,
+		b.buildSafetyClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	if err != nil {

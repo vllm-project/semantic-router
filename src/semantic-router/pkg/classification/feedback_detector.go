@@ -152,7 +152,7 @@ func (d *FeedbackDetector) Initialize() error {
 
 	// Check if mmBERT-32K is configured (takes precedence)
 	if d.config.UseMmBERT32K {
-		err := candle.InitMmBert32KFeedbackClassifier(d.config.ModelID, d.config.UseCPU)
+		err := candle.InitMmBert32KFeedbackClassifierWithMaxSequenceLength(d.config.ModelID, d.config.UseCPU, d.config.MaxSequenceLength)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mmBERT-32K feedback detector from %s: %w", d.config.ModelID, err)
 		}
@@ -183,12 +183,8 @@ func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*Feedback
 		return nil, fmt.Errorf("feedback detector not initialized")
 	}
 
-	if text == "" {
-		return &FeedbackResult{
-			FeedbackType: FeedbackLabelSatisfied,
-			Confidence:   1.0,
-			Class:        0,
-		}, nil
+	if strings.TrimSpace(text) == "" {
+		return nil, fmt.Errorf("feedback classification requires non-empty input")
 	}
 
 	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResultWithProbs, error) {

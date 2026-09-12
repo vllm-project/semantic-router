@@ -12,6 +12,7 @@ pub mod memory; //  memory management functions
 #[cfg(feature = "mkl")]
 pub mod mkl_shim; // hgemm_ fallback: static MKL 2020.1 lacks f16 GEMM
 pub mod mlp; // MLP selector for model selection (GPU-accelerated)
+pub mod sequence_model; // Independently owned configurable sequence heads
 pub mod similarity; //  similarity functions
 pub mod text_windows; //  embedding window ranges
 pub mod tokenization; //  tokenization function

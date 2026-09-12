@@ -23,6 +23,7 @@ type Signals struct {
 	ModalityRules      []ModalityRule         `yaml:"modality_rules,omitempty"`
 	RoleBindings       []RoleBinding          `yaml:"role_bindings,omitempty"`
 	JailbreakRules     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	SafetyRules        []SafetyRule           `yaml:"safety,omitempty"`
 	HallucinationRules []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PIIRules           []PIIRule              `yaml:"pii,omitempty"`
 	KBRules            []KBSignalRule         `yaml:"kb,omitempty"`

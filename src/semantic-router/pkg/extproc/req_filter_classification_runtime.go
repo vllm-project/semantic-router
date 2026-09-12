@@ -141,6 +141,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"modality":       signals.MatchedModalityRules,
 		"authz":          signals.MatchedAuthzRules,
 		"jailbreak":      signals.MatchedJailbreakRules,
+		"safety":         signals.MatchedSafetyRules,
 		"pii":            signals.MatchedPIIRules,
 		"kb":             signals.MatchedKBRules,
 		"conversation":   signals.MatchedConversationRules,

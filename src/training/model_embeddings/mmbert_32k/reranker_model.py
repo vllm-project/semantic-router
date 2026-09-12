@@ -13,6 +13,9 @@ from torch import nn
 from torch.nn import functional
 from transformers import AutoConfig, AutoModel
 
+from .representation_contract import read_representation_contract
+from .representation_outputs import select_hidden_state
+
 logger = logging.getLogger(__name__)
 
 
@@ -140,6 +143,9 @@ class Matryoshka2DReranker(nn.Module):
         logger.info("Layer indices: %s", self.layer_indices)
         logger.info("Dimension indices: %s", self.dim_indices)
         self.final_norm = _final_normalization(self.encoder)
+        self.representation_contract = read_representation_contract(
+            self.encoder.config, "reranker"
+        )
         self.layer_heads = _build_classification_heads(
             self.layer_indices, self.dim_indices
         )
@@ -223,9 +229,19 @@ class Matryoshka2DReranker(nn.Module):
         for layer_index in layers:
             if layer_index > len(hidden_states) - 1:
                 continue
-            hidden = hidden_states[layer_index]
-            if self.final_norm is not None and layer_index < self.num_layers:
-                hidden = self.final_norm(hidden)
+            if self.representation_contract is None:
+                # Preserve trained legacy heads when metadata is absent.
+                hidden = hidden_states[layer_index]
+                if self.final_norm is not None and layer_index < self.num_layers:
+                    hidden = self.final_norm(hidden)
+            else:
+                hidden = select_hidden_state(
+                    self.encoder,
+                    outputs,
+                    layer_index,
+                    self.representation_contract,
+                    task="reranker",
+                )
             pooled = self._pool(hidden, attention_mask)
             all_scores.update(self._score_dimensions(pooled, layer_index, dimensions))
         result = {}
@@ -298,6 +314,9 @@ class Matryoshka2DReranker(nn.Module):
     @classmethod
     def from_pretrained(cls, model_path: str, **kwargs):
         """Restore an exported encoder and its custom classification heads."""
+        heads_path = os.path.join(model_path, "classification_heads.pt")
+        if not os.path.isfile(heads_path):
+            raise FileNotFoundError(f"Missing trained reranker heads: {heads_path}")
         config_path = os.path.join(model_path, "matryoshka_config.json")
         if os.path.exists(config_path):
             with open(config_path) as handle:
@@ -310,9 +329,7 @@ class Matryoshka2DReranker(nn.Module):
                 }
             )
         model = cls(model_path, **kwargs)
-        heads_path = os.path.join(model_path, "classification_heads.pt")
-        if os.path.exists(heads_path):
-            state = torch.load(heads_path, map_location="cpu", weights_only=True)
-            model.layer_heads.load_state_dict(state)
-            logger.info("Loaded classification heads")
+        state = torch.load(heads_path, map_location="cpu", weights_only=True)
+        model.layer_heads.load_state_dict(state, strict=True)
+        logger.info("Loaded classification heads")
         return model

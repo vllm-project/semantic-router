@@ -33,6 +33,7 @@ use crate::model_architectures::attention::chunked_sdpa::{
     chunked_sdpa, prepare_padding_mask, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
 };
 use crate::model_architectures::embedding::pooling::mean_pool;
+use crate::model_architectures::embedding::representation_contract::IntermediateNormalization;
 use crate::model_architectures::traits::{
     EmbeddingPathSpecialization, LongContextEmbeddingCapable, ModelType, PoolingMethod,
 };
@@ -63,6 +64,7 @@ pub struct MmBertEmbeddingConfig {
     pub global_rope_theta: f64,
     pub local_attention: usize,
     pub local_rope_theta: f64,
+    pub intermediate_normalization: IntermediateNormalization,
 }
 
 impl MmBertEmbeddingConfig {
@@ -83,7 +85,12 @@ impl MmBertEmbeddingConfig {
             config_errors::invalid_json(&config_path.display().to_string(), &e.to_string())
         })?;
 
+        let intermediate_normalization = IntermediateNormalization::from_model_config(&config_json)
+            .map_err(|error| {
+                config_errors::invalid_json(&config_path.display().to_string(), &error)
+            })?;
         Ok(Self {
+            intermediate_normalization,
             vocab_size: config_json["vocab_size"].as_u64().unwrap_or(256000) as usize,
             hidden_size: config_json["hidden_size"].as_u64().unwrap_or(768) as usize,
             num_hidden_layers: config_json["num_hidden_layers"].as_u64().unwrap_or(22) as usize,
@@ -196,15 +203,17 @@ impl RotaryEmbedding {
             .map(|i| 1f32 / rope_theta.powf(i as f64 / dim as f64) as f32)
             .collect();
         let inv_freq_len = inv_freq.len();
-        let inv_freq = Tensor::from_vec(inv_freq, (1, inv_freq_len), device)?.to_dtype(dtype)?;
+        let inv_freq = Tensor::from_vec(inv_freq, (1, inv_freq_len), device)?;
         let max_seq_len = config.max_position_embeddings;
+        // Preserve integer positions and angular precision at 32K before casting.
+        // FP16 rounds adjacent positions above 2048; BF16 loses them above 256.
         let t = Tensor::arange(0u32, max_seq_len as u32, device)?
-            .to_dtype(dtype)?
+            .to_dtype(DType::F32)?
             .reshape((max_seq_len, 1))?;
         let freqs = t.matmul(&inv_freq)?;
         Ok(Self {
-            sin: freqs.sin()?,
-            cos: freqs.cos()?,
+            sin: freqs.sin()?.to_dtype(dtype)?,
+            cos: freqs.cos()?.to_dtype(dtype)?,
         })
     }
 
@@ -420,6 +429,7 @@ struct MmBertEncoder {
     layers: Vec<MmBertLayer>,
     final_norm: LayerNorm,
     local_attention_size: usize,
+    intermediate_normalization: IntermediateNormalization,
 }
 
 impl MmBertEncoder {
@@ -475,6 +485,7 @@ impl MmBertEncoder {
             layers,
             final_norm,
             local_attention_size: config.local_attention,
+            intermediate_normalization: config.intermediate_normalization,
         })
     }
 
@@ -498,13 +509,26 @@ impl MmBertEncoder {
 
         let mut xs = xs.apply(&self.word_embeddings)?.apply(&self.norm)?;
 
-        // Only iterate through layers up to target_layer
-        let num_layers_to_run = target_layer.min(self.layers.len());
-        for layer in self.layers.iter().take(num_layers_to_run) {
+        if target_layer == 0 || target_layer > self.layers.len() {
+            candle_core::bail!(
+                "target_layer must be in 1..={}, got {target_layer}",
+                self.layers.len()
+            );
+        }
+        for layer in self.layers.iter().take(target_layer) {
             xs = layer.forward(&xs, &pad_mask, window, block_size)?;
         }
 
-        xs.apply(&self.final_norm)
+        // Vela's adaptive-layer loss consumes raw intermediate residuals. Old
+        // artifacts without an explicit contract keep the historical norm-all
+        // reader; changing that silently would change existing embedding spaces.
+        if target_layer == self.layers.len()
+            || self.intermediate_normalization == IntermediateNormalization::FinalNorm
+        {
+            xs.apply(&self.final_norm)
+        } else {
+            Ok(xs)
+        }
     }
 
     fn num_layers(&self) -> usize {
@@ -722,6 +746,17 @@ impl MmBertEmbeddingModel {
                     input_context: None,
                 })?;
 
+        if encodings
+            .iter()
+            .any(|e| !e.get_overflowing().is_empty() || e.len() > max_length)
+        {
+            return Err(UnifiedError::Validation {
+                field: "texts".into(),
+                expected: format!("at most {max_length} tokens per input"),
+                actual: "input exceeds embedding budget".into(),
+                context: None,
+            });
+        }
         let batch_size = encodings.len();
         let seq_len = max_length.min(
             encodings
@@ -917,6 +952,7 @@ mod tests {
             global_rope_theta: 160000.0, // YaRN-scaled
             local_attention: 128,
             local_rope_theta: 160000.0,
+            intermediate_normalization: IntermediateNormalization::None,
         };
 
         // Verify config values
@@ -1014,6 +1050,7 @@ mod tests {
             global_rope_theta: 160000.0,
             local_attention: 8, // window = 4 each side
             local_rope_theta: 160000.0,
+            intermediate_normalization: IntermediateNormalization::None,
         }
     }
 
@@ -1513,5 +1550,109 @@ mod integration_tests {
         println!("   - num_layers: {}", config.num_hidden_layers);
         println!("   - num_heads: {}", config.num_attention_heads);
         println!("   - local_attention: {} tokens", config.local_attention);
+    }
+}
+
+#[cfg(test)]
+mod early_exit_contract_tests {
+    use super::*;
+
+    #[test]
+    fn long_context_rotary_preserves_positions_before_half_cast() -> candle_core::Result<()> {
+        let config = MmBertEmbeddingConfig {
+            vocab_size: 16,
+            hidden_size: 8,
+            num_hidden_layers: 2,
+            num_attention_heads: 2,
+            intermediate_size: 16,
+            max_position_embeddings: 32768,
+            layer_norm_eps: 1e-5,
+            pad_token_id: 0,
+            global_attn_every_n_layers: 2,
+            global_rope_theta: 160000.0,
+            local_attention: 4,
+            local_rope_theta: 10000.0,
+            intermediate_normalization: IntermediateNormalization::None,
+        };
+        for dtype in [DType::F16, DType::BF16] {
+            let rotary =
+                RotaryEmbedding::new(dtype, &config, config.global_rope_theta, &Device::Cpu)?;
+            let cosine = rotary.cos.to_dtype(DType::F32)?.to_vec2::<f32>()?;
+            let sine = rotary.sin.to_dtype(DType::F32)?.to_vec2::<f32>()?;
+            for position in [255, 256, 257, 2047, 2048, 2049, 8191, 16383, 32766, 32767] {
+                // The first rotary frequency is exactly 1.0: reference angles
+                // do not depend on this implementation's frequency builder.
+                let angle = position as f64;
+                assert!((cosine[position][0] - angle.cos() as f32).abs() < 0.004);
+                assert!((sine[position][0] - angle.sin() as f32).abs() < 0.004);
+            }
+            assert_ne!(cosine[32766][0], cosine[32767][0]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn intermediate_embeddings_preserve_hf_hidden_state_contract() -> candle_core::Result<()> {
+        let device = Device::Cpu;
+        let variables = candle_nn::VarMap::new();
+        let vb = VarBuilder::from_varmap(&variables, DType::F32, &device);
+        let config = MmBertEmbeddingConfig {
+            vocab_size: 16,
+            hidden_size: 8,
+            num_hidden_layers: 2,
+            num_attention_heads: 2,
+            intermediate_size: 16,
+            max_position_embeddings: 16,
+            layer_norm_eps: 1e-5,
+            pad_token_id: 0,
+            global_attn_every_n_layers: 2,
+            global_rope_theta: 10000.0,
+            local_attention: 4,
+            local_rope_theta: 10000.0,
+            intermediate_normalization: IntermediateNormalization::None,
+        };
+        let mut encoder = MmBertEncoder::load(vb, &config)?;
+        encoder.final_norm = LayerNorm::new_no_bias(Tensor::full(2f32, (8,), &device)?, 1e-5);
+        let ids = Tensor::new(&[[1u32, 2, 3]], &device)?;
+        let mask = Tensor::ones((1, 3), DType::U32, &device)?;
+        let padding = prepare_padding_mask(&mask, DType::F32)?;
+        let embedded = ids.apply(&encoder.word_embeddings)?.apply(&encoder.norm)?;
+        let first = encoder.layers[0].forward(&embedded, &padding, 2, ATTN_QUERY_BLOCK)?;
+        let second = encoder.layers[1].forward(&first, &padding, 2, ATTN_QUERY_BLOCK)?;
+        let early = encoder.forward_to_layer(&ids, &mask, 1)?;
+        let complete = encoder.forward_to_layer(&ids, &mask, 2)?;
+        let delta = early.sub(&first)?.abs()?.max_all()?.to_scalar::<f32>()?;
+        assert!(delta < 1e-6, "intermediate residual changed: {delta}");
+        let wrong_norm = first.apply(&encoder.final_norm)?;
+        assert!(
+            early
+                .sub(&wrong_norm)?
+                .abs()?
+                .max_all()?
+                .to_scalar::<f32>()?
+                > 0.1
+        );
+        let expected = second.apply(&encoder.final_norm)?;
+        assert!(
+            complete
+                .sub(&expected)?
+                .abs()?
+                .max_all()?
+                .to_scalar::<f32>()?
+                < 1e-6
+        );
+        encoder.intermediate_normalization = IntermediateNormalization::FinalNorm;
+        let legacy_early = encoder.forward_to_layer(&ids, &mask, 1)?;
+        assert!(
+            legacy_early
+                .sub(&wrong_norm)?
+                .abs()?
+                .max_all()?
+                .to_scalar::<f32>()?
+                < 1e-6
+        );
+        assert!(encoder.forward_to_layer(&ids, &mask, 0).is_err());
+        assert!(encoder.forward_to_layer(&ids, &mask, 3).is_err());
+        Ok(())
     }
 }

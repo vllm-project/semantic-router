@@ -13,6 +13,7 @@ export interface Signal {
   modality?: string[]
   authz?: string[]
   jailbreak?: string[]
+  safety?: string[]
   pii?: string[]
   kb?: string[]
 }

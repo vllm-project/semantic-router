@@ -26,6 +26,9 @@ type ModelSpec struct {
 	// HuggingFace repository ID
 	RepoID string `json:"repo_id" yaml:"repo_id"`
 
+	// Immutable release revision, when the built-in artifact is pinned.
+	Revision string `json:"revision,omitempty" yaml:"revision,omitempty"`
+
 	// Alternative names/aliases for this model
 	Aliases []string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
 
@@ -191,15 +194,16 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Modality Detection - mmBERT-32K Router Classifier
 	{
-		LocalPath:        "models/mmbert32k-modality-router-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-modality-router-merged",
-		Aliases:          []string{"modality-classifier", "modality-router", "mmbert32k-modality-router"},
-		Purpose:          PurposeModalityDetection,
-		Description:      "mmBERT-32K classifier for AR, DIFFUSION, and BOTH modality routing decisions",
-		ParameterSize:    "307M",
-		NumClasses:       3, // AR / DIFFUSION / BOTH
-		MaxContextLength: 32768,
-		Tags:             []string{"modality", "classification", "mmbert-32k", "multimodal", "routing"},
+		LocalPath:           "models/mmbert32k-modality-router-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-modality-router-merged",
+		Aliases:             []string{"modality-classifier", "modality-router", "mmbert32k-modality-router"},
+		Purpose:             PurposeModalityDetection,
+		Description:         "mmBERT-32K classifier for AR, DIFFUSION, and BOTH modality routing decisions",
+		ParameterSize:       "307M",
+		NumClasses:          3, // AR / DIFFUSION / BOTH
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"modality", "classification", "mmbert-32k", "multimodal", "routing"},
 	},
 
 	// Embedding Models - Pro (High Quality)
@@ -330,72 +334,77 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// mmBERT-32K Feedback Detector (Merged - for Rust/Go inference)
 	{
-		LocalPath:        "models/mmbert32k-feedback-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-feedback-detector-merged",
-		Aliases:          []string{"mmbert32k-feedback-merged", "feedback-detector-32k-merged"},
-		Purpose:          PurposeFeedbackDetection,
-		Description:      "Merged 4-class user feedback classifier based on mmbert-32k-yarn for direct inference without PEFT.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
-		MaxContextLength: 32768,
-		Tags:             []string{"feedback", "classification", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-feedback-detector-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-feedback-detector-merged",
+		Aliases:             []string{"mmbert32k-feedback-merged", "feedback-detector-32k-merged"},
+		Purpose:             PurposeFeedbackDetection,
+		Description:         "Merged 4-class user feedback classifier based on mmbert-32k-yarn for direct inference without PEFT.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"feedback", "classification", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K Intent Classifier (Merged)
 	{
-		LocalPath:        "models/mmbert32k-intent-classifier-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-intent-classifier-merged",
-		Aliases:          []string{"mmbert32k-intent-merged", "intent-classifier-32k-merged"},
-		Purpose:          PurposeDomainClassification,
-		Description:      "Merged intent classifier for 14 MMLU-Pro style categories based on mmbert-32k-yarn, ready for direct inference.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       14,
-		MaxContextLength: 32768,
-		Tags:             []string{"classification", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-intent-classifier-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-intent-classifier-merged",
+		Aliases:             []string{"mmbert32k-intent-merged", "intent-classifier-32k-merged"},
+		Purpose:             PurposeDomainClassification,
+		Description:         "Merged intent classifier for 14 MMLU-Pro style categories based on mmbert-32k-yarn, ready for direct inference.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          14,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"classification", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K Fact-Check Classifier (Merged)
 	{
-		LocalPath:        "models/mmbert32k-factcheck-classifier-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
-		Aliases:          []string{"mmbert32k-factcheck-merged", "factcheck-classifier-32k-merged"},
-		Purpose:          PurposeHallucinationSentinel,
-		Description:      "Merged two-label fact-check classifier based on mmbert-32k-yarn for direct inference without PEFT.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       2,
-		MaxContextLength: 32768,
-		Tags:             []string{"factcheck", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-factcheck-classifier-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
+		Aliases:             []string{"mmbert32k-factcheck-merged", "factcheck-classifier-32k-merged"},
+		Purpose:             PurposeHallucinationSentinel,
+		Description:         "Merged two-label fact-check classifier based on mmbert-32k-yarn for direct inference without PEFT.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          2,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"factcheck", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K Jailbreak Detector (Merged)
 	{
-		LocalPath:        "models/mmbert32k-jailbreak-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
-		Aliases:          []string{"mmbert32k-jailbreak-merged", "jailbreak-detector-32k-merged"},
-		Purpose:          PurposeJailbreakDetection,
-		Description:      "Merged jailbreak and prompt-injection detector based on mmbert-32k-yarn with 32K context support.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       2,
-		MaxContextLength: 32768,
-		Tags:             []string{"safety", "jailbreak", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-jailbreak-detector-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+		Aliases:             []string{"mmbert32k-jailbreak-merged", "jailbreak-detector-32k-merged"},
+		Purpose:             PurposeJailbreakDetection,
+		Description:         "Merged jailbreak and prompt-injection detector based on mmbert-32k-yarn with 32K context support.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          2,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"safety", "jailbreak", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K PII Detector (Merged)
 	{
-		LocalPath:        "models/mmbert32k-pii-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-pii-detector-merged",
-		Aliases:          []string{"mmbert32k-pii-merged", "pii-detector-32k-merged"},
-		Purpose:          PurposePIIDetection,
-		Description:      "Merged PII detector for 17 entity types and 35 BIO labels, based on mmbert-32k-yarn.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       35,
-		MaxContextLength: 32768,
-		Tags:             []string{"pii", "privacy", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-pii-detector-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-pii-detector-merged",
+		Aliases:             []string{"mmbert32k-pii-merged", "pii-detector-32k-merged"},
+		Purpose:             PurposePIIDetection,
+		Description:         "Merged PII detector for 17 entity types and 35 BIO labels, based on mmbert-32k-yarn.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          35,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"pii", "privacy", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K PII Detector

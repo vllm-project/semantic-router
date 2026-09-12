@@ -9,6 +9,14 @@ type modelFeatureGate struct {
 
 var optionalModelFeatureGates = []modelFeatureGate{
 	{
+		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(false) },
+		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Safety.ModelID} },
+	},
+	{
+		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(true) },
+		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Hazard.ModelID} },
+	},
+	{
 		enabled: func(cfg *config.RouterConfig) bool {
 			return !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend()
 		},

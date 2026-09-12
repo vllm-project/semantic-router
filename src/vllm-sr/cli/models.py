@@ -8,6 +8,8 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
+from .models_safety import SafetyRule
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -626,6 +628,7 @@ class Signals(BaseModel):
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
+    safety: list[SafetyRule] = Field(default_factory=list)
     hallucination: Optional[List[HallucinationRule]] = []
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
@@ -642,7 +645,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers", "input_modality"}
+                    if family in {"metadata", "classifiers", "input_modality", "safety"}
                     else signal.name
                 )
                 if name in seen:

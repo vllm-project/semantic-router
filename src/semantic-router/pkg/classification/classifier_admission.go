@@ -174,4 +174,5 @@ func (c *Classifier) applyAdmissionGates() {
 			deployment: admissionDeploymentPIIClassifier,
 		}
 	}
+	c.applySafetyAdmissionGates(registry)
 }

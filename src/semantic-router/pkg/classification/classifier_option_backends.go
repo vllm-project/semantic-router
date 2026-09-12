@@ -53,6 +53,9 @@ func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *Ca
 		return err
 	}
 	categoryInitializer, categoryInference := categoryDependenciesForVariant(variant)
+	if native, ok := categoryInitializer.(*MmBERT32KCategoryInitializerImpl); ok {
+		native.maxSequenceLength = b.cfg.CategoryModel.MaxSequenceLength
+	}
 	b.options = append(b.options, withCategory(categoryMapping, categoryInitializer, categoryInference))
 	return nil
 }
@@ -99,7 +102,7 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 	}
 	switch cfg.PromptGuard.Variant {
 	case config.PromptGuardVariantMmBERT32K:
-		return createMmBERT32KJailbreakInitializer(), jailbreakInference, nil
+		return &MmBERT32KJailbreakInitializerImpl{maxSequenceLength: cfg.PromptGuard.MaxSequenceLength}, jailbreakInference, nil
 	default:
 		return createJailbreakInitializer(), jailbreakInference, nil
 	}
@@ -148,7 +151,7 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping) (PII
 		logging.ComponentEvent("classifier", "pii_detector_backend_selected", map[string]interface{}{
 			"backend": "mmbert_32k",
 		})
-		return createMmBERT32KPIIInitializer(), createMmBERT32KPIIInference(), nil
+		return &MmBERT32KPIIInitializerImpl{maxSequenceLength: cfg.PIIModel.MaxSequenceLength}, createMmBERT32KPIIInference(), nil
 	}
 	return createPIIInitializer(), createPIIInference(), nil
 }

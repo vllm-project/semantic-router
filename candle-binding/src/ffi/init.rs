@@ -648,6 +648,26 @@ pub unsafe extern "C" fn init_mmbert_32k_intent_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_intent_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_intent_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
+    let max_sequence_length = if max_sequence_length == 0 {
+        512
+    } else {
+        max_sequence_length
+    };
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -662,13 +682,14 @@ pub unsafe extern "C" fn init_mmbert_32k_intent_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
         model_id,
         use_cpu,
         ModernBertVariant::Multilingual32K,
+        max_sequence_length,
     ) {
         Ok(model) => {
-            eprintln!("   mmBERT-32K intent classifier loaded (32K context, YaRN RoPE)");
+            eprintln!("   mmBERT-32K intent classifier loaded");
             MMBERT_32K_INTENT_CLASSIFIER.set(Arc::new(model)).is_ok()
         }
         Err(e) => {
@@ -690,6 +711,26 @@ pub unsafe extern "C" fn init_mmbert_32k_factcheck_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_factcheck_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_factcheck_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
+    let max_sequence_length = if max_sequence_length == 0 {
+        512
+    } else {
+        max_sequence_length
+    };
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -704,10 +745,11 @@ pub unsafe extern "C" fn init_mmbert_32k_factcheck_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
         model_id,
         use_cpu,
         ModernBertVariant::Multilingual32K,
+        max_sequence_length,
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K fact-check classifier loaded");
@@ -732,6 +774,26 @@ pub unsafe extern "C" fn init_mmbert_32k_jailbreak_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_jailbreak_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_jailbreak_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
+    let max_sequence_length = if max_sequence_length == 0 {
+        512
+    } else {
+        max_sequence_length
+    };
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -746,10 +808,11 @@ pub unsafe extern "C" fn init_mmbert_32k_jailbreak_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
         model_id,
         use_cpu,
         ModernBertVariant::Multilingual32K,
+        max_sequence_length,
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K jailbreak detector loaded");
@@ -774,6 +837,26 @@ pub unsafe extern "C" fn init_mmbert_32k_feedback_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_feedback_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_feedback_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
+    let max_sequence_length = if max_sequence_length == 0 {
+        512
+    } else {
+        max_sequence_length
+    };
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -788,10 +871,11 @@ pub unsafe extern "C" fn init_mmbert_32k_feedback_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
         model_id,
         use_cpu,
         ModernBertVariant::Multilingual32K,
+        max_sequence_length,
     ) {
         Ok(model) => {
             eprintln!("   mmBERT-32K feedback detector loaded");
@@ -815,6 +899,26 @@ pub unsafe extern "C" fn init_mmbert_32k_pii_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_pii_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_pii_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
+    let max_sequence_length = if max_sequence_length == 0 {
+        512
+    } else {
+        max_sequence_length
+    };
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -826,10 +930,11 @@ pub unsafe extern "C" fn init_mmbert_32k_pii_classifier(
 
     eprintln!("Initializing mmBERT-32K PII detector from: {}", model_id);
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new_with_variant(
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new_with_variant_and_max_sequence_length(
         model_id,
         use_cpu,
         ModernBertVariant::Multilingual32K,
+        max_sequence_length,
     ) {
         Ok(classifier) => {
             eprintln!("   mmBERT-32K PII detector loaded");
@@ -858,6 +963,26 @@ pub unsafe extern "C" fn init_mmbert_32k_modality_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_modality_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_modality_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
+    let max_sequence_length = if max_sequence_length == 0 {
+        512
+    } else {
+        max_sequence_length
+    };
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -872,13 +997,14 @@ pub unsafe extern "C" fn init_mmbert_32k_modality_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
         model_id,
         use_cpu,
         ModernBertVariant::Multilingual32K,
+        max_sequence_length,
     ) {
         Ok(model) => {
-            eprintln!("   mmBERT-32K modality router loaded (AR/DIFFUSION/BOTH, 32K context)");
+            eprintln!("   mmBERT-32K modality router loaded (AR/DIFFUSION/BOTH)");
             MMBERT_32K_MODALITY_CLASSIFIER.set(Arc::new(model)).is_ok()
         }
         Err(e) => {

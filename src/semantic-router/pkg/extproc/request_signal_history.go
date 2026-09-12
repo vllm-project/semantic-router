@@ -11,6 +11,7 @@ type signalConversationHistory struct {
 	priorUserMessages      []string
 	nonUserMessages        []string
 	hasAssistantReply      bool
+	lastUserHasText        bool
 	metadata               map[string]string
 	contextTokenFloor      int
 	contextTextBytes       int
@@ -47,6 +48,7 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		priorUserMessages:         append([]string(nil), result.PriorUserMessages...),
 		nonUserMessages:           append([]string(nil), result.NonUserMessages...),
 		hasAssistantReply:         result.HasAssistantReply,
+		lastUserHasText:           result.LastUserHasText,
 		metadata:                  cloneRoutingMetadata(result.Metadata),
 		contextTokenFloor:         result.ContextTokenFloor,
 		contextTextBytes:          result.ContextTextBytes,

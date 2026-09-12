@@ -19,6 +19,8 @@ func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *test
 		currentUserMessage: "user question",
 		nonUserMessages:    []string{"system setup", "assistant reply"},
 		hasAssistantReply:  true,
+		lastMessageRole:    "user",
+		lastUserHasText:    true,
 	})
 
 	assert.Equal(t, "user question", input.evaluationText)

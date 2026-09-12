@@ -262,6 +262,7 @@ type InlineModels struct {
 	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
 	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
+	SafetyModels            SafetyModelsConfig            `yaml:"safety_models"`
 	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
 	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`

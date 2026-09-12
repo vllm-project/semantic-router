@@ -50,6 +50,11 @@ script refuses an fp16 name for an FP32 graph, because `find_onnx_models`
 ranks candidates by name alone. A recognized RoPE position-to-sin/cos branch
 may keep its FP32 frequency constant and calculations before casting to FP16;
 this numerical constant is not counted as an encoder or classifier weight.
+For an FP16 encoder exported with FP32 pooling and a task head, add
+`--fp32-task-head`. The rewriter preserves FP32 constants only when they
+contribute to the output and cannot feed any attention block. It still rejects
+mixed encoder weight precision. In this mode the `fp16` filename describes the
+encoder; the artifact's export receipt must record the FP32 head separately.
 `make ck-rewrite-test` runs the rewriter's
 unit tests (`scripts/test_rewrite_graph.py`); the changed-file gate runs them
 for any change under this directory.

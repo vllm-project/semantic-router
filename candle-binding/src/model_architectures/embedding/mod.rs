@@ -47,6 +47,7 @@ pub mod gemma3_model;
 
 // mmBERT Embedding model (32K context, 2D Matryoshka)
 pub mod mmbert_embedding;
+pub mod representation_contract;
 
 // Multi-modal embedding model (text + image + audio, 384-dim)
 pub mod multimodal_embedding;

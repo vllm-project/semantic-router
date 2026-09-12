@@ -1,0 +1,2839 @@
+{
+  "source": {
+    "repository": "CohereLabs/aya_dataset",
+    "revision": "f9ea04583f02a8f86404ff6c58bf75fe637df8a2",
+    "filename": "data/train-00000-of-00001.parquet",
+    "file_sha256": "51baa85043b569ba117f41516b32d1b0e4e2647fb203a08933f98a556fb1fb06",
+    "license": "Apache-2.0"
+  },
+  "annotation_scope": "Individually assistant-reviewed task labels on human-authored source requests, assigned before model predictions. These are not human-expert task annotations. Excluded ambiguous requests are retained with reasons.",
+  "records": [
+    {
+      "id": "aya-review-eng-0",
+      "language": "eng",
+      "group_id": "aya-author-924d74be8d40510a070fdf4ae61e1ff38a1719f39bba1ea928b41b264bf7c464",
+      "source": "aya-original-human",
+      "source_text_sha256": "00430cae5a93274e629db008f8ae1e8e78d164784098eed1314b4964939e8ba6",
+      "task_labels": {
+        "domain": "psychology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-1",
+      "language": "eng",
+      "group_id": "aya-author-aa8d2326c36fb9d28cb1d8aaab266ccb7ec8ffee879619612d22791b5fb4e61c",
+      "source": "aya-original-human",
+      "source_text_sha256": "0044b19fb316e9609f82522c4329615a1ef91f81c5fdf0c90e6af1d57fba8872",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-2",
+      "language": "eng",
+      "group_id": "aya-author-2816aa9162735bfc3c72b16925f9527c78fedeab522f067276a78ccae0c1e2c1",
+      "source": "aya-original-human",
+      "source_text_sha256": "0058bcdb1ce6d8f4ee7a2adfa487ec35fc62b7d6f799fa4902416d19e24a8247",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-3",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "006310b9ce7f751e1544e9e26cea602e62ab6117a255b0f5cba4d19062902e5d",
+      "task_labels": {
+        "domain": "business",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-4",
+      "language": "eng",
+      "group_id": "aya-author-ca23f2d689e06c12d3ad3f5e33c7ca9c970b0fbb83b1cd49e2f80972794fc109",
+      "source": "aya-original-human",
+      "source_text_sha256": "00a8540a00bc4e10bd6fae0cfd0a2d6cdb6311675ea7225cad4525b552d995de",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-5",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "00e575522f85140b44ff15d08d294e759027e7fdd8d3fe90b20768b6f0a1e192",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-6",
+      "language": "eng",
+      "group_id": "aya-author-5c39b84813508cee899929f557fea6b9fda8282fd937c6620c4b70de8a7e93ab",
+      "source": "aya-original-human",
+      "source_text_sha256": "0109b434b0e153a55eb38bef330d5fa8a77aa2a06ad5284d16d795139c581098",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-7",
+      "language": "eng",
+      "group_id": "aya-author-5c39b84813508cee899929f557fea6b9fda8282fd937c6620c4b70de8a7e93ab",
+      "source": "aya-original-human",
+      "source_text_sha256": "013538bf460bb70e29f5bf19ed7645987943b5cdec3a2763f5d570342dfe1fb5",
+      "task_labels": {
+        "domain": "economics",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-8",
+      "language": "eng",
+      "group_id": "aya-author-924d74be8d40510a070fdf4ae61e1ff38a1719f39bba1ea928b41b264bf7c464",
+      "source": "aya-original-human",
+      "source_text_sha256": "015a499f30a0ad978440041c657f3872513467b66aacc7427076370717e7849f",
+      "task_labels": {
+        "domain": null,
+        "factcheck": null,
+        "modality": null
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-eng-9",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "017a8622da2c61de9ea9f67c0a6b221173c447e90b1fc4622b35961a239ef132",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-10",
+      "language": "eng",
+      "group_id": "aya-author-924d74be8d40510a070fdf4ae61e1ff38a1719f39bba1ea928b41b264bf7c464",
+      "source": "aya-original-human",
+      "source_text_sha256": "01cbfa3ef5cc5c7b869894ea3fcf88a58e1d624950443971f47604447bcba052",
+      "task_labels": {
+        "domain": "psychology",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-eng-11",
+      "language": "eng",
+      "group_id": "aya-author-59ad3805e07eacf4acbe528b017f4b114a2aad3449fc4ab27c167faf5ba16f18",
+      "source": "aya-original-human",
+      "source_text_sha256": "0236291d8536e4da67138c0291d4a2ee41f66b69d350ba2e190201cf6f2b613c",
+      "task_labels": {
+        "domain": "math",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-12",
+      "language": "eng",
+      "group_id": "aya-author-59ad3805e07eacf4acbe528b017f4b114a2aad3449fc4ab27c167faf5ba16f18",
+      "source": "aya-original-human",
+      "source_text_sha256": "0256add2358852ea8378cba81b94e21bbe53a626335a85e6f1ba5dd6b1555654",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-13",
+      "language": "eng",
+      "group_id": "aya-author-2816aa9162735bfc3c72b16925f9527c78fedeab522f067276a78ccae0c1e2c1",
+      "source": "aya-original-human",
+      "source_text_sha256": "02929fda47428f2b4d9ec54187405fd6e03b0cb0eb99c392a6aa9d8d7ee4a811",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-14",
+      "language": "eng",
+      "group_id": "aya-author-8a7a3d8dc5a2c4d7fcccf525725a05889e9ebfa97816aa13721d9ec7c20bfdbe",
+      "source": "aya-original-human",
+      "source_text_sha256": "02999a8e70e1c28b80e2bc80e22db369b92ec99cb1daa1a5b2a08457f232d529",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-eng-15",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "02e882b7a3ae29ddfb2bae72b75b402d24ae55d633f3184f0b376b72d8828290",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-16",
+      "language": "eng",
+      "group_id": "aya-author-5c39b84813508cee899929f557fea6b9fda8282fd937c6620c4b70de8a7e93ab",
+      "source": "aya-original-human",
+      "source_text_sha256": "02ee0f8bc2a34c6ce75a0410cf0c702dff881d3135b79174c0131349e4d72829",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-17",
+      "language": "eng",
+      "group_id": "aya-author-8c8ad332c18e58c4c2fdd2e1681ead0b0ee49d6fe446961226924a412856dac3",
+      "source": "aya-original-human",
+      "source_text_sha256": "0300747d2056b99b7d0d966c6d78ae8b0ecec93418c3fdd0bfc1b9a45acf2c9b",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-18",
+      "language": "eng",
+      "group_id": "aya-author-924d74be8d40510a070fdf4ae61e1ff38a1719f39bba1ea928b41b264bf7c464",
+      "source": "aya-original-human",
+      "source_text_sha256": "031ee4ff7d629172f6d1fd14b6f8651b365058ba7b62579b6175c14515703d18",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-eng-19",
+      "language": "eng",
+      "group_id": "aya-author-9e170d910e2194ebf3bb56437ea9d419733d407cecbfdddef1490d919ae7a15f",
+      "source": "aya-original-human",
+      "source_text_sha256": "034a3c0677e86cf11466746d0c05b5d44a8351d17347ae53efa86f7e35f776e1",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-20",
+      "language": "eng",
+      "group_id": "aya-author-2816aa9162735bfc3c72b16925f9527c78fedeab522f067276a78ccae0c1e2c1",
+      "source": "aya-original-human",
+      "source_text_sha256": "037378d6ea1b234503b9926215acfd0349f7bd124fbc87da76b397cc6d309f9d",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-21",
+      "language": "eng",
+      "group_id": "aya-author-5c39b84813508cee899929f557fea6b9fda8282fd937c6620c4b70de8a7e93ab",
+      "source": "aya-original-human",
+      "source_text_sha256": "03771d4958e00b5c6c03f37926927d2363bc889f8f599ce6627d00755ff5f7a3",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-22",
+      "language": "eng",
+      "group_id": "aya-author-c9f8d0c12f63201fcb3216626ce4af84e873e2908bab98a1386f2c817de4ef15",
+      "source": "aya-original-human",
+      "source_text_sha256": "0381b69225f721023a920cde04af78120404456256b899546779d3bb8207a0a1",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-eng-23",
+      "language": "eng",
+      "group_id": "aya-author-5bc7b2fd70f142b113cee411e3476425d7c987c0591da2752da99cc915cb14ae",
+      "source": "aya-original-human",
+      "source_text_sha256": "03838ea8898f133efd928a4ed679e5a0cb1fca9434809bfc7c548b0d94279ab0",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-24",
+      "language": "eng",
+      "group_id": "aya-author-2816aa9162735bfc3c72b16925f9527c78fedeab522f067276a78ccae0c1e2c1",
+      "source": "aya-original-human",
+      "source_text_sha256": "038623de5d6a65a3a223a3c4fe68c523582edf66e85a0a8dee860ea6240b2067",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-25",
+      "language": "eng",
+      "group_id": "aya-author-924d74be8d40510a070fdf4ae61e1ff38a1719f39bba1ea928b41b264bf7c464",
+      "source": "aya-original-human",
+      "source_text_sha256": "03a429d177678beeffa7279add54a28cf673111b8e865981b46cca9a0c9d596b",
+      "task_labels": {
+        "domain": null,
+        "factcheck": null,
+        "modality": null
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-eng-26",
+      "language": "eng",
+      "group_id": "aya-author-6978e3ae49981e2ac48d57635b67aeea276c633bbe82d88f4411aa212e319372",
+      "source": "aya-original-human",
+      "source_text_sha256": "03da286646085682a776eec98bec1f6276c01eeb16b7e79b63dca8b34ec3a67d",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-27",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "044f790dc8608c2382c93962e2ad7f0d7860888c58680cda586cfc39dc538e32",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-28",
+      "language": "eng",
+      "group_id": "aya-author-2816aa9162735bfc3c72b16925f9527c78fedeab522f067276a78ccae0c1e2c1",
+      "source": "aya-original-human",
+      "source_text_sha256": "049ca7bcee40a632cbeac67144f794780621349ea6076f9bc0e1556588f2bb22",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-29",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "04ae645fc4c88cae00598d7c2ffd390e8892ddcdd33f3654b4e650ee26baea07",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-30",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "0582af6d8dffc08fb47012a569075696250b5eecda2ef1951ae10859c2786aba",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-31",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "0586d6d6f291504cafb8fbd8b6e0f405603c2ef84c348885e2fe6fb8c47a635b",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-32",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "05b05aafb8d9fe843d57d13768a055ca8a0e7d7dab41c5180dc6640720a46539",
+      "task_labels": {
+        "domain": "math",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-33",
+      "language": "eng",
+      "group_id": "aya-author-2816aa9162735bfc3c72b16925f9527c78fedeab522f067276a78ccae0c1e2c1",
+      "source": "aya-original-human",
+      "source_text_sha256": "05be7a9c0ff2a991e345847288f2f5490ea435560e1c440d90703b620588549e",
+      "task_labels": {
+        "domain": "health",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-34",
+      "language": "eng",
+      "group_id": "aya-author-5bc7b2fd70f142b113cee411e3476425d7c987c0591da2752da99cc915cb14ae",
+      "source": "aya-original-human",
+      "source_text_sha256": "05f28ccad00db971734c8db12cb883dfaab064d892dce2b7a182587ef2a5ba4a",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-eng-35",
+      "language": "eng",
+      "group_id": "aya-author-e98d4e0d6460422079369572b448ae8cbad51db5c6f4e6451a5f065fb3deacea",
+      "source": "aya-original-human",
+      "source_text_sha256": "063530373bf9e0c03a8b104ed9338a3f8b36e19af4867623cf40a29ebc24a91a",
+      "task_labels": {
+        "domain": "math",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-0",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "001cce84daf06e862d2dbe7ddc4527bd17ea5ec68e80645ccd711f3d939cdbce",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-1",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "00388d0be5eafbd5ebd60ad2147b5f0cb31aeeab429f474a1c210c4b0accd80b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-2",
+      "language": "zho",
+      "group_id": "aya-author-68f2ab39801cc0fce2d39ceedb89e8822c12f6355e70286e7254c70994c75cac",
+      "source": "aya-original-human",
+      "source_text_sha256": "00423f3010c8b4a2bce869240ccd5b53d192ee404e87365988580033c3e7e975",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-3",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "00b7c33b5c33fcf81a988d62aee83b5e5694e2ea2a50b48bac62e408572d184c",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-4",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "011c2e6ca12666586b1c6a0c8f8a6176ba917bc84e26834ca8417c8e085bbbc5",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-5",
+      "language": "zho",
+      "group_id": "aya-author-fbd65cb390a74fa13ef2d0518e464c83e90fd1df5a5b2da91d8850177ee1b3c3",
+      "source": "aya-original-human",
+      "source_text_sha256": "01c30bf0715675af43a0afc38fc8db0e0d261973ac6744efbb27a8025295898b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-6",
+      "language": "zho",
+      "group_id": "aya-author-68f2ab39801cc0fce2d39ceedb89e8822c12f6355e70286e7254c70994c75cac",
+      "source": "aya-original-human",
+      "source_text_sha256": "01e88274ef462f2a9d01e137319ca41e44f32f05386304692d55e394524f45d7",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-7",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0201a4007ec50f95bbfe24a56d091805554b962fc3028c7892ff382f4b64f403",
+      "task_labels": {
+        "domain": "math",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-8",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0232050e0c9b09bdf02c3847591b3a1feef3ad17dbbb5aedd3ee3fef8188b05b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-9",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "024e839f4178865eb492d8b89cdb56f09bbe6edab798245876ebd52bca20cf09",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-10",
+      "language": "zho",
+      "group_id": "aya-author-68f2ab39801cc0fce2d39ceedb89e8822c12f6355e70286e7254c70994c75cac",
+      "source": "aya-original-human",
+      "source_text_sha256": "026e066375e20e135f45e3a3900c4b3bd95bdcdb6b7602c67ed9cb9700ee5677",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-11",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "02afd6f1b83edd9a519b7e37fdc2bdacfcdd9316fdfd093adbe7bae375ba5ba4",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-12",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "02e40407b68eca66eb764e6c60ba496b6522a2e0e4f7fa2da196341906cbcf53",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-13",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "02f25b2c9f16993c3504529851276992e4f462a55bffd1845e43ba90c0b5edaa",
+      "task_labels": {
+        "domain": "chemistry",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-14",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0300a143f8df321cc7635b8aa9867fe04cf48e82e04520e52a9819dac6a30d5f",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-15",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "030440d17e910ca70f72100a0eebbebc767c25a8f7b580108f1ac7ae1fcc8080",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-16",
+      "language": "zho",
+      "group_id": "aya-author-a1f5c118a90749b3f3c4271944a1055c676aa02cc0f6bdd26e4cbe986eb17a51",
+      "source": "aya-original-human",
+      "source_text_sha256": "0319ea6c57add9338b4057358d17591d6255c99b9e05366b99518d9df768abc4",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-17",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0321ea3deac6561040e17dd623df2740e75d5bcf62fa04ea7d8a6593dcb4d2cf",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-18",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "032652c3807073c42131f8541a0b6718fc9d9de26e056c33e71ef5535f93d746",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-19",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "03534d396ca63ff5f1ac496baafdb4568e2d86367000c2b4ea35aa900e1c94be",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-20",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0368405f0e86bdf7acb14776e6412f2d65054d58c9be2dbb26ba5005ca369476",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-21",
+      "language": "zho",
+      "group_id": "aya-author-5835c5271f7c7dce1ce63632094653841194bacea7b48630424f44ddedaf620b",
+      "source": "aya-original-human",
+      "source_text_sha256": "037ccfbe94f8e5451b7e80d666c318651d35e48af49932b7d7db6f10ec9c4117",
+      "task_labels": {
+        "domain": null,
+        "factcheck": null,
+        "modality": null
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-zho-22",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "038e30753c7de1c7ad1473da0bf022224e0a629b13bff78c70ff2615f2b183a1",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-23",
+      "language": "zho",
+      "group_id": "aya-author-fbd65cb390a74fa13ef2d0518e464c83e90fd1df5a5b2da91d8850177ee1b3c3",
+      "source": "aya-original-human",
+      "source_text_sha256": "039ab4e775164001ba1b3ffb05c4a46cf00733517d1cb6ebfb201b6419f14d3b",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-24",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "03b65b7b52fb00c90c1b7275c2caa0bfd3db09e67ad455402ec7844a14c179ee",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-25",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0404c1fd7459817def485e8d3e86a23681ccf1fe6332c7882c15022bf9c18758",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-26",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "044f5fbde9417a1e03d0f81e4342d1c4f388218fe4a22596339d57d626ac1410",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-27",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0450e9f802c5a6bceae305a83499eca2f78dbe02e2b8e8501f7e7db8385c3944",
+      "task_labels": {
+        "domain": "psychology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-28",
+      "language": "zho",
+      "group_id": "aya-author-68f2ab39801cc0fce2d39ceedb89e8822c12f6355e70286e7254c70994c75cac",
+      "source": "aya-original-human",
+      "source_text_sha256": "04738dda49002ad731e5dd94c8f52ca05ed9405077642c28b7cf270b0482c7c5",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-29",
+      "language": "zho",
+      "group_id": "aya-author-fbd65cb390a74fa13ef2d0518e464c83e90fd1df5a5b2da91d8850177ee1b3c3",
+      "source": "aya-original-human",
+      "source_text_sha256": "04b4e860af77017cdb646c7ab6bb52f7f70ab0babb0a752b52f29da435f1ca67",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-30",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "04b7c6324f86386b8dab1e93bd54cbf64f76a85e54f383fabe72d5d102ee1345",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-31",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0517dd4626f178e7850a868c600de2f738b040c0bd45f0717ff57f8d02fb6f25",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-32",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "0583a2e6ae573236f3cf71fb6acbb039be46e8da7bc0def3952c52f8ea6dee8a",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-33",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "05906ce297a4be42cd969620a2269dedd6534db72b33beebfa1764fb63ed25b2",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-34",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "05e5e8988012d73321f44f4ba664022930d50709353869b6a7a18d0b589ed70d",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-zho-35",
+      "language": "zho",
+      "group_id": "aya-author-e815427bc2b34d1ac8784d85a370cee46e094e88b21363a272494690d07d2e22",
+      "source": "aya-original-human",
+      "source_text_sha256": "068164dce9f105d210b840cdabf47f40f8e4322ee4bece15ca0a1ddbf92454e5",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-0",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "00247a3d5eaf584ff4d3b249e3b596669a4b50b775179e5cffdcc2748ea469e7",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-1",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "0059dbc49c4348272f09ff359306848c19dc0953c6c1b64f40555e90ff3011a8",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-2",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "01284f7b0b71f55a9db4dfdd597249c2dc999d78a5c020f8f865bf6ace34f60b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-3",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "01ca9573b0f832f51c4a9612740170ad456ec77e650385f8d889c74e37fcc392",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-4",
+      "language": "spa",
+      "group_id": "aya-author-8412f807572f18b56680969c87fa2f9a99fe2f1465df00350abca570704c0cec",
+      "source": "aya-original-human",
+      "source_text_sha256": "01d5ebe80040d13604b9429faf711d13d9c642601cf89450187b2bdc650a8dbe",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-5",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "0207509cff83d6a681f127f7bf79dd94f62f5015f64376ea4db59f3213ef3d2f",
+      "task_labels": {
+        "domain": "engineering",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-6",
+      "language": "spa",
+      "group_id": "aya-author-5ff707657b272c932a8eac9bdfc5d359da9fe3698e3cd1e6125df4bfa6bc331c",
+      "source": "aya-original-human",
+      "source_text_sha256": "022eb82ad31b2db5bf53a861e75190b1f6c5e51cb662e21d816726a31f7bce89",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-7",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "02633527a343ced35736e72be7e598f1c7e4c0b3c05cdf8afa2e3fe986a53dca",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-8",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "02cac547a2b089c5a2650b8ee6c4543b3bd0ae18315d54975729ac42cba14f7d",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-9",
+      "language": "spa",
+      "group_id": "aya-author-128fbd25726b0fd15da30c91774f2c58f99e408721aa4743579d9eb7f91a40d0",
+      "source": "aya-original-human",
+      "source_text_sha256": "0328e278611b7affd42135f55e027671903d5d46d59523d95f531f7479c5d862",
+      "task_labels": {
+        "domain": "math",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-10",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "041506e3749c6df054f67bd285dc82966daf550662188363f94a5d96d6994735",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-11",
+      "language": "spa",
+      "group_id": "aya-author-8412f807572f18b56680969c87fa2f9a99fe2f1465df00350abca570704c0cec",
+      "source": "aya-original-human",
+      "source_text_sha256": "04926234bde514bfde3b093f63b5be86c4f0513acfee1597473ba13eaac804ac",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-12",
+      "language": "spa",
+      "group_id": "aya-author-4f06d092131f78ec23fb57c324079a0adf08967b95883e68356ecca0bb75a97e",
+      "source": "aya-original-human",
+      "source_text_sha256": "04b1d8d7dfa032f82869ba7d4bc32dc509854b1cfd98b18c26fd3f852d272878",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-13",
+      "language": "spa",
+      "group_id": "aya-author-5ff707657b272c932a8eac9bdfc5d359da9fe3698e3cd1e6125df4bfa6bc331c",
+      "source": "aya-original-human",
+      "source_text_sha256": "055c53390ce747230fd57bb4b37dac0a5b2b0206048ce6bbe26c64f24a5b9647",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-14",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "05c79fb60008d1d9ea8adc627f395fee2231cc578e6f5867807feb835647f144",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-15",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "061b79a13c1a20c9d513a92c169fc09f2d72960dc7157225283ce16cdb09adda",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-16",
+      "language": "spa",
+      "group_id": "aya-author-7122484da0e5ac94986ec31d4218642de7a8510a84e3b773515061de6d8ffa88",
+      "source": "aya-original-human",
+      "source_text_sha256": "0636f16d68a0955ecba91d21d2e5139e27e7eb19c0141d1af35f047ab32eaf8a",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-17",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "065c667039a3f4f294aec575e2621a1c52b5908c3dee3a65a90a04dfa3c34b27",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-18",
+      "language": "spa",
+      "group_id": "aya-author-2986e8162ec136cdcfdd5402e3765f8fa028d4f1726dfec5e501a6c650f5adbf",
+      "source": "aya-original-human",
+      "source_text_sha256": "0677b4aa5e7a59336e9bbc767d8d8f505f05484fd57e3dbeb24eb1c6fe38fc49",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-19",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "06e1ed65e86923648bd3bf337b63e1823eb15a80f7b80cbe542113ab16aaadb5",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-20",
+      "language": "spa",
+      "group_id": "aya-author-7122484da0e5ac94986ec31d4218642de7a8510a84e3b773515061de6d8ffa88",
+      "source": "aya-original-human",
+      "source_text_sha256": "08015c9411b2fc00fac054a61e4c15b43185fd97169925c660948b43703639bf",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-21",
+      "language": "spa",
+      "group_id": "aya-author-a8dd08a8f2f5850dc68fc2aba9e3cfe6a6e27a81e50136717c60d7f003641cf5",
+      "source": "aya-original-human",
+      "source_text_sha256": "08a7f24e0f33ab84887c657f1553673d1a97750ce3c982ffe7dfd13b11dd94d8",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-22",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "08e3818cb3dc42e77cd2429af8338a387c301c26da096edae7e24f0718a60711",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-23",
+      "language": "spa",
+      "group_id": "aya-author-5ff707657b272c932a8eac9bdfc5d359da9fe3698e3cd1e6125df4bfa6bc331c",
+      "source": "aya-original-human",
+      "source_text_sha256": "091f11b10d928a5870fbc10bf10c1d6b299366c75d3e649063cf82c9f012f463",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-24",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "09951709ca65c5834cf4340697c003ff41156bbe631922e5e232961be6afc3ae",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-25",
+      "language": "spa",
+      "group_id": "aya-author-f648edbe7cbbe231244c420e627f97d92f71186e03cabfd628f589afccb168a4",
+      "source": "aya-original-human",
+      "source_text_sha256": "099d23a793c85d35565c464a1437e6adbe6658bbe290bc781a729ba291d1f0f0",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-spa-26",
+      "language": "spa",
+      "group_id": "aya-author-8b952b20ac15bab5342d070620109cbbcd07edb78f7c7ae9b655edfc8f3c1f53",
+      "source": "aya-original-human",
+      "source_text_sha256": "0aae8aea475af35808451de1f75a0237e0e66685e3d76905d6ff293671c4085e",
+      "task_labels": {
+        "domain": "chemistry",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-27",
+      "language": "spa",
+      "group_id": "aya-author-eff3c3f1ba2cb27d2bdf365f30a2c3d3686f677a896c1e01ba7232bcae23fbf9",
+      "source": "aya-original-human",
+      "source_text_sha256": "0afb12dce7c1572af56f2703466cb06bd09975015d96dea290d875ebba8f363c",
+      "task_labels": {
+        "domain": "philosophy",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-spa-28",
+      "language": "spa",
+      "group_id": "aya-author-a8dd08a8f2f5850dc68fc2aba9e3cfe6a6e27a81e50136717c60d7f003641cf5",
+      "source": "aya-original-human",
+      "source_text_sha256": "0b2a71d8676a08dff76b37a167213c5b47518b3b306f58aca8ba0b217338bcd1",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-29",
+      "language": "spa",
+      "group_id": "aya-author-b5a64acb53d11eb8ff670da1ccc9b5e0dbc4194076c747b3e8e223cf3aaa62fe",
+      "source": "aya-original-human",
+      "source_text_sha256": "0b77394fd2f96566efd7fd8de6afb61678b1e551cef3c48d8fefa9d61a08bab7",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-30",
+      "language": "spa",
+      "group_id": "aya-author-4f06d092131f78ec23fb57c324079a0adf08967b95883e68356ecca0bb75a97e",
+      "source": "aya-original-human",
+      "source_text_sha256": "0b81f8ee86679b80236a69048117aa59ddf0c4b2ac67bbb21cf9613f0cf2c21e",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-31",
+      "language": "spa",
+      "group_id": "aya-author-7122484da0e5ac94986ec31d4218642de7a8510a84e3b773515061de6d8ffa88",
+      "source": "aya-original-human",
+      "source_text_sha256": "0b8278687899deb178f20ae57f572dac70b877d83a8aa2b93e14f6331d864dff",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-32",
+      "language": "spa",
+      "group_id": "aya-author-9c34ccb2b0cf1f0411b88aeffdecdf4836f6acc5111e86bd272f1f6614098181",
+      "source": "aya-original-human",
+      "source_text_sha256": "0c3ee6761f0f49573fd1d2514229862a9a995ab6a0b4b97a7ae8a1a9659e855b",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-33",
+      "language": "spa",
+      "group_id": "aya-author-8b952b20ac15bab5342d070620109cbbcd07edb78f7c7ae9b655edfc8f3c1f53",
+      "source": "aya-original-human",
+      "source_text_sha256": "0c3f3eac70ec5ce31c9024337cc9fe5aefe82e14a5eea3e96e44737426aa0e7c",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-34",
+      "language": "spa",
+      "group_id": "aya-author-a8dd08a8f2f5850dc68fc2aba9e3cfe6a6e27a81e50136717c60d7f003641cf5",
+      "source": "aya-original-human",
+      "source_text_sha256": "0c7626d61458f786975fbfcf95c0aa1fd4767de00b7ef33168684bc4af7b9cdb",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-spa-35",
+      "language": "spa",
+      "group_id": "aya-author-8b952b20ac15bab5342d070620109cbbcd07edb78f7c7ae9b655edfc8f3c1f53",
+      "source": "aya-original-human",
+      "source_text_sha256": "0d1b9531210587d19671b371e46c811cb3140cb9f81f5f5a56c877f54ff6c86b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-0",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "00085a70e04ad5f9619e6adc9212172e9a79f960898a897b7081c817fb41dc65",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-1",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "0025ac840f4c3dcbeaa782176a170e4b5da9f09c051bed06df01515442fa24a8",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-2",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "003400e3ddc0deae7888904482ad57f739923e4e3143c6fcb6047d940bdeaf6e",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-3",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "0052ec8b7394f6f4a8bfffb120d920a13c8a135cc072439d210385c7494a471c",
+      "task_labels": {
+        "domain": "chemistry",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-4",
+      "language": "fra",
+      "group_id": "aya-author-54d94d4a442a2bd7562c58ec5ffd3053f6d2a82b17f0315354e75bde8c03329b",
+      "source": "aya-original-human",
+      "source_text_sha256": "00c15d3d2f8467c6d89a18656cd9413272bb5ab08b4ccf8ca396ccf91d359743",
+      "task_labels": {
+        "domain": "chemistry",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-5",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "00f9adec6b3ac9eebd05015037fd17b521104c9275b4870f3b3564ec5f642933",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-6",
+      "language": "fra",
+      "group_id": "aya-author-1245db41ea2e3a92042cbeb15a6dd7230ab562db06b9d6286e7342fd442e5fd1",
+      "source": "aya-original-human",
+      "source_text_sha256": "0148759121374fb00b49a8ee304f3f27bdf79435f9cc45406cd2608997908f12",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-7",
+      "language": "fra",
+      "group_id": "aya-author-a7d34b89888294e1afb42fb9160bd645ccfa37b7a1ef8701244bdb1605e572b6",
+      "source": "aya-original-human",
+      "source_text_sha256": "01dc955510244764c3ea5a5f2b26a1bcf63631a8e91dd5dccf38c9727a1c2651",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-8",
+      "language": "fra",
+      "group_id": "aya-author-54d94d4a442a2bd7562c58ec5ffd3053f6d2a82b17f0315354e75bde8c03329b",
+      "source": "aya-original-human",
+      "source_text_sha256": "024cea4ee9b3b7b239241552f0cb613cf21bdc499fa3f50f5e1341a677559d56",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-9",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "0312504d169c0bf9b05ee14b20153730dd96745c2a756d93cb4792c3f97e35a9",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-10",
+      "language": "fra",
+      "group_id": "aya-author-a7d34b89888294e1afb42fb9160bd645ccfa37b7a1ef8701244bdb1605e572b6",
+      "source": "aya-original-human",
+      "source_text_sha256": "032fc2ca475912edb28875a2911e945ffbd0957da43ba119353e34a5fc89d3c0",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-11",
+      "language": "fra",
+      "group_id": "aya-author-a7d34b89888294e1afb42fb9160bd645ccfa37b7a1ef8701244bdb1605e572b6",
+      "source": "aya-original-human",
+      "source_text_sha256": "0368bc70c5811a90e48c742564a3ddff6151e1fb0cc1d9cb0cdc707754afb37a",
+      "task_labels": {
+        "domain": "engineering",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-12",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "0434346f2f814767fcfe7a876813a9fb5049c68f1a6f55eca2463ecb78f15e5d",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-13",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "04822a5cec14a13b56e651c8418f5c842a1b0dbb757918077ae9b311f92c21da",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-14",
+      "language": "fra",
+      "group_id": "aya-author-54d94d4a442a2bd7562c58ec5ffd3053f6d2a82b17f0315354e75bde8c03329b",
+      "source": "aya-original-human",
+      "source_text_sha256": "04a8abcbaf2fbaa0bfd91f53b58d31c855971019ef223d72a8cb001ef3863cd3",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-15",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "04cbd1ce822bd71caf957abca31163d39a66f7ceefe7c688ee8dd163eeaf528a",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-16",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "05205a83cdb9b8e5cc5e621929353de70417deff8a5f73c500e2b5d206854a3d",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-17",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "05b1e7c13a66897d5aef6c595996ea4f1467ca744051394d19528c3acee7b918",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-18",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "05f4a3a3448c4da53d764777ad1d44d0168819bb66797776d27e2fa260e0966b",
+      "task_labels": {
+        "domain": "physics",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-19",
+      "language": "fra",
+      "group_id": "aya-author-54d94d4a442a2bd7562c58ec5ffd3053f6d2a82b17f0315354e75bde8c03329b",
+      "source": "aya-original-human",
+      "source_text_sha256": "065d519832f1fefbc290aa69d4c38090c191c78ddcf5f7b17fc8eecacef4db6a",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-20",
+      "language": "fra",
+      "group_id": "aya-author-54d94d4a442a2bd7562c58ec5ffd3053f6d2a82b17f0315354e75bde8c03329b",
+      "source": "aya-original-human",
+      "source_text_sha256": "065e0f5478202978e2a1562e7ea71b33496e09fc4b4127e82b7b808b4b4371f2",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-21",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "068bd805ec24cc6566029dc28b04e768625bb35d06fbb691aceb8c1bada4790a",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-fra-22",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "0697f692426b6fb77c274185b060b454cbce83c4fd406c9356249465fe2fc1c9",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-23",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "06eaf7d8ae23ab4457660d109c9ad6df77e957f7fd2f34b1cb9a6367ade916da",
+      "task_labels": {
+        "domain": "physics",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-24",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "070fb3d1b82428fa7cda9022f7454992ab5b767d85f30b7dee6863835cdecab3",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-25",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "0713779fa0514fcd6ab452fd8756c64685b7079450d0b7093fb130f36deaa87b",
+      "task_labels": {
+        "domain": "physics",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-26",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "07625ef864193d8a8765c87fae1cbadc8ce7531cd64c20567a2829e76e8328c7",
+      "task_labels": {
+        "domain": "business",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-27",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "07e067798e2193f8a6f9d65838930fa52a606da4ab17fa0025b484c887a439bc",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-fra-28",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "07f14c9231aed94a35d25bf7c34f6b8d9eeb0a715fbe1a7bc416533a8503f01d",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-29",
+      "language": "fra",
+      "group_id": "aya-author-54d94d4a442a2bd7562c58ec5ffd3053f6d2a82b17f0315354e75bde8c03329b",
+      "source": "aya-original-human",
+      "source_text_sha256": "084908bf67ca11d7ec92b5515f3da4b74a9ad3ed3bcfc5fbb7884ca53697b8be",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-30",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "08a396e0a3b9d6d25499554e4db7426471f9c4e912f12d0ffe05decc5cab3b31",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-31",
+      "language": "fra",
+      "group_id": "aya-author-1245db41ea2e3a92042cbeb15a6dd7230ab562db06b9d6286e7342fd442e5fd1",
+      "source": "aya-original-human",
+      "source_text_sha256": "08a92893ee6537ed8f55161328cae4af44f9916f3642bf8782e07673684d8f34",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-32",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "08fd831d21c2eba14d1004773d2c57d757a18cc4a5e981a7e4aa89cab4e7ca6e",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-33",
+      "language": "fra",
+      "group_id": "aya-author-30c761354de060343b18563795c46d572ef45e51b28f2977f3554b3815fce67f",
+      "source": "aya-original-human",
+      "source_text_sha256": "0917568584175cd9da38fcc9755b1d1d1014d41bfe956793cfb41dc40b2972b6",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-34",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "091e35e53f910139fc15cd1c0e5fd734aefc2a609466fce8139a1e911a73686f",
+      "task_labels": {
+        "domain": "physics",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-fra-35",
+      "language": "fra",
+      "group_id": "aya-author-7b7981c86fccc816e2d37e35ccdbf3141ea403d7281e3381b97ae61ad1551e27",
+      "source": "aya-original-human",
+      "source_text_sha256": "093e4f8b1251c77b303a9e6a813f3596adf87ab440b1ec0632aa1058160c2aa3",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-deu-0",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "043888460fb33d0b759c0e175bb07b1a929f3558818124afa5c8bbc758db8e0b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-1",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "043c8ed0be92b01a5cc4ff5a61972749cd12efe9bb700ce65dc5119ee0ecffe2",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-2",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "04dbd881c93195e8e6f35dbc97e4abd79e3af1e7486fa06b876da343d3899b13",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-3",
+      "language": "deu",
+      "group_id": "aya-author-1b6b66d80b6b38f2b24e5bc045480cbc476ff0faa7fccd210f012a58360dafe0",
+      "source": "aya-original-human",
+      "source_text_sha256": "07fb61786b605afd06a8c7c377f9dbd33893f3405232d527bc6fdd61d58765c9",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-4",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "0b50558884acf7a26ba5ab102f87d3645800cd66870162c611ad4e2164ba5a34",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-deu-5",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "0cff628fa984ff4b52ad8f743d9f1666f7972989a84f1f1c8f7ba14d64d67bde",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-deu-6",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "0fe2954263a5a01c786acf1f250fd45c99d841b2ffc2a7be29d04cae15352de1",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-7",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "15aa59d101f164584875af0cbf18bd216d250db5375734872f16f6eec4d0b2fd",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-deu-8",
+      "language": "deu",
+      "group_id": "aya-author-08cf632b35df86fe1b539fa75107c5c6c9a73f4a7a912cf5c97bc0a75838e211",
+      "source": "aya-original-human",
+      "source_text_sha256": "174c7135f7c96ec09547231c9479bd0e1a5b174b8bf30a3a3a8de847ac104b69",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-9",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "191d0ef78161750e679291fef533fc575015ad56da26023a944fd3c5481229c5",
+      "task_labels": {
+        "domain": "engineering",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-10",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "199388a60f9ca410c39e3fdea97237af6af110064eb501ab006477745fd35696",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-11",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "1a7cebff09eb27956b45256dbf190f1a99fcd3e345fed97e44292d479495a4ea",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-12",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "214dcc0773dad1c0cbcec25f24ba65bf749ee2ea1ce7cb2a1519ac38a90e4996",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-13",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "21efedebc2cdec42e1e2ba00e78647817b3a366f225a97fcfaf43960786d7577",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-14",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "2389035101e4b69e6de00503fcc3ee1d1a6398791c5564383606a4ad0d90b308",
+      "task_labels": {
+        "domain": "math",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-15",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "295fcd3201436f08177510fa76b681d062ede5707641b74ed2d57213e8eecce1",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-16",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "2dbae648f3da6bbabe499d647fd0a5c1ed0820c7450c8e1796ac25624a3c62fb",
+      "task_labels": {
+        "domain": "engineering",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-17",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "2e732ff841d45b5dea4a4f2bc0514e0a736a8fc2d5000cdf562c233d86880aa6",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-18",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "2f0338124237227f96ff10a80cbea874e6e4685e5b93a7b640a5ea327b67eac3",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-19",
+      "language": "deu",
+      "group_id": "aya-author-027809a6144dfe3ea9da473f1d2b99e213697683ef07e3d4fc005b433da2b28b",
+      "source": "aya-original-human",
+      "source_text_sha256": "2f6fd43cee6490c64023b0dc95f25b7171d754065bb88b30a70fafa34b38c230",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-20",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "38ed2570b2e4cf852a57219b34d96ec7fb408547c68ae46c88a8c5cbb85ee3e6",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-21",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "3953f89511c610da41ebf66a801a1a1986bbf1b531a0aa5597fa7f5dd6a5eb6e",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-22",
+      "language": "deu",
+      "group_id": "aya-author-9a919ec5f7307467147ec593992cdacc0dfecd24b1fa6d09f75fd81675fe29a3",
+      "source": "aya-original-human",
+      "source_text_sha256": "3f8453cf70e9156943ad6795a50a14ad54d9c499295fa83fe3e16a3baea30245",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-deu-23",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "4188b79265121ea5efe2f3009575a1223276792235203d72f84c7520d2467857",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-24",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "43e9e52cddda520b696cdd23d561d9c82793898ee3f7a400d47b047fc23a3a05",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-25",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "453e94d980859dea5e0088c367322a3b307ec2f4ccafd74701771fd4417fc64d",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-26",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "46594dad7d3524f13a516a02ea6c628b0c0cadd35aa18e4c773c7919ca7de329",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-27",
+      "language": "deu",
+      "group_id": "aya-author-89da884608fffca31bdfae1e82eef0f2159a3cf0c47f6d6ffe01f25c6aa6bb42",
+      "source": "aya-original-human",
+      "source_text_sha256": "48d327dbe70a57d2197708570d68cff3d6f8b6d09c400b4908be28a4e7599f59",
+      "task_labels": {
+        "domain": "chemistry",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-28",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "48d8a29b276a0b192b45cd45c457d24f0fc8c7e8b4be34ca8cfcd0c3402b19d8",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-29",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "4c8d12ee094891bc679a06d7e56ef005c32378d39f463ce5acb3de562948ae2f",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-30",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "4f30e58caa214de86cf10fa75d3f75cd51043f1ae73f509c2d01f7169983eea1",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-deu-31",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "4ff40966ca0e02dae9d3777d0e00f39d2a5a25980aa477c7011ed3747ec656cb",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-32",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "52b295a9df015e845fa1f19bda79f5a8e7eef8560b8e8fc6defe3482fe1b0599",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-33",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "56a24ebb548950b623142e821968ae3804098d6367663627062d264b3f2ca445",
+      "task_labels": {
+        "domain": "health",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-deu-34",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "581053636fb46ec87c84feeb26a1fef90f0287c9383d0ee1f5e198b7dbd8662f",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-deu-35",
+      "language": "deu",
+      "group_id": "aya-author-58d762b3fa4827f7939a9f35504321e6d2ff337e6abcf3f70dfef1115d088b5c",
+      "source": "aya-original-human",
+      "source_text_sha256": "6248d14df6032a1071e7549163645db5d61fe07b8908dd6bc330fb92b6043888",
+      "task_labels": {
+        "domain": "computer science",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-0",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "000415d66c2173bd5686c4ff4b09a4c575fb0835a91e38d16964e16b44e272a8",
+      "task_labels": {
+        "domain": "law",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-1",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0007f85a418fe1b3b3f3bf0bc4044c345b8bc88134b0a966d1883f60f1356468",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": null,
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests",
+      "exclusion_reason": "Incomplete request or verification need depends on unstated response policy"
+    },
+    {
+      "id": "aya-review-jpn-2",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0013b430072caf73eb9345b28645dc845ae2a73b33cc30f43ce9da89b4d14356",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-3",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0018247612dad4230ff7daee24cf9bac5b74ed0cdd7256d3ae1eb2fdaa2f91ba",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-4",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0019dfdb104e7f290cdee5303bc417d96aef0e02f74bbb96ce5847425683795b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-5",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "001ded3a9bd75fe78de4146d4eb17a3b5a8a11e527be43527c3173c9b0c9c6ea",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-6",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00237acfeaa21ccfbe8a698c005289a7e369213163fd880e553ad73fdddb33de",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-7",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00299121f2e206d0c3e75e2e833b1bffbe47a51c798ad34a13019b7faf3c2978",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-8",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "003580fae6e2ce02f070ca527c40ac8b2d9ba1232e91b811fd4c6b337dd728db",
+      "task_labels": {
+        "domain": "health",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-9",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00394cb5ae00eadf12803c996afc3f7c35dd1eeba6a9d0ee55a7ed2887e68d0c",
+      "task_labels": {
+        "domain": "health",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-10",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00573c03b3bbed9b43ac9e611abc7504ef347add319eb32d5c155990617bd033",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-11",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0059cefaf5b2ab08d0ca74bc5791741d6cb51611ca52b2697b21d2b391b987b7",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-12",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0063dddf4f617a9ed0c1fa74e9af1ec142cff426288eb84081d467f14ab9f3d7",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-13",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "006527af848ee9e6d91dc2714d09eb0b562c063382484721b4615b6a7f1c0c00",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-14",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "007bb297d185d967e7175621a73821f591b930ad0f6454ee41063fdc378e0d57",
+      "task_labels": {
+        "domain": "health",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-15",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "008a4f5276c0fb05e4a1668e10fb1530213f672db8dd6ef5dbe1cf743fc66e40",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-16",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "008ac923aacc98b1f6dca0d58e4c430c5e79c77d6c39eab61e9bd00bf48c1cb5",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-17",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00a716f8dcf9bd0242b79de5d3d7291d34a0651c321cd6a6d215b0f707188882",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-18",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00a7bb8f8e305650198716af6f06909a68dc2c5b3c9bc9d50fb350d5653fe0af",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-19",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00a9c8548a9b215d8d38308b5b042f71a4b786297d510ed2b696a59c78904beb",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-20",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00aabd7b43350a561a2fe8b5fcf033b55c1c9ec8dae9ab710351a2fd61cb18a6",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-21",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00c7506fb5beea02ac784c015c50849bbd0342e66e69c2a5d13f02457414427b",
+      "task_labels": {
+        "domain": "biology",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-22",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00d58181d84832d459bcd21a93ab50c1219f00e0c5bbc1769b02a3875e98239c",
+      "task_labels": {
+        "domain": "business",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-23",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00d77fa18658b52f3c693d216efa2a360cd456559e7f4387aef4567ee0af1152",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-24",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00e30a35e19ab05748c22b89c43a7e080eefc62957faa480c47080e67a4b5991",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-25",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00f1f76abb07f3168c5b29bb6878d5ab29a2550843bd57fab7d97b3c167751b4",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-26",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "00fca2b18255c1166e7ec779cde18caca7759c8a78f8efc53856adf9f65ad73c",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-27",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "01024869b8a8eda5bacd1842f11fb442072f89ead491f35cb45e9b2c53f02569",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-28",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0116a27888882807436488319d9504f56519a26e96735a1d481f1f2cb692811e",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-29",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0118e914113a9f45ee77b4f345f72420e91231801796346c680ade8a2ba2db83",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-30",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "011abd13f75fba618468116000ec17e7bbfcb218262b116a76aebbba42958bd5",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "NO_FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-31",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0121a0613ca3c1f6ca59ca01e596845998552705c2cdf3e07ef6b9ddd50250bf",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-32",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "012528005ed1283f39a05715fb1897ebf91cae95a32bbb203211a03a913f5222",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-33",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "012bd537551bcc54732fddd0e54c0e3c1c8b97956d6036a7be5edc308b9d8013",
+      "task_labels": {
+        "domain": "history",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-34",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0132ec1747d5f024a1e69ae5974ac43d100552afa3300eb86953613df5b0cfc1",
+      "task_labels": {
+        "domain": "business",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    },
+    {
+      "id": "aya-review-jpn-35",
+      "language": "jpn",
+      "group_id": "aya-author-a941c8b29c9a082c6dd06d0e49e121e1d522d826868cf6d8241681e17b417561",
+      "source": "aya-original-human",
+      "source_text_sha256": "0139b3595119321e6be541cda3bda682dc447c39e8191cf46d6b8f38bf56098b",
+      "task_labels": {
+        "domain": "other",
+        "factcheck": "FACT_CHECK_NEEDED",
+        "modality": "AR"
+      },
+      "annotation_provenance": "Assistant-reviewed task labels, before model predictions; original Aya human-authored requests"
+    }
+  ]
+}

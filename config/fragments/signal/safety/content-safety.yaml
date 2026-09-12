@@ -1,0 +1,81 @@
+# Merge into a canonical config with default-model and two complete-label HTTP classifier endpoints.
+# Hazard is the independent sigmoid head; more than one risk can be present.
+version: v0.3
+global:
+  model_catalog:
+    external:
+    - name: content-safety-binary
+      model_role: classification
+      llm_endpoint:
+        address: safety-binary
+        port: 8080
+        protocol: http
+      llm_timeout_seconds: 10
+    - name: content-safety-hazard
+      model_role: classification
+      llm_endpoint:
+        address: safety-hazard
+        port: 8080
+        protocol: http
+      llm_timeout_seconds: 10
+routing:
+  signals:
+    safety:
+    - name: unsafe-content
+      model: content-safety-binary
+      threshold: 0.5
+    - name: unsafe-privacy
+      model: content-safety-binary
+      threshold: 0.5
+      hazard:
+        model: content-safety-hazard
+        labels:
+        - violence
+        - criminal_activity
+        - sexual_content
+        - child_exploitation
+        - hate
+        - harassment_abuse
+        - regulated_substances
+        - weapons
+        - self_harm
+        - privacy
+        - specialized_advice
+        - misinformation
+        categories:
+        - privacy
+        threshold: 0.6
+  decisions:
+  - name: unsafe-privacy-content
+    description: Apply a privacy-specific refusal only when the binary model also
+      detects unsafe content.
+    priority: 310
+    rules:
+      operator: AND
+      on_unknown: fail_request
+      conditions:
+      - type: safety
+        name: unsafe-privacy
+    modelRefs:
+    - model: default-model
+    plugins:
+    - type: fast_response
+      configuration:
+        message: I cannot help with this request involving unsafe use of personal
+          information.
+  - name: unsafe-content
+    description: Handle unsafe content independently of prompt injection or jailbreak
+      detection.
+    priority: 300
+    rules:
+      operator: AND
+      on_unknown: fail_request
+      conditions:
+      - type: safety
+        name: unsafe-content
+    modelRefs:
+    - model: default-model
+    plugins:
+    - type: fast_response
+      configuration:
+        message: I cannot help with this unsafe request.

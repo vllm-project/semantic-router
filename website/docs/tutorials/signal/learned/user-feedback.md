@@ -50,5 +50,14 @@ The feedback detector processes conversational text and can confuse quoted or
 hypothetical complaints with real feedback. Evaluate it on follow-up traffic
 and keep a normal fallback path.
 
+The Router evaluates this signal only for a non-empty textual user turn after
+an assistant answer. First turns, tool-result continuations, assistant prefills,
+and user turns without text do not trigger feedback inference. The standalone
+classification API expects the caller to supply a genuine follow-up; it rejects
+empty input. Four-way classification cannot determine whether an arbitrary new
+question is feedback, and even high confidence does not establish applicability.
+A new topic later in a conversation can still trigger a false match; validate
+that case before using feedback to change the selected model.
+
 A prediction the detector is not confident about, one below the configured `threshold`, is reported as `satisfied` with the model's own probability for that class beside it. That number is often far below the threshold, because the model put its mass on a class the threshold rejected. Read the pair as uncertain, not as evidence the user was satisfied. See a complete example:
 [`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml).

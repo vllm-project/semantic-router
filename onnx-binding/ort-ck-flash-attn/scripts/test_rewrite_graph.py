@@ -16,6 +16,7 @@ from rewrite_graph import (
     attention_window,
     build_maps,
     find_attention_blocks,
+    fp32_head_initializers,
     output_precision_conflict,
     rewrite,
     rotary_fp32_initializers,
@@ -35,6 +36,41 @@ def graph_with_weights(*weights):
 
 
 class WeightPrecision(unittest.TestCase):
+    def test_explicit_fp32_head_exemption_follows_dataflow(self):
+        graph = graph_with_weights(
+            ("encoder", np.ones((2, 2), np.float16)),
+            ("head", np.ones((2, 2), np.float32)),
+            ("head_scale", np.array(0.5, np.float32)),
+        )
+        graph.node.extend(
+            [
+                helper.make_node("MatMul", ["x", "encoder"], ["qkv"]),
+                helper.make_node("Identity", ["qkv"], ["attention"]),
+                helper.make_node("Cast", ["attention"], ["hidden"], to=1),
+                helper.make_node("MatMul", ["hidden", "head"], ["logit"]),
+                helper.make_node("Mul", ["logit", "head_scale"], ["scores"]),
+            ]
+        )
+        del graph.output[:]
+        graph.output.append(
+            helper.make_tensor_value_info("scores", TensorProto.FLOAT, [1, 2])
+        )
+        blocks = [{"output_tensor": "attention"}]
+        maps, _ = build_maps(graph)
+        exempt = fp32_head_initializers(graph, maps, blocks)
+        self.assertEqual(exempt, {"head", "head_scale"})
+        self.assertEqual(
+            weight_precision(graph.initializer, head_constants=exempt),
+            TensorProto.FLOAT16,
+        )
+        # A reused head-looking weight inside the encoder cannot be exempted.
+        graph.node[0].input[1] = "head"
+        maps, _ = build_maps(graph)
+        exempt = fp32_head_initializers(graph, maps, blocks)
+        self.assertNotIn("head", exempt)
+        with self.assertRaisesRegex(ValueError, "mixes weight precisions"):
+            weight_precision(graph.initializer, head_constants=exempt)
+
     def test_fp16_weights_read_as_fp16_without_value_info(self):
         graph = graph_with_weights(
             ("w1", np.zeros((2, 2), np.float16)),

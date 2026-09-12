@@ -86,11 +86,14 @@ func isModelPathField(fieldName string) bool {
 
 // isModelDirectory checks if a path looks like a model directory (not a file)
 func isModelDirectory(path string) bool {
-	// If the basename has a file extension, treat it as a file rather than a model directory.
-	if filepath.Ext(filepath.Base(path)) != "" {
-		return false
-	}
-	return true
+	// Versioned model directories can contain dots (for example Vela-1.0).
+	// Only known artifact extensions identify a file; the model registry owns
+	// whether a directory is actually provisionable.
+	ext := strings.ToLower(filepath.Ext(filepath.Base(path)))
+	return !slices.Contains([]string{
+		".json", ".yaml", ".yml", ".txt", ".bin", ".pt", ".pth",
+		".safetensors", ".onnx", ".data", ".xml", ".model", ".gguf",
+	}, ext)
 }
 
 // BuildModelSpecs builds ModelSpec list from config and registry
@@ -132,13 +135,22 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 		specs = append(specs, ModelSpec{
 			LocalPath:       path,
 			RepoID:          repoID,
-			Revision:        "main",
+			Revision:        modelRevision(path, repoID),
 			RequiredFiles:   requiredFiles,
 			ExcludePatterns: excludePatternsByModel[config.ResolveModelPath(path)],
 		})
 	}
 
 	return specs, nil
+}
+
+func modelRevision(path, repoID string) string {
+	// A user mapping this path to a different repository owns that repository's
+	// revision. Never attach a built-in model's commit to a custom override.
+	if model := config.GetModelByPath(path); model != nil && model.RepoID == repoID && model.Revision != "" {
+		return model.Revision
+	}
+	return "main"
 }
 
 func extractProvisioningModelPaths(cfg *config.RouterConfig) []string {

@@ -322,12 +322,19 @@ impl MmBertEmbeddingModel {
                 ))
             })?;
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+
+        // Artifact tokenizers may retain short training truncation/padding.
+        // The runtime model config owns capacity; reject oversize inputs below.
+        tokenizer
+            .with_truncation(None)
+            .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        tokenizer.with_padding(None);
 
         // Find ONNX model candidates (priority order)
         let onnx_candidates =
-            Self::find_onnx_models(&model_path, &matryoshka_config.layers, use_cpu)?;
+            Self::find_onnx_models(&model_path, config.num_hidden_layers, use_cpu)?;
 
         // Create ONNX Runtime session with fallback across candidates.
         // We intentionally prefer GPU-optimized model variants first.
@@ -385,7 +392,7 @@ impl MmBertEmbeddingModel {
     /// model_path/onnx/layer-{N}/ subdirectories (highest layer first as primary).
     fn find_onnx_models<P: AsRef<Path>>(
         model_path: P,
-        layers: &[usize],
+        full_layer: usize,
         use_cpu: bool,
     ) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
@@ -427,14 +434,11 @@ impl MmBertEmbeddingModel {
 
         let mut search_dirs: Vec<std::path::PathBuf> = vec![dir.to_path_buf(), onnx_subdir.clone()];
 
-        // HuggingFace-style layer subdirectories (highest layer first for primary model).
-        let mut layers_desc: Vec<usize> = layers.to_vec();
-        layers_desc.sort_unstable_by(|a, b| b.cmp(a));
-        for layer in &layers_desc {
-            let layer_dir = onnx_subdir.join(format!("layer-{}", layer));
-            if layer_dir.is_dir() {
-                search_dirs.push(layer_dir);
-            }
+        // The primary session must implement the complete encoder. An absent
+        // full graph must not silently substitute a shallower embedding space.
+        let full_layer_dir = onnx_subdir.join(format!("layer-{full_layer}"));
+        if full_layer_dir.is_dir() {
+            search_dirs.push(full_layer_dir);
         }
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
@@ -458,7 +462,11 @@ impl MmBertEmbeddingModel {
             if let Ok(entries) = std::fs::read_dir(base_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     if path.extension().is_some_and(|ext| ext == "onnx")
+                        && (!name.starts_with("model_layer_")
+                            || name == format!("model_layer_{full_layer}.onnx"))
+                        && (!(use_cpu || !has_fa) || !name.contains("_fa"))
                         && !results.iter().any(|p| p == &path)
                     {
                         results.push(path);
@@ -605,52 +613,53 @@ impl MmBertEmbeddingModel {
         let mut sessions = Vec::new();
         let mut any_loaded = false;
         let model_dir = model_path.as_ref();
-        let onnx_dir = model_dir.join("onnx");
-
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
-
-        for layer in layers {
-            let layer_filename = format!("model_layer_{}.onnx", layer);
-            let hf_layer_dir = onnx_dir.join(format!("layer-{}", layer));
-
-            let mut candidates = vec![
-                model_dir.join(&layer_filename),
-                onnx_dir.join(&layer_filename),
-            ];
-            // HuggingFace-style layer subdirectories with FA priority
-            if has_fa {
-                candidates.push(hf_layer_dir.join("model_fa_fp16.onnx"));
-                candidates.push(hf_layer_dir.join("model_fa.onnx"));
-            }
-            candidates.push(hf_layer_dir.join("model.onnx"));
-
-            let found = candidates.iter().find(|p| p.exists()).cloned();
-
-            if let Some(ref layer_path) = found {
-                println!(
-                    "INFO: Loading layer-{} from {}",
-                    layer,
-                    layer_path.display()
-                );
-                match Self::create_session(layer_path, use_cpu) {
-                    Ok(session) => {
-                        sessions.push(Some(session));
-                        any_loaded = true;
-                    }
-                    Err(e) => {
-                        println!("WARN: Failed to load layer-{}: {:?}", layer, e);
-                        sessions.push(None);
-                    }
+        let has_fa = !use_cpu
+            && cfg!(any(feature = "rocm", feature = "migraphx"))
+            && std::env::var("ORT_CK_FLASH_ATTN_LIB")
+                .ok()
+                .is_some_and(|s| !s.is_empty());
+        for &layer in layers {
+            let mut selected = None;
+            for path in Self::layer_candidates(model_dir, layer, use_cpu, has_fa) {
+                if !path.is_file() {
+                    continue;
                 }
-            } else {
-                sessions.push(None);
+                match Self::create_session(&path, use_cpu) {
+                    Ok(session) => {
+                        selected = Some(session);
+                        break;
+                    }
+                    Err(error) => println!(
+                        "WARN: Layer-{layer} candidate {} failed: {error:?}",
+                        path.display()
+                    ),
+                }
             }
+            any_loaded |= selected.is_some();
+            sessions.push(selected);
         }
 
         (any_loaded, sessions)
+    }
+
+    fn layer_candidates(
+        dir: &Path,
+        layer: usize,
+        use_cpu: bool,
+        has_fa: bool,
+    ) -> Vec<std::path::PathBuf> {
+        let filename = format!("model_layer_{layer}.onnx");
+        let nested = dir.join("onnx").join(format!("layer-{layer}"));
+        let mut paths = vec![dir.join(&filename), dir.join("onnx").join(filename)];
+        if !use_cpu && has_fa {
+            paths.push(nested.join("model_fa_fp16.onnx"));
+            paths.push(nested.join("model_fa.onnx"));
+        }
+        if !use_cpu {
+            paths.push(nested.join("model_sdpa_fp16.onnx"));
+        }
+        paths.push(nested.join("model.onnx"));
+        paths
     }
 
     /// Get the model configuration
@@ -720,12 +729,38 @@ impl MmBertEmbeddingModel {
             });
         }
 
+        if let Some(layer) = target_layer {
+            if layer != self.config.num_hidden_layers
+                && !self.available_exit_layers().contains(&layer)
+            {
+                return Err(errors::inference_error(
+                    "target_layer",
+                    &format!("layer {layer} is not loaded"),
+                ));
+            }
+        }
+        if let Some(dim) = target_dim {
+            if !self.matryoshka_config.validate_dimension(dim) || dim > self.config.hidden_size {
+                return Err(errors::inference_error(
+                    "target_dim",
+                    &format!("unsupported dimension {dim}"),
+                ));
+            }
+        }
+
         // Tokenize
         let encodings = self
             .tokenizer
             .encode_batch(texts.to_vec(), true)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
+        if encodings.iter().any(|e| {
+            e.len() > self.config.max_position_embeddings || !e.get_overflowing().is_empty()
+        }) {
+            return Err(errors::tokenization_error(
+                "input exceeds the embedding model context window",
+            ));
+        }
         // Find max sequence length
         let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
         let max_len = max_len.min(self.config.max_position_embeddings);
@@ -739,7 +774,7 @@ impl MmBertEmbeddingModel {
             let seq_len = encoding.len().min(max_len);
             for j in 0..seq_len {
                 input_ids[i * max_len + j] = encoding.get_ids()[j] as i64;
-                attention_mask[i * max_len + j] = 1;
+                attention_mask[i * max_len + j] = encoding.get_attention_mask()[j] as i64;
             }
         }
 
@@ -926,6 +961,40 @@ impl MmBertEmbeddingModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cpu_layer_candidates_exclude_custom_gpu_graphs() {
+        let root = Path::new("models/example");
+        let cpu = MmBertEmbeddingModel::layer_candidates(root, 6, true, true);
+        assert!(cpu
+            .iter()
+            .all(|path| !path.to_string_lossy().contains("_fa")));
+        assert!(cpu
+            .iter()
+            .all(|path| !path.to_string_lossy().contains("fp16")));
+        let gpu = MmBertEmbeddingModel::layer_candidates(root, 6, false, true);
+        let fa = gpu
+            .iter()
+            .position(|p| p.ends_with("model_fa_fp16.onnx"))
+            .unwrap();
+        let portable = gpu.iter().position(|p| p.ends_with("model.onnx")).unwrap();
+        assert!(fa < portable);
+    }
+
+    #[test]
+    fn primary_graph_never_substitutes_an_early_exit() {
+        let root = tempfile::tempdir().unwrap();
+        let early = root.path().join("onnx/layer-6");
+        std::fs::create_dir_all(&early).unwrap();
+        std::fs::write(early.join("model.onnx"), []).unwrap();
+        std::fs::write(root.path().join("model_layer_6.onnx"), []).unwrap();
+        assert!(MmBertEmbeddingModel::find_onnx_models(root.path(), 22, true).is_err());
+        let full = root.path().join("onnx/layer-22");
+        std::fs::create_dir_all(&full).unwrap();
+        std::fs::write(full.join("model.onnx"), []).unwrap();
+        let candidates = MmBertEmbeddingModel::find_onnx_models(root.path(), 22, true).unwrap();
+        assert_eq!(candidates, vec![full.join("model.onnx")]);
+    }
 
     #[test]
     fn test_matryoshka_config_defaults() {

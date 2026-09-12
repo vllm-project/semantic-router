@@ -626,6 +626,16 @@ impl MmBertSequenceClassifier {
 
     /// Classify multiple texts in batch
     pub fn classify_batch(&mut self, texts: &[&str]) -> UnifiedResult<Vec<ClassificationResult>> {
+        self.classify_batch_with_activation(texts, false)
+    }
+
+    /// Return independent sigmoid scores for a multi-label head, or softmax for
+    /// a categorical head. Model loading must validate the declared head type.
+    pub fn classify_batch_with_activation(
+        &mut self,
+        texts: &[&str],
+        multi_label: bool,
+    ) -> UnifiedResult<Vec<ClassificationResult>> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
@@ -636,6 +646,15 @@ impl MmBertSequenceClassifier {
             .encode_batch(texts.to_vec(), true)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
+        if encodings
+            .iter()
+            .any(|encoding| !encoding.get_overflowing().is_empty())
+        {
+            return Err(errors::tokenization_error(&format!(
+                "input exceeds the classifier's {} token budget",
+                self.max_sequence_length
+            )));
+        }
         // The tokenizer includes special tokens within the validated budget.
         let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
         let max_len = max_len
@@ -681,7 +700,7 @@ impl MmBertSequenceClassifier {
         validate_classifier_logits(&logits, batch_size, self.config.num_labels)?;
 
         // Convert to results
-        let results = logits_to_classification_results(&logits, &self.config);
+        let results = logits_to_scores(&logits, &self.config, multi_label);
 
         Ok(results)
     }
@@ -927,19 +946,31 @@ fn extract_token_logits_from_outputs(outputs: &SessionOutputs<'_>) -> UnifiedRes
     Err(errors::inference_error("extract_token_logits", &detail))
 }
 
-/// Convert logits to classification results
-fn logits_to_classification_results(
+fn logits_to_scores(
     logits: &Array2<f32>,
     config: &MmBertClassifierConfig,
+    multi_label: bool,
 ) -> Vec<ClassificationResult> {
     let mut results = Vec::with_capacity(logits.nrows());
 
     for row in logits.rows() {
-        // Softmax
-        let max_val = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        let exp_vals: Vec<f32> = row.iter().map(|&x| (x - max_val).exp()).collect();
-        let sum_exp: f32 = exp_vals.iter().sum();
-        let probs: Vec<f32> = exp_vals.iter().map(|&x| x / sum_exp).collect();
+        let probs: Vec<f32> = if multi_label {
+            row.iter()
+                .map(|&x| {
+                    if x >= 0.0 {
+                        1.0 / (1.0 + (-x).exp())
+                    } else {
+                        let value = x.exp();
+                        value / (1.0 + value)
+                    }
+                })
+                .collect()
+        } else {
+            let max_val = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+            let exp_vals: Vec<f32> = row.iter().map(|&x| (x - max_val).exp()).collect();
+            let sum_exp: f32 = exp_vals.iter().sum();
+            exp_vals.iter().map(|&x| x / sum_exp).collect()
+        };
 
         // Find max (NaN-safe: treat NaN as less than any value)
         let (class_id, &confidence) = probs
@@ -1044,6 +1075,12 @@ impl MmBertTokenClassifier {
             .tokenizer
             .encode(text, true)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        if !encoding.get_overflowing().is_empty() {
+            return Err(errors::tokenization_error(&format!(
+                "input exceeds the token classifier's {} token budget",
+                self.max_sequence_length
+            )));
+        }
 
         let seq_len = encoding
             .len()
@@ -1689,5 +1726,20 @@ mod tests {
         assert!(encodings
             .iter()
             .all(|e| e.get_attention_mask().iter().all(|&v| v == 1)));
+    }
+}
+
+#[cfg(test)]
+mod multi_label_score_tests {
+    use super::*;
+    #[test]
+    fn independent_hazards_can_both_be_high_and_extremes_stay_finite() {
+        let config = MmBertClassifierConfig::default();
+        let logits = ndarray::array![[10.0f32, 10.0], [-1000.0, 1000.0]];
+        let multi = logits_to_scores(&logits, &config, true);
+        assert!(multi[0].probabilities.iter().all(|p| *p > 0.99));
+        assert_eq!(multi[1].probabilities, vec![0.0, 1.0]);
+        let categorical = logits_to_scores(&logits, &config, false);
+        assert_eq!(categorical[0].probabilities, vec![0.5, 0.5]);
     }
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -138,7 +139,7 @@ func (r *modelRegistryCardResolver) resolve(spec ModelSpec) ModelRegistryInfo {
 		return info
 	}
 
-	remote, ok := r.lookup(spec.RepoID)
+	remote, ok := r.lookup(spec.RepoID, spec.Revision)
 	if !ok {
 		return info
 	}
@@ -147,27 +148,28 @@ func (r *modelRegistryCardResolver) resolve(spec ModelSpec) ModelRegistryInfo {
 	return info
 }
 
-func (r *modelRegistryCardResolver) lookup(repoID string) (ModelRegistryInfo, bool) {
+func (r *modelRegistryCardResolver) lookup(repoID, revision string) (ModelRegistryInfo, bool) {
 	now := r.now()
+	cacheKey := repoID + "@" + revision
 
 	r.mu.Lock()
-	if cached, ok := r.cache[repoID]; ok && now.Before(cached.expiresAt) {
+	if cached, ok := r.cache[cacheKey]; ok && now.Before(cached.expiresAt) {
 		r.mu.Unlock()
 		return cached.info, cached.ok
 	}
 	r.mu.Unlock()
 
-	info, ok := r.fetch(repoID)
+	info, ok := r.fetch(repoID, revision)
 	expiresAt := now.Add(r.ttl)
 
 	r.mu.Lock()
-	r.cache[repoID] = cachedRegistryCard{
+	r.cache[cacheKey] = cachedRegistryCard{
 		expiresAt: expiresAt,
 		info:      info,
 		ok:        ok,
 	}
 	if ok && info.RepoID != "" && info.RepoID != repoID {
-		r.cache[info.RepoID] = cachedRegistryCard{
+		r.cache[info.RepoID+"@"+revision] = cachedRegistryCard{
 			expiresAt: expiresAt,
 			info:      info,
 			ok:        ok,
@@ -178,8 +180,14 @@ func (r *modelRegistryCardResolver) lookup(repoID string) (ModelRegistryInfo, bo
 	return info, ok
 }
 
-func (r *modelRegistryCardResolver) fetch(repoID string) (ModelRegistryInfo, bool) {
-	api, err := fetchRegistryJSON[hfModelAPIResponse](r, fmt.Sprintf("%s/api/models/%s", strings.TrimSuffix(r.baseURL, "/"), repoID))
+func (r *modelRegistryCardResolver) fetch(repoID, revision string) (ModelRegistryInfo, bool) {
+	apiURL := fmt.Sprintf("%s/api/models/%s", strings.TrimSuffix(r.baseURL, "/"), repoID)
+	ref := "main"
+	if revision != "" {
+		ref = url.PathEscape(revision)
+		apiURL += "/revision/" + ref
+	}
+	api, err := fetchRegistryJSON[hfModelAPIResponse](r, apiURL)
 	if err != nil {
 		return ModelRegistryInfo{}, false
 	}
@@ -203,12 +211,12 @@ func (r *modelRegistryCardResolver) fetch(repoID string) (ModelRegistryInfo, boo
 		info.ParameterSize = formatParameterCount(api.Safetensors.Total)
 	}
 
-	if readme := r.fetchText(fmt.Sprintf("%s/%s/raw/main/README.md", strings.TrimSuffix(r.baseURL, "/"), repoID)); readme != "" {
+	if readme := r.fetchText(fmt.Sprintf("%s/%s/raw/%s/README.md", strings.TrimSuffix(r.baseURL, "/"), repoID, ref)); readme != "" {
 		info.Description = extractModelCardDescription(readme)
 	}
 
 	var cfg hfModelConfig
-	if err := fetchRegistryJSONInto(r, fmt.Sprintf("%s/%s/raw/main/config.json", strings.TrimSuffix(r.baseURL, "/"), repoID), &cfg); err == nil {
+	if err := fetchRegistryJSONInto(r, fmt.Sprintf("%s/%s/raw/%s/config.json", strings.TrimSuffix(r.baseURL, "/"), repoID, ref), &cfg); err == nil {
 		info.EmbeddingDim = cfg.HiddenSize
 		info.NumClasses = maxInt(cfg.NumLabels, len(cfg.ID2Label), len(cfg.Label2ID))
 		if plausibleModelContext(cfg.MaxPositionEmbeddings) {
@@ -217,7 +225,7 @@ func (r *modelRegistryCardResolver) fetch(repoID string) (ModelRegistryInfo, boo
 	}
 
 	var tokenizer hfTokenizerConfig
-	if err := fetchRegistryJSONInto(r, fmt.Sprintf("%s/%s/raw/main/tokenizer_config.json", strings.TrimSuffix(r.baseURL, "/"), repoID), &tokenizer); err == nil {
+	if err := fetchRegistryJSONInto(r, fmt.Sprintf("%s/%s/raw/%s/tokenizer_config.json", strings.TrimSuffix(r.baseURL, "/"), repoID, ref), &tokenizer); err == nil {
 		if plausibleModelContext(tokenizer.ModelMaxLength) {
 			info.MaxContextLength = tokenizer.ModelMaxLength
 		}
@@ -284,7 +292,13 @@ func overlayRegistryInfo(info *ModelRegistryInfo, remote ModelRegistryInfo, spec
 		info.EmbeddingDim = remote.EmbeddingDim
 	}
 	if remote.MaxContextLength > 0 {
-		info.MaxContextLength = remote.MaxContextLength
+		// A tokenizer/config capacity is not evidence that a task head was
+		// trained or evaluated at that length. Keep the declared task limit.
+		if spec.MaxContextLength == 0 {
+			info.MaxContextLength = remote.MaxContextLength
+		} else if remote.MaxContextLength > spec.MaxContextLength {
+			info.BaseModelMaxContext = remote.MaxContextLength
+		}
 	}
 	if remote.NumClasses > 0 {
 		info.NumClasses = remote.NumClasses

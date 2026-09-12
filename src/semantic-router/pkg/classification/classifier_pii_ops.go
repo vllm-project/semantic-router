@@ -129,7 +129,7 @@ func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold f
 	classified := 0
 	partial := false
 
-	for _, span := range piiSignalChunkSpans(text) {
+	for _, span := range c.piiInputSpans(text) {
 		tokenResult, err := c.piiInference.ClassifyTokens(ctx, span.Text)
 		if err != nil {
 			// A declared truncation carries valid spans for the part the

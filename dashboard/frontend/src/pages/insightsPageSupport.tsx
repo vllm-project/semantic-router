@@ -419,6 +419,7 @@ export function collectSignals(signals: Signal): string[] {
     'modality',
     'authz',
     'jailbreak',
+    'safety',
     'pii',
     'kb',
   ]
@@ -454,6 +455,7 @@ function buildSignalFields(signals: Signal): ViewField[] {
     ['modality', 'Modality signals'],
     ['authz', 'Authz signals'],
     ['jailbreak', 'Jailbreak signals'],
+    ['safety', 'Safety signals'],
     ['pii', 'PII signals'],
     ['kb', 'Knowledge base signals'],
   ]

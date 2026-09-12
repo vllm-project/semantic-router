@@ -30,7 +30,9 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		allMessagesText:   strings.Join(history.nonUserMessages, " "),
 		currentUserText:   history.currentUserMessage,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
-		hasAssistantReply: history.hasAssistantReply,
+		// Feedback applies to a new textual user turn after an answer. Tool
+		// results and assistant prefills must not reclassify stale user text.
+		hasAssistantReply: history.hasAssistantReply && history.lastMessageRole == "user" && history.lastUserHasText,
 		conversationFacts: classification.ConversationFacts{
 			HasDeveloperMessage:       history.hasDeveloperMessage,
 			UserMessageCount:          history.userMessageCount,
@@ -121,6 +123,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
+	ctx.VSRMatchedSafety = signals.MatchedSafetyRules
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
 	ctx.VSRMatchedKB = signals.MatchedKBRules
 	ctx.VSRMatchedConversation = signals.MatchedConversationRules
@@ -204,6 +207,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedSafetyRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)

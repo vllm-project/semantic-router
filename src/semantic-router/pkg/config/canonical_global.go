@@ -82,6 +82,7 @@ type CanonicalEmbeddingModels struct {
 // CanonicalModelModules groups configurable capability modules built on top of
 // router-owned model assets.
 type CanonicalModelModules struct {
+	Safety                  SafetyModelsConfig              `yaml:"safety"`
 	PromptCompression       PromptCompressionConfig         `yaml:"prompt_compression"`
 	PromptGuard             CanonicalPromptGuardModule      `yaml:"prompt_guard"`
 	Classifier              CanonicalClassifierModule       `yaml:"classifier"`
@@ -93,6 +94,8 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
+	Safety                 string `yaml:"safety,omitempty"`
+	Hazard                 string `yaml:"hazard,omitempty"`
 	PromptGuard            string `yaml:"prompt_guard,omitempty"`
 	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
 	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
@@ -385,6 +388,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.HallucinationMitigation = modelCatalog.Modules.HallucinationMitigation.runtimeConfig()
 	cfg.FeedbackDetector = modelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
 	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
+	cfg.SafetyModels = modelCatalog.Modules.Safety
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 }
 
@@ -405,6 +409,14 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	}
 
 	var err error
+	for name, head := range map[string]*SequenceHeadModelConfig{
+		"safety": &global.ModelCatalog.Modules.Safety.Safety,
+		"hazard": &global.ModelCatalog.Modules.Safety.Hazard,
+	} {
+		if head.ModelID, err = resolveSystemModelRef(head.ModelRef, head.ModelID, global.ModelCatalog.System); err != nil {
+			return fmt.Errorf("global.model_catalog.modules.safety.%s: %w", name, err)
+		}
+	}
 	if global.ModelCatalog.Modules.PromptGuard.ModelID, err = resolveSystemModelRef(
 		global.ModelCatalog.Modules.PromptGuard.ModelRef,
 		global.ModelCatalog.Modules.PromptGuard.ModelID,
@@ -467,6 +479,10 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 
 	var modelID string
 	switch ref {
+	case "safety":
+		modelID = catalog.Safety
+	case "hazard":
+		modelID = catalog.Hazard
 	case "prompt_guard":
 		modelID = catalog.PromptGuard
 	case "domain_classifier":

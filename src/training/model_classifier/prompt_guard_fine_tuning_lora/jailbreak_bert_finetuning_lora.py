@@ -880,7 +880,16 @@ if __name__ == "__main__":
         help="Path to saved model for inference (default: ../../../models/lora_security_detector_r8)",
     )
 
+    parser.add_argument(
+        "--legacy-toxic-training",
+        action="store_true",
+        help="Explicitly reproduce the old toxicity-mixed recipe; use train_v2.py for injection-specific models",
+    )
     args = parser.parse_args()
+    if args.mode == "train" and not args.legacy_toxic_training:
+        parser.error(
+            "Use train_v2.py with prepared injection-specific data, or explicitly request --legacy-toxic-training"
+        )
 
     if args.mode == "train":
         main(
