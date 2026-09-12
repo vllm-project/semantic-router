@@ -164,10 +164,14 @@ func (r *OpenAIRouter) buildLooperRequest(
 	if isResponseAPIRequest(reqCtx) {
 		streaming = false
 	}
+	algorithmType := ""
+	if decision.Algorithm != nil {
+		algorithmType = decision.Algorithm.Type
+	}
 	logging.ComponentEvent("extproc", "looper_execution_started", map[string]interface{}{
 		"request_id":       reqCtx.RequestID,
 		"decision":         decision.Name,
-		"algorithm":        decision.Algorithm.Type,
+		"algorithm":        algorithmType,
 		"candidate_models": len(modelRefs),
 		"streaming":        streaming,
 		"response_api":     isResponseAPIRequest(reqCtx),

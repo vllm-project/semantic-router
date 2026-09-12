@@ -291,6 +291,7 @@ func TestBuildLooperRequestForwardsBlockedClientTokenLimit(t *testing.T) {
 	decision := outputTokenRequestParamsDecision(t, model, map[string]interface{}{
 		"blocked_params": []string{"max_tokens"},
 	})
+	decision.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmConfidence}
 	decision.ModelRefs[0].MaxCompletionTokens = &tokens
 	request := testNeutralRequest(model, "hello")
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
