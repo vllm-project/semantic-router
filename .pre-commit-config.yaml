@@ -88,6 +88,16 @@ repos:
         exclude: ^(\node_modules/)
         pass_filenames: false
 
+      # A pre-commit hook so the always-on quality gate runs this suite at the
+      # exact PR head.
+      - id: github-scripts-tests
+        name: github actions helper script tests
+        entry: bash -c 'cd .github/scripts && npm ci --no-audit --no-fund && npm test'
+        language: system
+        files: ^\.github/scripts/
+        exclude: ^\.github/scripts/node_modules/
+        pass_filenames: false
+
   # Rust specific hooks
   - repo: local
     hooks:
