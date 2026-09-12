@@ -20,6 +20,11 @@ import sys
 import numpy as np
 import onnx
 from onnx import TensorProto, helper, numpy_helper
+from stable_pooling import stabilize_mean_pooling
+
+WHERE_INPUT_COUNT = 3
+MASKED_ATTENTION_MAX = -10000.0
+ROPE_FREQUENCY_RANK = 3  # [1, rotary_dimension / 2, 1]
 
 
 def build_maps(graph):
@@ -32,7 +37,48 @@ def build_maps(graph):
     return out2node, name2node
 
 
-def find_attention_blocks(graph, out2node):  # noqa: C901,PLR0912
+def scalar_value(graph, out2node, name):
+    """Read a scalar export constant without materialising any model weights."""
+    tensor = next((t for t in graph.initializer if t.name == name), None)
+    if tensor is not None and math.prod(tensor.dims) == 1:
+        return float(numpy_helper.to_array(tensor).item())
+    node = out2node.get(name)
+    if node is None:
+        return None
+    if node.op_type == "Constant":
+        for attr in node.attribute:
+            if attr.name == "value" and math.prod(attr.t.dims) == 1:
+                return float(numpy_helper.to_array(attr.t).item())
+    if node.op_type == "Cast":
+        return scalar_value(graph, out2node, node.input[0])
+    return None
+
+
+def attention_probability_path(graph, out2node, softmax):
+    """Accept only direct probabilities or Where(IsNaN(p), scalar_zero, p)."""
+    probability = softmax.output[0]
+    extra = []
+    for node in graph.node:
+        if node.op_type != "Where" or len(node.input) != WHERE_INPUT_COUNT:
+            continue
+        guard = out2node.get(node.input[0])
+        if (
+            node.input[2] == probability
+            and guard is not None
+            and guard.op_type == "IsNaN"
+            and list(guard.input) == [probability]
+            and scalar_value(graph, out2node, node.input[1]) == 0
+        ):
+            probability = node.output[0]
+            extra = [guard, node]
+            break
+    consumers = [
+        n for n in graph.node if n.op_type == "MatMul" and n.input[0] == probability
+    ]
+    return consumers, extra
+
+
+def find_attention_blocks(graph, out2node):
     blocks = []
     softmaxes = [n for n in graph.node if n.op_type == "Softmax"]
 
@@ -71,10 +117,10 @@ def find_attention_blocks(graph, out2node):  # noqa: C901,PLR0912
         if not k_transpose:
             continue
 
-        av_consumers = [
-            n for n in graph.node if sm.output[0] in n.input and n.op_type == "MatMul"
-        ]
-        if not av_consumers:
+        av_consumers, probability_nodes = attention_probability_path(
+            graph, out2node, sm
+        )
+        if len(av_consumers) != 1:
             continue
         av_mm = av_consumers[0]
 
@@ -102,6 +148,7 @@ def find_attention_blocks(graph, out2node):  # noqa: C901,PLR0912
                 "k_transpose": k_transpose,
                 "k_extra_nodes": k_extra_nodes,
                 "av_matmul": av_mm,
+                "probability_nodes": probability_nodes,
                 "q_tensor": q_mul.input[0],
                 "k_tensor": k_tensor,
                 "v_tensor": av_mm.input[1],
@@ -113,7 +160,11 @@ def find_attention_blocks(graph, out2node):  # noqa: C901,PLR0912
     return blocks
 
 
-def compute_scale(graph, out2node, q_mul_node):
+def compute_scale(graph, out2node, q_mul_node, k_mul_node=None, hdim=64):
+    q_scale = scalar_value(graph, out2node, q_mul_node.input[1])
+    k_scale = scalar_value(graph, out2node, (k_mul_node or q_mul_node).input[1])
+    if q_scale is not None and k_scale is not None:
+        return q_scale * k_scale
     try:
         scale_name = q_mul_node.input[1]
         sqrt_node = out2node[scale_name]
@@ -126,32 +177,157 @@ def compute_scale(graph, out2node, q_mul_node):
             return 1.0 / math.sqrt(hdim_val)
     except (KeyError, IndexError):
         pass
-    return 1.0 / math.sqrt(64.0)
+    return 1.0 / math.sqrt(hdim)
 
 
-def classify_mask(mask_tensor_name, local_mask_name=None):
-    """Determine if a mask tensor represents local or global attention.
+def inverted_padding_fill(graph, out2node, mask):
+    """Recognise HF's Where(bool(1-padding), negative, 1-padding) export.
 
-    Two naming conventions are supported:
-      - Classifier models:  Where_1 = local, Where_2 = global
-      - Embedding models:   masked_fill = local, masked_fill_1 = global
+    The broadcast axes are part of the contract: attention_mask [B,S] becomes
+    [B,1,1,S], so only key padding is masked. Do not accept arbitrary inversions.
     """
-    # Classifier convention
-    if "Where_1" in mask_tensor_name:
-        return "local"
-    if "Where_2" in mask_tensor_name:
-        return "global"
-    # Embedding convention (fewer layers use the base mask = local)
-    if local_mask_name is not None:
-        return "local" if mask_tensor_name == local_mask_name else "global"
-    if mask_tensor_name == "masked_fill":
-        return "local"
-    if "masked_fill" in mask_tensor_name:
-        return "global"
-    return "unknown"
+    condition = out2node.get(mask.input[0])
+    if (
+        condition is None
+        or condition.op_type != "Cast"
+        or list(condition.input) != [mask.input[2]]
+        or not any(
+            a.name == "to" and a.i == TensorProto.BOOL for a in condition.attribute
+        )
+    ):
+        return False
+    sub = out2node.get(mask.input[2])
+    if (
+        sub is None
+        or sub.op_type != "Sub"
+        or scalar_value(graph, out2node, sub.input[0]) != 1
+    ):
+        return False
+    padding = out2node.get(sub.input[1])
+    if padding is not None and padding.op_type == "Cast":
+        padding = out2node.get(padding.input[0])
+    if padding is None or padding.op_type != "Expand":
+        return False
+    padding = out2node.get(padding.input[0])
+    if (
+        padding is None
+        or padding.op_type != "Unsqueeze"
+        or padding.input[0] != "attention_mask"
+    ):
+        return False
+    axes = next((t for t in graph.initializer if t.name == padding.input[1]), None)
+    if axes is None:
+        node = out2node.get(padding.input[1])
+        if node is not None and node.op_type == "Constant":
+            axes = next((a.t for a in node.attribute if a.name == "value"), None)
+    return axes is not None and list(numpy_helper.to_array(axes)) == [1, 2]
 
 
-def find_mask_only_nodes(graph, out2node):  # noqa: C901
+def attention_window(graph, out2node, mask_tensor_name):
+    """Read symmetric positional windows from mask semantics, never names/counts.
+
+    ModernBERT exports abs(query_position - key_position) <= local_attention/2.
+    Both endpoints are inclusive: a radius of 64 means (64, 64), not (63, 64).
+    Unknown comparisons are refused instead of silently becoming global attention.
+    """
+    mask = out2node.get(mask_tensor_name)
+    if mask is None or mask.op_type != "Where" or len(mask.input) != WHERE_INPUT_COUNT:
+        raise ValueError(f"unsupported additive attention mask {mask_tensor_name!r}")
+    keep = scalar_value(graph, out2node, mask.input[1])
+    masked = scalar_value(graph, out2node, mask.input[2])
+    positive_condition = (
+        keep == 0 and masked is not None and masked <= MASKED_ATTENTION_MAX
+    )
+    negative_condition = False
+    if keep is not None and keep <= MASKED_ATTENTION_MAX:
+        negative_condition = inverted_padding_fill(graph, out2node, mask)
+        condition = out2node.get(mask.input[0])
+        if condition is not None and condition.op_type == "Not":
+            window = out2node.get(condition.input[0])
+            while window is not None and window.op_type == "Unsqueeze":
+                window = out2node.get(window.input[0])
+            if window is not None and window.op_type in {"Less", "LessOrEqual"}:
+                # HF applies the window after the padding mask. A recursive
+                # global-mask check rejects reversed or otherwise unknown fills.
+                negative_condition = attention_window(
+                    graph, out2node, mask.input[2]
+                ) == (-1, -1)
+    if not positive_condition and not negative_condition:
+        raise ValueError(
+            f"mask {mask_tensor_name!r} must map allowed positions to zero"
+        )
+    ancestors = {}
+    pending = [mask_tensor_name]
+    leaves = set()
+    while pending:
+        name = pending.pop()
+        node = out2node.get(name)
+        if node is None:
+            leaves.add(name)
+        elif node.name not in ancestors:
+            ancestors[node.name] = node
+            pending.extend(node.input)
+    if "attention_mask" not in leaves:
+        raise ValueError(f"mask {mask_tensor_name!r} does not depend on attention_mask")
+
+    def position_range(name):
+        node = out2node.get(name)
+        while node is not None:
+            if node.op_type in {
+                "Cast",
+                "Identity",
+                "Unsqueeze",
+                "Squeeze",
+                "Reshape",
+            } or (
+                node.op_type == "Transpose"
+                and any(
+                    a.name == "perm" and list(a.ints) == [1, 0] for a in node.attribute
+                )
+            ):
+                node = out2node.get(node.input[0])
+            else:
+                break
+        return node.output[0] if node is not None and node.op_type == "Range" else None
+
+    radii = set()
+    for node in ancestors.values():
+        if node.op_type not in {
+            "Less",
+            "LessOrEqual",
+            "Greater",
+            "GreaterOrEqual",
+            "Equal",
+        }:
+            continue
+        lhs = out2node.get(node.input[0])
+        bound = scalar_value(graph, out2node, node.input[1])
+        if (
+            node.op_type == "GreaterOrEqual"
+            and bound == 0
+            and position_range(node.input[0]) is not None
+        ):
+            continue  # exporter bounds-checks non-negative query positions
+        if node.op_type in {"Less", "LessOrEqual"} and lhs is not None:
+            sub = out2node.get(lhs.input[0]) if lhs.op_type == "Abs" else None
+            if sub is not None and sub.op_type == "Sub" and bound is not None:
+                q_pos, k_pos = map(position_range, sub.input)
+                radius = bound - (1 if node.op_type == "Less" else 0)
+                if (
+                    q_pos is not None
+                    and q_pos == k_pos
+                    and radius >= 0
+                    and radius.is_integer()
+                ):
+                    radii.add(int(radius))
+                    continue
+        raise ValueError(f"unsupported attention-mask comparison {node.name!r}")
+    if len(radii) > 1:
+        raise ValueError(f"mask {mask_tensor_name!r} has conflicting local windows")
+    return (next(iter(radii)),) * 2 if radii else (-1, -1)
+
+
+def find_mask_only_nodes(graph, out2node):
     """Find nodes that are exclusively part of the 2-D mask computation."""
     mask_roots = set()
     for n in graph.node:
@@ -296,7 +472,81 @@ def create_1d_padding_bias_nodes(graph):
     return nodes, unsqueeze_out
 
 
-def weight_precision(initializers):
+def rotary_fp32_initializers(graph, out2node):
+    """Identify FP32 RoPE frequencies used only with positions, then cast to FP16.
+
+    Torch exports this intentional FP32 numerical island as an initializer.
+    It is not an encoder/head weight, and must not be narrowed to satisfy the
+    weight-name guard. Require the complete observed position-to-sin/cos path.
+    """
+    consumers = {}
+    for node in graph.node:
+        for name in set(node.input):
+            consumers.setdefault(name, []).append(node)
+    graph_outputs = {v.name for v in graph.output}
+
+    def only_consumer(name, op):
+        uses = consumers.get(name, [])
+        if name not in graph_outputs and len(uses) == 1 and uses[0].op_type == op:
+            return uses[0]
+        return None
+
+    def attr(node, name):
+        return next(
+            (helper.get_attribute_value(a) for a in node.attribute if a.name == name),
+            None,
+        )
+
+    exempt = set()
+    for tensor in graph.initializer:
+        if (
+            tensor.data_type != TensorProto.FLOAT
+            or len(tensor.dims) != ROPE_FREQUENCY_RANK
+        ):
+            continue
+        if tensor.dims[0] != 1 or tensor.dims[2] != 1:
+            continue
+        multiply = only_consumer(tensor.name, "MatMul")
+        if multiply is None or multiply.input[0] != tensor.name:
+            continue
+        position = out2node.get(multiply.input[1])
+        if position is None or position.op_type != "Cast" or attr(position, "to") != 1:
+            continue
+        position = out2node.get(position.input[0])
+        while position is not None and position.op_type == "Unsqueeze":
+            position = out2node.get(position.input[0])
+        if (
+            position is None
+            or position.op_type != "Range"
+            or scalar_value(graph, out2node, position.input[0]) != 0
+            or scalar_value(graph, out2node, position.input[2]) != 1
+        ):
+            continue
+        transpose = only_consumer(multiply.output[0], "Transpose")
+        if transpose is None or attr(transpose, "perm") != [0, 2, 1]:
+            continue
+        concat = only_consumer(transpose.output[0], "Concat")
+        if (
+            concat is None
+            or list(concat.input) != [transpose.output[0]] * 2
+            or attr(concat, "axis") not in (-1, 2)
+            or concat.output[0] in graph_outputs
+        ):
+            continue
+        trig = consumers.get(concat.output[0], [])
+        expected_trig = {"Cos", "Sin"}
+        if (
+            len(trig) != len(expected_trig)
+            or {n.op_type for n in trig} != expected_trig
+        ):
+            continue
+        casts = [only_consumer(n.output[0], "Cast") for n in trig]
+        if all(n is not None and attr(n, "to") == TensorProto.FLOAT16 for n in casts):
+            exempt.add(tensor.name)
+    return exempt
+
+
+def weight_precision(initializers, *, position_constants=frozenset()):
     """Return the one floating-point elem_type every weight tensor shares.
 
     Integer initializers (shapes, gather indices) carry no precision and are
@@ -307,7 +557,7 @@ def weight_precision(initializers):
     """
     counts = {}
     for tensor in initializers:
-        if tensor.data_type in _FLOAT_TYPES:
+        if tensor.data_type in _FLOAT_TYPES and tensor.name not in position_constants:
             counts[tensor.data_type] = counts.get(tensor.data_type, 0) + 1
     if not counts:
         raise ValueError("the graph holds no floating-point weight tensors")
@@ -367,9 +617,7 @@ def enforce_output_precision(output_path, model_is_fp16):
         )
 
 
-def rewrite(  # noqa: C901,PLR0912,PLR0915
-    model_path, output_path, hdim=64, local_attention=128
-):
+def rewrite(model_path, output_path, hdim=64, local_attention=128):
     model = onnx.load(model_path)
     graph = model.graph
 
@@ -380,31 +628,29 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
         print("No attention blocks found -- nothing to rewrite.")
         sys.exit(1)
 
-    scale = compute_scale(graph, out2node, blocks[0]["q_mul"])
-    print(f"Found {len(blocks)} attention blocks, scale={scale:.6f}")
-
-    # Auto-detect the local mask name: the mask tensor used by the fewest
-    # layers is the local (sliding-window) mask.
-    mask_names = [b["mask_tensor"] for b in blocks]
-    mask_freq = {}
-    for m in mask_names:
-        mask_freq[m] = mask_freq.get(m, 0) + 1
-    local_mask_name = min(mask_freq, key=mask_freq.get) if mask_freq else None
-
-    n_local = sum(
-        1 for b in blocks if classify_mask(b["mask_tensor"], local_mask_name) == "local"
-    )
-    n_global = sum(
-        1
+    softmax_count = sum(n.op_type == "Softmax" for n in graph.node)
+    if len(blocks) != softmax_count:
+        raise ValueError(
+            f"matched {len(blocks)} of {softmax_count} Softmax nodes; "
+            "refusing a partial rewrite that retains dense attention"
+        )
+    windows = {
+        b["mask_tensor"]: attention_window(graph, out2node, b["mask_tensor"])
         for b in blocks
-        if classify_mask(b["mask_tensor"], local_mask_name) == "global"
+    }
+    for window in windows.values():
+        if window[0] >= 0 and window != (local_attention // 2,) * 2:
+            raise ValueError(
+                f"source mask window {window} disagrees with "
+                f"--local-attention={local_attention}"
+            )
+    n_local = sum(windows[b["mask_tensor"]][0] >= 0 for b in blocks)
+    n_global = len(blocks) - n_local
+    print(f"Found {len(blocks)} attention blocks")
+    print(
+        f"  Local attention layers: {n_local} (source windows={set(windows.values())})"
     )
-    print(f"  Local attention layers: {n_local} (window={local_attention})")
     print(f"  Global attention layers: {n_global}")
-
-    # Window sizes for local attention (symmetric window around diagonal)
-    wl = local_attention // 2 - 1  # 63 for window=128
-    wr = local_attention // 2  # 64 for window=128
 
     # Create 1-D padding bias nodes
     pad_bias_nodes, pad_bias_tensor = create_1d_padding_bias_nodes(graph)
@@ -413,7 +659,11 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
     # optional and describes activations, so a valid FP16 export that carries
     # none would read as FP32, and one activation cannot vouch for every weight.
     try:
-        model_is_fp16 = weight_precision(graph.initializer) == TensorProto.FLOAT16
+        position_constants = rotary_fp32_initializers(graph, out2node)
+        model_is_fp16 = (
+            weight_precision(graph.initializer, position_constants=position_constants)
+            == TensorProto.FLOAT16
+        )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -421,6 +671,8 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
         print("  Model precision: FP16 (skipping input/output Cast nodes)")
     else:
         print("  Model precision: FP32 (adding fp32↔fp16 Cast nodes)")
+    if position_constants:
+        print(f"  Preserved {len(position_constants)} FP32 RoPE frequency constants")
 
     enforce_output_precision(output_path, model_is_fp16)
 
@@ -429,7 +681,7 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
     new_nodes = []
 
     for i, blk in enumerate(blocks):
-        mask_type = classify_mask(blk["mask_tensor"], local_mask_name)
+        scale = compute_scale(graph, out2node, blk["q_mul"], blk["k_mul"], hdim)
 
         for key in (
             "q_mul",
@@ -443,12 +695,10 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
             nodes_to_remove.add(blk[key].name)
         for extra in blk.get("k_extra_nodes", []):
             nodes_to_remove.add(extra.name)
+        for extra in blk["probability_nodes"]:
+            nodes_to_remove.add(extra.name)
 
-        # Set window attributes based on local vs global
-        if mask_type == "local":
-            fa_wl, fa_wr = wl, wr
-        else:
-            fa_wl, fa_wr = -1, -1
+        fa_wl, fa_wr = windows[blk["mask_tensor"]]
 
         # Derive a clean layer prefix for the FA node name
         sm_name = blk["softmax"].name
@@ -609,6 +859,10 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
 
     # Rebuild node list: keep original order, then append new nodes
     kept = [n for n in graph.node if n.name not in nodes_to_remove]
+    if any(output in windows for node in kept for output in node.output):
+        raise ValueError(
+            "dense attention mask is still live after rewriting every layer"
+        )
     kept.extend(pad_bias_nodes)
     kept.extend(new_nodes)
 
@@ -617,6 +871,8 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
 
     del graph.node[:]
     graph.node.extend(kept)
+    pooling_repairs = stabilize_mean_pooling(graph)
+    print(f"  Stabilized {pooling_repairs} FP16 masked mean-pooling paths")
 
     # For fp16 models, cast graph outputs from fp16 to fp32 so that older
     # ONNX Runtime host code (which only tries extract_tensor::<f32>) works.
@@ -661,6 +917,25 @@ def rewrite(  # noqa: C901,PLR0912,PLR0915
     has_ck = any(op.domain == "com.ck" for op in model.opset_import)
     if not has_ck:
         model.opset_import.append(helper.make_opsetid("com.ck", 1))
+
+    # Replacement nodes were appended after their original consumers. Keep the
+    # serialized graph valid without depending on an ORT-specific reordering.
+    available = (
+        {v.name for v in graph.input} | {t.name for t in graph.initializer} | {""}
+    )
+    pending = list(graph.node)
+    ordered = []
+    while pending:
+        ready = [n for n in pending if all(name in available for name in n.input)]
+        if not ready:
+            raise ValueError("rewritten graph has unresolved inputs or a cycle")
+        for node in ready:
+            ordered.append(node)
+            available.update(node.output)
+        ready_names = {n.name for n in ready}
+        pending = [n for n in pending if n.name not in ready_names]
+    del graph.node[:]
+    graph.node.extend(ordered)
 
     onnx.save(model, output_path)
     print(f"Saved rewritten model to {output_path}")
