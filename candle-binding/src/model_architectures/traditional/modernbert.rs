@@ -704,6 +704,20 @@ impl TraditionalModernBertClassifier {
         Ok(max_length)
     }
 
+    pub(super) fn parse_classifier_pooling(
+        config_json: &str,
+    ) -> Result<ClassifierPooling, candle_core::Error> {
+        let config: serde_json::Value =
+            serde_json::from_str(config_json).map_err(candle_core::Error::wrap)?;
+        match config.get("classifier_pooling") {
+            // Preserve the historical default for merged artifacts that omit it.
+            None => Ok(ClassifierPooling::MEAN),
+            Some(value) if value.as_str() == Some("mean") => Ok(ClassifierPooling::MEAN),
+            Some(value) if value.as_str() == Some("cls") => Ok(ClassifierPooling::CLS),
+            Some(_) => candle_core::bail!("classifier_pooling must be mean or cls"),
+        }
+    }
+
     pub(super) fn tokenizer_for_config(
         mut tokenizer: Tokenizer,
         config: &Config,
@@ -813,6 +827,7 @@ impl TraditionalModernBertClassifier {
             let unified_err = config_errors::invalid_json(&config_path, &e.to_string());
             candle_core::Error::from(unified_err)
         })?;
+        let classifier_pooling = Self::parse_classifier_pooling(&config_str)?;
 
         let max_sequence_length = Self::resolve_sequence_length(&config, max_sequence_length)?;
 
@@ -911,7 +926,7 @@ impl TraditionalModernBertClassifier {
             model,
             head,
             classifier,
-            classifier_pooling: ClassifierPooling::MEAN, // Use MEAN pooling as per model config
+            classifier_pooling,
             tokenizer: tokenizer_wrapper,
             device,
             config,

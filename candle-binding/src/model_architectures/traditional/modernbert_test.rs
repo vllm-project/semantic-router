@@ -1614,6 +1614,27 @@ fn context_test_config(max_length: usize) -> serde_json::Value {
     })
 }
 
+#[test]
+fn test_merged_classifier_pooling_respects_checkpoint_contract() {
+    use super::ClassifierPooling;
+    let parse = TraditionalModernBertClassifier::parse_classifier_pooling;
+    assert!(matches!(
+        parse(r#"{"classifier_pooling":"cls"}"#).unwrap(),
+        ClassifierPooling::CLS
+    ));
+    assert!(matches!(
+        parse(r#"{"classifier_pooling":"mean"}"#).unwrap(),
+        ClassifierPooling::MEAN
+    ));
+    assert!(matches!(parse("{}").unwrap(), ClassifierPooling::MEAN));
+    for invalid in [
+        r#"{"classifier_pooling":"max"}"#,
+        r#"{"classifier_pooling":null}"#,
+    ] {
+        assert!(parse(invalid).is_err());
+    }
+}
+
 fn context_test_tokenizer() -> tokenizers::Tokenizer {
     use tokenizers::models::wordlevel::WordLevel;
     use tokenizers::pre_tokenizers::whitespace::WhitespaceSplit;

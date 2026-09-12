@@ -15,6 +15,7 @@ from pathlib import Path
 
 from ..sequence_repair.data import assert_disjoint, file_receipts
 from ..sequence_repair.model import load_model, save_adapter
+from ..sequence_repair.train import token_budget_microbatches
 from .vela_hazard import evaluate, masked_loss, read_rows
 
 SAFE_SAMPLE_FRACTION = 0.3
@@ -117,6 +118,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--accumulate", type=int, default=4)
     parser.add_argument("--max-length", type=int, default=2048)
+    parser.add_argument("--microbatch-token-budget", type=int)
     parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument("--eval-every", type=int, default=150)
     parser.add_argument("--seed", type=int, default=20260913)
@@ -131,6 +133,10 @@ def main():
         )
         <= 0
         or args.learning_rate <= 0
+        or (
+            args.microbatch_token_budget is not None
+            and args.microbatch_token_budget <= 0
+        )
     ):
         raise ValueError("Training budgets must be positive")
     output = Path(args.output)
@@ -165,6 +171,12 @@ def main():
             safe.append(index)
     if not safe or any(not pool for pool in pools):
         raise ValueError("Every class needs positive supervision and safe negatives")
+    train_lengths = [len(encoded["input_ids"]) for _, encoded in train]
+    if (
+        args.microbatch_token_budget is not None
+        and max(train_lengths) > args.microbatch_token_budget
+    ):
+        raise ValueError("An eligible input exceeds the microbatch token budget")
     balance_sources = args.source_balanced_sampling or args.source_weights is not None
     source_weights = source_sampling_weights(
         [row for row, _ in train], args.source_weights
@@ -191,6 +203,9 @@ def main():
         "rejected": rejected,
         "labels": labels,
         "objective": "mean per-example masked BCE; no loss for unknown labels",
+        "examples_per_optimizer_step": args.batch_size * args.accumulate,
+        "microbatch_token_budget": args.microbatch_token_budget,
+        "dropout_trajectory_equivalence": args.microbatch_token_budget is None,
         "sampling": "30% explicit safe; 70% uniform positive category then row",
         "source_sampling_probabilities": (
             dict(
@@ -219,6 +234,7 @@ def main():
                 Path(__file__).with_name("vela_hazard.py"),
                 Path(__file__).parent.parent / "sequence_repair/model.py",
                 Path(__file__).parent.parent / "sequence_repair/data.py",
+                Path(__file__).parent.parent / "sequence_repair/train.py",
             ]
         },
         "requirements": {
@@ -248,24 +264,46 @@ def main():
     best = -1.0
     sampled_unique, sampled_sources, sampled_languages = set(), Counter(), Counter()
     positive_exposures = [0] * len(labels)
+
+    def draw_microbatch_indices():
+        return [
+            (
+                sample_grouped(balanced_pools, rng, source_weights)
+                if balanced_pools
+                else (
+                    rng.choice(safe)
+                    if rng.random() < SAFE_SAMPLE_FRACTION
+                    else rng.choice(rng.choice(pools))
+                )
+            )
+            for _ in range(args.batch_size)
+        ]
+
     for step in range(args.steps + 1):
         if step:
             optimizer.zero_grad(set_to_none=True)
             started = time.perf_counter()
             total = 0.0
-            for _ in range(args.accumulate):
+            if args.microbatch_token_budget is None:
+                microbatches = (
+                    draw_microbatch_indices() for _ in range(args.accumulate)
+                )
+            else:
                 indices = [
-                    (
-                        sample_grouped(balanced_pools, rng, source_weights)
-                        if balanced_pools
-                        else (
-                            rng.choice(safe)
-                            if rng.random() < SAFE_SAMPLE_FRACTION
-                            else rng.choice(rng.choice(pools))
-                        )
-                    )
-                    for _ in range(args.batch_size)
+                    index
+                    for _ in range(args.accumulate)
+                    for index in draw_microbatch_indices()
                 ]
+                microbatches = token_budget_microbatches(
+                    indices, train_lengths, args.microbatch_token_budget
+                )
+            microbatch_count, max_padded_tokens = 0, 0
+            for indices in microbatches:
+                microbatch_count += 1
+                max_padded_tokens = max(
+                    max_padded_tokens,
+                    max(train_lengths[index] for index in indices) * len(indices),
+                )
                 selected = [train[index] for index in indices]
                 sampled_unique.update(indices)
                 for row, _ in selected:
@@ -290,9 +328,13 @@ def main():
                     device="cuda",
                 )
                 with torch.autocast("cuda", dtype=torch.bfloat16):
-                    loss = masked_loss(
-                        model(**batch).logits, target, mask, args.accumulate
-                    )
+                    logits = model(**batch).logits
+                    if args.microbatch_token_budget is None:
+                        loss = masked_loss(logits, target, mask, args.accumulate)
+                    else:
+                        loss = masked_loss(logits, target, mask) * (
+                            len(selected) / (args.batch_size * args.accumulate)
+                        )
                 if not bool(torch.isfinite(loss)):
                     raise ValueError("Nonfinite hazard loss")
                 loss.backward()
@@ -318,6 +360,8 @@ def main():
                 "loss": total,
                 "grad_norm": float(norm),
                 "seconds": time.perf_counter() - started,
+                "microbatches": microbatch_count,
+                "max_padded_tokens": max_padded_tokens,
             }
             with (output / "steps.jsonl").open("a") as stream:
                 stream.write(json.dumps(log) + "\n")
