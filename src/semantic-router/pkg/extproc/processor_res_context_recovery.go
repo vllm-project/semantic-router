@@ -28,8 +28,8 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	plugin := activeContextRecoveryPlugin(requestCtx)
-	if plugin == nil {
+	recovery := activeContextRecovery(requestCtx)
+	if recovery == nil {
 		return responseBody, nil
 	}
 	engine, err := r.protocolEngine()
@@ -48,13 +48,13 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if err != nil || len(calls) == 0 {
 		return responseBody, err
 	}
-	if len(calls) > contextRecoveryLimit(plugin) {
+	if len(calls) > contextRecoveryLimit(recovery) {
 		return responseBody, fmt.Errorf("context recovery retrieval limit exceeded")
 	}
 	toolMessages, err := r.loadContextRecoveryToolMessages(
 		ctx,
 		requestCtx,
-		plugin,
+		recovery,
 		calls,
 	)
 	if err != nil {
@@ -73,27 +73,29 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	return followup, nil
 }
 
-func activeContextRecoveryPlugin(
+// activeContextRecovery reports the merged recovery contract for a request
+// that actually issued keys. Any context action may have issued them, so this
+// no longer depends on the compression plugin being configured.
+func activeContextRecovery(
 	requestCtx *RequestContext,
-) *config.ContextCompressionPluginConfig {
+) *config.ContextCompressionRecoveryConfig {
 	if requestCtx == nil ||
-		requestCtx.VSRSelectedDecision == nil ||
 		requestCtx.ExpectStreamingResponse ||
 		len(requestCtx.ContextCompressionRecoveryKeys) == 0 {
 		return nil
 	}
-	plugin := requestCtx.VSRSelectedDecision.GetContextCompressionConfig()
-	if plugin == nil || plugin.Recovery == nil || !plugin.Recovery.Enabled {
+	recovery, err := contextRecoverySettingsForRequest(requestCtx)
+	if err != nil || recovery == nil || !recovery.Enabled {
 		return nil
 	}
-	return plugin
+	return recovery
 }
 
 func contextRecoveryLimit(
-	plugin *config.ContextCompressionPluginConfig,
+	recovery *config.ContextCompressionRecoveryConfig,
 ) int {
-	if plugin.Recovery.MaxRetrievals > 0 {
-		return plugin.Recovery.MaxRetrievals
+	if recovery.MaxRetrievals > 0 {
+		return recovery.MaxRetrievals
 	}
 	return 8
 }
@@ -101,10 +103,10 @@ func contextRecoveryLimit(
 func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 	ctx context.Context,
 	requestCtx *RequestContext,
-	plugin *config.ContextCompressionPluginConfig,
+	recovery *config.ContextCompressionRecoveryConfig,
 	calls []contextRecoveryCall,
 ) ([]llmprotocol.Message, error) {
-	store := r.contextCompressionRecoveryStore(plugin)
+	store := r.contextRecoveryStore(recovery)
 	scope := r.contextCompressionScope(requestCtx)
 	if store == nil || scope == "" {
 		if service := r.contextCompressionService(); service != nil {

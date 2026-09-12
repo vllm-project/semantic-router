@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // ReasonNotEvaluated marks a configured action whose callback never ran, for
@@ -18,6 +19,9 @@ type Action struct {
 	policy    Policy
 	trigger   TriggerResult
 	blocked   string
+	recovery  RecoveryWriter
+	detached  map[int]llmprotocol.Message
+	key       string
 	result    Diagnostics
 	evaluated bool
 }
@@ -27,6 +31,26 @@ type Action struct {
 // or unavailable required recovery; an empty value means the action may run.
 func NewAction(policy Policy, trigger TriggerResult, blocked string) *Action {
 	return &Action{policy: policy, trigger: trigger, blocked: blocked}
+}
+
+// WithRecovery makes removal recoverable. detached holds the complete neutral
+// messages captured before any transformation, keyed by their stable request
+// ID; the callback's text-only view cannot serialize tool payloads or media,
+// so the trusted caller supplies them. Removal only commits once the payload
+// has been stored.
+func (a *Action) WithRecovery(
+	writer RecoveryWriter,
+	detached map[int]llmprotocol.Message,
+) *Action {
+	a.recovery, a.detached = writer, detached
+	return a
+}
+
+// RecoveryKey returns the key issued for this request, or an empty string when
+// nothing was stored. The caller adds it to the request-level key set; it is
+// never written to receipts or metrics labels.
+func (a *Action) RecoveryKey() string {
+	return a.key
 }
 
 // Step returns the shared transformation step. The proposal only removes whole
@@ -56,8 +80,54 @@ func (a *Action) propose(
 		return contextcompression.TransformationEdits{}, errBlocked(a.blocked)
 	}
 	edits, diagnostics := Plan(ctx, a.policy, a.trigger, view)
+	if len(edits.RemoveMessages) == 0 || a.recovery == nil {
+		if len(edits.RemoveMessages) > 0 {
+			diagnostics.RecoveryStatus = RecoveryNotRequired
+		}
+		a.record(diagnostics)
+		return edits, nil
+	}
+	if err := a.persist(ctx, edits.RemoveMessages, view, &diagnostics); err != nil {
+		a.record(diagnostics)
+		return contextcompression.TransformationEdits{}, err
+	}
 	a.record(diagnostics)
 	return edits, nil
+}
+
+// persist stores the removed turns before the executor commits the removal.
+// Once the shared executor deletes messages there is no rollback, so a failed
+// or oversized write must stop the action here rather than afterwards.
+func (a *Action) persist(
+	ctx context.Context,
+	ids []int,
+	view contextcompression.TransformationView,
+	diagnostics *Diagnostics,
+) error {
+	turns := make(map[int]int, len(view.Messages))
+	for _, message := range view.Messages {
+		turns[message.ID] = message.TurnID
+	}
+	payload, err := a.buildEnvelope(ids, turns)
+	if err != nil {
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryWriteFailed
+		diagnostics.RecoveryStatus = RecoveryFailed
+		return err
+	}
+	if a.policy.MaxRecoveryBytes > 0 && len(payload) > a.policy.MaxRecoveryBytes {
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryLimitExceeded
+		diagnostics.RecoveryStatus = RecoveryFailed
+		return errBlocked(ReasonRecoveryLimitExceeded)
+	}
+	key, err := a.recovery.Store(ctx, payload)
+	if err != nil {
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryWriteFailed
+		diagnostics.RecoveryStatus = RecoveryFailed
+		return err
+	}
+	a.key = key
+	diagnostics.RecoveryStatus, diagnostics.RecoveryEntries = RecoveryStored, 1
+	return nil
 }
 
 // record keeps the first finalized result. Re-entering a completed kind within
