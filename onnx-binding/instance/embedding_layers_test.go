@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -68,6 +69,100 @@ func TestOwnedEmbeddingLayerInventoryUsesLoadedGraphsWithoutDuplicatePrimary(t *
 	}
 	if _, err := isolated.Encode("hello", 1, 2); err == nil {
 		t.Fatal("missing layer silently used the primary graph")
+	}
+}
+
+func TestOwnedEmbeddingExplicitPrimaryLayerVariant(t *testing.T) {
+	options := layeredEmbeddingFixture(t)
+	if err := os.RemoveAll(filepath.Join(options.ModelPath, "onnx", "layer-1")); err != nil {
+		t.Fatal(err)
+	}
+	options.ModelFile = filepath.Join("onnx", "layer-2", "encoder.onnx")
+	if err := os.Rename(filepath.Join(options.ModelPath, "onnx", "layer-2", "model.onnx"), filepath.Join(options.ModelPath, options.ModelFile)); err != nil {
+		t.Fatal(err)
+	}
+	model, err := LoadEmbeddingModel(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer model.Close()
+	info, err := model.Info()
+	if err != nil || len(info.Sessions) != 1 || !reflect.DeepEqual(info.AvailableLayers, []int{2}) {
+		t.Fatalf("explicit graph's declared layer was replaced by architecture depth: %+v, %v", info, err)
+	}
+	primary, primaryErr := model.Encode("hello", 0, 2)
+	assertEmbedding(t, primary, primaryErr)
+	exit, exitErr := model.Encode("hello", 2, 2)
+	assertEmbedding(t, exit, exitErr)
+	if !reflect.DeepEqual(primary.Values, exit.Values) {
+		t.Fatalf("primary and its declared layer use different graphs: %v, %v", primary.Values, exit.Values)
+	}
+	if _, err := model.Encode("hello", 1, 2); err == nil {
+		t.Fatal("unloaded architectural layer silently used the explicit primary")
+	}
+}
+
+func TestOwnedEmbeddingExplicitPrimaryOwnsItsLayer(t *testing.T) {
+	options := layeredEmbeddingFixture(t)
+	options.ModelFile = "model.onnx"
+	// The primary is the architecture's full layer 1. A separately discovered
+	// graph for that same layer has a different task output and must not replace it.
+	other, readErr := os.ReadFile(filepath.Join("testdata", "sequence", "model.onnx"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if err := os.WriteFile(filepath.Join(options.ModelPath, "onnx", "layer-1", "model.onnx"), other, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	model, err := LoadEmbeddingModel(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer model.Close()
+	primary, primaryErr := model.Encode("hello", 0, 2)
+	assertEmbedding(t, primary, primaryErr)
+	exit, exitErr := model.Encode("hello", 1, 2)
+	assertEmbedding(t, exit, exitErr)
+	if !reflect.DeepEqual(primary.Values, exit.Values) {
+		t.Fatalf("automatic graph replaced the explicit primary: %v, %v", primary.Values, exit.Values)
+	}
+	info, err := model.Info()
+	if err != nil || len(info.Sessions) != 2 || !reflect.DeepEqual(info.AvailableLayers, []int{1, 2}) {
+		t.Fatalf("same-layer graph was loaded in addition to the selected primary: %+v, %v", info, err)
+	}
+}
+
+func TestOwnedEmbeddingArtifactNameDoesNotDeclareALayer(t *testing.T) {
+	options := specialTokenFixture(t, "embedding")
+	modelPath := filepath.Join(t.TempDir(), "layer-3")
+	if err := os.Rename(options.ModelPath, modelPath); err != nil {
+		t.Fatal(err)
+	}
+	options.ModelPath = modelPath
+	model, err := LoadEmbeddingModel(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer model.Close()
+	info, err := model.Info()
+	if err != nil || !reflect.DeepEqual(info.AvailableLayers, []int{1}) {
+		t.Fatalf("artifact directory name replaced the model's layer contract: %+v, %v", info, err)
+	}
+	result, inferErr := model.Encode("hello", 1, 2)
+	assertEmbedding(t, result, inferErr)
+}
+
+func TestOwnedEmbeddingRejectsUndeclaredPrimaryLayer(t *testing.T) {
+	options := layeredEmbeddingFixture(t)
+	if err := os.Rename(filepath.Join(options.ModelPath, "onnx", "layer-2"), filepath.Join(options.ModelPath, "onnx", "layer-3")); err != nil {
+		t.Fatal(err)
+	}
+	options.ModelFile = filepath.Join("onnx", "layer-3", "model.onnx")
+	if model, err := LoadEmbeddingModel(options); err == nil {
+		_ = model.Close()
+		t.Fatal("explicit primary claimed a layer absent from the artifact's layer contract")
+	} else if !strings.Contains(err.Error(), "primary_layer") {
+		t.Fatalf("wrong failure for undeclared primary layer: %v", err)
 	}
 }
 

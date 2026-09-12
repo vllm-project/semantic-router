@@ -648,25 +648,93 @@ impl MmBertEmbeddingModel {
         Ok(session)
     }
 
+    /// Resolve the selected graph's layer once from the artifact contract.
+    fn primary_graph_layer(
+        model_dir: &Path,
+        selected_path: &Path,
+        canonical_path: &Path,
+        layers: &[usize],
+        full_depth: usize,
+    ) -> UnifiedResult<usize> {
+        let mut selected_layer = None;
+        let canonical_root = std::fs::canonicalize(model_dir)
+            .map_err(|_| errors::file_not_found(&model_dir.display().to_string()))?;
+        // Layer membership belongs to the artifact layout and manifest, not to
+        // one preferred graph filename. Check symlink targets as well so an
+        // alias cannot advertise a different layer from the graph it selects.
+        for (path, root) in [
+            (selected_path, model_dir),
+            (canonical_path, canonical_root.as_path()),
+        ] {
+            let Ok(relative) = path.strip_prefix(root) else {
+                continue;
+            };
+            let parent = relative.parent().unwrap_or(Path::new(""));
+            let directory_layer = if parent.parent() == Some(Path::new("onnx")) {
+                parent
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(|name| name.strip_prefix("layer-"))
+            } else {
+                None
+            };
+            let flat_layer = if parent == Path::new("") || parent == Path::new("onnx") {
+                relative
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(|name| name.strip_prefix("model_layer_"))
+                    .and_then(|name| name.strip_suffix(".onnx"))
+            } else {
+                None
+            };
+            for name in [directory_layer, flat_layer].into_iter().flatten() {
+                let layer = name.parse::<usize>().map_err(|_| {
+                    errors::config_error(
+                        "primary_layer",
+                        "selected graph has an invalid layer name",
+                    )
+                })?;
+                if layer == 0 || !layers.contains(&layer) {
+                    return Err(errors::config_error(
+                        "primary_layer",
+                        "selected graph's layer is absent from the artifact's available_layers",
+                    ));
+                }
+                if selected_layer.is_some_and(|previous| previous != layer) {
+                    return Err(errors::config_error(
+                        "primary_layer",
+                        "selected graph has conflicting layer declarations",
+                    ));
+                }
+                selected_layer = Some(layer);
+            }
+        }
+        Ok(selected_layer.unwrap_or(full_depth))
+    }
+
     /// Load layer-specific ONNX sessions for early exit support.
     ///
-    /// Searches for layer models in multiple locations:
-    /// - model_path/model_layer_{N}.onnx  (legacy flat layout)
-    /// - model_path/onnx/model_layer_{N}.onnx
-    /// - model_path/onnx/layer-{N}/model_fa_fp16.onnx  (HuggingFace FA)
-    /// - model_path/onnx/layer-{N}/model.onnx           (HuggingFace default)
+    /// Searches the legacy flat model_layer_{N}.onnx layouts and
+    /// HuggingFace-style onnx/layer-{N}/ graph directories.
     fn load_layer_sessions<P: AsRef<Path>>(
         model_path: P,
         use_cpu: bool,
         layers: &[usize],
         options: Option<&InstanceOptions>,
         primary_path: &Path,
-        mut primary_layer: usize,
+        full_depth: usize,
     ) -> UnifiedResult<(usize, BTreeMap<usize, Session>)> {
         let mut sessions = BTreeMap::new();
-        let primary_path = std::fs::canonicalize(primary_path)
+        let canonical_primary = std::fs::canonicalize(primary_path)
             .map_err(|_| errors::file_not_found(&primary_path.display().to_string()))?;
         let model_dir = model_path.as_ref();
+        let primary_layer = Self::primary_graph_layer(
+            model_dir,
+            primary_path,
+            &canonical_primary,
+            layers,
+            full_depth,
+        )?;
         let onnx_dir = model_dir.join("onnx");
 
         let has_fa = options.is_none()
@@ -676,6 +744,12 @@ impl MmBertEmbeddingModel {
                 .is_some();
 
         for layer in layers {
+            // The selected primary is the only graph for its layer. An
+            // automatically discovered variant must not replace an explicit
+            // head or allocate a second session for that same layer.
+            if *layer == primary_layer {
+                continue;
+            }
             let layer_filename = format!("model_layer_{}.onnx", layer);
             let hf_layer_dir = onnx_dir.join(format!("layer-{}", layer));
 
@@ -695,9 +769,11 @@ impl MmBertEmbeddingModel {
             if let Some(ref layer_path) = found {
                 let canonical_path = std::fs::canonicalize(layer_path)
                     .map_err(|_| errors::file_not_found(&layer_path.display().to_string()))?;
-                if canonical_path == primary_path {
-                    primary_layer = *layer;
-                    continue;
+                if canonical_path == canonical_primary {
+                    return Err(errors::config_error(
+                        "primary_layer",
+                        "another declared layer aliases the selected primary graph",
+                    ));
                 }
                 println!(
                     "INFO: Loading layer-{} from {}",

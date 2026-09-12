@@ -48,6 +48,13 @@ ORT owned adapter rejects `fp32` as an override: use a native FP32 graph with
 `precision: native`. Candle encoder adapters do not implement a blanket FP16
 conversion by accepting `precision: fp16`.
 
+`vllm-sr serve --platform amd` preserves the semantic embedding catalog's
+`use_cpu` setting and supplies `true` when it is omitted. Other internal
+classifier GPU defaults remain unchanged. To run mmBERT embeddings on
+MIGraphX, select an explicit deployment with a positive input budget as shown
+in [Embeddings](embeddings.md). An explicit `use_cpu: false` without that
+binding still fails preparation; the Router does not retry it on CPU.
+
 The owned ORT path disables CPU fallback for a requested MIGraphX execution
 provider. Missing libraries, incompatible provider options, or unsupported
 execution fail preparation. Provider registration alone does not prove that

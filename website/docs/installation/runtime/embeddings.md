@@ -122,12 +122,15 @@ revision, layer, or provider.
 mmBERT layer/dimension requests use an owned view of the prepared model. The
 layer must actually be loaded and the dimension supported. ORT layer exports
 are discovered from their manifest/graphs; missing requested layers fail
-preparation. Its current layered loader also needs the primary full-depth
-graph in addition to a selected early-exit graph. It downloads external tensors
-from real ONNX references rather than assuming a `.data` filename.
+preparation. Without an explicit graph, the loader selects a primary graph
+from the artifact. An explicit `head` may select an early-exit graph declared
+by the artifact's layer layout and manifest; that graph remains the only
+execution target for its layer. A full-depth primary uses the architecture's
+declared depth. External tensors come from real ONNX references rather than
+an assumed `.data` filename.
 
 Available-layer metadata comes from the native sessions that actually loaded.
-The full-depth graph is loaded once even when it is also a selectable layer.
+The primary graph is loaded once even when it is also a selectable layer.
 Before readiness, the Router executes a warmup for every advertised ORT layer
 and checks its output values and dimension. A failed layer rejects the
 candidate while the previous generation remains available. Cold compilation
@@ -141,13 +144,19 @@ This window API does not enable automatic `input.overflow: window` for a
 classifier that lacks such an adapter.
 
 Owned MIGraphX mmBERT embeddings require an explicit positive
-`input.max_tokens`. Omitting it or setting zero fails preparation. The tensor
+`input.max_tokens` in a deployment selected by the recipe's `embedding`
+binding. Setting only the catalog's `use_cpu: false` does not supply this
+budget. Omitting it or setting zero fails preparation. The tensor
 length is fixed to that budget, within the model's actual capacity; the
 maintained 32K checkpoint permits at most 32768 tokens. Shorter inputs use
 padding with a zero attention mask. Token usage and tokenizer windows still
 describe the real input, and special tokens count toward the budget. This is
 separate from the classification task's 512-token cap. Owned CPU and legacy
 embedding execution retain dynamic tensor lengths.
+
+The AMD `serve` platform default preserves the semantic catalog's `use_cpu`
+setting, using CPU when that setting is omitted. The explicit deployment in
+the example selects MIGraphX independently of this catalog default.
 
 ## Use a remote text provider
 

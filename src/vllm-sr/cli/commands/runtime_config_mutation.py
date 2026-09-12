@@ -88,11 +88,18 @@ DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
 GPU_OVERRIDE_PREVIEW_LIMIT = 8
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
-# Platforms that flip router internal-model `use_cpu` flags to false by default
-# so local signal models run on the platform GPU.
+# Platforms with GPU defaults for router internal models. AMD semantic
+# embeddings retain their setting: MIGraphX mmBERT requires an authored budget.
 GPU_DEFAULT_PLATFORMS = (PLATFORM_AMD, PLATFORM_NVIDIA)
+SEMANTIC_EMBEDDING_USE_CPU_PATH = (
+    "global",
+    "model_catalog",
+    "embeddings",
+    "semantic",
+    "use_cpu",
+)
 GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
-    ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
+    SEMANTIC_EMBEDDING_USE_CPU_PATH,
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "pii", "use_cpu"),
@@ -138,22 +145,30 @@ def _normalize_platform(value: str | None) -> str:
     return str(value).strip().lower()
 
 
+def _preserve_use_cpu_setting(path: str, platform: str) -> bool:
+    return platform == PLATFORM_AMD and path == ".".join(
+        SEMANTIC_EMBEDDING_USE_CPU_PATH
+    )
+
+
 def _set_use_cpu_false(
-    config_node: object, path: str, changed_paths: list[str]
+    config_node: object, path: str, changed_paths: list[str], platform: str
 ) -> None:
     if isinstance(config_node, dict):
         for key, value in config_node.items():
             current_path = f"{path}.{key}" if path else key
+            if _preserve_use_cpu_setting(current_path, platform):
+                continue
             if key == "use_cpu" and value is True:
                 config_node[key] = False
                 changed_paths.append(current_path)
             else:
-                _set_use_cpu_false(value, current_path, changed_paths)
+                _set_use_cpu_false(value, current_path, changed_paths, platform)
         return
 
     if isinstance(config_node, list):
         for index, item in enumerate(config_node):
-            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths)
+            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths, platform)
 
 
 def _ensure_mapping_path(
@@ -192,6 +207,11 @@ def _inject_missing_gpu_defaults(
             continue
 
         leaf_key = use_cpu_path[-1]
+        if _preserve_use_cpu_setting(".".join(use_cpu_path), platform):
+            if leaf_key not in parent:
+                parent[leaf_key] = True
+                changed_paths.append(".".join(use_cpu_path))
+            continue
         existing_value = parent.get(leaf_key)
         if existing_value is False:
             continue
@@ -243,9 +263,11 @@ def apply_platform_gpu_defaults(
     """
     Apply platform-specific GPU defaults.
 
-    For AMD (ROCm) and NVIDIA (CUDA) platforms, rewrite router internal model
-    `use_cpu` flags to false by default so `--platform amd` / `--platform nvidia`
-    run local signal models on the platform GPU. Set
+    AMD (ROCm) and NVIDIA (CUDA) platforms default local signal models to GPU.
+    AMD semantic embeddings retain their authored `use_cpu` value, defaulting
+    to true when absent. MIGraphX mmBERT embeddings require an explicit deployment
+    with an input budget; platform defaults never construct or modify bindings.
+    Set
     VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
     or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off
     to preserve CPU settings when the router does not have dedicated GPU headroom.
@@ -255,7 +277,7 @@ def apply_platform_gpu_defaults(
         return False
 
     changed_paths: list[str] = []
-    _set_use_cpu_false(merged_config, "", changed_paths)
+    _set_use_cpu_false(merged_config, "", changed_paths, resolved_platform)
     _inject_missing_gpu_defaults(merged_config, changed_paths, resolved_platform)
     if not changed_paths:
         log.info(
@@ -268,7 +290,7 @@ def apply_platform_gpu_defaults(
     if len(changed_paths) > GPU_OVERRIDE_PREVIEW_LIMIT:
         preview = f"{preview}, ..."
     log.info(
-        "Platform %s detected: set %d use_cpu flag(s) to false for GPU default (%s)",
+        "Platform %s detected: applied %d internal model use_cpu default(s) (%s)",
         resolved_platform,
         len(changed_paths),
         preview,

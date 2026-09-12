@@ -71,8 +71,7 @@ def test_realize_runtime_config_applies_overrides_without_mutating_source(
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
     assert realized["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     assert (
-        realized["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is False
+        realized["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"] is True
     )
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
@@ -139,9 +138,49 @@ def test_runtime_materialize_module_uses_current_runtime_env(
     realized = yaml.safe_load(target.read_text(encoding="utf-8"))
     assert realized["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     assert (
-        realized["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is False
+        realized["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"] is True
     )
+
+
+def test_runtime_materialize_keeps_authored_gpu_embedding_budget(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setenv("DASHBOARD_PLATFORM", "amd")
+    monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
+    monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
+    source = tmp_path / "raw.yaml"
+    _write_source(source)
+    document = yaml.safe_load(source.read_text())
+    deployments = {
+        "gpu-embedding": {
+            "artifact": "models/mmbert-embedding",
+            "provider": "ort",
+            "device": "migraphx:0",
+            "precision": "native",
+            "input": {"max_tokens": 128, "overflow": "reject"},
+        }
+    }
+    bindings = {
+        "embedding": {
+            "deployment": "gpu-embedding",
+            "contract": "embedding.v1",
+            "adapter": "mmbert",
+        }
+    }
+    document["global"]["model_catalog"]["deployments"] = deployments
+    document["routing"]["model_bindings"] = bindings
+    source.write_text(yaml.safe_dump(document), encoding="utf-8")
+    original = source.read_bytes()
+    target = tmp_path / "state" / "runtime-config.yaml"
+
+    assert main(["--source", str(source), "--target", str(target)]) == 0
+
+    realized = yaml.safe_load(target.read_text())
+    catalog = realized["global"]["model_catalog"]
+    assert catalog["embeddings"]["semantic"]["use_cpu"] is True
+    assert catalog["deployments"] == deployments
+    assert realized["routing"]["model_bindings"] == bindings
+    assert source.read_bytes() == original
 
 
 @pytest.mark.parametrize(
