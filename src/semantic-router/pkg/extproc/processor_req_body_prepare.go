@@ -103,6 +103,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightModel = selectedModel
 	ctx.InflightToken = inflight.Begin(selectedModel)
+	bindHistoryResetPolicy(ctx)
 	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
 		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0

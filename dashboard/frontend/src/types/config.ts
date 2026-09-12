@@ -374,6 +374,7 @@ export interface PluginConfig {
     | 'memory'
     | 'system_prompt'
     | 'header_mutation'
+    | 'history_reset'
     | 'hallucination'
     | 'router_replay'
     | 'rag'

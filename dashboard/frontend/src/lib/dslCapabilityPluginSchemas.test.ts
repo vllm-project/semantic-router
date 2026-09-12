@@ -18,6 +18,19 @@ describe('capability plugin field schemas', () => {
     expect(fields?.find((field) => field.key === 'targets')?.type).toBe('object')
   })
 
+  it('exposes the history reset contract', () => {
+    const fields = resolveCapabilityPluginFieldSchema('history_reset')
+    expect(fields?.map((field) => field.key)).toEqual([
+      'enabled',
+      'trigger',
+      'scope',
+      'failure_mode',
+      'limits',
+      'recovery',
+    ])
+    expect(fields?.find((field) => field.key === 'trigger')?.type).toBe('object')
+  })
+
   it('exposes the shadow dispatch bounds', () => {
     const fields = resolveCapabilityPluginFieldSchema('shadow_dispatch')
     expect(fields?.map((field) => field.key)).toEqual([
