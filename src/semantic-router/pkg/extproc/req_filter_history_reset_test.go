@@ -64,7 +64,7 @@ func TestHistoryResetBindingIsInertWithoutAnEnabledPolicy(t *testing.T) {
 				t.Fatal("an inactive policy must not disturb caching")
 			}
 
-			prepareContextHistorySteps(ctx, request)
+			(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
 			if len(ctx.ContextHistorySteps) != 0 || ctx.HistoryResetAction != nil {
 				t.Fatal("no reset step should be registered")
 			}
@@ -95,8 +95,8 @@ func TestHistoryResetRegistersOneStepBeforeTheSharedStage(t *testing.T) {
 	request := resetConversation()
 	ctx := enabledResetContext(t, request)
 
-	prepareContextHistorySteps(ctx, request)
-	prepareContextHistorySteps(ctx, request)
+	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
+	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
 	if len(ctx.ContextHistorySteps) != 1 {
 		t.Fatalf("expected exactly one registration, got %d", len(ctx.ContextHistorySteps))
 	}
@@ -111,7 +111,7 @@ func TestHistoryResetPreservesHistoryWhenNoTriggerResultExists(t *testing.T) {
 	request := resetConversation()
 	ctx := enabledResetContext(t, request)
 	captureOriginalContextHistory(ctx)
-	prepareContextHistorySteps(ctx, request)
+	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
 
 	if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err != nil {
 		t.Fatalf("fail-open evaluation must not reject the request: %v", err)
@@ -133,13 +133,14 @@ func TestHistoryResetPreservesHistoryWhenNoTriggerResultExists(t *testing.T) {
 func TestHistoryResetRemovesEligibleTurnsOnAcceptedChange(t *testing.T) {
 	request := resetConversation()
 	ctx := enabledResetContext(t, request)
+	captureOriginalContextHistory(ctx)
 	ctx.HistoryResetTrigger = &historyreset.TriggerResult{
 		Class:      historyreset.TriggerChange,
 		Confidence: 0.95,
 		Signal:     "topic_boundary",
+		Binding:    historyResetEvidenceBinding(ctx),
 	}
-	captureOriginalContextHistory(ctx)
-	prepareContextHistorySteps(ctx, request)
+	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
 
 	if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err != nil {
 		t.Fatalf("expected the plan to succeed: %v", err)
@@ -172,13 +173,14 @@ func TestHistoryResetRefusesUnrecoverableRemoval(t *testing.T) {
 		}),
 	}
 	bindHistoryResetPolicy(ctx)
+	captureOriginalContextHistory(ctx)
 	ctx.HistoryResetTrigger = &historyreset.TriggerResult{
 		Class:      historyreset.TriggerChange,
 		Confidence: 1,
 		Signal:     "topic_boundary",
+		Binding:    historyResetEvidenceBinding(ctx),
 	}
-	captureOriginalContextHistory(ctx)
-	prepareContextHistorySteps(ctx, request)
+	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
 
 	if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err != nil {
 		t.Fatalf("fail-open must preserve the request: %v", err)
@@ -209,7 +211,7 @@ func TestHistoryResetFailClosedRejectsBeforeDispatch(t *testing.T) {
 	}
 	bindHistoryResetPolicy(ctx)
 	captureOriginalContextHistory(ctx)
-	prepareContextHistorySteps(ctx, request)
+	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
 
 	if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err == nil {
 		t.Fatal("expected the plan to be rejected")
@@ -228,14 +230,15 @@ func TestHistoryResetFailClosedRejectsBeforeDispatch(t *testing.T) {
 func TestHistoryResetReplayDiagnosticsCarryNoContent(t *testing.T) {
 	request := resetConversation()
 	ctx := enabledResetContext(t, request)
+	captureOriginalContextHistory(ctx)
 	ctx.HistoryResetTrigger = &historyreset.TriggerResult{
 		Class:      historyreset.TriggerChange,
 		Confidence: 0.95,
 		Signal:     "topic_boundary",
 		Version:    "v1",
+		Binding:    historyResetEvidenceBinding(ctx),
 	}
-	captureOriginalContextHistory(ctx)
-	prepareContextHistorySteps(ctx, request)
+	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
 	if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err != nil {
 		t.Fatalf("expected the plan to succeed: %v", err)
 	}

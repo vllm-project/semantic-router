@@ -343,7 +343,11 @@ type RequestContext struct {
 	MemoryMessageIndexes map[int]struct{}
 
 	ContextCompressionTargetTokens *int
+	// ContextCompressionRecoveryKeys holds every recovery key issued for this
+	// request, by any context action, and ContextRecoveryToolOwned records
+	// that the router installed the reserved retrieval tool itself.
 	ContextCompressionRecoveryKeys []string
+	ContextRecoveryToolOwned       bool
 	ContextCompressionStrategy     string
 	ContextCompressionBudgetMode   string
 	ContextCompressionTokenSource  string

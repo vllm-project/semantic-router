@@ -39,6 +39,9 @@ func (r *OpenAIRouter) applyContextTransformationPlan(ctx *RequestContext, reque
 	if err != nil {
 		return err
 	}
+	if err := finalizeHistoryResetRecovery(ctx, request); err != nil {
+		return err
+	}
 	if err := r.applySemanticContextCompression(ctx, request); err != nil {
 		return err
 	}

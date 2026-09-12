@@ -420,6 +420,9 @@ func validateOneDecisionPluginContracts(
 			return err
 		}
 	}
+	if err := validateDecisionContextRecoveryAgreement(decision); err != nil {
+		return err
+	}
 	if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
 		if err := toolsCfg.Validate(); err != nil {
 			return fmt.Errorf("decision '%s': %w", decision.Name, err)

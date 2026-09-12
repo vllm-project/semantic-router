@@ -16,6 +16,9 @@ const (
 	TriggerChange       TriggerClass = "change"
 	TriggerContinuation TriggerClass = "continuation"
 	TriggerUnknown      TriggerClass = "unknown"
+	// TriggerConflicting reports that the producer saw irreconcilable
+	// evidence. It is never treated as a weak change.
+	TriggerConflicting TriggerClass = "conflicting"
 )
 
 // TriggerResult carries one evaluated topic-continuity result. Signal names
@@ -27,6 +30,10 @@ type TriggerResult struct {
 	Signal     string
 	Version    string
 	Fallback   bool
+	// Binding ties the result to the request's resolved original history and
+	// live turn. A timestamp cannot establish that evidence describes the
+	// request being changed, so freshness is checked through this identity.
+	Binding string
 }
 
 // Policy is the resolved, validated configuration the action executes with.
@@ -39,6 +46,12 @@ type Policy struct {
 	MaxHistoryTurns int
 	MaxHistoryBytes int
 	FailClosed      bool
+	// Binding is this request's original-history and live-turn identity.
+	// Evidence that does not carry the same binding describes some other
+	// request or an older view of this one, and cannot authorize removal.
+	Binding string
+	// MaxRecoveryBytes bounds the payload a single request may persist.
+	MaxRecoveryBytes int
 }
 
 // Outcome describes what the action did, independently of the shared
@@ -63,7 +76,13 @@ const (
 	ReasonEvidenceFallback           = "evidence_fallback"
 	ReasonEvidenceWrongSignal        = "evidence_wrong_signal"
 	ReasonEvidenceUnsupportedVersion = "evidence_unsupported_version"
+	ReasonEvidenceStale              = "evidence_stale"
+	ReasonEvidenceConflicting        = "evidence_conflicting"
 	ReasonHistoryLimitExceeded       = "history_limit_exceeded"
+	ReasonRecoveryWriteFailed        = "recovery_write_failed"
+	ReasonRecoveryLimitExceeded      = "recovery_limit_exceeded"
+	ReasonStreamingUnsupported       = "streaming_recovery_unsupported"
+	ReasonReservedToolConflict       = "reserved_tool_conflict"
 	ReasonCancelled                  = "cancelled"
 	ReasonUnsupportedRepresentation  = "unsupported_request_representation"
 	ReasonRecoveryUnavailable        = "recovery_unavailable"
@@ -83,7 +102,17 @@ type Diagnostics struct {
 	ProtectedMessages int
 	RemovedMessages   int
 	RemovedTurns      int
+	RecoveryStatus    string
+	RecoveryEntries   int
 }
+
+// Recovery status values. They describe what the action did about
+// recoverability, never where the payload went or under which key.
+const (
+	RecoveryStored      = "stored"
+	RecoveryNotRequired = "not_required"
+	RecoveryFailed      = "failed"
+)
 
 // skipped builds a no-removal diagnostic carrying the terminal reason.
 func skipped(trigger TriggerResult, reason string) Diagnostics {
@@ -106,6 +135,10 @@ func (p Policy) authorize(trigger TriggerResult) string {
 		return ReasonEvidenceWrongSignal
 	case !p.supportsVersion(trigger.Version):
 		return ReasonEvidenceUnsupportedVersion
+	case p.Binding != "" && trigger.Binding != p.Binding:
+		return ReasonEvidenceStale
+	case trigger.Class == TriggerConflicting:
+		return ReasonEvidenceConflicting
 	case trigger.Fallback:
 		return ReasonEvidenceFallback
 	case trigger.Class == TriggerContinuation:

@@ -305,3 +305,45 @@ func TestGetHistoryResetConfigReadsTheDecisionPlugin(t *testing.T) {
 		t.Fatal("a decision without the plugin must report no policy")
 	}
 }
+
+// One request-level recovery store serves every context action, so a decision
+// that asks for two different stores is rejected instead of silently losing
+// one action's content.
+func TestDecisionRejectsDisagreeingContextRecoveryStores(t *testing.T) {
+	decision := &Decision{
+		Name: "context",
+		Plugins: []DecisionPlugin{
+			{
+				Type: DecisionPluginContextCompression,
+				Configuration: MustStructuredPayload(map[string]interface{}{
+					"enabled":  true,
+					"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
+				}),
+			},
+			{
+				Type: DecisionPluginHistoryReset,
+				Configuration: MustStructuredPayload(map[string]interface{}{
+					"enabled":  false,
+					"recovery": map[string]interface{}{"enabled": true, "store": "valkey"},
+				}),
+			},
+		},
+	}
+	err := validateDecisionContextRecoveryAgreement(decision)
+	if err == nil {
+		t.Fatal("disagreeing recovery stores were accepted")
+	}
+	if !strings.Contains(err.Error(), "must match") {
+		t.Fatalf("unexpected error %v", err)
+	}
+
+	matching := decision.Plugins[1].Configuration
+	decision.Plugins[1].Configuration = MustStructuredPayload(map[string]interface{}{
+		"enabled":  false,
+		"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
+	})
+	if err = validateDecisionContextRecoveryAgreement(decision); err != nil {
+		t.Fatalf("matching stores were rejected: %v", err)
+	}
+	decision.Plugins[1].Configuration = matching
+}

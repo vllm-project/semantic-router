@@ -6,6 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
@@ -33,22 +34,34 @@ func bindHistoryResetPolicy(ctx *RequestContext) {
 // request. It runs after RAG and Memory enrichment and immediately before the
 // shared context stage, so the policy sees the same messages the executor will
 // transform. It must not construct the request IR; the shared stage owns that.
-func prepareContextHistorySteps(ctx *RequestContext, request *llmprotocol.Request) {
+func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *llmprotocol.Request) {
 	if ctx == nil || !ctx.HistoryResetPolicy.IsEnabled() || ctx.HistoryResetAction != nil {
 		return
 	}
+	blocked := historyResetBlockedReason(ctx, request)
+	var writer historyreset.RecoveryWriter
+	var detached map[int]llmprotocol.Message
+	if blocked == "" {
+		writer, detached, blocked = r.historyResetRecovery(ctx, request)
+	}
 	action := historyreset.NewAction(
-		historyResetPolicy(ctx.HistoryResetPolicy),
+		historyResetPolicy(ctx, ctx.HistoryResetPolicy),
 		historyResetTrigger(ctx),
-		historyResetBlockedReason(ctx, request),
+		blocked,
 	)
+	if writer != nil {
+		action = action.WithRecovery(writer, detached)
+	}
 	ctx.HistoryResetAction = action
 	ctx.ContextHistorySteps = append(ctx.ContextHistorySteps, action.Step())
 }
 
 // historyResetPolicy translates validated configuration into the policy the
 // pure action executes with. Configuration cannot widen shared eligibility.
-func historyResetPolicy(configured *config.HistoryResetPluginConfig) historyreset.Policy {
+func historyResetPolicy(
+	ctx *RequestContext,
+	configured *config.HistoryResetPluginConfig,
+) historyreset.Policy {
 	limits := configured.EffectiveLimits()
 	confidence, _ := configured.EffectiveMinConfidence()
 	policy := historyreset.Policy{
@@ -56,9 +69,13 @@ func historyResetPolicy(configured *config.HistoryResetPluginConfig) historyrese
 		MaxHistoryTurns: limits.MaxHistoryTurns,
 		MaxHistoryBytes: limits.MaxHistoryBytes,
 		FailClosed:      configured.EffectiveFailureMode() == config.HistoryResetFailureClosed,
+		Binding:         historyResetEvidenceBinding(ctx),
 	}
 	if configured.Trigger != nil {
 		policy.Signal = configured.Trigger.Signal
+	}
+	if configured.Recovery != nil {
+		policy.MaxRecoveryBytes = configured.Recovery.MaxBytesPerRequest
 	}
 	return policy
 }
@@ -75,14 +92,11 @@ func historyResetTrigger(ctx *RequestContext) historyreset.TriggerResult {
 }
 
 // historyResetBlockedReason reports a terminal condition established before
-// planning. Reset is semantic-only, and a policy that requires recovery cannot
-// remove history until recoverable storage is actually available.
+// planning. Reset is semantic-only; recoverability is resolved separately
+// because it depends on runtime stores rather than the request shape.
 func historyResetBlockedReason(ctx *RequestContext, request *llmprotocol.Request) string {
 	if request == nil || ctx.SemanticRequest == nil {
 		return historyreset.ReasonUnsupportedRepresentation
-	}
-	if ctx.HistoryResetPolicy.RequiresRecovery() {
-		return historyreset.ReasonRecoveryUnavailable
 	}
 	return ""
 }
@@ -97,6 +111,14 @@ func finalizeHistoryResetDiagnostics(ctx *RequestContext, ir *contextcompression
 	}
 	diagnostics := ctx.HistoryResetAction.Reconcile(ir.Transformations.Receipts())
 	ctx.HistoryResetDiagnostics = &diagnostics
+	metrics.RecordHistoryResetEvaluation(
+		ctx.VSRSelectedDecisionName,
+		string(diagnostics.Outcome),
+		diagnostics.Reason,
+		diagnostics.RemovedTurns,
+		diagnostics.RemovedMessages,
+	)
+	metrics.RecordHistoryResetRecovery(diagnostics.RecoveryStatus)
 	logging.ComponentEvent("extproc", "history_reset_evaluated", map[string]interface{}{
 		"request_id":         ctx.RequestID,
 		"signal":             diagnostics.Signal,
@@ -130,4 +152,27 @@ func historyResetReplayDiagnostics(ctx *RequestContext) *store.HistoryResetDiagn
 		RemovedMessages:   diagnostics.RemovedMessages,
 		RemovedTurns:      diagnostics.RemovedTurns,
 	}
+}
+
+// contextTransformationFailure maps a fail-closed context stage onto the
+// response the client receives. A policy that could not obtain its evidence or
+// its recovery store is a temporary service condition, so it reports 503;
+// anything else keeps the existing internal-failure mapping.
+func contextTransformationFailure(ctx *RequestContext) (int, string) {
+	if ctx == nil || ctx.HistoryResetDiagnostics == nil ||
+		ctx.HistoryResetDiagnostics.Outcome != historyreset.OutcomeFailed {
+		return 500, "Context compression failed under fail_closed policy"
+	}
+	switch ctx.HistoryResetDiagnostics.Reason {
+	case historyreset.ReasonRecoveryUnavailable,
+		historyreset.ReasonRecoveryWriteFailed,
+		historyreset.ReasonStreamingUnsupported,
+		historyreset.ReasonReservedToolConflict,
+		historyreset.ReasonEvidenceMissing,
+		historyreset.ReasonEvidenceUnknown,
+		historyreset.ReasonEvidenceStale,
+		historyreset.ReasonEvidenceConflicting:
+		return 503, "History reset could not be evaluated under fail_closed policy"
+	}
+	return 500, "Context transformation failed under fail_closed policy"
 }
