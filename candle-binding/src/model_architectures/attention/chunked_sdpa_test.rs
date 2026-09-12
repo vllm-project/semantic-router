@@ -486,3 +486,90 @@ fn test_chunked_sdpa_rejects_a_block_with_no_keys() {
     };
     assert!(chunked_sdpa(&q, &k, &k, None, &cfg).is_err());
 }
+
+#[test]
+fn test_chunked_sdpa_key_blocks_match_dense() {
+    let device = Device::Cpu;
+    let heads = 4;
+    let head_dim = 8;
+    let scale = (head_dim as f64).powf(-0.5);
+    let seq_len = 40;
+
+    let mut mask_vec = vec![1u32; seq_len];
+    for m in mask_vec.iter_mut().skip(seq_len - 7) {
+        *m = 0;
+    }
+    let raw_mask = Tensor::from_vec(mask_vec, (1, seq_len), &device).unwrap();
+    let pad = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+    let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
+
+    for window in [None, Some(4usize)] {
+        for causal in [false, true] {
+            for pad_mask in [None, Some(&pad)] {
+                let reference = dense_sdpa_reference(&q, &k, &v, pad_mask, window, causal, scale);
+                for &block in &[3usize, 8, 512] {
+                    for &key_block in &[0usize, 1, 3, 5, 16, 512] {
+                        let cfg = ChunkedSdpaConfig {
+                            block_size: block,
+                            window,
+                            causal,
+                            scale,
+                            q_offset: 0,
+                        };
+                        let out =
+                            chunked_sdpa_with_key_block(&q, &k, &v, pad_mask, &cfg, key_block)
+                                .unwrap();
+                        let diff = max_abs_diff(&out, &reference);
+                        assert!(
+                            diff < 1e-4,
+                            "window={:?} causal={} pad={} block={} key_block={}: max|Δ|={}",
+                            window,
+                            causal,
+                            pad_mask.is_some(),
+                            block,
+                            key_block,
+                            diff
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_chunked_sdpa_key_blocks_match_dense_with_decode_offset() {
+    let device = Device::Cpu;
+    let heads = 4;
+    let head_dim = 8;
+    let scale = (head_dim as f64).powf(-0.5);
+    for window in [None, Some(3usize)] {
+        for &(offset, q_len) in &[(0usize, 9usize), (5, 1), (5, 4), (20, 3), (17, 8)] {
+            let k_len = offset + q_len;
+            let q = Tensor::randn(0f32, 1f32, (1, heads, q_len, head_dim), &device).unwrap();
+            let k = Tensor::randn(0f32, 1f32, (1, heads, k_len, head_dim), &device).unwrap();
+            let v = Tensor::randn(0f32, 1f32, (1, heads, k_len, head_dim), &device).unwrap();
+            let reference = dense_offset_reference(&q, &k, &v, offset, window, true, scale);
+            for &key_block in &[1usize, 2, 7] {
+                let cfg = ChunkedSdpaConfig {
+                    block_size: 2,
+                    window,
+                    causal: true,
+                    scale,
+                    q_offset: offset,
+                };
+                let out = chunked_sdpa_with_key_block(&q, &k, &v, None, &cfg, key_block).unwrap();
+                let diff = max_abs_diff(&out, &reference);
+                assert!(
+                    diff < 1e-4,
+                    "window={:?} offset={} q_len={} key_block={}: max|Δ|={}",
+                    window,
+                    offset,
+                    q_len,
+                    key_block,
+                    diff
+                );
+            }
+        }
+    }
+}
