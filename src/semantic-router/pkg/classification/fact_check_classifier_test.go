@@ -46,6 +46,11 @@ func TestFactCheckClassifier_RequiresModelID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err == nil {
@@ -67,6 +72,11 @@ func TestFactCheckClassifier_EmptyText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -99,6 +109,11 @@ func TestFactCheckClassifier_Initialize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -126,6 +141,11 @@ func TestFactCheckClassifier_FactCheckNeeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -167,6 +187,11 @@ func TestFactCheckClassifier_NoFactCheckNeeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -239,6 +264,11 @@ func TestFactCheckClassifier_OpenAIPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -280,6 +310,11 @@ func TestFactCheckClassifier_Threshold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
