@@ -47,6 +47,7 @@ func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev
 				Key:      headerPair.Name,
 				RawValue: []byte(headerPair.Value),
 			},
+			AppendAction: corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 		})
 	}
 

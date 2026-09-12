@@ -18,17 +18,53 @@ use ort::value::Tensor;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tokenizers::{Tokenizer, TruncationDirection, TruncationParams, TruncationStrategy};
+use tokenizers::{
+    PostProcessor, Tokenizer, TruncationDirection, TruncationParams, TruncationStrategy,
+};
 
-/// Maximum sequence length for classification inference.
-///
-/// ModernBERT-32k has global attention layers (every 3 layers = 7–8 out of 22)
-/// that scale quadratically with sequence length. At ~4000 tokens the global-attention
-/// layers require roughly 6–8 GB of activation memory per batch item, reliably
-/// triggering an OOM kill with no container logs. Classification tasks (intent,
-/// jailbreak, PII) only need the first few hundred tokens to produce a reliable
-/// signal, so we cap at 512 — matching the `max_length` field in tokenizer_config.json.
+/// Conservative default for existing callers. Longer contexts are an explicit
+/// deployment choice: global attention retains quadratic compute, and memory
+/// use depends on the selected ONNX graph and execution provider.
 const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
+
+fn classifier_context_length(capacity: usize, requested: Option<usize>) -> UnifiedResult<usize> {
+    let limit = requested.unwrap_or(MAX_CLASSIFICATION_SEQ_LEN.min(capacity));
+    if capacity == 0 || limit == 0 || limit > capacity {
+        return Err(errors::config_error(
+            "max_sequence_length",
+            &format!("requested {limit} tokens; model capacity is {capacity}"),
+        ));
+    }
+    Ok(limit)
+}
+
+fn configure_classifier_tokenizer(tokenizer: &mut Tokenizer, limit: usize) -> UnifiedResult<()> {
+    let special_tokens = tokenizer
+        .get_post_processor()
+        .map_or(0, |processor| processor.added_tokens(false));
+    // tokenizers subtracts this count before validating truncation parameters.
+    // Reject undersized budgets before that usize subtraction can underflow.
+    if limit < special_tokens {
+        return Err(errors::config_error(
+            "max_sequence_length",
+            &format!(
+                "requested {limit} tokens; tokenizer requires {special_tokens} special tokens"
+            ),
+        ));
+    }
+    // Batch padding is performed below, using the model's pad token and each
+    // encoding's mask. Artifact-level fixed padding must not expand this budget.
+    tokenizer.with_padding(None);
+    tokenizer
+        .with_truncation(Some(TruncationParams {
+            max_length: limit,
+            strategy: TruncationStrategy::LongestFirst,
+            direction: TruncationDirection::Right,
+            stride: 0,
+        }))
+        .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+    Ok(())
+}
 
 // ============================================================================
 // Classification Types
@@ -143,7 +179,8 @@ impl MmBertClassifierConfig {
             num_attention_heads: config_json["num_attention_heads"].as_u64().unwrap_or(12) as usize,
             max_position_embeddings: config_json["max_position_embeddings"]
                 .as_u64()
-                .unwrap_or(32768) as usize,
+                .unwrap_or(MAX_CLASSIFICATION_SEQ_LEN as u64)
+                as usize,
             num_labels,
             id2label,
             label2id,
@@ -195,6 +232,7 @@ pub struct MmBertSequenceClassifier {
     tokenizer: Arc<Tokenizer>,
     config: MmBertClassifierConfig,
     model_path: String,
+    max_sequence_length: usize,
 }
 
 impl MmBertSequenceClassifier {
@@ -203,10 +241,31 @@ impl MmBertSequenceClassifier {
         model_path: P,
         provider: ClassifierExecutionProvider,
     ) -> UnifiedResult<Self> {
+        Self::load_with_context(model_path, provider, None)
+    }
+
+    /// Load with an explicit input budget, including special tokens. The graph
+    /// must support this length; callers must validate its memory and latency on
+    /// their execution provider before choosing a larger deployment budget.
+    pub fn load_with_max_sequence_length<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+        max_sequence_length: usize,
+    ) -> UnifiedResult<Self> {
+        Self::load_with_context(model_path, provider, Some(max_sequence_length))
+    }
+
+    fn load_with_context<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+        requested: Option<usize>,
+    ) -> UnifiedResult<Self> {
         let model_path_str = model_path.as_ref().display().to_string();
 
         // Load configuration
         let config = MmBertClassifierConfig::from_pretrained(&model_path)?;
+        let max_sequence_length =
+            classifier_context_length(config.max_position_embeddings, requested)?;
 
         // Load tokenizer
         let tokenizer_path = model_path.as_ref().join("tokenizer.json");
@@ -219,18 +278,7 @@ impl MmBertSequenceClassifier {
         let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        // Apply truncation at load time so encode_batch never produces sequences
-        // longer than MAX_CLASSIFICATION_SEQ_LEN. The tokenizer.json loaded above
-        // has no truncation set (tokenizer_config.json max_length=512 is Python-side
-        // metadata that the Rust tokenizers crate does not apply automatically).
-        tokenizer
-            .with_truncation(Some(TruncationParams {
-                max_length: MAX_CLASSIFICATION_SEQ_LEN,
-                strategy: TruncationStrategy::LongestFirst,
-                direction: TruncationDirection::Right,
-                stride: 0,
-            }))
-            .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        configure_classifier_tokenizer(&mut tokenizer, max_sequence_length)?;
 
         // Find ONNX model candidates and initialize with fallback.
         let onnx_candidates = Self::find_onnx_models(&model_path, provider)?;
@@ -246,6 +294,7 @@ impl MmBertSequenceClassifier {
             tokenizer: Arc::new(tokenizer),
             config,
             model_path: model_path_str,
+            max_sequence_length,
         })
     }
 
@@ -486,10 +535,7 @@ impl MmBertSequenceClassifier {
                                 return Ok(session);
                             }
                             Err(e) => {
-                                println!(
-                                    "WARNING: CUDA EP failed: {}, falling back to CPU",
-                                    e
-                                );
+                                println!("WARNING: CUDA EP failed: {}, falling back to CPU", e);
                             }
                         }
                     }
@@ -590,14 +636,11 @@ impl MmBertSequenceClassifier {
             .encode_batch(texts.to_vec(), true)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        // Find max sequence length; apply both the model's architectural limit and
-        // the classification safety cap. The tokenizer already enforces
-        // MAX_CLASSIFICATION_SEQ_LEN via truncation, but this second guard ensures
-        // correctness even if the tokenizer is replaced or called without truncation.
+        // The tokenizer includes special tokens within the validated budget.
         let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
         let max_len = max_len
             .min(self.config.max_position_embeddings)
-            .min(MAX_CLASSIFICATION_SEQ_LEN);
+            .min(self.max_sequence_length);
 
         // Prepare input tensors
         let batch_size = texts.len();
@@ -635,6 +678,7 @@ impl MmBertSequenceClassifier {
 
         // Extract logits (inline to avoid borrow issues)
         let logits = extract_logits_from_outputs(&outputs)?;
+        validate_classifier_logits(&logits, batch_size, self.config.num_labels)?;
 
         // Convert to results
         let results = logits_to_classification_results(&logits, &self.config);
@@ -645,6 +689,11 @@ impl MmBertSequenceClassifier {
     /// Get model configuration
     pub fn config(&self) -> &MmBertClassifierConfig {
         &self.config
+    }
+
+    /// Effective input budget, including special tokens.
+    pub fn max_sequence_length(&self) -> usize {
+        self.max_sequence_length
     }
 
     /// Get model info string
@@ -661,6 +710,29 @@ impl MmBertSequenceClassifier {
 // ============================================================================
 // Helper Functions (standalone to avoid borrow issues)
 // ============================================================================
+
+fn validate_classifier_logits(
+    logits: &Array2<f32>,
+    rows: usize,
+    labels: usize,
+) -> UnifiedResult<()> {
+    if logits.dim() != (rows, labels) || rows == 0 || labels == 0 {
+        return Err(errors::inference_error(
+            "validate_logits",
+            &format!(
+                "expected logits shape ({rows}, {labels}), got {:?}; check the exported model task",
+                logits.dim()
+            ),
+        ));
+    }
+    if logits.iter().any(|value| !value.is_finite()) {
+        return Err(errors::inference_error(
+            "validate_logits",
+            "model produced non-finite logits; check graph precision and input context length",
+        ));
+    }
+    Ok(())
+}
 
 /// Extract logits from model output
 fn extract_logits_from_outputs(outputs: &SessionOutputs<'_>) -> UnifiedResult<Array2<f32>> {
@@ -901,6 +973,7 @@ pub struct MmBertTokenClassifier {
     tokenizer: Arc<Tokenizer>,
     config: MmBertClassifierConfig,
     model_path: String,
+    max_sequence_length: usize,
 }
 
 impl MmBertTokenClassifier {
@@ -909,9 +982,28 @@ impl MmBertTokenClassifier {
         model_path: P,
         provider: ClassifierExecutionProvider,
     ) -> UnifiedResult<Self> {
+        Self::load_with_context(model_path, provider, None)
+    }
+
+    /// Load a token classifier with a validated, explicit input budget.
+    pub fn load_with_max_sequence_length<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+        max_sequence_length: usize,
+    ) -> UnifiedResult<Self> {
+        Self::load_with_context(model_path, provider, Some(max_sequence_length))
+    }
+
+    fn load_with_context<P: AsRef<Path>>(
+        model_path: P,
+        provider: ClassifierExecutionProvider,
+        requested: Option<usize>,
+    ) -> UnifiedResult<Self> {
         let model_path_str = model_path.as_ref().display().to_string();
 
         let config = MmBertClassifierConfig::from_pretrained(&model_path)?;
+        let max_sequence_length =
+            classifier_context_length(config.max_position_embeddings, requested)?;
 
         let tokenizer_path = model_path.as_ref().join("tokenizer.json");
         if !tokenizer_path.exists() {
@@ -923,14 +1015,7 @@ impl MmBertTokenClassifier {
         let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        tokenizer
-            .with_truncation(Some(TruncationParams {
-                max_length: MAX_CLASSIFICATION_SEQ_LEN,
-                strategy: TruncationStrategy::LongestFirst,
-                direction: TruncationDirection::Right,
-                stride: 0,
-            }))
-            .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        configure_classifier_tokenizer(&mut tokenizer, max_sequence_length)?;
 
         let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path, provider)?;
         let (session, onnx_path) = MmBertSequenceClassifier::create_session_with_fallback(
@@ -948,6 +1033,7 @@ impl MmBertTokenClassifier {
             tokenizer: Arc::new(tokenizer),
             config,
             model_path: model_path_str,
+            max_sequence_length,
         })
     }
 
@@ -962,7 +1048,7 @@ impl MmBertTokenClassifier {
         let seq_len = encoding
             .len()
             .min(self.config.max_position_embeddings)
-            .min(MAX_CLASSIFICATION_SEQ_LEN);
+            .min(self.max_sequence_length);
 
         // Prepare inputs
         let mut input_ids = vec![self.config.pad_token_id as i64; seq_len];
@@ -995,6 +1081,9 @@ impl MmBertTokenClassifier {
 
         // Extract token logits [1, seq_len, num_labels]
         let token_logits = extract_token_logits_from_outputs(&outputs)?;
+        // A sequence-classification export can have the same label count but
+        // only one row. It must not silently become an empty/successful PII scan.
+        validate_classifier_logits(&token_logits, seq_len, self.config.num_labels)?;
 
         // Convert to entities using BIO scheme
         let entities = bio_decode_entities(text, &encoding, &token_logits, &self.config)?;
@@ -1009,6 +1098,11 @@ impl MmBertTokenClassifier {
             self.model_path, self.config.num_labels
         )
     }
+
+    /// Effective input budget, including special tokens.
+    pub fn max_sequence_length(&self) -> usize {
+        self.max_sequence_length
+    }
 }
 
 /// Decode BIO tags to entities (standalone function)
@@ -1019,7 +1113,27 @@ fn bio_decode_entities(
     config: &MmBertClassifierConfig,
 ) -> UnifiedResult<Vec<DetectedEntity>> {
     let mut entities = Vec::new();
-    let mut current_entity: Option<(String, usize, usize, f32)> = None;
+    // Keep the confidence sum and token count so every token has equal weight.
+    let mut current_entity: Option<(String, usize, usize, f32, usize)> = None;
+    let finish_entity =
+        |(entity_type, start, end, confidence_sum, count): (String, usize, usize, f32, usize)| {
+            text.get(start..end).and_then(|entity_text| {
+                let trimmed = entity_text.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                // Token offsets may include surrounding whitespace. Keep the
+                // public value and its UTF-8 byte offsets on the same span.
+                let start = start + entity_text.len() - entity_text.trim_start().len();
+                Some(DetectedEntity {
+                    text: trimmed.to_string(),
+                    entity_type,
+                    start,
+                    end: start + trimmed.len(),
+                    confidence: confidence_sum / count as f32,
+                })
+            })
+        };
 
     let offsets = encoding.get_offsets();
 
@@ -1050,65 +1164,39 @@ fn bio_decode_entities(
 
         let label = config.get_label(label_id as i32);
 
-        // Parse BIO tag
-        if let Some(stripped) = label.strip_prefix("B-") {
-            // Save current entity if any
-            if let Some((entity_type, ent_start, ent_end, ent_conf)) = current_entity.take() {
-                if ent_start < text.len() && ent_end <= text.len() {
-                    entities.push(DetectedEntity {
-                        text: text[ent_start..ent_end].to_string(),
-                        entity_type,
-                        start: ent_start,
-                        end: ent_end,
-                        confidence: ent_conf,
-                    });
-                }
-            }
+        let tag = label
+            .strip_prefix("B-")
+            .map(|entity_type| (entity_type, false))
+            .or_else(|| {
+                label
+                    .strip_prefix("I-")
+                    .map(|entity_type| (entity_type, true))
+            });
 
-            // Start new entity
-            let entity_type = stripped.to_string();
-            current_entity = Some((entity_type, start, end, confidence));
-        } else if let Some(stripped) = label.strip_prefix("I-") {
-            // Continue current entity
-            if let Some((ref entity_type, ent_start, _, ref mut ent_conf)) = current_entity {
-                let expected_type = stripped;
-                if entity_type == expected_type {
-                    current_entity = Some((
-                        entity_type.clone(),
-                        ent_start,
-                        end,
-                        (*ent_conf + confidence) / 2.0,
-                    ));
+        if let Some((entity_type, true)) = tag {
+            if let Some((current_type, _, current_end, confidence_sum, count)) =
+                current_entity.as_mut()
+            {
+                if current_type == entity_type {
+                    *current_end = end;
+                    *confidence_sum += confidence;
+                    *count += 1;
+                    continue;
                 }
             }
-        } else {
-            // O tag - save current entity if any
-            if let Some((entity_type, ent_start, ent_end, ent_conf)) = current_entity.take() {
-                if ent_start < text.len() && ent_end <= text.len() {
-                    entities.push(DetectedEntity {
-                        text: text[ent_start..ent_end].to_string(),
-                        entity_type,
-                        start: ent_start,
-                        end: ent_end,
-                        confidence: ent_conf,
-                    });
-                }
-            }
+        }
+
+        entities.extend(current_entity.take().and_then(&finish_entity));
+        // An orphan I-tag or a changed I-tag type starts a new entity. Trained
+        // classifiers can emit these without a preceding B-tag; dropping them
+        // loses valid PII spans, including entire email addresses.
+        if let Some((entity_type, _)) = tag {
+            current_entity = Some((entity_type.to_string(), start, end, confidence, 1));
         }
     }
 
     // Save final entity if any
-    if let Some((entity_type, ent_start, ent_end, ent_conf)) = current_entity {
-        if ent_start < text.len() && ent_end <= text.len() {
-            entities.push(DetectedEntity {
-                text: text[ent_start..ent_end].to_string(),
-                entity_type,
-                start: ent_start,
-                end: ent_end,
-                confidence: ent_conf,
-            });
-        }
-    }
+    entities.extend(current_entity.and_then(finish_entity));
 
     Ok(entities)
 }
@@ -1120,6 +1208,181 @@ fn bio_decode_entities(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn decode_bio_fixture(
+        text: &str,
+        predictions: &[(usize, usize, &str, f32)],
+    ) -> Vec<DetectedEntity> {
+        let labels = [
+            "O",
+            "B-PERSON",
+            "I-PERSON",
+            "B-EMAIL_ADDRESS",
+            "I-EMAIL_ADDRESS",
+        ];
+        let config = MmBertClassifierConfig {
+            num_labels: labels.len(),
+            id2label: labels
+                .iter()
+                .enumerate()
+                .map(|(i, label)| (i as i32, label.to_string()))
+                .collect(),
+            ..Default::default()
+        };
+        let encoding = tokenizers::Encoding::from_tokens(
+            predictions
+                .iter()
+                .enumerate()
+                .map(|(i, &(start, end, _, _))| tokenizers::Token {
+                    id: i as u32,
+                    value: text[start..end].to_string(),
+                    offsets: (start, end),
+                })
+                .collect(),
+            0,
+        );
+        let mut logits = Array2::zeros((predictions.len(), labels.len()));
+        for (i, &(_, _, label, confidence)) in predictions.iter().enumerate() {
+            let label_id = labels
+                .iter()
+                .position(|candidate| *candidate == label)
+                .unwrap();
+            logits
+                .row_mut(i)
+                .fill(((1.0 - confidence) / (labels.len() - 1) as f32).ln());
+            logits[(i, label_id)] = confidence.ln();
+        }
+        bio_decode_entities(text, &encoding, &logits, &config).unwrap()
+    }
+
+    #[test]
+    fn bio_orphan_email_after_unicode_keeps_utf8_byte_offsets() {
+        let text = "中文🙂 alice.smith@example.com";
+        // The maintained PII checkpoint emits this all-I email pattern. Zero
+        // offsets model BOS/EOS/PAD; their predictions must not create entities.
+        let entities = decode_bio_fixture(
+            text,
+            &[
+                (0, 0, "B-PERSON", 0.99),
+                (0, 6, "O", 0.95),
+                (6, 10, "O", 0.95),
+                (10, 16, "I-EMAIL_ADDRESS", 0.40),
+                (16, 17, "I-EMAIL_ADDRESS", 0.85),
+                (17, 22, "I-EMAIL_ADDRESS", 0.99),
+                (22, 23, "I-EMAIL_ADDRESS", 0.52),
+                (23, 30, "I-EMAIL_ADDRESS", 0.86),
+                (30, 31, "I-EMAIL_ADDRESS", 0.74),
+                (31, 34, "I-EMAIL_ADDRESS", 0.92),
+                (0, 0, "B-PERSON", 0.99),
+                (0, 0, "I-PERSON", 0.99),
+            ],
+        );
+        assert_eq!(entities.len(), 1);
+        let entity = &entities[0];
+        assert_eq!(entity.entity_type, "EMAIL_ADDRESS");
+        assert_eq!(entity.text, "alice.smith@example.com");
+        assert_eq!((entity.start, entity.end), (11, text.len()));
+        assert_eq!(&text[entity.start..entity.end], entity.text);
+        assert!((entity.confidence - 5.28 / 7.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bio_orphan_i_can_start_at_the_first_text_token() {
+        let entities =
+            decode_bio_fixture("李明", &[(0, 3, "I-PERSON", 0.9), (3, 6, "I-PERSON", 0.8)]);
+        assert_eq!(entities.len(), 1);
+        assert_eq!(entities[0].text, "李明");
+        assert_eq!((entities[0].start, entities[0].end), (0, 6));
+    }
+
+    #[test]
+    fn bio_trims_surrounding_unicode_whitespace_and_adjusts_byte_offsets() {
+        let prefix = "前缀🙂";
+        let leading = "\u{2003}\t";
+        let value = "李 明";
+        let trailing = "\n\u{3000}";
+        let text = format!("{prefix}{leading}{value}{trailing}结束");
+        let raw_end = prefix.len() + leading.len() + value.len() + trailing.len();
+        let entities = decode_bio_fixture(
+            &text,
+            &[
+                (0, prefix.len(), "O", 0.9),
+                (prefix.len(), raw_end, "B-PERSON", 0.8),
+                (raw_end, text.len(), "O", 0.9),
+            ],
+        );
+        assert_eq!(entities.len(), 1);
+        let entity = &entities[0];
+        assert_eq!(entity.text, value);
+        assert_eq!(entity.start, prefix.len() + leading.len());
+        assert_eq!(entity.end, entity.start + value.len());
+        assert_eq!(&text[entity.start..entity.end], value);
+        assert!((entity.confidence - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bio_drops_whitespace_only_entities_after_trimming() {
+        let text = "\u{2003}\t \n";
+        let entities = decode_bio_fixture(text, &[(0, text.len(), "I-EMAIL_ADDRESS", 0.9)]);
+        assert!(entities.is_empty());
+    }
+
+    #[test]
+    fn bio_i_type_change_closes_the_old_span_before_starting_another() {
+        let entities = decode_bio_fixture(
+            "Alice a@b.co Bob",
+            &[
+                (0, 5, "B-PERSON", 0.9),
+                (6, 7, "I-EMAIL_ADDRESS", 0.8),
+                (7, 12, "I-EMAIL_ADDRESS", 0.7),
+                (13, 16, "I-PERSON", 0.9),
+            ],
+        );
+        assert_eq!(entities.len(), 3);
+        assert_eq!(entities[0].text, "Alice");
+        assert_eq!(entities[0].entity_type, "PERSON");
+        assert_eq!(entities[1].text, "a@b.co");
+        assert_eq!(entities[1].entity_type, "EMAIL_ADDRESS");
+        assert_eq!(entities[2].text, "Bob");
+        assert_eq!(entities[2].entity_type, "PERSON");
+        assert!((entities[1].confidence - 0.75).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bio_b_and_o_tags_keep_same_type_entities_separate() {
+        let entities = decode_bio_fixture(
+            "Alice Bob and Eve",
+            &[
+                (0, 5, "B-PERSON", 0.9),
+                (6, 9, "B-PERSON", 0.9),
+                (10, 13, "O", 0.9),
+                (14, 17, "I-PERSON", 0.9),
+            ],
+        );
+        assert_eq!(
+            entities
+                .iter()
+                .map(|entity| entity.text.as_str())
+                .collect::<Vec<_>>(),
+            ["Alice", "Bob", "Eve"]
+        );
+    }
+
+    #[test]
+    fn bio_confidence_is_the_arithmetic_mean_of_all_entity_tokens() {
+        let entities = decode_bio_fixture(
+            "Alice Mary Jane Smith",
+            &[
+                (0, 5, "B-PERSON", 0.8),
+                (6, 10, "I-PERSON", 0.6),
+                (11, 15, "I-PERSON", 0.9),
+                (16, 21, "I-PERSON", 0.7),
+            ],
+        );
+        assert_eq!(entities.len(), 1);
+        assert_eq!(entities[0].text, "Alice Mary Jane Smith");
+        assert!((entities[0].confidence - 0.75).abs() < 1e-6);
+    }
 
     fn write_onnx_dir(files: &[&str]) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
@@ -1317,225 +1580,114 @@ mod tests {
         assert_eq!(cloned.confidence, entity.confidence);
     }
 
-    // =========================================================================
-    // Long-prompt truncation tests
-    //
-    // These tests verify that the tokenizer enforces MAX_CLASSIFICATION_SEQ_LEN
-    // (512) regardless of raw input length, preventing the quadratic global-
-    // attention OOM that was observed at ~4 000 tokens (GitHub issue #1843).
-    //
-    // The tests load tokenizer.json from the mmBERT-32K model on disk and are
-    // therefore skipped automatically when running in CI (where model files are
-    // not present) by checking the `CI` environment variable.
-    // =========================================================================
-
-    /// Return the path to the mmBERT-32K ONNX tokenizer, relative to the
-    /// `onnx-binding` workspace root.
-    fn mmbert_onnx_tokenizer_path() -> std::path::PathBuf {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("models/mmbert32k-intent-classifier-merged/onnx/tokenizer.json")
-    }
-
-    /// Load the long-prompt fixture JSON bundled in `test_data/`.
-    fn load_long_prompt_fixtures() -> serde_json::Value {
-        let fixture_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("test_data/long_prompt_fixtures.json");
-        let raw = std::fs::read_to_string(&fixture_path)
-            .unwrap_or_else(|_| panic!("fixture not found at {:?}", fixture_path));
-        serde_json::from_str(&raw).expect("invalid fixture JSON")
-    }
-
-    /// Helper: tokenize `text` with the given `Tokenizer` and return the
-    /// token count after the tokenizer's internal truncation has been applied.
-    fn token_count_after_encode(tokenizer: &tokenizers::Tokenizer, text: &str) -> usize {
+    fn test_tokenizer() -> Tokenizer {
+        use tokenizers::models::wordlevel::WordLevel;
+        use tokenizers::pre_tokenizers::whitespace::Whitespace;
+        use tokenizers::processors::bert::BertProcessing;
+        let vocabulary = ["[UNK]", "[PAD]", "[CLS]", "[SEP]", "word", "tail"]
+            .iter()
+            .enumerate()
+            .map(|(i, token)| (token.to_string(), i as u32))
+            .collect();
+        let model = WordLevel::builder()
+            .vocab(vocabulary)
+            .unk_token("[UNK]".into())
+            .build()
+            .unwrap();
+        let mut tokenizer = Tokenizer::new(model);
+        tokenizer.with_pre_tokenizer(Some(Whitespace));
+        tokenizer.with_post_processor(Some(BertProcessing::new(
+            ("[SEP]".into(), 3),
+            ("[CLS]".into(), 2),
+        )));
         tokenizer
-            .encode(text, true)
-            .expect("encode failed")
-            .get_ids()
-            .len()
     }
 
-    /// Confirm the constant value that guards against OOM.
     #[test]
-    fn test_max_classification_seq_len_is_512() {
-        assert_eq!(
-            MAX_CLASSIFICATION_SEQ_LEN, 512,
-            "MAX_CLASSIFICATION_SEQ_LEN must be 512 to prevent quadratic-attention OOM"
-        );
-    }
-
-    /// Verify that MmBertSequenceClassifier::load configures the tokenizer so
-    /// that a ~4 000-token prompt is truncated to ≤ 512 tokens.
-    ///
-    /// Skipped in CI (`CI` env var set) because model files are not present.
-    #[test]
-    fn test_onnx_tokenizer_truncates_long_prompt() {
-        if std::env::var("CI").is_ok() {
-            eprintln!(
-                "skipping test_onnx_tokenizer_truncates_long_prompt: CI environment detected"
+    fn context_budget_is_explicit_and_bounded_by_model_capacity() {
+        assert_eq!(classifier_context_length(32768, None).unwrap(), 512);
+        assert_eq!(classifier_context_length(256, None).unwrap(), 256);
+        for limit in [512, 513, 1025, 8192, 32768] {
+            assert_eq!(
+                classifier_context_length(32768, Some(limit)).unwrap(),
+                limit
             );
-            return;
         }
-
-        let tokenizer_path = mmbert_onnx_tokenizer_path();
-        if !tokenizer_path.exists() {
-            eprintln!(
-                "skipping test_onnx_tokenizer_truncates_long_prompt: tokenizer not found at {:?}",
-                tokenizer_path
-            );
-            return;
-        }
-
-        let fixtures = load_long_prompt_fixtures();
-        let prompts = fixtures["prompts"].as_array().expect("prompts array");
-
-        // Load and configure the tokenizer the same way MmBertSequenceClassifier::load does.
-        let mut tokenizer =
-            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("failed to load tokenizer");
-        tokenizer
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: MAX_CLASSIFICATION_SEQ_LEN,
-                strategy: TruncationStrategy::LongestFirst,
-                direction: TruncationDirection::Right,
-                stride: 0,
-            }))
-            .expect("truncation config failed");
-
-        for prompt in prompts {
-            let id = prompt["id"].as_str().unwrap_or("?");
-            let text = prompt["text"].as_str().expect("text field");
-            let approx_untruncated = prompt["approx_tokens_untruncated"].as_u64().unwrap_or(0);
-
-            let count = token_count_after_encode(&tokenizer, text);
-
-            assert!(
-                count <= MAX_CLASSIFICATION_SEQ_LEN,
-                "prompt '{}' produced {} tokens (approx untruncated: {}); expected ≤ {}",
-                id,
-                count,
-                approx_untruncated,
-                MAX_CLASSIFICATION_SEQ_LEN,
-            );
+        for (capacity, limit) in [(32768, 0), (8192, 32768), (0, 512)] {
+            assert!(classifier_context_length(capacity, Some(limit)).is_err());
         }
     }
 
-    /// Verify that a prompt long enough to OOM the model (≥ 4 000 raw tokens)
-    /// does NOT reach the model with more than MAX_CLASSIFICATION_SEQ_LEN tokens.
-    ///
-    /// This is the direct regression test for GitHub issue #1843.
-    ///
-    /// Skipped in CI.
     #[test]
-    fn test_onnx_4k_prompt_truncated_to_safe_length() {
-        if std::env::var("CI").is_ok() {
-            eprintln!("skipping test_onnx_4k_prompt_truncated_to_safe_length: CI environment");
-            return;
-        }
+    fn context_budget_reserves_actual_postprocessor_special_tokens() {
+        let mut tokenizer = test_tokenizer();
+        let error = configure_classifier_tokenizer(&mut tokenizer, 1).unwrap_err();
+        assert!(error.to_string().contains("requires 2 special tokens"));
+        configure_classifier_tokenizer(&mut tokenizer, 2).unwrap();
+        let encoding = tokenizer.encode("word tail", true).unwrap();
+        assert_eq!(encoding.get_ids(), &[2, 3]);
 
-        let tokenizer_path = mmbert_onnx_tokenizer_path();
-        if !tokenizer_path.exists() {
-            eprintln!(
-                "skipping test_onnx_4k_prompt_truncated_to_safe_length: tokenizer not found at {:?}",
-                tokenizer_path
-            );
-            return;
-        }
-
-        let fixtures = load_long_prompt_fixtures();
-        let long_prompt = fixtures["prompts"]
-            .as_array()
-            .and_then(|p| p.iter().find(|x| x["id"] == "long_4k"))
-            .expect("long_4k fixture missing");
-
-        let text = long_prompt["text"].as_str().expect("text");
-        let approx_raw = long_prompt["approx_tokens_untruncated"]
-            .as_u64()
-            .unwrap_or(0);
-
-        // Confirm the fixture is actually long enough to trigger the OOM without the fix.
-        assert!(
-            approx_raw > 2048,
-            "fixture too short ({} est. tokens); update long_prompt_fixtures.json",
-            approx_raw
-        );
-
-        // Configure tokenizer as the classifier does.
-        let mut tokenizer =
-            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
-        tokenizer
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: MAX_CLASSIFICATION_SEQ_LEN,
-                strategy: TruncationStrategy::LongestFirst,
-                direction: TruncationDirection::Right,
-                stride: 0,
-            }))
-            .expect("truncation config");
-
-        let count = token_count_after_encode(&tokenizer, text);
-        assert_eq!(
-            count, MAX_CLASSIFICATION_SEQ_LEN,
-            "4k prompt must produce exactly MAX_CLASSIFICATION_SEQ_LEN={} tokens after truncation, got {}",
-            MAX_CLASSIFICATION_SEQ_LEN, count
-        );
+        let mut tokenizer = test_tokenizer();
+        tokenizer.with_post_processor(None::<tokenizers::processors::bert::BertProcessing>);
+        configure_classifier_tokenizer(&mut tokenizer, 1).unwrap();
+        let encoding = tokenizer.encode("word tail", true).unwrap();
+        assert_eq!(encoding.get_ids(), &[4]);
     }
 
-    /// Verify that a short prompt is NOT over-truncated: a normal user message
-    /// must keep all its tokens.
-    ///
-    /// Skipped in CI.
     #[test]
-    fn test_onnx_short_prompt_not_truncated() {
-        if std::env::var("CI").is_ok() {
-            eprintln!("skipping test_onnx_short_prompt_not_truncated: CI environment");
-            return;
+    fn classification_rejects_wrong_task_shapes_and_nonfinite_logits() {
+        let valid = Array2::zeros((513, 35));
+        validate_classifier_logits(&valid, 513, 35).unwrap();
+        assert!(validate_classifier_logits(&Array2::zeros((1, 35)), 513, 35).is_err());
+        assert!(validate_classifier_logits(&valid, 513, 14).is_err());
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let mut logits = Array2::zeros((1, 14));
+            logits[(0, 3)] = invalid;
+            assert!(validate_classifier_logits(&logits, 1, 14).is_err());
         }
+    }
 
-        let tokenizer_path = mmbert_onnx_tokenizer_path();
-        if !tokenizer_path.exists() {
-            eprintln!(
-                "skipping test_onnx_short_prompt_not_truncated: tokenizer not found at {:?}",
-                tokenizer_path
+    #[test]
+    fn explicit_context_keeps_tail_and_special_tokens_through_32k() {
+        for limit in [512, 513, 1025, 8192, 32768] {
+            let mut tokenizer = test_tokenizer();
+            configure_classifier_tokenizer(&mut tokenizer, limit).unwrap();
+            let text = format!("{}tail", "word ".repeat(limit - 3));
+            let encoding = tokenizer.encode(text.as_str(), true).unwrap();
+            assert_eq!(encoding.len(), limit);
+            assert_eq!(
+                encoding.get_ids()[limit - 2],
+                5,
+                "tail must survive at {limit}"
             );
-            return;
+            assert_eq!(
+                encoding.get_ids()[limit - 1],
+                3,
+                "SEP must count toward the limit"
+            );
+            let longer = format!("{}word word", text);
+            let encoding = tokenizer.encode(longer.as_str(), true).unwrap();
+            assert_eq!(encoding.len(), limit);
+            assert_eq!(encoding.get_ids()[limit - 1], 3);
         }
+    }
 
-        let fixtures = load_long_prompt_fixtures();
-        let short = fixtures["prompts"]
-            .as_array()
-            .and_then(|p| p.iter().find(|x| x["id"] == "short_baseline"))
-            .expect("short_baseline fixture missing");
-
-        let text = short["text"].as_str().expect("text");
-
-        // Tokenizer without truncation limit to get the "true" token count.
-        let baseline_tokenizer =
-            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
-        let baseline_count = token_count_after_encode(&baseline_tokenizer, text);
-
-        // Tokenizer with the production truncation limit.
-        let mut truncating_tokenizer =
-            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
-        truncating_tokenizer
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: MAX_CLASSIFICATION_SEQ_LEN,
-                strategy: TruncationStrategy::LongestFirst,
-                direction: TruncationDirection::Right,
-                stride: 0,
-            }))
-            .expect("truncation config");
-        let truncated_count = token_count_after_encode(&truncating_tokenizer, text);
-
-        assert_eq!(
-            baseline_count, truncated_count,
-            "short prompt ({} tokens) should not be truncated by MAX_CLASSIFICATION_SEQ_LEN={}",
-            baseline_count, MAX_CLASSIFICATION_SEQ_LEN
-        );
-        assert!(
-            truncated_count < MAX_CLASSIFICATION_SEQ_LEN,
-            "short prompt unexpectedly long: {} tokens",
-            truncated_count
-        );
+    #[test]
+    fn artifact_fixed_padding_cannot_expand_the_input_budget() {
+        let mut tokenizer = test_tokenizer();
+        tokenizer.with_padding(Some(tokenizers::PaddingParams {
+            strategy: tokenizers::PaddingStrategy::Fixed(4096),
+            pad_id: 1,
+            ..Default::default()
+        }));
+        configure_classifier_tokenizer(&mut tokenizer, 1025).unwrap();
+        let encodings = tokenizer
+            .encode_batch(vec!["word", "word tail"], true)
+            .unwrap();
+        assert_eq!(encodings[0].len(), 3);
+        assert_eq!(encodings[1].len(), 4);
+        assert!(encodings
+            .iter()
+            .all(|e| e.get_attention_mask().iter().all(|&v| v == 1)));
     }
 }

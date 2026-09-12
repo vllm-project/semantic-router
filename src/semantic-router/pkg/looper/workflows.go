@@ -2,6 +2,7 @@ package looper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -19,17 +20,17 @@ type WorkflowsLooper struct {
 }
 
 func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
-	return newWorkflowsLooper(cfg, nil)
+	return newWorkflowsLooper(cfg, ownClient(NewClient(cfg)))
 }
 
-func newWorkflowsLooper(cfg *config.LooperConfig, client *Client) *WorkflowsLooper {
-	return newWorkflowsLooperWithService(cfg, client, nil)
+func newWorkflowsLooper(cfg *config.LooperConfig, binding clientBinding) *WorkflowsLooper {
+	return newWorkflowsLooperWithService(cfg, binding, nil)
 }
 
 // newWorkflowsLooperWithService creates a WorkflowsLooper that shares the
 // state store owned by the given service. When service is nil it falls back
 // to creating a per-instance store (backward-compatible with tests).
-func newWorkflowsLooperWithService(cfg *config.LooperConfig, client *Client, svc *WorkflowStateService) *WorkflowsLooper {
+func newWorkflowsLooperWithService(cfg *config.LooperConfig, binding clientBinding, svc *WorkflowStateService) *WorkflowsLooper {
 	var store workflowToolStateStore
 	var ownsStore bool
 	if svc != nil {
@@ -39,18 +40,27 @@ func newWorkflowsLooperWithService(cfg *config.LooperConfig, client *Client, svc
 		ownsStore = true
 	}
 	return &WorkflowsLooper{
-		BaseLooper: newBaseLooper(cfg, client),
+		BaseLooper: newBaseLooper(cfg, binding),
 		toolStates: store,
 		ownsStore:  ownsStore,
 	}
 }
 
-// Close releases resources if this looper owns the underlying store (e.g. in tests).
+// Close releases an owned tool-state store and, when this looper created the
+// client, the client as well.
 func (l *WorkflowsLooper) Close() error {
-	if l != nil && l.ownsStore && l.toolStates != nil {
-		return l.toolStates.Close()
+	if l == nil {
+		return nil
 	}
-	return nil
+	var storeErr error
+	if l.ownsStore && l.toolStates != nil {
+		storeErr = l.toolStates.Close()
+	}
+	var clientErr error
+	if l.BaseLooper != nil {
+		clientErr = l.BaseLooper.Close()
+	}
+	return errors.Join(storeErr, clientErr)
 }
 
 func workflowFlowRuntimeConfig(cfg *config.LooperConfig) config.FlowRuntimeConfig {

@@ -242,7 +242,23 @@ func normalizeSparseCanonicalCategoryOverride(
 			categoryModel.Variant = ""
 		}
 	}
+	normalizeCanonicalPIIBackend(&resolved.ModelCatalog.Modules.Classifier.PII.PIIModel, rawOverride)
 	return normalizeCanonicalCategoryVariant(categoryModel)
+}
+
+// normalizeCanonicalPIIBackend applies the domain rule to PII: the canonical
+// default selects the local mmBERT PII model, and a sparse override that
+// attaches a remote backend must replace that inherited selector rather than be
+// rejected for mixing local and remote. Only a backend key the operator wrote
+// counts; an unrelated sparse pii override keeps the default. model_ref still
+// resolves, so the mapping file the token_spans adapter needs is provisioned
+// with the local model.
+func normalizeCanonicalPIIBackend(model *PIIModel, rawOverride *StructuredPayload) {
+	rawPII := rawCanonicalClassifierModuleOverride(rawOverride, "pii")
+	if rawPII == nil || !hasRawKey(rawPII, "backend") || rawBoolValue(rawPII, "use_mmbert_32k") {
+		return
+	}
+	model.UseMmBERT32K = false
 }
 
 // normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
@@ -269,6 +285,13 @@ func normalizeCanonicalCategoryVariant(model *CategoryModel) error {
 }
 
 func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]interface{} {
+	return rawCanonicalClassifierModuleOverride(rawOverride, "domain")
+}
+
+// rawCanonicalClassifierModuleOverride returns the raw (pre-merge) mapping the
+// override supplied for one classifier module, so normalization can tell an
+// inherited default from a key the operator actually wrote.
+func rawCanonicalClassifierModuleOverride(rawOverride *StructuredPayload, module string) map[string]interface{} {
 	if rawOverride == nil || rawOverride.IsEmpty() {
 		return nil
 	}
@@ -279,7 +302,7 @@ func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]int
 	modelCatalog := nestedStringMap(global["model_catalog"])
 	modules := nestedStringMap(modelCatalog["modules"])
 	classifier := nestedStringMap(modules["classifier"])
-	return nestedStringMap(classifier["domain"])
+	return nestedStringMap(classifier[module])
 }
 
 func hasRawKey(raw map[string]interface{}, key string) bool {

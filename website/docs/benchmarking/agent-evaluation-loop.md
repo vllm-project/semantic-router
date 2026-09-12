@@ -51,7 +51,13 @@ vllm-sr config apply --config candidate.yaml --mode replace \
 
 `plan` executes the same parse, normalization, semantic validation, and
 hot-reload feasibility checks as mutation without writing. `apply` plans again
-and uses the returned ETag as its compare-and-swap precondition.
+and uses the returned ETag as its compare-and-swap precondition. A plan that
+changes listeners or provider backend topology returns `RESTART_REQUIRED`
+because those fields are rendered into Envoy; activate that candidate through
+the deployment workflow instead of the Router mutation API. For local Docker,
+ask before replacing the running stack, then use
+`vllm-sr serve --config candidate.yaml --replace-active-config`. Ordinary
+`serve` preserves Dashboard-edited active state.
 
 ## 2. Verify routing in two stages
 
@@ -69,18 +75,27 @@ Probe then sends a real request through Envoy and asserts the resulting route:
 
 ```bash
 vllm-sr route probe \
-  --base-url http://localhost:8899 \
+  --base-url http://localhost:8899/v1 \
   --model vllm-sr/auto \
   --prompt 'Implement a lock-free queue' \
   --expect-recipe balanced \
   --expect-decision coding \
-  --expect-algorithm multi_factor
+  --expect-algorithm multi_factor \
+  --expect-selected-model qwen \
+  --expect-response-model Qwen/Qwen3.8-Flash-Next
 ```
 
 The probe emits a machine-readable receipt with HTTP status, latency, routing
-headers, response, and assertions. A failed assertion exits with code `2`.
-Preview success proves decision behavior only; probe success proves one routed
-request only. Neither substitutes for a benchmark.
+headers, response, and assertions. `--expect-selected-model` checks the Router
+receipt; `--expect-response-model` checks the upstream OpenAI response body.
+Use the latter when that backend exposes a stable top-level `model` value. A
+failed assertion exits with code `2`.
+The base URL may be either the Envoy listener origin or the standard OpenAI
+root ending in `/v1`.
+Preview success proves decision behavior only. A selected-model header proves
+the Router's choice but not which backend answered; response-model evidence
+closes that gap when available. One probe still does not substitute for a
+benchmark.
 
 ## 3. Run comparable benchmarks
 
