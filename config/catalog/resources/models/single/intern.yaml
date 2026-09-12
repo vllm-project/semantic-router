@@ -1,0 +1,133 @@
+- id: intern/intern-s2-preview-397b
+  display_name: Intern-S2-Preview 397B
+  description: Shanghai AI Laboratory's multimodal scientific foundation model for long-horizon reasoning and agentic workflows.
+  kind: physical
+  publisher: Shanghai AI Laboratory / Intern
+  presentation:
+    logo: monogram
+    monogram: I
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/internlm/Intern-S2-Preview-397B
+    license: Apache-2.0
+  family: intern-s2-preview
+  parameter_size: 397B (17B active)
+  revision: f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1
+  released_at: '2026-07-16'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Shanghai AI Laboratory / Intern
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/internlm/Intern-S2-Preview-397B
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - agentic
+  - long_context
+- id: intern/intern-s2-preview-35b
+  display_name: Intern-S2-Preview 35B
+  description: Shanghai AI Laboratory's efficient multimodal scientific foundation model for reasoning and scientific agent workflows.
+  kind: physical
+  publisher: Shanghai AI Laboratory / Intern
+  presentation:
+    logo: monogram
+    monogram: I
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/internlm/Intern-S2-Preview
+    license: Apache-2.0
+  family: intern-s2-preview
+  parameter_size: 35B (3B active)
+  revision: 4f57cab513689b089019fce4ad24e26520df183c
+  released_at: '2026-05-15'
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Shanghai AI Laboratory / Intern
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/internlm/Intern-S2-Preview
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - agentic
+  - long_context
+- id: intern/intern-s1
+  display_name: Intern-S1
+  description: Shanghai AI Laboratory's open multimodal reasoning model for scientific understanding and research assistance.
+  kind: physical
+  publisher: Shanghai AI Laboratory / Intern
+  presentation:
+    logo: monogram
+    monogram: I
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/internlm/Intern-S1
+    license: Apache-2.0
+  family: intern-s1
+  parameter_size: 235B (22B active)
+  revision: 4ecad381e28293c4825793f113327cc016cdcbda
+  released_at: '2025-07-24'
+  lifecycle: active
+  limits:
+    context_window_size: 65536
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Shanghai AI Laboratory / Intern
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/internlm/Intern-S1
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - scientific
+  - agentic
+  - long_context

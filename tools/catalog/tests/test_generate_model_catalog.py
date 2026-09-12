@@ -525,6 +525,129 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {"score": 0},
         )
 
+    def test_intern_creator_has_exact_evidence_buckets_and_real_bindings(
+        self,
+    ) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        intern_models = [
+            "intern/intern-s2-preview-397b",
+            "intern/intern-s2-preview-35b",
+            "intern/intern-s1",
+        ]
+        intern_model_set = set(intern_models)
+        creators = {
+            creator["publisher"]: creator["representative_models"]
+            for creator in manifest["inventory"]["physical"]["creators"]
+        }
+        self.assertEqual(
+            creators["Shanghai AI Laboratory / Intern"],
+            intern_models,
+        )
+
+        models = {model["id"]: model for model in resources["models"]}
+        self.assertEqual(
+            {models[model_id]["publisher"] for model_id in intern_models},
+            {"Shanghai AI Laboratory / Intern"},
+        )
+        self.assertEqual(
+            {model_id: models[model_id]["revision"] for model_id in intern_models},
+            {
+                "intern/intern-s2-preview-397b": (
+                    "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1"
+                ),
+                "intern/intern-s2-preview-35b": (
+                    "4f57cab513689b089019fce4ad24e26520df183c"
+                ),
+                "intern/intern-s1": (
+                    "4ecad381e28293c4825793f113327cc016cdcbda"
+                ),
+            },
+        )
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, intern_model_set)
+        for model_id in intern_models:
+            self.assertGreaterEqual(
+                len(buckets[(model_id, "enabled", "vendor_claimed")]),
+                5,
+            )
+
+        anchor_benchmarks = {
+            "tiger-ai-lab/mmlu-pro@1.0.0",
+            "idavidrein/gpqa-diamond@1.0.0",
+            "cais/humanitys-last-exam@1.0.0",
+            "livecodebench/livecodebench@6.0.0",
+            "scicode-bench/scicode@1.0.0",
+            "harbor/terminal-bench@2.1.0",
+        }
+        anchor_evaluations = [
+            evaluation
+            for evaluation in resources["evaluations"]
+            if evaluation["model"] == "intern/intern-s2-preview-397b"
+            and evaluation["benchmark"] in anchor_benchmarks
+        ]
+        self.assertEqual(
+            {evaluation["benchmark"] for evaluation in anchor_evaluations},
+            anchor_benchmarks,
+        )
+        self.assertEqual(len(anchor_evaluations), 6)
+        self.assertTrue(
+            all(
+                evaluation["subject"]["model_revision"]
+                == "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1"
+                and evaluation["subject"]["task_artifact"].startswith("https://")
+                and evaluation["subject"]["cost_usd"] is None
+                and evaluation["subject"]["latency_ms"] is None
+                for evaluation in anchor_evaluations
+            )
+        )
+        self.assertTrue(
+            {
+                "matharena/hmmt-feb@2026.0.0",
+                "mmmu-benchmark/mmmu-pro@1.0.0",
+                "swe-bench/pro@1.0.0",
+            }.issubset(
+                buckets[("intern/intern-s2-preview-397b", "enabled", "vendor_claimed")]
+            )
+        )
+
+        snapshot = json.loads(catalog.render_outputs()[catalog.WEBSITE_OUTPUT])
+        anchor_results = {
+            result["index"]: result
+            for result in snapshot["index_results"]
+            if result["model"] == "intern/intern-s2-preview-397b"
+            and result["reasoning_effort"] == "enabled"
+        }
+        for index_id in (
+            "vllm-sr/general@1.0.0",
+            "vllm-sr/reasoning@1.0.0",
+            "vllm-sr/coding@1.0.0",
+            "vllm-sr/agentic@1.0.0",
+            "vllm-sr/intelligence@1.0.0",
+        ):
+            self.assertEqual(anchor_results[index_id]["status"], "available")
+            self.assertIsNotNone(anchor_results[index_id]["score"])
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        vllm_bindings = {
+            binding["catalog"]: binding
+            for binding in providers["vllm"]["models"]
+            if binding["catalog"] in intern_model_set
+        }
+        self.assertEqual(
+            {model_id: vllm_bindings[model_id]["id"] for model_id in intern_models},
+            {
+                "intern/intern-s2-preview-397b": "internlm/Intern-S2-Preview-397B",
+                "intern/intern-s2-preview-35b": "internlm/Intern-S2-Preview",
+                "intern/intern-s1": "internlm/Intern-S1",
+            },
+        )
+        self.assertTrue(
+            all(
+                binding["relationship"] == "self_hosted"
+                for binding in vllm_bindings.values()
+            )
+        )
+
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         stepfun_models = {
