@@ -34,6 +34,11 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_matches_dense_with_decode_offset \
 	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_offset_prefill_equals_split_prefill \
 	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_rejects_a_block_with_no_keys \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_key_blocks_match_dense \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_key_blocks_match_dense_with_decode_offset \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_all_masked_first_key_tile_stays_finite \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_single_query_with_masked_first_keys_stays_finite \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_half_precision_accumulates_without_overflow \
 	model_architectures::embedding::gemma3_model::chunked_attention_tests::test_chunked_attention_matches_dense \
 	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense \
 	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense_on_real_rows_with_left_padding \
