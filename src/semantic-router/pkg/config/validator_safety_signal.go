@@ -64,7 +64,7 @@ func validateSafetyClassifier(cfg *RouterConfig, rule ClassifierSignalRule, loca
 	if local.InputLimit() <= 0 {
 		return fmt.Errorf("max_sequence_length must be positive")
 	}
-	return nil
+	return local.ValidateWindow()
 }
 
 func validateSafetyThreshold(value float64) error {

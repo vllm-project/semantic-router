@@ -15,6 +15,7 @@ func safetyTestConfig() *RouterConfig {
 
 func TestSafetyValidationAndCanonicalRoundTrip(t *testing.T) {
 	cfg := safetyTestConfig()
+	cfg.SafetyModels.Safety.Window = &SequenceHeadWindowConfig{Size: 512, Overlap: 255}
 	if err := validateSafetySignalContracts(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -30,6 +31,14 @@ func TestSafetyValidationAndCanonicalRoundTrip(t *testing.T) {
 		t.Fatalf("local heads lost: %+v", restored.SafetyModels)
 	}
 	for name, mutate := range map[string]func(*RouterConfig){
+		"zero window":          func(c *RouterConfig) { c.SafetyModels.Safety.Window = &SequenceHeadWindowConfig{} },
+		"window exceeds input": func(c *RouterConfig) { c.SafetyModels.Safety.Window = &SequenceHeadWindowConfig{Size: 32769} },
+		"negative overlap": func(c *RouterConfig) {
+			c.SafetyModels.Safety.Window = &SequenceHeadWindowConfig{Size: 512, Overlap: -1}
+		},
+		"window cannot advance": func(c *RouterConfig) {
+			c.SafetyModels.Safety.Window = &SequenceHeadWindowConfig{Size: 512, Overlap: 512}
+		},
 		"empty model":         func(c *RouterConfig) { c.SafetyModels.Safety.ModelID = "" },
 		"invalid context":     func(c *RouterConfig) { c.SafetyModels.Hazard.MaxSequenceLength = -1 },
 		"unknown external":    func(c *RouterConfig) { c.SafetyRules[0].Model = "missing" },

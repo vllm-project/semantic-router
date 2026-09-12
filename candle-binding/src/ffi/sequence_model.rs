@@ -172,6 +172,52 @@ pub unsafe extern "C" fn candle_sequence_model_predict(
 }
 
 /// # Safety
+/// Same ownership requirements as predict. Size includes special tokens;
+/// overlap counts content tokens. The entire request is checked before inference.
+#[no_mangle]
+pub unsafe extern "C" fn candle_sequence_model_predict_windows(
+    handle: *mut c_void,
+    text: *const c_char,
+    size: usize,
+    overlap: usize,
+) -> *mut c_char {
+    let outcome = catch_unwind(AssertUnwindSafe(
+        || -> Result<Vec<serde_json::Value>, String> {
+            if handle.is_null() || text.is_null() {
+                return Err("live model and text are required".into());
+            }
+            let model = unsafe { &mut *handle.cast::<SequenceModel>() };
+            let text = unsafe { CStr::from_ptr(text) }
+                .to_str()
+                .map_err(|e| e.to_string())?;
+            let windows = crate::core::sequence_windows::encode_windows(
+                &model.tokenizer,
+                text,
+                model.limit,
+                size,
+                overlap,
+            )?;
+            let mut results = Vec::with_capacity(windows.len());
+            for window in windows {
+                let (_, _, scores) = model
+                    .model
+                    .classify_tokens_with_activation(&window.ids, model.multi_label)
+                    .map_err(|e| e.to_string())?;
+                results.push(
+                    serde_json::json!({"start":window.start,"end":window.end,"scores":scores}),
+                );
+            }
+            Ok(results)
+        },
+    ))
+    .unwrap_or_else(|_| Err("window inference panicked".into()));
+    match outcome {
+        Ok(windows) => string_result(serde_json::json!({"windows":windows})),
+        Err(message) => string_result(serde_json::json!({"error":message})),
+    }
+}
+
+/// # Safety
 /// handle must be null or uniquely owned and live, with no in-flight prediction.
 #[no_mangle]
 pub unsafe extern "C" fn candle_sequence_model_close(handle: *mut c_void) {

@@ -19,17 +19,25 @@ type nativeSafetyClassifier struct {
 	closed     bool
 	gate       admission.Admissioner
 	deployment string
+	window     *candle.SequenceWindowOptions
 }
 
 func newNativeSafetyClassifier(model config.SequenceHeadModelConfig, labels []string, multiLabel bool) (labelClassifier, error) {
 	if model.ModelID == "" || model.InputLimit() <= 0 {
 		return nil, fmt.Errorf("safety head requires a model path and a positive context limit")
 	}
+	if err := model.ValidateWindow(); err != nil {
+		return nil, err
+	}
+	var window *candle.SequenceWindowOptions
+	if model.Window != nil {
+		window = &candle.SequenceWindowOptions{Size: model.Window.Size, Overlap: model.Window.Overlap}
+	}
 	deployment := "safety"
 	if multiLabel {
 		deployment = "hazard"
 	}
-	return &nativeSafetyClassifier{deployment: deployment, options: candle.SequenceModelOptions{
+	return &nativeSafetyClassifier{deployment: deployment, window: window, options: candle.SequenceModelOptions{
 		ModelPath: config.ResolveModelPath(model.ModelID), UseCPU: model.UseCPU,
 		MaxSequenceLength: model.InputLimit(), Labels: append([]string(nil), labels...), MultiLabel: multiLabel,
 	}}, nil
@@ -66,6 +74,24 @@ func (c *nativeSafetyClassifier) classify(ctx context.Context, input string) (la
 	defer c.mu.RUnlock()
 	if c.closed || c.model == nil {
 		return labelClassification{}, fmt.Errorf("safety head is not initialized")
+	}
+	if c.window != nil {
+		windows, err := c.model.ClassifyWindows(input, *c.window)
+		if err != nil {
+			return labelClassification{}, err
+		}
+		if err := ctx.Err(); err != nil {
+			return labelClassification{}, err
+		}
+		result := labelClassification{ScoreWindows: make([]map[string]float64, len(windows))}
+		for index, window := range windows {
+			scores := make(map[string]float64, len(c.options.Labels))
+			for i, label := range c.options.Labels {
+				scores[label] = float64(window.Scores[i])
+			}
+			result.ScoreWindows[index] = scores
+		}
+		return result, nil
 	}
 	scores, err := c.model.Classify(input)
 	if err != nil {

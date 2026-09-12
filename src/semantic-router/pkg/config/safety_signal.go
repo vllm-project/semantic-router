@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 const SignalTypeSafety = "safety"
 
 // SafetyRule observes content hazards independently of prompt attacks. Model
@@ -56,10 +58,11 @@ type SafetyModelsConfig struct {
 // SequenceHeadModelConfig defines one native sequence head's deployment budget.
 // Zero MaxSequenceLength preserves the conservative 512-token default.
 type SequenceHeadModelConfig struct {
-	ModelID           string `yaml:"model_id,omitempty"`
-	ModelRef          string `yaml:"model_ref,omitempty"`
-	UseCPU            bool   `yaml:"use_cpu"`
-	MaxSequenceLength int    `yaml:"max_sequence_length,omitempty"`
+	ModelID           string                    `yaml:"model_id,omitempty"`
+	ModelRef          string                    `yaml:"model_ref,omitempty"`
+	UseCPU            bool                      `yaml:"use_cpu"`
+	MaxSequenceLength int                       `yaml:"max_sequence_length,omitempty"`
+	Window            *SequenceHeadWindowConfig `yaml:"window,omitempty"`
 }
 
 func (c SequenceHeadModelConfig) InputLimit() int {
@@ -98,4 +101,27 @@ func (c *RouterConfig) NeedsLocalSafetyHeadForRouting(hazard bool) bool {
 		}
 	}
 	return false
+}
+
+// SequenceHeadWindowConfig enables scanning all content tokens in overlapping
+// windows. Omission keeps whole-input inference. Size includes special tokens;
+// Overlap counts content tokens. Scores are aggregated only after inference.
+type SequenceHeadWindowConfig struct {
+	Size    int `yaml:"size"`
+	Overlap int `yaml:"overlap"`
+}
+
+func (c SequenceHeadModelConfig) ValidateWindow() error {
+	if c.Window == nil {
+		return nil
+	}
+	if c.Window.Size <= 0 || c.Window.Size > c.InputLimit() {
+		return fmt.Errorf("window.size must be positive and at most max_sequence_length")
+	}
+	if c.Window.Overlap < 0 || c.Window.Overlap >= c.Window.Size {
+		return fmt.Errorf("window.overlap must be nonnegative and smaller than window.size")
+	}
+	// The native tokenizer additionally checks that special tokens leave
+	// enough content room for this overlap when scanning the model.
+	return nil
 }

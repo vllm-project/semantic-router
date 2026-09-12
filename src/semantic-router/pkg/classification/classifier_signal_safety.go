@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -177,13 +178,13 @@ func (c *Classifier) evaluateSafetySignals(ctx context.Context, results *SignalR
 		began := time.Now()
 		binary, err := classify(detector.binaryKey, detector.binary)
 		c.recordSignalExtraction(config.SignalTypeSafety, rule.Name, time.Since(began).Seconds())
-		if err != nil || !classifierScoresFinite(rule.EffectiveLabels(), binary.Scores) {
+		if err != nil || !safetyScoresFinite(rule.EffectiveLabels(), binary) {
 			mu.Lock()
 			results.SignalErrors[key] = "safety_classification_failed"
 			mu.Unlock()
 			continue
 		}
-		risk := selectedSafetyScore(binary.Scores, rule.EffectiveUnsafeLabels())
+		risk := aggregateSafetyWindows(binary, rule.EffectiveUnsafeLabels(), selectedSafetyScore)
 		matched := risk >= rule.Threshold
 		mu.Lock()
 		results.SignalValues[key] = risk
@@ -192,13 +193,13 @@ func (c *Classifier) evaluateSafetySignals(ctx context.Context, results *SignalR
 		mu.Unlock()
 		if matched && rule.Hazard != nil {
 			hazard, err := classify(detector.hazardKey, detector.hazard)
-			if err != nil || !classifierScoresFinite(rule.Hazard.Labels, hazard.Scores) {
+			if err != nil || !safetyScoresFinite(rule.Hazard.Labels, hazard) {
 				mu.Lock()
 				results.SignalErrors[key] = "safety_hazard_classification_failed"
 				mu.Unlock()
 				continue
 			}
-			hazardRisk := selectedHazardScore(hazard.Scores, rule.Hazard.Categories)
+			hazardRisk := aggregateSafetyWindows(hazard, rule.Hazard.Categories, selectedHazardScore)
 			matched = hazardRisk >= rule.Hazard.Threshold
 			mu.Lock()
 			results.SignalValues[key+":hazard"] = hazardRisk
@@ -232,4 +233,36 @@ func selectedHazardScore(scores map[string]float64, labels []string) float64 {
 		result = max(result, scores[label])
 	}
 	return result
+}
+
+func safetyScoresFinite(labels []string, result labelClassification) bool {
+	windows := result.ScoreWindows
+	if len(windows) == 0 {
+		windows = []map[string]float64{result.Scores}
+	}
+	for _, scores := range windows {
+		if len(scores) != len(labels) {
+			return false
+		}
+		for _, label := range labels {
+			value, ok := scores[label]
+			if !ok || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// Select the rule's labels within each window, then take the maximum. Adding
+// independently maximized softmax classes would invent probability mass.
+func aggregateSafetyWindows(result labelClassification, labels []string, selectScore func(map[string]float64, []string) float64) float64 {
+	if len(result.ScoreWindows) == 0 {
+		return selectScore(result.Scores, labels)
+	}
+	var maximum float64
+	for _, scores := range result.ScoreWindows {
+		maximum = max(maximum, selectScore(scores, labels))
+	}
+	return maximum
 }

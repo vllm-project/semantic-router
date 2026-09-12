@@ -10,3 +10,19 @@ type SequenceModelOptions struct {
 	Labels            []string `json:"labels"`
 	MultiLabel        bool     `json:"multi_label"`
 }
+
+// SequenceWindowOptions defines an exact token scan. Size includes the model's
+// special tokens; Overlap counts content tokens shared by adjacent windows.
+type SequenceWindowOptions struct {
+	Size    int `json:"size"`
+	Overlap int `json:"overlap"`
+}
+
+// SequenceWindowScores retains the full distribution for one content-token
+// range [Start, End). Aggregate selected labels within each window before
+// taking the maximum across windows; independent softmax maxima are invalid.
+type SequenceWindowScores struct {
+	Start  int       `json:"start"`
+	End    int       `json:"end"`
+	Scores []float32 `json:"scores"`
+}

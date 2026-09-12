@@ -1268,8 +1268,34 @@ impl TraditionalModernBertClassifier {
                 candle_core::Error::from(unified_err)
             })?;
 
+        self.classify_tensors_with_activation(&input_ids, &attention_mask, multi_label)
+    }
+
+    /// Classify an unpadded token window, with its special tokens already restored.
+    /// Positions start at zero for every call. No tokenizer can truncate or change it.
+    pub fn classify_tokens_with_activation(
+        &self,
+        ids: &[u32],
+        multi_label: bool,
+    ) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
+        if ids.is_empty() || ids.len() > self.tokenizer.get_config().max_length {
+            candle_core::bail!("token window is empty or exceeds the classifier budget");
+        }
+        run_on_inference_pool(&self.device, || {
+            let input_ids = Tensor::new(ids, &self.device)?.unsqueeze(0)?;
+            let attention_mask = Tensor::ones((1, ids.len()), DType::U32, &self.device)?;
+            self.classify_tensors_with_activation(&input_ids, &attention_mask, multi_label)
+        })
+    }
+
+    fn classify_tensors_with_activation(
+        &self,
+        input_ids: &Tensor,
+        attention_mask: &Tensor,
+        multi_label: bool,
+    ) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
         // 3. Forward pass through ModernBERT model
-        let model_output = self.model.forward(&input_ids, &attention_mask)?;
+        let model_output = self.model.forward(input_ids, attention_mask)?;
 
         // 4. Apply pooling strategy
         let pooled_output = match self.classifier_pooling {

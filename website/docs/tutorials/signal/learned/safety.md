@@ -94,3 +94,42 @@ See [shared model configuration](../../global/safety-models-and-policy.md)
 for native context budgets, external endpoints and failure policies, and the
 [complete HTTP example](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
 for a category-specific policy.
+
+## Long-input scanning
+
+Native heads use whole-input inference by default. A separately calibrated
+window policy can scan local risks throughout a long request:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      safety:
+        safety:
+          model_id: models/my-safety-model
+          max_sequence_length: 32768
+          window:
+            size: 512
+            overlap: 255
+```
+
+`max_sequence_length` limits the complete tokenized request, including special
+tokens. Longer inputs fail; the router never silently keeps only the first
+window. `window.size` includes special tokens, while `overlap` counts content
+tokens. For a tokenizer adding two special tokens, this example advances by
+255 content tokens. Each window restores the original special tokens and
+starts positions at zero. Empty content and invalid window budgets fail.
+
+The scan uses original token IDs, covers every content token, and leaves the
+last window short. It sums selected unsafe probabilities within each window,
+then takes the largest window score and applies the rule's threshold once.
+Hazard similarly takes the maximum selected category probability across
+windows. Set a separate `window` under the `hazard` head if that artifact has
+been evaluated with scanning. External classifiers retain their own input
+processing contract.
+
+Choose thresholds evaluated with the exact model, window size, overlap and
+precision you deploy. Window scanning can recover local risks that a whole-input
+classifier misses, but it cannot interpret a distant refusal or protective
+purpose outside the same window. Validate quoted material and other long-range
+context in your application. Omit `window` when whole-input semantics are needed.

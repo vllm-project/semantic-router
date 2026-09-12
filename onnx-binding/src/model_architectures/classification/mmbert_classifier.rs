@@ -677,6 +677,39 @@ impl MmBertSequenceClassifier {
             }
         }
 
+        self.classify_inputs(input_ids, attention_mask, batch_size, max_len, multi_label)
+    }
+
+    /// Classify an unpadded exact token window with positions reset to zero.
+    pub fn classify_tokens_with_activation(
+        &mut self,
+        ids: &[u32],
+        multi_label: bool,
+    ) -> UnifiedResult<ClassificationResult> {
+        if ids.is_empty() || ids.len() > self.max_sequence_length {
+            return Err(errors::tokenization_error(
+                "token window is empty or exceeds the classifier budget",
+            ));
+        }
+        self.classify_inputs(
+            ids.iter().map(|&id| i64::from(id)).collect(),
+            vec![1; ids.len()],
+            1,
+            ids.len(),
+            multi_label,
+        )?
+        .pop()
+        .ok_or_else(|| errors::inference_error("classify_window", "model returned no result"))
+    }
+
+    fn classify_inputs(
+        &mut self,
+        input_ids: Vec<i64>,
+        attention_mask: Vec<i64>,
+        batch_size: usize,
+        max_len: usize,
+        multi_label: bool,
+    ) -> UnifiedResult<Vec<ClassificationResult>> {
         // Create tensors
         let input_ids_tensor = Tensor::from_array(([batch_size, max_len], input_ids))
             .map_err(|e: ort::Error| errors::inference_error("create_input_ids", &e.to_string()))?;
