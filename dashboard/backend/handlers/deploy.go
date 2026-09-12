@@ -234,9 +234,16 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
-	existingData, err := os.ReadFile(configPath)
+	existingData, err := readLiveConfig(configPath)
 	if err != nil {
-		existingData = nil
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_read_failed",
+			"message": "Deploy aborted: the current config could not be read, so it cannot be merged or backed up.",
+		})
+		log.Printf("[Deploy] aborted, current config unreadable: %v", err)
+		return
 	}
 
 	// Step 2: Deep merge the routing fragment into the deploy base.
@@ -262,7 +269,17 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	}
 
 	// Step 3: Create backup of current config
-	version := createConfigBackup(configDir, existingData)
+	version, backupErr := createConfigBackup(configDir, existingData)
+	if backupErr != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_backup_failed",
+			"message": "Deploy aborted: the config backup could not be written with owner-only permissions.",
+		})
+		log.Printf("[Deploy] aborted, config backup failed: %v", backupErr)
+		return
+	}
 
 	// Step 4: Archive DSL source (for audit trail)
 	archiveDeployDSL(configDir, req.DSL)
@@ -492,7 +509,17 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 
 	// Back up current config before rollback
-	existingData := snapshotCurrentConfigBeforeRollback(configPath, configDir)
+	existingData, snapshotErr := snapshotCurrentConfigBeforeRollback(configPath, configDir)
+	if snapshotErr != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_backup_failed",
+			"message": "Rollback aborted: the pre-rollback snapshot could not be written with owner-only permissions.",
+		})
+		log.Printf("[Rollback] aborted, pre-rollback snapshot failed: %v", snapshotErr)
+		return
+	}
 
 	// Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, backupData); err != nil {

@@ -217,8 +217,16 @@ func SetupActivateHandler(
 			return
 		}
 
+		// Fails closed for the same reason as deploy: config.yaml carries
+		// credentials, so no backup means no activation.
 		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
-			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
+			log.Printf("Setup activation aborted, config backup failed: %v", backupErr)
+			http.Error(
+				w,
+				"Setup activation aborted: the config backup could not be written with owner-only permissions.",
+				http.StatusInternalServerError,
+			)
+			return
 		}
 
 		tmpConfigFile := configPath + ".tmp"
@@ -533,19 +541,25 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 }
 
 func backupCurrentConfig(configPath string, configDir string) error {
-	existingData, err := os.ReadFile(configPath)
-	if err != nil || len(existingData) == 0 {
+	// A missing config is the first-run case and has nothing to back up; any
+	// other read error must abort rather than activate over an unreadable file.
+	existingData, err := readLiveConfig(configPath)
+	if err != nil {
 		return err
+	}
+	if len(existingData) == 0 {
+		return nil
 	}
 
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+	backupDir := configBackupDir(configDir)
+	if err := ensureConfigSnapshotDir(backupDir); err != nil {
 		return err
 	}
+	repairConfigSnapshotPermissions(configDir)
 
 	version := time.Now().Format("20060102-150405")
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
+	if err := writeConfigSnapshot(backupFile, existingData); err != nil {
 		return err
 	}
 	cleanupBackups(backupDir)
