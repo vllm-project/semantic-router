@@ -28,9 +28,9 @@ func rawToCandidateIteration(r *rawCandidateForDecl) (*CandidateIterationDecl, [
 		case r.Source.Models != nil:
 			iter.Source = "models"
 			for _, model := range r.Source.Models.Models {
-				ref, refErrs := rawToModelRef(model)
+				ref, modelErrs := rawToModelRef(model)
 				iter.Models = append(iter.Models, ref)
-				errs = append(errs, refErrs...)
+				errs = append(errs, modelErrs...)
 			}
 		}
 	}
@@ -52,9 +52,9 @@ func rawToCandidateIterationModelOutput(item *rawCandidateIterationItem) (*Candi
 	}
 	var errs []error
 	for _, model := range item.Model.Models {
-		ref, refErrs := rawToModelRef(model)
+		ref, modelErrs := rawToModelRef(model)
 		output.Models = append(output.Models, ref)
-		errs = append(errs, refErrs...)
+		errs = append(errs, modelErrs...)
 		if output.Value == "" {
 			output.Value = ref.Model
 		}

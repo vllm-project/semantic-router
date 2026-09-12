@@ -395,9 +395,9 @@ func rawToRoute(r *rawRouteDecl) (*RouteDecl, []error) {
 			route.When = toBoolExpr(item.When)
 		case item.Model != nil:
 			for _, m := range item.Model.Models {
-				ref, refErrs := rawToModelRef(m)
+				ref, modelErrs := rawToModelRef(m)
 				route.Models = append(route.Models, ref)
-				errs = append(errs, refErrs...)
+				errs = append(errs, modelErrs...)
 			}
 		case item.Algorithm != nil:
 			route.Algorithm = rawToAlgo(item.Algorithm)

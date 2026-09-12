@@ -104,9 +104,9 @@ func applyDecisionTreeItemToRoute(route *RouteDecl, item *rawDecisionTreeItem) [
 	case item.Model != nil:
 		var errs []error
 		for _, model := range item.Model.Models {
-			ref, refErrs := rawToModelRef(model)
+			ref, modelErrs := rawToModelRef(model)
 			route.Models = append(route.Models, ref)
-			errs = append(errs, refErrs...)
+			errs = append(errs, modelErrs...)
 		}
 		return errs
 	case item.Algorithm != nil:
