@@ -46,7 +46,10 @@ func ValidateReloadArtifacts(current, next *config.RouterConfig) error {
 		if !exists {
 			continue
 		}
-		if old.Revision != spec.Revision || refresh[path] {
+		// An omitted revision can reuse complete local files without asserting
+		// a new version. Explicit revisions (including main) retain that intent;
+		// any required download still rejects writes into a live snapshot.
+		if (spec.Revision != "" && old.Revision != spec.Revision) || refresh[path] {
 			return fmt.Errorf("artifact %q is in use and cannot be refreshed during reload; choose a separate local artifact directory", spec.LocalPath)
 		}
 	}

@@ -6,7 +6,8 @@ type ModelSpec struct {
 	LocalPath string
 	// HuggingFace repository ID (e.g., "sentence-transformers/all-MiniLM-L12-v2")
 	RepoID string
-	// Git revision (commit hash, tag, or branch). Defaults to "main"
+	// Git revision (commit hash, tag, or branch). Empty leaves the revision
+	// unspecified for local reuse; a download uses HuggingFace's default branch.
 	Revision string
 	// Required files to verify model completeness
 	RequiredFiles []string

@@ -215,9 +215,9 @@ func TestExplicitDeploymentDownloadFailsClosed(t *testing.T) {
 	}
 }
 
-func writeHFSnapshot(t *testing.T, dir, revision string) {
+func writeHFSnapshot(t *testing.T, dir, revision string, extraFiles ...string) {
 	t.Helper()
-	for _, name := range []string{"config.json", "tokenizer.json", "model.safetensors"} {
+	for _, name := range append([]string{"config.json", "tokenizer.json", "model.safetensors"}, extraFiles...) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -251,13 +251,15 @@ func TestExactPinnedHFSnapshotIsReusedOffline(t *testing.T) {
 func TestRetiredPinnedSnapshotCannotBeOverwritten(t *testing.T) {
 	dir := t.TempDir()
 	writeHFSnapshot(t, dir, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	spec := ModelSpec{LocalPath: dir, Revision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Strict: true}
 	before, err := os.ReadFile(filepath.Join(dir, "model.safetensors"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if validationErr := validateArtifactDownload(spec); validationErr == nil {
-		t.Fatal("retired snapshot accepted new revision")
+	for _, revision := range []string{"", "main", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"} {
+		spec := ModelSpec{LocalPath: dir, Revision: revision, Strict: true}
+		if validationErr := validateArtifactDownload(spec); validationErr == nil {
+			t.Fatalf("retired snapshot accepted a write at revision %q", revision)
+		}
 	}
 	after, err := os.ReadFile(filepath.Join(dir, "model.safetensors"))
 	if err != nil {
@@ -281,6 +283,130 @@ func TestLiveSnapshotCannotBeResyncedDuringReload(t *testing.T) {
 	}
 	if err := ValidateReloadArtifacts(cfg, cfg); err == nil {
 		t.Fatal("live incomplete snapshot would be mutated")
+	}
+}
+
+func TestReloadReusesUnversionedCompanionFromLiveSnapshot(t *testing.T) {
+	const revision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	dir := t.TempDir()
+	writeHFSnapshot(t, dir, revision, "labels.json")
+	mapping := filepath.Join(dir, "labels.json")
+	if err := os.WriteFile(mapping, []byte(`{"0":"billing"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	current := deploymentConfig("candle", dir)
+	current.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: dir, Revision: revision}
+	binding := current.ModelBindings["domain_classifier"]
+	binding.MappingPath = mapping
+	current.ModelBindings["domain_classifier"] = binding
+	if err := ValidateReloadArtifacts(current, current); err != nil {
+		t.Fatalf("current pinned snapshot is not complete: %v", err)
+	}
+	next := deploymentConfig("candle", dir)
+	missingArtifact := filepath.Join(t.TempDir(), "unregistered-candidate")
+	next.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: missingArtifact, Revision: revision}
+	next.ModelBindings["domain_classifier"] = binding
+
+	// The existing mapping is still needed, but the candidate's revision does
+	// not describe that separate snapshot. No download may touch the live path.
+	specs, err := BuildModelSpecs(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(specs) != 1 || specs[0].LocalPath != dir || !specs[0].FilesOnly || specs[0].Revision != "" {
+		t.Errorf("expected an unversioned mapping companion, got %#v", specs)
+	}
+	if err := ValidateReloadArtifacts(current, next); err != nil {
+		t.Errorf("complete live companion rejected before candidate preparation: %v", err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	if err := EnsureModelsForConfig(next); err != nil {
+		t.Fatalf("read-only companion unexpectedly required the download CLI: %v", err)
+	}
+	if _, err := os.Stat(missingArtifact); !os.IsNotExist(err) {
+		t.Fatalf("unregistered candidate was provisioned: %v", err)
+	}
+	if err := os.Remove(mapping); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateReloadArtifacts(current, next); err == nil {
+		t.Fatal("missing live companion could be downloaded into the active snapshot")
+	}
+}
+
+func TestReloadCompanionGraphRequiresExternalTensorFiles(t *testing.T) {
+	const revision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	dir := t.TempDir()
+	writeHFSnapshot(t, dir, revision, "model.onnx", "actual-weights.bin")
+	entry := append(protoBytes(1, []byte("location")), protoBytes(2, []byte("actual-weights.bin"))...)
+	graph := protoBytes(7, protoBytes(5, protoBytes(13, entry)))
+	if err := os.WriteFile(filepath.Join(dir, "model.onnx"), graph, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	current := deploymentConfig("ort", dir)
+	current.ModelDeployments["new"] = config.ModelDeployment{Provider: "ort", Artifact: dir, Revision: revision}
+	binding := current.ModelBindings["domain_classifier"]
+	binding.Head = filepath.Join(dir, "model.onnx")
+	current.ModelBindings["domain_classifier"] = binding
+	if err := ValidateReloadArtifacts(current, current); err != nil {
+		t.Fatalf("current pinned graph is not complete: %v", err)
+	}
+	next := deploymentConfig("ort", dir)
+	next.ModelDeployments["new"] = config.ModelDeployment{Provider: "ort", Artifact: filepath.Join(t.TempDir(), "candidate"), Revision: revision}
+	next.ModelBindings["domain_classifier"] = binding
+	if err := ValidateReloadArtifacts(current, next); err != nil {
+		t.Errorf("complete external graph companion was rejected: %v", err)
+	}
+	if err := os.Remove(filepath.Join(dir, "actual-weights.bin")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateReloadArtifacts(current, next); err == nil {
+		t.Fatal("companion graph could download missing external tensors into the live snapshot")
+	}
+}
+
+func TestReloadRevisionIntentPreservesLiveWriteProtection(t *testing.T) {
+	const revision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	for _, test := range []struct {
+		name     string
+		revision string
+		reject   bool
+	}{
+		{name: "same_pin", revision: revision},
+		{name: "unspecified"},
+		{name: "explicit_main", revision: "main", reject: true},
+		{name: "different_pin", revision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", reject: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeHFSnapshot(t, dir, revision)
+			current := deploymentConfig("candle", dir)
+			current.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: dir, Revision: revision}
+			next := deploymentConfig("candle", dir)
+			next.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: dir, Revision: test.revision}
+			specs, err := BuildModelSpecs(next)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(specs) != 1 || specs[0].Revision != test.revision {
+				t.Errorf("revision intent changed: %#v", specs)
+			}
+			if err := ValidateReloadArtifacts(current, next); (err != nil) != test.reject {
+				t.Errorf("preflight error=%v, want rejection=%v", err, test.reject)
+			}
+			if !test.reject {
+				t.Setenv("PATH", t.TempDir())
+				if err := EnsureModelsForConfig(next); err != nil {
+					t.Fatalf("complete snapshot required download: %v", err)
+				}
+			}
+			if err := os.Remove(filepath.Join(dir, "tokenizer.json")); err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateReloadArtifacts(current, next); err == nil {
+				t.Fatal("revision intent allowed a live snapshot to be refreshed")
+			}
+		})
 	}
 }
 

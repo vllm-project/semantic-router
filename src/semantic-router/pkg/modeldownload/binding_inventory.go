@@ -47,11 +47,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	sort.Strings(keys)
 	specs := make([]ModelSpec, 0, len(keys))
 	for _, key := range keys {
-		spec := inventory.specs[key]
-		if spec.Revision == "" {
-			spec.Revision = "main"
-		}
-		specs = append(specs, spec)
+		specs = append(specs, inventory.specs[key])
 	}
 	return specs, nil
 }
