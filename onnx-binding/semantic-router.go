@@ -738,21 +738,8 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
-// ClassifyMmBert32KFeedbackWithProbs classifies text for feedback detection
-// and returns the winning class and confidence in the probability-compatible
-// result shape used by the Candle binding.
-func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := ClassifyMmBert32KFeedback(text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{},
-	}, nil
-}
-// and returns the full probability distribution.
+// ClassifyMmBert32KFeedbackWithProbs classifies text for feedback detection and
+// returns the full probability distribution.
 func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
 	return classifyWithClassifierProbabilities("feedback", text)
 }
@@ -1136,19 +1123,6 @@ func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
-// ClassifyFeedbackTextWithProbs classifies feedback text using the
-// probability-compatible result shape shared with the Candle binding.
-func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := ClassifyFeedbackText(text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{},
-	}, nil
-}
 // ClassifyFeedbackTextWithProbs classifies text for feedback detection and
 // returns the full probability distribution.
 func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
