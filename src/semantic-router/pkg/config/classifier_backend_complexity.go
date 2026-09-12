@@ -31,12 +31,15 @@ func ValidateComplexityModelBackend(cfg *RouterConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("complexity model configuration is nil")
 	}
-	if err := ValidateComplexityRuleBoundaries(cfg); err != nil {
+	if err := validateComplexityRoutingContracts(cfg); err != nil {
 		return err
 	}
-	for _, advisory := range ComplexityBackendAdvisories(cfg) {
-		logging.Warnf("%s", advisory)
-	}
+	return validateComplexityModelBackendContracts(cfg)
+}
+
+// validateComplexityModelBackendContracts checks the static attachment before
+// startup. Rule boundaries are checked separately once routing state is ready.
+func validateComplexityModelBackendContracts(cfg *RouterConfig) error {
 	backend := cfg.ComplexityModel.Backend
 	if backend == nil {
 		return nil
@@ -182,9 +185,14 @@ func ComplexityBackendAdvisories(cfg *RouterConfig) []string {
 	return advisories
 }
 
-// validateComplexityModelBackendContracts is the config-load entry point,
-// registered in globalConfigContractValidators so the same checks the
-// classifier construction seam runs also reject a bad document at load time.
-func validateComplexityModelBackendContracts(cfg *RouterConfig) error {
-	return ValidateComplexityModelBackend(cfg)
+// validateComplexityRoutingContracts checks all recipe rules against the shared
+// backend and reports advisories once the complete routing graph is available.
+func validateComplexityRoutingContracts(cfg *RouterConfig) error {
+	if err := ValidateComplexityRuleBoundaries(cfg); err != nil {
+		return err
+	}
+	for _, advisory := range ComplexityBackendAdvisories(cfg) {
+		logging.Warnf("%s", advisory)
+	}
+	return nil
 }
