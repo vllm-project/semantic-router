@@ -208,147 +208,7 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
         { key: 'max_responses_per_round', label: 'Max Responses/Round', type: 'number' },
       ]
     case 'fusion':
-      return [
-        {
-          key: 'model',
-          label: 'Judge Model',
-          type: 'string',
-          placeholder: 'qwen3-32b',
-          description: 'Judge/calling model for analysis and final synthesis',
-        },
-        {
-          key: 'analysis_models',
-          label: 'Analysis Models',
-          type: 'string[]',
-          placeholder: 'Add panel model...',
-          description: 'Override route modelRefs with a dedicated panel',
-        },
-        FUSION_ANALYSIS_MODE_FIELD,
-        {
-          key: 'analysis_overrides',
-          label: 'Analysis Overrides',
-          type: 'object[]',
-          description: 'Per-panel-model sampling overrides',
-          addLabel: 'Add override',
-          emptyLabel: 'No model-specific overrides configured.',
-          itemLabel: 'Model override',
-          itemLabelKey: 'model',
-          fields: [
-            { key: 'model', label: 'Model', type: 'string', required: true },
-            { key: 'temperature', label: 'Temperature', type: 'number', min: 0 },
-            {
-              key: 'max_completion_tokens',
-              label: 'Max Completion Tokens',
-              type: 'number',
-              min: 1,
-            },
-          ],
-        },
-        {
-          key: 'max_concurrent',
-          label: 'Max Concurrent',
-          type: 'number',
-          placeholder: '0 (panel size)',
-        },
-        {
-          key: 'max_completion_tokens',
-          label: 'Max Completion Tokens',
-          type: 'number',
-          placeholder: '512',
-        },
-        {
-          key: 'round_timeout_seconds',
-          label: 'Round Timeout',
-          type: 'number',
-          placeholder: '0 (wait for all)',
-          description: 'Stop waiting for panel responses after this many seconds',
-        },
-        {
-          key: 'min_successful_responses',
-          label: 'Min Successful',
-          type: 'number',
-          placeholder: '0 (all calls)',
-          description: 'Continue once this many panel responses succeed',
-        },
-        { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '0.2' },
-        FUSION_INCLUDE_ANALYSIS_FIELD,
-        {
-          key: 'include_intermediate_responses',
-          label: 'Include Responses',
-          type: 'boolean',
-          description: 'Return panel responses in the Fusion trace',
-        },
-        { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
-        {
-          key: 'analysis_template',
-          label: 'Analysis Template',
-          type: 'string',
-          description: 'Optional prompt template for panel analysis',
-        },
-        {
-          key: 'synthesis_template',
-          label: 'Synthesis Template',
-          type: 'string',
-          description: 'Optional prompt template for the judge synthesis',
-        },
-        {
-          key: 'quorum_failure_policy',
-          label: 'Quorum Failure Policy',
-          type: 'select',
-          options: ['', 'fail', 'fallback'],
-          description:
-            'Panel-level behavior below Min Successful. Independent of On Error, which governs one failed attempt',
-        },
-        {
-          key: 'quorum_fallback_target',
-          label: 'Quorum Fallback Target',
-          type: 'string',
-          placeholder: 'backup-model',
-          description: 'Model to route to when Quorum Failure Policy is fallback',
-        },
-        {
-          key: 'judge_prompt_version',
-          label: 'Prompt Version',
-          type: 'string',
-          placeholder: 'fusion-v1',
-        },
-        {
-          key: 'grounding',
-          label: 'Grounding',
-          type: 'object',
-          description: 'Score panel responses for faithfulness before synthesis',
-          fields: [
-            { key: 'enabled', label: 'Enabled', type: 'boolean' },
-            {
-              key: 'reference',
-              label: 'Reference',
-              type: 'select',
-              options: ['', 'hybrid', 'context', 'panel'],
-            },
-            {
-              key: 'policy',
-              label: 'Policy',
-              type: 'select',
-              options: ['', 'weight', 'annotate', 'filter'],
-            },
-            { key: 'min_score', label: 'Minimum Score', type: 'number', min: 0, max: 1 },
-            { key: 'min_keep', label: 'Minimum Responses', type: 'number', min: 0 },
-            {
-              key: 'nli_contradiction_penalty',
-              label: 'NLI Contradiction Penalty',
-              type: 'number',
-              min: 0,
-              max: 1,
-            },
-            {
-              key: 'on_error',
-              label: 'On Error',
-              type: 'select',
-              options: ['', 'skip', 'fail'],
-            },
-          ],
-        },
-      ]
+      return getFusionFieldSchema()
     case 'workflows':
       return [
         {
@@ -706,4 +566,148 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
     default:
       return []
   }
+}
+
+function getFusionFieldSchema(): FieldSchema[] {
+  return [
+    {
+      key: 'model',
+      label: 'Judge Model',
+      type: 'string',
+      placeholder: 'qwen3-32b',
+      description: 'Judge/calling model for analysis and final synthesis',
+    },
+    {
+      key: 'analysis_models',
+      label: 'Analysis Models',
+      type: 'string[]',
+      placeholder: 'Add panel model...',
+      description: 'Override route modelRefs with a dedicated panel',
+    },
+    FUSION_ANALYSIS_MODE_FIELD,
+    {
+      key: 'analysis_overrides',
+      label: 'Analysis Overrides',
+      type: 'object[]',
+      description: 'Per-panel-model sampling overrides',
+      addLabel: 'Add override',
+      emptyLabel: 'No model-specific overrides configured.',
+      itemLabel: 'Model override',
+      itemLabelKey: 'model',
+      fields: [
+        { key: 'model', label: 'Model', type: 'string', required: true },
+        { key: 'temperature', label: 'Temperature', type: 'number', min: 0 },
+        {
+          key: 'max_completion_tokens',
+          label: 'Max Completion Tokens',
+          type: 'number',
+          min: 1,
+        },
+      ],
+    },
+    {
+      key: 'max_concurrent',
+      label: 'Max Concurrent',
+      type: 'number',
+      placeholder: '0 (panel size)',
+    },
+    {
+      key: 'max_completion_tokens',
+      label: 'Max Completion Tokens',
+      type: 'number',
+      placeholder: '512',
+    },
+    {
+      key: 'round_timeout_seconds',
+      label: 'Round Timeout',
+      type: 'number',
+      placeholder: '0 (wait for all)',
+      description: 'Stop waiting for panel responses after this many seconds',
+    },
+    {
+      key: 'min_successful_responses',
+      label: 'Min Successful',
+      type: 'number',
+      placeholder: '0 (all calls)',
+      description: 'Continue once this many panel responses succeed',
+    },
+    { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '0.2' },
+    FUSION_INCLUDE_ANALYSIS_FIELD,
+    {
+      key: 'include_intermediate_responses',
+      label: 'Include Responses',
+      type: 'boolean',
+      description: 'Return panel responses in the Fusion trace',
+    },
+    { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
+    {
+      key: 'analysis_template',
+      label: 'Analysis Template',
+      type: 'string',
+      description: 'Optional prompt template for panel analysis',
+    },
+    {
+      key: 'synthesis_template',
+      label: 'Synthesis Template',
+      type: 'string',
+      description: 'Optional prompt template for the judge synthesis',
+    },
+    {
+      key: 'quorum_failure_policy',
+      label: 'Quorum Failure Policy',
+      type: 'select',
+      options: ['', 'fail', 'fallback'],
+      description:
+        'Panel-level behavior below Min Successful. Independent of On Error, which governs one failed attempt',
+    },
+    {
+      key: 'quorum_fallback_target',
+      label: 'Quorum Fallback Target',
+      type: 'string',
+      placeholder: 'backup-model',
+      description: 'Model to route to when Quorum Failure Policy is fallback',
+    },
+    {
+      key: 'judge_prompt_version',
+      label: 'Prompt Version',
+      type: 'string',
+      placeholder: 'fusion-v1',
+    },
+    {
+      key: 'grounding',
+      label: 'Grounding',
+      type: 'object',
+      description: 'Score panel responses for faithfulness before synthesis',
+      fields: [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        {
+          key: 'reference',
+          label: 'Reference',
+          type: 'select',
+          options: ['', 'hybrid', 'context', 'panel'],
+        },
+        {
+          key: 'policy',
+          label: 'Policy',
+          type: 'select',
+          options: ['', 'weight', 'annotate', 'filter'],
+        },
+        { key: 'min_score', label: 'Minimum Score', type: 'number', min: 0, max: 1 },
+        { key: 'min_keep', label: 'Minimum Responses', type: 'number', min: 0 },
+        {
+          key: 'nli_contradiction_penalty',
+          label: 'NLI Contradiction Penalty',
+          type: 'number',
+          min: 0,
+          max: 1,
+        },
+        {
+          key: 'on_error',
+          label: 'On Error',
+          type: 'select',
+          options: ['', 'skip', 'fail'],
+        },
+      ],
+    },
+  ]
 }
