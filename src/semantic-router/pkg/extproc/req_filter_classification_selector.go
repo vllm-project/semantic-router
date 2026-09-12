@@ -49,7 +49,9 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 		)
 		return selected, string(method), nil
 	}
-	if len(selCtx.CandidateModels) == 1 {
+	// multi_factor applies eligibility policy as well as ranking. A sole
+	// candidate must still satisfy the configured SLO and quality constraints.
+	if len(selCtx.CandidateModels) == 1 && method != selection.MethodMultiFactor {
 		return r.selectSingleCandidateModel(selCtx, method, defaultCandidate, ctx)
 	}
 
@@ -138,6 +140,10 @@ func (r *OpenAIRouter) selectWithSelector(
 			ctx,
 		)
 		return selected, string(method), nil
+	}
+	selCtx, err = applySelectionEligibility(selCtx, result, ctx)
+	if err != nil {
+		return nil, string(method), err
 	}
 	recordCtx, result, selectedModel, learningApplied := r.applyRouterLearning(
 		selCtx,

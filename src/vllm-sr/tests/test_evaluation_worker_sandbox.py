@@ -5,6 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux", reason="worker seccomp and Landlock require Linux"
+)
+
 
 def _run_probe(
     tmp_path: Path,
@@ -113,6 +119,40 @@ if os.read(pipe_read, 6) != b"broker":
 with ThreadPoolExecutor(max_workers=2) as pool:
     if tuple(pool.map(lambda value: value * 2, (2, 3))) != (4, 6):
         raise AssertionError("worker thread execution stopped working")
+""",
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_worker_threads_inherit_filesystem_network_and_process_restrictions(
+    tmp_path: Path,
+) -> None:
+    secret = tmp_path / "outside-worker-secret"
+    secret.write_text("must-not-reach-worker-thread", encoding="utf-8")
+    result = _run_probe(
+        tmp_path,
+        """
+from concurrent.futures import ThreadPoolExecutor
+def check_thread_restrictions():
+    for operation in (
+        lambda: socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+        lambda: (root / "outside-worker-secret").read_text(),
+    ):
+        try:
+            operation()
+        except PermissionError:
+            continue
+        raise AssertionError("worker thread escaped its sandbox")
+    try:
+        child = os.fork()
+    except PermissionError:
+        return "isolated"
+    if child == 0:
+        os._exit(99)
+    os.waitpid(child, 0)
+    raise AssertionError("worker thread created a child process")
+with ThreadPoolExecutor(max_workers=1) as pool:
+    assert pool.submit(check_thread_restrictions).result() == "isolated"
 """,
     )
     assert result.returncode == 0, result.stderr

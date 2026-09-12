@@ -141,7 +141,7 @@ def test_migrate_materializes_legacy_router_owned_anthropic_backend(tmp_path):
     anthropic_cluster = next(
         cluster
         for cluster in rendered["static_resources"]["clusters"]
-        if cluster["name"] == "claude_legacy_cluster"
+        if cluster["name"] == "model_claude_2dlegacy_cluster"
     )
     endpoint = anthropic_cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0][
         "endpoint"

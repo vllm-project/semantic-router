@@ -44,6 +44,12 @@ The Dashboard is available at <http://localhost:8700>. The routed
 OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
 reference config).
 
+For local `serve`, `listeners[].address` controls the host port publication.
+Use `127.0.0.1` or `::1` for host-only access. Envoy listens on the container
+bridge interface so both the published port and Dashboard can reach it; this
+keeps the host loopback restriction, including after Dashboard config saves.
+Standalone `config envoy` generation retains the configured listener address.
+
 `vllm-sr serve` starts the routing stack. It does not start the physical LLM
 backends referenced by `providers.models`; those endpoints must already be
 running and reachable.

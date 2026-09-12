@@ -25,6 +25,8 @@ const imageFilePNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlE
 const (
 	imageFileVisionDecision = "input_modality_vision_decision"
 	imageFileTextDecision   = "input_modality_text_decision"
+	imageFileVisionModel    = "mock/vision"
+	imageFileTextModel      = "openai/gpt-oss-20b"
 )
 
 func init() {
@@ -72,6 +74,9 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 	if err := verifyBackendReceivedInlinedImage(ctx, client, opts, sessionID, fileID); err != nil {
 		return err
 	}
+	if err := assertTextModelRejectsImage(ctx, client, opts, session, fileID, sessionID+"-text-model"); err != nil {
+		return err
+	}
 	if err := assertTextOnlySelectsTextDecision(ctx, session); err != nil {
 		return err
 	}
@@ -81,10 +86,14 @@ func testResponseAPIImageFileID(ctx context.Context, client *kubernetes.Clientse
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"file_id":             fileID,
-			"image_decision":      imageFileVisionDecision,
-			"text_decision":       imageFileTextDecision,
-			"unknown_file_status": http.StatusBadRequest,
+			"file_id":                     fileID,
+			"image_decision":              imageFileVisionDecision,
+			"image_model":                 imageFileVisionModel,
+			"text_decision":               imageFileTextDecision,
+			"text_model":                  imageFileTextModel,
+			"text_model_image_status":     http.StatusBadRequest,
+			"text_model_image_dispatched": false,
+			"unknown_file_status":         http.StatusBadRequest,
 		})
 	}
 	return nil
@@ -118,6 +127,67 @@ func assertImageFileSelectsVisionDecision(
 	if decision := imageResp.Headers.Get("x-vsr-selected-decision"); decision != imageFileVisionDecision {
 		return fmt.Errorf("image request selected decision %q, want %q", decision, imageFileVisionDecision)
 	}
+	if model := imageResp.Headers.Get("x-vsr-selected-model"); model != imageFileVisionModel {
+		return fmt.Errorf("image request selected model %q, want %q", model, imageFileVisionModel)
+	}
+	return nil
+}
+
+// assertTextModelRejectsImage pins the task constraint even when the client
+// names the text-only backend directly. The preceding positive image request
+// proves the simulator records forwarded session markers before this check
+// relies on the absence of a provider request.
+func assertTextModelRejectsImage(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	session *fixtures.ServiceSession,
+	fileID, sessionID string,
+) error {
+	response, err := postResponsesWithHeaders(ctx, session, map[string]any{
+		"model": imageFileTextModel,
+		"store": false,
+		"input": []map[string]any{{
+			"role": "user",
+			"content": []map[string]any{
+				{"type": "input_text", "text": "Describe the attached test image."},
+				{"type": "input_image", "file_id": fileID},
+			},
+		}},
+	}, map[string]string{"x-vsr-test-session-id": sessionID})
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusBadRequest {
+		return fmt.Errorf("text-only model image request returned HTTP %d, want 400: %s",
+			response.StatusCode, truncateString(string(response.Body), 500))
+	}
+	var envelope struct {
+		Error struct {
+			Type    string `json:"type"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if decodeErr := json.Unmarshal(response.Body, &envelope); decodeErr != nil {
+		return fmt.Errorf("decode text-only model capability error: %w", decodeErr)
+	}
+	if envelope.Error.Type != "invalid_request_error" || envelope.Error.Code != "unsupported_capability" ||
+		!strings.Contains(envelope.Error.Message, imageFileTextModel) || !strings.Contains(envelope.Error.Message, "image_input") {
+		return fmt.Errorf("text-only model returned the wrong capability error: %s", truncateString(string(response.Body), 500))
+	}
+	providerSession, err := openProtocolCodecProviderSession(ctx, client, opts, "openai.chat.v1")
+	if err != nil {
+		return err
+	}
+	defer providerSession.Close()
+	dispatched, model, err := lookupShortCircuitDispatch(ctx, providerSession, sessionID)
+	if err != nil {
+		return err
+	}
+	if dispatched {
+		return fmt.Errorf("rejected text-only model image request reached provider model %q", model)
+	}
 	return nil
 }
 
@@ -137,6 +207,9 @@ func assertTextOnlySelectsTextDecision(ctx context.Context, session *fixtures.Se
 	}
 	if decision := textResp.Headers.Get("x-vsr-selected-decision"); decision != imageFileTextDecision {
 		return fmt.Errorf("text request selected decision %q, want %q", decision, imageFileTextDecision)
+	}
+	if model := textResp.Headers.Get("x-vsr-selected-model"); model != imageFileTextModel {
+		return fmt.Errorf("text request selected model %q, want %q", model, imageFileTextModel)
 	}
 	return nil
 }
@@ -248,6 +321,10 @@ func verifyBackendReceivedInlinedImage(
 	if err := json.Unmarshal(recorded, &debug); err != nil {
 		return fmt.Errorf("decode recorded backend request: %w", err)
 	}
+	var model string
+	if err := json.Unmarshal(debug.Body["model"], &model); err != nil || model != imageFileVisionModel {
+		return fmt.Errorf("backend request model = %q, want %q: %s", model, imageFileVisionModel, truncateString(string(recorded), 600))
+	}
 	if _, found := debug.Body["messages"]; !found {
 		return fmt.Errorf("backend request is not in Chat Completions form: %s", truncateString(string(recorded), 600))
 	}
@@ -278,6 +355,7 @@ func postResponsesWithHeaders(
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-vsr-debug", "true")
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}

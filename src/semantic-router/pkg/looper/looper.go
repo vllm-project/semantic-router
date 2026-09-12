@@ -86,6 +86,11 @@ type Response struct {
 	// Body is the response body (JSON for non-streaming, SSE for streaming)
 	Body []byte
 
+	// BufferedBody is the completed Chat result behind a locally synthesized
+	// stream. It preserves alternative choices for semantic accounting without
+	// feeding a multi-choice aggregate through a single-choice stream decoder.
+	BufferedBody []byte `json:"-"`
+
 	// ContentType is "application/json" or "text/event-stream"
 	ContentType string
 

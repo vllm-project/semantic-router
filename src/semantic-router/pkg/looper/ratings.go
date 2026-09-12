@@ -187,6 +187,18 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 
 // formatRatingsJSONResponse creates a response with multiple choices (one per model)
 func (l *RatingsLooper) formatRatingsJSONResponse(responses []*ModelResponse, modelsUsed []string, iterations int) (*Response, error) {
+	body, err := ratingsCompletionBody(responses, modelsUsed,
+		fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()), time.Now().Unix())
+	if err != nil {
+		return nil, err
+	}
+	return &Response{
+		Body: body, ContentType: "application/json", Model: modelsUsed[len(modelsUsed)-1],
+		ModelsUsed: modelsUsed, Iterations: iterations, AlgorithmType: "ratings", Usage: SumUsage(responses...),
+	}, nil
+}
+
+func ratingsCompletionBody(responses []*ModelResponse, modelsUsed []string, id string, timestamp int64) ([]byte, error) {
 	// Build choices array - one choice per model response
 	choices := make([]map[string]interface{}, len(responses))
 	for i, resp := range responses {
@@ -202,9 +214,9 @@ func (l *RatingsLooper) formatRatingsJSONResponse(responses []*ModelResponse, mo
 
 	usage := SumUsage(responses...)
 	completion := map[string]interface{}{
-		"id":      fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()),
+		"id":      id,
 		"object":  "chat.completion",
-		"created": time.Now().Unix(),
+		"created": timestamp,
 		"model":   strings.Join(modelsUsed, ","), // Combined model names
 		"choices": choices,
 		"usage":   usage.Map(),
@@ -215,15 +227,7 @@ func (l *RatingsLooper) formatRatingsJSONResponse(responses []*ModelResponse, mo
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}
 
-	return &Response{
-		Body:          body,
-		ContentType:   "application/json",
-		Model:         modelsUsed[len(modelsUsed)-1],
-		ModelsUsed:    modelsUsed,
-		Iterations:    iterations,
-		AlgorithmType: "ratings",
-		Usage:         usage,
-	}, nil
+	return body, nil
 }
 
 // formatRatingsStreamingResponse creates an SSE streaming response with multiple choices
@@ -255,26 +259,23 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 	firstChunkBytes, _ := json.Marshal(firstChunk)
 	sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", firstChunkBytes))
 
-	// Content chunks: stream content for each choice
-	// Find the max content length to determine chunk iterations
-	maxLen := 0
-	for _, resp := range responses {
-		if len(resp.Content) > maxLen {
-			maxLen = len(resp.Content)
+	// Split on rune boundaries before JSON encoding so each delta preserves
+	// the original UTF-8 text, including CJK and emoji at chunk boundaries.
+	chunks := make([][]string, len(responses))
+	maxChunks := 0
+	for i, resp := range responses {
+		chunks[i] = splitIntoChunks(resp.Content, 50)
+		if len(chunks[i]) > maxChunks {
+			maxChunks = len(chunks[i])
 		}
 	}
 
-	chunkSize := 50
-	for offset := 0; offset < maxLen; offset += chunkSize {
+	for offset := 0; offset < maxChunks; offset++ {
 		choices := make([]map[string]interface{}, len(responses))
-		for i, resp := range responses {
+		for i := range responses {
 			content := ""
-			if offset < len(resp.Content) {
-				end := offset + chunkSize
-				if end > len(resp.Content) {
-					end = len(resp.Content)
-				}
-				content = resp.Content[offset:end]
+			if offset < len(chunks[i]) {
+				content = chunks[i][offset]
 			}
 			choices[i] = map[string]interface{}{
 				"index": i,
@@ -315,10 +316,21 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 	}
 	finalChunkBytes, _ := json.Marshal(finalChunk)
 	sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", finalChunkBytes))
+	usageChunk := map[string]interface{}{
+		"id": id, "object": "chat.completion.chunk", "created": timestamp,
+		"model": strings.Join(modelsUsed, ","), "choices": []interface{}{}, "usage": SumUsage(responses...).Map(),
+	}
+	usageChunkBytes, _ := json.Marshal(usageChunk)
+	sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", usageChunkBytes))
 	sseChunks = append(sseChunks, "data: [DONE]\n\n")
+	bufferedBody, err := ratingsCompletionBody(responses, modelsUsed, id, timestamp)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Response{
 		Body:          []byte(strings.Join(sseChunks, "")),
+		BufferedBody:  bufferedBody,
 		ContentType:   "text/event-stream",
 		Model:         modelsUsed[len(modelsUsed)-1],
 		ModelsUsed:    modelsUsed,

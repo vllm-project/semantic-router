@@ -134,12 +134,14 @@ func openRecipeConfigLock(storeFD int) (int, error) {
 		return -1, fmt.Errorf("open Recipe config lock: %w", err)
 	}
 	var lockInfo unix.Stat_t
-	if err = unix.Fstat(lockFD, &lockInfo); err == nil && lockInfo.Mode&unix.S_IFMT != unix.S_IFREG {
-		err = errors.New("recipe config lock is not a regular file")
+	if err = unix.Fstat(lockFD, &lockInfo); err == nil && (lockInfo.Mode&unix.S_IFMT != unix.S_IFREG || lockInfo.Nlink != 1) {
+		err = errors.New("recipe config lock must be a private regular file")
 	}
-	if err == nil {
-		err = unix.Fchmod(lockFD, 0o600)
+	if err == nil && lockInfo.Mode&0o007 != 0 {
+		err = errors.New("recipe config lock must not grant access to other users")
 	}
+	// Local stack bootstrap prepares group access for Dashboard. Preserve that shared
+	// lock's permissions instead of making subsequent Dashboard writes fail.
 	if err == nil {
 		err = unix.Flock(lockFD, unix.LOCK_EX|unix.LOCK_NB)
 	}

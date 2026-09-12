@@ -209,6 +209,7 @@ func TestSetupWriteEndpointsGateOnResolvedState(t *testing.T) {
 // resolver is reused and nothing restarts, so a stale cached resolution would
 // show up as /api/setup/state still reporting true after activation.
 func TestSetupActivateHandlerFlipsSetupStateWithinOneRequest(t *testing.T) {
+	isolateConfigMutationRuntime(t)
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 	// The legacy flag stays true across activation, as it does in a real

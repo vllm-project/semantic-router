@@ -45,7 +45,14 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	var semantic *llmprotocol.Response
 	var body []byte
 	contentType := "application/json"
-	if strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream") {
+	streaming := strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream")
+	if streaming && target == llmprotocol.OpenAIChatV1 && len(resp.BufferedBody) > 0 {
+		semantic, body, err = prepareNativeLooperStream(engine, resp, reqCtx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		contentType = "text/event-stream"
+	} else if streaming {
 		stream, streamErr := engine.NewStream(
 			llmprotocol.OpenAIChatV1,
 			target,

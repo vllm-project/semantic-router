@@ -10,7 +10,7 @@ static_resources:
   - name: {{ listener.name }}
     address:
       socket_address:
-        address: {{ listener.address }}
+        address: {{ listener.address | tojson }}
         port_value: {{ listener.port }}
     perConnectionBufferLimitBytes: 524288000
     filter_chains:
@@ -37,13 +37,13 @@ static_resources:
               - "x-authz-user-groups"
               routes:
               {% for model in models %}
-              # Route for model: {{ model.name }}
+              # Route for model: {{ model.name | tojson }}
               - match:
                   prefix: "/"
                   headers:
                   - name: x-selected-model
                     string_match:
-                      exact: "{{ model.name }}"
+                      exact: {{ model.name | tojson }}
                 {% if model.route_request_headers %}
                 request_headers_to_add:
                 {% for header in model.route_request_headers %}
@@ -225,7 +225,7 @@ static_resources:
   {% endif %}
 
   {% for model in models %}
-  # Cluster for model: {{ model.name }}
+  # Cluster for model: {{ model.name | tojson }}
   - name: {{ model.cluster_name }}_cluster
     connect_timeout: 10s
     type: {{ model.cluster_type }}

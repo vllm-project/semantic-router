@@ -130,6 +130,16 @@ jobs:
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
 
+      - name: Set up Python for selector parity
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify trained selector parity with the native runtime
+        run: |
+          python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt
+          make test-model-selection-parity
+
       # Reuse the CPU bindings above and gate protection before external services
       # or model downloads. The report includes per-turn failures on regression.
       - name: Gate agent routing protection benchmark
