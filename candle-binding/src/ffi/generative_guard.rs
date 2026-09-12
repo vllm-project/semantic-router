@@ -1,6 +1,7 @@
 //! FFI bindings for Qwen3Guard safety classification.
 
 use crate::model_architectures::generative::Qwen3GuardModel;
+use crate::registry::get_registry;
 use candle_core::Device;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
@@ -8,7 +9,6 @@ use std::ptr;
 use std::sync::{Mutex, OnceLock};
 
 /// Global Qwen3Guard instance (for safety/jailbreak detection)
-static GLOBAL_QWEN3_GUARD: OnceLock<Mutex<Qwen3GuardModel>> = OnceLock::new();
 
 /// Guard generation result returned to Go (raw text only)
 #[repr(C)]
@@ -93,13 +93,16 @@ pub unsafe extern "C" fn init_qwen3_guard(model_path: *const c_char) -> i32 {
 
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
 
-    if GLOBAL_QWEN3_GUARD.get().is_some() {
+    if get_registry()
+        .get::<Mutex<Qwen3GuardModel>>("global_qwen3_guard")
+        .is_some()
+    {
         println!("Qwen3Guard already initialized, reusing existing instance");
         return 0;
     }
 
     match Qwen3GuardModel::new(model_path_str, &device, None) {
-        Ok(guard) => match GLOBAL_QWEN3_GUARD.set(Mutex::new(guard)) {
+        Ok(guard) => match get_registry().register("global_qwen3_guard", Mutex::new(guard)) {
             Ok(_) => {
                 println!("Qwen3Guard initialized: {}", model_path_str);
                 0
@@ -166,7 +169,7 @@ pub unsafe extern "C" fn classify_with_qwen3_guard(
         }
     };
 
-    let guard_mutex = match GLOBAL_QWEN3_GUARD.get() {
+    let guard_mutex = match get_registry().get::<Mutex<Qwen3GuardModel>>("global_qwen3_guard") {
         Some(g) => g,
         None => {
             eprintln!("Error: Qwen3Guard not initialized");
@@ -233,7 +236,10 @@ pub unsafe extern "C" fn classify_with_qwen3_guard(
 /// - 0 if not initialized
 #[no_mangle]
 pub extern "C" fn is_qwen3_guard_initialized() -> i32 {
-    if GLOBAL_QWEN3_GUARD.get().is_some() {
+    if get_registry()
+        .get::<Mutex<Qwen3GuardModel>>("global_qwen3_guard")
+        .is_some()
+    {
         1
     } else {
         0
