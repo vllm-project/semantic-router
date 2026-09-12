@@ -134,7 +134,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/Vela-1.0-Encoder-307M-Feedback",
 		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M-Feedback",
-		Revision:         "e1fed64ceb29836b2f3b7233c847a3841e3e137c",
+		Revision:         "491d57960997e787e9977fb5166fc371b36b5e5c",
 		Aliases:          []string{"Vela-1.0-Encoder-307M-Feedback"},
 		Purpose:          PurposeFeedbackDetection,
 		Description:      "Recognize satisfaction, clarification, corrections, alternative requests, and messages without feedback. Supports 32K input; the published ONNX variant is FP32 with batch size 1.",

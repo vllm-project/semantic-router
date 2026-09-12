@@ -102,12 +102,14 @@ python3 scripts/rewrite_blocked_attention.py \
   --block-size 256 --max-score-bytes 536870912
 ```
 
-Each query block attends to the complete key/value sequence. An ONNX `Loop`
-bounds the score tensor by dynamically reducing the query block for the current
-batch, head count, and key length. Local masks use absolute positions, including
-the last partial block. The rewrite preserves the separate Q/K scaling, mask
-fill values, and NaN guard, and removes the original quadratic mask. It reduces
-peak attention storage, not the quadratic computation of global attention.
+Global attention keeps the complete key/value sequence. Local attention crops
+keys and values to the query block's window only when the entire batch has no
+padding and conservative numeric bounds prove that omitted mask probabilities
+are zero. Otherwise it keeps the complete sequence. An ONNX `Loop` bounds the
+score tensor using the batch, head count, and full key length. Local masks keep
+absolute positions, including the last partial block. The rewrite preserves
+separate Q/K scaling, mask fill values, and the NaN guard, and removes the
+original quadratic mask. Global attention still performs quadratic computation.
 The score budget covers one FP32 score tensor; it is not a total device-memory
 limit. Weights, other intermediates, and runtime workspaces require extra memory.
 
