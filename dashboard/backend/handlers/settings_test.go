@@ -81,8 +81,8 @@ func testSettingsReadUser(t *testing.T) {
 	if response.ServerReadonly || !response.RuntimeConfigWritable || !response.RecipeStoreWritable {
 		t.Fatalf("unexpected server capability response: %#v", response)
 	}
-	if response.RouterEvalURL != "http://router:8080/api/v1/eval" {
-		t.Fatalf("routerEvalEndpoint = %q, want %q", response.RouterEvalURL, "http://router:8080/api/v1/eval")
+	if response.RouterEvalURL != "http://router:8080/api/v1/routing/preview" {
+		t.Fatalf("routerEvalEndpoint = %q, want %q", response.RouterEvalURL, "http://router:8080/api/v1/routing/preview")
 	}
 }
 

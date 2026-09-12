@@ -43,6 +43,7 @@ def _prepare_docker_runtime_config(
     source_setup_mode: bool,
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
+    replace_active_config: bool,
 ):
     stack_layout = resolve_runtime_stack()
     state_root_dir = (
@@ -73,6 +74,12 @@ def _prepare_docker_runtime_config(
             state_root_dir=state_root_dir, stack_name=stack_layout.stack_name
         )
         if package_active:
+            if replace_active_config:
+                raise ValueError(
+                    "--replace-active-config cannot replace an active Recipe "
+                    "package; change or deactivate that package through the "
+                    "Recipe workflow first"
+                )
             # Authorize against what the package declares, not against what
             # the CLI materialized. The runtime config also carries the CLI's
             # own references -- this stack's generated storage credentials --
@@ -98,6 +105,7 @@ def _prepare_docker_runtime_config(
                 effective_config_bytes,
                 state_root_dir=state_root_dir,
                 stack_name=stack_layout.stack_name,
+                replace_active=replace_active_config,
             )
         setup_mode = is_setup_mode_config(effective_config_path)
         return effective_config_path, setup_mode, runtime_lock
@@ -114,12 +122,17 @@ def _prepare_effective_serve_config(
     source_setup_mode: bool,
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
+    replace_active_config: bool,
 ):
     """Prepare the target-specific active config and its optional runtime lock."""
 
     if resolved_target != "docker" and recipe_env_bindings:
         raise ValueError(
             "--recipe-env is supported only for local Docker Recipe packages"
+        )
+    if resolved_target != "docker" and replace_active_config:
+        raise ValueError(
+            "--replace-active-config is supported only for local Docker deployments"
         )
     if resolved_target == "docker":
         effective_path, setup_mode, runtime_lock = _prepare_docker_runtime_config(
@@ -128,6 +141,7 @@ def _prepare_effective_serve_config(
             source_setup_mode,
             platform,
             recipe_env_bindings,
+            replace_active_config,
         )
         return effective_path, setup_mode, runtime_lock, None
 

@@ -25,11 +25,11 @@ func TestClassifyEmptyInputReturns400(t *testing.T) {
 		body    string
 		handler func(http.ResponseWriter, *http.Request)
 	}{
-		{"intent empty", "/api/v1/classify/intent", `{"text":""}`, s.handleIntentClassification},
-		{"pii empty", "/api/v1/classify/pii", `{"text":""}`, s.handlePIIDetection},
-		{"security empty", "/api/v1/classify/security", `{"text":""}`, s.handleSecurityDetection},
-		{"pii whitespace", "/api/v1/classify/pii", `{"text":"   "}`, s.handlePIIDetection},
-		{"security whitespace", "/api/v1/classify/security", `{"text":"\t \n"}`, s.handleSecurityDetection},
+		{"intent empty", "/api/v1/diagnostics/classify/intent", `{"text":""}`, s.handleIntentClassification},
+		{"pii empty", "/api/v1/diagnostics/classify/pii", `{"text":""}`, s.handlePIIDetection},
+		{"security empty", "/api/v1/diagnostics/classify/security", `{"text":""}`, s.handleSecurityDetection},
+		{"pii whitespace", "/api/v1/diagnostics/classify/pii", `{"text":"   "}`, s.handlePIIDetection},
+		{"security whitespace", "/api/v1/diagnostics/classify/security", `{"text":"\t \n"}`, s.handleSecurityDetection},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -53,7 +53,7 @@ func TestClassifyNonEmptyInputStillOK(t *testing.T) {
 	s := &ClassificationAPIServer{
 		classificationSvc: services.NewPlaceholderClassificationService(),
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/pii", strings.NewReader(`{"text":"my email is a@b.com"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/pii", strings.NewReader(`{"text":"my email is a@b.com"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	s.handlePIIDetection(rr, req)

@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent',
         {
           type: 'category',
           label: 'Plan a Deployment',
@@ -489,6 +490,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'benchmarking/overview',
         'benchmarking/open-intelligence-index',
+        'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
         'benchmarking/evaluation-plane',
       ],
