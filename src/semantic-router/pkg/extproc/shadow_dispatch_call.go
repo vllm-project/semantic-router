@@ -187,15 +187,18 @@ func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
 			result[key] = value
 		}
 	}
-	// prepareShadowCall permits these client-supplied routing inputs only after
+	// prepareShadowCall permits these effective routing inputs only after
 	// resolving a same-format Dynamo target. Apply them after static headers so
 	// Dynamo's documented header-over-body routing semantics remain intact.
-	for key, value := range job.dynamoHeaders {
-		for existing := range result {
-			if strings.EqualFold(existing, key) {
-				delete(result, existing)
-			}
+	// Remove every routing input inherited from the independently configured
+	// shadow profile or decision. Re-add only the primary request's validated
+	// effective state so decision deletes remain deletes on the shadow path.
+	for existing := range result {
+		if _, ok := canonicalDynamoRoutingHeaderName(existing); ok {
+			delete(result, existing)
 		}
+	}
+	for key, value := range job.dynamoHeaders {
 		result[key] = value
 	}
 	result[headers.RequestID] = job.shadowRequestID

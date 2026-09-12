@@ -5,6 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -120,22 +123,68 @@ func hasDynamoRoutingHeader(ctx *RequestContext) bool {
 	return false
 }
 
-// snapshotDynamoRoutingHeaders copies only the documented, validated Dynamo
-// routing inputs needed to preserve shadow request semantics. Other client
-// headers remain outside the shadow trust boundary.
-func snapshotDynamoRoutingHeaders(ctx *RequestContext) map[string]string {
-	var result map[string]string
+// snapshotEffectiveDynamoRoutingHeaders materializes the Dynamo routing
+// inputs Envoy will send on the primary request. Envoy applies removals before
+// sets, so provider-profile and decision mutations replace or remove the raw
+// client values before the bounded shadow snapshot is taken.
+func snapshotEffectiveDynamoRoutingHeaders(
+	ctx *RequestContext,
+	mutation *ext_proc.HeaderMutation,
+) (map[string]string, error) {
+	result := make(map[string]string)
 	for _, name := range dynamoRoutingHeaderNames {
 		value := headerValueCI(ctx, name)
 		if strings.TrimSpace(value) == "" {
 			continue
 		}
-		if result == nil {
-			result = make(map[string]string)
-		}
 		result[name] = value
 	}
-	return result
+	if mutation != nil {
+		for _, name := range mutation.GetRemoveHeaders() {
+			deleteDynamoRoutingHeader(result, name)
+		}
+		for _, option := range mutation.GetSetHeaders() {
+			applyDynamoRoutingHeaderMutation(result, option)
+		}
+	}
+	effective := &RequestContext{Headers: result}
+	if err := validateDynamoRoutingHeaders(effective, llmprotocol.DefaultPolicy().Limits); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func applyDynamoRoutingHeaderMutation(result map[string]string, option *core.HeaderValueOption) {
+	if option == nil || option.GetHeader() == nil {
+		return
+	}
+	name, ok := canonicalDynamoRoutingHeaderName(option.GetHeader().GetKey())
+	if !ok {
+		return
+	}
+	deleteDynamoRoutingHeader(result, name)
+	value := string(option.GetHeader().GetRawValue())
+	if strings.TrimSpace(value) == "" {
+		return
+	}
+	result[name] = value
+}
+
+func deleteDynamoRoutingHeader(result map[string]string, name string) {
+	canonical, ok := canonicalDynamoRoutingHeaderName(name)
+	if !ok {
+		return
+	}
+	delete(result, canonical)
+}
+
+func canonicalDynamoRoutingHeaderName(name string) (string, bool) {
+	for _, candidate := range dynamoRoutingHeaderNames {
+		if strings.EqualFold(strings.TrimSpace(name), candidate) {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 func modelHasOnlyDynamoBackends(
