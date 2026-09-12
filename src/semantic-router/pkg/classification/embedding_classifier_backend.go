@@ -184,8 +184,17 @@ func (c *EmbeddingClassifier) getBackend() string {
 	return c.backend
 }
 
+// inferenceBackend reports the prepared provider when one owns inference.
+// Legacy configuration and overrides only select a backend without a provider.
+func (c *EmbeddingClassifier) inferenceBackend() string {
+	if c.provider != nil {
+		return c.provider.Backend()
+	}
+	return c.getBackend()
+}
+
 func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, phases ...string) ([]float32, error) {
-	backend := c.getBackend()
+	backend := c.inferenceBackend()
 	start := time.Now()
 	var embedding []float32
 	var err error
