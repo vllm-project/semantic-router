@@ -1,6 +1,6 @@
 //go:build windows || !cgo || (!amd64 && !arm64)
 
-package candle_binding
+package onnx_binding
 
 import "fmt"
 

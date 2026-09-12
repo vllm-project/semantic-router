@@ -1,6 +1,6 @@
 //go:build windows || !cgo || (!amd64 && !arm64)
 
-package candle_binding
+package onnx_binding
 
 func InitMmBert32KIntentClassifierWithMaxSequenceLength(modelPath string, useCPU bool, maxSequenceLength int) error {
 	return InitMmBert32KIntentClassifier(modelPath, useCPU)

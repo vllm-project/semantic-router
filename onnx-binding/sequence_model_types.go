@@ -1,4 +1,4 @@
-package candle_binding
+package onnx_binding
 
 // SequenceModelOptions is the exact contract of an independently owned head.
 // Labels follow the artifact's id2label ordering. MultiLabel selects sigmoid;
