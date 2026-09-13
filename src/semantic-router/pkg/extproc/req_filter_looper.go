@@ -186,6 +186,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 			if err == nil {
 				looperReq := &looper.Request{
 					OriginalRequest:              openAIRequest,
+					Grounding:                    r.groundingForRecipe(reqCtx.Routing.RecipeName()),
 					BaseContextTokens:            reqCtx.VSRContextTokenCount,
 					ModelRefs:                    modelRefs,
 					ModelParams:                  r.getModelParams(),
@@ -311,4 +312,18 @@ func pluginMaxOutputTokens(decision *config.Decision) *int64 {
 		return nil
 	}
 	return outputtokens.FromInt(params.MaxTokensLimit)
+}
+
+func (r *OpenAIRouter) groundingForRecipe(recipe config.RecipeName) *looper.GroundingBackends {
+	if r.RecipeClassifiers != nil {
+		classifier, ok := r.RecipeClassifiers.ForRecipe(recipe)
+		if !ok {
+			return nil
+		}
+		return classifier.GroundingBackends()
+	}
+	if recipe == "" || recipe == config.DefaultRecipeName {
+		return r.Classifier.GroundingBackends()
+	}
+	return nil
 }

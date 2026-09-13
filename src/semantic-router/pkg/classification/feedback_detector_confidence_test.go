@@ -3,7 +3,7 @@ package classification
 import (
 	"testing"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // The four classes the shipped detector declares, in the order its config.json
@@ -24,7 +24,7 @@ func TestApplyThresholdReportsTheSatisfiedProbability(t *testing.T) {
 	// 0.6395, under the configured threshold of 0.7, and P(satisfied) is
 	// 3.56e-06. Reporting 1 - 0.6395 claimed 0.3605, which is the mass on
 	// wrong_answer plus satisfied, not satisfied alone.
-	result := candle.ClassResultWithProbs{
+	result := tasks.ClassResultWithProbs{
 		Class:         3,
 		Confidence:    0.6395,
 		Probabilities: []float32{0.00000356, 0.0000412, 0.36048, 0.63946},
@@ -45,7 +45,7 @@ func TestApplyThresholdReportsTheSatisfiedProbability(t *testing.T) {
 
 func TestApplyThresholdLeavesAConfidentPredictionAlone(t *testing.T) {
 	d := &FeedbackDetector{mapping: fourClassMapping()}
-	result := candle.ClassResultWithProbs{
+	result := tasks.ClassResultWithProbs{
 		Class:         2,
 		Confidence:    0.9999,
 		Probabilities: []float32{0.00000001, 0.00000004, 0.9999, 0.0000012},
@@ -67,7 +67,7 @@ func TestApplyThresholdReadsTheSatisfiedIndexFromTheMapping(t *testing.T) {
 		"2": FeedbackLabelSatisfied,
 		"3": FeedbackLabelNeedClarification,
 	}}}
-	result := candle.ClassResultWithProbs{
+	result := tasks.ClassResultWithProbs{
 		Class:         0,
 		Confidence:    0.51,
 		Probabilities: []float32{0.51, 0.4, 0.08, 0.01},
@@ -91,7 +91,7 @@ func TestApplyThresholdKeepsThePredictionWhenSatisfiedIsUnreadable(t *testing.T)
 		"no probabilities": {mapping: fourClassMapping()},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result := candle.ClassResultWithProbs{Class: 3, Confidence: 0.42}
+			result := tasks.ClassResultWithProbs{Class: 3, Confidence: 0.42}
 			if name == "no satisfied label" {
 				result.Probabilities = []float32{0.42}
 				result.NumClasses = 1

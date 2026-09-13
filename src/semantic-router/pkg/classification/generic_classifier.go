@@ -9,10 +9,13 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-const defaultLLMLabelClassifierMaxTokens = 128
-const llmLabelScoreSumTolerance = 0.02
+const (
+	defaultLLMLabelClassifierMaxTokens = 128
+	llmLabelScoreSumTolerance          = 0.02
+)
 
 type labelClassification struct {
 	Scores    map[string]float64
@@ -30,16 +33,22 @@ type llmLabelClassifier struct {
 	instructions string
 	timeout      time.Duration
 	maxTokens    int
+	handle       *binding.Resolved[string, labelClassification]
+	recipe       string
 }
 
 func newLLMLabelClassifier(
 	rule config.ClassifierSignalRule,
 	external *config.ExternalModelConfig,
+	models ...*classifierModelRuntime,
 ) (labelClassifier, error) {
 	if external == nil {
 		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
 	}
 	client := newVLLMClientFromConfig(external)
+	if client.initErr != nil {
+		return nil, client.initErr
+	}
 	timeout := time.Duration(external.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Second
@@ -48,17 +57,34 @@ func newLLMLabelClassifier(
 	if maxTokens <= 0 {
 		maxTokens = defaultLLMLabelClassifierMaxTokens
 	}
-	return &llmLabelClassifier{
+	classifier := &llmLabelClassifier{
 		client:       client,
 		model:        external.ModelName,
 		labels:       append([]string(nil), rule.Labels...),
 		instructions: rule.Instructions,
 		timeout:      timeout,
 		maxTokens:    maxTokens,
-	}, nil
+	}
+	runtime := consumerModelRuntime(models)
+	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Protocol: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractLabelDistribution}
+	spec := runtime.remoteSpec("classifier."+rule.Name, backendCfg)
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, client, classifier.classify, func(_ string, out labelClassification) error {
+		_, err := validateLLMLabelScores(classifier.labels, out.Scores)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	classifier.handle, classifier.recipe = handle, string(spec.Recipe)
+	return classifier, nil
 }
 
-func (c *llmLabelClassifier) Classify(
+func (c *llmLabelClassifier) Classify(ctx context.Context, input string) (labelClassification, error) {
+	return c.handle.Call(ctx, c.recipe, input)
+}
+func (c *llmLabelClassifier) Close() error { return c.handle.Close() }
+
+func (c *llmLabelClassifier) classify(
 	ctx context.Context,
 	input string,
 ) (labelClassification, error) {
@@ -174,16 +200,18 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 		)
 		switch rule.Type {
 		case config.ClassifierSignalTypeLocal:
-			classifier, err = newLocalLabelClassifier(rule)
+			classifier, err = newLocalLabelClassifier(rule, b.models)
 		case config.ClassifierSignalTypeLLM:
 			classifier, err = newLLMLabelClassifier(
 				rule,
 				b.cfg.FindExternalModelByName(rule.Model),
+				b.models,
 			)
 		case config.ClassifierSignalTypeSequenceClassifier:
 			classifier, err = newSequenceLabelClassifier(
 				rule,
 				b.cfg.FindExternalModelByName(rule.Model),
+				b.models,
 			)
 		default:
 			// Config validation rejects unknown types, so reaching here means a
@@ -192,9 +220,18 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 			err = fmt.Errorf("unsupported type %q", rule.Type)
 		}
 		if err != nil {
+			closeLabelClassifiers(classifiers)
 			return nil, fmt.Errorf("build classifier signal %q: %w", rule.Name, err)
 		}
 		classifiers[rule.Name] = classifier
 	}
 	return withGenericClassifiers(classifiers), nil
+}
+
+func closeLabelClassifiers(classifiers map[string]labelClassifier) {
+	for _, classifier := range classifiers {
+		if closer, ok := classifier.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
+	}
 }

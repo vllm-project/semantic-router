@@ -316,18 +316,6 @@ func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 	return piiType, ok
 }
 
-// stripBIOPrefix removes the BIO sequence labeling prefix from a PII type string.
-// For example: "B-PERSON" → "PERSON", "I-DATE_TIME" → "DATE_TIME", "PERSON" → "PERSON".
-func stripBIOPrefix(s string) string {
-	if len(s) > 2 && s[1] == '-' {
-		switch s[0] {
-		case 'B', 'I', 'E':
-			return s[2:]
-		}
-	}
-	return s
-}
-
 // TranslatePIIType translates a PII type from Rust binding format to named type.
 // Handles formats like "class_6" → "DATE_TIME" and passes through already-named types.
 // Also strips BIO prefixes (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME).

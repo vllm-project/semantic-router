@@ -97,7 +97,7 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	switch apiConfig.RequestFormat {
 	case "pinecone", "weaviate":
 		var queryEmbeddings [][]float32
-		queryEmbeddings, buildErr = ragQueryEmbeddings(ctx.UserContent)
+		queryEmbeddings, buildErr = r.ragQueryEmbeddings(traceCtx, ctx.UserContent, ctx)
 		for _, queryEmbedding := range queryEmbeddings {
 			var body []byte
 			if apiConfig.RequestFormat == "pinecone" {
