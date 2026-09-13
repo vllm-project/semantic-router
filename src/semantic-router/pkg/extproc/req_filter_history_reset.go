@@ -56,6 +56,19 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 	ctx.ContextHistorySteps = append(ctx.ContextHistorySteps, action.Step())
 }
 
+// prepareLooperContextHistorySteps registers the history actions for an
+// internal Looper hop. The hop continues a public turn the parent request
+// already evaluated, so it inherits that completion instead of treating
+// appended tool results or a model change as a new topic-change event.
+func prepareLooperContextHistorySteps(ctx *RequestContext) {
+	if ctx == nil || !ctx.HistoryResetPolicy.IsEnabled() || ctx.HistoryResetAction != nil {
+		return
+	}
+	action := historyreset.NewInheritedAction(historyResetPolicy(ctx, ctx.HistoryResetPolicy))
+	ctx.HistoryResetAction = action
+	ctx.ContextHistorySteps = append(ctx.ContextHistorySteps, action.Step())
+}
+
 // historyResetPolicy translates validated configuration into the policy the
 // pure action executes with. Configuration cannot widen shared eligibility.
 func historyResetPolicy(
@@ -98,7 +111,7 @@ func historyResetBlockedReason(ctx *RequestContext, request *llmprotocol.Request
 	if request == nil || ctx.SemanticRequest == nil {
 		return historyreset.ReasonUnsupportedRepresentation
 	}
-	return ""
+	return ctx.HistoryResetBlocked
 }
 
 // finalizeHistoryResetDiagnostics reconciles the action's bounded diagnostic

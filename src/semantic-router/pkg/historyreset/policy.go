@@ -85,6 +85,7 @@ const (
 	ReasonReservedToolConflict       = "reserved_tool_conflict"
 	ReasonCancelled                  = "cancelled"
 	ReasonUnsupportedRepresentation  = "unsupported_request_representation"
+	ReasonHistoryUnresolved          = "history_unresolved"
 	ReasonRecoveryUnavailable        = "recovery_unavailable"
 	ReasonInheritedCompleted         = "inherited_completed"
 )
