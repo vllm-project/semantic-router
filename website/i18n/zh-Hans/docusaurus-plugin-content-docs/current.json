@@ -208,7 +208,7 @@
     "description": "The label for category Troubleshooting in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Contributing": {
-    "message": "Contributing",
+    "message": "贡献指南",
     "description": "The label for category Contributing in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Installation": {
