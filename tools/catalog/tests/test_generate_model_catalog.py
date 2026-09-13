@@ -290,9 +290,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "the official Astra model page does not publish a default effort",
         )
 
-        public_snapshot = json.loads(
-            catalog.render_outputs()[catalog.WEBSITE_OUTPUT]
-        )
+        public_snapshot = json.loads(catalog.render_outputs()[catalog.WEBSITE_OUTPUT])
         anchor_profiles = {
             result["index"]: result
             for result in public_snapshot["index_results"]
@@ -311,9 +309,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             anchor_profiles["vllm-sr/intelligence@1.0.0"]["status"],
             "available",
         )
-        self.assertIsNotNone(
-            anchor_profiles["vllm-sr/intelligence@1.0.0"]["score"]
-        )
+        self.assertIsNotNone(anchor_profiles["vllm-sr/intelligence@1.0.0"]["score"])
 
         providers = {provider["id"]: provider for provider in resources["providers"]}
         binding = next(
@@ -586,18 +582,12 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             5,
         )
         self.assertGreaterEqual(
-            len(
-                buckets[
-                    ("ai2/olmo-3-1-32b-think", "enabled", "vendor_claimed")
-                ]
-            ),
+            len(buckets[("ai2/olmo-3-1-32b-think", "enabled", "vendor_claimed")]),
             5,
         )
         self.assertGreaterEqual(
             len(
-                buckets[
-                    ("ai2/olmo-3-1-32b-instruct", "unspecified", "vendor_claimed")
-                ]
+                buckets[("ai2/olmo-3-1-32b-instruct", "unspecified", "vendor_claimed")]
             ),
             5,
         )
