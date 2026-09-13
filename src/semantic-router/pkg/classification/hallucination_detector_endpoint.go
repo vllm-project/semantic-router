@@ -1,17 +1,17 @@
 package classification
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -93,26 +93,65 @@ type EndpointHallucinationDetector struct {
 	config      *config.HallucinationModelConfig
 	initialized bool
 	mu          sync.RWMutex
-	client      *http.Client
+	client      *connector.Client
+	handle      *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
+	spec        config.ResolvedModelBinding
 	endpoint    string
 }
 
-func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig) (*EndpointHallucinationDetector, error) {
+func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*classifierModelRuntime) (*EndpointHallucinationDetector, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("hallucination model config is required")
 	}
-	if cfg.Endpoint == "" {
+	runtime := consumerModelRuntime(models)
+	endpoint := strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/")
+	external := &config.ExternalModelConfig{Name: "hallucination_endpoint", ModelName: cfg.ModelID, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint}, TimeoutSeconds: 10}
+	spec := config.ResolvedModelBinding{Recipe: runtime.recipe, Name: "hallucination_detector", Binding: config.ModelBinding{Deployment: "hallucination_detector", Contract: config.RemoteClassifierContractTokenSpans, Adapter: config.RemoteClassifierProtocolHTTPChat}, Deployment: config.ModelDeployment{Provider: "http", ExternalModel: external.Name}, Admission: runtime.cfg.ModelAdmission["hallucination_detector"]}
+	if declared, ok := runtime.plan.Lookup(runtime.recipe, "hallucination_detector"); ok {
+		spec = declared
+		if declared.Deployment.Provider != "http" {
+			return nil, fmt.Errorf("endpoint hallucination detector requires HTTP deployment")
+		}
+		backend := &config.RemoteClassifierBackend{Model: declared.Deployment.ExternalModel, Protocol: declared.Binding.Adapter, Contract: declared.Binding.Contract}
+		var err error
+		external, err = config.ResolveRemoteClassifierBackend(runtime.cfg, backend, config.ModelRoleClassification, config.RemoteClassifierContractTokenSpans)
+		if err != nil {
+			return nil, err
+		}
+		scheme := external.ModelEndpoint.Protocol
+		if scheme == "" {
+			scheme = "http"
+		}
+		endpoint = fmt.Sprintf("%s://%s:%d/v1", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
+		copied := *cfg
+		copied.ModelID = external.ModelName
+		copied.Endpoint = endpoint
+		cfg = &copied
+	}
+	if endpoint == "" {
 		return nil, fmt.Errorf("hallucination endpoint is required when backend is endpoint")
 	}
 	if cfg.ModelID == "" {
 		return nil, fmt.Errorf("hallucination model_id is required")
 	}
-
-	return &EndpointHallucinationDetector{
-		config:   cfg,
-		client:   &http.Client{Timeout: 10 * time.Second},
-		endpoint: strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/"),
-	}, nil
+	client, err := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
+	if err != nil {
+		return nil, err
+	}
+	detector := &EndpointHallucinationDetector{config: cfg, client: client, endpoint: endpoint, spec: spec}
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, client, detector.classifyGrounded, func(input tasks.GroundedTextRequest, out tasks.TokenClassificationResult) error {
+		for _, span := range out.Entities {
+			if span.Start < 0 || span.End > len(input.Answer) || span.Start >= span.End || input.Answer[span.Start:span.End] != span.Text {
+				return fmt.Errorf("invalid grounding span")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	detector.handle = handle
+	return detector, nil
 }
 
 func (d *EndpointHallucinationDetector) Initialize() error {
@@ -209,7 +248,7 @@ func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question
 // Start/End offsets are populated. The NLI label is set to the NLIUnknown sentinel
 // (not 0, which is NLIEntailment) because the endpoint backend does not produce NLI
 // labels, keeping the numeric and string forms consistent.
-func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, answer string) ([]EnhancedHallucinationSpan, error) {
+func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, answer string) ([]tasks.TokenEntity, error) {
 	var openaiResp struct {
 		Choices []struct {
 			Message struct {
@@ -245,7 +284,7 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 	}
 
 	rawSpans := *parsed.HallucinatedSpans
-	spans := make([]EnhancedHallucinationSpan, 0, len(rawSpans))
+	spans := make([]tasks.TokenEntity, 0, len(rawSpans))
 	invalidCount := 0
 	for _, s := range rawSpans {
 		if s.Text == "" {
@@ -269,17 +308,7 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 			continue
 		}
 
-		spans = append(spans, EnhancedHallucinationSpan{
-			Text:                    s.Text,
-			Start:                   start,
-			End:                     start + len(s.Text),
-			HallucinationConfidence: 1.0,
-			NLILabel:                NLIUnknown,
-			NLILabelStr:             "UNKNOWN",
-			NLIConfidence:           0,
-			Severity:                2,
-			Explanation:             endpointSpanExplanation(s.Explanation, category, subcategory),
-		})
+		spans = append(spans, tasks.TokenEntity{Text: s.Text, Start: start, End: start + len(s.Text), EntityType: category, Subtype: subcategory, Explanation: endpointSpanExplanation(s.Explanation, category, subcategory)})
 	}
 
 	// A response that returned spans but where every one failed validation is a
@@ -313,51 +342,45 @@ func endpointSpanExplanation(explanation, category, subcategory string) string {
 // through on error and records the detection_error path rather than not_detected.
 // A clean result is reserved for an empty answer (nothing to verify) and for a
 // successfully parsed empty span list.
+func (d *EndpointHallucinationDetector) classifyGrounded(ctx context.Context, input tasks.GroundedTextRequest) (tasks.TokenClassificationResult, error) {
+	if input.Context == "" {
+		return tasks.TokenClassificationResult{}, fmt.Errorf("context is required for hallucination detection")
+	}
+	body, err := d.buildRequestPayload(input.Context, input.Question, input.Answer)
+	if err != nil {
+		return tasks.TokenClassificationResult{}, err
+	}
+	response, err := d.client.Do(ctx, connector.Operation{Name: "hallucination", Method: http.MethodPost, Path: "/chat/completions", SuccessStatusCode: http.StatusOK}, body)
+	if err != nil {
+		return tasks.TokenClassificationResult{}, err
+	}
+	spans, err := d.parseOpenAIResponse(response, input.Answer)
+	available := false
+	return tasks.TokenClassificationResult{Entities: spans, ScoresAvailable: &available}, err
+}
+
+func (d *EndpointHallucinationDetector) ClassifyGrounded(ctx context.Context, input tasks.GroundedTextRequest) (tasks.TokenClassificationResult, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if !d.initialized {
+		return tasks.TokenClassificationResult{}, binding.ErrClosed
+	}
+	return d.handle.Call(ctx, string(d.spec.Recipe), input)
+}
+
 func (d *EndpointHallucinationDetector) DetectWithNLI(ctx context.Context, reqContext, question, answer string) (*EnhancedHallucinationResult, error) {
 	if answer == "" {
 		return d.cleanResult(), nil
 	}
-	if reqContext == "" {
-		return nil, fmt.Errorf("context is required for hallucination detection")
-	}
-
-	bodyBytes, err := d.buildRequestPayload(reqContext, question, answer)
+	result, err := d.ClassifyGrounded(ctx, tasks.GroundedTextRequest{Context: reqContext, Question: question, Answer: answer})
 	if err != nil {
-		return nil, fmt.Errorf("failed to build hallucination detection request: %w", err)
+		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", d.endpoint+"/chat/completions", bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create hallucination detection request: %w", err)
+	enhanced := &EnhancedHallucinationResult{HallucinationDetected: len(result.Entities) > 0, Spans: make([]EnhancedHallucinationSpan, 0, len(result.Entities))}
+	for _, span := range result.Entities {
+		enhanced.Spans = append(enhanced.Spans, EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: span.Explanation})
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("endpoint hallucination detection request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("endpoint hallucination detection returned non-200 status: %d", resp.StatusCode)
-	}
-
-	// Cap the response read at 10MB to avoid unbounded memory use from a
-	// misbehaving endpoint.
-	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
-	if err != nil {
-		return nil, fmt.Errorf("endpoint hallucination detection response read failed: %w", err)
-	}
-
-	spans, err := d.parseOpenAIResponse(respBytes, answer)
-	if err != nil {
-		return nil, fmt.Errorf("endpoint hallucination detection parse failed: %w", err)
-	}
-
-	return &EnhancedHallucinationResult{
-		HallucinationDetected: len(spans) > 0,
-		Confidence:            1.0,
-		Spans:                 spans,
-	}, nil
+	return enhanced, nil
 }
 
 // cleanResult is the "nothing to verify" verdict, used only when the answer is
@@ -366,7 +389,6 @@ func (d *EndpointHallucinationDetector) DetectWithNLI(ctx context.Context, reqCo
 func (d *EndpointHallucinationDetector) cleanResult() *EnhancedHallucinationResult {
 	return &EnhancedHallucinationResult{
 		HallucinationDetected: false,
-		Confidence:            1.0,
 		Spans:                 []EnhancedHallucinationSpan{},
 	}
 }
@@ -380,9 +402,24 @@ func (d *EndpointHallucinationDetector) Detect(ctx context.Context, reqContext, 
 	res := &HallucinationResult{
 		HallucinationDetected: enhanced.HallucinationDetected,
 		Confidence:            enhanced.Confidence,
+		ScoreAvailable:        enhanced.ScoreAvailable,
+		ScoreKind:             enhanced.ScoreKind,
 	}
 	for _, s := range enhanced.Spans {
 		res.UnsupportedSpans = append(res.UnsupportedSpans, s.Text)
 	}
 	return res, nil
+}
+
+func (d *EndpointHallucinationDetector) Close() error {
+	if d == nil {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.initialized = false
+	if d.handle != nil {
+		return d.handle.Close()
+	}
+	return nil
 }

@@ -55,7 +55,7 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 	// reports whether the whole response was scored, which no single threshold
 	// can answer for every rule.
 	start := time.Now()
-	scan, err := classifier.ScanJailbreakRisk(selectionRequestContext(ctx), assistantContent)
+	scan, err := classifier.ScanJailbreak(selectionRequestContext(ctx), assistantContent)
 	latency := time.Since(start).Seconds()
 
 	if err != nil {
@@ -69,6 +69,8 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 	}
 	ctx.VSRResponseJailbreakType = scan.Type
 	ctx.VSRResponseJailbreakRisk = scan.RiskScore
+	ctx.VSRResponseJailbreakScoreAvailable = scan.Decision == nil
+	ctx.VSRResponseJailbreakDecision = scan.Decision
 	r.publishResponseJailbreakSignal(ctx, rules, &scan)
 }
 

@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"testing"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -58,6 +57,11 @@ func setupRealFeedbackDetector(t *testing.T) *FeedbackDetector {
 	if err := detector.Initialize(); err != nil {
 		t.Fatalf("initialize feedback detector from %q: %v", modelPath, err)
 	}
+	t.Cleanup(func() {
+		if err := detector.Close(); err != nil {
+			t.Errorf("close feedback detector: %v", err)
+		}
+	})
 	return detector
 }
 
@@ -101,10 +105,11 @@ func TestFeedbackConfidenceIsTheSatisfiedProbabilityRealModel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Classify(%q): %v", text, err)
 			}
-			probs, err := candle.ClassifyMmBert32KFeedbackWithProbs(text)
+			probs, err := detector.backend.Classify(context.Background(), text)
 			if err != nil {
-				t.Fatalf("ClassifyMmBert32KFeedbackWithProbs(%q): %v", text, err)
+				t.Fatalf("raw owned feedback distribution(%q): %v", text, err)
 			}
+			class, confidence := deriveArgmax(probs.Probabilities)
 			if len(probs.Probabilities) < 2 {
 				t.Fatalf("probabilities = %v, want the full per-class distribution", probs.Probabilities)
 			}
@@ -112,12 +117,12 @@ func TestFeedbackConfidenceIsTheSatisfiedProbabilityRealModel(t *testing.T) {
 				t.Errorf("probabilities sum = %.4f, want ~1.0 (softmax distribution)", sum)
 			}
 			t.Logf("text=%q argmax=%d confidence=%.6f probabilities=%v reported=%s %.6f",
-				text, probs.Class, probs.Confidence, probs.Probabilities, result.FeedbackType, result.Confidence)
+				text, class, confidence, probs.Probabilities, result.FeedbackType, result.Confidence)
 
-			if probs.Confidence >= realFeedbackThreshold {
-				if result.Confidence != probs.Confidence {
+			if confidence >= realFeedbackThreshold {
+				if result.Confidence != confidence {
 					t.Errorf("above the threshold the reported confidence is %v, want the model's %v",
-						result.Confidence, probs.Confidence)
+						result.Confidence, confidence)
 				}
 				return
 			}
@@ -128,7 +133,7 @@ func TestFeedbackConfidenceIsTheSatisfiedProbabilityRealModel(t *testing.T) {
 			if result.Confidence != want {
 				t.Errorf("reported confidence is %v, want P(satisfied) %v", result.Confidence, want)
 			}
-			if regressed := float32(1.0) - probs.Confidence; result.Confidence == regressed && want != regressed {
+			if regressed := float32(1.0) - confidence; result.Confidence == regressed && want != regressed {
 				t.Errorf("reported confidence is 1 - P(argmax) (%v), the #3534 defect", regressed)
 			}
 		})
@@ -148,12 +153,13 @@ func TestFeedbackConfidenceUnderAThresholdNoPredictionMeetsRealModel(t *testing.
 	if err != nil {
 		t.Fatalf("Classify(%q): %v", text, err)
 	}
-	probs, err := candle.ClassifyMmBert32KFeedbackWithProbs(text)
+	probs, err := detector.backend.Classify(context.Background(), text)
 	if err != nil {
-		t.Fatalf("ClassifyMmBert32KFeedbackWithProbs(%q): %v", text, err)
+		t.Fatalf("raw owned feedback distribution(%q): %v", text, err)
 	}
+	class, confidence := deriveArgmax(probs.Probabilities)
 	t.Logf("text=%q argmax=%d confidence=%.6f probabilities=%v reported=%s %.6f",
-		text, probs.Class, probs.Confidence, probs.Probabilities, result.FeedbackType, result.Confidence)
+		text, class, confidence, probs.Probabilities, result.FeedbackType, result.Confidence)
 
 	if result.FeedbackType != FeedbackLabelSatisfied {
 		t.Fatalf("the label is %q, want %q", result.FeedbackType, FeedbackLabelSatisfied)

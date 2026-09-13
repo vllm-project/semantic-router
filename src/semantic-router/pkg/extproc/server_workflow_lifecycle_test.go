@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
 func TestReloadRouterFromConfig_FailedWarmupDoesNotApplyFileTTL(t *testing.T) {
@@ -29,7 +30,7 @@ func TestReloadRouterFromConfig_FailedWarmupDoesNotApplyFileTTL(t *testing.T) {
 
 	candidate := cfg
 	candidate.Flow.State.TTLSeconds = 1
-	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
 		return newWorkflowRouter(t, candidate), nil
 	}
 	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {
@@ -129,7 +130,7 @@ func TestReloadRouterFromConfig_WorkflowFileStateConcurrentPutTake(t *testing.T)
 	const workers = 4
 	const opsPerWorker = 8
 	errCh := make(chan error, workers*opsPerWorker)
-	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
 		var wg sync.WaitGroup
 		for w := 0; w < workers; w++ {
 			wg.Add(1)
@@ -265,7 +266,7 @@ func stubWorkflowReloadSeams(t *testing.T, looperCfg config.LooperConfig) {
 	}
 	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error { return nil }
 	replaceReloadConfig = func(*config.RouterConfig) {}
-	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
 		return newWorkflowRouter(t, looperCfg), nil
 	}
 }

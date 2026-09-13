@@ -19,14 +19,18 @@ type FactCheckOptions struct {
 
 // FactCheckResponse represents the response from fact-check classification
 type FactCheckResponse struct {
-	NeedsFactCheck   bool    `json:"needs_fact_check"`
-	Label            string  `json:"label"`
-	Confidence       float64 `json:"confidence"`
-	ProcessingTimeMs int64   `json:"processing_time_ms"`
+	NeedsFactCheck      bool    `json:"needs_fact_check"`
+	Label               string  `json:"label"`
+	Confidence          float64 `json:"confidence"`
+	ConfidenceAvailable bool    `json:"confidence_available"`
+	PolicyDefault       string  `json:"policy_default,omitempty"`
+	ProcessingTimeMs    int64   `json:"processing_time_ms"`
 }
 
 // ClassifyFactCheck performs fact-check classification
 func (s *ClassificationService) ClassifyFactCheck(ctx context.Context, req FactCheckRequest) (*FactCheckResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	if blankText(req.Text) {
@@ -38,10 +42,10 @@ func (s *ClassificationService) ClassifyFactCheck(ctx context.Context, req FactC
 	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &FactCheckResponse{
-			NeedsFactCheck:   false,
-			Label:            "unknown",
-			Confidence:       0.0,
-			ProcessingTimeMs: processingTime,
+			NeedsFactCheck:      false,
+			Label:               "unknown",
+			ConfidenceAvailable: false,
+			ProcessingTimeMs:    processingTime,
 		}, nil
 	}
 
@@ -49,10 +53,10 @@ func (s *ClassificationService) ClassifyFactCheck(ctx context.Context, req FactC
 	if !classifier.IsFactCheckEnabled() {
 		processingTime := time.Since(start).Milliseconds()
 		return &FactCheckResponse{
-			NeedsFactCheck:   false,
-			Label:            "fact_check_disabled",
-			Confidence:       0.0,
-			ProcessingTimeMs: processingTime,
+			NeedsFactCheck:      false,
+			Label:               "fact_check_disabled",
+			ConfidenceAvailable: false,
+			ProcessingTimeMs:    processingTime,
 		}, nil
 	}
 
@@ -65,10 +69,12 @@ func (s *ClassificationService) ClassifyFactCheck(ctx context.Context, req FactC
 	processingTime := time.Since(start).Milliseconds()
 
 	return &FactCheckResponse{
-		NeedsFactCheck:   result.NeedsFactCheck,
-		Label:            result.Label,
-		Confidence:       float64(result.Confidence),
-		ProcessingTimeMs: processingTime,
+		NeedsFactCheck:      result.NeedsFactCheck,
+		Label:               result.Label,
+		Confidence:          float64(result.Confidence),
+		ConfidenceAvailable: result.ConfidenceAvailable,
+		PolicyDefault:       result.PolicyDefault,
+		ProcessingTimeMs:    processingTime,
 	}, nil
 }
 
@@ -85,14 +91,18 @@ type UserFeedbackOptions struct {
 
 // UserFeedbackResponse represents the response from user feedback classification
 type UserFeedbackResponse struct {
-	FeedbackType     string  `json:"feedback_type"`
-	Label            string  `json:"label"`
-	Confidence       float64 `json:"confidence"`
-	ProcessingTimeMs int64   `json:"processing_time_ms"`
+	FeedbackType        string  `json:"feedback_type"`
+	Label               string  `json:"label"`
+	Confidence          float64 `json:"confidence"`
+	ConfidenceAvailable bool    `json:"confidence_available"`
+	PolicyDefault       string  `json:"policy_default,omitempty"`
+	ProcessingTimeMs    int64   `json:"processing_time_ms"`
 }
 
 // ClassifyUserFeedback performs user feedback classification
 func (s *ClassificationService) ClassifyUserFeedback(ctx context.Context, req UserFeedbackRequest) (*UserFeedbackResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	if blankText(req.Text) {
@@ -104,10 +114,10 @@ func (s *ClassificationService) ClassifyUserFeedback(ctx context.Context, req Us
 	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &UserFeedbackResponse{
-			FeedbackType:     "unknown",
-			Label:            "unknown",
-			Confidence:       0.0,
-			ProcessingTimeMs: processingTime,
+			FeedbackType:        "unknown",
+			Label:               "unknown",
+			ConfidenceAvailable: false,
+			ProcessingTimeMs:    processingTime,
 		}, nil
 	}
 
@@ -115,10 +125,10 @@ func (s *ClassificationService) ClassifyUserFeedback(ctx context.Context, req Us
 	if !classifier.IsFeedbackDetectorEnabled() {
 		processingTime := time.Since(start).Milliseconds()
 		return &UserFeedbackResponse{
-			FeedbackType:     "feedback_detector_disabled",
-			Label:            "feedback_detector_disabled",
-			Confidence:       0.0,
-			ProcessingTimeMs: processingTime,
+			FeedbackType:        "feedback_detector_disabled",
+			Label:               "feedback_detector_disabled",
+			ConfidenceAvailable: false,
+			ProcessingTimeMs:    processingTime,
 		}, nil
 	}
 
@@ -131,10 +141,12 @@ func (s *ClassificationService) ClassifyUserFeedback(ctx context.Context, req Us
 	processingTime := time.Since(start).Milliseconds()
 
 	return &UserFeedbackResponse{
-		FeedbackType:     result.FeedbackType,
-		Label:            result.FeedbackType, // FeedbackType is the label
-		Confidence:       float64(result.Confidence),
-		ProcessingTimeMs: processingTime,
+		FeedbackType:        result.FeedbackType,
+		Label:               result.FeedbackType, // FeedbackType is the label
+		Confidence:          float64(result.Confidence),
+		ConfidenceAvailable: result.ConfidenceAvailable,
+		PolicyDefault:       result.PolicyDefault,
+		ProcessingTimeMs:    processingTime,
 	}, nil
 }
 
@@ -158,6 +170,8 @@ type NLIResponse struct {
 // Returns ENTAILMENT when the premise supports the hypothesis, NEUTRAL when it
 // neither supports nor contradicts, and CONTRADICTION when it conflicts.
 func (s *ClassificationService) ClassifyNLI(ctx context.Context, req NLIRequest) (*NLIResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	if req.Premise == "" || req.Hypothesis == "" {
@@ -194,6 +208,8 @@ func (s *ClassificationService) ClassifyNLI(ctx context.Context, req NLIRequest)
 
 // IsNLIReady reports whether the NLI model is loaded and ready for inference.
 func (s *ClassificationService) IsNLIReady() bool {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	classifier := s.classifierSnapshot()
 	return classifier != nil && classifier.IsHallucinationExplainerReady()
 }

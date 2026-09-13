@@ -52,7 +52,14 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	// translate, then restore the public workflow trace when the decision
 	// asked for intermediate responses.
 	codecBody, flow := isolateLooperWorkflowFlow(resp.Body)
-	if strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream") {
+	streaming := strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream")
+	if streaming && target == llmprotocol.OpenAIChatV1 && len(resp.BufferedBody) > 0 {
+		semantic, body, err = prepareNativeLooperStream(engine, resp, reqCtx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		contentType = "text/event-stream"
+	} else if streaming {
 		stream, streamErr := engine.NewStream(
 			llmprotocol.OpenAIChatV1,
 			target,
@@ -250,7 +257,7 @@ func appendLooperRoutingFacts(
 	appendOptionalHeader(setHeaders, headers.VSRSelectedModel, selectedModel)
 	appendOptionalHeader(setHeaders, headers.VSRSelectedRecipe, string(reqCtx.Routing.RecipeName()))
 	appendOptionalHeader(setHeaders, headers.VSRSelectedDecision, reqCtx.VSRSelectedDecisionName)
-	if reqCtx.VSRSelectedDecisionName != "" && reqCtx.VSRSelectedDecisionConfidence >= 0 {
+	if reqCtx.VSRSelectedDecisionName != "" && reqCtx.VSRSelectedDecisionConfidenceScored && reqCtx.VSRSelectedDecisionConfidence >= 0 {
 		appendOptionalHeader(
 			setHeaders,
 			headers.VSRSelectedConfidence,

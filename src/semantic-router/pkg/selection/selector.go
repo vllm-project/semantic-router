@@ -259,6 +259,12 @@ type SelectionResult struct {
 	// Reasoning provides human-readable explanation for the selection
 	Reasoning string
 
+	// EligibleModels is the selector's explicit policy envelope. Nil means the
+	// selector only ranks candidates; a non-nil set contains every model still
+	// allowed after hard filters (or the explicitly configured fallback).
+	// Later learning and provider rerouting must not expand this set.
+	EligibleModels []config.ModelRef
+
 	// AllScores maps each candidate model to its computed score
 	AllScores map[string]float64
 

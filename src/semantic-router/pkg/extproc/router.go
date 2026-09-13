@@ -33,6 +33,7 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
+	Embeddings           *embedding.Set
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
@@ -47,6 +48,7 @@ type OpenAIRouter struct {
 	CompressionRecovery   contextcompression.RecoveryStore
 	CompressionEmbedding  embedding.Provider
 	CompressionScorer     contextcompression.RelevanceScorer
+	compressionScorers    map[string]contextcompression.RelevanceScorer
 	contextCompressionMu  sync.Mutex
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
