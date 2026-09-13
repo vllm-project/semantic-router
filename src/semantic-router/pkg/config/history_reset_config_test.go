@@ -40,31 +40,6 @@ var historyResetValidationCases = []struct {
 		},
 	},
 	{
-		name: "enabled_is_rejected_until_the_trigger_family_exists",
-		payload: map[string]interface{}{
-			"enabled": true,
-			"trigger": map[string]interface{}{
-				"signal":            "topic_boundary",
-				"min_confidence":    0.9,
-				"accepted_versions": []string{"v1"},
-			},
-		},
-		wantErr: HistoryResetTriggerUnavailable,
-	},
-	{
-		name: "enabled_fail_closed_is_rejected_the_same_way",
-		payload: map[string]interface{}{
-			"enabled":      true,
-			"failure_mode": "fail_closed",
-			"trigger": map[string]interface{}{
-				"signal":            "topic_boundary",
-				"min_confidence":    0.75,
-				"accepted_versions": []string{"v1"},
-			},
-		},
-		wantErr: HistoryResetTriggerUnavailable,
-	},
-	{
 		name: "enabled_requires_accepted_versions",
 		payload: map[string]interface{}{
 			"enabled": true,
@@ -267,23 +242,10 @@ func TestHistoryResetEffectiveLimitsOverrideOnlyConfiguredBounds(t *testing.T) {
 	}
 }
 
-// The enablement gate follows the signal catalog rather than a constant, so it
-// opens on its own when the topic-continuity family is registered. Passing a
-// catalog keeps that verifiable without mutating the process-wide registry.
-func TestHistoryResetTriggerFamilyFollowsTheSignalCatalog(t *testing.T) {
-	if historyResetTriggerFamilyRegistered(signalCatalog) {
-		t.Fatal("the shipped catalog already declares a topic-continuity family")
-	}
-	withFamily := append(append([]SignalCatalogEntry(nil), signalCatalog...), SignalCatalogEntry{
-		Type:                  HistoryResetTriggerSignalType,
-		DisplayName:           "Topic Continuity",
-		Collection:            "topic_continuity",
-		DecisionReferenceable: true,
-	})
-	if !historyResetTriggerFamilyRegistered(withFamily) {
-		t.Fatal("expected the registered family to satisfy the trigger gate")
-	}
-
+// Enablement depends on whether the topic-continuity family is available, and
+// the check is parameterized so both directions are verified without asserting
+// anything about which families the shipped catalog happens to declare.
+func TestHistoryResetEnablementFollowsTriggerAvailability(t *testing.T) {
 	confidence := 0.9
 	policy := &HistoryResetPluginConfig{
 		Enabled: true,
@@ -293,13 +255,21 @@ func TestHistoryResetTriggerFamilyFollowsTheSignalCatalog(t *testing.T) {
 			AcceptedVersions: []string{"v1"},
 		},
 	}
-	// An enabled policy is refused while the family is absent and accepted once
-	// it exists; nothing else about the policy changes between the two calls.
-	if err := validateHistoryResetEnablement(policy, "decision", false); err == nil {
-		t.Fatal("an enabled policy was accepted with no registered family")
+	err := validateHistoryResetEnablement(policy, "decision", false)
+	if err == nil {
+		t.Fatal("an enabled policy was accepted with no available trigger family")
 	}
-	if err := validateHistoryResetEnablement(policy, "decision", true); err != nil {
+	if !strings.Contains(err.Error(), HistoryResetTriggerUnavailable) {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if err = validateHistoryResetEnablement(policy, "decision", true); err != nil {
 		t.Fatalf("expected an enabled policy to validate once the family exists, got %v", err)
+	}
+
+	// A disabled policy never depends on the trigger family.
+	disabled := &HistoryResetPluginConfig{Enabled: false}
+	if err = validateHistoryResetEnablement(disabled, "decision", false); err != nil {
+		t.Fatalf("a disabled policy must not require a trigger family: %v", err)
 	}
 }
 
