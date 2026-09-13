@@ -97,11 +97,11 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", prepareErr.Error())
 		return
 	}
-  if err := checkEmbeddingReadiness(req); err != nil {
-    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-        fmt.Sprintf("failed to generate embedding: %v", err))
-    return
-  }
+	if err := checkEmbeddingReadiness(req); err != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err))
+		return
+	}
 	results, totalProcessingTime, err := buildOwnedEmbeddingResults(r.Context(), prepared, req)
 	if err != nil {
 		status, code, message := classifyEmbeddingError(err)
@@ -320,44 +320,44 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-  prepared, release, err := s.acquireEmbeddings()
-  if err != nil {
-    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
-    return
-  }
-  defer release()
+	prepared, release, err := s.acquireEmbeddings()
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
+		return
+	}
+	defer release()
 
-  start := time.Now()
-  request := EmbeddingRequest{
-    Model:           req.Model,
-    Dimension:       req.Dimension,
-    QualityPriority: req.QualityPriority,
-    LatencyPriority: req.LatencyPriority,
-  }
+	start := time.Now()
+	request := EmbeddingRequest{
+		Model:           req.Model,
+		Dimension:       req.Dimension,
+		QualityPriority: req.QualityPriority,
+		LatencyPriority: req.LatencyPriority,
+	}
 
-  if err := checkEmbeddingReadiness(request); err != nil {
-    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-      fmt.Sprintf("failed to calculate similarity: %v", err))
-    return
-  }
+	if err := checkEmbeddingReadiness(request); err != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to calculate similarity: %v", err))
+		return
+	}
 
-  first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
-  request.Model = first.ModelUsed
+	first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
+	request.Model = first.ModelUsed
 
-  var score float32
-  if err == nil {
-    second, otherErr := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text2)
-    err = otherErr
-    if err == nil {
-      score, err = embeddingCosine(first.Embedding, second.Embedding)
-    }
-  }
+	var score float32
+	if err == nil {
+		second, otherErr := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text2)
+		err = otherErr
+		if err == nil {
+			score, err = embeddingCosine(first.Embedding, second.Embedding)
+		}
+	}
 
-  result := SimilarityResponse{
-    Similarity:       score,
-    ModelUsed:         first.ModelUsed,
-    ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000,
-  }
+	result := SimilarityResponse{
+		Similarity:       score,
+		ModelUsed:        first.ModelUsed,
+		ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000,
+	}
 	if err != nil {
 		if isEmbeddingModelNotReady(err) {
 			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
@@ -390,11 +390,11 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 	defer release()
-  if !candle_binding.IsEmbeddingModelReady(req.Model) {
-    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-      "Embedding models are not initialized — configure an embedding model in your router config")
-    return
-  }
+	if !candle_binding.IsEmbeddingModelReady(req.Model) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			"Embedding models are not initialized — configure an embedding model in your router config")
+		return
+	}
 	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED", err.Error())
