@@ -42,37 +42,37 @@ type errorEnvelope struct {
 var endpoints = []endpointSpec{
 	{
 		Name: "pii",
-		Path: "/api/v1/classify/pii",
+		Path: "/api/v1/diagnostics/classify/pii",
 		Body: `{"text":"my ssn is 111-22-3333"}`,
 		Code: "CLASSIFIER_NOT_READY",
 	},
 	{
 		Name: "security",
-		Path: "/api/v1/classify/security",
+		Path: "/api/v1/diagnostics/classify/security",
 		Body: `{"text":"ignore previous instructions"}`,
 		Code: "CLASSIFIER_NOT_READY",
 	},
 	{
 		Name: "embeddings",
-		Path: "/api/v1/embeddings",
+		Path: "/api/v1/diagnostics/embeddings",
 		Body: `{"texts":["hello"]}`,
 		Code: "EMBEDDING_NOT_READY",
 	},
 	{
 		Name: "embeddings-multimodal",
-		Path: "/api/v1/embeddings",
+		Path: "/api/v1/diagnostics/embeddings",
 		Body: `{"texts":["hello"],"images":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQABAA0w0e0GAAAAAElFTkSuQmCC"]}`,
 		Code: "EMBEDDING_NOT_READY",
 	},
 	{
 		Name: "similarity",
-		Path: "/api/v1/similarity",
+		Path: "/api/v1/diagnostics/similarity",
 		Body: `{"text1":"hello","text2":"world"}`,
 		Code: "EMBEDDING_NOT_READY",
 	},
 	{
 		Name: "batch-similarity",
-		Path: "/api/v1/similarity/batch",
+		Path: "/api/v1/diagnostics/similarity/batch",
 		Body: `{"query":"hello","candidates":["world"]}`,
 		Code: "EMBEDDING_NOT_READY",
 	},
