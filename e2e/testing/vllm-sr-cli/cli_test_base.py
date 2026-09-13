@@ -350,6 +350,7 @@ class CLITestBase(unittest.TestCase):
         api_only: bool = False,
         managed_storage: bool = False,
         skip_processing: bool = False,
+        looper: bool = False,
     ) -> str:
         """Write a minimal runnable canonical v0.3 config into the temp workspace.
 
@@ -370,6 +371,24 @@ class CLITestBase(unittest.TestCase):
             backend_ref["provider"] = provider
         if api_key_env is not None:
             backend_ref["api_key_env"] = api_key_env
+
+        decision: dict[str, object] = {
+            "name": "default-route",
+            "description": "Default route for CLI test coverage",
+            "priority": 100,
+            "rules": {"operator": "AND", "conditions": []},
+            "modelRefs": [{"model": model_name, "use_reasoning": False}],
+        }
+        if looper:
+            decision["algorithm"] = {
+                "type": "remom",
+                "remom": {
+                    "breadth_schedule": [1],
+                    "model_distribution": "first_only",
+                    "min_successful_responses": 1,
+                    "on_error": "fail",
+                },
+            }
 
         config = {
             "version": "v0.3",
@@ -396,15 +415,7 @@ class CLITestBase(unittest.TestCase):
             },
             "routing": {
                 "modelCards": [{"name": model_name}],
-                "decisions": [
-                    {
-                        "name": "default-route",
-                        "description": "Default route for CLI test coverage",
-                        "priority": 100,
-                        "rules": {"operator": "AND", "conditions": []},
-                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
-                    }
-                ],
+                "decisions": [decision],
             },
         }
         if api_only:
@@ -413,6 +424,12 @@ class CLITestBase(unittest.TestCase):
             global_config = config.setdefault("global", {})
             global_config.setdefault("router", {})["skip_processing"] = {
                 "enabled": True
+            }
+        if looper:
+            global_config = config.setdefault("global", {})
+            integrations = global_config.setdefault("integrations", {})
+            integrations["looper"] = {
+                "endpoint": f"http://localhost:{port}/v1/chat/completions"
             }
         if managed_storage:
             global_config = config.get("global")

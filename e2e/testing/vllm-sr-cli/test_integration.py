@@ -7,6 +7,7 @@ They are slower than unit tests and should be run with --integration flag.
 
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -183,14 +184,18 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         request_path: str = "/v1/chat/completions",
         redact_values: tuple[str, ...] = (),
         request_headers: dict[str, str] | None = None,
+        model: str = "test-model",
     ):
         """Send a chat request, retrying until the local stack is ready."""
         listener_port = 8888 + self.runtime_stack.port_offset
         request = urllib_request.Request(
             f"http://localhost:{listener_port}{request_path}",
-            data=(
-                b'{"model":"test-model","messages":[{"role":"user","content":"ping"}]}'
-            ),
+            data=json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": "ping"}],
+                }
+            ).encode(),
             headers={"Content-Type": "application/json", **(request_headers or {})},
             method="POST",
         )
@@ -244,6 +249,8 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         request_path: str = "/v1/chat/completions",
         direct_endpoint: bool = False,
         skip_processing: bool = False,
+        model: str = "test-model",
+        looper: bool = False,
     ) -> set[str]:
         """Route one chat request to a path-recording OpenAI mock upstream."""
         mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
@@ -257,6 +264,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         with self._running_serve(
             api_only=True,
             skip_processing=skip_processing,
+            looper=looper,
             **serve_kwargs,
         ):
             self.assertTrue(
@@ -273,6 +281,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
                     request_headers=(
                         {"x-vsr-skip-processing": "true"} if skip_processing else None
                     ),
+                    model=model,
                 )
                 return self._mock_upstream_paths(mock_container)
 
@@ -387,6 +396,30 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         )
 
         self.print_test_result(True, "Direct endpoint path was resolved once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_looper_custom_prefix_uses_selected_route_without_rewrite(self):
+        """Keep Looper provider paths off the default rewriting route."""
+        self.print_test_header(
+            "Looper Provider Path Integration Test",
+            "Routes every Looper hop once to a /v1/provider mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="looper-provider-path-upstream",
+            base_path="/v1/provider",
+            model="vllm-sr/auto",
+            looper=True,
+        )
+        self.assertEqual(
+            {"/v1/provider/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Looper provider paths were resolved once")
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
