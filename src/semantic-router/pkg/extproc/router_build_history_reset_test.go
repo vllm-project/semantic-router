@@ -294,17 +294,13 @@ func TestRecoveryAgreementIsCheckedBeforeComponentsAreBuilt(t *testing.T) {
 // components would otherwise go unnoticed.
 func TestConstructionRejectsAnEnabledPolicyWithoutAProducer(t *testing.T) {
 	released := 0
-	original := closeRejectedCandidate
-	closeRejectedCandidate = func(router *OpenAIRouter) error {
-		released++
-		return original(router)
-	}
-	t.Cleanup(func() { closeRejectedCandidate = original })
-
 	cfg := &config.RouterConfig{}
 	cfg.Decisions = []config.Decision{resetDecisionFor(t, "reset", nil)}
 
-	router, err := buildOpenAIRouterFromConfig(cfg)
+	router, err := buildOpenAIRouterFromConfigWithCloser(cfg, func(candidate *OpenAIRouter) error {
+		released++
+		return candidate.Close()
+	})
 	if err == nil {
 		if router != nil {
 			_ = router.Close()
