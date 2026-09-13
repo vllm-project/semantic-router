@@ -56,8 +56,11 @@ type Policy struct {
 	Binding string
 	// MaxRecoveryBytes bounds the payload a single request may persist.
 	MaxRecoveryBytes int
-	// Timeout bounds the whole evaluation, including preparing the view's
-	// dependency groups, not just the selection loop.
+	// Timeout bounds the action's own callback: selecting removable turns,
+	// closing over tool dependencies, and persisting recovery content. The
+	// shared executor prepares the transformation view before the callback
+	// runs, and the topic producer is asked before that, so neither is inside
+	// this budget; each bounds its own work.
 	Timeout time.Duration
 }
 

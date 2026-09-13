@@ -57,11 +57,14 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 		writer, detached, blocked = r.historyResetRecovery(ctx, request)
 	}
 	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, recoverySettings)
-	action := historyreset.NewAction(
-		policy,
-		r.historyResetTrigger(ctx, policy),
-		blocked,
-	)
+	// A request that is already terminal cannot be changed by any result, so
+	// the producer is not asked: evaluating a topic signal can be expensive,
+	// and its answer could only be discarded.
+	var trigger historyreset.TriggerResult
+	if blocked == "" {
+		trigger = r.historyResetTrigger(ctx, policy)
+	}
+	action := historyreset.NewAction(policy, trigger, blocked)
 	if writer != nil {
 		action = action.WithRecovery(writer, detached)
 	}
@@ -135,6 +138,11 @@ func (r *OpenAIRouter) historyResetTrigger(
 	callContext := ctx.TraceContext
 	if callContext == nil {
 		callContext = context.Background()
+	}
+	if ctx.OriginalContextHistory == nil {
+		// Nothing resolved the history, so there is no conversation to
+		// classify and no binding to verify a result against.
+		return historyreset.TriggerResult{}
 	}
 	result, ok := r.HistoryResetTriggers.TopicContinuity(callContext, historyreset.TriggerRequest{
 		Signal:  policy.Signal,

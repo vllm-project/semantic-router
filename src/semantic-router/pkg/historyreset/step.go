@@ -146,6 +146,12 @@ func (a *Action) persist(
 		diagnostics.RecoveryStatus = RecoveryFailed
 		return errBlocked(ReasonCancelled)
 	}
+	if a.policy.MaxRecoveryBytes > 0 &&
+		a.estimateEnvelopeBytes(ids) > a.policy.MaxRecoveryBytes {
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryLimitExceeded
+		diagnostics.RecoveryStatus = RecoveryFailed
+		return errBlocked(ReasonRecoveryLimitExceeded)
+	}
 	payload, err := a.buildEnvelope(ids, turns)
 	if err != nil {
 		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryWriteFailed
