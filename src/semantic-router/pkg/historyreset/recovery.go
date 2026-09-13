@@ -107,6 +107,22 @@ func (a *Action) buildEnvelope(
 	turns map[int]int,
 	limit int,
 ) (string, error) {
+	return a.buildEnvelopeWithSizer(ids, turns, limit, encodedMessageSize)
+}
+
+// recoveryMessageSizer reports a message's encoded size, or refuses to measure
+// a shape it does not model.
+type recoveryMessageSizer func(llmprotocol.Message) (int, error)
+
+// buildEnvelopeWithSizer carries the construction loop. The sizer is a
+// parameter so a test can exercise the refusal path end to end; production
+// always supplies the real one.
+func (a *Action) buildEnvelopeWithSizer(
+	ids []int,
+	turns map[int]int,
+	limit int,
+	size recoveryMessageSizer,
+) (string, error) {
 	wire := envelopeWire{Version: EnvelopeVersion, Removed: make([]envelopeWireMessage, 0, len(ids))}
 	distinct := make(map[int]struct{}, len(ids))
 	encoded := envelopeFixedOverhead + len(EnvelopeVersion)
@@ -119,11 +135,11 @@ func (a *Action) buildEnvelope(
 		// permits both very large single fields and very many small blocks.
 		// Sizing the encoded form first keeps the work bounded: a message that
 		// would not fit is refused before its encoded bytes are allocated.
-		size, err := encodedMessageSize(message)
+		messageSize, err := size(message)
 		if err != nil {
 			return "", fmt.Errorf("size removed message %d: %w", id, err)
 		}
-		if limit > 0 && encoded+size > limit {
+		if limit > 0 && encoded+messageSize > limit {
 			return "", errRecoveryPayloadTooLarge
 		}
 		payload, err := json.Marshal(message)

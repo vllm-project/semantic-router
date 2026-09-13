@@ -708,22 +708,51 @@ func TestRecoveryTypeGraphStaysSupported(t *testing.T) {
 	}
 }
 
-// A message the sizer cannot measure must fail the removal rather than proceed
-// on an unverified budget.
-func TestUnsizableMessageFailsRecoveryInsteadOfProceeding(t *testing.T) {
+// The nested pointers the current content block uses stay measurable, so an
+// ordinary removal still builds its envelope.
+func TestSupportedNestedPointersBuildRecoveryEnvelope(t *testing.T) {
 	action := NewAction(testPolicy(), acceptedChange(), "").
-		WithRecovery(&recoveryWriterStub{}, map[int]llmprotocol.Message{0: {}})
-	// Force an unsupported shape through the detached content.
-	action.detached[0] = llmprotocol.Message{
-		Role: llmprotocol.RoleUser,
-		Content: []llmprotocol.Content{{
-			Kind: llmprotocol.ContentText,
-			Cache: &llmprotocol.CacheDirective{
-				Type: "ephemeral",
-			},
-		}},
-	}
+		WithRecovery(&recoveryWriterStub{}, map[int]llmprotocol.Message{0: {
+			Role: llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{
+				Kind:  llmprotocol.ContentText,
+				Cache: &llmprotocol.CacheDirective{Type: "ephemeral", TTL: "5m"},
+			}},
+		}})
 	if _, err := action.buildEnvelope([]int{0}, map[int]int{0: 0}, 1<<20); err != nil {
 		t.Fatalf("a supported shape must still size: %v", err)
+	}
+}
+
+// A message the sizer refuses to measure must stop envelope construction, so
+// the action reports a recovery failure instead of removing history on an
+// unverified budget.
+func TestUnsizableMessageStopsEnvelopeConstruction(t *testing.T) {
+	writer := &recoveryWriterStub{}
+	action := NewAction(testPolicy(), acceptedChange(), "").
+		WithRecovery(writer, map[int]llmprotocol.Message{
+			0: {Role: llmprotocol.RoleUser},
+			1: {Role: llmprotocol.RoleAssistant},
+		})
+	sized := 0
+	refuse := func(llmprotocol.Message) (int, error) {
+		sized++
+		return 0, errUnsupportedRecoveryEncoding
+	}
+
+	payload, err := action.buildEnvelopeWithSizer(
+		[]int{0, 1}, map[int]int{0: 0, 1: 0}, 1<<20, refuse,
+	)
+	if !errors.Is(err, errUnsupportedRecoveryEncoding) {
+		t.Fatalf("expected the refusal to propagate, got %v", err)
+	}
+	if payload != "" {
+		t.Fatal("a refused message must not produce a payload")
+	}
+	if sized != 1 {
+		t.Fatalf("construction continued past the refusal: sized %d messages", sized)
+	}
+	if len(writer.payloads) != 0 {
+		t.Fatal("nothing may reach the store when sizing is refused")
 	}
 }
