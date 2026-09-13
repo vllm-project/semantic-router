@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -152,7 +151,6 @@ func semanticContextCompressionCapabilities(
 	}
 	return capabilities
 }
-
 
 func (stats contextCompressionStats) format() string {
 	switch stats.jsonBlocks {

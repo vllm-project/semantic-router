@@ -371,12 +371,12 @@ type RequestContext struct {
 
 	// History reset state. HistoryResetTrigger is the seam a topic-continuity
 	// signal fills; the action treats an absent result as missing evidence.
-	HistoryResetPolicy       *config.HistoryResetPluginConfig
-	HistoryResetBlocked      string
-	HistoryResetTrigger      *historyreset.TriggerResult
-	HistoryResetAction       *historyreset.Action
-	HistoryResetDiagnostics  *historyreset.Diagnostics
-	SemanticResponse         *llmprotocol.Response
+	HistoryResetPolicy      *config.HistoryResetPluginConfig
+	HistoryResetBlocked     string
+	HistoryResetTrigger     *historyreset.TriggerResult
+	HistoryResetAction      *historyreset.Action
+	HistoryResetDiagnostics *historyreset.Diagnostics
+	SemanticResponse        *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would
