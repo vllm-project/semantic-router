@@ -558,9 +558,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "intern/intern-s2-preview-35b": (
                     "4f57cab513689b089019fce4ad24e26520df183c"
                 ),
-                "intern/intern-s1": (
-                    "4ecad381e28293c4825793f113327cc016cdcbda"
-                ),
+                "intern/intern-s1": ("4ecad381e28293c4825793f113327cc016cdcbda"),
             },
         )
 
