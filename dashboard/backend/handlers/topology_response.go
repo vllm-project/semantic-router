@@ -8,16 +8,16 @@ import (
 )
 
 type topologySignalMapping struct {
-	signalType        string
-	names             []string
-	defaultConfidence float64
-	reason            string
-	addPath           bool
+	signalType string
+	names      []string
+	reason     string
+	addPath    bool
 }
 
 // convertRouterResponse converts Router API response to TestQueryResult.
 func convertRouterResponse(req TestQueryRequest, routerResp *RouterEvalResponse, configPath string) *TestQueryResult {
 	result := newTestQueryResult(req)
+	result.SignalErrorMatches = routerResp.SignalErrorMatches
 
 	appendMatchedSignals(result, routerResp)
 	appendSignalGroupHighlights(result)
@@ -47,7 +47,7 @@ func appendMatchedSignals(result *TestQueryResult, routerResp *RouterEvalRespons
 	}
 
 	for _, mapping := range topologySignalMappings(matchedSignals) {
-		addMatchedSignals(result, mapping, routerResp.SignalConfidences, routerResp.SignalValues)
+		addMatchedSignals(result, mapping, routerResp.SignalConfidences, routerResp.SignalValues, routerResp.SignalErrorMatches)
 	}
 }
 
@@ -60,24 +60,24 @@ func matchedRouterSignals(routerResp *RouterEvalResponse) *RouterMatchedSignals 
 
 func topologySignalMappings(matchedSignals *RouterMatchedSignals) []topologySignalMapping {
 	return []topologySignalMapping{
-		{signalType: "keyword", names: matchedSignals.Keywords, defaultConfidence: 1.0, reason: "Keyword rule matched", addPath: true},
-		{signalType: "embedding", names: matchedSignals.Embeddings, defaultConfidence: 0.85, reason: "Embedding similarity matched", addPath: true},
-		{signalType: "domain", names: matchedSignals.Domains, defaultConfidence: 1.0, reason: "Domain classification matched", addPath: true},
-		{signalType: "fact_check", names: matchedSignals.FactCheck, defaultConfidence: 0.9, reason: "Fact check signal matched"},
-		{signalType: "preference", names: matchedSignals.Preferences, defaultConfidence: 1.0, reason: "User preference matched", addPath: true},
-		{signalType: "user_feedback", names: matchedSignals.UserFeedback, defaultConfidence: 1.0, reason: "User feedback matched", addPath: true},
-		{signalType: "language", names: matchedSignals.Language, defaultConfidence: 0.95, reason: "Language detected", addPath: true},
-		{signalType: "context", names: matchedSignals.Context, defaultConfidence: 1.0, reason: "Context token count matched", addPath: true},
-		{signalType: "structure", names: matchedSignals.Structure, defaultConfidence: 1.0, reason: "Structure rule matched", addPath: true},
-		{signalType: "complexity", names: matchedSignals.Complexity, defaultConfidence: 0.9, reason: "Complexity level matched", addPath: true},
-		{signalType: "modality", names: matchedSignals.Modality, defaultConfidence: 1.0, reason: "Modality signal matched", addPath: true},
-		{signalType: "authz", names: matchedSignals.Authz, defaultConfidence: 1.0, reason: "Authorization signal matched", addPath: true},
-		{signalType: "jailbreak", names: matchedSignals.Jailbreak, defaultConfidence: 1.0, reason: "Jailbreak signal matched", addPath: true},
-		{signalType: "pii", names: matchedSignals.PII, defaultConfidence: 1.0, reason: "PII signal matched", addPath: true},
-		{signalType: "kb", names: matchedSignals.KB, defaultConfidence: 1.0, reason: "Knowledge base signal matched", addPath: true},
-		{signalType: "conversation", names: matchedSignals.Conversation, defaultConfidence: 1.0, reason: "Conversation structure signal matched", addPath: true},
-		{signalType: "event", names: matchedSignals.Event, defaultConfidence: 1.0, reason: "Event signal matched", addPath: true},
-		{signalType: "projection", names: matchedSignals.Projection, defaultConfidence: 1.0, reason: "Projection mapping matched", addPath: true},
+		{signalType: "keyword", names: matchedSignals.Keywords, reason: "Keyword rule matched", addPath: true},
+		{signalType: "embedding", names: matchedSignals.Embeddings, reason: "Embedding similarity matched", addPath: true},
+		{signalType: "domain", names: matchedSignals.Domains, reason: "Domain classification matched", addPath: true},
+		{signalType: "fact_check", names: matchedSignals.FactCheck, reason: "Fact check signal matched"},
+		{signalType: "preference", names: matchedSignals.Preferences, reason: "User preference matched", addPath: true},
+		{signalType: "user_feedback", names: matchedSignals.UserFeedback, reason: "User feedback matched", addPath: true},
+		{signalType: "language", names: matchedSignals.Language, reason: "Language detected", addPath: true},
+		{signalType: "context", names: matchedSignals.Context, reason: "Context token count matched", addPath: true},
+		{signalType: "structure", names: matchedSignals.Structure, reason: "Structure rule matched", addPath: true},
+		{signalType: "complexity", names: matchedSignals.Complexity, reason: "Complexity level matched", addPath: true},
+		{signalType: "modality", names: matchedSignals.Modality, reason: "Modality signal matched", addPath: true},
+		{signalType: "authz", names: matchedSignals.Authz, reason: "Authorization signal matched", addPath: true},
+		{signalType: "jailbreak", names: matchedSignals.Jailbreak, reason: "Jailbreak signal matched", addPath: true},
+		{signalType: "pii", names: matchedSignals.PII, reason: "PII signal matched", addPath: true},
+		{signalType: "kb", names: matchedSignals.KB, reason: "Knowledge base signal matched", addPath: true},
+		{signalType: "conversation", names: matchedSignals.Conversation, reason: "Conversation structure signal matched", addPath: true},
+		{signalType: "event", names: matchedSignals.Event, reason: "Event signal matched", addPath: true},
+		{signalType: "projection", names: matchedSignals.Projection, reason: "Projection mapping matched", addPath: true},
 	}
 }
 
@@ -86,30 +86,28 @@ func addMatchedSignals(
 	mapping topologySignalMapping,
 	signalConfidences map[string]float64,
 	signalValues map[string]float64,
+	signalErrorMatches map[string]bool,
 ) {
 	for _, name := range mapping.names {
-		confidence := matchedSignalConfidence(mapping.signalType, name, signalConfidences, mapping.defaultConfidence)
+		key := strings.ToLower(fmt.Sprintf("%s:%s", mapping.signalType, name))
+		confidence, reported := signalConfidences[key]
+		reported = reported && !signalErrorMatches[key]
+		if !reported {
+			confidence = 0
+		}
+
 		result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
-			Type:       mapping.signalType,
-			Name:       name,
-			Confidence: confidence,
-			Value:      matchedSignalValue(mapping.signalType, name, signalValues),
-			Reason:     mapping.reason,
+			Type:                mapping.signalType,
+			Name:                name,
+			Confidence:          confidence,
+			ConfidenceAvailable: &reported,
+			Value:               matchedSignalValue(mapping.signalType, name, signalValues),
+			Reason:              mapping.reason,
 		})
 		if mapping.addPath {
 			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-%s-%s", mapping.signalType, name))
 		}
 	}
-}
-
-func matchedSignalConfidence(signalType string, name string, signalConfidences map[string]float64, fallback float64) float64 {
-	if signalConfidences == nil {
-		return fallback
-	}
-	if confidence, ok := signalConfidences[strings.ToLower(fmt.Sprintf("%s:%s", signalType, name))]; ok {
-		return confidence
-	}
-	return fallback
 }
 
 func matchedSignalValue(signalType string, name string, signalValues map[string]float64) *float64 {
@@ -141,6 +139,8 @@ func appendSignalGroupHighlights(result *TestQueryResult) {
 func applyRouterDecision(result *TestQueryResult, routerResp *RouterEvalResponse) {
 	if routerResp.DecisionResult != nil {
 		result.MatchedDecision = routerResp.DecisionResult.DecisionName
+		result.DecisionConfidence = routerResp.DecisionResult.Confidence
+		result.DecisionConfidenceAvailable = routerResp.DecisionResult.ConfidenceAvailable
 		result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("decision-%s", routerResp.DecisionResult.DecisionName))
 	}
 

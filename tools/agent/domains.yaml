@@ -283,6 +283,15 @@ domains:
     checks: [make test-training-contracts]
     ci_jobs: []
 
+  model-selection-parity:
+    owner: training
+    paths:
+      - src/training/model_selection/ml_model_selection/models.py
+      - src/training/model_selection/ml_model_selection/tests/**
+      - src/training/model_selection/ml_model_selection/requirements-parity.txt
+    checks: []
+    ci_jobs: [core-tests]
+
 images:
   dashboard:
     pr_paths:

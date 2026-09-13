@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
@@ -85,18 +87,22 @@ const (
 
 // handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
-	req, ok := s.parseEmbeddingRequest(w, r)
+	_, prepared, release, prepareErr := s.acquireEmbeddingRuntime()
+	defer release()
+	req, ok := s.parseEmbeddingRequest(w, r, prepared)
 	if !ok {
 		return
 	}
-
-	if err := checkEmbeddingReadiness(req); err != nil {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			fmt.Sprintf("failed to generate embedding: %v", err))
+	if prepareErr != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", prepareErr.Error())
 		return
 	}
-
-	results, totalProcessingTime, err := buildEmbeddingResults(req)
+  if err := checkEmbeddingReadiness(req); err != nil {
+    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+        fmt.Sprintf("failed to generate embedding: %v", err))
+    return
+  }
+	results, totalProcessingTime, err := buildOwnedEmbeddingResults(r.Context(), prepared, req)
 	if err != nil {
 		status, code, message := classifyEmbeddingError(err)
 		s.writeErrorResponse(w, status, code, message)
@@ -117,24 +123,24 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r *http.Request) (EmbeddingRequest, bool) {
+func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r *http.Request, prepared *embedding.Set) (EmbeddingRequest, bool) {
 	var req EmbeddingRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return EmbeddingRequest{}, false
 	}
-
 	applyEmbeddingDefaults(&req)
-	mmbertPath := ""
-	if cfg := s.currentConfig(); cfg != nil {
-		mmbertPath = cfg.EmbeddingModels.MmBertModelPath
+	var availableLayers []int
+	for _, model := range prepared.Models() {
+		if model.Name == "mmbert" {
+			availableLayers = model.Layers
+			break
+		}
 	}
-	availableLayers := config.MmBertAvailableLayers(mmbertPath)
 	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return EmbeddingRequest{}, false
 	}
-
 	return req, true
 }
 
@@ -314,12 +320,44 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	result, err := candle_binding.CalculateEmbeddingSimilarity(
-		req.Text1,
-		req.Text2,
-		req.Model,
-		req.Dimension,
-	)
+  prepared, release, err := s.acquireEmbeddings()
+  if err != nil {
+    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
+    return
+  }
+  defer release()
+
+  start := time.Now()
+  request := EmbeddingRequest{
+    Model:           req.Model,
+    Dimension:       req.Dimension,
+    QualityPriority: req.QualityPriority,
+    LatencyPriority: req.LatencyPriority,
+  }
+
+  if err := checkEmbeddingReadiness(request); err != nil {
+    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+      fmt.Sprintf("failed to calculate similarity: %v", err))
+    return
+  }
+
+  first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
+  request.Model = first.ModelUsed
+
+  var score float32
+  if err == nil {
+    second, otherErr := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text2)
+    err = otherErr
+    if err == nil {
+      score, err = embeddingCosine(first.Embedding, second.Embedding)
+    }
+  }
+
+  result := SimilarityResponse{
+    Similarity:       score,
+    ModelUsed:         first.ModelUsed,
+    ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000,
+  }
 	if err != nil {
 		if isEmbeddingModelNotReady(err) {
 			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
@@ -331,14 +369,10 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	response := SimilarityResponse{
-		Similarity:       result.Similarity,
-		ModelUsed:        result.ModelType,
-		ProcessingTimeMs: result.ProcessingTimeMs,
-	}
+	response := result
 
 	logging.Infof("Calculated similarity: %.4f (model: %s, took: %.2fms)",
-		result.Similarity, result.ModelType, result.ProcessingTimeMs)
+		result.Similarity, result.ModelUsed, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -350,46 +384,25 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
-	if !candle_binding.IsEmbeddingModelReady(req.Model) {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			"Embedding models are not initialized — configure an embedding model in your router config")
-		return
-	}
-
-	// Calculate batch similarity
-	result, err := candle_binding.CalculateSimilarityBatch(
-		req.Query,
-		req.Candidates,
-		req.TopK,
-		req.Model,
-		req.Dimension,
-	)
+	prepared, release, err := s.acquireEmbeddings()
 	if err != nil {
-		if isEmbeddingModelNotReady(err) {
-			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-				fmt.Sprintf("failed to calculate batch similarity: %v", err))
-			return
-		}
-		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
-			fmt.Sprintf("failed to calculate batch similarity: %v", err))
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
 		return
 	}
-
-	matches, err := buildBatchSimilarityMatches(result, req.Candidates)
+	defer release()
+  if !candle_binding.IsEmbeddingModelReady(req.Model) {
+    s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+      "Embedding models are not initialized — configure an embedding model in your router config")
+    return
+  }
+	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_INVALID_RESULT", err.Error())
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED", err.Error())
 		return
-	}
-
-	response := BatchSimilarityResponse{
-		Matches:          matches,
-		TotalCandidates:  len(req.Candidates),
-		ModelUsed:        result.ModelType,
-		ProcessingTimeMs: result.ProcessingTimeMs,
 	}
 
 	logging.Infof("Calculated batch similarity: query=%s, %d candidates, top-%d matches (model: %s, took: %.2fms)",
-		logging.ContentDescriptor(req.Query), len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
+		logging.ContentDescriptor(req.Query), len(req.Candidates), len(response.Matches), response.ModelUsed, response.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }

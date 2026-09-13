@@ -45,11 +45,9 @@ func newPolarityTestCache(t *testing.T, useNLI bool) (*InMemoryCache, CacheEntry
 
 // installVerifier swaps in a fake verifier for the test and restores the
 // package state afterwards.
-func installVerifier(t *testing.T, fn PolarityVerifyFunc) {
+func installVerifier(t *testing.T, c *InMemoryCache, fn PolarityVerifyFunc) {
 	t.Helper()
-	previous := loadPolarityVerifier()
-	SetPolarityVerifier(fn)
-	t.Cleanup(func() { SetPolarityVerifier(previous) })
+	c.SetPolarityVerifier(fn)
 }
 
 func finishWithCandidate(c *InMemoryCache, ctx context.Context, query string, entry CacheEntry) (LookupResult, error) {
@@ -62,7 +60,7 @@ func TestPolarityNLIGuardRejectsContradiction(t *testing.T) {
 	c, entry := newPolarityTestCache(t, true)
 	var calls int32
 	var gotCached, gotIncoming string
-	installVerifier(t, func(_ context.Context, cached, incoming string) (float32, error) {
+	installVerifier(t, c, func(_ context.Context, cached, incoming string) (float32, error) {
 		atomic.AddInt32(&calls, 1)
 		gotCached, gotIncoming = cached, incoming
 		return 0.97, nil
@@ -96,7 +94,7 @@ func TestPolarityNLIGuardRejectsContradiction(t *testing.T) {
 
 func TestPolarityNLIGuardServesCompatibleCandidate(t *testing.T) {
 	c, entry := newPolarityTestCache(t, true)
-	installVerifier(t, func(context.Context, string, string) (float32, error) { return 0.01, nil })
+	installVerifier(t, c, func(context.Context, string, string) (float32, error) { return 0.01, nil })
 
 	result, err := finishWithCandidate(c, context.Background(), "How can I enable two-factor authentication?", entry)
 	if err != nil {
@@ -112,7 +110,7 @@ func TestPolarityNLIGuardServesCompatibleCandidate(t *testing.T) {
 
 func TestPolarityNLIGuardThresholdIsExclusive(t *testing.T) {
 	c, entry := newPolarityTestCache(t, true)
-	installVerifier(t, func(context.Context, string, string) (float32, error) { return 0.5, nil })
+	installVerifier(t, c, func(context.Context, string, string) (float32, error) { return 0.5, nil })
 
 	result, err := finishWithCandidate(c, context.Background(), "How can I enable 2FA?", entry)
 	if err != nil {
@@ -125,7 +123,7 @@ func TestPolarityNLIGuardThresholdIsExclusive(t *testing.T) {
 
 func TestPolarityNLIGuardDisabledNeverCallsVerifier(t *testing.T) {
 	c, entry := newPolarityTestCache(t, false)
-	installVerifier(t, func(context.Context, string, string) (float32, error) {
+	installVerifier(t, c, func(context.Context, string, string) (float32, error) {
 		t.Fatal("verifier must not run when the NLI tier is off")
 		return 0, nil
 	})
@@ -142,7 +140,7 @@ func TestPolarityNLIGuardDisabledNeverCallsVerifier(t *testing.T) {
 func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 	t.Run("verifier error serves the hit", func(t *testing.T) {
 		c, entry := newPolarityTestCache(t, true)
-		installVerifier(t, func(context.Context, string, string) (float32, error) {
+		installVerifier(t, c, func(context.Context, string, string) (float32, error) {
 			return 0, errors.New("nli backend unavailable")
 		})
 		result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
@@ -156,7 +154,7 @@ func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 
 	t.Run("nil verifier serves the hit", func(t *testing.T) {
 		c, entry := newPolarityTestCache(t, true)
-		installVerifier(t, nil)
+		installVerifier(t, c, nil)
 		result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -169,7 +167,7 @@ func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 
 func TestPolarityNLIGuardHonorsCancellation(t *testing.T) {
 	c, entry := newPolarityTestCache(t, true)
-	installVerifier(t, func(context.Context, string, string) (float32, error) {
+	installVerifier(t, c, func(context.Context, string, string) (float32, error) {
 		t.Fatal("verifier must not run for a cancelled request")
 		return 0, nil
 	})
@@ -187,7 +185,7 @@ func TestPolarityNLIGuardHonorsCancellation(t *testing.T) {
 
 func TestPolarityNLIGuardBelowThresholdSkipsVerifier(t *testing.T) {
 	c, entry := newPolarityTestCache(t, true)
-	installVerifier(t, func(context.Context, string, string) (float32, error) {
+	installVerifier(t, c, func(context.Context, string, string) (float32, error) {
 		t.Fatal("verifier must not run for a below-threshold candidate")
 		return 0, nil
 	})
@@ -207,14 +205,14 @@ func TestPolarityNLIGuardBelowThresholdSkipsVerifier(t *testing.T) {
 // with -race.
 func TestPolarityNLIGuardVerifierReplacementIsRaceFree(t *testing.T) {
 	c, entry := newPolarityTestCache(t, true)
-	installVerifier(t, func(context.Context, string, string) (float32, error) { return 0.01, nil })
+	installVerifier(t, c, func(context.Context, string, string) (float32, error) { return 0.01, nil })
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		for i := 0; i < 200; i++ {
 			score := float32(i%2) * 0.9 // alternate between rejecting and passing verifiers
-			SetPolarityVerifier(func(context.Context, string, string) (float32, error) { return score, nil })
+			c.SetPolarityVerifier(func(context.Context, string, string) (float32, error) { return score, nil })
 		}
 	}()
 	for i := 0; i < 200; i++ {

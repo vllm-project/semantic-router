@@ -86,7 +86,7 @@ func runCachedPanelArm(
 			Grounding:      grounding,
 		},
 	}
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	resp, err := newGroundedTestFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(resp.Body, &body))
 	return body, judgePrompts
@@ -164,7 +164,7 @@ func TestFusionExecute_CachedPanelBelowUsableQuorumFailsBeforeJudge(t *testing.T
 		},
 	}
 
-	_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	_, err := newGroundedTestFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
 	require.Error(t, err)
 	assert.Zero(t, judgeCalls.Load())
 	evidence, ok := FusionQuorumEvidenceFromError(err)

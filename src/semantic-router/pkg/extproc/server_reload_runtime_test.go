@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -58,7 +59,7 @@ func TestReloadRouterFromConfigSkipsReplaceForKubernetesSource(t *testing.T) {
 	}
 
 	buildCalls := 0
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		buildCalls++
 		if cfg != candidateCfg {
 			t.Fatalf("buildReloadRouter() cfg = %p, want %p", cfg, candidateCfg)
@@ -119,7 +120,7 @@ func TestReloadRouterFromConfigDoesNotSwapWhenRuntimePreparationFails(t *testing
 	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
 		return modelruntime.EmbeddingRuntimeState{}, errors.New("modality init failed")
 	}
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		t.Fatalf("buildReloadRouter() should not be called when runtime prep fails")
 		return nil, nil
 	}
@@ -178,7 +179,7 @@ func TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap(t *testing.T) {
 	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
 		return modelruntime.EmbeddingRuntimeState{AnyReady: true, ToolsReady: true}, nil
 	}
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		return &OpenAIRouter{
 			Config:                newCfg,
 			ClassificationService: newService,

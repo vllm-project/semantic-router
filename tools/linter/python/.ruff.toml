@@ -83,6 +83,11 @@ ignore = [
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 "e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
+"bench/test_*.py" = ["PLR2004"]
+"bench/reasoning/test_*.py" = ["PLR2004"]
+"bench/reasoning/router_reason_bench_multi_dataset.py" = [
+  "PLR2004",  # answer-parsing and token thresholds are readable inline
+]
 "tools/mock-vllm/tests/*.py" = ["PLR2004"]
 "tools/mock-vllm/app.py" = [
   "PLR0911",  # endpoint dispatch keeps one response path per request outcome

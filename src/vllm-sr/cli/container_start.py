@@ -6,7 +6,10 @@ from cli.commands.runtime_support import (
     RECIPE_ENV_ALLOWLIST_ENV,
     sensitive_env_names,
 )
-from cli.config_generator import generate_envoy_config_from_user_config
+from cli.config_generator import (
+    ENVOY_CONTAINER_LISTENER_ADDRESS_ENV,
+    generate_envoy_config_from_user_config,
+)
 from cli.consts import (
     DEFAULT_NOFILE_LIMIT,
     MIN_NOFILE_LIMIT,
@@ -622,6 +625,9 @@ def _build_dashboard_runtime_env(
     dashboard_env.setdefault(
         "ENVOY_ROUTER_API_ADDRESS", stack_layout.router_container_name
     )
+    # Dashboard regeneration must preserve the same bridge realization as serve.
+    # listeners.address still controls the host publication in the Docker argv.
+    dashboard_env[ENVOY_CONTAINER_LISTENER_ADDRESS_ENV] = "0.0.0.0"
     dashboard_env.setdefault("VLLM_SR_ENVOY_CONFIG_PATH", "/app/.vllm-sr/envoy.yaml")
     dashboard_env.setdefault(
         "OPENCLAW_DASHBOARD_CONTAINER_NAME", stack_layout.dashboard_container_name
@@ -685,8 +691,12 @@ def _render_split_envoy_config(
 ) -> None:
     original_extproc = os.environ.get("ENVOY_EXTPROC_ADDRESS")
     original_router_api = os.environ.get("ENVOY_ROUTER_API_ADDRESS")
+    original_listener = os.environ.get(ENVOY_CONTAINER_LISTENER_ADDRESS_ENV)
     os.environ["ENVOY_EXTPROC_ADDRESS"] = stack_layout.router_container_name
     os.environ["ENVOY_ROUTER_API_ADDRESS"] = stack_layout.router_container_name
+    # The managed bridge uses IPv4, even for an IPv6 host port publication.
+    # Container loopback cannot receive NAT or Dashboard service-name traffic.
+    os.environ[ENVOY_CONTAINER_LISTENER_ADDRESS_ENV] = "0.0.0.0"
     try:
         generate_envoy_config_from_user_config(
             parse_user_config(config_path),
@@ -696,6 +706,7 @@ def _render_split_envoy_config(
     finally:
         _restore_env_var("ENVOY_EXTPROC_ADDRESS", original_extproc)
         _restore_env_var("ENVOY_ROUTER_API_ADDRESS", original_router_api)
+        _restore_env_var(ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, original_listener)
 
 
 def _restore_env_var(name: str, original_value: str | None) -> None:

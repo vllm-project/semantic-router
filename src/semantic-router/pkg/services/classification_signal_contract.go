@@ -13,6 +13,8 @@ import (
 // ClassifyIntentForEval performs intent classification specifically for evaluation scenarios.
 // This method forces evaluation of all signals and returns comprehensive signal information.
 func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req IntentRequest) (*EvalResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	input, err := req.resolveSignalInput()
 	if err != nil {
 		return nil, err

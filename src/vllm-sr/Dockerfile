@@ -198,6 +198,32 @@ RUN mkdir -p /build/out && \
     echo "=== Built nlp-binding library ===" && \
     ls -la /build/out/
 
+# Build independent ORT instances using the existing CPU cross toolchain.
+FROM rust-builder AS onnx-builder
+ARG TARGETARCH
+WORKDIR /build/onnx
+COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
+COPY onnx-binding/src/ ./src/
+RUN mkdir -p /build/onnx-out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu && \
+      cp target/aarch64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/onnx-out/; \
+    else \
+      cargo build --release --lib --locked --no-default-features --features dynamic && \
+      cp target/release/libonnx_semantic_router.so /build/onnx-out/; \
+    fi
+
+# ort rc.10 uses ORT API 22; keep the shared CPU runtime on that version.
+ARG ONNXRUNTIME_VERSION=1.22.0
+RUN case "$TARGETARCH" in arm64) ort_arch=aarch64 ;; amd64) ort_arch=x64 ;; *) exit 1 ;; esac && \
+    mkdir -p /build/onnx-runtime && \
+    curl --fail --location --retry 3 \
+      "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ort_arch}-${ONNXRUNTIME_VERSION}.tgz" \
+      -o /tmp/onnxruntime.tgz && \
+    tar -xzf /tmp/onnxruntime.tgz --strip-components=1 -C /build/onnx-runtime && \
+    cp -a /build/onnx-runtime/lib/libonnxruntime*.so* /build/onnx-out/ && \
+    rm /tmp/onnxruntime.tgz
+
 # Stage 2: Build Go semantic router
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
@@ -205,13 +231,19 @@ WORKDIR /build
 
 # Copy Rust libraries from all builders
 COPY --from=rust-builder /build/out/ /usr/local/lib/
+COPY --from=onnx-builder /build/onnx-out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/ /usr/local/lib/
 COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY candle-binding/go.mod candle-binding/*.go /build/../candle-binding/
+COPY --from=rust-builder /build/out/ /build/../candle-binding/target/release/
+
+COPY onnx-binding/go.mod /build/../onnx-binding/
+COPY onnx-binding/instance/ /build/../onnx-binding/instance/
+COPY --from=onnx-builder /build/onnx-out/ /build/../onnx-binding/target/release/
 
 # Copy ml-binding Go files (needed for go.mod replace directive)
 # Also copy the built library to ml-binding/target/release/ for CGO linking
@@ -230,6 +262,11 @@ RUN mkdir -p /build/../openvino-binding && \
 # Copy Go source (go.mod has local replace directives, so go mod download
 # requires candle-binding and ml-binding to be present first)
 COPY src/semantic-router/ .
+COPY tools/docker/check-native-abi.sh /build/check-native-abi.sh
+RUN bash /build/check-native-abi.sh \
+    /usr/local/lib/libcandle_semantic_router.so \
+    /usr/local/lib/libonnx_semantic_router.so
+
 
 # Build router (cross-compile for arm64 when TARGETARCH=arm64)
 # arm64: need libssl-dev:arm64 because libcandle_semantic_router.so dynamically links OpenSSL
@@ -277,10 +314,12 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=onnx-builder /build/onnx-out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
 
 WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
