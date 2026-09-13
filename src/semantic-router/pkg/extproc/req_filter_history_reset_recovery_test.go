@@ -15,8 +15,9 @@ func recoverableResetDecision(t *testing.T, overrides map[string]interface{}) *c
 	configuration := map[string]interface{}{
 		"enabled": true,
 		"trigger": map[string]interface{}{
-			"signal":         "topic_boundary",
-			"min_confidence": 0.9,
+			"signal":            "topic_boundary",
+			"min_confidence":    0.9,
+			"accepted_versions": []string{"v1"},
 		},
 		"recovery": map[string]interface{}{
 			"enabled":     true,
@@ -409,5 +410,62 @@ func TestFailClosedResetStatusMapping(t *testing.T) {
 	status, message := contextTransformationFailure(&RequestContext{})
 	if status != 500 || !strings.Contains(message, "Context compression") {
 		t.Fatalf("unexpected compression mapping: %d %q", status, message)
+	}
+}
+
+// Neither action may persist more than the merged contract allows: the budget
+// is the stricter of the two plugins' declared limits, not this plugin's own.
+func TestRecoveryPayloadBudgetUsesTheMergedContract(t *testing.T) {
+	decision := &config.Decision{Name: "context"}
+	decision.Plugins = []config.DecisionPlugin{
+		{
+			Type: config.DecisionPluginContextCompression,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"recovery": map[string]interface{}{
+					"enabled": true, "store": "redis", "max_bytes_per_request": 4096,
+				},
+			}),
+		},
+		{
+			Type: config.DecisionPluginHistoryReset,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"trigger": map[string]interface{}{
+					"signal":            "topic_boundary",
+					"min_confidence":    0.9,
+					"accepted_versions": []string{"v1"},
+				},
+				"recovery": map[string]interface{}{
+					"enabled": true, "store": "redis", "max_bytes_per_request": 8192,
+				},
+			}),
+		},
+	}
+	request := resetConversation()
+	ctx := recoverableResetContext(t, decision, request)
+
+	settings, err := contextRecoverySettingsForRequest(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, settings)
+	if policy.MaxRecoveryBytes != 4096 {
+		t.Fatalf("recovery budget = %d, want the stricter merged 4096", policy.MaxRecoveryBytes)
+	}
+}
+
+// Enabling recovery without naming a size bound must not mean persisting
+// without one.
+func TestOmittedRecoveryBudgetFallsBackToADocumentedDefault(t *testing.T) {
+	request := resetConversation()
+	ctx := recoverableResetContext(t, recoverableResetDecision(t, nil), request)
+	settings, err := contextRecoverySettingsForRequest(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, settings)
+	if policy.MaxRecoveryBytes != defaultContextRecoveryBytesPerRequest {
+		t.Fatalf("recovery budget = %d, want the default bound", policy.MaxRecoveryBytes)
 	}
 }

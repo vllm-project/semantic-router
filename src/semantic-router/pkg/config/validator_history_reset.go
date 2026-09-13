@@ -134,6 +134,16 @@ func validateHistoryResetEnablement(typed *HistoryResetPluginConfig, scope strin
 	if _, present := typed.EffectiveMinConfidence(); !present {
 		return fmt.Errorf("%s: trigger.min_confidence is required when enabled is true", scope)
 	}
+	if len(typed.Trigger.AcceptedVersions) == 0 {
+		return fmt.Errorf(
+			"%s: trigger.accepted_versions is required when enabled is true", scope)
+	}
+	for index, version := range typed.Trigger.AcceptedVersions {
+		if strings.TrimSpace(version) == "" {
+			return fmt.Errorf(
+				"%s: trigger.accepted_versions[%d] cannot be empty", scope, index)
+		}
+	}
 	if !HistoryResetTriggerFamilyRegistered() {
 		return fmt.Errorf(
 			"%s: %s: no %q signal family is registered, so an enabled history_reset policy cannot resolve a trigger",
@@ -182,7 +192,16 @@ func validateHistoryResetTriggerReferences(cfg *RouterConfig) error {
 		// per-recipe validation pass performs this check.
 		return nil
 	}
-	declared := projectionDeclaredSignals(cfg)
+	return resolveHistoryResetTriggerReferences(cfg, projectionDeclaredSignals(cfg))
+}
+
+// resolveHistoryResetTriggerReferences takes the declared-signal map as an
+// argument so the resolution rules can be exercised against a topic-continuity
+// declaration before any producer registers one.
+func resolveHistoryResetTriggerReferences(
+	cfg *RouterConfig,
+	declared map[string]map[string]struct{},
+) error {
 	for index := range cfg.Decisions {
 		decision := &cfg.Decisions[index]
 		reset := decision.GetHistoryResetConfig()

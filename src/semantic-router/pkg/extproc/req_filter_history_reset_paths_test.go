@@ -40,8 +40,9 @@ func enabledResetConfiguration() map[string]interface{} {
 	return map[string]interface{}{
 		"enabled": true,
 		"trigger": map[string]interface{}{
-			"signal":         "topic_boundary",
-			"min_confidence": 0.9,
+			"signal":            "topic_boundary",
+			"min_confidence":    0.9,
+			"accepted_versions": []string{"v1"},
 		},
 	}
 }

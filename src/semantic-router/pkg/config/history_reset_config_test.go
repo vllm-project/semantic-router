@@ -44,8 +44,9 @@ var historyResetValidationCases = []struct {
 		payload: map[string]interface{}{
 			"enabled": true,
 			"trigger": map[string]interface{}{
-				"signal":         "topic_boundary",
-				"min_confidence": 0.9,
+				"signal":            "topic_boundary",
+				"min_confidence":    0.9,
+				"accepted_versions": []string{"v1"},
 			},
 		},
 		wantErr: HistoryResetTriggerUnavailable,
@@ -56,11 +57,35 @@ var historyResetValidationCases = []struct {
 			"enabled":      true,
 			"failure_mode": "fail_closed",
 			"trigger": map[string]interface{}{
-				"signal":         "topic_boundary",
-				"min_confidence": 0.75,
+				"signal":            "topic_boundary",
+				"min_confidence":    0.75,
+				"accepted_versions": []string{"v1"},
 			},
 		},
 		wantErr: HistoryResetTriggerUnavailable,
+	},
+	{
+		name: "enabled_requires_accepted_versions",
+		payload: map[string]interface{}{
+			"enabled": true,
+			"trigger": map[string]interface{}{
+				"signal":         "topic_boundary",
+				"min_confidence": 0.9,
+			},
+		},
+		wantErr: "trigger.accepted_versions is required",
+	},
+	{
+		name: "accepted_versions_cannot_be_blank",
+		payload: map[string]interface{}{
+			"enabled": true,
+			"trigger": map[string]interface{}{
+				"signal":            "topic_boundary",
+				"min_confidence":    0.9,
+				"accepted_versions": []string{" "},
+			},
+		},
+		wantErr: "cannot be empty",
 	},
 	{
 		name:    "enabled_requires_a_trigger",
@@ -322,9 +347,6 @@ func TestDecisionRejectsDisagreeingContextRecoveryStores(t *testing.T) {
 // Registering the topic-continuity family globally must not be enough on its
 // own: an enabled trigger has to name a signal the recipe actually declares.
 func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
-	if HistoryResetTriggerFamilyRegistered() {
-		t.Skip("the topic-continuity family is registered; adjust this fixture with its declaration source")
-	}
 	enabled := func(signal string) Decision {
 		return Decision{
 			Name: "reset",
@@ -333,8 +355,9 @@ func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
 				Configuration: MustStructuredPayload(map[string]interface{}{
 					"enabled": true,
 					"trigger": map[string]interface{}{
-						"signal":         signal,
-						"min_confidence": 0.9,
+						"signal":            signal,
+						"min_confidence":    0.9,
+						"accepted_versions": []string{"v1"},
 					},
 				}),
 			}},
@@ -367,6 +390,25 @@ func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
 		t.Fatalf("unscoped configuration must defer the reference check: %v", err)
 	}
 
+	// Once a topic-continuity signal can be declared, a reference to it
+	// resolves and a reference to any other family still does not. Supplying
+	// the declaration map directly exercises both today.
+	withTopicSignal := map[string]map[string]struct{}{
+		HistoryResetTriggerSignalType: {"topic_boundary": {}},
+		SignalTypeKeyword:             {"unrelated": {}},
+	}
+	if err = resolveHistoryResetTriggerReferences(scoped, withTopicSignal); err != nil {
+		t.Fatalf("a declared topic-continuity signal was rejected: %v", err)
+	}
+	scoped.Decisions = []Decision{enabled("unrelated")}
+	if err = resolveHistoryResetTriggerReferences(scoped, withTopicSignal); err == nil {
+		t.Fatal("a signal from another family was accepted as a trigger")
+	}
+	scoped.Decisions = []Decision{enabled("declared_elsewhere")}
+	if err = resolveHistoryResetTriggerReferences(scoped, withTopicSignal); err == nil {
+		t.Fatal("a name declared in no recipe was accepted")
+	}
+
 	// A disabled policy never resolves its future trigger.
 	disabled := &RouterConfig{RoutingScope: "recipe-a"}
 	disabled.Decisions = []Decision{{
@@ -375,7 +417,11 @@ func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
 			Type: DecisionPluginHistoryReset,
 			Configuration: MustStructuredPayload(map[string]interface{}{
 				"enabled": false,
-				"trigger": map[string]interface{}{"signal": "topic_boundary", "min_confidence": 0.9},
+				"trigger": map[string]interface{}{
+					"signal":            "topic_boundary",
+					"min_confidence":    0.9,
+					"accepted_versions": []string{"v1"},
+				},
 			}),
 		}},
 	}}

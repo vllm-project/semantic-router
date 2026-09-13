@@ -17,6 +17,8 @@ func Plan(
 	trigger TriggerResult,
 	view contextcompression.TransformationView,
 ) (contextcompression.TransformationEdits, Diagnostics) {
+	// A nested deadline can never outlive its parent, so this is the effective
+	// bound for direct callers and a no-op when the action already applied it.
 	if policy.Timeout > 0 {
 		bounded, cancel := context.WithTimeout(ctx, policy.Timeout)
 		defer cancel()

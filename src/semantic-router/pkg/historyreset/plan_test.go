@@ -2,6 +2,7 @@ package historyreset
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -9,7 +10,11 @@ import (
 )
 
 func testPolicy() Policy {
-	return Policy{Signal: "topic_boundary", MinConfidence: 0.9}
+	return Policy{
+		Signal:           "topic_boundary",
+		MinConfidence:    0.9,
+		AcceptedVersions: []string{"v1"},
+	}
 }
 
 func acceptedChange() TriggerResult {
@@ -197,7 +202,7 @@ func TestPlanSkipsWithoutAuthorizingEvidence(t *testing.T) {
 
 func TestPlanRejectsUnsupportedEvidenceVersion(t *testing.T) {
 	policy := testPolicy()
-	policy.SignalVersions = []string{"v2"}
+	policy.AcceptedVersions = []string{"v2"}
 	ids, diagnostics := planIDs(t, policy, acceptedChange(), historyMessage(0, 0, "user"))
 	if len(ids) != 0 || diagnostics.Reason != ReasonEvidenceUnsupportedVersion {
 		t.Fatalf("expected an unsupported-version skip, got %v %+v", ids, diagnostics)
@@ -381,5 +386,55 @@ func TestPlanningHonoursCallerCancellationDuringSelection(t *testing.T) {
 	)
 	if diagnostics.Reason != ReasonCancelled {
 		t.Fatalf("unexpected diagnostics %+v", diagnostics)
+	}
+}
+
+// A confidence that cannot be compared with the threshold must be rejected:
+// NaN fails every ordered comparison and would otherwise slip through.
+func TestUnusableConfidenceCannotAuthorizeRemoval(t *testing.T) {
+	for name, confidence := range map[string]float64{
+		"nan":          math.NaN(),
+		"positive_inf": math.Inf(1),
+		"negative_inf": math.Inf(-1),
+		"above_one":    1.5,
+		"below_zero":   -0.5,
+	} {
+		t.Run(name, func(t *testing.T) {
+			trigger := acceptedChange()
+			trigger.Confidence = confidence
+			edits, diagnostics := Plan(
+				context.Background(),
+				testPolicy(),
+				trigger,
+				contextcompression.TransformationView{Messages: []contextcompression.MessageView{
+					historyMessage(0, 0, "user"),
+					historyMessage(1, 0, "assistant"),
+				}},
+			)
+			if len(edits.RemoveMessages) != 0 {
+				t.Fatalf("unusable confidence authorized %d removals", len(edits.RemoveMessages))
+			}
+			if diagnostics.Reason != ReasonEvidenceInvalidConfidence {
+				t.Fatalf("unexpected diagnostics %+v", diagnostics)
+			}
+		})
+	}
+}
+
+// A policy that has not declared which producer contracts it trusts cannot
+// verify compatibility, so it must not act on any result.
+func TestUndeclaredAcceptedVersionsRejectEveryResult(t *testing.T) {
+	policy := testPolicy()
+	policy.AcceptedVersions = nil
+	edits, diagnostics := Plan(
+		context.Background(),
+		policy,
+		acceptedChange(),
+		contextcompression.TransformationView{Messages: []contextcompression.MessageView{
+			historyMessage(0, 0, "user"),
+		}},
+	)
+	if len(edits.RemoveMessages) != 0 || diagnostics.Reason != ReasonEvidenceUnsupportedVersion {
+		t.Fatalf("unexpected outcome %v %+v", edits.RemoveMessages, diagnostics)
 	}
 }

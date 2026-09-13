@@ -58,6 +58,10 @@ type HistoryResetPluginConfig struct {
 type HistoryResetTriggerConfig struct {
 	Signal        string   `json:"signal,omitempty" yaml:"signal,omitempty"`
 	MinConfidence *float64 `json:"min_confidence,omitempty" yaml:"min_confidence,omitempty"`
+	// AcceptedVersions pins the producing signal contracts this policy trusts.
+	// An enabled policy must name at least one: without it the action would
+	// have to trust whatever version a producer claims.
+	AcceptedVersions []string `json:"accepted_versions,omitempty" yaml:"accepted_versions,omitempty"`
 }
 
 // HistoryResetLimitsConfig bounds the history a single request may examine.

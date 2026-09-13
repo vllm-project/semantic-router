@@ -39,8 +39,9 @@ func enabledResetContext(t *testing.T, request *llmprotocol.Request) *RequestCon
 		VSRSelectedDecision: historyResetDecision(t, map[string]interface{}{
 			"enabled": true,
 			"trigger": map[string]interface{}{
-				"signal":         "topic_boundary",
-				"min_confidence": 0.9,
+				"signal":            "topic_boundary",
+				"min_confidence":    0.9,
+				"accepted_versions": []string{"v1"},
 			},
 		}),
 	}
@@ -167,8 +168,9 @@ func TestHistoryResetRefusesUnrecoverableRemoval(t *testing.T) {
 		VSRSelectedDecision: historyResetDecision(t, map[string]interface{}{
 			"enabled": true,
 			"trigger": map[string]interface{}{
-				"signal":         "topic_boundary",
-				"min_confidence": 0.9,
+				"signal":            "topic_boundary",
+				"min_confidence":    0.9,
+				"accepted_versions": []string{"v1"},
 			},
 			"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
 		}),
@@ -205,8 +207,9 @@ func TestHistoryResetFailClosedRejectsBeforeDispatch(t *testing.T) {
 			"enabled":      true,
 			"failure_mode": "fail_closed",
 			"trigger": map[string]interface{}{
-				"signal":         "topic_boundary",
-				"min_confidence": 0.9,
+				"signal":            "topic_boundary",
+				"min_confidence":    0.9,
+				"accepted_versions": []string{"v1"},
 			},
 			"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
 		}),
@@ -329,8 +332,9 @@ func TestHistoryResetEvidenceFailureModesOnTheRequestPath(t *testing.T) {
 						"enabled":      true,
 						"failure_mode": failureMode,
 						"trigger": map[string]interface{}{
-							"signal":         "topic_boundary",
-							"min_confidence": 0.9,
+							"signal":            "topic_boundary",
+							"min_confidence":    0.9,
+							"accepted_versions": []string{"v1"},
 						},
 					}),
 				}
@@ -379,8 +383,9 @@ func TestHistoryResetContinuationIsNeverRejected(t *testing.T) {
 				"enabled":      true,
 				"failure_mode": failureMode,
 				"trigger": map[string]interface{}{
-					"signal":         "topic_boundary",
-					"min_confidence": 0.9,
+					"signal":            "topic_boundary",
+					"min_confidence":    0.9,
+					"accepted_versions": []string{"v1"},
 				},
 			}),
 		}
