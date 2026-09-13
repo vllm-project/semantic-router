@@ -72,10 +72,10 @@ global:
 
 ## 更新运行中的模型 {#update-a-running-model}
 
-将新的模型 revision 放入新目录，更新配置，再通过 Dashboard 或现有管理流程重载。Router 在激活前准备新模型。准备失败时，当前配置继续运行；旧模型资源会在已有请求完成后释放。
+将新的模型 revision 放入新目录，更新配置，再通过控制面板或现有管理流程重载。Router 在激活前准备新模型。准备失败时，当前配置继续运行；旧模型资源会在已有请求完成后释放。
 
-Dashboard 更改可能已保存但尚未激活。对于返回 `202` 的更新，通过 Dashboard 轮询 `GET /api/router/api/v1/config/hash`，等待 `active_runtime_hash` 与该次更新的 `generated_runtime_hash` 相同。第一项更新尚未激活时，另一项写入会返回 `409`。
+控制面板更改可能已保存但尚未激活。对于返回 `202` 的更新，通过控制面板轮询 `GET /api/router/api/v1/config/hash`，等待 `active_runtime_hash` 与该次更新的 `generated_runtime_hash` 相同。第一项更新尚未激活时，另一项写入会返回 `409`。
 
 知识库更新会保留旧资产版本，供仍在运行的读取使用。旧版本保留在磁盘上，目前不自动清理。请求和响应详情见[管理 API 参考](/zh-Hans/docs/api/apiserver)。
 
-`serve` 会保留通过 Dashboard 或 API 保存的配置。要改用本地文件，请运行 `vllm-sr serve --config config.yaml --replace-active-config`。
+`serve` 会保留通过控制面板或 API 保存的配置。要改用本地文件，请运行 `vllm-sr serve --config config.yaml --replace-active-config`。
