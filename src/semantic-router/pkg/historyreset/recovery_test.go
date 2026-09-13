@@ -724,16 +724,16 @@ func TestSupportedNestedPointersBuildRecoveryEnvelope(t *testing.T) {
 	}
 }
 
-// A message the sizer refuses to measure must stop envelope construction, so
-// the action reports a recovery failure instead of removing history on an
-// unverified budget.
+// A message the sizer refuses to measure must stop envelope construction: the
+// refusal reaches the caller, no partial payload is returned, and the
+// remaining messages are never visited. Whether that error also prevents
+// storage is a property of persist, covered by the persistence tests above.
 func TestUnsizableMessageStopsEnvelopeConstruction(t *testing.T) {
-	writer := &recoveryWriterStub{}
-	action := NewAction(testPolicy(), acceptedChange(), "").
-		WithRecovery(writer, map[int]llmprotocol.Message{
-			0: {Role: llmprotocol.RoleUser},
-			1: {Role: llmprotocol.RoleAssistant},
-		})
+	action := NewAction(testPolicy(), acceptedChange(), "")
+	action.detached = map[int]llmprotocol.Message{
+		0: {Role: llmprotocol.RoleUser},
+		1: {Role: llmprotocol.RoleAssistant},
+	}
 	sized := 0
 	refuse := func(llmprotocol.Message) (int, error) {
 		sized++
@@ -751,8 +751,5 @@ func TestUnsizableMessageStopsEnvelopeConstruction(t *testing.T) {
 	}
 	if sized != 1 {
 		t.Fatalf("construction continued past the refusal: sized %d messages", sized)
-	}
-	if len(writer.payloads) != 0 {
-		t.Fatal("nothing may reach the store when sizing is refused")
 	}
 }
