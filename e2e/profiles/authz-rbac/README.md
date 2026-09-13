@@ -1,6 +1,9 @@
 # Authorization and RBAC E2E profile
 
-This profile verifies the safe boundary for identity-derived routing headers.
+This profile verifies the safe boundary for identity-derived routing headers
+when no authenticated identity producer is installed. It explicitly sets
+`authz.identity.ingress: none`, so the active tests exercise only anonymous
+fallback and anti-spoofing behavior.
 The Gateway removes client-supplied `x-authz-user-id` and
 `x-authz-user-groups` before ExtProc, so a caller cannot claim a Router role by
 setting those headers directly.
@@ -15,7 +18,8 @@ The current profile runs:
 
 The checked-in Gateway resources do not install JWT validation or an external
 authorization service. Therefore this profile does not prove positive routing
-for a real admin, premium, or free-user identity. The policy in
+for a real admin, premium, or free-user identity, and it must not declare a
+trusted identity ingress. The policy in
 [`values.yaml`](values.yaml) contains those example tiers, but validated claims
 must be injected by a trusted authentication component after untrusted headers
 are removed.

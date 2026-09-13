@@ -65,13 +65,11 @@ const (
 	portMapping = "8080:80"
 )
 
-// Profile implements the authz-rbac test profile.
-// It demonstrates user-level RBAC model routing where different users
-// (admin, premium, free) are routed to different models (14B vs 7B)
-// based on identity headers extracted from validated JWT tokens.
-// SECURITY: Identity headers (x-authz-user-id, x-authz-user-groups) must only
-// come from validated auth backends (JWT, Authorino, etc.), not from client requests.
-// The Envoy configuration strips any client-supplied identity headers before processing.
+// Profile implements the negative-only authz-rbac test profile.
+// It retains user-level RBAC routing configuration as an example, but it does
+// not install a JWT validator or external authorization service. The Envoy
+// configuration strips client-supplied identity headers before processing and
+// the profile keeps the router's verified identity ingress disabled.
 type Profile struct {
 	verbose bool
 }
@@ -88,7 +86,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description
 func (p *Profile) Description() string {
-	return "Tests RBAC-based model routing with JWT-validated user identity headers (admin→14B, premium→14B/7B, free→7B)"
+	return "Verifies anonymous fallback and RBAC identity-header anti-spoofing without a verified identity ingress"
 }
 
 // Setup deploys all required components for authz-rbac testing
@@ -167,18 +165,17 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 }
 
 // GetTestCases returns the list of test cases for this profile.
-// The authz-rbac profile validates RBAC routing through the standard
-// chat-completions test, which sends model="MoM" requests through
-// the full pipeline. Tests should use JWT tokens in the Authorization header;
-// Envoy Gateway validates the JWT and extracts claims into identity headers.
-// Client-supplied identity headers are stripped by Envoy configuration.
+// This profile intentionally does not include the positive authz-rbac-routing
+// testcase because it installs no JWT validator or external authorization
+// service. Client-supplied identity headers are stripped by the Gateway, and
+// the router receives anonymous requests.
 func (p *Profile) GetTestCases() []string {
 	return []string{
-		// Standard functional test — validates end-to-end routing
+		// Standard functional test — validates the anonymous base inference path.
 		"chat-completions-request",
-		// Authz-specific functional test (200 OK; identity headers are stripped by Envoy Lua before ext_proc)
+		// Authz-specific functional test (200 OK; identity headers are stripped by Envoy Lua before ext_proc).
 		"chat-completions-request-authz",
-		// Security test — validates that client-supplied identity headers are stripped
+		// Security test — validates that client-supplied identity headers are stripped.
 		"authz-header-spoofing",
 		// NOTE: ratelimit-limitor is NOT run here: it requires x-authz-* from the client to reach
 		// the router, but EnvoyPatchPolicy Lua strips those headers (same as production anti-spoofing).
