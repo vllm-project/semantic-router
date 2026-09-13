@@ -122,9 +122,37 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `candidates` _string array_ | List of candidate phrases or examples |  |  |
 
+#### ComplexityModelConfig
+
+ComplexityModelConfig configures how the complexity signal produces its
+score. It mirrors global.model_catalog.modules.complexity in the router
+config and is passed through field for field.
+
+The contract requirement sits here rather than on
+RemoteClassifierBackendConfig because it is a property of this consumer, not
+of the block: complexity reads two response shapes, so guessing wrong would
+surface per request instead of at admission. A consumer that reads one shape
+
+- categories does - keeps the field optional and defaults it.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote scoring model. Its absence keeps local prototype<br />scoring; when set, the signal never reads the rules' hard/easy<br />candidates. It sits on the module rather than on a rule because routing<br />signals are replaced wholesale per recipe, so a per-rule backend would<br />vanish under any recipe that did not repeat it. |  | Optional: \{\} <br /> |
+
 #### ComplexityRulesConfig
 
-ComplexityRulesConfig defines complexity-based signal classification
+ComplexityRulesConfig defines complexity-based signal classification.
+
+The CEL rules below reject at admission the boundary combinations the Router
+refuses at config load. Without them the API server accepts the object and
+the Router crashloops on it, which turns a typo into an outage instead of a
+rejected write. They are per-object and static; anything needing the model
+catalog - whether backend.model resolves, for instance - stays with the
+Router's validator, which remains the single source of truth for the rest.
 
 _Appears in:_
 
@@ -134,9 +162,13 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity") |  |  |
 | `description` _string_ | Description of what this rule classifies |  | Optional: \{\} <br /> |
-| `threshold` _string_ | Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.<br />Queries scoring above this threshold are classified as "hard" |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-| `hard` _[ComplexityCandidates](#complexitycandidates)_ | Hard candidates represent complex/difficult examples |  |  |
-| `easy` _[ComplexityCandidates](#complexitycandidates)_ | Easy candidates represent simple/easy examples |  |  |
+| `threshold` _string_ | Threshold for the local prototype-scoring path (0.0-1.0), stored as a<br />string to avoid float precision issues. The local margin is<br />hard-minus-easy and centred on zero, so the threshold is symmetric: a<br />margin above it is "hard", below its negative is "easy", and in between<br />is "medium". It does not apply under a score.v1 backend, whose score is<br />in the model's own units; state a boundary pair instead. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `hard_above` _string_ | HardAbove and EasyBelow are the two cut points for a score where a<br />higher value is harder, in the scoring model's own units - so no [0,1]<br />pattern applies and negative values are valid. Both are required<br />together, and the pair is mutually exclusive with Threshold and with<br />HardBelow/EasyAbove. Stored as strings to avoid float precision issues. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `easy_below` _string_ | EasyBelow is the lower cut point of the harder-when-higher pair: a score<br />below it is "easy", and anything between EasyBelow and HardAbove is<br />"medium". It must be below HardAbove, and both are required together. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `hard_below` _string_ | HardBelow and EasyAbove are the pair for a score where a lower value is<br />harder - a model predicting the chance of a correct answer, say. They<br />require a score.v1 backend: the local margin is harder-when-higher by<br />construction, and inverting it locally means swapping the candidate<br />lists. Stored as strings to avoid float precision issues. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `easy_above` _string_ | EasyAbove is the upper cut point of the harder-when-lower pair: a score<br />above it is "easy", and anything between HardBelow and EasyAbove is<br />"medium". It must be above HardBelow, and both are required together. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `hard` _[ComplexityCandidates](#complexitycandidates)_ | Hard candidates represent complex/difficult examples. Read only by the<br />local path; a remote backend never consults them, so they are optional. |  | Optional: \{\} <br /> |
+| `easy` _[ComplexityCandidates](#complexitycandidates)_ | Easy candidates represent simple/easy examples. Read only by the local<br />path; a remote backend never consults them, so they are optional. |  | Optional: \{\} <br /> |
 | `composer` _[RuleComposition](#rulecomposition)_ | Composer allows filtering based on other signals (e.g., only apply this rule if domain:medical) |  | Optional: \{\} <br /> |
 
 #### CompositionCondition
@@ -163,6 +195,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
 | `semantic_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | SemanticCache is the deprecated response-cache field. |  | Optional: \{\} <br /> |
@@ -170,10 +204,11 @@ _Appears in:_
 | `prompt_guard` _[PromptGuardConfig](#promptguardconfig)_ | Prompt guard configuration |  | Optional: \{\} <br /> |
 | `classifier` _[ClassifierConfig](#classifierconfig)_ | Classifier configuration |  | Optional: \{\} <br /> |
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
+| `complexity_model` _[ComplexityModelConfig](#complexitymodelconfig)_ | ComplexityModel says how the complexity signal produces its score.<br />Absent, the signal scores locally against each rule's hard/easy<br />candidates. With a backend, a remote model produces the score and the<br />candidates are never read. Mirrors<br />global.model_catalog.modules.complexity in the router config. |  | Optional: \{\} <br /> |
+| `external_models` _[ExternalModelConfig](#externalmodelconfig) array_ | ExternalModels declares the remote models that classifier backends<br />(`classifier.pii.backend.model`, `complexity_model.backend.model`) and<br />the prompt guard protocol refer to by name. Mirrors<br />global.model_catalog.external[] in the router config field for field;<br />the router's own validator decides whether a backend resolves against it. |  | Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
-| `reasoning_families` _object (keys:string, values:[ReasoningFamily](#reasoningfamily))_ | Reasoning families |  | Optional: \{\} <br /> |
-| `default_reasoning_effort` _string_ | Default reasoning effort |  | Enum: [low medium high] <br />Optional: \{\} <br /> |
+| `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
 
@@ -211,6 +246,7 @@ _Appears in:_
 | `api_key_env` _string_ | APIKeyEnv names the environment variable containing the provider API key. |  | Optional: \{\} <br /> |
 | `timeout_seconds` _integer_ | TimeoutSeconds is the request timeout for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `max_retries` _integer_ | MaxRetries is the maximum number of retry attempts for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `max_response_bytes` _integer_ | MaxResponseBytes caps the size of each embedding response body. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `dimensions` _integer_ | Dimensions requests a provider-side output dimension when supported. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### EmbeddingModelsConfig
@@ -243,6 +279,39 @@ _Appears in:_
 | `type` _string_ |  | otlp | Optional: \{\} <br /> |
 | `endpoint` _string_ |  | jaeger:4317 | Optional: \{\} <br /> |
 | `insecure` _boolean_ |  | true | Optional: \{\} <br /> |
+
+#### ExternalModelConfig
+
+ExternalModelConfig is one entry of global.model_catalog.external[]: a
+remote model a classifier backend or the prompt guard can name. Field names
+are the router's YAML keys so the generic typed conversion carries them
+unchanged.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the catalog name a backend block refers to in its model field. |  | MinLength: 1 <br /> |
+| `model_role` _string_ | ModelRole is what the model is used for; classifier backends require<br />"classification", the prompt guard protocol requires "guardrail". |  | MinLength: 1 <br /> |
+| `llm_model_name` _string_ | ModelName is the model identifier the remote service expects, and the<br />value a token_spans.v1 envelope's model member must equal. |  | MinLength: 1 <br /> |
+| `llm_endpoint` _[ExternalModelEndpoint](#externalmodelendpoint)_ | Endpoint is where the remote model is reached. |  |  |
+| `llm_timeout_seconds` _integer_ | TimeoutSeconds bounds one call when the backend block sets no deadline. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+
+#### ExternalModelEndpoint
+
+ExternalModelEndpoint is the address of a remote classification model.
+
+_Appears in:_
+
+- [ExternalModelConfig](#externalmodelconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `address` _string_ |  |  | MinLength: 1 <br /> |
+| `port` _integer_ |  |  | Maximum: 65535 <br />Minimum: 1 <br /> |
+| `protocol` _string_ |  |  | Enum: [http https] <br />Optional: \{\} <br /> |
 
 #### GatewayReference
 
@@ -416,19 +485,6 @@ _Appears in:_
 | `password` _string_ | Password for Milvus authentication (plaintext - consider using PasswordSecretRef instead) |  | Optional: \{\} <br /> |
 | `password_secret_ref` _[SecretKeySelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#secretkeyselector-v1-core)_ | PasswordSecretRef references a Secret containing the Milvus password<br />Preferred over plaintext Password field for security |  | Optional: \{\} <br /> |
 
-#### MilvusCacheBatch
-
-MilvusCacheBatch defines batch operation settings.
-
-_Appears in:_
-
-- [MilvusCachePerformance](#milvuscacheperformance)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `insert_batch_size` _integer_ | InsertBatchSize for bulk inserts | 100 | Minimum: 1 <br />Optional: \{\} <br /> |
-| `timeout` _integer_ | Timeout for batch operations in seconds | 60 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheCollection
 
 MilvusCacheCollection defines Milvus collection configuration.
@@ -457,19 +513,6 @@ _Appears in:_
 | `type` _string_ | Type of index algorithm | HNSW | Enum: [HNSW IVF_FLAT IVF_SQ8 IVF_PQ] <br />Optional: \{\} <br /> |
 | `params` _[MilvusCacheIndexParams](#milvuscacheindexparams)_ | Params for the index |  | Optional: \{\} <br /> |
 
-#### MilvusCacheCompaction
-
-MilvusCacheCompaction defines compaction settings.
-
-_Appears in:_
-
-- [MilvusCacheDataManagement](#milvuscachedatamanagement)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ | Enabled controls whether auto-compaction is active | false | Optional: \{\} <br /> |
-| `interval` _integer_ | Interval in seconds between compaction runs | 86400 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheConfig
 
 MilvusCacheConfig defines Milvus cache backend configuration.
@@ -484,8 +527,6 @@ _Appears in:_
 | `connection` _[MilvusCacheConnection](#milvuscacheconnection)_ | Connection settings for Milvus server |  | Optional: \{\} <br /> |
 | `collection` _[MilvusCacheCollection](#milvuscachecollection)_ | Collection settings for Milvus |  | Optional: \{\} <br /> |
 | `search` _[MilvusCacheSearch](#milvuscachesearch)_ | Search settings for Milvus queries |  | Optional: \{\} <br /> |
-| `performance` _[MilvusCachePerformance](#milvuscacheperformance)_ | Performance tuning for Milvus |  | Optional: \{\} <br /> |
-| `data_management` _[MilvusCacheDataManagement](#milvuscachedatamanagement)_ | DataManagement settings for TTL and compaction |  | Optional: \{\} <br /> |
 | `development` _[MilvusCacheDevelopment](#milvuscachedevelopment)_ | Development settings for Milvus cache |  | Optional: \{\} <br /> |
 
 #### MilvusCacheConnection
@@ -505,33 +546,6 @@ _Appears in:_
 | `auth` _[MilvusCacheAuth](#milvuscacheauth)_ | Auth configuration for Milvus authentication |  | Optional: \{\} <br /> |
 | `tls` _[MilvusCacheTLS](#milvuscachetls)_ | TLS configuration for secure Milvus connections |  | Optional: \{\} <br /> |
 
-#### MilvusCacheConnectionPool
-
-MilvusCacheConnectionPool defines connection pool settings.
-
-_Appears in:_
-
-- [MilvusCachePerformance](#milvuscacheperformance)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `max_connections` _integer_ | MaxConnections in the pool | 10 | Minimum: 1 <br />Optional: \{\} <br /> |
-| `max_idle_connections` _integer_ | MaxIdleConnections to keep | 5 | Minimum: 0 <br />Optional: \{\} <br /> |
-| `acquire_timeout` _integer_ | AcquireTimeout in seconds | 30 | Minimum: 0 <br />Optional: \{\} <br /> |
-
-#### MilvusCacheDataManagement
-
-MilvusCacheDataManagement defines data lifecycle settings.
-
-_Appears in:_
-
-- [MilvusCacheConfig](#milvuscacheconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `ttl` _[MilvusCacheTTL](#milvuscachettl)_ | TTL settings for automatic expiration |  | Optional: \{\} <br /> |
-| `compaction` _[MilvusCacheCompaction](#milvuscachecompaction)_ | Compaction settings |  | Optional: \{\} <br /> |
-
 #### MilvusCacheDevelopment
 
 MilvusCacheDevelopment defines development-mode settings.
@@ -544,7 +558,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_collection_on_startup` _boolean_ | DropCollectionOnStartup clears the collection when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_collection` _boolean_ | AutoCreateCollection automatically creates the collection if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### MilvusCacheIndexParams
 
@@ -558,19 +571,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `M` _integer_ | M is the number of bi-directional links for HNSW | 16 | Minimum: 2 <br />Optional: \{\} <br /> |
 | `efConstruction` _integer_ | EfConstruction for HNSW index building | 64 | Minimum: 1 <br />Optional: \{\} <br /> |
-
-#### MilvusCachePerformance
-
-MilvusCachePerformance defines performance tuning.
-
-_Appears in:_
-
-- [MilvusCacheConfig](#milvuscacheconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `connection_pool` _[MilvusCacheConnectionPool](#milvuscacheconnectionpool)_ | ConnectionPool settings |  | Optional: \{\} <br /> |
-| `batch` _[MilvusCacheBatch](#milvuscachebatch)_ | Batch settings for operations |  | Optional: \{\} <br /> |
 
 #### MilvusCacheSearch
 
@@ -613,20 +613,6 @@ _Appears in:_
 | `key_file` _string_ | KeyFile is the path to client key file |  | Optional: \{\} <br /> |
 | `ca_file` _string_ | CAFile is the path to CA certificate file |  | Optional: \{\} <br /> |
 
-#### MilvusCacheTTL
-
-MilvusCacheTTL defines time-to-live settings.
-
-_Appears in:_
-
-- [MilvusCacheDataManagement](#milvuscachedatamanagement)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ | Enabled controls whether TTL is active | false | Optional: \{\} <br /> |
-| `timestamp_field` _string_ | TimestampField is the field used for TTL calculation | created_at | Optional: \{\} <br /> |
-| `cleanup_interval` _integer_ | CleanupInterval in seconds between cleanup runs | 3600 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheVectorField
 
 MilvusCacheVectorField defines vector field configuration.
@@ -641,6 +627,29 @@ _Appears in:_
 | `dimension` _integer_ | Dimension of the embedding vectors |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `metric_type` _string_ | MetricType for vector similarity<br />Options: "IP" (inner product), "L2", "COSINE" | IP | Enum: [IP L2 COSINE] <br />Optional: \{\} <br /> |
 
+#### ModelReasoningSpec
+
+ModelReasoningSpec selects a catalog reasoning family or defines the request
+projection for a custom self-hosted model. Family and inline fields are
+mutually exclusive and are validated by the Router's canonical compiler.
+
+_Appears in:_
+
+- [VLLMEndpointSpec](#vllmendpointspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `family` _string_ |  |  | Optional: \{\} <br /> |
+| `type` _string_ |  |  | Enum: [chat_template_kwargs reasoning_effort reasoning_mode top_level_reasoning_effort] <br />Optional: \{\} <br /> |
+| `parameter` _string_ |  |  | Optional: \{\} <br /> |
+| `activationParameter` _string_ |  |  | Optional: \{\} <br /> |
+| `effortFlags` _object (keys:string, values:string)_ | EffortFlags maps a logical effort to a boolean chat-template parameter. |  | Optional: \{\} <br /> |
+| `levels` _string array_ |  |  | Optional: \{\} <br /> |
+| `default` _string_ |  |  | Optional: \{\} <br /> |
+| `modes` _string array_ |  |  | items:Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `defaultMode` _string_ |  |  | Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `disabled` _string_ |  |  | Optional: \{\} <br /> |
+
 #### ModelRefConfig
 
 ModelRefConfig defines a model reference for routing
@@ -654,7 +663,8 @@ _Appears in:_
 | `model` _string_ | Model name to route to |  |  |
 | `lora_name` _string_ | LoRAName is the optional LoRA adapter name |  | Optional: \{\} <br /> |
 | `use_reasoning` _boolean_ | UseReasoning enables reasoning mode for this model |  | Optional: \{\} <br /> |
-| `reasoning_effort` _string_ | ReasoningEffort specifies the reasoning effort level (low, medium, high) |  | Optional: \{\} <br /> |
+| `reasoning_mode` _string_ | ReasoningMode selects the model's reasoning activation mode when the<br />family supports more than a boolean switch. |  | Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `reasoning_effort` _string_ | ReasoningEffort selects one of the model family's declared effort levels. |  | Optional: \{\} <br /> |
 
 #### ObservabilityConfig
 
@@ -695,7 +705,12 @@ _Appears in:_
 
 #### PIIModelConfig
 
-PIIModelConfig defines PII model configuration
+PIIModelConfig defines PII model configuration.
+
+The contract rule sits on the consumer, as on ComplexityModelConfig: the
+shared backend block lists every contract any consumer reads, and each
+consumer narrows it to what it can parse, so a mismatch is refused at
+admission instead of by the router at load.
 
 _Appears in:_
 
@@ -708,6 +723,8 @@ _Appears in:_
 | `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert and use_cpu above; the router also refuses a<br />backend combined with the use_mmbert_32k selector that this CRD does not<br />expose, so that combination cannot be written here. |  | Optional: \{\} <br /> |
+| `on_error` _string_ | OnError selects what a PII backend failure, or a provider-declared<br />truncation, does to the rule that consumed it: allow (default) treats the<br />content as not matching, block matches it as classification_error. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
 
 #### PersistenceSpec
 
@@ -767,9 +784,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Protocol. When both fields are omitted, the operator uses<br />mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
-| `protocol` _string_ | Protocol selects a remote HTTP backend's wire contract. Mutually<br />exclusive with Variant. Requires an external model configured via a<br />vllmEndpoints/externalModels entry with model_role="guardrail". |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
+| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
+| `protocol` _string_ | Protocol is retired and rejected at admission. Configure Backend with<br />the protocol, contract and explicit external model name instead. |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
 | `model_id` _string_ |  | models/mmbert32k-jailbreak-detector-merged | Optional: \{\} <br /> |
 | `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.7 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
@@ -794,19 +812,6 @@ _Appears in:_
 | `use_tls` _boolean_ | UseTLS enables TLS for the Qdrant connection | false | Optional: \{\} <br /> |
 | `collection_name` _string_ | CollectionName is the Qdrant collection to use for semantic cache | semantic_cache | Optional: \{\} <br /> |
 | `connect_timeout` _integer_ | ConnectTimeout is the timeout in seconds for Qdrant connection | 10 | Optional: \{\} <br /> |
-
-#### ReasoningFamily
-
-ReasoningFamily defines reasoning family configuration
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `type` _string_ |  |  | Optional: \{\} <br /> |
-| `parameter` _string_ |  |  | Optional: \{\} <br /> |
 
 #### RedisCacheConfig
 
@@ -854,7 +859,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_index_on_startup` _boolean_ | DropIndexOnStartup clears the index when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_index` _boolean_ | AutoCreateIndex automatically creates the index if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### RedisCacheIndex
 
@@ -925,6 +929,27 @@ _Appears in:_
 | `name` _string_ | Name of the vector field | embedding | Optional: \{\} <br /> |
 | `dimension` _integer_ | Dimension of the embedding vectors<br />For BERT: 384, for Qwen3: 1024, for Gemma: 768 |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `metric_type` _string_ | MetricType for vector similarity<br />Options: "COSINE", "IP" (inner product), "L2" (Euclidean) | COSINE | Enum: [COSINE IP L2] <br />Optional: \{\} <br /> |
+
+#### RemoteClassifierBackendConfig
+
+RemoteClassifierBackendConfig is the shared remote-classifier block. How
+the remote is called (protocol), what shape it answers with (contract),
+which catalog entry it is (model) and how long to wait (deadline) are
+independent axes rather than one enumeration. It mirrors the router's
+backend block field for field so the operator passes it through unchanged.
+
+_Appears in:_
+
+- [ComplexityModelConfig](#complexitymodelconfig)
+- [PIIModelConfig](#piimodelconfig)
+- [PromptGuardConfig](#promptguardconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `protocol` _string_ | Protocol is how the remote is called. |  | Enum: [http_classify http_chat] <br /> |
+| `contract` _string_ | Contract is the response shape the signal reads. Complexity reads two -<br />score.v1, one regression number interpreted through each rule's<br />boundaries, and label_distribution.v1, hard/easy/medium probabilities -<br />so the router requires it there rather than guessing per request. PII<br />reads token_spans.v1, entity spans with code-point offsets. Prompt guard<br />http_chat reads label_decision.v1, a verdict without invented probability. |  | Enum: [score.v1 label_distribution.v1 token_spans.v1 label_decision.v1] <br />Optional: \{\} <br /> |
+| `model` _string_ | Model is the name of an entry in the external model catalog. |  | MinLength: 1 <br /> |
+| `deadline_ms` _integer_ | DeadlineMs bounds one remote call. Defaults to the router's value. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### ResourceConfig
 
@@ -1282,7 +1307,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name of the backend ref generated under config.providers.models[].backend_refs |  | MinLength: 1 <br /> |
 | `model` _string_ | Model name as reported by vLLM (e.g., "Model-A", "llama3-8b") |  | MinLength: 1 <br /> |
-| `reasoningFamily` _string_ | Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt") |  | Optional: \{\} <br /> |
+| `catalog` _string_ | Catalog optionally selects a repository built-in Model Card. Model remains<br />the request-facing alias. |  | Optional: \{\} <br /> |
+| `reasoning` _[ModelReasoningSpec](#modelreasoningspec)_ | Reasoning optionally selects a built-in family or defines inline wire<br />behavior for this self-hosted model. Catalog-backed models normally omit it. |  | Optional: \{\} <br /> |
 | `loras` _[LoRAAdapterSpec](#loraadapterspec) array_ | LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards. |  | MaxItems: 50 <br />Optional: \{\} <br /> |
 | `backend` _[VLLMBackend](#vllmbackend)_ | Backend configuration |  |  |
 | `weight` _integer_ | Weight for load balancing (default: 1) | 1 | Optional: \{\} <br /> |
@@ -1333,7 +1359,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_index_on_startup` _boolean_ | DropIndexOnStartup clears the index when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_index` _boolean_ | AutoCreateIndex automatically creates the index if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### ValkeyCacheIndex
 

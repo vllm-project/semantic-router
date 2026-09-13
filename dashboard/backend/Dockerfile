@@ -13,11 +13,12 @@ COPY src/semantic-router/ ./
 
 # Local replace directives point at sibling bindings that are not needed for the
 # WASM build. Stub them under /app so `../../*-binding` resolves correctly.
-RUN mkdir -p /app/candle-binding /app/ml-binding /app/nlp-binding /app/openvino-binding && \
+RUN mkdir -p /app/candle-binding /app/ml-binding /app/nlp-binding /app/openvino-binding /app/onnx-binding && \
     echo 'module github.com/vllm-project/semantic-router/candle-binding' > /app/candle-binding/go.mod && \
     echo 'module github.com/vllm-project/semantic-router/ml-binding' > /app/ml-binding/go.mod && \
     echo 'module github.com/vllm-project/semantic-router/nlp-binding' > /app/nlp-binding/go.mod && \
-    echo 'module github.com/vllm-project/semantic-router/openvino-binding' > /app/openvino-binding/go.mod
+    echo 'module github.com/vllm-project/semantic-router/openvino-binding' > /app/openvino-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/onnx-binding' > /app/onnx-binding/go.mod
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
       -buildvcs=false \
@@ -31,19 +32,21 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
     fi
 
 # Stage 1: Build frontend with Node.js
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
-WORKDIR /app/frontend
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
+WORKDIR /workspace/dashboard/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /workspace/src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
+COPY website/static/model-catalog/catalog.json /workspace/website/static/model-catalog/catalog.json
 COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
 # Use official npm registry to avoid mirror timeouts
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
+FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
 WORKDIR /app/wizmap
 COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
@@ -83,8 +86,11 @@ RUN set -eux; \
 # Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
+COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
+COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
+COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
@@ -128,11 +134,13 @@ RUN set -eux; \
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
-COPY --from=frontend-builder /app/frontend/dist /app/frontend
+COPY --from=frontend-builder /workspace/dashboard/frontend/dist /app/frontend
 COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 COPY src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
+COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 COPY config/knowledge_bases/ /app/config/knowledge_bases/

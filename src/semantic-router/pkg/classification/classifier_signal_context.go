@@ -22,7 +22,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeLanguage:      len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:       c.contextClassifier != nil,
 		config.SignalTypeStructure:     c.structureClassifier != nil,
-		config.SignalTypeComplexity:    c.complexityClassifier != nil,
+		config.SignalTypeComplexity:    c.isComplexitySignalReady(),
 		config.SignalTypeModality:      len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
 		config.SignalTypeJailbreak:     c.isJailbreakSignalReady(),
 		config.SignalTypePII:           len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
@@ -40,8 +40,19 @@ func (c *Classifier) signalReadiness() map[string]bool {
 // require only their preloaded embedding classifiers. Coupling both paths to
 // IsJailbreakEnabled silently skipped otherwise healthy contrastive rules when
 // the optional Prompt Guard model was disabled.
+// isComplexitySignalReady reports whether any path can produce the signal.
+// Keying only off the local classifier would report a remote-only config as
+// unavailable, and the dispatcher would skip the signal entirely.
+func (c *Classifier) isComplexitySignalReady() bool {
+	return c.complexityScoreBackend != nil ||
+		c.complexityLabelBackend != nil ||
+		c.complexityClassifier != nil
+}
+
 func (c *Classifier) isJailbreakSignalReady() bool {
-	if len(c.Config.JailbreakRules) == 0 {
+	// Response-direction rules are scored from the model's output, so they do
+	// not make the request-stage signal ready on their own.
+	if len(c.Config.RequestJailbreakRules()) == 0 {
 		return false
 	}
 
@@ -181,7 +192,6 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 	signalScope []config.Decision,
 	signalScopeSet bool,
 ) *SignalResults {
-	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	switch {

@@ -141,6 +141,11 @@ func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) 
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate, true)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
+			return
+		}
 
 		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup validation failed: %v", validationErr), http.StatusBadRequest)
@@ -148,7 +153,7 @@ func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) 
 		}
 
 		summary := summarizeSetupConfig(&candidate.CanonicalConfig)
-		configJSON, err := rawJSONMessage(candidate.CanonicalConfig)
+		configJSON, err := rawJSONMessage(candidate.canonicalTransport())
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to encode validated config: %v", err), http.StatusInternalServerError)
 			return
@@ -196,6 +201,11 @@ func SetupActivateHandler(
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate, false)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
+			return
+		}
 
 		if validationErr := validateSetupCandidate(configPath, candidate); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Setup activation validation failed: %v", validationErr), http.StatusBadRequest)
@@ -211,7 +221,7 @@ func SetupActivateHandler(
 		}
 		defer release()
 
-		yamlData, err := marshalYAMLBytes(candidate.CanonicalConfig)
+		yamlData, err := marshalYAMLBytes(candidate.canonicalTransport())
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to convert config to YAML: %v", err), http.StatusInternalServerError)
 			return
@@ -336,7 +346,7 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 		}
 
 		summary := summarizeSetupConfig(&remoteConfig.CanonicalConfig)
-		configJSON, err := rawJSONMessage(remoteConfig.CanonicalConfig)
+		configJSON, err := rawJSONMessage(remoteConfig.canonicalTransport())
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to encode remote config: %v", err), http.StatusInternalServerError)
 			return
@@ -381,13 +391,16 @@ func buildSetupCandidateConfig(
 		return nil, fmt.Errorf("config is required")
 	}
 
-	requestConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](req.Config)
+	requestConfig, err := decodeYAMLTaggedBytes[canonicalConfigTransport](req.Config)
 	if err != nil {
 		return nil, fmt.Errorf("invalid config payload: %w", err)
 	}
 
 	merged := *configFile
-	merged.CanonicalConfig = mergeSetupCanonicalConfig(configFile.CanonicalConfig, requestConfig)
+	merged.CanonicalConfig = mergeSetupCanonicalConfig(configFile.CanonicalConfig, requestConfig.CanonicalConfig)
+	if requestConfig.Global != nil {
+		merged.globalOverrideRaw = requestConfig.globalOverrideRaw
+	}
 	merged.Setup = nil
 	return &merged, nil
 }
@@ -456,7 +469,7 @@ func validateSetupCandidate(configPath string, configData *setupConfigFile) erro
 		return err
 	}
 
-	yamlData, err := marshalYAMLBytes(configData.CanonicalConfig)
+	yamlData, err := marshalYAMLBytes(configData.canonicalTransport())
 	if err != nil {
 		return err
 	}
@@ -509,7 +522,6 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 	}
 	if len(patch.Providers.Models) > 0 ||
 		patch.Providers.Defaults.DefaultModel != "" ||
-		len(patch.Providers.Defaults.ReasoningFamilies) > 0 ||
 		patch.Providers.Defaults.DefaultReasoningEffort != "" {
 		merged.Providers = patch.Providers
 	}

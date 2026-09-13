@@ -1,8 +1,13 @@
 """Algorithm configuration models for multi-model orchestration."""
 
+import math
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from cli.config_schema import surface_types
+
+SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
 
 class ModelRef(BaseModel):
@@ -11,9 +16,8 @@ class ModelRef(BaseModel):
     model: str
     use_reasoning: bool | None = False
     reasoning_description: str | None = None
-    reasoning_effort: str | None = (
-        None  # Model-specific reasoning effort level (low, medium, high)
-    )
+    reasoning_mode: Literal["enabled", "disabled", "adaptive"] | None = None
+    reasoning_effort: str | None = None  # Model-specific reasoning effort level.
     lora_name: str | None = None  # LoRA adapter name (if using LoRA)
     weight: float | None = None
 
@@ -172,6 +176,7 @@ class FusionAlgorithmConfig(BaseModel):
 
     model: str | None = None
     analysis_models: list[str] | None = None
+    analysis_mode: Literal["separate", "one_call", "none"] = "separate"
     analysis_overrides: list[FusionModelOverrideConfig] | None = None
     max_concurrent: int | None = Field(default=None, ge=1)
     max_completion_tokens: int | None = Field(default=None, ge=1)
@@ -194,6 +199,11 @@ class FusionAlgorithmConfig(BaseModel):
             if model in seen:
                 raise ValueError(f"analysis override model {model!r} is duplicated")
             seen.add(model)
+
+        if self.analysis_mode != "separate" and (
+            self.analysis_template and self.analysis_template.strip()
+        ):
+            raise ValueError("analysis_template requires analysis_mode='separate'")
         return self
 
 
@@ -367,15 +377,79 @@ class MultiFactorSLOConfig(BaseModel):
     max_inflight: int | None = Field(default=None, ge=0)
 
 
+class QualityEvidenceConfig(BaseModel):
+    """Versioned catalog evidence used as the multi-factor quality signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    index: str = Field(min_length=1)
+    on_missing: Literal["exclude", "disable_quality"] = "exclude"
+    min_coverage: float | None = Field(default=None, ge=0, le=1)
+    min_score: float | None = None
+
+    @model_validator(mode="after")
+    def validate_index(self):
+        if self.index != self.index.strip():
+            raise ValueError("index cannot have surrounding whitespace")
+        if self.min_score is not None and not math.isfinite(self.min_score):
+            raise ValueError("min_score must be finite")
+        if self.min_score is not None and self.on_missing == "disable_quality":
+            raise ValueError("min_score requires on_missing=exclude")
+        return self
+
+
+class MultiFactorPriorityConfig(BaseModel):
+    """One ordered factor in a lexicographic routing objective."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    factor: Literal["quality", "latency", "cost", "load"]
+    tolerance: float = Field(default=0, ge=0, le=1)
+
+
+class MultiFactorObjectiveConfig(BaseModel):
+    """Weighted balance or ordered factor comparison."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: Literal["weighted", "lexicographic"] = "weighted"
+    priorities: list[MultiFactorPriorityConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_strategy(self):
+        if self.strategy == "weighted" and self.priorities:
+            raise ValueError("priorities require strategy=lexicographic")
+        if self.strategy == "lexicographic" and not self.priorities:
+            raise ValueError("lexicographic objective requires priorities")
+        factors = [priority.factor for priority in self.priorities]
+        if len(factors) != len(set(factors)):
+            raise ValueError("objective priorities cannot repeat a factor")
+        return self
+
+
 class MultiFactorSelectionConfig(BaseModel):
     """Configuration for the canonical multi_factor selector."""
 
     model_config = ConfigDict(extra="forbid")
 
+    objective: MultiFactorObjectiveConfig | None = None
     weights: MultiFactorWeightsConfig | None = None
     slo: MultiFactorSLOConfig | None = None
+    quality: QualityEvidenceConfig | None = None
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
-    on_no_candidates: str | None = "cheapest"
+    on_no_candidates: Literal["cheapest", "first", "fail"] | None = "cheapest"
+
+    @model_validator(mode="after")
+    def validate_objective(self):
+        if (
+            self.objective is not None
+            and self.objective.strategy == "lexicographic"
+            and self.weights is not None
+        ):
+            raise ValueError(
+                "weights cannot be combined with a lexicographic objective"
+            )
+        return self
 
 
 class PromptSelectionConfig(BaseModel):
@@ -401,25 +475,8 @@ class AlgorithmConfig(BaseModel):
 
     Specifies how multiple models in a decision should be orchestrated.
 
-    Supports three categories of algorithms:
-
-    1. Looper algorithms (multi-model execution):
-       - "confidence": Try smaller models first, escalate if confidence is low
-       - "ratings": Coordinate bounded candidate execution
-       - "remom": Multi-round parallel reasoning with intelligent synthesis
-       - "fusion": Parallel panel deliberation with judge analysis and final synthesis
-       - "workflows": Router Flow dynamic/static micro-agent workflows
-
-    2. Selection algorithms (single model selection from candidates):
-       - "static": Use first model (default)
-       - "router_dc": Use embedding similarity for query-model matching
-       - "automix": Use POMDP-based cost-quality optimization
-       - "hybrid": Combine multiple selection methods
-       - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
-       - "multi_factor": Combine quality, latency, cost, and load
-
-    Cross-request learning systems live under global.router.learning.adaptation
-    and global.router.learning.protection.
+    The supported selector and looper types come from the generated Router
+    contract. Cross-request systems live under global.router.learning.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -428,28 +485,18 @@ class AlgorithmConfig(BaseModel):
     # is materialized by an Entrypoint.
     minimum_candidates: int | None = Field(default=None, ge=1)
 
-    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
-    # "workflows") or
-    # selection ("static", "router_dc", "automix", "hybrid", "knn",
-    #            "kmeans", "svm", "mlp", "multi_factor", "latency_aware")
-    type: Literal[
-        "confidence",
-        "ratings",
-        "remom",
-        "fusion",
-        "workflows",
-        "static",
-        "router_dc",
-        "automix",
-        "hybrid",
-        "knn",
-        "kmeans",
-        "svm",
-        "mlp",
-        "multi_factor",
-        "latency_aware",
-        "prompt",
-    ]
+    type: str
+
+    @field_validator("type")
+    @classmethod
+    def validate_algorithm_type(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in SUPPORTED_ALGORITHM_TYPES:
+            supported = ", ".join(sorted(SUPPORTED_ALGORITHM_TYPES))
+            raise ValueError(
+                f"unsupported algorithm type {value!r}; choose one of: {supported}"
+            )
+        return normalized
 
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None

@@ -8,11 +8,12 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: openai/gpt-oss-20b
+      model: openai/gpt-oss-20b
     models:
       - name: openai/gpt-oss-20b
         backend_refs:
           - name: mock-vllm
+            provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -53,6 +54,12 @@ config:
           description: Query contains factual claims that should be verified against context
         - name: no_fact_check_needed
           description: Query is creative, code, or opinion based - no fact verification needed
+      # Checked from the model's answer against the tool context the request
+      # carried. The hallucination plugin above enforces on this observation;
+      # without it the plugin would classify the answer itself.
+      hallucination:
+        - name: ungrounded_claims
+          description: Detect claims in the answer that the tool context does not support.
     modelCards:
       - name: openai/gpt-oss-20b
   global:
@@ -116,13 +123,22 @@ config:
             endpoint: http://mock-hallucination-detector.default.svc.cluster.local:8000/v1
             include_explanation: false
             model_id: KRLabsOrg/lettucedect-v2-qwen-2b
+# The detector is remote, but the router still loads two local models before it
+# serves: the startup embedding download, gated only on
+# !EmbeddingModels.UsesRemoteEmbeddingBackend() and the model_catalog.embeddings
+# *_model_path values (pkg/modeldownload/feature_gates.go), and the mmBERT-32K
+# fact-check classifier that gates when detection runs. 2Gi held while this
+# profile was selection: manual and never ran in CI; on the PR lane the pod is
+# OOMKilled during fact-check initialization before the startup probe passes.
+# jailbreak-onerror needs 6Gi for the embedding load alone, so this profile,
+# which adds the 32K classifier on top, gets 8Gi.
 resources:
   limits:
     cpu: '2'
-    memory: 2Gi
+    memory: 8Gi
   requests:
     cpu: 500m
-    memory: 1Gi
+    memory: 2Gi
 
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:

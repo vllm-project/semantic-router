@@ -25,11 +25,11 @@ def run_make(target: str) -> None:
 def ensure_node_runtime() -> None:
     if shutil.which("node") and shutil.which("npm"):
         return
-    run_make("agent-node-bootstrap")
+    run_make("harness-node-bootstrap")
     local_node = LOCAL_NODE_BIN / "node"
     local_npm = LOCAL_NODE_BIN / "npm"
     if not local_node.is_file() or not local_npm.is_file():
-        raise RuntimeError("agent-node-bootstrap did not provide npm")
+        raise RuntimeError("harness-node-bootstrap did not provide npm")
     os.environ["PATH"] = f"{LOCAL_NODE_BIN}{os.pathsep}{os.environ['PATH']}"
 
 
@@ -52,7 +52,7 @@ def run_markdownlint(files: list[str]) -> int:
     if not files:
         return 0
     ensure_node_runtime()
-    run_make("agent-markdown-bootstrap")
+    run_make("harness-markdown-bootstrap")
     command = [
         str(MARKDOWNLINT),
         "-c",

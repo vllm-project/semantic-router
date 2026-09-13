@@ -1,6 +1,10 @@
 package dsl
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 // ---------- AST → JSON serialization ----------
 //
@@ -10,6 +14,7 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
+	ModelBindings        map[string]config.ModelBinding `json:"modelBindings,omitempty"`
 	Strategy             string                         `json:"strategy,omitempty"`
 	Entrypoints          []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
 	Recipes              []*RecipeDeclJSON              `json:"recipes,omitempty"`
@@ -154,6 +159,7 @@ type ModelDeclJSON struct {
 type ModelRefJSON struct {
 	Model     string   `json:"model"`
 	Reasoning *bool    `json:"reasoning,omitempty"`
+	Mode      string   `json:"mode,omitempty"`
 	Effort    string   `json:"effort,omitempty"`
 	LoRA      string   `json:"lora,omitempty"`
 	ParamSize string   `json:"paramSize,omitempty"`
@@ -237,11 +243,12 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	}
 
 	result := &ProgramJSON{
-		Strategy: prog.Strategy,
-		Signals:  make([]*SignalDeclJSON, 0, len(prog.Signals)),
-		Routes:   make([]*RouteDeclJSON, 0, len(prog.Routes)),
-		Models:   make([]*ModelDeclJSON, 0, len(prog.Models)),
-		Plugins:  make([]*PluginDeclJSON, 0, len(prog.Plugins)),
+		ModelBindings: cloneModelBindings(prog.ModelBindings),
+		Strategy:      prog.Strategy,
+		Signals:       make([]*SignalDeclJSON, 0, len(prog.Signals)),
+		Routes:        make([]*RouteDeclJSON, 0, len(prog.Routes)),
+		Models:        make([]*ModelDeclJSON, 0, len(prog.Models)),
+		Plugins:       make([]*PluginDeclJSON, 0, len(prog.Plugins)),
 	}
 	for _, entrypoint := range prog.Entrypoints {
 		result.Entrypoints = append(result.Entrypoints, &EntrypointDeclJSON{
@@ -407,6 +414,7 @@ func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 		rj.Models = append(rj.Models, &ModelRefJSON{
 			Model:     m.Model,
 			Reasoning: m.Reasoning,
+			Mode:      m.Mode,
 			Effort:    m.Effort,
 			LoRA:      m.LoRA,
 			ParamSize: m.ParamSize,

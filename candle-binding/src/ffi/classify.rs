@@ -1521,6 +1521,63 @@ pub extern "C" fn classify_feedback_text(text: *const c_char) -> ModernBertClass
     }
 }
 
+/// Classify feedback text, returning every class probability
+///
+/// The argmax variant reports only the winning class, which leaves a caller that
+/// needs the probability of a specific class with no way to read it.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs`; `probabilities` is freed by the
+/// caller with `free_modernbert_probabilities`.
+#[no_mangle]
+pub extern "C" fn classify_feedback_text_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = FEEDBACK_DETECTOR_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_id as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!("Feedback detection (with probs) failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("Feedback detector not initialized - call init_feedback_detector first");
+        default_result
+    }
+}
+
 /// Classify ModernBERT PII tokens
 ///
 /// # Safety
@@ -2474,6 +2531,67 @@ pub extern "C" fn classify_mmbert_32k_feedback(
             },
             Err(e) => {
                 eprintln!("mmBERT-32K feedback classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K feedback classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify text using mmBERT-32K feedback detector, returning every class probability
+///
+/// The argmax variant reports only the winning class, which leaves a caller that
+/// needs the probability of a specific class with no way to read it.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs` with:
+/// - `class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
+/// - `confidence`: confidence score of the predicted class (0.0-1.0)
+/// - `probabilities`: caller frees with `free_modernbert_probabilities`
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_feedback_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_FEEDBACK_CLASSIFIER.get() {
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_id as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "mmBERT-32K feedback classification (with probs) failed: {}",
+                    e
+                );
                 default_result
             }
         }

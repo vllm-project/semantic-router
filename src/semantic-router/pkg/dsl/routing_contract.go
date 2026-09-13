@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -69,7 +70,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{Strategy: string(cfg.Strategy)}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings)}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
@@ -77,11 +78,23 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 }
 
 func (d *decompiler) decompileRoutingStrategy() {
-	if d.cfg.Strategy == "" {
+	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 {
 		return
 	}
 	d.writeSection("ROUTING PROFILE")
-	d.write("ROUTING {\n  strategy: %s\n}\n\n", d.cfg.Strategy)
+	d.write("ROUTING {\n")
+	if d.cfg.Strategy != "" {
+		d.write("  strategy: %s\n", d.cfg.Strategy)
+	}
+	if len(d.cfg.ModelBindings) > 0 {
+		// Convert the canonical structs through their JSON tags, then use the
+		// DSL formatter so object keys retain the grammar's identifier syntax.
+		bindings, _ := json.Marshal(d.cfg.ModelBindings)
+		var fields map[string]interface{}
+		_ = json.Unmarshal(bindings, &fields)
+		d.write("  model_bindings: %s\n", formatPluginConfigValue(fields))
+	}
+	d.write("}\n\n")
 }
 
 func (d *decompiler) appendSignalsToProgram(prog *Program) {
@@ -208,6 +221,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
 	}
+	for i := range d.cfg.HallucinationRules {
+		prog.Signals = append(prog.Signals, d.hallucinationToSignal(&d.cfg.HallucinationRules[i]))
+	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
 	}
@@ -245,12 +261,6 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
 	d.writeRoutingModelLoRAs(model.LoRAs)
 	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	if model.QualityScore != 0 {
-		d.write(
-			"  quality_score: %s\n",
-			strconv.FormatFloat(model.QualityScore, 'f', -1, 64),
-		)
-	}
 	d.writeOptionalRoutingModelString("modality", model.Modality)
 }
 
@@ -312,9 +322,6 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	}
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)
-	}
-	if model.QualityScore != 0 {
-		fields["quality_score"] = FloatValue{V: model.QualityScore}
 	}
 	if model.Modality != "" {
 		fields["modality"] = StringValue{V: model.Modality}

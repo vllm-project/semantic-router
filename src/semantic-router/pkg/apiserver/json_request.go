@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,14 @@ var errRequestBodyTooLarge = errors.New("request body too large")
 
 func (s *ClassificationAPIServer) parseJSONRequest(r *http.Request, v interface{}) error {
 	return s.parseJSONRequestWithLimit(r, v, defaultJSONRequestBodyLimit)
+}
+
+func (s *ClassificationAPIServer) parseStrictJSONRequest(r *http.Request, v interface{}) error {
+	body, err := readJSONRequestBody(r, defaultJSONRequestBodyLimit)
+	if err != nil {
+		return err
+	}
+	return decodeStrictJSONBody(body, v)
 }
 
 func (s *ClassificationAPIServer) parseJSONRequestWithLimit(r *http.Request, v interface{}, maxBytes int64) error {
@@ -55,6 +64,19 @@ func readJSONRequestBody(r *http.Request, maxBytes int64) ([]byte, error) {
 func decodeJSONBody(body []byte, v interface{}) error {
 	if err := json.Unmarshal(body, v); err != nil {
 		return fmt.Errorf("failed to parse JSON: %w", err)
+	}
+	return nil
+}
+
+func decodeStrictJSONBody(body []byte, v interface{}) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		return fmt.Errorf("failed to parse JSON: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("failed to parse JSON: request body must contain one JSON value")
 	}
 	return nil
 }

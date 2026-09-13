@@ -122,6 +122,7 @@ type ModelCapability struct {
 	ParamSize         float64 `json:"param_size"`          // Model size in billions of parameters
 	Cost              float64 `json:"cost"`                // Cost per 1M tokens
 	AvgQuality        float64 `json:"avg_quality"`         // Learned average quality score
+	QualityKnown      bool    `json:"quality_known"`       // False until catalog evidence or feedback exists
 	VerificationProb  float64 `json:"verification_prob"`   // Probability of passing self-verification
 	EscalationReward  float64 `json:"escalation_reward"`   // Expected reward from escalation
 	QuerySuccessCount int     `json:"query_success_count"` // Successful queries
@@ -222,10 +223,9 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 	defer a.capMu.Unlock()
 
 	for model, params := range modelConfig {
-		// Use configured quality score if available, otherwise default to 0.8
-		qualityScore := params.QualityScore
-		if qualityScore <= 0 || qualityScore > 1.0 {
-			qualityScore = 0.8 // Default quality estimate
+		qualityScore, qualityKnown := params.EvidenceScore("")
+		if qualityKnown {
+			qualityScore = math.Max(0, math.Min(1, qualityScore/100))
 		}
 
 		paramSize := a.estimateParamSize(model)
@@ -233,6 +233,7 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 			Model:            model,
 			Cost:             params.Pricing.PromptPer1M,
 			AvgQuality:       qualityScore,
+			QualityKnown:     qualityKnown,
 			VerificationProb: 0.7,       // Default verification probability
 			ParamSize:        paramSize, // Estimate from model name
 		}
@@ -243,9 +244,10 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 			a.adaOpsSolver.RegisterModel(model, params.Pricing.PromptPer1M, paramSize)
 		}
 
-		// Initialize value function (higher for larger/better models)
+		// Missing intelligence evidence starts with no quality contribution.
+		// Cost and subsequent feedback can still differentiate candidates.
 		a.valueMu.Lock()
-		a.valueFunction[model] = cap.ParamSize / 100.0 // Normalize
+		a.valueFunction[model] = qualityScore
 		a.valueMu.Unlock()
 	}
 
@@ -335,60 +337,65 @@ func (a *AutoMixSelector) UpdateFeedback(ctx context.Context, feedback *Feedback
 	a.capMu.Lock()
 	defer a.capMu.Unlock()
 
-	// Update winner model capabilities
-	if cap, ok := a.capabilities[feedback.WinnerModel]; ok {
-		cap.QuerySuccessCount++
-		cap.QueryTotalCount++
-
-		// Update verification probability with exponential moving average
-		alpha := 0.1 // Learning rate
-		cap.VerificationProb = cap.VerificationProb*(1-alpha) + 1.0*alpha
-		cap.AvgQuality = cap.AvgQuality*(1-alpha) + 1.0*alpha
-
-		// Update AdaOps belief state with observation
-		if a.adaOpsSolver != nil {
-			a.adaOpsSolver.UpdateBelief(feedback.WinnerModel, 1.0) // Winner = high performance
-		}
-
-		logging.Debugf("[AutoMix] Updated winner %s: verification_prob=%.3f, quality=%.3f",
-			feedback.WinnerModel, cap.VerificationProb, cap.AvgQuality)
-	}
-
-	// Update loser model capabilities (if this was a comparison)
+	a.updateFeedbackCapability(feedback.WinnerModel, 1)
 	if feedback.LoserModel != "" && !feedback.Tie {
-		if cap, ok := a.capabilities[feedback.LoserModel]; ok {
-			cap.QueryTotalCount++
-
-			alpha := 0.1
-			cap.VerificationProb = cap.VerificationProb*(1-alpha) + 0.0*alpha
-			cap.AvgQuality = cap.AvgQuality*(1-alpha) + 0.0*alpha
-
-			// Update AdaOps belief state with observation
-			if a.adaOpsSolver != nil {
-				a.adaOpsSolver.UpdateBelief(feedback.LoserModel, 0.0) // Loser = low performance
-			}
-
-			logging.Debugf("[AutoMix] Updated loser %s: verification_prob=%.3f, quality=%.3f",
-				feedback.LoserModel, cap.VerificationProb, cap.AvgQuality)
-		}
+		a.updateFeedbackCapability(feedback.LoserModel, 0)
 	}
 
 	// Run value iteration to update POMDP values (we already hold capMu.Lock)
 	a.updateValueFunctionLocked()
-
-	// Record updated metrics after feedback
-	if cap, ok := a.capabilities[feedback.WinnerModel]; ok {
-		RecordAutoMixCapability(feedback.WinnerModel, cap.VerificationProb, cap.AvgQuality,
-			cap.QuerySuccessCount, cap.QueryTotalCount)
-	}
-	if feedback.LoserModel != "" {
-		if cap, ok := a.capabilities[feedback.LoserModel]; ok {
-			RecordAutoMixCapability(feedback.LoserModel, cap.VerificationProb, cap.AvgQuality,
-				cap.QuerySuccessCount, cap.QueryTotalCount)
-		}
-	}
-
+	a.recordFeedbackMetrics(feedback)
 	return nil
+}
+
+func (a *AutoMixSelector) updateFeedbackCapability(model string, outcome float64) {
+	capability, ok := a.capabilities[model]
+	if !ok {
+		return
+	}
+	capability.QueryTotalCount++
+	if outcome == 1 {
+		capability.QuerySuccessCount++
+	}
+	const learningRate = 0.1
+	capability.VerificationProb = exponentialMovingAverage(
+		capability.VerificationProb, outcome, learningRate,
+	)
+	if !capability.QualityKnown {
+		capability.AvgQuality = outcome
+		capability.QualityKnown = true
+	} else {
+		capability.AvgQuality = exponentialMovingAverage(capability.AvgQuality, outcome, learningRate)
+	}
+	if a.adaOpsSolver != nil {
+		a.adaOpsSolver.UpdateBelief(model, outcome)
+	}
+	logging.Debugf(
+		"[AutoMix] Updated model %s: verification_prob=%.3f, quality=%.3f",
+		model, capability.VerificationProb, capability.AvgQuality,
+	)
+}
+
+func exponentialMovingAverage(current, observed, rate float64) float64 {
+	return current*(1-rate) + observed*rate
+}
+
+func (a *AutoMixSelector) recordFeedbackMetrics(feedback *Feedback) {
+	a.recordCapabilityMetric(feedback.WinnerModel)
+	if feedback.LoserModel != "" {
+		a.recordCapabilityMetric(feedback.LoserModel)
+	}
+}
+
+func (a *AutoMixSelector) recordCapabilityMetric(model string) {
+	capability, ok := a.capabilities[model]
+	if !ok {
+		return
+	}
+	RecordAutoMixCapability(
+		model, capability.VerificationProb, capability.AvgQuality,
+		capability.QuerySuccessCount, capability.QueryTotalCount,
+	)
 }
 
 // computeExpectedValue calculates the expected value of using a model
@@ -399,8 +406,12 @@ func (a *AutoMixSelector) computeExpectedValue(model string, selCtx *SelectionCo
 		return 0.5 // Default value for unknown models
 	}
 
-	// Immediate reward: quality
-	quality := cap.AvgQuality
+	// Missing quality evidence contributes nothing; it is not treated as a
+	// measured zero. Cost and learned verification remain independent signals.
+	quality := 0.0
+	if cap.QualityKnown {
+		quality = cap.AvgQuality
+	}
 
 	// Cost penalty (normalized)
 	costPenalty := 0.0
@@ -538,7 +549,10 @@ func (a *AutoMixSelector) updateValueFunctionLocked() {
 	// Simple value iteration: V(s) = R(s) + γ * max_a E[V(s')]
 	for model, cap := range a.capabilities {
 		// Current reward
-		reward := cap.AvgQuality
+		reward := 0.0
+		if cap.QualityKnown {
+			reward = cap.AvgQuality
+		}
 
 		// Expected future value (from escalation)
 		futureValue := 0.0

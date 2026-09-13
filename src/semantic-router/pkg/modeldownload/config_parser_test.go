@@ -458,12 +458,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       provider_model_id: openai/gpt-oss-120b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 100
@@ -504,12 +505,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       provider_model_id: openai/gpt-oss-120b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 100
@@ -608,8 +610,6 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 	}
 
 	assertContainsAllModelSpecs(t, specs,
-		"models/mom-embedding-pro",
-		"models/mom-embedding-flash",
 		"models/mmbert-embed-32k-2d-matryoshka",
 		"models/mom-embedding-light",
 		"models/mmbert32k-modality-router-merged",

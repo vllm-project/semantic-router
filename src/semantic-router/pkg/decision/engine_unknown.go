@@ -14,7 +14,10 @@ type DecisionUnresolvedError struct {
 }
 
 func (e *DecisionUnresolvedError) Error() string {
-	return fmt.Sprintf("decision %q could not be resolved because a signal evaluator failed: %v", e.Decision, ErrDecisionUnresolved)
+	return fmt.Sprintf(
+		"decision %q could not be resolved because a signal evaluator failed: %v. Fix the signal backend, or set rules.on_unknown to no_match or match on that decision to route instead of failing",
+		e.Decision, ErrDecisionUnresolved,
+	)
 }
 
 func (e *DecisionUnresolvedError) Unwrap() error {

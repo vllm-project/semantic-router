@@ -99,7 +99,7 @@ func TestDoAppliesAuthAndPreservesBasePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 
 	body, err := client.Do(context.Background(), testOperation, []byte(`{"input":"hello"}`))
 	if err != nil {
@@ -107,6 +107,49 @@ func TestDoAppliesAuthAndPreservesBasePath(t *testing.T) {
 	}
 	if string(body) != `{"ok":true}` {
 		t.Fatalf("Do() body = %q", body)
+	}
+}
+
+func TestDoUsesExactBaseURLWhenOperationPathIsEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if got := request.URL.EscapedPath(); got != "/v1/chat/completions" {
+			t.Errorf("path = %q, want /v1/chat/completions", got)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL+"/v1/chat/completions", nil, testOptions())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+
+	operation := testOperation
+	operation.Path = ""
+	if _, err := client.Do(context.Background(), operation, nil); err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+}
+
+func TestDoRejectsUnexpectedSuccessfulStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server, testOptions())
+	if _, err := client.Do(context.Background(), testOperation, nil); err != nil {
+		t.Fatalf("Do() with default success policy error = %v", err)
+	}
+
+	operation := testOperation
+	operation.SuccessStatusCode = http.StatusOK
+
+	_, err := client.Do(context.Background(), operation, nil)
+	connectorErr := assertConnectorError(t, err, KindStatus, 1, false)
+	if connectorErr.StatusCode != http.StatusNoContent {
+		t.Fatalf("status code = %d, want %d", connectorErr.StatusCode, http.StatusNoContent)
 	}
 }
 

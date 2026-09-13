@@ -11,10 +11,11 @@ import (
 )
 
 type canonicalRoutingOverrideFields struct {
-	modelCards  bool
-	signals     bool
-	projections bool
-	decisions   bool
+	modelBindings bool
+	modelCards    bool
+	signals       bool
+	projections   bool
+	decisions     bool
 }
 
 func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig.CanonicalRouting, canonicalRoutingOverrideFields, error) {
@@ -35,6 +36,8 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 
 	for key := range object {
 		switch key {
+		case "model_bindings":
+			fields.modelBindings = true
 		case "modelCards":
 			fields.modelCards = true
 		case "signals":
@@ -53,6 +56,17 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 	if err := yaml.Unmarshal(data, &routing); err != nil {
 		return routing, fields, err
 	}
+	if fields.modelBindings {
+		bindingsJSON, err := json.Marshal(object["model_bindings"])
+		if err != nil {
+			return routing, fields, err
+		}
+		bindings, err := decodeCanonicalModelObject[map[string]routerconfig.ModelBinding](&apiextensionsv1.JSON{Raw: bindingsJSON})
+		if err != nil {
+			return routing, fields, fmt.Errorf("model_bindings: %w", err)
+		}
+		routing.ModelBindings = bindings
+	}
 
 	return routing, fields, nil
 }
@@ -62,6 +76,9 @@ func applyCanonicalRoutingOverrides(
 	routing routerconfig.CanonicalRouting,
 	fields canonicalRoutingOverrideFields,
 ) {
+	if fields.modelBindings {
+		canonical.Routing.ModelBindings = routing.ModelBindings
+	}
 	if fields.modelCards {
 		canonical.Routing.ModelCards = routing.ModelCards
 	}

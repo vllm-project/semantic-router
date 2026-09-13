@@ -72,7 +72,7 @@ func stripSemanticToolPolicy(request *llmprotocol.Request, stripHistory bool) (b
 }
 
 func clearSemanticToolChoiceWhenNoTools(request *llmprotocol.Request) bool {
-	if request == nil || len(request.Tools) > 0 || request.ToolChoice.Mode == "" {
+	if request == nil || len(request.Tools) > 0 || request.ImageGeneration != nil || request.ToolChoice.Mode == "" {
 		return false
 	}
 	request.ToolChoice = llmprotocol.ToolChoice{}

@@ -17,9 +17,7 @@ import { findModelProviderPreset } from './modelProviderCatalog'
 function ModelProviderMark({ model }: { model: NormalizedModel }) {
   const backend = model.backend_refs?.[0]
   const preset = findModelProviderPreset({
-    backendName: backend?.name,
-    baseUrl: backend?.base_url,
-    apiFormat: model.api_format ?? backend?.provider,
+    providerID: backend?.provider,
   })
   return (
     <span className={styles.modelProviderMark} aria-hidden="true">

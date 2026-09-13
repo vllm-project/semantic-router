@@ -2,8 +2,11 @@ package extproc
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -332,17 +335,39 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 
 // addFinalDecisionHeaders adds the final routing facts that ride on the default
 // surface of every successful non-cache-hit response: the selected decision and
-// its confidence, the selection algorithm, the selected model, and the replay-id
-// entry point.
+// its confidence, the selection algorithm, the selected model and how long
+// choosing it took, and the replay-id entry point.
 func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName()))
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
-	if ctx.VSRSelectedDecisionName != "" {
+	if ctx.VSRSelectedDecisionName != "" && ctx.VSRSelectedDecisionConfidenceScored {
 		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
 	}
 	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	if ctx.RoutingLatency > 0 {
+		builder.addString(headers.VSRRoutingLatencyMs, formatMilliseconds(ctx.RoutingLatency))
+	}
+	builder.addString(headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
+}
+
+// formatMilliseconds keeps sub-millisecond precision: keyword routing usually
+// finishes well under 1 ms, which whole milliseconds would report as 0.
+func formatMilliseconds(d time.Duration) string {
+	return strconv.FormatFloat(float64(d)/float64(time.Millisecond), 'f', 3, 64)
+}
+
+func appliedUnknownPolicyHeader(ctx *RequestContext) string {
+	if ctx == nil || len(ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies) == 0 {
+		return ""
+	}
+	policies := ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies
+	pairs := make([]string, 0, len(policies))
+	for _, name := range slices.Sorted(maps.Keys(policies)) {
+		pairs = append(pairs, sanitizeWarningField(name)+"="+sanitizeWarningField(policies[name]))
+	}
+	return strings.Join(pairs, ",")
 }
 
 // addDecisionDetailHeaders adds the intermediate decision/classification details

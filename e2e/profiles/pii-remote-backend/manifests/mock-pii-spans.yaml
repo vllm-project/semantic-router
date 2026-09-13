@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mock-pii-spans
+  namespace: default
+data:
+  server.py: |
+    import json
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    # A token_spans.v1 backend: entity spans as code-point offsets into the
+    # exact string it was sent, with the matching substring echoed back so the
+    # router can verify the offset unit. The response is the HuggingFace
+    # token-classification shape, wrapped in the envelope form so this server
+    # can also declare a truncation or an error.
+    #
+    # What it returns is pinned by markers in the request, so the routing
+    # assertion is attributable to this server rather than to whatever the
+    # text happens to resemble:
+    #   __PII_SPAN__ <LABEL> <word>   one span of <LABEL> over <word>
+    #   __PII_ERROR__                 a 200 carrying an error member
+    #   __PII_TRUNCATED__ <n>         spans plus truncated_at: <n>
+    # An unmarked request returns no spans, so a clean request cannot drift
+    # between runs and make the assertion flaky for unrelated reasons.
+    SPAN_MARKER = "__PII_SPAN__"
+    ERROR_MARKER = "__PII_ERROR__"
+    TRUNCATED_MARKER = "__PII_TRUNCATED__"
+
+    def marker_args(text, marker, count):
+        at = text.find(marker)
+        if at == -1:
+            return None
+        return text[at + len(marker):].strip().split()[:count]
+
+    def spans_for(text):
+        args = marker_args(text, SPAN_MARKER, 2)
+        if not args or len(args) < 2:
+            return []
+        label, word = args[0], args[1]
+        start = text.find(word)
+        if start == -1:
+            return []
+        # Offsets are code points, which is what the contract requires and
+        # what Python string indices already are.
+        return [{
+            "label": label,
+            "score": 0.99,
+            "text": word,
+            "start": start,
+            "end": start + len(word),
+        }]
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            return
+
+        def send_json(self, status, payload):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_json(200, {"status": "ok"})
+                return
+            self.send_json(404, {"error": "not found"})
+
+        def do_POST(self):
+            if self.path != "/classify":
+                self.send_json(404, {"error": "not found"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                text = str(json.loads(self.rfile.read(length))["inputs"])
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                self.send_json(400, {"error": "invalid request"})
+                return
+            if ERROR_MARKER in text:
+                # A 200 that carries an error member. The contract refuses to
+                # read this as "no PII found"; on_error decides what happens.
+                self.send_json(200, {"error": "model unavailable"})
+                return
+            envelope = {"spans": spans_for(text), "model": "pii-spans-service"}
+            truncated = marker_args(text, TRUNCATED_MARKER, 1)
+            if truncated:
+                try:
+                    envelope["truncated_at"] = int(truncated[0])
+                except ValueError:
+                    pass
+            self.send_json(200, envelope)
+
+    ThreadingHTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-pii-spans
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-pii-spans
+  template:
+    metadata:
+      labels:
+        app: mock-pii-spans
+    spec:
+      containers:
+        - name: mock-pii-spans
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/app/server.py"]
+          ports:
+            - name: http
+              containerPort: 8000
+          volumeMounts:
+            - name: script
+              mountPath: /app/server.py
+              subPath: server.py
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: script
+          configMap:
+            name: mock-pii-spans
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-pii-spans
+  namespace: default
+spec:
+  selector:
+    app: mock-pii-spans
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP

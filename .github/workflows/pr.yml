@@ -172,55 +172,6 @@ jobs:
       && needs.changes.outputs.paper == 'true'
     uses: ./.github/workflows/paper-build.yml
 
-  compatibility:
-    name: ${{ matrix.check }}
-    if: always()
-    needs:
-      - changes
-      - quality
-      - security
-      - core-tests
-      - dashboard
-      - operator
-      - e2e
-      - cli
-      - memory
-      - recipe-conformance
-      - openvino
-      - images
-      - performance
-      - router-learning
-      - paper
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        check:
-          - Run pre-commit hooks check file lint
-          - test-and-build
-          - Lint
-          - Unit Tests
-          - Verify Manifests
-          - Validate OLM Bundle
-    steps:
-      - name: Preserve stable merge-gate context
-        env:
-          DOMAIN_RESULTS: ${{ toJSON(needs) }}
-        run: |
-          failures="$(
-            jq -r '
-              to_entries[]
-              | select(.value.result != "success" and .value.result != "skipped")
-              | "\(.key)=\(.value.result)"
-            ' <<< "$DOMAIN_RESULTS"
-          )"
-          if [ -n "$failures" ]; then
-            echo "::error::Affected PR domain failed or was cancelled"
-            echo "$failures"
-            exit 1
-          fi
-          echo "All affected PR domains passed or were deliberately skipped."
-
   pr-gate:
     name: PR Gate
     if: always()

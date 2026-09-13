@@ -1034,10 +1034,10 @@ func TestConvertToConfigMapWithSliceRoot(t *testing.T) {
 			Name:        "code-complexity",
 			Description: "Classify coding tasks by complexity",
 			Threshold:   "0.3",
-			Hard: vllmv1alpha1.ComplexityCandidates{
+			Hard: &vllmv1alpha1.ComplexityCandidates{
 				Candidates: []string{"Implement a distributed lock manager"},
 			},
-			Easy: vllmv1alpha1.ComplexityCandidates{
+			Easy: &vllmv1alpha1.ComplexityCandidates{
 				Candidates: []string{"Reverse a string"},
 			},
 		},

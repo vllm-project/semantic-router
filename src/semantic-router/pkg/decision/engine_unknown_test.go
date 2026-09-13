@@ -2,6 +2,7 @@ package decision
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -227,6 +228,13 @@ func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
 				t.Fatalf("error = %#v", err)
 			}
 		})
+	}
+}
+
+func TestDecisionUnresolvedErrorNamesFix(t *testing.T) {
+	err := &DecisionUnresolvedError{Decision: "guarded"}
+	if !strings.Contains(err.Error(), "rules.on_unknown") || !errors.Is(err, ErrDecisionUnresolved) {
+		t.Fatalf("error = %q", err.Error())
 	}
 }
 

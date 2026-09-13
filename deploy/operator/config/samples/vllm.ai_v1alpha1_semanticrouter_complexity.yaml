@@ -16,7 +16,8 @@ spec:
     # Fast model for simple queries
     - name: llama-8b-fast
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
@@ -25,7 +26,8 @@ spec:
     # Powerful model for complex queries
     - name: llama-70b-reasoning
       model: llama3-70b
-      reasoningFamily: deepseek
+      reasoning:
+        family: deepseek
       backend:
         type: kserve
         inferenceServiceName: llama-3-70b
@@ -155,4 +157,4 @@ spec:
       top_k: 3
 
     # Default reasoning effort for queries without complexity classification
-    default_reasoning_effort: "medium"
+    reasoning_effort: "medium"

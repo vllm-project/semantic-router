@@ -9,7 +9,11 @@ from typing import Any
 
 import requests
 
-from cli.evaluation.broker_client import BrokerProtocolError, worker_broker
+from cli.evaluation.broker_client import (
+    BrokerProtocolError,
+    parse_broker_timestamp,
+    worker_broker,
+)
 
 _HTTP_SUCCESS_MIN = 200
 _HTTP_SUCCESS_MAX = 300
@@ -33,8 +37,8 @@ def _broker_operation(method: str, url: str, track_id: str | None) -> str:
         if track_id in {"joint", "multimodal", "capacity"}:
             return "routed-chat.completions"
         raise BrokerProtocolError("evaluation chat track has no broker operation")
-    if method == "POST" and url.endswith("/api/v1/eval?trace=true"):
-        return "router.evaluate"
+    if method == "POST" and url.endswith("/api/v1/routing/preview?trace=true"):
+        return "routing.preview"
     raise BrokerProtocolError("evaluation requested an unsupported broker operation")
 
 
@@ -90,7 +94,7 @@ class EvaluationHTTPClient:
             headers=response["headers"],
             error=response["error"],
             broker_receipt=response["broker_receipt"],
-            fetched_at=datetime.fromisoformat(response["fetched_at"]),
+            fetched_at=parse_broker_timestamp(response["fetched_at"]),
         )
 
     @staticmethod

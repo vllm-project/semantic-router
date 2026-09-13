@@ -16,6 +16,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does the router improve reasoning-task selection over a direct backend? | `vllm-semantic-router-bench` |
 | Does a model benefit from its reasoning mode, and what does that cost? | `reasoning-mode-eval` |
 | Does session routing preserve continuity and tool-loop invariants? | `agentic_routing_experiment.py` and `agentic_routing_live_benchmark.py` |
+| Does production protection obey maintained per-turn contracts? | [`make bench-agent-routing-protection`](../website/docs/benchmarking/agent-routing-protection.md) |
 | Does a routed model complete maintained multi-turn agent tasks? | `agent_task_live_benchmark.py` |
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
@@ -93,17 +94,11 @@ A known-family patch uses the current v0.3 provider and Model Card fields:
 ```yaml
 providers:
   defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
+    reasoning_effort: medium
   models:
     - name: qwen3-14b
-      reasoning_family: qwen3
-routing:
-  modelCards:
-    - name: qwen3-14b
+      reasoning:
+        family: qwen3
 ```
 
 Reasoning is enabled per decision reference, after the evaluated model has been
@@ -209,3 +204,16 @@ python -m pytest \
 When changing a CLI, update its `--help`, tests, and this index only if the
 reader's choice of runner or first command changes. Detailed experiment design
 belongs with the runner that implements it.
+
+### Fault proxy streaming checks
+
+The fault proxy forwards SSE events as they arrive from upstream. Optional
+`--stream-frames` shaping forwards the first requested content events live and
+repeats them if needed before forwarding the terminal event. Events after the
+terminal event, including usage and `[DONE]`, are preserved. `--stream-interval-ms`
+adds pacing between forwarded events; it does not remove upstream delays.
+
+Run `make soak-test` and `python -m pytest bench/test_openai_fault_proxy.py -q`
+for buffered and streaming behavior coverage. The PR core-quality workflow runs
+both commands in **Soak behavior (PR head)** on the exact PR head commit and
+records that SHA in its job summary.

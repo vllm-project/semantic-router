@@ -1,6 +1,9 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+import (
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
 
 // adaptProviderRequest applies backend-dialect extensions after the standard
 // wire codec has rendered the request. Official protocol semantics stay in
@@ -11,8 +14,16 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) ([]byte, error) {
-	if dispatch == nil || ctx == nil || dispatch.decisionName == "" || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+	if dispatch == nil || ctx == nil || dispatch.decisionName == "" {
 		return body, nil
+	}
+	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+		family := r.getModelReasoningFamily(dispatch.logicalModel)
+		transport := resolveProviderReasoningTransport(dispatch.profile)
+		if dispatch.targetFormat != llmprotocol.OpenAIResponsesV1 || family == nil ||
+			transport != modelcatalog.ReasoningTransportChatTemplate {
+			return body, nil
+		}
 	}
 	return r.setReasoningModeToRequestBodyForModelAndProvider(
 		body,

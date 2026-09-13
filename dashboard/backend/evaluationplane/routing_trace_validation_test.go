@@ -107,7 +107,7 @@ func TestRealWorkerAuthenticatedRoutingUsesServerBrokeredCredential(t *testing.T
 		switch request.URL.Path {
 		case "/v1/models":
 			_, _ = writer.Write([]byte(`{"data":[{"id":"entrypoint-a","routing":{"resolution":"virtual","selectable":true,"default_route":true,"recipe":"default"}}]}`))
-		case "/api/v1/eval":
+		case "/api/v1/routing/preview":
 			if request.Header.Get("Authorization") == "Bearer "+routerAccessValue {
 				authenticatedRouterRequests.Add(1)
 			}

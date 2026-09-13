@@ -9,19 +9,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelAvailability {
-	if s == nil || s.classificationSvc == nil {
+func classificationAvailabilityForService(service classificationService) classifierModelAvailability {
+	if service == nil {
 		return classifierModelAvailability{}
 	}
 
 	availability := classifierModelAvailability{
-		core:                   s.classificationSvc.HasClassifier(),
-		factCheck:              s.classificationSvc.HasFactCheckClassifier(),
-		hallucination:          s.classificationSvc.HasHallucinationDetector(),
-		hallucinationExplainer: s.classificationSvc.HasHallucinationExplainer(),
-		feedback:               s.classificationSvc.HasFeedbackDetector(),
+		core:                   service.HasClassifier(),
+		factCheck:              service.HasFactCheckClassifier(),
+		hallucination:          service.HasHallucinationDetector(),
+		hallucinationExplainer: service.HasHallucinationExplainer(),
+		feedback:               service.HasFeedbackDetector(),
 	}
-	if inventory, ok := s.classificationSvc.(classificationInventoryReadinessService); ok {
+	if inventory, ok := service.(classificationInventoryReadinessService); ok {
 		availability.factCheck = inventory.HasAnyFactCheckClassifier()
 		availability.hallucination = inventory.HasAnyHallucinationDetector()
 		availability.hallucinationExplainer = inventory.HasAnyHallucinationExplainer()
@@ -32,10 +32,10 @@ func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelA
 
 // getClassifierModelsInfo returns information about configured classifier models.
 func (s *ClassificationAPIServer) getClassifierModelsInfo(
+	cfg *routerconfig.RouterConfig,
 	availability classifierModelAvailability,
 	runtimeState *startupstatus.State,
 ) []ModelInfo {
-	cfg := s.currentConfig()
 	if cfg == nil {
 		return s.getPlaceholderModelsInfo(runtimeState)
 	}

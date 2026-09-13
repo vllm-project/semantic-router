@@ -88,7 +88,7 @@ the llm-d deployment and must use the API version supported by that release.
    the route values. Validate it before deployment:
 
    ```bash
-   vllm-sr validate --config config.yaml
+   vllm-sr config validate --config config.yaml
    ```
 
 2. Deploy Semantic Router with the Helm or Operator workflow described in

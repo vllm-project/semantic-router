@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
-
 	// Registers every profile (and, transitively, every testcase in this
 	// package) so framework.NewProfileByName resolves the same way it does
 	// inside the real e2e binary.
@@ -19,6 +18,10 @@ var signalRoutingContracts = []struct {
 	testCase string
 }{
 	{profile: "envoy-ai-gateway", testCase: "event-routing"},
+	{profile: "envoy-ai-gateway", testCase: "language-routing"},
+	{profile: "envoy-ai-gateway", testCase: "reask-routing"},
+	{profile: "envoy-ai-gateway", testCase: "llm-classifier-distribution-routing"},
+	{profile: "envoy-ai-gateway", testCase: "sequence-classifier-routing"},
 }
 
 func TestProfilesSelectSignalRoutingContracts(t *testing.T) {

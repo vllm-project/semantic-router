@@ -52,8 +52,19 @@ These fields are easy to confuse:
 - backend-ref `provider` supplies provider-specific authentication and path
   defaults. It does not prove that the endpoint implements an API format.
 
-For Responses and Messages backends, a path in `base_url` is retained and the
-protocol path is appended. `chat_path` applies only to Chat Completions.
+For every backend format, `base_url` names the complete upstream API root. Its
+path is retained and the protocol operation suffix is appended exactly once;
+the protocol's default `/v1` base path is used only when the URL has no path.
+`chat_path` applies only to Chat Completions.
+
+For an HTTPS backend, the generated Envoy cluster verifies both the server
+certificate chain and its DNS hostname. An HTTPS replica pool must keep one
+hostname because the supported Envoy runtime shares its TLS context within a
+cluster; use separate model aliases for different HTTPS hosts. IP-literal HTTPS
+targets are rejected instead of silently weakening hostname verification. A
+custom Envoy image used with `vllm-sr serve` must provide the system CA bundle at
+`/etc/ssl/certs/ca-certificates.crt`; startup validation fails rather than
+silently disabling verification when that trust store is unavailable.
 
 ## Client-to-backend matrix
 
@@ -125,6 +136,14 @@ providers:
             anthropic-version: "2023-06-01"
           weight: 100
 ```
+
+`api_format` chooses only the backend codec. It does not imply Anthropic,
+OpenAI, or any other runtime Provider. Router-owned listeners require a
+physical model to declare `backend_refs[].provider`; metadata-only
+`listeners: []` configurations leave transport and credentials to the external
+gateway. The local `vllm-sr serve` workflow manages Envoy transport, so it does
+not accept a backendless physical model; use the external-gateway deployment
+profile for that topology.
 
 Test the backend directly with its native path and a minimal request first.
 Then send the same semantic request through the Router using the client API that

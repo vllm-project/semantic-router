@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.21.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: intelligentroutes.vllm.ai
 spec:
   group: vllm.ai
@@ -99,12 +99,16 @@ spec:
                             maxLength: 500
                             type: string
                           reasoningEffort:
-                            description: ReasoningEffort defines the reasoning effort
-                              level (low/medium/high)
+                            description: ReasoningEffort selects an effort value supported
+                              by the model family.
+                            type: string
+                          reasoningMode:
+                            description: ReasoningMode selects an activation mode
+                              supported by the model family.
                             enum:
-                            - low
-                            - medium
-                            - high
+                            - enabled
+                            - disabled
+                            - adaptive
                             type: string
                           useReasoning:
                             default: false
@@ -146,6 +150,7 @@ spec:
                             - request_params
                             - response_jailbreak
                             - router_replay
+                            - shadow_dispatch
                             - response_cache
                             - response-cache
                             - semantic_cache
@@ -211,8 +216,9 @@ spec:
                           type: string
                         operator:
                           description: |-
-                            Operator defines the logical operator for combining conditions (AND/OR/NOT)
-                            NOT uses NOR semantics: matches only when none of the conditions match.
+                            Operator defines the logical operator for combining conditions (AND/OR/NOT).
+                            NOT is strictly unary: it takes exactly one child condition and negates its result.
+                            Compose NOR/NAND by nesting NOT around OR/AND.
                           enum:
                           - AND
                           - OR

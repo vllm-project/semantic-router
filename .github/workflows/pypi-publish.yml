@@ -89,7 +89,8 @@ jobs:
           pip install build twine
           python ../../tools/release/snapshot_model_catalog.py \
             --check --version "$RELEASE_VERSION"
-          python ../../tools/release/sync_model_catalog.py --check
+          python ../../tools/release/stage_model_catalog_package.py
+          python ../../tools/release/stage_model_catalog_package.py --check
           python -m build
           twine check dist/*
           REQUIRED_FILES=(

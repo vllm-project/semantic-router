@@ -92,7 +92,7 @@ the Router can reach a host-published port through `host.docker.internal`:
 ```yaml
 providers:
   defaults:
-    default_model: local/qwen
+    model: local/qwen
   models:
     - name: local/qwen
       provider_model_id: Qwen/Qwen3-0.6B
@@ -101,7 +101,7 @@ providers:
         - name: nvidia-vllm
           endpoint: host.docker.internal:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
 ```
 
@@ -123,7 +123,7 @@ untrusted network.
 If vLLM should own all GPU memory, keep the Router on CPU:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
@@ -132,7 +132,7 @@ To run supported Router-side ONNX embeddings and classifiers on CUDA, use
 `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image by default:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --platform nvidia --config config.yaml
 ```
 

@@ -107,7 +107,8 @@ spec:
     # Example: KServe InferenceService backend
     - name: llama3-8b-endpoint
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
@@ -116,7 +117,8 @@ spec:
     # Example: Direct service backend
     - name: qwen-endpoint
       model: qwen2.5-7b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: service
         service:
@@ -177,22 +179,8 @@ spec:
         pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
 
     # Reasoning mode configuration per model family
-    reasoning_families:
-      deepseek:
-        type: "chat_template_kwargs"
-        parameter: "thinking"
-      qwen3:
-        type: "chat_template_kwargs"
-        parameter: "enable_thinking"
-      gpt-oss:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
-      gpt:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
-
     # Default reasoning effort level
-    default_reasoning_effort: high
+    reasoning_effort: high
 
     # API configuration
     api:

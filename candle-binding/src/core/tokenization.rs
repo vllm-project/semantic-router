@@ -222,9 +222,9 @@ impl UnifiedTokenizer {
         tokenizer
             .with_truncation(Some(TruncationParams {
                 max_length: self.config.max_length,
-                strategy: self.config.truncation_strategy.clone(),
+                strategy: self.config.truncation_strategy,
                 stride: 0,
-                direction: self.config.truncation_direction.clone(),
+                direction: self.config.truncation_direction,
             }))
             .map_err(E::msg)?;
 
@@ -676,3 +676,7 @@ pub fn create_mmbert_compatibility_tokenizer_with_max_length(
     let unified_tokenizer = UnifiedTokenizer::new(tokenizer, config, device)?;
     Ok(Box::new(unified_tokenizer))
 }
+
+/// Token prediction with tokenizer-provided UTF-8 byte offsets:
+/// (token text, class ID, softmax confidence, start byte, end byte).
+pub type TokenPrediction = (String, usize, f32, usize, usize);

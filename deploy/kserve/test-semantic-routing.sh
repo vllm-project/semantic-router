@@ -26,6 +26,8 @@ NAMESPACE="${NAMESPACE:-$DEFAULT_NAMESPACE}"
 ROUTE_NAME="semantic-router-kserve"
 # Model name to use for testing - get from configmap or override with MODEL_NAME env var
 MODEL_NAME="${MODEL_NAME:-$($CLI get configmap semantic-router-kserve-config -n "$NAMESPACE" -o jsonpath='{.data.config\.yaml}' 2>/dev/null | grep 'default_model:' | awk '{print $2}' | tr -d '\"' || echo 'granite32-8b')}"
+ROUTER_MANAGEMENT_URL="${ROUTER_MANAGEMENT_URL:-}"
+TEST_FAILURES=0
 
 # Get the route URL
 echo "Using CLI: $CLI"
@@ -72,6 +74,10 @@ if [ -z "$ROUTER_URL" ] || [ "$ROUTER_URL" = "http://" ]; then
     exit 1
 fi
 
+if [ -z "$ROUTER_MANAGEMENT_URL" ] && [ "$CLI" = "kubectl" ] && [[ "$ROUTER_URL" =~ ^(https?://[^/:]+)(:[0-9]+)?$ ]]; then
+    ROUTER_MANAGEMENT_URL="${BASH_REMATCH[1]}:8080"
+fi
+
 echo -e "${GREEN}✓${NC} Semantic router URL: $ROUTER_URL"
 echo ""
 
@@ -83,30 +89,32 @@ test_classification_api() {
     echo -e "${BLUE}Testing classification API:${NC} \"$query\""
     echo -n "Expected category: $expected_category ... "
 
-    # Call classification endpoint (port 8080)
-    response=$(curl -s -k -X POST "$ROUTER_URL:8080/api/v1/classify" \
-        -H "Content-Type: application/json" \
-        -d "{\"text\": \"$query\"}" 2>/dev/null)
-
-    if [ -z "$response" ]; then
-        echo -e "${YELLOW}SKIP${NC} - Classification API not responding (may not be exposed)"
+    if [ -z "$ROUTER_MANAGEMENT_URL" ]; then
+        echo -e "${YELLOW}SKIP${NC} - set ROUTER_MANAGEMENT_URL to test the management listener"
         return 0
+    fi
+
+    if ! response=$(curl -sS -k --fail-with-body -X POST "$ROUTER_MANAGEMENT_URL/api/v1/diagnostics/classify/intent" \
+        -H "Content-Type: application/json" \
+        -d "{\"text\": \"$query\"}" 2>&1); then
+        echo -e "${RED}FAIL${NC} - Classification API request failed: $response"
+        return 1
     fi
 
     # Extract category from response
     category=$(echo "$response" | grep -o '"category":"[^"]*"' | cut -d'"' -f4)
 
     if [ -z "$category" ]; then
-        echo -e "${YELLOW}SKIP${NC} - Classification API not available"
-        return 0
+        echo -e "${RED}FAIL${NC} - Response has no classification category: $response"
+        return 1
     fi
 
     if [ "$category" == "$expected_category" ]; then
         echo -e "${GREEN}PASS${NC} - Category: $category"
         return 0
     else
-        echo -e "${YELLOW}PARTIAL${NC} - Got: $category (expected: $expected_category)"
-        return 0
+        echo -e "${RED}FAIL${NC} - Got: $category (expected: $expected_category)"
+        return 1
     fi
 }
 
@@ -161,6 +169,7 @@ if echo "$models_response" | grep -q '"object":"list"'; then
 else
     echo -e "${RED}✗${NC} Models endpoint not responding correctly"
     echo "Response: $models_response"
+    TEST_FAILURES=$((TEST_FAILURES + 1))
 fi
 echo ""
 
@@ -168,9 +177,9 @@ echo ""
 echo -e "${BLUE}Test 2:${NC} Testing category classification API (optional)"
 echo ""
 
-test_classification_api "What is the derivative of x squared?" "math"
-test_classification_api "Explain quantum entanglement in physics" "physics"
-test_classification_api "Write a function to reverse a string in Python" "computer science"
+test_classification_api "What is the derivative of x squared?" "math" || TEST_FAILURES=$((TEST_FAILURES + 1))
+test_classification_api "Explain quantum entanglement in physics" "physics" || TEST_FAILURES=$((TEST_FAILURES + 1))
+test_classification_api "Write a function to reverse a string in Python" "computer science" || TEST_FAILURES=$((TEST_FAILURES + 1))
 
 echo ""
 
@@ -178,9 +187,9 @@ echo ""
 echo -e "${BLUE}Test 3:${NC} Testing end-to-end chat completion"
 echo ""
 
-test_chat_completion "Route this with auto model selection" "auto"
-test_chat_completion "What is 2+2? Answer briefly."
-test_chat_completion "Tell me a joke"
+test_chat_completion "Route this with auto model selection" "auto" || TEST_FAILURES=$((TEST_FAILURES + 1))
+test_chat_completion "What is 2+2? Answer briefly." || TEST_FAILURES=$((TEST_FAILURES + 1))
+test_chat_completion "Tell me a joke" || TEST_FAILURES=$((TEST_FAILURES + 1))
 
 echo ""
 
@@ -212,9 +221,13 @@ CACHE_QUERY="What is the capital of France?"
 
 echo "First request (cache miss expected)..."
 time1_start=$(date +%s%N)
-response1=$(curl -s -k -X POST "$ROUTER_URL/v1/chat/completions" \
+if ! curl -sS -k --fail-with-body -X POST "$ROUTER_URL/v1/chat/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\": \"$MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"$CACHE_QUERY\"}], \"max_tokens\": 20}" 2>/dev/null)
+    -d "{\"model\": \"$MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"$CACHE_QUERY\"}], \"max_tokens\": 20}" \
+    >/dev/null; then
+    echo -e "${RED}FAIL${NC} - First cache probe failed"
+    TEST_FAILURES=$((TEST_FAILURES + 1))
+fi
 time1_end=$(date +%s%N)
 time1=$(((time1_end - time1_start) / 1000000))
 
@@ -222,9 +235,13 @@ sleep 1
 
 echo "Second request (cache hit expected)..."
 time2_start=$(date +%s%N)
-response2=$(curl -s -k -X POST "$ROUTER_URL/v1/chat/completions" \
+if ! curl -sS -k --fail-with-body -X POST "$ROUTER_URL/v1/chat/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\": \"$MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"$CACHE_QUERY\"}], \"max_tokens\": 20}" 2>/dev/null)
+    -d "{\"model\": \"$MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"$CACHE_QUERY\"}], \"max_tokens\": 20}" \
+    >/dev/null; then
+    echo -e "${RED}FAIL${NC} - Second cache probe failed"
+    TEST_FAILURES=$((TEST_FAILURES + 1))
+fi
 time2_end=$(date +%s%N)
 time2=$(((time2_end - time2_start) / 1000000))
 
@@ -240,6 +257,10 @@ fi
 
 echo ""
 echo "=================================================="
+if [ "$TEST_FAILURES" -ne 0 ]; then
+    echo -e "${RED}Validation failed: $TEST_FAILURES required check(s) failed${NC}"
+    exit 1
+fi
 echo "Validation Complete"
 echo "=================================================="
 echo ""
