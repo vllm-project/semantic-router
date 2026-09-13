@@ -131,6 +131,11 @@ func TestHallucinationDetector_InitializationRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	// Should fail if not initialized
 	_, err = detector.Detect(context.Background(), "context", "question", "answer")
@@ -153,6 +158,11 @@ func TestHallucinationDetector_ContextRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	err = detector.Initialize()
 	if err != nil {
@@ -180,6 +190,11 @@ func TestHallucinationDetector_EmptyAnswerOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	err = detector.Initialize()
 	if err != nil {
@@ -193,8 +208,8 @@ func TestHallucinationDetector_EmptyAnswerOK(t *testing.T) {
 	if result.HallucinationDetected {
 		t.Error("Empty answer should not be detected as hallucination")
 	}
-	if result.Confidence != 1.0 {
-		t.Errorf("Expected confidence 1.0 for empty answer, got %f", result.Confidence)
+	if result.ScoreAvailable {
+		t.Fatal("empty answer acquired a model score")
 	}
 }
 
@@ -262,6 +277,11 @@ func TestHallucinationDetector_OpenAIPipeline_GroundedResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	err = detector.Initialize()
 	if err != nil {
@@ -353,6 +373,11 @@ func TestHallucinationDetector_OpenAIPipeline_HallucinatedResponse(t *testing.T)
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	err = detector.Initialize()
 	if err != nil {
@@ -443,6 +468,11 @@ func TestHallucinationDetector_OpenAIPipeline_MultipleToolResults(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	err = detector.Initialize()
 	if err != nil {
@@ -613,6 +643,11 @@ func TestHallucinationDetector_SetNLIConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	// Initially NLI should not be initialized
 	if detector.IsNLIInitialized() {
@@ -649,6 +684,11 @@ func TestHallucinationDetector_NLIClassification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	// Initialize hallucination detector
 	err = detector.Initialize()
@@ -721,6 +761,11 @@ func TestHallucinationDetector_EnhancedDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	// Initialize both models
 	err = detector.Initialize()
@@ -1103,6 +1148,11 @@ func setupDetectorWithNLI(t *testing.T) *HallucinationDetector {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 
 	err = detector.Initialize()
 	if err != nil {

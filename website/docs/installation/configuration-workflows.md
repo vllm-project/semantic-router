@@ -15,9 +15,17 @@ Use YAML when configuration belongs in source control or an existing deployment
 pipeline:
 
 ```bash
+vllm-sr config init --output config.yaml
 vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
+
+`config init` writes the packaged minimal canonical template and refuses to
+replace an existing file unless `--force` is explicit. When a Router is already
+running, start from `vllm-sr config get` instead so unrelated active settings
+are preserved. A model becomes a routing candidate only after the same model
+name appears in `providers.models`, `routing.modelCards`, and the applicable
+decision's `modelRefs`.
 
 The local runtime derives stack-specific service addresses in runtime-owned
 state without rewriting the source file. Concurrent `serve` and `stop`
@@ -118,6 +126,20 @@ reference errors fail before deployment.
 Choose Kubernetes GPU images, resources, and device plugins through Helm or the
 Operator. The local `--platform amd` and `--platform nvidia` shortcuts do not
 configure Kubernetes scheduling.
+
+The chart runs the Dashboard as its own Deployment and Service, and that
+Deployment is disabled by default. The Router Service carries the gRPC and HTTP
+API ports only, so port 8700 appears in the cluster only after the Dashboard is
+enabled.
+
+```bash
+helm upgrade --install semantic-router \
+  oci://ghcr.io/vllm-project/charts/semantic-router \
+  -f values.yaml --set dashboard.enabled=true
+
+kubectl --namespace vllm-semantic-router-system port-forward \
+  svc/semantic-router-dashboard 8700:8700
+```
 
 ## Operator
 

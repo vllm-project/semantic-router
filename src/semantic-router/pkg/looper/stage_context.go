@@ -44,30 +44,6 @@ func (e *StageContextWindowError) Error() string {
 	)
 }
 
-func (l *BaseLooper) callModelWithContextGate(
-	ctx context.Context,
-	baseReq *Request,
-	stageReq *openai.ChatCompletionNewParams,
-	modelName string,
-	streaming bool,
-	iteration int,
-	logprobsConfig *LogprobsConfig,
-	accessKey string,
-) (*ModelResponse, error) {
-	if err := validateLooperStageContext(baseReq, stageReq, modelName); err != nil {
-		return nil, err
-	}
-	return l.client.CallModel(
-		ctx,
-		stageReq,
-		modelName,
-		streaming,
-		iteration,
-		logprobsConfig,
-		accessKey,
-	)
-}
-
 func (l *BaseLooper) dispatchModel(
 	ctx context.Context,
 	baseReq *Request,

@@ -46,6 +46,11 @@ func TestFactCheckClassifier_RequiresModelID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err == nil {
@@ -67,6 +72,11 @@ func TestFactCheckClassifier_EmptyText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -80,8 +90,8 @@ func TestFactCheckClassifier_EmptyText(t *testing.T) {
 	if result.NeedsFactCheck {
 		t.Error("Empty text should not need fact checking")
 	}
-	if result.Confidence != 1.0 {
-		t.Errorf("Expected confidence 1.0 for empty text, got %f", result.Confidence)
+	if result.ConfidenceAvailable || result.Confidence != 0 || result.PolicyDefault != "empty_text" {
+		t.Fatalf("empty input fabricated confidence: %+v", result)
 	}
 }
 
@@ -99,6 +109,11 @@ func TestFactCheckClassifier_Initialize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -126,6 +141,11 @@ func TestFactCheckClassifier_FactCheckNeeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -167,6 +187,11 @@ func TestFactCheckClassifier_NoFactCheckNeeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -197,9 +222,10 @@ func TestFactCheckClassifier_NoFactCheckNeeded(t *testing.T) {
 // TestFactCheckResult_JSONSerialization tests that results can be serialized
 func TestFactCheckResult_JSONSerialization(t *testing.T) {
 	result := &FactCheckResult{
-		NeedsFactCheck: true,
-		Confidence:     0.85,
-		Label:          FactCheckLabelNeeded,
+		NeedsFactCheck:      true,
+		Confidence:          0.85,
+		ConfidenceAvailable: true,
+		Label:               FactCheckLabelNeeded,
 	}
 
 	data, err := json.Marshal(result)
@@ -238,6 +264,11 @@ func TestFactCheckClassifier_OpenAIPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {
@@ -279,6 +310,11 @@ func TestFactCheckClassifier_Threshold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := classifier.Close(); closeErr != nil {
+			t.Errorf("Failed to close classifier: %v", closeErr)
+		}
+	})
 
 	err = classifier.Initialize()
 	if err != nil {

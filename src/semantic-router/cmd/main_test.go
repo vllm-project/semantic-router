@@ -1,14 +1,45 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
+
+func TestKubernetesUpdateProtectsPublishedArtifactBeforeDownload(t *testing.T) {
+	restore := stubKubernetesUpdateSeams(t)
+	defer restore()
+	artifact := t.TempDir()
+	makeConfig := func(revision string) *config.RouterConfig {
+		cfg := &config.RouterConfig{MoMRegistry: map[string]string{artifact: "test/model"}}
+		cfg.CategoryModel.ModelID = artifact
+		cfg.CategoryMappingPath = filepath.Join(artifact, "labels.json")
+		cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
+		cfg.ModelDeployments = map[string]config.ModelDeployment{"intent": {Provider: "candle", Artifact: artifact, Revision: revision}}
+		cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "intent", Contract: "label_distribution.v1", Adapter: "mmbert32k"}}
+		return cfg
+	}
+	current := makeConfig(strings.Repeat("a", 40))
+	candidate := makeConfig(strings.Repeat("b", 40))
+	ensureKubernetesConfigModels = func(context.Context, *config.RouterConfig) error {
+		t.Fatal("candidate download must not modify published artifacts")
+		return nil
+	}
+	replaceKubernetesRuntimeConfig = func(*config.RouterConfig) {
+		t.Fatal("unsafe candidate was published")
+	}
+	err := applyKubernetesConfigUpdate(context.Background(), candidate, func() *config.RouterConfig { return current })
+	if err == nil || !strings.Contains(err.Error(), "in use") {
+		t.Fatalf("update error = %v, want live artifact rejection", err)
+	}
+}
 
 func TestApplyKubernetesConfigUpdateEnsuresModelsBeforeReplace(t *testing.T) {
 	restoreKubernetesUpdateSeams := stubKubernetesUpdateSeams(t)
@@ -17,7 +48,7 @@ func TestApplyKubernetesConfigUpdateEnsuresModelsBeforeReplace(t *testing.T) {
 	cfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
 	order := make([]string, 0, 2)
 
-	ensureKubernetesConfigModels = func(got *config.RouterConfig) error {
+	ensureKubernetesConfigModels = func(_ context.Context, got *config.RouterConfig) error {
 		order = append(order, "ensure")
 		if got != cfg {
 			t.Fatalf("ensureKubernetesConfigModels() cfg = %p, want %p", got, cfg)
@@ -31,7 +62,7 @@ func TestApplyKubernetesConfigUpdateEnsuresModelsBeforeReplace(t *testing.T) {
 		}
 	}
 
-	if err := applyKubernetesConfigUpdate(cfg); err != nil {
+	if err := applyKubernetesConfigUpdate(context.Background(), cfg); err != nil {
 		t.Fatalf("applyKubernetesConfigUpdate() error = %v", err)
 	}
 
@@ -46,7 +77,7 @@ func TestApplyKubernetesConfigUpdateSkipsReplaceOnEnsureFailure(t *testing.T) {
 	defer restoreKubernetesUpdateSeams()
 
 	cfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
-	ensureKubernetesConfigModels = func(got *config.RouterConfig) error {
+	ensureKubernetesConfigModels = func(_ context.Context, got *config.RouterConfig) error {
 		if got != cfg {
 			t.Fatalf("ensureKubernetesConfigModels() cfg = %p, want %p", got, cfg)
 		}
@@ -56,12 +87,31 @@ func TestApplyKubernetesConfigUpdateSkipsReplaceOnEnsureFailure(t *testing.T) {
 		t.Fatalf("replaceKubernetesRuntimeConfig() should not be called on ensure failure")
 	}
 
-	err := applyKubernetesConfigUpdate(cfg)
+	err := applyKubernetesConfigUpdate(context.Background(), cfg)
 	if err == nil {
 		t.Fatal("applyKubernetesConfigUpdate() error = nil, want failure")
 	}
 	if got := err.Error(); got != "failed to ensure models for kubernetes config update: download failed" {
 		t.Fatalf("applyKubernetesConfigUpdate() error = %q", got)
+	}
+}
+
+func TestApplyKubernetesConfigUpdateDoesNotPublishAfterCancellation(t *testing.T) {
+	restoreKubernetesUpdateSeams := stubKubernetesUpdateSeams(t)
+	defer restoreKubernetesUpdateSeams()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ensureKubernetesConfigModels = func(context.Context, *config.RouterConfig) error {
+		cancel()
+		return nil
+	}
+	replaceKubernetesRuntimeConfig = func(*config.RouterConfig) {
+		t.Fatal("replaceKubernetesRuntimeConfig() called after cancellation")
+	}
+
+	err := applyKubernetesConfigUpdate(ctx, &config.RouterConfig{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("applyKubernetesConfigUpdate() error = %v, want context canceled", err)
 	}
 }
 

@@ -8,13 +8,22 @@ editing, discover only the relevant schema surface:
 ```bash
 vllm-sr config schema --endpoint http://router-management:8080
 vllm-sr config schema --endpoint http://router-management:8080 \
-  --section routing
+  --section providers.models
+vllm-sr config schema --endpoint http://router-management:8080 \
+  --section routing.decisions.modelRefs
 vllm-sr config schema --endpoint http://router-management:8080 \
   --surface algorithm:multi_factor
 ```
 
-Use `--full` only for offline tooling that genuinely needs the entire JSON
-Schema.
+Section requests return compact field directories that link to child paths.
+Add `--expanded` only when tooling needs a self-contained schema for that
+section, and use `--full` only when it genuinely needs the entire JSON Schema.
+
+Read an active document with `vllm-sr config get`. In a fresh workspace, run
+`vllm-sr config init --output candidate.yaml` for a minimal canonical starter.
+The same physical model name must occur under `providers.models`,
+`routing.modelCards`, and the applicable decision's `modelRefs`; a provider or
+Model Card alone does not make a model routable.
 
 ## Validate, plan, apply
 
@@ -31,8 +40,14 @@ vllm-sr config apply --config candidate.yaml --mode replace \
 
 `plan` performs the same canonical parse, merge/replace, and hot-reload checks
 as mutation but writes nothing. `apply` plans again and uses the returned ETag
-as a compare-and-swap precondition. Prefer `replace` for a complete reviewed
-document; use `merge` only for an intentionally partial patch.
+as a compare-and-swap precondition. Listener and provider-backend topology is
+rendered into Envoy, so a plan that changes it returns `RESTART_REQUIRED` and
+must be activated through the deployment workflow. For local Docker, the
+explicit operation is `vllm-sr serve --config <candidate>
+--replace-active-config`; without that flag, `serve` preserves Dashboard-edited
+runtime state. The Router apply API is for hot-reloadable state. Prefer
+`replace` for a complete reviewed document; use `merge` only for an
+intentionally partial patch.
 
 Inspect or recover state with:
 

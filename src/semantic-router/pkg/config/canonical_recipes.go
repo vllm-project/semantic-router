@@ -42,10 +42,11 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 			Name:        RecipeName(recipe.Name),
 			Description: recipe.Description,
 			Profile: RoutingProfile{
-				Signals:     normalizeSignals(recipe.Routing.Signals, decisions),
-				Projections: normalizeProjections(recipe.Routing.Projections),
-				Decisions:   decisions,
-				Strategy:    strategy,
+				ModelBindings: cloneModelMap(recipe.Routing.ModelBindings),
+				Signals:       normalizeSignals(recipe.Routing.Signals, decisions),
+				Projections:   normalizeProjections(recipe.Routing.Projections),
+				Decisions:     decisions,
+				Strategy:      strategy,
 			},
 		})
 	}
@@ -57,15 +58,17 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 		cfg.Projections = explicitDefault.Profile.Projections
 		cfg.Decisions = explicitDefault.Profile.Decisions
 		cfg.Strategy = explicitDefault.Profile.Strategy
+		cfg.ModelBindings = cloneModelMap(explicitDefault.Profile.ModelBindings)
 	} else {
 		// The top-level routing profile is the default recipe.
 		recipes = append([]RoutingRecipe{{
 			Name: DefaultRecipeName,
 			Profile: RoutingProfile{
-				Signals:     cfg.Signals,
-				Projections: cfg.Projections,
-				Decisions:   cfg.Decisions,
-				Strategy:    cfg.Strategy,
+				ModelBindings: cloneModelMap(cfg.ModelBindings),
+				Signals:       cfg.Signals,
+				Projections:   cfg.Projections,
+				Decisions:     cfg.Decisions,
+				Strategy:      cfg.Strategy,
 			},
 		}}, recipes...)
 	}
@@ -224,10 +227,11 @@ func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
 			Name:        string(recipe.Name),
 			Description: recipe.Description,
 			Routing: CanonicalRouting{
-				Signals:     canonicalSignalsFromSignals(recipe.Profile.Signals),
-				Projections: canonicalProjectionsFromProjections(recipe.Profile.Projections),
-				Decisions:   copyDecisions(recipe.Profile.Decisions),
-				Strategy:    recipe.Profile.Strategy,
+				ModelBindings: cloneModelMap(recipe.Profile.ModelBindings),
+				Signals:       canonicalSignalsFromSignals(recipe.Profile.Signals),
+				Projections:   canonicalProjectionsFromProjections(recipe.Profile.Projections),
+				Decisions:     copyDecisions(recipe.Profile.Decisions),
+				Strategy:      recipe.Profile.Strategy,
 			},
 		})
 	}
@@ -265,6 +269,9 @@ func findRecipe(recipes []RoutingRecipe, name RecipeName) *RoutingRecipe {
 // content (signals, projections, or decisions). modelCards do not count: they
 // are the shared model catalog, not part of any one profile.
 func canonicalRoutingHasProfile(routing CanonicalRouting) bool {
+	if len(routing.ModelBindings) > 0 {
+		return true
+	}
 	if routing.Strategy != "" {
 		return true
 	}

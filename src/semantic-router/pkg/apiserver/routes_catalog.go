@@ -342,6 +342,7 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 				Parameters: []OpenAPIParameter{
 					{Name: "view", In: "query", Description: "Representation to return. Omit for the compact index; use full for the complete schema.", Schema: OpenAPISchema{Type: "string", Enum: []string{"full", "index", "section", "surface"}}},
 					{Name: "path", In: "query", Description: "Dot- or slash-delimited config path required by view=section.", Schema: OpenAPISchema{Type: "string"}},
+					{Name: "expanded", In: "query", Description: "Return a self-contained JSON Schema for view=section instead of its compact field directory.", Schema: OpenAPISchema{Type: "boolean"}},
 					{Name: "kind", In: "query", Description: "Surface kind required by view=surface.", Schema: OpenAPISchema{Type: "string", Enum: []string{"signal", "algorithm", "plugin", "projection"}}},
 					{Name: "name", In: "query", Description: "Registered surface name required by view=surface.", Schema: OpenAPISchema{Type: "string"}},
 				},

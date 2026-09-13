@@ -3,8 +3,12 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"time"
 
@@ -21,6 +25,14 @@ const (
 	apiWriteTimeout = 2 * time.Minute
 	apiIdleTimeout  = 60 * time.Second
 )
+
+type Server struct {
+	httpServer *http.Server
+	done       chan struct{}
+	serveErr   error
+	owned      *serverOwnedResources
+	ownedDone  chan struct{}
+}
 
 // Init starts the API server.
 func Init(configPath string, port int) error {
@@ -53,11 +65,23 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 // InitWithOptions starts the API server with explicit management listener policy.
 func InitWithOptions(opts InitOptions) error {
+	server, err := StartWithOptions(opts)
+	if err != nil {
+		return err
+	}
+	<-server.done
+	if server.ownedDone != nil {
+		<-server.ownedDone
+	}
+	return errors.Join(normalizeServerError(server.serveErr), server.owned.closeError())
+}
+
+func StartWithOptions(opts InitOptions) (*Server, error) {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
 	cfg := resolveAPIServerConfig(opts.RuntimeRegistry)
 	if cfg == nil {
-		return fmt.Errorf("configuration not initialized")
+		return nil, fmt.Errorf("configuration not initialized")
 	}
 
 	managementCfg, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
@@ -67,12 +91,11 @@ func InitWithOptions(opts InitOptions) error {
 		AuthMode:       opts.AuthMode,
 	})
 	if err != nil {
-		return fmt.Errorf("invalid management API configuration: %w", err)
+		return nil, fmt.Errorf("invalid management API configuration: %w", err)
 	}
 	cfg.ManagementAPI = managementCfg
 
-	classificationSvc := resolveClassificationService(cfg, opts.RuntimeRegistry)
-	classificationSvc = ensureClassificationService(cfg, opts.RuntimeRegistry, classificationSvc)
+	classificationSvc, classificationOwner := classificationServiceForStartup(cfg, opts.RuntimeRegistry)
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -126,7 +149,7 @@ func InitWithOptions(opts InitOptions) error {
 
 	// Create HTTP server with routes
 	mux := apiServer.setupRoutes()
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:         managementCfg.ListenAddress(),
 		Handler:      mux,
 		ReadTimeout:  apiReadTimeout,
@@ -141,7 +164,66 @@ func InitWithOptions(opts InitOptions) error {
 		"remote_exposure": managementCfg.RemoteExposure,
 		"auth_mode":       managementCfg.Auth.Mode,
 	})
-	return server.ListenAndServe()
+	return startHTTPServer(httpServer, classificationOwner)
+}
+
+func startHTTPServer(httpServer *http.Server, owners ...io.Closer) (*Server, error) {
+	owned := newServerOwnedResources(owners)
+	listener, err := net.Listen("tcp", httpServer.Addr)
+	if err != nil {
+		return nil, errors.Join(err, owned.drainAndClose())
+	}
+	httpServer.Addr = listener.Addr().String()
+	server := &Server{
+		httpServer: httpServer,
+		done:       make(chan struct{}),
+		owned:      owned,
+	}
+	if owned != nil {
+		server.ownedDone = make(chan struct{})
+		httpServer.Handler = owned.handler(httpServer.Handler)
+	}
+	go func() {
+		server.serveErr = httpServer.Serve(listener)
+		close(server.done)
+		if owned != nil {
+			_ = owned.drainAndClose()
+			close(server.ownedDone)
+		}
+	}()
+	return server, nil
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s == nil || s.httpServer == nil {
+		return nil
+	}
+	s.owned.beginDrain()
+	shutdownErr := s.httpServer.Shutdown(ctx)
+	if shutdownErr != nil {
+		_ = s.httpServer.Close()
+	}
+	select {
+	case <-s.done:
+		if s.ownedDone != nil {
+			select {
+			case <-s.ownedDone:
+			case <-ctx.Done():
+				return errors.Join(shutdownErr, ctx.Err())
+			}
+		}
+		return errors.Join(shutdownErr, normalizeServerError(s.serveErr), s.owned.closeError())
+	case <-ctx.Done():
+		_ = s.httpServer.Close()
+		return errors.Join(shutdownErr, ctx.Err())
+	}
+}
+
+func normalizeServerError(err error) error {
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {
@@ -259,7 +341,20 @@ func buildConfigUpdater(
 			config.Replace(newCfg)
 		}
 	}
-	return runtimeRegistry.RefreshRuntimeConfig
+	// The persisted document is a candidate. The router watcher publishes the
+	// complete generation after preparation; mutating its borrowed service here
+	// would expose a new API classifier beside the old extproc/cache snapshot.
+	return func(*config.RouterConfig) {}
+}
+
+func classificationServiceForStartup(cfg *config.RouterConfig, registry *routerruntime.Registry) (*services.ClassificationService, io.Closer) {
+	service := resolveClassificationService(cfg, registry)
+	created := service == nil && registry == nil
+	service = ensureClassificationService(cfg, registry, service)
+	if created {
+		return service, service
+	}
+	return service, nil
 }
 
 // initClassify attempts to get the global classification service with retry logic

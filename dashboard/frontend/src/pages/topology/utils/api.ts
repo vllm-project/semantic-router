@@ -11,10 +11,14 @@ interface TestQueryResponse {
   matchedSignals: Array<{
     type: string
     name: string
-    confidence: number
+    confidence: number | null
+    confidenceAvailable?: boolean
     value?: number
     reason?: string
   }>
+  decisionConfidence?: number | null
+  decisionConfidenceAvailable?: boolean
+  signalErrorMatches?: Record<string, boolean>
   matchedDecision: string | null
   matchedModels: string[]
   highlightedPath: string[]
@@ -65,6 +69,9 @@ export async function testQueryDryRun(
     isAccurate: data.isAccurate,
     matchedSignals: convertSignals(data.matchedSignals),
     matchedDecision: data.matchedDecision,
+    decisionConfidence: data.decisionConfidence,
+    decisionConfidenceAvailable: data.decisionConfidenceAvailable,
+    signalErrorMatches: data.signalErrorMatches,
     matchedModels: data.matchedModels,
     highlightedPath: data.highlightedPath,
     evaluatedRules: convertEvaluatedRules(data.evaluatedRules),
@@ -104,6 +111,9 @@ export async function testQuerySimulate(
     isAccurate: data.isAccurate,
     matchedSignals: convertSignals(data.matchedSignals),
     matchedDecision: data.matchedDecision,
+    decisionConfidence: data.decisionConfidence,
+    decisionConfidenceAvailable: data.decisionConfidenceAvailable,
+    signalErrorMatches: data.signalErrorMatches,
     matchedModels: data.matchedModels,
     highlightedPath: data.highlightedPath,
     evaluatedRules: convertEvaluatedRules(data.evaluatedRules),
@@ -123,8 +133,9 @@ function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSi
     name: s.name,
     matched: true, // Backend only returns matched signals
     value: s.value,
-    confidence: s.confidence,
-    score: s.confidence,
+    confidence: s.confidenceAvailable === false ? null : s.confidence,
+    confidenceAvailable: s.confidenceAvailable,
+    score: s.confidenceAvailable === false ? null : s.confidence,
     reason: s.reason,
     needsBackend: false,
   }))

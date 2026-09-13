@@ -394,12 +394,44 @@ func TestHandleConfigValidateRejectsEmptyYAML(t *testing.T) {
 	}
 }
 
-func TestValidateHotReloadCompatibilityRejectsLocalClassifierChange(t *testing.T) {
+func TestValidateHotReloadCompatibilityAllowsOwnedLocalClassifierChange(t *testing.T) {
 	current := []byte(localClassifierReloadConfig("models/risk-v1"))
 	next := []byte(localClassifierReloadConfig("models/risk-v2"))
 
-	if err := validateHotReloadCompatibility(current, next); err == nil {
-		t.Fatal("expected restart-required local classifier reload error")
+	if err := validateHotReloadCompatibility(current, next); err != nil {
+		t.Fatalf("owned local classifier changes should prepare a candidate: %v", err)
+	}
+	invalid := []byte(strings.ReplaceAll(string(next), "labels: [SAFE, RISKY]", "labels: [SAFE, SAFE]"))
+	if err := validateHotReloadCompatibility(current, invalid); err == nil {
+		t.Fatal("invalid candidate labels should still fail validation")
+	}
+}
+
+func TestValidateHotReloadCompatibilityRejectsEnvoyTopologyChange(t *testing.T) {
+	current := minimalDeployTestConfig("route")
+	next := minimalDeployTestConfig("route")
+	next.VLLMEndpoints[0].Port++
+
+	currentYAML := mustMarshalCanonicalConfigYAML(t, current)
+	nextYAML := mustMarshalCanonicalConfigYAML(t, next)
+	err := validateHotReloadCompatibility(currentYAML, nextYAML)
+	if err == nil {
+		t.Fatal("expected restart-required Envoy topology error")
+	}
+	if !strings.Contains(err.Error(), "deployment workflow") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateHotReloadCompatibilityAllowsRouterPolicyChange(t *testing.T) {
+	current := minimalDeployTestConfig("before")
+	next := minimalDeployTestConfig("after")
+
+	if err := validateHotReloadCompatibility(
+		mustMarshalCanonicalConfigYAML(t, current),
+		mustMarshalCanonicalConfigYAML(t, next),
+	); err != nil {
+		t.Fatalf("routing-only change should be hot-reloadable: %v", err)
 	}
 }
 

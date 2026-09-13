@@ -53,7 +53,9 @@ type classifierModelAvailability struct {
 // buildModelsInfoResponse builds the models info response
 func (s *ClassificationAPIServer) buildModelsInfoResponse() ModelsInfoResponse {
 	runtimeState := s.loadModelsRuntimeState()
-	models := s.getClassifierModelsInfo(s.classifierModelAvailability(), runtimeState)
+	cfg, service, release := s.acquireClassificationRuntime()
+	defer release()
+	models := s.getClassifierModelsInfo(cfg, classificationAvailabilityForService(service), runtimeState)
 
 	// Add embedding models information
 	embeddingModels := s.getEmbeddingModelsInfo(runtimeState)

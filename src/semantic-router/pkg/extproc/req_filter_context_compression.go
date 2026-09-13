@@ -76,7 +76,7 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		Policy:       policy,
 		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),
 		TokenCounter: r.contextCompressionTokenCounter(ctx),
-		Scorer:       r.contextCompressionScorer(callContext, pluginConfig),
+		Scorer:       r.contextCompressionScorer(callContext, pluginConfig, ctx),
 		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
 		Provenance:   provenance,
 	}

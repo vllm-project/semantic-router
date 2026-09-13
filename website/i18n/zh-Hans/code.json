@@ -605,10 +605,10 @@
     "message": "安装指南"
   },
   "homepage.install.agentCta": {
-    "message": "查看 Agent Skill"
+    "message": "Agent 安装指南"
   },
   "homepage.install.secondaryCta": {
-    "message": "打开快速上手"
+    "message": "查看原始 Skill"
   },
   "homepage.install.docsCta": {
     "message": "阅读文档"

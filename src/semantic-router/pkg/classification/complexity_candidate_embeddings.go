@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -152,6 +153,9 @@ func (c *ComplexityClassifier) startCandidateEmbeddingWorkers(
 
 func (c *ComplexityClassifier) computeCandidateEmbedding(task complexityCandidateTask) ([]float32, error) {
 	if task.isImage {
+		if c.multiModalProvider != nil {
+			return embedding.Image(context.Background(), c.multiModalProvider, task.candidate, 0)
+		}
 		return getMultiModalImageEmbedding(task.candidate, 0)
 	}
 	if c.provider != nil {
