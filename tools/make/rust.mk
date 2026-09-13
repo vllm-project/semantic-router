@@ -207,8 +207,7 @@ test-binding-lora: $(if $(CI),rust-ci,rust) ## Run Go tests with LoRA and advanc
 	@echo "Running candle-binding tests with LoRA and advanced embedding models..."
 	@export $(NATIVE_ENV) && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
-		-run "^Test(BertTokenClassification|BertSequenceClassification|CandleBertClassifier|CandleBertTokenClassifier|CandleBertTokensWithLabels|LoRAUnifiedClassifier|GetEmbeddingSmart|InitEmbeddingModels|GetEmbeddingWithDim|EmbeddingConsistency|EmbeddingPriorityRouting|EmbeddingConcurrency)$$" \
-		|| { echo "⚠️  Warning: Some LoRA/embedding tests failed (may be due to missing restricted models), continuing..."; $(if $(CI),true,exit 1); }
+		-run "^Test(BertTokenClassification|BertSequenceClassification|CandleBertClassifier|CandleBertTokenClassifier|CandleBertTokensWithLabels|LoRAUnifiedClassifier|GetEmbeddingSmart|InitEmbeddingModels|GetEmbeddingWithDim|EmbeddingConsistency|EmbeddingPriorityRouting|EmbeddingConcurrency)$$"
 # Test the Rust library - all tests (conditionally use rust-ci in CI environments)
 test-binding: $(if $(CI),rust-ci,rust) ## Run all Go tests with the Rust static library
 	@$(LOG_TARGET)
