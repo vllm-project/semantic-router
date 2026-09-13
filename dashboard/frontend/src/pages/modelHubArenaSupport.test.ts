@@ -16,7 +16,7 @@ describe('model hub arena hierarchy', () => {
 
     expect(arena).not.toBeNull()
     expect(arena?.overall.id).toBe('vllm-sr/intelligence@1.0.0')
-    expect(arena?.overall.rows).toHaveLength(21)
+    expect(arena?.overall.rows).toHaveLength(22)
     expect(arena?.capabilities.map((surface) => surface.displayName)).toEqual([
       'General',
       'Reasoning',
