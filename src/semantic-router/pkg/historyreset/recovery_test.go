@@ -302,3 +302,55 @@ func TestMatchingBindingAuthorizesRemoval(t *testing.T) {
 		t.Fatalf("bound evidence must authorize removal, got %v %+v", edits.RemoveMessages, diagnostics)
 	}
 }
+
+// Serialization cannot be interrupted once it starts, so an oversized removal
+// is rejected from an estimate before the envelope is built.
+func TestOversizedRemovalIsRejectedBeforeSerialization(t *testing.T) {
+	policy := testPolicy()
+	policy.MaxRecoveryBytes = 64
+	writer := &recoveryWriterStub{}
+	request := conversation()
+	request.Messages[0].Content[0].Text = strings.Repeat("x", 4096)
+	detached := make(map[int]llmprotocol.Message, len(request.Messages))
+	for index, message := range request.Messages {
+		detached[index] = message
+	}
+	action := NewAction(policy, acceptedChange(), "").WithRecovery(writer, detached)
+
+	ir, err := applyAction(t, request, action)
+	if err != nil {
+		t.Fatalf("fail-open must not stop the plan: %v", err)
+	}
+	if len(request.Messages) != 5 {
+		t.Fatal("an oversized removal must not remove history")
+	}
+	if len(writer.payloads) != 0 {
+		t.Fatal("an oversized payload must not reach the store")
+	}
+	diagnostics := action.Reconcile(ir.Transformations.Receipts())
+	if diagnostics.Reason != ReasonRecoveryLimitExceeded {
+		t.Fatalf("unexpected diagnostics %+v", diagnostics)
+	}
+}
+
+// The estimate must account for payloads the policy's text view cannot see,
+// so a large tool argument is bounded like any other content.
+func TestRecoveryEstimateCountsToolPayloads(t *testing.T) {
+	request := conversation()
+	request.Messages[1] = llmprotocol.Message{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolCall,
+			ToolCall: &llmprotocol.ToolCall{
+				ID: "a", Name: "lookup", Arguments: strings.Repeat("y", 8192),
+			},
+		}},
+	}
+	detached := map[int]llmprotocol.Message{0: request.Messages[0], 1: request.Messages[1]}
+	action := NewAction(testPolicy(), acceptedChange(), "").
+		WithRecovery(&recoveryWriterStub{}, detached)
+
+	if estimate := action.estimateEnvelopeBytes([]int{0, 1}); estimate < 8192 {
+		t.Fatalf("estimate = %d, want the tool arguments to be counted", estimate)
+	}
+}

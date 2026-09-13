@@ -71,6 +71,42 @@ func DecodeEnvelope(payload string) (Envelope, error) {
 	return envelope, nil
 }
 
+// estimateEnvelopeBytes approximates the stored payload before it is built.
+// Serialization is not interruptible once started, so an oversized removal is
+// rejected from this estimate rather than by cancelling a marshal in flight.
+func (a *Action) estimateEnvelopeBytes(ids []int) int {
+	total := len(EnvelopeVersion) + envelopeFixedOverhead
+	for _, id := range ids {
+		message, ok := a.detached[id]
+		if !ok {
+			continue
+		}
+		total += envelopeMessageOverhead + len(message.Role)
+		for _, content := range message.Content {
+			total += len(content.Text) + len(content.Kind) + len(content.MediaType) +
+				len(content.URL) + len(content.Data)
+			if content.ToolCall != nil {
+				total += len(content.ToolCall.ID) + len(content.ToolCall.Name) +
+					len(content.ToolCall.Arguments)
+			}
+			if content.ToolResult != nil {
+				total += len(content.ToolResult.CallID)
+				for _, nested := range content.ToolResult.Content {
+					total += len(nested.Text) + len(nested.Data)
+				}
+			}
+		}
+	}
+	return total
+}
+
+// Envelope encoding overheads. They only need to be the right order of
+// magnitude: the exact payload is still measured before it is stored.
+const (
+	envelopeFixedOverhead   = 64
+	envelopeMessageOverhead = 96
+)
+
 // buildEnvelope resolves the proposed IDs against the detached pre-transform
 // messages. A missing binding is an error rather than a partial payload: the
 // action must never remove history it cannot store completely.
