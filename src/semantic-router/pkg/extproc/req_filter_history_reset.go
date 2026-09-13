@@ -18,8 +18,7 @@ import (
 // cache in both directions: the cache identity covers static configuration but
 // not the per-request topic result, recovery availability, or the receipt that
 // an enabled policy must produce, so a hit could otherwise skip an authorized
-// evaluation. Configuration validation currently rejects every enabled policy,
-// so this path is inert until a topic-continuity trigger is registered.
+// evaluation.
 func bindHistoryResetPolicy(ctx *RequestContext) {
 	if ctx == nil || ctx.VSRSelectedDecision == nil {
 		return
@@ -104,8 +103,6 @@ func historyResetPolicy(
 	}
 	if configured.Trigger != nil {
 		policy.Signal = configured.Trigger.Signal
-	}
-	if configured.Trigger != nil {
 		policy.AcceptedVersions = append([]string(nil), configured.Trigger.AcceptedVersions...)
 	}
 	// The recovery budget comes from the merged request-level contract, not

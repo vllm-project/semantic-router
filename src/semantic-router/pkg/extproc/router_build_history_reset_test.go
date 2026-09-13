@@ -56,7 +56,7 @@ func TestRouterRefusesToActivateAnEnabledResetWithoutAProducer(t *testing.T) {
 	cfg.Decisions = []config.Decision{resetDecisionFor(t, "reset", nil)}
 
 	router := &OpenAIRouter{}
-	err := router.verifyHistoryResetRuntime(cfg)
+	err := router.verifyHistoryResetTriggerWiring(cfg)
 	if err == nil {
 		t.Fatal("an enabled policy was activated without a producer")
 	}
@@ -65,14 +65,14 @@ func TestRouterRefusesToActivateAnEnabledResetWithoutAProducer(t *testing.T) {
 	}
 
 	router.HistoryResetTriggers = &stubTriggerSource{}
-	if err = router.verifyHistoryResetRuntime(cfg); err != nil {
+	if err = router.verifyHistoryResetTriggerWiring(cfg); err != nil {
 		t.Fatalf("a wired producer must satisfy the gate: %v", err)
 	}
 
 	// A disabled policy needs no producer.
 	disabled := &config.RouterConfig{}
 	disabled.Decisions = []config.Decision{*historyResetDecision(t, map[string]interface{}{"enabled": false})}
-	if err = (&OpenAIRouter{}).verifyHistoryResetRuntime(disabled); err != nil {
+	if err = (&OpenAIRouter{}).verifyHistoryResetTriggerWiring(disabled); err != nil {
 		t.Fatalf("a disabled policy must not require a producer: %v", err)
 	}
 }
@@ -81,8 +81,6 @@ func TestRouterRefusesToActivateAnEnabledResetWithoutAProducer(t *testing.T) {
 // different backends or budgets cannot both be honoured. Refuse the
 // configuration rather than letting the first request decide for the rest.
 func TestRouterRefusesDisagreeingRecoveryContractsAcrossDecisions(t *testing.T) {
-	router := &OpenAIRouter{HistoryResetTriggers: &stubTriggerSource{}}
-
 	cfg := &config.RouterConfig{}
 	cfg.Decisions = []config.Decision{
 		resetDecisionFor(t, "first", map[string]interface{}{
@@ -92,7 +90,7 @@ func TestRouterRefusesDisagreeingRecoveryContractsAcrossDecisions(t *testing.T) 
 			"enabled": true, "store": "valkey", "max_total_bytes": 1024,
 		}),
 	}
-	err := router.verifyHistoryResetRuntime(cfg)
+	err := verifyContextRecoveryAgreement(cfg)
 	if err == nil || !strings.Contains(err.Error(), "different context recovery stores") {
 		t.Fatalf("disagreeing stores were accepted: %v", err)
 	}
@@ -100,7 +98,7 @@ func TestRouterRefusesDisagreeingRecoveryContractsAcrossDecisions(t *testing.T) 
 	cfg.Decisions[1] = resetDecisionFor(t, "second", map[string]interface{}{
 		"enabled": true, "store": "redis", "max_total_bytes": 2048,
 	})
-	if err = router.verifyHistoryResetRuntime(cfg); err == nil ||
+	if err = verifyContextRecoveryAgreement(cfg); err == nil ||
 		!strings.Contains(err.Error(), "max_total_bytes") {
 		t.Fatalf("disagreeing total budgets were accepted: %v", err)
 	}
@@ -108,7 +106,7 @@ func TestRouterRefusesDisagreeingRecoveryContractsAcrossDecisions(t *testing.T) 
 	cfg.Decisions[1] = resetDecisionFor(t, "second", map[string]interface{}{
 		"enabled": true, "store": "redis", "max_total_bytes": 1024,
 	})
-	if err = router.verifyHistoryResetRuntime(cfg); err != nil {
+	if err = verifyContextRecoveryAgreement(cfg); err != nil {
 		t.Fatalf("agreeing contracts were rejected: %v", err)
 	}
 }
