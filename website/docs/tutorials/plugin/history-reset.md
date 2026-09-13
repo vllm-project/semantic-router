@@ -142,6 +142,35 @@ follow-up has nowhere to run. Such a request preserves its history under
 `streaming_recovery_unsupported` reason. Reset never silently downgrades a
 recoverable removal to an irreversible one.
 
+## Supported Paths
+
+Reset runs in the shared context stage, after retrieval and memory enrichment
+and before compression, so every supported ingress format is handled once in
+the neutral request rather than per protocol. OpenAI Chat Completions, the
+Responses API, and Anthropic Messages all keep their own semantics on the way
+out: instructions, tool call and result links, multimodal blocks, and request
+metadata survive the encode step unchanged.
+
+Responses requests need one extra step. Part of their conversation can live
+behind `previous_response_id`, and that stored history is normally materialized
+just before the provider call — after the context stage. When a reset policy is
+enabled, the router resolves the permitted stored history first, so the reset
+sees the conversation the provider would actually receive, and dispatch does
+not prepend it a second time. Stored input, lineage, conversation membership,
+and public response IDs stay owned by the Responses API and are never altered
+by a reset. If that history cannot be resolved, the action is blocked with
+`history_unresolved` and the configured failure mode decides.
+
+Internal router hops — the algorithm loop and recovery follow-ups — continue a
+public turn that was already evaluated. They inherit that completion and never
+start a new topic-change event, so an appended tool result or a model change
+cannot trigger a second removal. The hop still registers its (non-removing)
+history step, which keeps the shared live-history compression protection
+consistent between the ingress request and its internal continuations.
+
+Requests dispatched through an external gateway without a recipe-local decision
+have no reset policy to apply and behave exactly as before.
+
 ## Interaction With Context Compression
 
 Reset runs before compression in the shared context pipeline. Enabling any

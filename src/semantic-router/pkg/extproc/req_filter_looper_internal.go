@@ -162,15 +162,20 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return r.createErrorResponse(400, "Invalid request body"), nil
 	}
 
+	// Bind the context policy before the internal plugins run: their cache
+	// lookup happens first, and an enabled reset policy must not serve a
+	// cached answer that skipped its evaluation.
+	bindHistoryResetPolicy(ctx)
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
-	compressionErr := r.applySemanticContextCompression(ctx, request)
-	if compressionErr != nil {
-		return r.createErrorResponse(
-			500,
-			"Context compression failed under fail_closed policy",
-		), nil
+	captureOriginalContextHistory(ctx)
+	prepareLooperContextHistorySteps(ctx)
+	// Internal hops run the same shared context stage as ingress requests, so
+	// history actions and compression compose identically on both paths.
+	if contextErr := r.applyContextTransformationPlan(ctx, request); contextErr != nil {
+		status, message := contextTransformationFailure(ctx)
+		return r.createErrorResponse(status, message), nil
 	}
 	err = r.modifyRequestBodyForLooper(
 		request,

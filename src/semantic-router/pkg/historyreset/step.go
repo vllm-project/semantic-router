@@ -16,6 +16,7 @@ const ReasonNotEvaluated = "not_evaluated"
 // the request-local diagnostic and is not safe for concurrent use across
 // requests, matching the plan it registers into.
 type Action struct {
+	inherited bool
 	policy    Policy
 	trigger   TriggerResult
 	blocked   string
@@ -24,6 +25,15 @@ type Action struct {
 	key       string
 	result    Diagnostics
 	evaluated bool
+}
+
+// NewInheritedAction builds the adapter for an internal follow-up of a public
+// turn that was already evaluated. It never removes anything: appended tool
+// results and model hops continue an exchange rather than starting a new
+// topic. It stays enabled so the shared live-history compression protection an
+// enabled history policy implies remains active on the follow-up's own IR.
+func NewInheritedAction(policy Policy) *Action {
+	return &Action{policy: policy, inherited: true}
 }
 
 // NewAction builds the per-request adapter. blocked carries a terminal reason
@@ -75,6 +85,12 @@ func (a *Action) propose(
 	// A blocked action is a step failure in both modes. The step's declared
 	// failure mode then decides whether the remaining plan continues, which is
 	// the shared executor's existing contract.
+	// An inherited follow-up evaluates nothing: the public turn it continues
+	// was already decided, and appended tool results are not a new topic.
+	if a.inherited {
+		a.record(skipped(a.trigger, ReasonInheritedCompleted))
+		return contextcompression.TransformationEdits{}, nil
+	}
 	if a.blocked != "" {
 		a.record(failed(a.trigger, a.blocked))
 		return contextcompression.TransformationEdits{}, errBlocked(a.blocked)

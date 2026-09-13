@@ -314,6 +314,7 @@ type RequestContext struct {
 	// History reset state. HistoryResetTrigger is the seam a topic-continuity
 	// signal fills; the action treats an absent result as missing evidence.
 	HistoryResetPolicy       *config.HistoryResetPluginConfig
+	HistoryResetBlocked      string
 	HistoryResetTrigger      *historyreset.TriggerResult
 	HistoryResetAction       *historyreset.Action
 	HistoryResetDiagnostics  *historyreset.Diagnostics

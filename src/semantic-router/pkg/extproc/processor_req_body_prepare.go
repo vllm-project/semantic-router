@@ -75,6 +75,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightToken = inflight.Begin(selectedModel)
 	bindHistoryResetPolicy(ctx)
+	r.resolveHistoryResetRequestHistory(ctx)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		inflight.End(selectedModel, ctx.InflightToken)
 		ctx.InflightToken = 0
