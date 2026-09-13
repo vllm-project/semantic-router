@@ -28,6 +28,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
@@ -1684,7 +1685,9 @@ var _ = Describe("Caching Functionality", func() {
 		// Disable PII detection for caching tests (not needed and avoids model loading issues)
 		cfg.PIIModel.ModelID = ""
 
-		var err error
+		provider, err := embedding.NewFuncProvider("test", 2, func(_ context.Context, text string) ([]float32, error) { return []float32{float32(len(text)), 1}, nil })
+		Expect(err).NotTo(HaveOccurred())
+
 		router, err = CreateTestRouter(cfg)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1696,6 +1699,7 @@ var _ = Describe("Caching Functionality", func() {
 			MaxEntries:          100,
 			TTLSeconds:          3600,
 			EmbeddingModel:      "bert",
+			EmbeddingProvider:   provider,
 		}
 		cacheBackend, err := cache.NewCacheBackend(cacheConfig)
 		Expect(err).NotTo(HaveOccurred())
@@ -1918,13 +1922,14 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 
 	// Create request context with VSR decision information
 	ctx := &RequestContext{
-		VSRSelectedDecisionName:       "math_decision",
-		VSRSelectedDecisionConfidence: 0.91,
-		VSRSelectedCategory:           "math",
-		VSRReasoningMode:              "on",
-		VSRSelectedModel:              "deepseek-v31",
-		VSRCacheHit:                   false, // Not a cache hit
-		VSRInjectedSystemPrompt:       true,  // System prompt was injected
+		VSRSelectedDecisionName:             "math_decision",
+		VSRSelectedDecisionConfidence:       0.91,
+		VSRSelectedDecisionConfidenceScored: true,
+		VSRSelectedCategory:                 "math",
+		VSRReasoningMode:                    "on",
+		VSRSelectedModel:                    "deepseek-v31",
+		VSRCacheHit:                         false, // Not a cache hit
+		VSRInjectedSystemPrompt:             true,  // System prompt was injected
 		VSRDecisionDiagnostics: decision.EvaluationDiagnostics{
 			AppliedUnknownPolicies: map[string]string{"guarded": "no_match"},
 		},

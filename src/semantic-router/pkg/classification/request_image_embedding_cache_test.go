@@ -1,10 +1,13 @@
 package classification
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // TestRequestImageEmbeddingCache_DedupsConcurrentResolves verifies the cache's
@@ -205,4 +208,21 @@ func equalFloat32Slices(a, b []float32) bool {
 		}
 	}
 	return true
+}
+
+func TestRequestImageEmbeddingCacheSeparatesPreparedProviders(t *testing.T) {
+	cache := newRequestImageEmbeddingCache()
+	first, _ := embedding.NewFuncProvider("first", 2, func(context.Context, string) ([]float32, error) { return []float32{1, 0}, nil })
+	second, _ := embedding.NewFuncProvider("second", 2, func(context.Context, string) ([]float32, error) { return []float32{0, 1}, nil })
+	a, err := cache.resolveFor(first, "same-image", 0, func() ([]float32, error) { return first.Embed(context.Background(), "") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := cache.resolveFor(second, "same-image", 0, func() ([]float32, error) { return second.Embed(context.Background(), "") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a[0] != 1 || b[1] != 1 {
+		t.Fatalf("model identities shared an image result: %v / %v", a, b)
+	}
 }

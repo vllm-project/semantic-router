@@ -49,12 +49,41 @@ func jsonBodyFor[T any]() apiRequestBody {
 	return jsonBodyWithLimitFor[T](defaultJSONRequestBodyLimit)
 }
 
+func strictJSONBodyFor[T any]() apiRequestBody {
+	return strictJSONBodyWithLimitFor[T](defaultJSONRequestBodyLimit)
+}
+
 func jsonBodyWithLimitFor[T any](limit int64) apiRequestBody {
 	return apiRequestBody{
 		Kind:       requestBodyJSON,
 		Required:   true,
 		LimitBytes: limit,
 		Schema:     openAPIRequestSchemaFor[T](),
+	}
+}
+
+func strictJSONBodyWithLimitFor[T any](limit int64) apiRequestBody {
+	body := jsonBodyWithLimitFor[T](limit)
+	closeOpenAPIObjectSchemas(body.Schema)
+	return body
+}
+
+// closeOpenAPIObjectSchemas mirrors json.Decoder.DisallowUnknownFields for
+// reflected struct objects while preserving explicitly open map schemas.
+func closeOpenAPIObjectSchemas(schema *OpenAPISchema) {
+	if schema == nil {
+		return
+	}
+	if schema.Type == "object" && schema.AdditionalProperties == nil && len(schema.Properties) > 0 {
+		schema.AdditionalProperties = false
+	}
+	for name, property := range schema.Properties {
+		closeOpenAPIObjectSchemas(&property)
+		schema.Properties[name] = property
+	}
+	closeOpenAPIObjectSchemas(schema.Items)
+	if additional, ok := schema.AdditionalProperties.(*OpenAPISchema); ok {
+		closeOpenAPIObjectSchemas(additional)
 	}
 }
 
@@ -104,15 +133,19 @@ func apiEndpointMetadata() []EndpointMetadata {
 func apiRoutes() []apiRoute {
 	return appendAPIRoutes(
 		make([]apiRoute, 0, 64),
-		apiHealthRoutes(),
-		apiClassifyRoutes(),
-		apiInfoRoutes(),
-		apiRouterReplayRoutes(),
-		apiResponseCacheRoutes(),
-		apiContextCompressionRoutes(),
-		apiConfigRoutes(),
-		apiMemoryRoutes(),
-		apiVectorStoreRoutes(),
-		apiFileRoutes(),
+		applyRouteContract(apiHealthRoutes(), routeContract("system", APIPlaneInfrastructure, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiRoutingRoutes(), routeContract("routing", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiClassifyRoutes(), routeContract("diagnostics", APIPlaneDiagnostic, APIVisibilityAdvanced, APIAudienceOperator, APIAudienceInternal)),
+		applyRouteContract(apiInventoryRoutes(), routeContract("inventory", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiOpenAIDataRoutes(), routeContract("inventory", APIPlaneData, APIVisibilityPrimary, APIAudienceAgent, APIAudienceClient)),
+		applyRouteContract(apiObservabilityRoutes(), routeContract("observability", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiRouterReplayRoutes(), routeContract("observability", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiResponseCacheRoutes(), routeContract("response-cache", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiContextCompressionRoutes(), routeContract("context-compression", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiConfigRoutes(), routeContract("config", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiKnowledgeBaseRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiMemoryRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiVectorStoreRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiFileRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 	)
 }

@@ -113,7 +113,7 @@
 - id: independent/deepseek-v3-2-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: DeepSeek V3.2 (Reasoning)
@@ -221,7 +221,7 @@
 - id: independent/deepseek-v3-2-non-reasoning-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: DeepSeek V3.2 (Non-reasoning)
@@ -329,7 +329,7 @@
 - id: independent/deepseek-r1-0120-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-r1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: default
   subject:
     source_model: DeepSeek R1 0120
@@ -513,7 +513,7 @@
 - id: deepseek/deepseek-v4-pro-model-card-max-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: max
   subject:
     variant: DeepSeek-V4-Pro
@@ -532,7 +532,7 @@
 - id: independent/deepseek-v4-pro-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: DeepSeek V4 Pro 0813 (max)
@@ -767,7 +767,7 @@
 - id: independent/deepseek-v4-flash-0420-high-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: DeepSeek V4 Flash (Reasoning, High Effort)
@@ -911,7 +911,7 @@
 - id: deepseek/deepseek-v4-flash-model-card-max-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: max
   subject:
     variant: DeepSeek-V4-Flash
@@ -930,7 +930,7 @@
 - id: independent/deepseek-v4-flash-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
@@ -1153,7 +1153,7 @@
 - id: independent/deepseek-v3-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: DeepSeek V3 (Dec '24)
@@ -1244,7 +1244,7 @@
 - id: independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3-0324
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: DeepSeek V3 0324
@@ -1436,7 +1436,7 @@
 - id: independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3.1-terminus
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: DeepSeek V3.1 Terminus (Reasoning)

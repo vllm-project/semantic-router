@@ -443,7 +443,7 @@ func sealedLiveMoMEvidenceFixture() (RunManifest, recordAttestation, executionAt
 		Digest:                digestString("sealed-live-mom-attestation"),
 		Entries: []executionAttestationEntry{
 			{Operation: workerBrokerListModels, BrokerReceipt: digestString("models")},
-			{Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-1", BrokerReceipt: digestString("routing")},
+			{Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-1", BrokerReceipt: digestString("routing")},
 			{Operation: workerBrokerArmChatCompletion, TrackID: "model_pool", CaseID: "case-1", ArmID: &armFast, BrokerReceipt: digestString("pool-fast")},
 			{Operation: workerBrokerArmChatCompletion, TrackID: "model_pool", CaseID: "case-1", ArmID: &armStrong, BrokerReceipt: digestString("pool-strong")},
 			{Operation: workerBrokerRoutedChatCompletion, TrackID: "joint", CaseID: "case-1", BrokerReceipt: digestString("joint")},

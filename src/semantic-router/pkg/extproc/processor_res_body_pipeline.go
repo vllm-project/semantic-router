@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,6 +63,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.markUnverifiedFactualResponse(ctx)
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
+	addResponseCostHeaders(ctx, response)
 	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, clientBody)
 	}
@@ -168,6 +170,18 @@ func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.Proce
 // (comma-separated codes) onto the response, merging with any existing mutation.
 func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
 	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
+}
+
+// addResponseCostHeaders reports the priced cost of a buffered response. A
+// streamed response has already sent its headers by the time usage arrives.
+func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !ctx.RequestCostPriced {
+		return
+	}
+	setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(ctx.RequestCost, 'f', -1, 64))
+	if ctx.RequestCostCurrency != "" {
+		setResponseBodyHeader(response, headers.VSRCostCurrency, ctx.RequestCostCurrency)
+	}
 }
 
 // setResponseBodyHeader sets one response header from the body phase, merging

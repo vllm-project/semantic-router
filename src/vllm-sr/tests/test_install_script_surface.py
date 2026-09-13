@@ -3,6 +3,19 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INSTALL_SCRIPT_PATH = REPO_ROOT / "install.sh"
 INSTALL_DOC_PATH = REPO_ROOT / "website" / "docs" / "installation" / "installation.md"
+AGENT_INSTALL_DOC_PATH = REPO_ROOT / "website" / "docs" / "installation" / "agent.md"
+INSTALL_DATA_PATH = REPO_ROOT / "website" / "src" / "data" / "installation.ts"
+HOMEPAGE_INSTALL_PATH = (
+    REPO_ROOT
+    / "website"
+    / "src"
+    / "components"
+    / "InstallQuickStartSection"
+    / "index.tsx"
+)
+VLLM_SR_AGENT_SKILL_PATH = (
+    REPO_ROOT / "website" / "static" / "install" / "agent" / "vllm-sr" / "SKILL.md"
+)
 PYPI_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "pypi-publish.yml"
 ROOT_MAKEFILE_PATH = REPO_ROOT / "Makefile"
 RELEASE_MAKEFILE_PATH = REPO_ROOT / "tools" / "make" / "release.mk"
@@ -63,14 +76,46 @@ def test_install_script_defaults_to_dev_channel() -> None:
     assert "resolves and pins the newest" in content
 
 
-def test_installation_doc_recommends_development_package() -> None:
-    content = INSTALL_DOC_PATH.read_text(encoding="utf-8")
+def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
+    docs = INSTALL_DOC_PATH.read_text(encoding="utf-8")
+    agent_docs = AGENT_INSTALL_DOC_PATH.read_text(encoding="utf-8")
+    normalized_agent_docs = " ".join(agent_docs.split())
+    data = INSTALL_DATA_PATH.read_text(encoding="utf-8")
+    homepage = HOMEPAGE_INSTALL_PATH.read_text(encoding="utf-8")
+    skill = VLLM_SR_AGENT_SKILL_PATH.read_text(encoding="utf-8")
 
-    assert "bash -s -- --channel dev" in content
-    assert (
-        'python -m pip install --upgrade "vllm-sr==${VLLM_SR_DEV_VERSION}"' in content
-    )
-    assert "newest published `.dev` package" in content
+    for method in ("curl", "pip", "uv", "Agent"):
+        assert f"label: '{method}'" in docs
+
+    assert "pip index versions" not in docs
+    assert "VLLM_SR_DEV_VERSION" not in docs
+    assert "awk" not in docs
+    assert "python -m pip install --upgrade vllm-sr" in data
+    assert "uv tool install vllm-sr" in data
+    assert "--channel stable" in data
+
+    assert "For humans" in homepage
+    assert "For agents" in homepage
+    assert "AGENT_INSTALL_PROMPT" in homepage
+    assert "AGENT_SKILL_PATH" in homepage
+    assert "AGENT_INSTALL_DOC_PATH" in homepage
+
+    assert "AGENT_INSTALL_PROMPT" in agent_docs
+    assert "AGENT_SKILL_PATH" in agent_docs
+    assert "Dashboard is optional" in normalized_agent_docs
+    assert "vllm-sr config validate" in agent_docs
+    assert "vllm-sr config plan" in agent_docs
+    assert "vllm-sr route preview" in agent_docs
+    assert "vllm-sr route probe" in agent_docs
+
+    assert "name: vllm-sr" in skill
+    assert "vllm-sr config schema" in skill
+    assert "vllm-sr config init" in skill
+    assert "vllm-sr config validate --config config.yaml" in skill
+    assert "vllm-sr config plan --config config.yaml" in skill
+    assert "vllm-sr route preview" in skill
+    assert "vllm-sr route probe" in skill
+    assert "Dashboard is optional" in skill
 
 
 def test_pypi_publish_workflow_does_not_push_back_to_main() -> None:
@@ -96,5 +141,5 @@ def test_openclaw_install_docs_use_the_validate_config_option() -> None:
     for path in (OPENCLAW_SKILL_PATH, OPENCLAW_INSTALL_DOC_PATH):
         content = path.read_text(encoding="utf-8")
 
-        assert "vllm-sr validate --config config.yaml" in content
-        assert "vllm-sr validate config.yaml" not in content
+        assert "vllm-sr config validate --config config.yaml" in content
+        assert "vllm-sr config validate config.yaml" not in content

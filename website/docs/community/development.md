@@ -110,7 +110,7 @@ offset.
   container names.
 - Set `RUST_LOG=debug` for native-library diagnostics.
 - Set `SR_LOG_LEVEL=debug` for Router diagnostics.
-- Run `vllm-sr validate --config <file>` before debugging a configuration at
+- Run `vllm-sr config validate --config <file>` before debugging a configuration at
   runtime.
 - See [Common Errors](/docs/troubleshooting/common-errors) and
   [Container Connectivity](/docs/troubleshooting/container-connectivity) for

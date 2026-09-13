@@ -255,13 +255,17 @@ func StartDecisionSpan(ctx context.Context, decisionName string) (context.Contex
 }
 
 // EndDecisionSpan ends a decision span with evaluation results
-func EndDecisionSpan(span trace.Span, confidence float64, matchedRules []string, strategy string) {
+func EndDecisionSpan(span trace.Span, confidence float64, matchedRules []string, strategy string, scored ...bool) {
 	if span == nil {
 		return
 	}
 
+	available := len(scored) == 0 || scored[0]
+	if available {
+		SetSpanAttributes(span, attribute.Float64(AttrDecisionConfidence, confidence))
+	}
 	SetSpanAttributes(span,
-		attribute.Float64(AttrDecisionConfidence, confidence),
+		attribute.Bool(AttrDecisionConfidence+"_available", available),
 		attribute.StringSlice(AttrDecisionMatchedRules, matchedRules),
 		attribute.String(AttrDecisionStrategy, strategy))
 

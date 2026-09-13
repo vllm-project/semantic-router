@@ -268,6 +268,20 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
 
+	// ModelDeployments contains canonical global.model_catalog.deployments.
+	// The router validates provider, device, precision and task compatibility.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelDeployments *apiextensionsv1.JSON `json:"model_deployments,omitempty" yaml:"model_deployments,omitempty"`
+
+	// ModelAdmission contains canonical global.model_catalog.admission budgets.
+	// Keys name deployments or the router's existing admission consumers.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelAdmission *apiextensionsv1.JSON `json:"model_admission,omitempty" yaml:"model_admission,omitempty"`
+
 	// Embedding models configuration (qwen3, gemma, mmbert)
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
@@ -303,6 +317,14 @@ type ConfigSpec struct {
 	// global.model_catalog.modules.complexity in the router config.
 	// +optional
 	ComplexityModel *ComplexityModelConfig `json:"complexity_model,omitempty"`
+
+	// ExternalModels declares the remote models that classifier backends
+	// (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
+	// the prompt guard protocol refer to by name. Mirrors
+	// global.model_catalog.external[] in the router config field for field;
+	// the router's own validator decides whether a backend resolves against it.
+	// +optional
+	ExternalModels []ExternalModelConfig `json:"external_models,omitempty"`
 
 	// Decision routing strategy ("priority" for priority-based matching)
 	// +kubebuilder:validation:Enum=priority
@@ -1202,6 +1224,7 @@ type ComplexityCandidates struct {
 // - categories does - keeps the field optional and defaults it.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || has(self.backend.contract)",message="complexity reads two response shapes, so backend.contract must be stated: score.v1 or label_distribution.v1"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract in ['score.v1', 'label_distribution.v1']",message="complexity reads score.v1 or label_distribution.v1; token_spans.v1 is the PII contract"
 type ComplexityModelConfig struct {
 	// Backend names a remote scoring model. Its absence keeps local prototype
 	// scoring; when set, the signal never reads the rules' hard/easy
@@ -1212,6 +1235,46 @@ type ComplexityModelConfig struct {
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 }
 
+// ExternalModelConfig is one entry of global.model_catalog.external[]: a
+// remote model a classifier backend or the prompt guard can name. Field names
+// are the router's YAML keys so the generic typed conversion carries them
+// unchanged.
+type ExternalModelConfig struct {
+	// Name is the catalog name a backend block refers to in its model field.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// ModelRole is what the model is used for; classifier backends require
+	// "classification", the prompt guard protocol requires "guardrail".
+	// +kubebuilder:validation:MinLength=1
+	ModelRole string `json:"model_role"`
+
+	// ModelName is the model identifier the remote service expects, and the
+	// value a token_spans.v1 envelope's model member must equal.
+	// +kubebuilder:validation:MinLength=1
+	ModelName string `json:"llm_model_name"`
+
+	// Endpoint is where the remote model is reached.
+	Endpoint ExternalModelEndpoint `json:"llm_endpoint"`
+
+	// TimeoutSeconds bounds one call when the backend block sets no deadline.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TimeoutSeconds int `json:"llm_timeout_seconds,omitempty"`
+}
+
+// ExternalModelEndpoint is the address of a remote classification model.
+type ExternalModelEndpoint struct {
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int `json:"port"`
+	// +kubebuilder:validation:Enum=http;https
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+}
+
 // RemoteClassifierBackendConfig is the shared remote-classifier block. How
 // the remote is called (protocol), what shape it answers with (contract),
 // which catalog entry it is (model) and how long to wait (deadline) are
@@ -1219,14 +1282,16 @@ type ComplexityModelConfig struct {
 // backend block field for field so the operator passes it through unchanged.
 type RemoteClassifierBackendConfig struct {
 	// Protocol is how the remote is called.
-	// +kubebuilder:validation:Enum=http_classify
+	// +kubebuilder:validation:Enum=http_classify;http_chat
 	Protocol string `json:"protocol"`
 
 	// Contract is the response shape the signal reads. Complexity reads two -
 	// score.v1, one regression number interpreted through each rule's
 	// boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-	// so the router requires it there rather than guessing per request.
-	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1
+	// so the router requires it there rather than guessing per request. PII
+	// reads token_spans.v1, entity spans with code-point offsets. Prompt guard
+	// http_chat reads label_decision.v1, a verdict without invented probability.
+	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1;token_spans.v1;label_decision.v1
 	// +optional
 	Contract string `json:"contract,omitempty"`
 
@@ -1369,18 +1434,19 @@ type ToolsConfig struct {
 
 // PromptGuardConfig defines prompt guard configuration
 type PromptGuardConfig struct {
+	// Backend selects a named external classifier and its typed result contract.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 	// Variant selects a local Candle-backed model variant. It is mutually
-	// exclusive with Protocol. When both fields are omitted, the operator uses
-	// mmbert32k.
+	// exclusive with Backend. When both are omitted, the operator uses mmbert32k.
 	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
 	Variant string `json:"variant,omitempty"`
-	// Protocol selects a remote HTTP backend's wire contract. Mutually
-	// exclusive with Variant. Requires an external model configured via a
-	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// Protocol is retired and rejected at admission. Configure Backend with
+	// the protocol, contract and explicit external model name instead.
 	// +kubebuilder:validation:Enum=http_chat;http_classify
 	// +optional
 	Protocol string `json:"protocol,omitempty"`
@@ -1437,7 +1503,14 @@ type CategoryModelConfig struct {
 	CategoryMappingPath string `json:"category_mapping_path,omitempty"`
 }
 
-// PIIModelConfig defines PII model configuration
+// PIIModelConfig defines PII model configuration.
+//
+// The contract rule sits on the consumer, as on ComplexityModelConfig: the
+// shared backend block lists every contract any consumer reads, and each
+// consumer narrows it to what it can parse, so a mismatch is refused at
+// admission instead of by the router at load.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
 type PIIModelConfig struct {
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
@@ -1451,6 +1524,19 @@ type PIIModelConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
+	// Backend names a remote token classifier speaking token_spans.v1. Its
+	// absence keeps local PII inference. The local selectors this replaces are
+	// model_id, use_modernbert and use_cpu above; the router also refuses a
+	// backend combined with the use_mmbert_32k selector that this CRD does not
+	// expose, so that combination cannot be written here.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+	// OnError selects what a PII backend failure, or a provider-declared
+	// truncation, does to the rule that consumed it: allow (default) treats the
+	// content as not matching, block matches it as classification_error.
+	// +kubebuilder:validation:Enum=allow;block
+	// +optional
+	OnError string `json:"on_error,omitempty"`
 }
 
 // APIConfig defines API configuration

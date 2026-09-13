@@ -438,7 +438,7 @@ func validExecutionAttestationForManifest(t *testing.T, manifest RunManifest) ex
 		requestedModel := manifest.Target.Mixture.EntrypointModel
 		recipe := manifest.Target.Mixture.RecipeName
 		entry := executionAttestationEntry{
-			RequestID: 2, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+			RequestID: 2, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 			CaseID: "case-1", AttemptID: "attempt-1",
 			RequestDigest: digestString("routing-request"), ResponseDigest: digestString(""),
 			UpstreamAttempted: true, LatencyMicroseconds: 100, FetchedAt: &observedAt,

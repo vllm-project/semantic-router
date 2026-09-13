@@ -195,6 +195,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
 | `semantic_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | SemanticCache is the deprecated response-cache field. |  | Optional: \{\} <br /> |
@@ -203,6 +205,7 @@ _Appears in:_
 | `classifier` _[ClassifierConfig](#classifierconfig)_ | Classifier configuration |  | Optional: \{\} <br /> |
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
 | `complexity_model` _[ComplexityModelConfig](#complexitymodelconfig)_ | ComplexityModel says how the complexity signal produces its score.<br />Absent, the signal scores locally against each rule's hard/easy<br />candidates. With a backend, a remote model produces the score and the<br />candidates are never read. Mirrors<br />global.model_catalog.modules.complexity in the router config. |  | Optional: \{\} <br /> |
+| `external_models` _[ExternalModelConfig](#externalmodelconfig) array_ | ExternalModels declares the remote models that classifier backends<br />(`classifier.pii.backend.model`, `complexity_model.backend.model`) and<br />the prompt guard protocol refer to by name. Mirrors<br />global.model_catalog.external[] in the router config field for field;<br />the router's own validator decides whether a backend resolves against it. |  | Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
 | `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
@@ -276,6 +279,39 @@ _Appears in:_
 | `type` _string_ |  | otlp | Optional: \{\} <br /> |
 | `endpoint` _string_ |  | jaeger:4317 | Optional: \{\} <br /> |
 | `insecure` _boolean_ |  | true | Optional: \{\} <br /> |
+
+#### ExternalModelConfig
+
+ExternalModelConfig is one entry of global.model_catalog.external[]: a
+remote model a classifier backend or the prompt guard can name. Field names
+are the router's YAML keys so the generic typed conversion carries them
+unchanged.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the catalog name a backend block refers to in its model field. |  | MinLength: 1 <br /> |
+| `model_role` _string_ | ModelRole is what the model is used for; classifier backends require<br />"classification", the prompt guard protocol requires "guardrail". |  | MinLength: 1 <br /> |
+| `llm_model_name` _string_ | ModelName is the model identifier the remote service expects, and the<br />value a token_spans.v1 envelope's model member must equal. |  | MinLength: 1 <br /> |
+| `llm_endpoint` _[ExternalModelEndpoint](#externalmodelendpoint)_ | Endpoint is where the remote model is reached. |  |  |
+| `llm_timeout_seconds` _integer_ | TimeoutSeconds bounds one call when the backend block sets no deadline. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+
+#### ExternalModelEndpoint
+
+ExternalModelEndpoint is the address of a remote classification model.
+
+_Appears in:_
+
+- [ExternalModelConfig](#externalmodelconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `address` _string_ |  |  | MinLength: 1 <br /> |
+| `port` _integer_ |  |  | Maximum: 65535 <br />Minimum: 1 <br /> |
+| `protocol` _string_ |  |  | Enum: [http https] <br />Optional: \{\} <br /> |
 
 #### GatewayReference
 
@@ -669,7 +705,12 @@ _Appears in:_
 
 #### PIIModelConfig
 
-PIIModelConfig defines PII model configuration
+PIIModelConfig defines PII model configuration.
+
+The contract rule sits on the consumer, as on ComplexityModelConfig: the
+shared backend block lists every contract any consumer reads, and each
+consumer narrows it to what it can parse, so a mismatch is refused at
+admission instead of by the router at load.
 
 _Appears in:_
 
@@ -682,6 +723,8 @@ _Appears in:_
 | `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert and use_cpu above; the router also refuses a<br />backend combined with the use_mmbert_32k selector that this CRD does not<br />expose, so that combination cannot be written here. |  | Optional: \{\} <br /> |
+| `on_error` _string_ | OnError selects what a PII backend failure, or a provider-declared<br />truncation, does to the rule that consumed it: allow (default) treats the<br />content as not matching, block matches it as classification_error. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
 
 #### PersistenceSpec
 
@@ -741,9 +784,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Protocol. When both fields are omitted, the operator uses<br />mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
-| `protocol` _string_ | Protocol selects a remote HTTP backend's wire contract. Mutually<br />exclusive with Variant. Requires an external model configured via a<br />vllmEndpoints/externalModels entry with model_role="guardrail". |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
+| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
+| `protocol` _string_ | Protocol is retired and rejected at admission. Configure Backend with<br />the protocol, contract and explicit external model name instead. |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
 | `model_id` _string_ |  | models/mmbert32k-jailbreak-detector-merged | Optional: \{\} <br /> |
 | `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.7 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
@@ -897,11 +941,13 @@ backend block field for field so the operator passes it through unchanged.
 _Appears in:_
 
 - [ComplexityModelConfig](#complexitymodelconfig)
+- [PIIModelConfig](#piimodelconfig)
+- [PromptGuardConfig](#promptguardconfig)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `protocol` _string_ | Protocol is how the remote is called. |  | Enum: [http_classify] <br /> |
-| `contract` _string_ | Contract is the response shape the signal reads. Complexity reads two -<br />score.v1, one regression number interpreted through each rule's<br />boundaries, and label_distribution.v1, hard/easy/medium probabilities -<br />so the router requires it there rather than guessing per request. |  | Enum: [score.v1 label_distribution.v1] <br />Optional: \{\} <br /> |
+| `protocol` _string_ | Protocol is how the remote is called. |  | Enum: [http_classify http_chat] <br /> |
+| `contract` _string_ | Contract is the response shape the signal reads. Complexity reads two -<br />score.v1, one regression number interpreted through each rule's<br />boundaries, and label_distribution.v1, hard/easy/medium probabilities -<br />so the router requires it there rather than guessing per request. PII<br />reads token_spans.v1, entity spans with code-point offsets. Prompt guard<br />http_chat reads label_decision.v1, a verdict without invented probability. |  | Enum: [score.v1 label_distribution.v1 token_spans.v1 label_decision.v1] <br />Optional: \{\} <br /> |
 | `model` _string_ | Model is the name of an entry in the external model catalog. |  | MinLength: 1 <br /> |
 | `deadline_ms` _integer_ | DeadlineMs bounds one remote call. Defaults to the router's value. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 

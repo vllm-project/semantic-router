@@ -41,7 +41,7 @@ func routingRecipeDecisionFromBrokerResponse(
 	response workerBrokerResponse,
 	entry executionAttestationEntry,
 ) *RoutingRecipeDecisionSnapshot {
-	if manifest.Mode != ModeLive || request.Operation != workerBrokerRouterEvaluate ||
+	if manifest.Mode != ModeLive || request.Operation != workerBrokerRoutingPreview ||
 		request.TrackID != "routing" || !containsTrack(manifest.TrackIDs, "routing") ||
 		manifest.Target.Mixture == nil {
 		return nil
@@ -408,7 +408,7 @@ func normalizedRoutingRecipeSelection(entry executionAttestationEntry, plan Rout
 }
 
 func validateBrokerRoutingRecipeDecision(mixture *ManifestMixture, entry executionAttestationEntry) error {
-	if entry.Operation != workerBrokerRouterEvaluate {
+	if entry.Operation != workerBrokerRoutingPreview {
 		if entry.RoutingRecipeDecision != nil {
 			return fmt.Errorf("non-routing broker operation contains routing recipe decision evidence")
 		}

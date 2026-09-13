@@ -22,10 +22,11 @@ func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 	c.config.Recipes = []config.RoutingRecipe{{
 		Name: config.DefaultRecipeName,
 		Profile: config.RoutingProfile{
-			Signals:     c.config.Signals,
-			Projections: c.config.Projections,
-			Decisions:   c.config.Decisions,
-			Strategy:    c.config.Strategy,
+			ModelBindings: cloneModelBindings(c.config.ModelBindings),
+			Signals:       c.config.Signals,
+			Projections:   c.config.Projections,
+			Decisions:     c.config.Decisions,
+			Strategy:      c.config.Strategy,
 		},
 	}}
 
@@ -54,10 +55,11 @@ func (c *Compiler) compileRecipes() map[config.RecipeName]struct{} {
 			Name:        name,
 			Description: recipe.Description,
 			Profile: config.RoutingProfile{
-				Signals:     child.config.Signals,
-				Projections: child.config.Projections,
-				Decisions:   child.config.Decisions,
-				Strategy:    child.config.Strategy,
+				ModelBindings: cloneModelBindings(child.config.ModelBindings),
+				Signals:       child.config.Signals,
+				Projections:   child.config.Projections,
+				Decisions:     child.config.Decisions,
+				Strategy:      child.config.Strategy,
 			},
 		})
 	}
@@ -102,5 +104,6 @@ func newScopedCompiler(prog *Program) *Compiler {
 		pluginTemplates: make(map[string]*PluginDecl),
 	}
 	c.config.Strategy = config.RoutingStrategy(prog.Strategy)
+	c.config.ModelBindings = cloneModelBindings(prog.ModelBindings)
 	return c
 }

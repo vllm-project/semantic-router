@@ -103,7 +103,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
@@ -124,7 +126,9 @@ routing:
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
@@ -143,7 +147,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "must define backend_refs or model metadata" in result.output
@@ -165,7 +171,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
@@ -185,7 +193,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "Provider model name cannot be empty" in result.output
@@ -204,7 +214,9 @@ routing:
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "Model card name cannot be empty" in result.output
@@ -246,7 +258,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert expected_error in result.output
@@ -398,7 +412,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert expected_error in result.output
@@ -417,7 +433,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "must define backend_refs with an explicit Provider ID" in result.output
@@ -472,7 +490,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "Configuration validation failed" in result.output
@@ -536,7 +556,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output

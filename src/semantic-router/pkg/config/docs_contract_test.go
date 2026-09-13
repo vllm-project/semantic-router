@@ -21,7 +21,7 @@ func repoRel(parts ...string) string {
 var apiserverDocNeedles = []string{
 	"http://localhost:8080",
 	"/openapi.json",
-	"/config/router",
+	"/api/v1/config",
 }
 
 var configContractRequiredDocs = []docNeedles{
@@ -46,7 +46,7 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
 			"`providers.defaults.model`",
-			"vllm-sr validate --config config.yaml",
+			"vllm-sr config validate --config config.yaml",
 			"Environment references and secrets",
 			"Entrypoints and recipes",
 			"exhaustive canonical example",

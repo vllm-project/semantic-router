@@ -21,14 +21,24 @@ agents to load the full schema first:
 
 ```bash
 vllm-sr config schema
-vllm-sr config schema --section global.router.learning
+vllm-sr config schema --section providers.models
+vllm-sr config schema --section routing.decisions.modelRefs
+vllm-sr config schema --section routing --expanded
 vllm-sr config schema --surface algorithm:multi_factor
 vllm-sr config schema --full
 ```
 
-Against a running Router, `GET /config/router/schema` returns the compact index.
-Use `view=section&path=...` or `view=surface&kind=...&name=...` to expand one
-branch, and `view=full` for the complete schema.
+Against a running Router, `GET /api/v1/config/schema` returns the compact index.
+Use `view=section&path=...` for a compact field directory or
+`view=surface&kind=...&name=...` for one registered routing surface. Add
+`expanded=true` to a section request only when a self-contained JSON Schema is
+required; use `view=full` for the complete schema.
+
+Ask for the narrowest section that answers the current edit. The default field
+directory links to its child paths, so agents do not need to load every nested
+algorithm, plugin, signal, and projection. For a new file, use
+`vllm-sr config init`; the template shows the required provider, Model Card,
+and decision-reference relationship without loading the full schema.
 
 Section views preserve their real shape: list sections such as `listeners`,
 `entrypoints`, and `recipes` expose their item fields, while `version` is shown

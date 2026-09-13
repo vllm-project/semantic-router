@@ -95,7 +95,7 @@ routing:
 """,
     )
 
-    cluster = _cluster_by_name(rendered, "frontier_cluster")
+    cluster = _cluster_by_name(rendered, "model_frontier_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["transport_socket"]["name"] == "envoy.transport_sockets.tls"
     endpoint = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]
@@ -106,7 +106,7 @@ routing:
     assert endpoint["load_balancing_weight"] == 1
 
     route = _model_route(rendered, "frontier")
-    assert route["route"]["cluster"] == "frontier_cluster"
+    assert route["route"]["cluster"] == "model_frontier_cluster"
     assert route["route"]["host_rewrite_literal"] == "api.openai.com"
     assert route["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
     headers = {
@@ -141,7 +141,7 @@ routing: {}
 """,
     )
 
-    cluster = _cluster_by_name(rendered, "claude_cluster")
+    cluster = _cluster_by_name(rendered, "model_claude_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["transport_socket"]["name"] == "envoy.transport_sockets.tls"
     endpoint = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]
@@ -150,7 +150,7 @@ routing: {}
         "port_value": 443,
     }
     route = _model_route(rendered, "claude")
-    assert route["route"]["cluster"] == "claude_cluster"
+    assert route["route"]["cluster"] == "model_claude_cluster"
     headers = {
         header["header"]["key"]: header["header"]["value"]
         for header in route.get("request_headers_to_add", [])
@@ -278,7 +278,7 @@ routing: {}
     )
 
     route = _model_route(rendered, "frontier-responses")
-    assert route["route"]["cluster"] == "frontier_responses_cluster"
+    assert route["route"]["cluster"] == "model_frontier_2dresponses_cluster"
     assert route["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
     headers = {
         header["header"]["key"]: header["header"]["value"]
@@ -340,7 +340,7 @@ routing:
 """,
     )
 
-    cluster = _cluster_by_name(rendered, "frontier_cluster")
+    cluster = _cluster_by_name(rendered, "model_frontier_cluster")
     endpoint = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]
     assert (
         endpoint["endpoint"]["address"]["socket_address"]["address"]
@@ -559,7 +559,7 @@ routing: {{}}
 """,
     )
 
-    cluster = _cluster_by_name(rendered, "local_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_local_2dmodel_cluster")
     endpoint = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]
     assert endpoint["endpoint"]["address"]["socket_address"] == {
         "address": expected_address,
@@ -739,7 +739,7 @@ routing: {}
     )
 
     with pytest.raises(AssertionError):
-        _cluster_by_name(rendered, "virtual_entrypoint_cluster")
+        _cluster_by_name(rendered, "model_virtual_2dentrypoint_cluster")
     assert _default_route(rendered)["route"]["cluster"] == "vllm_static_cluster"
 
 
@@ -752,7 +752,7 @@ def test_reference_config_projects_a_homogeneous_weighted_pool(tmp_path, monkeyp
     generate_envoy_config_from_user_config(config, str(output_path))
 
     rendered = yaml.safe_load(output_path.read_text())
-    cluster = _cluster_by_name(rendered, "qwen3_8b_cluster")
+    cluster = _cluster_by_name(rendered, "model_qwen3_2d8b_cluster")
     endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
     assert [endpoint["load_balancing_weight"] for endpoint in endpoints] == [80, 20]
     assert {

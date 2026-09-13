@@ -22,8 +22,8 @@ const (
 	ContractVersion    = "vllm-sr/config-schema/v1"
 	ConfigVersion      = routerconfig.CanonicalConfigVersion
 	SchemaID           = "https://vllm-sr.ai/schemas/router-config-v0.3.schema.json"
-	SchemaEndpoint     = "/config/router/schema"
-	ValidationEndpoint = "/config/router/validate"
+	SchemaEndpoint     = "/api/v1/config/schema"
+	ValidationEndpoint = "/api/v1/config/validate"
 )
 
 //go:generate go run ../../../../tools/configschema/main.go --repository-root ../../../..

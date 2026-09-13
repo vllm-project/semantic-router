@@ -9,7 +9,7 @@ const readySettings = {
   setupMode: false,
   platform: 'amd',
   envoyUrl: 'http://envoy',
-  routerEvalEndpoint: 'http://router/api/v1/eval',
+  routerEvalEndpoint: 'http://router/api/v1/routing/preview',
   evaluationAvailable: true,
   evaluationUnavailableReason: '',
 }

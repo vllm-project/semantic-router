@@ -10,7 +10,7 @@ The router splits headers across two surfaces:
 - **Default surface** — every non-cache-hit response includes
   `x-vsr-schema-version` and `x-vsr-response-path`. Successful routed responses
   can also include the final recipe, decision, confidence, algorithm, model,
-  and replay id. Protocol markers appear when translation occurs; protocol
+  routing latency, cost, and replay id. Protocol markers appear when translation occurs; protocol
   warnings appear only when there are warnings.
 - **Debug surface** — intermediate classification details, matched signals,
   tool-selection metrics, and `x-vsr-retention-*` directives appear inline
@@ -63,10 +63,11 @@ Router Learning observability, require `x-vsr-debug`.
 | ------ | ------- | ----------- | ------- |
 | `x-vsr-selected-recipe` | default | Routing isolation scope selected by an entrypoint or auto/looper alias. Omitted for concrete backend passthrough. | `support` |
 | `x-vsr-selected-decision` | default | Final decision selected by the decision engine. | `complex-request` |
-| `x-vsr-selected-confidence` | default | Confidence score for the selected decision. | `0.9100` |
+| `x-vsr-selected-confidence` | default | Model-derived score for the selected decision. Absent for structural or error-policy matches without a score. | `0.9100` |
 | `x-vsr-applied-unknown-policy` | default | Decisions whose unknown result was resolved by `rules.on_unknown`, as `decision=policy` pairs. Also set on the `fail_request` 503. | `guarded=no_match` |
 | `x-vsr-selected-algorithm` | default | Model-selection algorithm used after the decision matched. | `static` |
 | `x-vsr-selected-model` | default | Logical model alias selected by the router. | `reasoning-model` |
+| `x-vsr-routing-latency-ms` | default | Time the router spent choosing the model, in milliseconds with sub-millisecond precision. | `0.412` |
 | `x-vsr-selected-category` | debug | Domain/category classifier result when domain routing runs. | `math` |
 | `x-vsr-selected-reasoning` | debug | Reasoning mode selected for the request. | `on` |
 | `x-vsr-selected-modality` | debug | Modality result and optional method. | `AR;classifier` |
@@ -135,6 +136,18 @@ clients should not use them as commands.
 Unset fields are omitted. Cache hits do not emit these headers because no
 decision was evaluated for that response.
 
+## Cost headers
+
+On a buffered (non-streaming) response, the router prices the usage the model
+reported with the served model's `pricing` configuration. This is a
+configured-price figure, not a provider bill. Streamed responses and models
+without `pricing` omit both headers.
+
+| Header | Surface | Description | Example |
+| ------ | ------- | ----------- | ------- |
+| `x-vsr-cost` | default | Usage tokens multiplied by the served model's configured prices. | `0.000054` |
+| `x-vsr-cost-currency` | default | Currency of `x-vsr-cost`, from `pricing.currency`. | `USD` |
+
 ## Cache and plugin headers
 
 `x-vsr-cache-hit` and `x-vsr-fast-response` identify an immediate response on
@@ -161,7 +174,6 @@ x-vsr-schema-version: 2
 x-vsr-response-path: upstream
 x-vsr-selected-recipe: default
 x-vsr-selected-decision: complex-request
-x-vsr-selected-confidence: 1.0000
 x-vsr-selected-algorithm: static
 x-vsr-selected-model: reasoning-model
 x-vsr-replay-id: replay_01J...
@@ -176,7 +188,6 @@ x-vsr-schema-version: 2
 x-vsr-response-path: upstream
 x-vsr-selected-recipe: default
 x-vsr-selected-decision: complex-request
-x-vsr-selected-confidence: 1.0000
 x-vsr-selected-algorithm: static
 x-vsr-selected-model: reasoning-model
 x-vsr-session-phase: tool_loop

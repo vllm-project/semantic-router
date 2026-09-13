@@ -156,7 +156,7 @@ func decodeWorkerBrokerRequest(
 			payload[len(payload)-1] != '}' || !json.Valid(payload) {
 			return workerBrokerRequest{}, fmt.Errorf("evaluation worker HTTP POST evidence envelope is invalid")
 		}
-		if request.Operation == workerBrokerRouterEvaluate && request.TrackID != "routing" {
+		if request.Operation == workerBrokerRoutingPreview && request.TrackID != "routing" {
 			return workerBrokerRequest{}, fmt.Errorf("router evaluation requests must bind routing evidence")
 		}
 		if request.Operation == workerBrokerRoutedChatCompletion && request.TrackID != "joint" &&
