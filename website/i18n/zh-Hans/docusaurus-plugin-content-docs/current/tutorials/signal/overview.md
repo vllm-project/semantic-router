@@ -128,7 +128,7 @@ routing:
 - 需要 `PROJECTION partition`、加权分数聚合或命名路由档位时，阅读[投影](../projection/overview)。
 - 完整公开约定见 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。
 - 完整路由策略见 `balance` 配方：
- - [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
- - [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
+  - [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+  - [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
 
 信号可按族检查请求文本、对话历史、图像、调用方元数据或可信身份。学习型信号可能把这些数据发给已配置的远程分类器或嵌入提供方。作为策略关卡使用前，请阅读各族页面上的依赖与数据说明。
