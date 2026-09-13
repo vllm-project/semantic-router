@@ -289,9 +289,18 @@ func TestRecoveryAgreementIsCheckedBeforeComponentsAreBuilt(t *testing.T) {
 	}
 }
 
-// The rejection path is exercised through the real constructor, so the control
-// flow that releases a rejected candidate is covered rather than simulated.
+// The rejection path is exercised through the real constructor, and the test
+// fails if the release step is ever dropped: a rejected reload that leaks its
+// components would otherwise go unnoticed.
 func TestConstructionRejectsAnEnabledPolicyWithoutAProducer(t *testing.T) {
+	released := 0
+	original := closeRejectedCandidate
+	closeRejectedCandidate = func(router *OpenAIRouter) error {
+		released++
+		return original(router)
+	}
+	t.Cleanup(func() { closeRejectedCandidate = original })
+
 	cfg := &config.RouterConfig{}
 	cfg.Decisions = []config.Decision{resetDecisionFor(t, "reset", nil)}
 
@@ -307,5 +316,8 @@ func TestConstructionRejectsAnEnabledPolicyWithoutAProducer(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), config.HistoryResetTriggerUnavailable) {
 		t.Fatalf("unexpected error %v", err)
+	}
+	if released != 1 {
+		t.Fatalf("the rejected candidate was released %d times, want 1", released)
 	}
 }

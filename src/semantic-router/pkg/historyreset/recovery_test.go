@@ -2,8 +2,10 @@ package historyreset
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -441,122 +443,161 @@ func TestRecoveryBoundStopsAtTheCrossingMessage(t *testing.T) {
 	}
 }
 
-// The running accounting must stay an upper bound on the final document at
-// every count boundary, or a payload could pass the bound and then encode
-// larger than the limit it was checked against.
-func TestRecoveryAccountingStaysAnUpperBound(t *testing.T) {
-	message := llmprotocol.Message{
-		Role:    llmprotocol.RoleUser,
-		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "bounded"}},
+// The computed size must match what the encoder actually produces. Anything less
+// would let a message pass the budget and then allocate beyond it.
+func TestEncodedSizeMatchesTheEncoder(t *testing.T) {
+	result := "generated"
+	partial := int64(2)
+	isError := true
+	manyBlocks := make([]llmprotocol.Content, 512)
+	for index := range manyBlocks {
+		manyBlocks[index] = llmprotocol.Content{Kind: llmprotocol.ContentText}
 	}
-	for count := 1; count <= 16; count++ {
-		detached := make(map[int]llmprotocol.Message, count)
-		ids := make([]int, 0, count)
-		turns := make(map[int]int, count)
-		for index := 0; index < count; index++ {
-			detached[index] = message
-			ids = append(ids, index)
-			turns[index] = index
-		}
-		action := NewAction(testPolicy(), acceptedChange(), "").
-			WithRecovery(&recoveryWriterStub{}, detached)
-
-		payload, err := action.buildEnvelope(ids, turns, 0)
-		if err != nil {
-			t.Fatalf("count=%d unbounded encoding failed: %v", count, err)
-		}
-		// The smallest bound the accounting will accept must still be at least
-		// the real encoded size: the running total may only over-count.
-		accepted, err := action.buildEnvelope(ids, turns, len(payload))
-		if err == nil && len(accepted) > len(payload) {
-			t.Fatalf("count=%d accepted %d bytes under a %d byte bound",
-				count, len(accepted), len(payload))
-		}
-		if _, err = action.buildEnvelope(ids, turns, len(payload)-1); err == nil {
-			t.Fatalf("count=%d accepted a payload above its bound", count)
-		}
+	cases := map[string]llmprotocol.Message{
+		"empty":       {},
+		"plain":       {Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "hello"}}},
+		"empty_slice": {Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{}},
+		// Structure dominates here: every block encodes its complete object.
+		"many_empty_blocks": {Role: llmprotocol.RoleUser, Content: manyBlocks},
+		"escapes": {Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentText,
+			Text: "quote\" backslash\\ newline\n tab\t bell\x07 html <&> done",
+		}}},
+		"unicode_separators": {Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentText, Text: "line\u2028para\u2029end \u00e9\u4e2d",
+		}}},
+		"invalid_utf8": {Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentText, Text: "bad\xff\xfe bytes",
+		}}},
+		"nested_tool_result": {Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult,
+			ToolResult: &llmprotocol.ToolResult{
+				CallID:  "call_1",
+				IsError: &isError,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "nested <result>"}},
+			},
+		}}},
+		"every_field": {
+			ID:   "message-1",
+			Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{
+				Kind:      llmprotocol.ContentToolCall,
+				Text:      "t",
+				MediaType: "image/png",
+				URL:       "https://example.test/a.png",
+				Data:      "ZGF0YQ==",
+				FileID:    "file-1",
+				Filename:  "a.png",
+				Detail:    "high",
+				Signature: "sig",
+				Reasoning: llmprotocol.ReasoningScopeSummary,
+				Citations: []llmprotocol.Citation{{
+					URL: "https://example.test", Title: "t", StartIndex: 3, EndIndex: 9,
+				}},
+				Cache:    &llmprotocol.CacheDirective{Type: "ephemeral", TTL: "5m"},
+				ToolCall: &llmprotocol.ToolCall{ID: "c", Name: "lookup", Arguments: `{"q":1}`},
+				GeneratedImage: &llmprotocol.GeneratedImage{
+					Status: "completed", Result: &result, PartialIndex: &partial,
+					PartialImage: "p", Size: "1024x1024", Quality: "high",
+					Background: "opaque", OutputFormat: "png",
+				},
+			}},
+		},
+	}
+	for name, message := range cases {
+		t.Run(name, func(t *testing.T) {
+			encoded, err := json.Marshal(message)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			size := encodedMessageSize(message)
+			if size < len(encoded) {
+				t.Fatalf("size %d is below the encoded length %d", size, len(encoded))
+			}
+			if size != len(encoded) {
+				t.Fatalf("size %d does not match the encoded length %d", size, len(encoded))
+			}
+		})
 	}
 }
 
-// Raw content already over the limit is refused without allocating its encoded
-// form, which is what bounds the work a single oversized message can cause.
-func TestOversizedMessageIsRefusedBeforeEncoding(t *testing.T) {
-	huge := llmprotocol.Message{
-		Role: llmprotocol.RoleUser,
-		Content: []llmprotocol.Content{{
-			Kind: llmprotocol.ContentImage,
-			Data: strings.Repeat("d", 1<<20),
-		}},
+// A message built only of empty blocks carries almost no content but encodes to
+// megabytes. It must be refused before those bytes are allocated.
+func TestStructurallyLargeMessageIsRefusedBeforeEncoding(t *testing.T) {
+	blocks := make([]llmprotocol.Content, 16383)
+	for index := range blocks {
+		blocks[index] = llmprotocol.Content{Kind: llmprotocol.ContentText}
 	}
-	if raw := messageRawBytes(huge); raw < 1<<20 {
-		t.Fatalf("raw accounting = %d, want the media payload counted", raw)
+	message := llmprotocol.Message{Role: llmprotocol.RoleUser, Content: blocks}
+
+	encoded, err := json.Marshal(message)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
 	}
+	size := encodedMessageSize(message)
+	if size != len(encoded) {
+		t.Fatalf("size %d does not match the encoded length %d", size, len(encoded))
+	}
+
 	action := NewAction(testPolicy(), acceptedChange(), "").
-		WithRecovery(&recoveryWriterStub{}, map[int]llmprotocol.Message{0: huge})
-	if _, err := action.buildEnvelope([]int{0}, map[int]int{0: 0}, 4096); !errors.Is(
+		WithRecovery(&recoveryWriterStub{}, map[int]llmprotocol.Message{0: message})
+	// A budget far above the content bytes but far below the encoded size.
+	if _, err = action.buildEnvelope([]int{0}, map[int]int{0: 0}, 1<<17); !errors.Is(
 		err, errRecoveryPayloadTooLarge,
 	) {
 		t.Fatalf("expected refusal before encoding, got %v", err)
 	}
 }
 
-// Every serializable field contributes to the raw measurement, so no field can
-// smuggle unbounded content past the pre-encoding gate.
-func TestRawAccountingVisitsEverySerializableField(t *testing.T) {
-	result := "generated"
-	content := llmprotocol.Content{
-		Kind:      llmprotocol.ContentToolResult,
-		Text:      "t",
-		MediaType: "m",
-		URL:       "u",
-		Data:      "d",
-		FileID:    "f",
-		Filename:  "n",
-		Detail:    "e",
-		Signature: "s",
-		Reasoning: llmprotocol.ReasoningScopeSummary,
-		Citations: []llmprotocol.Citation{{URL: "cu", Title: "ct"}},
-		Cache:     &llmprotocol.CacheDirective{Type: "ephemeral", TTL: "5m"},
-		ToolCall:  &llmprotocol.ToolCall{ID: "i", Name: "na", Arguments: "ar"},
-		ToolResult: &llmprotocol.ToolResult{
-			CallID:  "ci",
-			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "nested"}},
-		},
-		GeneratedImage: &llmprotocol.GeneratedImage{
-			Status: "completed", Result: &result, PartialImage: "p",
-			Size: "1024x1024", Quality: "high", Background: "opaque", OutputFormat: "png",
-		},
+// Schema drift guard: every serializable field of the recovery types must be
+// reachable by the size walk. Populating each string through reflection and
+// re-checking against the encoder fails if a new field is ever skipped.
+func TestEncodedSizeCoversEveryStringField(t *testing.T) {
+	content := &llmprotocol.Content{
+		Kind:           llmprotocol.ContentToolResult,
+		Citations:      []llmprotocol.Citation{{}},
+		Cache:          &llmprotocol.CacheDirective{},
+		ToolCall:       &llmprotocol.ToolCall{},
+		ToolResult:     &llmprotocol.ToolResult{Content: []llmprotocol.Content{{}}},
+		GeneratedImage: &llmprotocol.GeneratedImage{},
 	}
-	baseline := contentRawBytes(content)
-	for name, mutate := range map[string]func(*llmprotocol.Content){
-		"text":            func(c *llmprotocol.Content) { c.Text += "xxxx" },
-		"data":            func(c *llmprotocol.Content) { c.Data += "xxxx" },
-		"file_id":         func(c *llmprotocol.Content) { c.FileID += "xxxx" },
-		"filename":        func(c *llmprotocol.Content) { c.Filename += "xxxx" },
-		"detail":          func(c *llmprotocol.Content) { c.Detail += "xxxx" },
-		"signature":       func(c *llmprotocol.Content) { c.Signature += "xxxx" },
-		"citation_title":  func(c *llmprotocol.Content) { c.Citations[0].Title += "xxxx" },
-		"cache_ttl":       func(c *llmprotocol.Content) { c.Cache.TTL += "xxxx" },
-		"tool_arguments":  func(c *llmprotocol.Content) { c.ToolCall.Arguments += "xxxx" },
-		"nested_result":   func(c *llmprotocol.Content) { c.ToolResult.Content[0].Text += "xxxx" },
-		"generated_image": func(c *llmprotocol.Content) { c.GeneratedImage.PartialImage += "xxxx" },
-	} {
-		t.Run(name, func(t *testing.T) {
-			mutated := content
-			mutated.Citations = append([]llmprotocol.Citation(nil), content.Citations...)
-			cache := *content.Cache
-			call := *content.ToolCall
-			toolResult := llmprotocol.ToolResult{
-				CallID:  content.ToolResult.CallID,
-				Content: append([]llmprotocol.Content(nil), content.ToolResult.Content...),
+	populateStrings(reflect.ValueOf(content).Elem())
+
+	message := llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{*content}}
+	populateStrings(reflect.ValueOf(&message).Elem().FieldByName("ID"))
+
+	encoded, err := json.Marshal(message)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if size := encodedMessageSize(message); size != len(encoded) {
+		t.Fatalf("size %d does not match the encoded length %d for a fully populated message",
+			size, len(encoded))
+	}
+}
+
+// populateStrings writes a distinctive value into every reachable string so a
+// field the size walk ignores would change the encoded length without changing
+// the computed size.
+func populateStrings(value reflect.Value) {
+	switch value.Kind() {
+	case reflect.String:
+		if value.CanSet() {
+			value.SetString(strings.Repeat("s", 7))
+		}
+	case reflect.Pointer:
+		if !value.IsNil() {
+			populateStrings(value.Elem())
+		}
+	case reflect.Slice:
+		for index := 0; index < value.Len(); index++ {
+			populateStrings(value.Index(index))
+		}
+	case reflect.Struct:
+		for index := 0; index < value.NumField(); index++ {
+			if value.Type().Field(index).IsExported() {
+				populateStrings(value.Field(index))
 			}
-			image := *content.GeneratedImage
-			mutated.Cache, mutated.ToolCall = &cache, &call
-			mutated.ToolResult, mutated.GeneratedImage = &toolResult, &image
-			mutate(&mutated)
-			if contentRawBytes(mutated) <= baseline {
-				t.Fatalf("%s did not contribute to the raw measurement", name)
-			}
-		})
+		}
 	}
 }
