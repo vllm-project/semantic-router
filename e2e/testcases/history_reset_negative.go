@@ -25,11 +25,6 @@ func init() {
 // plugin, and the upstream request still contains every prior turn. The mock
 // backend echoes the conversation it actually received, so an HTTP 200 alone
 // cannot satisfy this test.
-//
-// Live removal has no coverage here by design: configuration validation
-// rejects an enabled policy until a topic-continuity signal family is
-// registered, so there is no way to trigger a reset through the public
-// surface yet.
 func testHistoryResetNegative(
 	ctx context.Context,
 	client *kubernetes.Clientset,

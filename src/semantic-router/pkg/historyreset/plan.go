@@ -17,13 +17,9 @@ func Plan(
 	trigger TriggerResult,
 	view contextcompression.TransformationView,
 ) (contextcompression.TransformationEdits, Diagnostics) {
-	// A nested deadline can never outlive its parent, so this is the effective
-	// bound for direct callers and a no-op when the action already applied it.
-	if policy.Timeout > 0 {
-		bounded, cancel := context.WithTimeout(ctx, policy.Timeout)
-		defer cancel()
-		ctx = bounded
-	}
+	// The caller owns the budget: the action applies the policy timeout before
+	// calling in, because it must also cover envelope construction and the
+	// recovery write that follow selection.
 	if ctx.Err() != nil {
 		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonCancelled)
 	}

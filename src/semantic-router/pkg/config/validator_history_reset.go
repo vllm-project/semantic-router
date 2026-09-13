@@ -22,7 +22,10 @@ func validateHistoryResetPlugin(
 		func() error { return validateHistoryResetLimits(typed, scope) },
 		func() error { return validateHistoryResetTrigger(typed, scope) },
 		func() error { return validateHistoryResetRecovery(typed, scope) },
-		func() error { return validateHistoryResetEnablement(typed, scope) },
+		func() error {
+			return validateHistoryResetEnablement(
+				typed, scope, historyResetTriggerFamilyRegistered(signalCatalog))
+		},
 	}
 	for _, check := range checks {
 		if err := check(); err != nil {
@@ -119,12 +122,15 @@ func validateHistoryResetRecovery(typed *HistoryResetPluginConfig, scope string)
 }
 
 // validateHistoryResetEnablement rejects an enabled policy that cannot be
-// executed safely. An enabled policy needs an explicit trigger and acceptance
-// threshold, and the topic-continuity signal family must be registered; until
-// #3342 registers it, no configuration can enable live removal. Disabled
-// policies are accepted so the contract, examples, and round trips are usable
-// before that dependency lands.
-func validateHistoryResetEnablement(typed *HistoryResetPluginConfig, scope string) error {
+// executed safely: it needs an explicit trigger, an acceptance threshold, the
+// producer contracts it trusts, and a registered topic-continuity family.
+// Disabled policies are accepted without those, so the contract and its
+// examples stay usable.
+func validateHistoryResetEnablement(
+	typed *HistoryResetPluginConfig,
+	scope string,
+	triggerFamilyRegistered bool,
+) error {
 	if !typed.IsEnabled() {
 		return nil
 	}
@@ -144,7 +150,7 @@ func validateHistoryResetEnablement(typed *HistoryResetPluginConfig, scope strin
 				"%s: trigger.accepted_versions[%d] cannot be empty", scope, index)
 		}
 	}
-	if !HistoryResetTriggerFamilyRegistered() {
+	if !triggerFamilyRegistered {
 		return fmt.Errorf(
 			"%s: %s: no %q signal family is registered, so an enabled history_reset policy cannot resolve a trigger",
 			scope,

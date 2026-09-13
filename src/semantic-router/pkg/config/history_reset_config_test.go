@@ -267,22 +267,20 @@ func TestHistoryResetEffectiveLimitsOverrideOnlyConfiguredBounds(t *testing.T) {
 	}
 }
 
-// The enablement gate must follow the signal catalog rather than a constant, so
-// it opens on its own once the topic-continuity family is registered.
+// The enablement gate follows the signal catalog rather than a constant, so it
+// opens on its own when the topic-continuity family is registered. Passing a
+// catalog keeps that verifiable without mutating the process-wide registry.
 func TestHistoryResetTriggerFamilyFollowsTheSignalCatalog(t *testing.T) {
-	if HistoryResetTriggerFamilyRegistered() {
-		t.Skip("the topic-continuity family is registered; enablement is no longer gated on it")
+	if historyResetTriggerFamilyRegistered(signalCatalog) {
+		t.Fatal("the shipped catalog already declares a topic-continuity family")
 	}
-	original := signalCatalog
-	t.Cleanup(func() { signalCatalog = original })
-
-	signalCatalog = append(append([]SignalCatalogEntry(nil), original...), SignalCatalogEntry{
+	withFamily := append(append([]SignalCatalogEntry(nil), signalCatalog...), SignalCatalogEntry{
 		Type:                  HistoryResetTriggerSignalType,
 		DisplayName:           "Topic Continuity",
 		Collection:            "topic_continuity",
 		DecisionReferenceable: true,
 	})
-	if !HistoryResetTriggerFamilyRegistered() {
+	if !historyResetTriggerFamilyRegistered(withFamily) {
 		t.Fatal("expected the registered family to satisfy the trigger gate")
 	}
 
@@ -295,7 +293,12 @@ func TestHistoryResetTriggerFamilyFollowsTheSignalCatalog(t *testing.T) {
 			AcceptedVersions: []string{"v1"},
 		},
 	}
-	if err := ValidateHistoryResetPluginConfig(policy); err != nil {
+	// An enabled policy is refused while the family is absent and accepted once
+	// it exists; nothing else about the policy changes between the two calls.
+	if err := validateHistoryResetEnablement(policy, "decision", false); err == nil {
+		t.Fatal("an enabled policy was accepted with no registered family")
+	}
+	if err := validateHistoryResetEnablement(policy, "decision", true); err != nil {
 		t.Fatalf("expected an enabled policy to validate once the family exists, got %v", err)
 	}
 }

@@ -40,29 +40,6 @@ type RecoveryWriter interface {
 	Store(ctx context.Context, payload string) (string, error)
 }
 
-// NewEnvelope builds the versioned payload for a set of removed messages. The
-// caller supplies them in request order; this function does not reorder them.
-func NewEnvelope(removed []EnvelopeMessage) Envelope {
-	turns := make(map[int]struct{}, len(removed))
-	for _, message := range removed {
-		turns[message.TurnID] = struct{}{}
-	}
-	return Envelope{
-		Version:  EnvelopeVersion,
-		Removed:  removed,
-		Turns:    len(turns),
-		Messages: len(removed),
-	}
-}
-
-func (envelope Envelope) Encode() (string, error) {
-	payload, err := json.Marshal(envelope)
-	if err != nil {
-		return "", fmt.Errorf("encode removed history: %w", err)
-	}
-	return string(payload), nil
-}
-
 // DecodeEnvelope reads a stored payload and rejects an unknown version.
 func DecodeEnvelope(payload string) (Envelope, error) {
 	var envelope Envelope

@@ -7,20 +7,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// verifyHistoryResetRuntime runs both activation checks. Construction calls
-// them separately so the configuration-only one can reject a candidate before
-// components are allocated; this entry point keeps them together for callers
-// that verify an already-built router.
-func (r *OpenAIRouter) verifyHistoryResetRuntime(cfg *config.RouterConfig) error {
-	if r == nil || cfg == nil {
-		return nil
-	}
-	if err := r.verifyHistoryResetTriggerWiring(cfg); err != nil {
-		return err
-	}
-	return verifyContextRecoveryAgreement(cfg)
-}
-
 // verifyHistoryResetTriggerWiring refuses to activate an enabled policy that
 // has no topic-continuity producer in this process. Static validation proves
 // the configuration is well formed and that its trigger resolves inside the

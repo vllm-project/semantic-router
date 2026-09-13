@@ -4,7 +4,7 @@ import "strings"
 
 // History reset is a route-local context action that removes complete eligible
 // prior turns after an accepted topic change. Detection is not part of this
-// contract: issue #3342 owns the topic-continuity signal, and this package only
+// contract: the topic-continuity signal owns it, and this package only
 // describes, defaults, and validates the action's configuration.
 const (
 	// HistoryResetScopeEligibleHistory is the only supported reset scope.
@@ -15,9 +15,9 @@ const (
 	HistoryResetFailureClosed = "fail_closed"
 
 	// HistoryResetTriggerSignalType is the only signal family allowed to
-	// authorize removal. #3342 registers the family in the signal catalog;
-	// until it does, an enabled policy is rejected rather than being allowed
-	// to bind to an unrelated signal that happens to resolve.
+	// authorize removal. An enabled policy whose family is unregistered is
+	// rejected rather than allowed to bind to an unrelated signal that
+	// happens to resolve.
 	HistoryResetTriggerSignalType = "topic_continuity"
 
 	// HistoryResetTriggerUnavailable is the stable reason reported when an
@@ -132,11 +132,11 @@ func (c *HistoryResetPluginConfig) RequiresRecovery() bool {
 	return c != nil && c.Recovery != nil && c.Recovery.Enabled
 }
 
-// HistoryResetTriggerFamilyRegistered reports whether the signal catalog
-// carries the topic-continuity family. The gate opens on its own once #3342
-// registers the family; no build flag or manual switch is involved.
-func HistoryResetTriggerFamilyRegistered() bool {
-	for _, entry := range signalCatalog {
+// historyResetTriggerFamilyRegistered reports whether a signal catalog carries
+// the topic-continuity family. The gate opens on its own when the family is
+// registered; no build flag or manual switch is involved.
+func historyResetTriggerFamilyRegistered(catalog []SignalCatalogEntry) bool {
+	for _, entry := range catalog {
 		if entry.Type == HistoryResetTriggerSignalType {
 			return true
 		}
