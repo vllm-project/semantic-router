@@ -12,6 +12,12 @@ zh-Hans	benchmarking/custom-evaluations.md
 zh-Hans	benchmarking/evaluation-plane.md
 zh-Hans	benchmarking/open-intelligence-index.md
 zh-Hans	benchmarking/overview.md
+zh-Hans	community/code-style.md
+zh-Hans	community/development.md
+zh-Hans	community/documentation.md
+zh-Hans	community/model-provider-day-0-support.md
+zh-Hans	community/overview.md
+zh-Hans	community/translation-guide.md
 zh-Hans	fleet-sim/getting-started.md
 zh-Hans	fleet-sim/guide.md
 zh-Hans	fleet-sim/overview.md
