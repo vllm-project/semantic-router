@@ -2,6 +2,7 @@ package historyreset
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -333,24 +334,109 @@ func TestOversizedRemovalIsRejectedBeforeSerialization(t *testing.T) {
 	}
 }
 
-// The estimate must account for payloads the policy's text view cannot see,
-// so a large tool argument is bounded like any other content.
-func TestRecoveryEstimateCountsToolPayloads(t *testing.T) {
-	request := conversation()
-	request.Messages[1] = llmprotocol.Message{
-		Role: llmprotocol.RoleAssistant,
-		Content: []llmprotocol.Content{{
-			Kind: llmprotocol.ContentToolCall,
-			ToolCall: &llmprotocol.ToolCall{
-				ID: "a", Name: "lookup", Arguments: strings.Repeat("y", 8192),
-			},
-		}},
+// The bound counts every serialized field, including payloads the policy's
+// text view cannot see and content whose JSON encoding is larger than its raw
+// length. Encoding each message as it is added is what makes that exact.
+func TestRecoveryBoundCountsTheCompleteEncodedPayload(t *testing.T) {
+	cases := map[string]llmprotocol.Message{
+		"tool_arguments": {
+			Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentToolCall,
+				ToolCall: &llmprotocol.ToolCall{
+					ID: "a", Name: "lookup", Arguments: strings.Repeat("y", 2048),
+				},
+			}},
+		},
+		"file_metadata": {
+			Role: llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{
+				Kind:     llmprotocol.ContentFile,
+				FileID:   strings.Repeat("f", 2048),
+				Filename: strings.Repeat("n", 2048),
+			}},
+		},
+		"nested_tool_result": {
+			Role: llmprotocol.RoleTool,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentToolResult,
+				ToolResult: &llmprotocol.ToolResult{
+					CallID: "a",
+					Content: []llmprotocol.Content{{
+						Kind: llmprotocol.ContentText, Text: strings.Repeat("z", 2048),
+					}},
+				},
+			}},
+		},
+		// JSON escaping expands control characters to six bytes each, so a
+		// counted string can encode far larger than its raw length.
+		"escaped_control_characters": {
+			Role: llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentText, Text: strings.Repeat("\x01", 1024),
+			}},
+		},
+		"media": {
+			Role: llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentImage, MediaType: "image/png",
+				Data: strings.Repeat("d", 2048), Detail: "high",
+			}},
+		},
 	}
-	detached := map[int]llmprotocol.Message{0: request.Messages[0], 1: request.Messages[1]}
+	for name, message := range cases {
+		t.Run(name, func(t *testing.T) {
+			action := NewAction(testPolicy(), acceptedChange(), "").
+				WithRecovery(&recoveryWriterStub{}, map[int]llmprotocol.Message{0: message})
+
+			// Encoding without a bound reports the exact payload.
+			payload, err := action.buildEnvelope([]int{0}, map[int]int{0: 0}, 0)
+			if err != nil {
+				t.Fatalf("unbounded encoding failed: %v", err)
+			}
+
+			// The same content is refused once the bound is below that size.
+			if _, err = action.buildEnvelope([]int{0}, map[int]int{0: 0}, len(payload)-1); err == nil {
+				t.Fatalf("a %d byte payload passed a %d byte bound", len(payload), len(payload)-1)
+			}
+			if !errors.Is(err, errRecoveryPayloadTooLarge) {
+				t.Fatalf("unexpected error %v", err)
+			}
+
+			// And accepted when the bound comfortably covers it. The running
+			// total counts framing overhead per message, so it is a
+			// conservative upper bound: it may refuse a payload just under the
+			// limit, but it never accepts one above it.
+			accepted, err := action.buildEnvelope([]int{0}, map[int]int{0: 0}, len(payload)*2)
+			if err != nil {
+				t.Fatalf("a payload within its bound was refused: %v", err)
+			}
+			if len(accepted) > len(payload)*2 {
+				t.Fatalf("an accepted payload exceeded its bound: %d > %d", len(accepted), len(payload)*2)
+			}
+		})
+	}
+}
+
+// The bound stops at the message that crosses it rather than encoding the
+// whole conversation first.
+func TestRecoveryBoundStopsAtTheCrossingMessage(t *testing.T) {
+	detached := map[int]llmprotocol.Message{}
+	for index := 0; index < 8; index++ {
+		detached[index] = llmprotocol.Message{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: strings.Repeat("x", 512)}},
+		}
+	}
 	action := NewAction(testPolicy(), acceptedChange(), "").
 		WithRecovery(&recoveryWriterStub{}, detached)
 
-	if estimate := action.estimateEnvelopeBytes([]int{0, 1}); estimate < 8192 {
-		t.Fatalf("estimate = %d, want the tool arguments to be counted", estimate)
+	ids := []int{0, 1, 2, 3, 4, 5, 6, 7}
+	turns := map[int]int{}
+	for _, id := range ids {
+		turns[id] = id
+	}
+	if _, err := action.buildEnvelope(ids, turns, 1024); !errors.Is(err, errRecoveryPayloadTooLarge) {
+		t.Fatalf("expected the bound to stop encoding, got %v", err)
 	}
 }

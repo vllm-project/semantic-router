@@ -2,6 +2,7 @@ package historyreset
 
 import (
 	"context"
+	"errors"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -146,22 +147,15 @@ func (a *Action) persist(
 		diagnostics.RecoveryStatus = RecoveryFailed
 		return errBlocked(ReasonCancelled)
 	}
-	if a.policy.MaxRecoveryBytes > 0 &&
-		a.estimateEnvelopeBytes(ids) > a.policy.MaxRecoveryBytes {
-		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryLimitExceeded
-		diagnostics.RecoveryStatus = RecoveryFailed
-		return errBlocked(ReasonRecoveryLimitExceeded)
-	}
-	payload, err := a.buildEnvelope(ids, turns)
+	payload, err := a.buildEnvelope(ids, turns, a.policy.MaxRecoveryBytes)
 	if err != nil {
-		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryWriteFailed
+		reason := ReasonRecoveryWriteFailed
+		if errors.Is(err, errRecoveryPayloadTooLarge) {
+			reason = ReasonRecoveryLimitExceeded
+		}
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, reason
 		diagnostics.RecoveryStatus = RecoveryFailed
 		return err
-	}
-	if a.policy.MaxRecoveryBytes > 0 && len(payload) > a.policy.MaxRecoveryBytes {
-		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonRecoveryLimitExceeded
-		diagnostics.RecoveryStatus = RecoveryFailed
-		return errBlocked(ReasonRecoveryLimitExceeded)
 	}
 	key, err := a.recovery.Store(ctx, payload)
 	if err != nil {
