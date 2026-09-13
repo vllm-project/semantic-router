@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -10,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
@@ -81,5 +83,19 @@ func TestRespondDecisionUnresolvedKeepsErrorResponseShape(t *testing.T) {
 	body := string(immediate.GetBody())
 	if body == "" || ctx.RouterReplayID != "" {
 		t.Fatalf("body = %q, replay id = %q; want body without a replay record", body, ctx.RouterReplayID)
+	}
+}
+
+func TestRespondSelectionRejectedReturnsServiceUnavailable(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{RequestID: "strict-selection"}
+
+	resp := router.respondSelectionRejected(ctx, "model", selection.ErrNoEligibleCandidates)
+	immediate := resp.GetImmediateResponse()
+	if immediate == nil || int(immediate.GetStatus().GetCode()) != 503 {
+		t.Fatalf("selection rejection response = %#v, want HTTP 503", immediate)
+	}
+	if body := string(immediate.GetBody()); !strings.Contains(body, selection.ErrNoEligibleCandidates.Error()) {
+		t.Fatalf("selection rejection body = %q", body)
 	}
 }

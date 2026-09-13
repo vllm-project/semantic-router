@@ -134,3 +134,17 @@ func TestClearToolChoiceWhenNoTools_KeepsChoiceWhenToolsPresent(t *testing.T) {
 	assert.False(t, changed)
 	assert.Equal(t, llmprotocol.ToolChoiceAuto, req.ToolChoice.Mode)
 }
+
+// A hosted image_generation operation does not occupy request.Tools, but it is
+// still a tool: an explicit tool_choice: none forbidding all tools must be
+// preserved, not erased, so capability dispatch can avoid the images backend.
+func TestClearToolChoiceWhenNoTools_KeepsExplicitNoneWithHostedImageGeneration(t *testing.T) {
+	req := testNeutralRequest("test-model", "画一只猫")
+	req.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNone}
+
+	changed := clearSemanticToolChoiceWhenNoTools(req)
+
+	assert.False(t, changed)
+	assert.Equal(t, llmprotocol.ToolChoiceNone, req.ToolChoice.Mode)
+}

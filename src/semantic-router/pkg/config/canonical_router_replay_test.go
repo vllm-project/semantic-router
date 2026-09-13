@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -299,6 +300,125 @@ routing: {}
 	profile, ok := cfg.ProviderProfiles["production_primary"]
 	if !ok || profile.Protocol != "openai/responses@1" {
 		t.Fatalf("provider profile = %+v, want Responses protocol", profile)
+	}
+}
+
+func TestGPT6AstraCatalogMaterializesItsExactReasoningContract(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: astra
+      catalog: openai/gpt-6-astra
+      api_format: responses
+      backend_refs:
+        - name: primary
+          provider: openai
+routing:
+  decisions:
+    - name: astra_default
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: astra
+          use_reasoning: true
+          reasoning_effort: max
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	family := cfg.GetModelReasoningFamily("astra")
+	if family == nil {
+		t.Fatal("Astra reasoning family is missing")
+	}
+	if got := strings.Join(family.Levels, ","); got != "low,medium,high,xhigh,max" {
+		t.Fatalf("Astra reasoning levels = %q", got)
+	}
+	if family.Default != "" || family.Disabled != "" ||
+		len(family.Modes) != 1 || family.Modes[0] != ReasoningModeEnabled {
+		t.Fatalf("Astra reasoning contract = %+v", *family)
+	}
+	profile, ok := cfg.ProviderProfiles["astra_primary"]
+	if !ok || profile.Protocol != "openai/responses@1" {
+		t.Fatalf("Astra provider profile = %+v", profile)
+	}
+	if got := strings.Join(profile.ReasoningEfforts, ","); got != "low,medium,high,xhigh,max" {
+		t.Fatalf("Astra provider efforts = %q", got)
+	}
+	if got := cfg.ResolveExternalModelID("astra", "astra_primary"); got != "gpt-6-astra" {
+		t.Fatalf("Astra provider model ID = %q", got)
+	}
+}
+
+func TestGPT6AstraCatalogNarrowsChatReasoningEfforts(t *testing.T) {
+	configForEffort := func(effort string) []byte {
+		return []byte(fmt.Sprintf(`
+version: v0.3
+providers:
+  models:
+    - name: astra
+      catalog: openai/gpt-6-astra
+      backend_refs:
+        - name: primary
+          provider: openai
+routing:
+  decisions:
+    - name: astra_default
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: astra
+          use_reasoning: true
+          reasoning_effort: %s
+`, effort))
+	}
+
+	cfg, err := ParseYAMLBytes(configForEffort("xhigh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, ok := cfg.ProviderProfiles["astra_primary"]
+	if !ok || profile.Protocol != "openai/chat-completions@1" {
+		t.Fatalf("Astra Chat provider profile = %+v", profile)
+	}
+	if got := strings.Join(profile.ReasoningEfforts, ","); got != "low,medium,high,xhigh" {
+		t.Fatalf("Astra Chat provider efforts = %q", got)
+	}
+
+	_, err = ParseYAMLBytes(configForEffort("max"))
+	if err == nil || !strings.Contains(err.Error(), `reasoning_effort "max" is not supported by provider "openai"`) {
+		t.Fatalf("expected Astra Chat max-effort rejection, got %v", err)
+	}
+}
+
+func TestGPT6AstraCatalogRejectsDisabledReasoning(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: astra
+      catalog: openai/gpt-6-astra
+      backend_refs:
+        - name: primary
+          provider: openai
+routing:
+  decisions:
+    - name: astra_disabled
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: astra
+          use_reasoning: false
+`))
+	if err == nil || !strings.Contains(err.Error(), "always-on reasoning family") {
+		t.Fatalf("expected Astra disable rejection, got %v", err)
 	}
 }
 

@@ -63,7 +63,6 @@ _ROOT_KEYS = frozenset(
         "models",
         "benchmarks",
         "evaluations",
-        "evaluation_coverage",
         "indices",
         "index_results",
     }

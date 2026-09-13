@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 
 import type {
   CatalogEvaluation,
@@ -129,6 +129,14 @@ function ModelTable({
   return (
     <div className={styles.tableFrame}>
       <table>
+        <colgroup>
+          <col className={styles.modelColumn} />
+          <col className={styles.distributionColumn} />
+          <col className={styles.contextColumn} />
+          <col className={styles.providersColumn} />
+          <col className={styles.resultsColumn} />
+          <col className={styles.releasedColumn} />
+        </colgroup>
         <thead>
           <tr>
             <th>Model</th>
@@ -231,135 +239,102 @@ export function ModelHubDirectory({
   setPage: (page: number) => void
   selectModel: (id: string) => void
 }) {
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const activeFilters = modelHubActiveFilterCount(filters)
 
   return (
-    <div className={`${styles.directory} ${filtersCollapsed ? styles.directoryCollapsed : ''}`}>
-      <aside
-        className={`${styles.filterRail} ${filtersCollapsed ? styles.filterRailCollapsed : ''}`}
-        aria-label="Model filters"
-      >
-        <header>
-          <strong>Filters</strong>
-          <span className={styles.filterActions}>
-            <button type="button" onClick={resetFilters} disabled={!activeFilters}>Reset</button>
-            <button
-              type="button"
-              className={styles.collapseFilters}
-              aria-expanded={!filtersCollapsed}
-              aria-controls="website-model-hub-filter-controls"
-              aria-label={filtersCollapsed ? 'Show model filters' : 'Hide model filters'}
-              title={filtersCollapsed ? 'Show filters' : 'Hide filters'}
-              onClick={() => setFiltersCollapsed(current => !current)}
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d={filtersCollapsed ? 'm6 4 4 4-4 4' : 'm10 4-4 4 4 4'} />
-              </svg>
-            </button>
-          </span>
-        </header>
+    <div className={styles.directory}>
+      <div className={styles.toolbar}>
+        <label className={styles.search}>
+          <span className={srOnlyClass}>Search models</span>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="8.5" cy="8.5" r="5.5" />
+            <path d="m12.5 12.5 4 4" />
+          </svg>
+          <input type="search" value={filters.search} onChange={event => updateFilters({ search: event.target.value })} placeholder="Search models" />
+        </label>
+        <div className={styles.typeTabs} role="group" aria-label="Model type">
+          {([['all', 'All'], ['physical', 'Single'], ['virtual', 'Virtual']] as const).map(([kind, label]) => (
+            <button key={kind} type="button" aria-pressed={filters.kind === kind} onClick={() => updateFilters({ kind })}>{label}</button>
+          ))}
+        </div>
+        <SelectControl
+          label="Sort"
+          value={filters.sort}
+          options={[
+            ['newest', 'Newest'], ['name', 'Name A–Z'], ['context', 'Context'],
+          ]}
+          onChange={sort => updateFilters({ sort: sort as ModelHubDirectoryFilters['sort'] })}
+        />
+        <ViewToggle value={view} onChange={setView} />
+      </div>
+      <div className={styles.filterRow} aria-label="Model filters">
+        <SelectControl
+          label="Distribution"
+          value={filters.distribution}
+          options={[
+            ['all', 'All distributions'], ['open_weights', 'Open weights'], ['proprietary_api', 'Proprietary API'], ['router_recipe', 'Router recipe'],
+          ]}
+          onChange={distribution => updateFilters({ distribution: distribution as ModelHubDirectoryFilters['distribution'] })}
+        />
+        <SelectControl
+          label="Creator"
+          value={filters.publisher}
+          options={[
+            ['all', 'All creators'], ...publishers.map(publisher => [publisher, publisher] as [string, string]),
+          ]}
+          onChange={publisher => updateFilters({ publisher })}
+        />
+        <SelectControl
+          label="Provider"
+          value={filters.provider}
+          options={[
+            ['all', 'All providers'], ...providers.map(provider => [provider.id, provider.display_name] as [string, string]),
+          ]}
+          onChange={provider => updateFilters({ provider })}
+        />
+        <SelectControl
+          label="Capability"
+          value={filters.capability}
+          options={[
+            ['all', 'All capabilities'], ...capabilities.map(capability => [capability, capability.replace(/_/g, ' ')] as [string, string]),
+          ]}
+          onChange={capability => updateFilters({ capability })}
+        />
+        <SelectControl
+          label="Lifecycle"
+          value={filters.lifecycle}
+          options={[
+            ['supported', 'Supported'], ['active', 'Active'], ['experimental', 'Experimental'], ['deprecated', 'Deprecated'], ['removed', 'Removed'], ['all', 'All states'],
+          ]}
+          onChange={lifecycle => updateFilters({ lifecycle: lifecycle as ModelHubDirectoryFilters['lifecycle'] })}
+        />
         <button
           type="button"
-          className={styles.mobileFilterToggle}
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen(current => !current)}
+          className={styles.resetFilters}
+          onClick={resetFilters}
+          disabled={!activeFilters}
         >
-          Filters
-          {activeFilters ? ` (${activeFilters})` : ''}
-          <span>{filtersOpen ? '−' : '+'}</span>
+          Reset
         </button>
-        <div
-          id="website-model-hub-filter-controls"
-          className={`${styles.filterStack} ${filtersOpen ? styles.filterStackOpen : ''}`}
-        >
-          <SelectControl
-            label="Distribution"
-            value={filters.distribution}
-            options={[
-              ['all', 'All distributions'], ['open_weights', 'Open weights'], ['proprietary_api', 'Proprietary API'], ['router_recipe', 'Router recipe'],
-            ]}
-            onChange={distribution => updateFilters({ distribution: distribution as ModelHubDirectoryFilters['distribution'] })}
-          />
-          <SelectControl
-            label="Creator"
-            value={filters.publisher}
-            options={[
-              ['all', 'All creators'], ...publishers.map(publisher => [publisher, publisher] as [string, string]),
-            ]}
-            onChange={publisher => updateFilters({ publisher })}
-          />
-          <SelectControl
-            label="Provider"
-            value={filters.provider}
-            options={[
-              ['all', 'All mapped providers'], ...providers.map(provider => [provider.id, provider.display_name] as [string, string]),
-            ]}
-            onChange={provider => updateFilters({ provider })}
-          />
-          <SelectControl
-            label="Capability"
-            value={filters.capability}
-            options={[
-              ['all', 'All capabilities'], ...capabilities.map(capability => [capability, capability.replace(/_/g, ' ')] as [string, string]),
-            ]}
-            onChange={capability => updateFilters({ capability })}
-          />
-          <SelectControl
-            label="Lifecycle"
-            value={filters.lifecycle}
-            options={[
-              ['supported', 'Supported'], ['active', 'Active'], ['experimental', 'Experimental'], ['deprecated', 'Deprecated'], ['removed', 'Removed'], ['all', 'All states'],
-            ]}
-            onChange={lifecycle => updateFilters({ lifecycle: lifecycle as ModelHubDirectoryFilters['lifecycle'] })}
-          />
-        </div>
-      </aside>
-      <div className={styles.directoryMain}>
-        <div className={styles.toolbar}>
-          <label className={styles.search}>
-            <span className={srOnlyClass}>Search models</span>
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <circle cx="8.5" cy="8.5" r="5.5" />
-              <path d="m12.5 12.5 4 4" />
-            </svg>
-            <input type="search" value={filters.search} onChange={event => updateFilters({ search: event.target.value })} placeholder="Search models" />
-          </label>
-          <div className={styles.typeTabs} role="group" aria-label="Model type">
-            {([['all', 'All'], ['physical', 'Single'], ['virtual', 'Virtual']] as const).map(([kind, label]) => (
-              <button key={kind} type="button" aria-pressed={filters.kind === kind} onClick={() => updateFilters({ kind })}>{label}</button>
-            ))}
-          </div>
-          <SelectControl
-            label="Sort"
-            value={filters.sort}
-            options={[
-              ['newest', 'Newest'], ['name', 'Name A–Z'], ['context', 'Context'],
-            ]}
-            onChange={sort => updateFilters({ sort: sort as ModelHubDirectoryFilters['sort'] })}
-          />
-          <ViewToggle value={view} onChange={setView} />
-        </div>
-        <div className={styles.resultCount}>
-          <strong>{models.length}</strong>
-          {' '}
-          models
-        </div>
-        {view === 'list'
-          ? (
-              <div className={styles.modelList} role="list" aria-label="Model catalog results">
-                {pageModels.map(model => (
-                  <ModelListRow key={model.id} model={model} evaluationCount={evaluationsByModel.get(model.id)?.length ?? 0} providerCount={providersByModel.get(model.id)?.length ?? 0} onSelect={() => selectModel(model.id)} />
-                ))}
-              </div>
-            )
-          : (
-              <ModelTable models={pageModels} providersByModel={providersByModel} evaluationsByModel={evaluationsByModel} onSelect={selectModel} />
-            )}
-        {!models.length ? <EmptyState title="No models found" body="Try a broader search or fewer filters." /> : null}
-        <Pagination page={page} pageCount={pageCount} total={models.length} pageSize={pageSize} label="models" onChange={setPage} />
       </div>
+      <div className={styles.resultCount}>
+        <strong>{models.length}</strong>
+        {' '}
+        models
+      </div>
+      {view === 'list'
+        ? (
+            <div className={styles.modelList} role="list" aria-label="Model catalog results">
+              {pageModels.map(model => (
+                <ModelListRow key={model.id} model={model} evaluationCount={evaluationsByModel.get(model.id)?.length ?? 0} providerCount={providersByModel.get(model.id)?.length ?? 0} onSelect={() => selectModel(model.id)} />
+              ))}
+            </div>
+          )
+        : (
+            <ModelTable models={pageModels} providersByModel={providersByModel} evaluationsByModel={evaluationsByModel} onSelect={selectModel} />
+          )}
+      {!models.length ? <EmptyState title="No models found" body="Try a broader search or fewer filters." /> : null}
+      <Pagination page={page} pageCount={pageCount} total={models.length} pageSize={pageSize} label="models" onChange={setPage} />
     </div>
   )
 }

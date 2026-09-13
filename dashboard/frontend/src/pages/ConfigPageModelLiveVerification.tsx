@@ -41,7 +41,13 @@ export default function ConfigPageModelLiveVerification({
           }`}
           aria-hidden="true"
         />
-        <span className={styles.liveVerificationLabel}>
+        <span
+          className={`${styles.liveVerificationLabel} ${
+            hasBackend && allowed && state.status === 'verified'
+              ? styles.liveVerificationLabelSuccess
+              : ''
+          }`}
+        >
           {!hasBackend
             ? 'No backend'
             : !allowed

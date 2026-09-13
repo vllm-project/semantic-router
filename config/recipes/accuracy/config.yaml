@@ -104,6 +104,24 @@ providers:
           api_key_env: OPENROUTER_API_KEY
           weight: 1
 
+evaluation:
+  records:
+    - model: qwen-coordinator
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.88
+    - model: opus48-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.95
+    - model: gemini31-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.93
+    - model: gpt55-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
 routing:
   modelCards:
     - name: local/omni
@@ -113,40 +131,24 @@ routing:
       context_window_size: 32768
       description: Local planner and synthesis model for Router Flow dynamic plans.
       capabilities: [chat, planning, synthesis, code]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.88
       modality: text
       tags: [deployment:self_hosted, role:planner]
     - name: opus48-worker
       context_window_size: 1000000
       description: OpenRouter worker for long-horizon agentic work.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.95
       modality: text
       tags: [deployment:openrouter, role:worker]
     - name: gemini31-worker
       context_window_size: 1000000
       description: OpenRouter worker for broad reasoning and coding.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.93
       modality: text
       tags: [deployment:openrouter, role:worker]
     - name: gpt55-worker
       context_window_size: 1048576
       description: OpenRouter worker for long-context planning and frontier synthesis.
       capabilities: [chat, code, reasoning, long-context, planning, synthesis]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, role:worker, role:planner]
 

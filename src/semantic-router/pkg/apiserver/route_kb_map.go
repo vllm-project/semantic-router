@@ -32,7 +32,8 @@ func (s *ClassificationAPIServer) loadKnowledgeBaseMapArtifacts(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (*knowledgeBaseMapArtifacts, bool) {
-	cfg := s.currentConfig()
+	cfg, prepared, release, prepareErr := s.acquireEmbeddingRuntime()
+	defer release()
 	if cfg == nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_UNAVAILABLE", "Classification config not available")
 		return nil, false
@@ -45,7 +46,11 @@ func (s *ClassificationAPIServer) loadKnowledgeBaseMapArtifacts(
 		return nil, false
 	}
 
-	artifacts, err := s.ensureKnowledgeBaseMapArtifacts(cfg, knowledgeBaseConfigBaseDir(cfg, s.configPath), kb)
+	if prepareErr != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "KB_MAP_BUILD_ERROR", prepareErr.Error())
+		return nil, false
+	}
+	artifacts, err := s.ensureKnowledgeBaseMapArtifacts(r.Context(), cfg, knowledgeBaseConfigBaseDir(cfg, s.configPath), kb, prepared)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "KB_MAP_BUILD_ERROR", err.Error())
 		return nil, false

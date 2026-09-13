@@ -61,6 +61,16 @@ providers:
           protocol: http
           weight: 1
 
+evaluation:
+  records:
+    - model: local/private-qwen
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.74
+    - model: cloud/frontier-reasoning
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.92
 routing:
   modelCards:
     - name: local/omni
@@ -75,10 +85,6 @@ routing:
         - security_containment
         - code
         - internal_docs
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.74
       modality: text
       tags:
         - deployment:self_hosted
@@ -93,10 +99,6 @@ routing:
         - deep_synthesis
         - architecture_review
         - long_context
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.92
       modality: text
       tags:
         - deployment:cloud

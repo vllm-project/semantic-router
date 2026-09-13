@@ -151,6 +151,75 @@ func TestDecisionWithoutModelRefsFreezesProviderDefaultArm(t *testing.T) {
 	}
 }
 
+func TestCatalogBackedModelsMaterializeExecutableEvaluationArms(t *testing.T) {
+	const catalogBackedYAML = `version: v0.3
+listeners:
+  - name: validation
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    model: qwen/qwen3.8-27b
+  models:
+    - name: qwen/qwen3.8-27b
+      catalog: qwen/qwen3.8-27b
+      provider_model_id: served-qwen
+      backend_refs:
+        - name: qwen
+          provider: vllm
+          endpoint: qwen:8000
+    - name: zai/glm-5.3-flash
+      catalog: zai/glm-5.3-flash
+      provider_model_id: served-glm
+      backend_refs:
+        - name: glm
+          provider: vllm
+          endpoint: glm:8000
+routing: {}
+entrypoints:
+  - model_names: [vllm-sr/quality]
+    recipe: quality
+recipes:
+  - name: quality
+    routing:
+      decisions:
+        - name: select
+          modelRefs:
+            - model: qwen/qwen3.8-27b
+              use_reasoning: true
+            - model: zai/glm-5.3-flash
+              use_reasoning: true
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights: {quality: 1}
+              quality: {index: vllm-sr/reasoning@1.0.0}
+`
+
+	snapshot, err := ModelArmSnapshotFromYAML([]byte(catalogBackedYAML), "revision")
+	if err != nil {
+		t.Fatalf("ModelArmSnapshotFromYAML: %v", err)
+	}
+	mixture := mixtureForRecipe(t, snapshot, "quality")
+	if !mixture.Ready || len(mixture.Mixture.ModelArms) != 2 || len(mixture.Mixture.Decisions) != 1 {
+		t.Fatalf("catalog-backed mixture is not executable: %#v", mixture)
+	}
+	arms := make(map[string]ModelArm, len(mixture.Mixture.ModelArms))
+	for _, arm := range mixture.Mixture.ModelArms {
+		arms[arm.Model] = arm
+	}
+	qwen := arms["qwen/qwen3.8-27b"]
+	if qwen.ContextWindowTokens == nil || *qwen.ContextWindowTokens != 262144 ||
+		qwen.ParameterSize == nil || *qwen.ParameterSize != "27B" ||
+		!containsString(qwen.Capabilities, "reasoning") ||
+		!reflect.DeepEqual(qwen.Modalities, []string{"text", "image", "video"}) {
+		t.Fatalf("catalog metadata was not frozen into the Qwen arm: %#v", qwen)
+	}
+	if arms["zai/glm-5.3-flash"].ProviderModelIDDigest != digestString("served-glm") {
+		t.Fatalf("provider model identity did not use the deployment override: %#v", arms["zai/glm-5.3-flash"])
+	}
+}
+
 func TestModelArmSnapshotFromYAMLIsCanonicalDeterministicAndConnectivityFree(t *testing.T) {
 	runtimeRevision := "git-test-revision"
 	snapshot, err := ModelArmSnapshotFromYAML([]byte(modelArmTestYAML), runtimeRevision)

@@ -236,7 +236,7 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   language: 'Detect query language',
   context: 'Context window length requirements',
   structure: 'Detect request-shape features such as counts, density, and ordered markers',
-  complexity: 'Estimate query difficulty via embedding similarity',
+  complexity: 'Estimate query difficulty from example sets or a remote scoring model',
   modality: 'Detect multi-modal input (text, image, audio)',
   authz: 'Authorization-based routing (RBAC)',
   jailbreak: 'Detect jailbreak attempts via classifier or contrastive methods',

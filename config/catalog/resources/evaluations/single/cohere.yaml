@@ -73,7 +73,7 @@
 - id: independent/north-mini-code-humanitys-last-exam@1.0.0
   model: cohere/north-mini-code-1.0
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: North Mini Code
@@ -217,7 +217,7 @@
 - id: independent/command-a-plus-humanitys-last-exam@1.0.0
   model: cohere/command-a-plus-05-2026
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Command A+
@@ -361,7 +361,7 @@
 - id: independent/tiny-aya-global-humanitys-last-exam@1.0.0
   model: cohere/tiny-aya-global
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Tiny Aya Global

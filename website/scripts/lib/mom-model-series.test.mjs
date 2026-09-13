@@ -13,7 +13,7 @@ test('MoM V1 blog model series follows the packaged CLI catalog', () => {
   const catalog = readFileSync(
     resolve(
       repositoryRoot,
-      'src/vllm-sr/cli/model_assets/latest/catalog.yaml',
+      'config/recipes/built-in/latest/catalog.yaml',
     ),
     'utf8',
   )

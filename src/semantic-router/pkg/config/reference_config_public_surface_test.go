@@ -137,7 +137,12 @@ func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]
 }
 
 func assertReferenceConfigComplexityCoverage(t testingT, complexity []interface{}) {
-	assertSliceUnionCoversStructFields(t, complexity, reflect.TypeOf(ComplexityRule{}), "routing.signals.complexity")
+	// hard_below/easy_above express a score that falls as difficulty rises,
+	// which only a score.v1 backend can produce: the local margin is
+	// hard-minus-easy, so a higher value is harder by construction. Covering
+	// them here would mean shipping a reference rule whose direction is
+	// wrong for the path the reference config actually uses.
+	assertSliceUnionCoversStructFields(t, complexity, reflect.TypeOf(ComplexityRule{}), "routing.signals.complexity", "hard_below", "easy_above")
 	assertSliceUnionCoversStructFields(
 		t,
 		collectChildMapsFromSlice(t, complexity, "hard", "routing.signals.complexity"),

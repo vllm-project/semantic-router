@@ -92,10 +92,12 @@ active release-plan tasks:
 
 ## Built-in Model Catalog Releases
 
-`config/recipes/built-in/latest/` is the authoring source for the catalog that
-ships with `vllm-sr`. The package mirror under
-`src/vllm-sr/cli/model_assets/latest/` is generated; update it with
-`tools/release/sync_model_catalog.py` rather than editing it directly.
+`config/catalog/manifest.yaml` and `config/catalog/resources/` are the authored
+catalog facts. Generation writes the distributable snapshot beside the recipe
+bundles under `config/recipes/built-in/latest/`. The CLI reads that tree in a
+source checkout; `make model-catalog-package-stage` creates an ignored package
+mirror only while building a wheel or sdist. Never edit or commit that staging
+tree.
 
 Immediately before a stable `vX.Y.Z` tag, create the matching catalog snapshot:
 
@@ -104,9 +106,9 @@ make built-in-model-snapshot RELEASE_VERSION=X.Y.Z
 ```
 
 The command creates `config/recipes/built-in/vX.Y/`, updates its release
-metadata and bundle digests, and generates the matching package resources. It
-refuses to overwrite an existing snapshot. Commit both generated trees in the
-release-preparation change.
+metadata and bundle digests, and stages matching package resources for the
+release build. It refuses to overwrite an existing snapshot. Commit the
+immutable `config/recipes` snapshot, never the ignored package staging tree.
 
 Before tagging, verify the version contract and source/package parity. Published
 snapshots are release inputs and must not be rewritten; policy changes belong

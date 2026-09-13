@@ -1634,30 +1634,11 @@ semantic_cache:
         ef: 64
       topk: 10
       consistency_level: "Session"
-    performance:
-      connection_pool:
-        max_connections: 10
-        max_idle_connections: 5
-        acquire_timeout: 5
-      batch:
-        insert_batch_size: 1000
-        timeout: 30
-    data_management:
-      ttl:
-        enabled: true
-        timestamp_field: "timestamp"
-        cleanup_interval: 3600
-      compaction:
-        enabled: true
-        interval: 86400
     logging:
       level: "info"
-      enable_query_log: false
-      enable_metrics: true
     development:
       drop_collection_on_startup: true
       auto_create_collection: true
-      verbose_errors: true
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1707,37 +1688,11 @@ semantic_cache:
 				Expect(cfg.SemanticCache.Milvus.Search.ConsistencyLevel).To(Equal("Session"))
 			})
 
-			It("should parse inline milvus backend performance configuration correctly", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(cfg.SemanticCache.Milvus.Performance).ToNot(BeNil())
-				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.MaxConnections).To(Equal(10))
-				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.MaxIdleConnections).To(Equal(5))
-				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.AcquireTimeout).To(Equal(5))
-				Expect(cfg.SemanticCache.Milvus.Performance.Batch.InsertBatchSize).To(Equal(1000))
-				Expect(cfg.SemanticCache.Milvus.Performance.Batch.Timeout).To(Equal(30))
-			})
-
-			It("should parse inline milvus backend data management configuration correctly", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(cfg.SemanticCache.Milvus.DataManagement).ToNot(BeNil())
-				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.Enabled).To(BeTrue())
-				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.TimestampField).To(Equal("timestamp"))
-				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.CleanupInterval).To(Equal(3600))
-				Expect(cfg.SemanticCache.Milvus.DataManagement.Compaction.Enabled).To(BeTrue())
-				Expect(cfg.SemanticCache.Milvus.DataManagement.Compaction.Interval).To(Equal(86400))
-			})
-
 			It("should parse inline milvus backend logging configuration correctly", func() {
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Logging.Level).To(Equal("info"))
-				Expect(cfg.SemanticCache.Milvus.Logging.EnableQueryLog).To(BeFalse())
-				Expect(cfg.SemanticCache.Milvus.Logging.EnableMetrics).To(BeTrue())
 			})
 
 			It("should parse inline milvus backend development configuration correctly", func() {
@@ -1746,7 +1701,6 @@ semantic_cache:
 
 				Expect(cfg.SemanticCache.Milvus.Development.DropCollectionOnStartup).To(BeTrue())
 				Expect(cfg.SemanticCache.Milvus.Development.AutoCreateCollection).To(BeTrue())
-				Expect(cfg.SemanticCache.Milvus.Development.VerboseErrors).To(BeTrue())
 			})
 		})
 
@@ -1785,12 +1739,9 @@ semantic_cache:
       topk: 1
     logging:
       level: "info"
-      enable_query_log: false
-      enable_metrics: true
     development:
       drop_index_on_startup: true
       auto_create_index: true
-      verbose_errors: true
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1841,8 +1792,6 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Logging.Level).To(Equal("info"))
-				Expect(cfg.SemanticCache.Redis.Logging.EnableQueryLog).To(BeFalse())
-				Expect(cfg.SemanticCache.Redis.Logging.EnableMetrics).To(BeTrue())
 			})
 
 			It("should parse inline redis backend development configuration correctly", func() {
@@ -1851,7 +1800,6 @@ semantic_cache:
 
 				Expect(cfg.SemanticCache.Redis.Development.DropIndexOnStartup).To(BeTrue())
 				Expect(cfg.SemanticCache.Redis.Development.AutoCreateIndex).To(BeTrue())
-				Expect(cfg.SemanticCache.Redis.Development.VerboseErrors).To(BeTrue())
 			})
 		})
 
@@ -2154,8 +2102,6 @@ semantic_cache:
 api:
   batch_classification:
     max_batch_size: 64
-    concurrency_threshold: 5
-    max_concurrency: 8
     metrics:
       enabled: true
       detailed_goroutine_tracking: false
@@ -2172,8 +2118,6 @@ api:
 			// Verify batch classification configuration (zero-config auto-discovery)
 			batchConfig := cfg.API.BatchClassification
 			Expect(batchConfig.MaxBatchSize).To(Equal(64))
-			Expect(batchConfig.ConcurrencyThreshold).To(Equal(5))
-			Expect(batchConfig.MaxConcurrency).To(Equal(8))
 
 			// Verify metrics configuration
 			metricsConfig := batchConfig.Metrics
@@ -2201,8 +2145,6 @@ api:
 			// Verify that missing metrics configuration doesn't cause errors (zero-config)
 			batchConfig := cfg.API.BatchClassification
 			Expect(batchConfig.MaxBatchSize).To(Equal(32))
-			Expect(batchConfig.ConcurrencyThreshold).To(Equal(0))
-			Expect(batchConfig.MaxConcurrency).To(Equal(0))
 
 			// Metrics should have zero values (will be handled by defaults in application)
 			metricsConfig := batchConfig.Metrics
@@ -2214,7 +2156,6 @@ api:
 			yamlContent := `
 api:
   batch_classification:
-    concurrency_threshold: 3
     metrics:
       enabled: true
       sample_rate: 0.5
@@ -2224,7 +2165,6 @@ api:
 			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cfg.API.BatchClassification.ConcurrencyThreshold).To(Equal(3))
 			metricsConfig := cfg.API.BatchClassification.Metrics
 			Expect(metricsConfig.Enabled).To(BeTrue())
 			Expect(metricsConfig.SampleRate).To(Equal(0.5))

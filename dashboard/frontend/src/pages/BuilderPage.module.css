@@ -1344,6 +1344,37 @@
   letter-spacing: 0.05em;
 }
 
+.fieldDescription {
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  line-height: 1.45;
+}
+
+.booleanControl {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 40px;
+  padding: 0.5rem 0.7rem;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.booleanControl:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-hover);
+}
+
 .fieldInput {
   padding: 0.5rem 0.75rem;
   font-size: var(--text-sm);

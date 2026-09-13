@@ -37,6 +37,63 @@ type ProjectionScoreInput struct {
 	Miss        float64 `yaml:"miss,omitempty"`
 }
 
+// ProjectionCatalogEntry is the canonical public identity for one projection
+// collection under routing.projections.
+type ProjectionCatalogEntry struct {
+	Collection  string `json:"collection"`
+	DisplayName string `json:"display_name"`
+}
+
+var projectionCatalog = []ProjectionCatalogEntry{
+	{Collection: "partitions", DisplayName: "Partitions"},
+	{Collection: "scores", DisplayName: "Scores"},
+	{Collection: "mappings", DisplayName: "Mappings"},
+}
+
+// ProjectionCatalog returns every supported derived-routing collection.
+func ProjectionCatalog() []ProjectionCatalogEntry {
+	return append([]ProjectionCatalogEntry(nil), projectionCatalog...)
+}
+
+var supportedProjectionInputTypes = []string{
+	SignalTypeKeyword,
+	SignalTypeEmbedding,
+	SignalTypeDomain,
+	SignalTypeFactCheck,
+	SignalTypeUserFeedback,
+	SignalTypeReask,
+	SignalTypePreference,
+	SignalTypeLanguage,
+	SignalTypeContext,
+	SignalTypeStructure,
+	SignalTypeComplexity,
+	SignalTypeModality,
+	SignalTypeAuthz,
+	SignalTypeJailbreak,
+	SignalTypePII,
+	SignalTypeKB,
+	SignalTypeConversation,
+	SignalTypeEvent,
+	SignalTypeInputModality,
+	ProjectionInputKBMetric,
+	SignalTypeProjection,
+}
+
+// SupportedProjectionInputTypes returns the exact signal and derived-value
+// vocabulary accepted by projection score inputs.
+func SupportedProjectionInputTypes() []string {
+	return append([]string(nil), supportedProjectionInputTypes...)
+}
+
+func isProjectionInputTypeSupported(signalType string) bool {
+	for _, supported := range supportedProjectionInputTypes {
+		if signalType == supported {
+			return true
+		}
+	}
+	return false
+}
+
 // Projection input value sources are shared by runtime validation, DSL
 // validation, and projection execution. Keeping the vocabulary here prevents
 // those surfaces from drifting as new signal types are introduced.

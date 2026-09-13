@@ -101,7 +101,7 @@ func mixtureSnapshotForRecipe(
 	armResolver modelArmResolver,
 ) (MixtureTargetSnapshot, error) {
 	scopedRouting := routerconfig.CanonicalConfigFromRouterConfig(cfg.ConfigForRecipe(recipe)).Routing
-	inventory := collectMixtureModelInventory(canonical, recipe)
+	inventory := collectMixtureModelInventory(cfg, canonical, recipe)
 	poolArms, armIDByModel, armsReady := resolveMixtureArms(inventory.poolModels, armResolver)
 	supportModels, supportReady := resolveMixtureSupportModels(
 		canonical, scopedRouting, inventory, armResolver,

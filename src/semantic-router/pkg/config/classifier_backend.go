@@ -13,10 +13,23 @@ const (
 )
 
 // Remote classifier contracts describe the semantic product returned by a
-// remote classifier. Category is the first consumer and currently supports
-// the complete label distribution contract.
+// remote classifier, independently of the protocol used to fetch it. A
+// consumer declares which contracts it can read; the contract chosen tells the
+// runtime how to interpret the response, so the two are not interchangeable.
+// Category consumes the complete label distribution contract; PII consumes the
+// token-span contract. Each built-in signal accepts exactly one shape, so the
+// contract defaults per consumer and a wrong explicit value is a configuration
+// error rather than a silent fallback.
 const (
 	RemoteClassifierContractLabelDistribution = "label_distribution.v1"
+	RemoteClassifierContractLabelDecision     = "label_decision.v1"
+	// RemoteClassifierContractScore carries a single continuous score for a
+	// regression-style model, such as a query-difficulty scorer. It has no
+	// label of its own; the consumer turns the score into a verdict.
+	RemoteClassifierContractScore = "score.v1"
+	// RemoteClassifierContractTokenSpans carries entity spans with code-point
+	// offsets into the request string; PII is its first consumer.
+	RemoteClassifierContractTokenSpans = "token_spans.v1" //nolint:gosec // G101: contract name, not a credential
 )
 
 const defaultRemoteClassifierDeadlineMs = 5000
@@ -97,7 +110,7 @@ func (b *RemoteClassifierBackend) Validate() error {
 	}
 	if b.Contract != "" {
 		switch b.Contract {
-		case RemoteClassifierContractLabelDistribution:
+		case RemoteClassifierContractLabelDistribution, RemoteClassifierContractLabelDecision, RemoteClassifierContractScore, RemoteClassifierContractTokenSpans:
 		default:
 			return fmt.Errorf("backend.contract: unsupported value %q", b.Contract)
 		}
@@ -112,11 +125,16 @@ func (b *RemoteClassifierBackend) Validate() error {
 // explicitly named external model. The role assertion is kept separate from
 // the transport protocol so a model cannot be selected merely because it is
 // the first catalog entry with a matching role.
+//
+// A consumer passes every contract it can read. Passing exactly one keeps that
+// contract available as the default for an omitted `contract:` field, because
+// there is nothing to guess. A consumer that accepts several cannot default -
+// see requireDeclaredContract.
 func ResolveRemoteClassifierBackend(
 	cfg *RouterConfig,
 	backend *RemoteClassifierBackend,
 	expectedRole string,
-	expectedContract string,
+	expectedContracts ...string,
 ) (*ExternalModelConfig, error) {
 	if backend == nil {
 		return nil, nil
@@ -124,8 +142,8 @@ func ResolveRemoteClassifierBackend(
 	if err := backend.Validate(); err != nil {
 		return nil, err
 	}
-	if expectedContract != "" && backend.EffectiveContract(expectedContract) != expectedContract {
-		return nil, fmt.Errorf("backend.contract %q is incompatible; expected %q", backend.EffectiveContract(expectedContract), expectedContract)
+	if err := requireDeclaredContract(backend, expectedContracts); err != nil {
+		return nil, err
 	}
 	external, err := findNamedExternalModel(cfg, backend.Model)
 	if err != nil {
@@ -135,6 +153,39 @@ func ResolveRemoteClassifierBackend(
 		return nil, err
 	}
 	return external, nil
+}
+
+// requireDeclaredContract checks a backend's contract against the contracts a
+// consumer declared it can read.
+//
+// With one declared contract the field may be omitted: the single possibility
+// is the default. With several, omitting it would leave the runtime guessing
+// which response shape to expect - and guessing wrong surfaces per request
+// rather than at config load - so an explicit value is required.
+func requireDeclaredContract(backend *RemoteClassifierBackend, declared []string) error {
+	if len(declared) == 0 {
+		return nil
+	}
+	if len(declared) == 1 {
+		if got := backend.EffectiveContract(declared[0]); got != declared[0] {
+			return fmt.Errorf("backend.contract %q is incompatible; expected %q", got, declared[0])
+		}
+		return nil
+	}
+	contract := strings.TrimSpace(backend.Contract)
+	if contract == "" {
+		return fmt.Errorf(
+			"backend.contract is required because this signal reads more than one contract; set it to one of: %s",
+			strings.Join(declared, ", "))
+	}
+	for _, candidate := range declared {
+		if contract == candidate {
+			return nil
+		}
+	}
+	return fmt.Errorf(
+		"backend.contract %q is incompatible; expected one of: %s",
+		contract, strings.Join(declared, ", "))
 }
 
 func findNamedExternalModel(cfg *RouterConfig, name string) (*ExternalModelConfig, error) {
@@ -209,6 +260,38 @@ func ValidateCategoryModelBackend(cfg *RouterConfig) error {
 		RemoteClassifierContractLabelDistribution,
 	); err != nil {
 		return fmt.Errorf("classifier.domain: %w", err)
+	}
+	return nil
+}
+
+// ValidatePIIModelBackend is the PII-facing counterpart of
+// ValidateCategoryModelBackend. A remote PII backend speaks token_spans.v1 and
+// is mutually exclusive with the local mmBERT-32K selector, since the shared
+// block describes the remote path only.
+func ValidatePIIModelBackend(cfg *RouterConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("PII model configuration is nil")
+	}
+	model := &cfg.PIIModel
+	if err := model.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
+		return fmt.Errorf("classifier.pii.%w", err)
+	}
+	if model.Backend == nil {
+		return nil
+	}
+	if model.UseMmBERT32K {
+		return fmt.Errorf("classifier.pii: backend is mutually exclusive with use_mmbert_32k")
+	}
+	if model.Backend.Protocol != RemoteClassifierProtocolHTTPClassify {
+		return fmt.Errorf("classifier.pii.backend.protocol %q is not supported by the PII consumer", model.Backend.Protocol)
+	}
+	if _, err := ResolveRemoteClassifierBackend(
+		cfg,
+		model.Backend,
+		ModelRoleClassification,
+		RemoteClassifierContractTokenSpans,
+	); err != nil {
+		return fmt.Errorf("classifier.pii: %w", err)
 	}
 	return nil
 }

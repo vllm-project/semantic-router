@@ -27,18 +27,17 @@ var (
 // come from the Router catalog package so the HTTP boundary cannot drift from
 // the runtime registry.
 type modelCatalogEnvelope struct {
-	SchemaVersion      string                                   `json:"schema_version"`
-	Catalogs           []modelcatalog.CatalogHeader             `json:"catalogs"`
-	Protocols          []modelcatalog.ProtocolDefinition        `json:"protocols"`
-	Providers          []modelcatalog.ProviderDefinition        `json:"providers"`
-	ReasoningFamilies  []modelcatalog.ReasoningFamilyDefinition `json:"reasoning_families"`
-	Models             []modelcatalog.ModelCard                 `json:"models"`
-	Benchmarks         []modelcatalog.BenchmarkDefinition       `json:"benchmarks"`
-	Evaluations        []modelcatalog.EvaluationRecord          `json:"evaluations"`
-	EvaluationCoverage []modelcatalog.EvaluationCoverage        `json:"evaluation_coverage"`
-	Indices            []modelcatalog.IndexDefinition           `json:"indices"`
-	IndexResults       []modelcatalog.IndexResult               `json:"index_results"`
-	Configured         json.RawMessage                          `json:"configured,omitempty"`
+	SchemaVersion     string                                   `json:"schema_version"`
+	Catalogs          []modelcatalog.CatalogHeader             `json:"catalogs"`
+	Protocols         []modelcatalog.ProtocolDefinition        `json:"protocols"`
+	Providers         []modelcatalog.ProviderDefinition        `json:"providers"`
+	ReasoningFamilies []modelcatalog.ReasoningFamilyDefinition `json:"reasoning_families"`
+	Models            []modelcatalog.ModelCard                 `json:"models"`
+	Benchmarks        []modelcatalog.BenchmarkDefinition       `json:"benchmarks"`
+	Evaluations       []modelcatalog.EvaluationRecord          `json:"evaluations"`
+	Indices           []modelcatalog.IndexDefinition           `json:"indices"`
+	IndexResults      []modelcatalog.IndexResult               `json:"index_results"`
+	Configured        json.RawMessage                          `json:"configured,omitempty"`
 }
 
 func normalizeModelCatalogDocument(raw []byte) ([]byte, error) {
@@ -108,9 +107,6 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 		return err
 	}
 	if err := validateCatalogEvaluations(envelope.Evaluations, models, metrics); err != nil {
-		return err
-	}
-	if err := validateCatalogEvaluationCoverage(envelope.EvaluationCoverage, models, metrics); err != nil {
 		return err
 	}
 	return validateCatalogIndexResults(envelope.IndexResults, models, indices)
@@ -585,38 +581,6 @@ func validOptionalCatalogDate(value string) bool {
 	return err == nil
 }
 
-func validateCatalogEvaluationCoverage(
-	values []modelcatalog.EvaluationCoverage,
-	models map[string]struct{},
-	metrics map[string]catalogMetricContract,
-) error {
-	seen := make(map[string]struct{}, len(values))
-	for _, coverage := range values {
-		metricID := coverage.Benchmark + "#" + coverage.Metric
-		contract, metricOK := metrics[metricID]
-		profileOK := false
-		if metricOK {
-			_, profileOK = contract.profiles[coverage.BenchmarkProfile]
-		}
-		_, modelOK := models[coverage.Model]
-		key := coverage.Model + "#" + coverage.ReasoningEffort + "#" + metricID + "#" + coverage.BenchmarkProfile
-		if _, duplicate := seen[key]; duplicate {
-			return fmt.Errorf("duplicate evaluation coverage")
-		}
-		seen[key] = struct{}{}
-		if !modelOK || coverage.ReasoningEffort == "" || !metricOK || !profileOK ||
-			!oneOf(coverage.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
-			(coverage.Status == "available" && (coverage.Value == nil || coverage.Evaluation == "" || !finite(*coverage.Value))) ||
-			(coverage.Status != "available" && (coverage.Value != nil || coverage.Evaluation != "")) {
-			return fmt.Errorf("malformed evaluation coverage")
-		}
-		if coverage.Value != nil && (*coverage.Value < contract.metric.Range[0] || *coverage.Value > contract.metric.Range[1]) {
-			return fmt.Errorf("evaluation coverage value is invalid")
-		}
-	}
-	return nil
-}
-
 func validateCatalogIndices(
 	values []modelcatalog.IndexDefinition,
 	metrics map[string]catalogMetricContract,
@@ -643,15 +607,14 @@ func validateCatalogIndices(
 			}
 			if component.Metric != "" {
 				metric, ok := metrics[component.Benchmark+"#"+component.Metric]
-				profileOK := false
-				if ok {
-					_, profileOK = metric.profiles[component.BenchmarkProfile]
-				}
-				if component.Benchmark == "" || component.BenchmarkProfile == "" || !ok || !profileOK {
+				if component.Benchmark == "" || !ok || !validCatalogIndexComponentProfiles(component, metric.profiles) {
 					return nil, fmt.Errorf("index metric is unknown")
 				}
 			}
 			if component.Index != "" {
+				if component.Benchmark != "" || component.BenchmarkProfile != "" || len(component.BenchmarkProfiles) != 0 {
+					return nil, fmt.Errorf("nested index contains benchmark fields")
+				}
 				if _, ok := ids[component.Index]; !ok {
 					return nil, fmt.Errorf("nested index is unknown")
 				}
@@ -663,6 +626,35 @@ func validateCatalogIndices(
 		}
 	}
 	return ids, nil
+}
+
+func validCatalogIndexComponentProfiles(
+	component modelcatalog.IndexComponent,
+	declared map[string]struct{},
+) bool {
+	hasSingular := component.BenchmarkProfile != ""
+	hasPlural := len(component.BenchmarkProfiles) != 0
+	if hasSingular == hasPlural {
+		return false
+	}
+	profiles := component.BenchmarkProfiles
+	if hasSingular {
+		profiles = []string{component.BenchmarkProfile}
+	}
+	seen := make(map[string]struct{}, len(profiles))
+	for _, profile := range profiles {
+		if profile == "" {
+			return false
+		}
+		if _, duplicate := seen[profile]; duplicate {
+			return false
+		}
+		if _, ok := declared[profile]; !ok {
+			return false
+		}
+		seen[profile] = struct{}{}
+	}
+	return true
 }
 
 func validateCatalogIndexResults(
@@ -678,14 +670,26 @@ func validateCatalogIndexResults(
 		seen[key] = struct{}{}
 		_, modelOK := models[result.Model]
 		_, indexOK := indices[result.Index]
-		if !modelOK || result.ReasoningEffort == "" || !indexOK || !oneOf(result.Status, "available", "missing", "failed", "not_applicable", "withheld") ||
+		if !modelOK || result.ReasoningEffort == "" || !indexOK ||
 			!finite(result.Coverage) || result.Coverage < 0 || result.Coverage > 1 ||
-			(result.Status == "available" && (result.Score == nil || !finite(*result.Score))) ||
-			(result.Status != "available" && result.Score != nil) {
+			!validCatalogIndexResultStatus(result) {
 			return fmt.Errorf("malformed index result")
 		}
 	}
 	return nil
+}
+
+func validCatalogIndexResultStatus(result modelcatalog.IndexResult) bool {
+	switch result.Status {
+	case "available":
+		return result.Score != nil && finite(*result.Score) && result.Coverage > 0
+	case "partial":
+		return result.Score == nil && result.Coverage > 0 && result.Coverage < 1
+	case "missing":
+		return result.Score == nil && result.Coverage == 0
+	default:
+		return false
+	}
 }
 
 func validModelCatalogDigest(value string) bool {

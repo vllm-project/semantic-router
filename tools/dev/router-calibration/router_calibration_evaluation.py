@@ -28,11 +28,11 @@ def evaluate_probe(
 ) -> dict[str, Any]:
     status, payload = http_client(
         "POST",
-        f"{normalize_router_url(router_url)}/api/v1/eval?trace=true",
+        f"{normalize_router_url(router_url)}/api/v1/routing/preview?trace=true",
         _build_request_payload(probe),
         timeout_seconds=request_timeout_seconds,
     )
-    data = ensure_success(status, payload, "POST /api/v1/eval")
+    data = ensure_success(status, payload, "POST /api/v1/routing/preview")
     if not isinstance(data, dict):
         raise RuntimeError(
             f"unexpected eval payload for probe {probe.probe_id}: {data!r}"

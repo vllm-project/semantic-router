@@ -27,3 +27,8 @@ rich>=13.0.0
 
 # OpenAI-compatible evaluation clients
 openai>=1.0.0
+
+# Provenance manifests
+PyYAML>=6.0
+jsonschema>=4.18.0
+huggingface_hub>=0.20.0

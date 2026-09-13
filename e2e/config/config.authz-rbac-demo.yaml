@@ -20,6 +20,16 @@ providers:
           endpoint: 127.0.0.1:8200
           weight: 1
           provider: vllm
+evaluation:
+  records:
+    - model: qwen14b-admin
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
+    - model: qwen14b-free
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.7
 routing:
   decisions:
     - name: admin_to_admin_tier
@@ -81,20 +91,12 @@ routing:
         - code
         - reasoning
         - math
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.9
     - name: qwen14b-free
       param_size: 14b
       description: Qwen2.5 14B — free tier (port 8200)
       capabilities:
         - chat
         - code
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.7
 global:
   router:
     strategy: priority

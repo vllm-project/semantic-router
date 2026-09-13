@@ -31,6 +31,8 @@ var BaselineRouterContract = []string{
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
+	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
+	"plugin-request-mutations",
 	"tool-selection",
 	"rule-condition-logic",
 	"decision-fallback-behavior",
@@ -53,6 +55,10 @@ var BaselineRouterContract = []string{
 	"session-pricing-response-api",
 	// Event signal rule matching and routing (issue #3178)
 	"event-routing",
+	// Language signal rule matching and routing (issue #3178)
+	"language-routing",
+	// Reask signal rule matching and routing (issue #3178)
+	"reask-routing",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.

@@ -3,8 +3,10 @@ package extproc
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
@@ -33,6 +35,28 @@ func (s *noopMemoryStore) ForgetByScope(_ context.Context, _ memory.MemoryScope)
 func (s *noopMemoryStore) IsEnabled() bool                                             { return true }
 func (s *noopMemoryStore) CheckConnection(_ context.Context) error                     { return nil }
 func (s *noopMemoryStore) Close() error                                                { return nil }
+
+type blockingMemoryStore struct {
+	noopMemoryStore
+	storeStarted chan struct{}
+	allowStore   chan struct{}
+	closed       chan struct{}
+}
+
+func (s *blockingMemoryStore) Store(ctx context.Context, _ *memory.Memory) error {
+	close(s.storeStarted)
+	select {
+	case <-s.allowStore:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *blockingMemoryStore) Close() error {
+	close(s.closed)
+	return nil
+}
 
 func TestScheduleResponseMemoryStore_NoOpWithoutMemoryExtractor(t *testing.T) {
 	router := &OpenAIRouter{
@@ -117,6 +141,67 @@ func TestScheduleResponseMemoryStore_SkippedWhenBothAutoStoresDisabled(t *testin
 	}
 
 	router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("test"))
+}
+
+func TestResponseMemoryStoreHoldsGenerationUntilBackgroundWriteCompletes(t *testing.T) {
+	store := &blockingMemoryStore{
+		storeStarted: make(chan struct{}),
+		allowStore:   make(chan struct{}),
+		closed:       make(chan struct{}),
+	}
+	resources := newResourceScope()
+	resources.add(store.Close)
+	router := &OpenAIRouter{
+		Config:          &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+		MemoryExtractor: memory.NewMemoryChunkStore(store),
+		resources:       resources,
+	}
+	service := NewRouterService(router)
+	reqCtx := &RequestContext{
+		Headers: map[string]string{headers.AuthzUserID: "user-1"},
+		SemanticRequest: &llmprotocol.Request{
+			Generation: 1,
+			Messages: []llmprotocol.Message{{
+				Role: llmprotocol.RoleUser,
+				Content: []llmprotocol.Content{{
+					Kind: llmprotocol.ContentText,
+					Text: "Please remember the detailed itinerary for next month's conference trip.",
+				}},
+			}},
+		},
+	}
+
+	router.scheduleResponseMemoryStoreText(reqCtx, "The conference itinerary has been saved for later reference.")
+	select {
+	case <-store.storeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("background memory write did not start")
+	}
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- service.Shutdown(context.Background())
+	}()
+	select {
+	case <-store.closed:
+		t.Fatal("generation resources closed while the background memory write was active")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(store.allowStore)
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			t.Fatalf("Shutdown() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish after the background memory write completed")
+	}
+	select {
+	case <-store.closed:
+	default:
+		t.Fatal("generation resources remained open after shutdown")
+	}
 }
 
 func memoryTestResponse(text string) *llmprotocol.Response {

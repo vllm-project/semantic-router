@@ -122,7 +122,7 @@ func fetchRecipeReplayRows(
 	raw, err := doRouterReplayManagementGET(
 		ctx,
 		managementSession,
-		"/v1/router_replay?"+query.Encode(),
+		"/api/v1/observability/replays?"+query.Encode(),
 	)
 	if err != nil {
 		return nil, err

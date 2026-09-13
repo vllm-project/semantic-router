@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,6 +68,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 		JailbreakDetected:        true,
 		JailbreakType:            "prompt_injection",
 		JailbreakConfidence:      0.91,
+		JailbreakScoreAvailable:  true,
 		PIIDetected:              true,
 		PIIEntities:              []string{"EMAIL_ADDRESS"},
 	}
@@ -93,6 +95,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 	assert.True(t, ctx.JailbreakDetected)
 	assert.Equal(t, "prompt_injection", ctx.JailbreakType)
 	assert.Equal(t, float32(0.91), ctx.JailbreakConfidence)
+	assert.True(t, ctx.JailbreakScoreAvailable)
 	assert.True(t, ctx.PIIDetected)
 	assert.Equal(t, []string{"EMAIL_ADDRESS"}, ctx.PIIEntities)
 	assert.True(t, ctx.FactCheckNeeded)
@@ -239,4 +242,19 @@ func TestBuildCompressionConfigAppliesProfileAndOverrides(t *testing.T) {
 	assert.Equal(t, 0.7, cfg.PositionDepth)
 	assert.Equal(t, 0.2, cfg.TextRankWeight)
 	assert.Equal(t, 2, cfg.PreserveFirstN, "coding profile should apply when not explicitly overridden")
+}
+
+func TestApplySignalResultsPreservesUnscoredPolicyMatch(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{}
+	key := "jailbreak:guard"
+	signals := &classification.SignalResults{MatchedJailbreakRules: []string{"guard"}, JailbreakDetected: true, JailbreakType: classification.JailbreakClassificationErrorType, SignalErrorMatches: map[string]bool{key: true}}
+	router.applySignalResultsToContext(ctx, signals)
+	signals.SignalErrorMatches[key] = false
+	require.True(t, ctx.VSRSignalErrorMatches[key])
+	require.False(t, ctx.JailbreakScoreAvailable)
+	outcome := responseJailbreakReplayOutcome(&RequestContext{VSRSignalErrors: map[string]string{key: "unreachable"}, ResponseJailbreakType: classification.JailbreakClassificationErrorType}, config.JailbreakRule{Name: "guard"}, time.Now(), "block")
+	require.Equal(t, "unavailable", outcome.Verdict)
+	require.Equal(t, "true", outcome.Metadata["policy_match"])
+	require.Equal(t, "false", outcome.Metadata["score_available"])
 }

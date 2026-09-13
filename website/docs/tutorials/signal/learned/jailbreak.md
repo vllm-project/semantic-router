@@ -102,7 +102,12 @@ unresolved unless the score the other chunks produced already matches it. The
 response is scored once and each rule draws its own line across that score, so
 a partial scan is resolved per rule: a score of 0.5 matches a rule at 0.4 and
 leaves a rule at 0.9 unresolved, because the chunk that was never scored is
-where a higher score would have been. Streaming responses are not scored.
+where a higher score would have been.
+
+A streamed response is scored once the stream ends and recorded with
+`enforcement: not_enforced_streaming` in place of an action. Its bytes are
+already with the client by then, so the `response_jailbreak` plugin does not
+run and no `block`, header or body action applies.
 
 ## Dependencies and Limitations
 

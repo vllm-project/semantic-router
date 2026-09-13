@@ -49,6 +49,15 @@ type PIIModel struct {
 	UseCPU         bool    `yaml:"use_cpu"`
 	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
+	// Backend attaches a named remote token classifier speaking token_spans.v1.
+	// Its absence preserves local PII inference exactly as before.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
+
+	// ClassifierOnErrorConfig contributes OnError (allow|block). With block, a
+	// PII rule whose content could not be fully classified (backend error, or a
+	// provider that declared truncated_at) matches as classification_error
+	// instead of reading as clean.
+	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type EmbeddingModels struct {
@@ -154,12 +163,13 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 }
 
 type PromptGuardConfig struct {
-	Enabled              bool     `yaml:"enabled"`
-	ModelID              string   `yaml:"model_id"`
-	Threshold            float32  `yaml:"threshold"`
-	UseCPU               bool     `yaml:"use_cpu"`
-	JailbreakMappingPath string   `yaml:"jailbreak_mapping_path"`
-	PositiveLabels       []string `yaml:"positive_labels,omitempty"`
+	Backend              *RemoteClassifierBackend `yaml:"backend,omitempty"`
+	Enabled              bool                     `yaml:"enabled"`
+	ModelID              string                   `yaml:"model_id"`
+	Threshold            float32                  `yaml:"threshold"`
+	UseCPU               bool                     `yaml:"use_cpu"`
+	JailbreakMappingPath string                   `yaml:"jailbreak_mapping_path"`
+	PositiveLabels       []string                 `yaml:"positive_labels,omitempty"`
 
 	// Variant selects a local Candle-backed model variant. Mutually
 	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
@@ -208,6 +218,12 @@ func (c PreferenceModelConfig) ContrastiveEnabled() bool {
 
 type ComplexityModelConfig struct {
 	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// Backend attaches a named remote scorer. Its absence preserves local
+	// prototype scoring exactly as before. It sits here, beside
+	// prototype_scoring, rather than on a rule: routing.signals is replaced
+	// wholesale per recipe, so a backend declared there would disappear under
+	// any recipe that did not repeat it.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
 }
 
 func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
@@ -307,7 +323,7 @@ type HallucinationModelConfig struct {
 	MinSpanLength          int     `yaml:"min_span_length,omitempty"`
 	MinSpanConfidence      float32 `yaml:"min_span_confidence,omitempty"`
 	ContextWindowSize      int     `yaml:"context_window_size,omitempty"`
-	EnableNLIFiltering     bool    `yaml:"enable_nli_filtering,omitempty"`
+	EnableNLIFiltering     bool    `yaml:"enable_nli_filtering"`
 	NLIEntailmentThreshold float32 `yaml:"nli_entailment_threshold,omitempty"`
 }
 
@@ -373,35 +389,76 @@ type ModelParams struct {
 	// AuthoredModel preserves the typed user declaration across materialization.
 	// Effective catalog defaults must not leak into exported user YAML, and an
 	// api_key_env reference must not be replaced by its expanded secret value.
-	AuthoredModel     *CanonicalProviderModel             `yaml:"-" json:"-"`
-	LoRAs             []LoRAAdapter                       `yaml:"loras,omitempty"`
-	AccessKey         string                              `yaml:"access_key,omitempty" json:"-"`
-	AccessKeys        map[string]string                   `yaml:"-" json:"-"`
-	Catalog           string                              `yaml:"catalog,omitempty"`
-	ParamSize         string                              `yaml:"param_size,omitempty"`
-	ContextWindowSize int                                 `yaml:"context_window_size,omitempty"`
-	APIFormat         string                              `yaml:"api_format,omitempty"`
-	Description       string                              `yaml:"description,omitempty"`
-	Capabilities      []string                            `yaml:"capabilities,omitempty"`
-	Tags              []string                            `yaml:"tags,omitempty"`
-	Evaluations       []modelcatalog.UserEvaluation       `yaml:"-" json:"-"`
-	IndexResults      map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
-	QualityIndex      string                              `yaml:"-" json:"-"`
-	ExternalModelIDs  map[string]string                   `yaml:"external_model_ids,omitempty"`
-	Modality          string                              `yaml:"modality,omitempty"`
+	AuthoredModel        *CanonicalProviderModel                        `yaml:"-" json:"-"`
+	LoRAs                []LoRAAdapter                                  `yaml:"loras,omitempty"`
+	AccessKey            string                                         `yaml:"access_key,omitempty" json:"-"`
+	AccessKeys           map[string]string                              `yaml:"-" json:"-"`
+	Catalog              string                                         `yaml:"catalog,omitempty"`
+	ParamSize            string                                         `yaml:"param_size,omitempty"`
+	ContextWindowSize    int                                            `yaml:"context_window_size,omitempty"`
+	APIFormat            string                                         `yaml:"api_format,omitempty"`
+	Description          string                                         `yaml:"description,omitempty"`
+	Capabilities         []string                                       `yaml:"capabilities,omitempty"`
+	Tags                 []string                                       `yaml:"tags,omitempty"`
+	IndexResults         map[string]modelcatalog.IndexResult            `yaml:"-" json:"-"`
+	IndexResultsByEffort map[string]map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
+	QualityIndex         string                                         `yaml:"-" json:"-"`
+	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
+	Modality             string                                         `yaml:"modality,omitempty"`
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and
 // not-applicable results return ok=false and are never coerced to zero.
 func (params ModelParams) EvidenceScore(index string) (float64, bool) {
+	result, ok := params.EvidenceResult(index)
+	if !ok {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceResult resolves one available preferred-effort index result and
+// returns a defensive copy so callers can inspect coverage safely.
+func (params ModelParams) EvidenceResult(index string) (modelcatalog.IndexResult, bool) {
 	if index == "" {
 		index = params.QualityIndex
 	}
 	result, ok := params.IndexResults[index]
 	if !ok || result.Status != "available" || result.Score == nil {
+		return modelcatalog.IndexResult{}, false
+	}
+	return cloneCatalogIndexResult(result), true
+}
+
+// EvidenceScoreAt resolves evidence for the exact configured reasoning effort
+// when one is present on the candidate. An empty effort uses the model's
+// catalog-preferred result. Scores are never borrowed across efforts.
+func (params ModelParams) EvidenceScoreAt(index, reasoningEffort string) (float64, bool) {
+	result, ok := params.EvidenceResultAt(index, reasoningEffort)
+	if !ok {
 		return 0, false
 	}
 	return *result.Score, true
+}
+
+// EvidenceResultAt resolves an available index result for the exact configured
+// reasoning effort. Results are never borrowed from another effort.
+func (params ModelParams) EvidenceResultAt(index, reasoningEffort string) (modelcatalog.IndexResult, bool) {
+	if reasoningEffort == "" {
+		return params.EvidenceResult(index)
+	}
+	if index == "" {
+		index = params.QualityIndex
+	}
+	results, ok := params.IndexResultsByEffort[reasoningEffort]
+	if !ok {
+		return modelcatalog.IndexResult{}, false
+	}
+	result, ok := results[index]
+	if !ok || result.Status != "available" || result.Score == nil {
+		return modelcatalog.IndexResult{}, false
+	}
+	return cloneCatalogIndexResult(result), true
 }
 
 type LoRAAdapter struct {

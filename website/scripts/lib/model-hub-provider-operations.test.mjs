@@ -91,3 +91,31 @@ test('provider cards render each supported operation instead of only a count', (
   assert.match(providerCard, /operation\.path/)
   assert.doesNotMatch(providerCard, /operationCount/)
 })
+
+test('provider discovery uses task-oriented choices instead of internal mapping classes', () => {
+  const providers = readFileSync(
+    resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubProviders.tsx'),
+    'utf8',
+  )
+  const page = readFileSync(
+    resolve(repositoryRoot, 'website/src/pages/models.tsx'),
+    'utf8',
+  )
+  const detail = readFileSync(
+    resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubDetail.tsx'),
+    'utf8',
+  )
+
+  assert.match(providers, /Every provider below can be connected to Semantic Router/)
+  assert.match(providers, /built-in .*choice/)
+  assert.match(providers, /Enter a model ID/)
+  assert.match(page, /catalog\.providers\.length/)
+  assert.match(page, /available providers/)
+  assert.match(detail, /No built-in provider choice/)
+  assert.doesNotMatch(providers, /ProviderScope/)
+  assert.doesNotMatch(providers, /Contract only/)
+  assert.doesNotMatch(providers, />Mapped /)
+  assert.doesNotMatch(page, /mapped providers/)
+  assert.doesNotMatch(page, /runtime contracts/)
+  assert.doesNotMatch(detail, /mapped provider/)
+})
