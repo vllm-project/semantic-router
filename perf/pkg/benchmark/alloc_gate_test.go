@@ -15,26 +15,14 @@ func TestCompareWithBaseline_GatesOnAllocsNotTime(t *testing.T) {
 		current   BenchmarkMetric
 		wantBlock bool
 	}{
-		{
-			"time doubles but allocs+bytes flat -> not blocking",
-			BenchmarkMetric{NsPerOp: 200, AllocsPerOp: 10, BytesPerOp: 100},
-			false,
-		},
-		{
-			"allocs +20% over its 5% bound -> blocks",
-			BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 12, BytesPerOp: 100},
-			true,
-		},
-		{
-			"bytes +20% over its 5% bound -> blocks",
-			BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 10, BytesPerOp: 120},
-			true,
-		},
-		{
-			"everything flat -> clean",
-			BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 10, BytesPerOp: 100},
-			false,
-		},
+		{"time doubles but allocs+bytes flat -> not blocking",
+			BenchmarkMetric{NsPerOp: 200, AllocsPerOp: 10, BytesPerOp: 100}, false},
+		{"allocs +20% over its 5% bound -> blocks",
+			BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 12, BytesPerOp: 100}, true},
+		{"bytes +20% over its 5% bound -> blocks",
+			BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 10, BytesPerOp: 120}, true},
+		{"everything flat -> clean",
+			BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 10, BytesPerOp: 100}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

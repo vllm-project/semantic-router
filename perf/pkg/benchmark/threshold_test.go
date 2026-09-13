@@ -10,18 +10,12 @@ func testThresholds() *ThresholdsConfig {
 		ComponentBenchmarks: ComponentBenchmarksThresholds{
 			Default: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10},
 			Benchmarks: []BenchmarkRegressionThreshold{
-				{
-					Name: "classification", Pattern: "^BenchmarkClassify",
-					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10, MaxNsRegressionPercent: 30},
-				},
-				{
-					Name: "decision_engine", Pattern: "^Benchmark(EvaluateDecisions|PrioritySelection)",
-					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 5, MaxBytesRegressionPercent: 5, MaxNsRegressionPercent: 20},
-				},
-				{
-					Name: "looper", Pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)",
-					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 15, MaxNsRegressionPercent: 40},
-				},
+				{Name: "classification", Pattern: "^BenchmarkClassify",
+					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 10, MaxNsRegressionPercent: 30}},
+				{Name: "decision_engine", Pattern: "^Benchmark(EvaluateDecisions|PrioritySelection)",
+					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 5, MaxBytesRegressionPercent: 5, MaxNsRegressionPercent: 20}},
+				{Name: "looper", Pattern: "^Benchmark(ReMoM|Fusion|Flow|Base)",
+					RegressionThreshold: RegressionThreshold{MaxAllocsRegressionPercent: 10, MaxBytesRegressionPercent: 15, MaxNsRegressionPercent: 40}},
 			},
 		},
 	}
