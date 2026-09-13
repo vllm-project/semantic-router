@@ -11,11 +11,21 @@ import (
 // reset would then remove nothing and dispatch would restore the very turns
 // the policy was meant to drop.
 //
-// For a reset-enabled decision the router resolves the permitted history
-// first, so the original-history snapshot, the topic evidence bound to it, and
-// the transformation view all describe the conversation the provider would
-// actually receive. Materialization stays idempotent, so the later dispatch
-// call becomes a no-op instead of prepending the history a second time.
+// For a reset-enabled decision the router resolves the permitted history here,
+// so the original-history snapshot and the transformation view describe the
+// conversation the provider would actually receive. Materialization stays
+// idempotent, so the later dispatch call becomes a no-op instead of prepending
+// the history a second time.
+//
+// Ordering constraint for the topic-continuity producer: signals are evaluated
+// before this point, against the request as it arrived. A producer that
+// classifies there sees the pre-materialization view, and its result will not
+// carry this request's binding, so the action rejects it as stale rather than
+// acting on a partial history. Consuming the resolved snapshot is therefore
+// part of the trigger integration, not something this seam can supply on the
+// producer's behalf. Moving materialization ahead of signal extraction for all
+// Responses traffic is deliberately out of scope: it would change the inputs
+// every existing classifier sees.
 func (r *OpenAIRouter) resolveHistoryResetRequestHistory(ctx *RequestContext) {
 	if ctx == nil || !ctx.HistoryResetPolicy.IsEnabled() || ctx.SemanticRequest == nil {
 		return

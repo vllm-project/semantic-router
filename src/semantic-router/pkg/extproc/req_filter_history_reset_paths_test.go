@@ -75,6 +75,7 @@ func TestResponsesStoredHistoryIsResolvedBeforeReset(t *testing.T) {
 		Class:      historyreset.TriggerChange,
 		Confidence: 0.95,
 		Signal:     "topic_boundary",
+		Version:    "v1",
 		Binding:    historyResetEvidenceBinding(ctx),
 	}
 	router.prepareContextHistorySteps(ctx, request)
@@ -187,6 +188,7 @@ func TestRequestDemandObservesTheResetGeneration(t *testing.T) {
 		Class:      historyreset.TriggerChange,
 		Confidence: 0.95,
 		Signal:     "topic_boundary",
+		Version:    "v1",
 		Binding:    historyResetEvidenceBinding(ctx),
 	}
 	captureRequestDemand(ctx, requestDemandStageOriginal, request, "model")
@@ -232,4 +234,68 @@ func capturedRequestDemand(ctx *RequestContext, stage string) (store.RequestDema
 		}
 	}
 	return store.RequestDemandSnapshot{}, false
+}
+
+// Evidence produced against the pre-materialization Responses view describes a
+// different conversation than the one reset would transform. The binding must
+// catch that rather than letting a partial-history classification authorize a
+// removal.
+func TestResponsesEvidenceFromThePreMaterializedViewIsRejected(t *testing.T) {
+	router := &OpenAIRouter{}
+	request := &llmprotocol.Request{
+		Model:    "model",
+		Messages: []llmprotocol.Message{neutralTextMessage(llmprotocol.RoleUser, "live question")},
+	}
+	ctx := storedResponsesContext(t, request)
+
+	// A producer evaluating at signal time binds to the request as it arrived.
+	bindHistoryResetPolicy(ctx)
+	captureOriginalContextHistory(ctx)
+	ingressBinding := historyResetEvidenceBinding(ctx)
+
+	router.resolveHistoryResetRequestHistory(ctx)
+	if historyResetEvidenceBinding(ctx) == ingressBinding {
+		t.Fatal("resolving stored history must change the binding")
+	}
+	ctx.HistoryResetTrigger = &historyreset.TriggerResult{
+		Class:      historyreset.TriggerChange,
+		Confidence: 0.95,
+		Signal:     "topic_boundary",
+		Version:    "v1",
+		Binding:    ingressBinding,
+	}
+
+	router.prepareContextHistorySteps(ctx, request)
+	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
+		t.Fatalf("fail-open must preserve the request: %v", err)
+	}
+	if len(request.Messages) != 3 {
+		t.Fatalf("evidence about a partial history must not remove turns, got %d", len(request.Messages))
+	}
+	if ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonEvidenceStale {
+		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+	}
+}
+
+// An enabled policy with no resolvable original history has nothing to bind
+// evidence to, so it must refuse rather than accept unbound evidence.
+func TestResetRefusesWhenNoHistoryCanBeResolved(t *testing.T) {
+	router := &OpenAIRouter{}
+	request := resetConversation()
+	ctx := &RequestContext{
+		SemanticRequest:     request,
+		VSRSelectedDecision: historyResetDecision(t, enabledResetConfiguration()),
+	}
+	bindHistoryResetPolicy(ctx)
+	// Deliberately skip captureOriginalContextHistory.
+	router.prepareContextHistorySteps(ctx, request)
+	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
+		t.Fatalf("fail-open must preserve the request: %v", err)
+	}
+	if len(request.Messages) != 3 {
+		t.Fatal("history must be preserved when it cannot be resolved")
+	}
+	if ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonHistoryUnresolved {
+		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+	}
 }

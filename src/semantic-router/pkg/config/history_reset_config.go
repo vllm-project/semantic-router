@@ -61,6 +61,9 @@ type HistoryResetTriggerConfig struct {
 }
 
 // HistoryResetLimitsConfig bounds the history a single request may examine.
+// MaxHistoryBytes counts the text the policy inspects; tool arguments, media,
+// and other non-text payloads are not part of that view, so TimeoutMs is the
+// bound that covers expensive inputs regardless of their shape.
 type HistoryResetLimitsConfig struct {
 	MaxHistoryTurns int `json:"max_history_turns,omitempty" yaml:"max_history_turns,omitempty"`
 	MaxHistoryBytes int `json:"max_history_bytes,omitempty" yaml:"max_history_bytes,omitempty"`

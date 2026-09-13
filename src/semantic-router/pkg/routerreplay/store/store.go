@@ -278,6 +278,7 @@ type DecisionRanking struct {
 // recovery keys ever reach replay storage.
 type HistoryResetDiagnostics struct {
 	Signal            string `json:"signal,omitempty"`
+	Scope             string `json:"scope,omitempty"`
 	TriggerClass      string `json:"trigger_class,omitempty"`
 	Version           string `json:"signal_version,omitempty"`
 	Outcome           string `json:"outcome,omitempty"`
