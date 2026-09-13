@@ -314,6 +314,7 @@ export type RoutingStrategy = (typeof ROUTING_STRATEGIES)[number]
 export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy = 'priority'
 
 export interface RoutingConfig {
+  model_bindings?: Record<string, Record<string, string>>
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
   projections?: ConfigProjections
@@ -327,6 +328,7 @@ export interface EntrypointConfig {
 }
 
 export interface RecipeRoutingConfig {
+  model_bindings?: Record<string, Record<string, string>>
   signals?: ConfigSignals
   projections?: ConfigProjections
   decisions?: DecisionConfig[]

@@ -196,6 +196,15 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 }
 
 func mergeProgram(dst, src *Program) {
+	if src.ModelBindings != nil {
+		if dst.ModelBindings == nil {
+			dst.ModelBindings = cloneModelBindings(src.ModelBindings)
+		} else {
+			for name, binding := range src.ModelBindings {
+				dst.ModelBindings[name] = binding
+			}
+		}
+	}
 	if src.Strategy != "" {
 		dst.Strategy = src.Strategy
 	}

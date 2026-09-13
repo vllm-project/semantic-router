@@ -3,7 +3,7 @@ package classification
 import (
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -11,7 +11,7 @@ import (
 // matchDomainCategories returns the domain categories that exceed the configured
 // threshold, using entropy analysis to decide between top-1 and multi-category output.
 func (c *Classifier) matchDomainCategories(
-	domainResult candle_binding.ClassResultWithProbs,
+	domainResult tasks.ClassResultWithProbs,
 	topCategoryName string,
 ) []entropy.CategoryProbability {
 	threshold := c.Config.CategoryModel.Threshold

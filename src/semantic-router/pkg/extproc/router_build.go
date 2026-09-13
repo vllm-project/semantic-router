@@ -1,14 +1,19 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -22,13 +27,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-type classifierMappings struct {
-	categoryMapping  *classification.CategoryMapping
-	piiMapping       *classification.PIIMapping
-	jailbreakMapping *classification.JailbreakMapping
-}
-
 type routerComponents struct {
+	embeddings           *embedding.Set
+	modelRuntime         *native.Runtime
 	cfg                  *config.RouterConfig
 	categoryDescriptions []string
 	classifier           *classification.Classifier
@@ -77,13 +78,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 func newOpenAIRouterForServer(
 	configPath string,
 	runtimeRegistry *routerruntime.Registry,
+	pool *binding.Pool,
 ) (*OpenAIRouter, error) {
 	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
 	if err != nil {
 		return nil, err
 	}
 
-	router, err := buildOpenAIRouterFromConfig(cfg)
+	router, err := buildOpenAIRouterFromConfig(cfg, pool)
 	if err != nil {
 		return nil, err
 	}
@@ -135,11 +137,11 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 	return cfg, nil
 }
 
-func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Pool) (*OpenAIRouter, error) {
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
-	components, err := buildRouterComponents(cfg)
+	components, err := buildRouterComponents(cfg, pools...)
 	if err != nil {
 		return nil, err
 	}
@@ -179,25 +181,32 @@ func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 	}
 }
 
-func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {
+func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*routerComponents, error) {
+	var pool *binding.Pool
+	if len(pools) > 0 {
+		pool = pools[0]
+	}
 	components := &routerComponents{
+		modelRuntime:       native.New(pool),
 		cfg:                cfg,
 		resources:          newResourceScope(),
 		routerSessionStore: buildRouterLearningStateStore(cfg),
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
+	embeddings, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, components.modelRuntime)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
+	components.embeddings = embeddings
+	components.resources.add(embeddings.Close)
 	if cfg.Looper.IsEnabled() {
-		looperClient, err := looper.NewConnectorClient(&cfg.Looper)
-		if err != nil {
-			return nil, rollbackResources(components.resources, err)
+		looperClient, clientErr := looper.NewConnectorClient(&cfg.Looper)
+		if clientErr != nil {
+			return nil, rollbackResources(components.resources, clientErr)
 		}
 		components.looperClient = looperClient
 		components.resources.add(components.looperClient.Close)
-	}
-	mappings, err := loadClassifierMappings(cfg)
-	if err != nil {
-		return nil, rollbackResources(components.resources, err)
 	}
 
 	components.categoryDescriptions = cfg.GetCategoryDescriptions()
@@ -206,8 +215,8 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		"descriptions": components.categoryDescriptions,
 	})
 
-	if err := components.buildEarlyResources(mappings); err != nil {
-		return nil, err
+	if buildErr := components.buildEarlyResources(); buildErr != nil {
+		return nil, buildErr
 	}
 
 	components.responseAPIFilter = createResponseAPIFilter(cfg)
@@ -227,13 +236,13 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		replayReaderForLookup = components.replayRecorder.Reader()
 	}
 	if cfg.ModelSelection.Enabled {
-		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
+		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup, components.recipeClassifiers)
 		registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
 	} else {
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg)
+	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg, components.embeddings)
 	if components.memoryStore != nil {
 		components.resources.add(components.memoryStore.Close)
 	}
@@ -256,9 +265,9 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	return components, nil
 }
 
-func (components *routerComponents) buildEarlyResources(mappings *classifierMappings) error {
+func (components *routerComponents) buildEarlyResources() error {
 	var err error
-	components.semanticCache, err = createSemanticCache(components.cfg)
+	components.semanticCache, err = createSemanticCache(components.cfg, components.embeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
@@ -266,16 +275,22 @@ func (components *routerComponents) buildEarlyResources(mappings *classifierMapp
 		components.resources.add(components.semanticCache.Close)
 	}
 
-	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg)
+	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.embeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, mappings)
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.modelRuntime, Embeddings: components.embeddings})
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 	components.resources.add(components.recipeClassifiers.Close)
+	components.resources.add(components.classificationSvc.Close)
+	if target, ok := components.semanticCache.(interface {
+		SetPolarityVerifier(cache.PolarityVerifyFunc)
+	}); ok {
+		target.SetPolarityVerifier(components.classifier.PolarityVerifier())
+	}
 	return nil
 }
 
@@ -318,10 +333,10 @@ func rollbackResources(resources *resourceScope, cause error) error {
 	return cause
 }
 
-func buildToolsRuntime(cfg *config.RouterConfig) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
+func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
 	// One provider serves both the tools database and the tool embedder, so a
 	// remote endpoint gets a single HTTP client/connection pool.
-	provider, providerErr := toolsEmbeddingProvider(cfg)
+	provider, providerErr := toolsEmbeddingProvider(cfg, sets...)
 	if providerErr != nil && cfg.Tools.Enabled {
 		return nil, nil, providerErr
 	}

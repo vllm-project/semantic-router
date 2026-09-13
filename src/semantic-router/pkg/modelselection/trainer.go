@@ -17,12 +17,13 @@ limitations under the License.
 package modelselection
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"math"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -78,6 +79,7 @@ func DefaultHyperparams() AlgorithmHyperparams {
 
 // Trainer handles training of model selection algorithms
 type Trainer struct {
+	EmbeddingProvider embedding.Provider
 	// EmbeddingDim is the dimension of query embeddings (e.g., 1024 for Qwen3)
 	EmbeddingDim int
 
@@ -195,8 +197,7 @@ func (t *Trainer) GetEmbedding(query string) ([]float64, error) {
 		// Use Candle for real embeddings (same as VSR cache/classification)
 		embeddingF32, err := t.generateCandleEmbedding(query)
 		if err != nil {
-			logging.Warnf("Candle embedding failed, falling back to hash-based: %v", err)
-			embedding = t.generateDeterministicEmbedding(query)
+			return nil, fmt.Errorf("training embedding provider failed: %w", err)
 		} else {
 			// Convert float32 to float64
 			embedding = make([]float64, len(embeddingF32))
@@ -217,27 +218,7 @@ func (t *Trainer) GetEmbedding(query string) ([]float64, error) {
 // generateCandleEmbedding generates an embedding using Candle (Qwen3/Gemma)
 // This is the same approach used by VSR's semantic cache
 func (t *Trainer) generateCandleEmbedding(text string) ([]float32, error) {
-	switch t.EmbeddingModel {
-	case "qwen3":
-		// Use GetEmbeddingBatched for Qwen3 with continuous batching
-		output, err := candle_binding.GetEmbeddingBatched(text, "qwen3", t.EmbeddingDim)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "gemma":
-		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, "gemma", t.EmbeddingDim)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "bert", "":
-		// Use traditional GetEmbedding for BERT (default)
-		return candle_binding.GetEmbedding(text, t.EmbeddingDim)
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', or 'gemma')", t.EmbeddingModel)
-	}
+	return embedding.Embed(context.Background(), t.EmbeddingProvider, text, embedding.Options{Dimension: t.EmbeddingDim})
 }
 
 // generateDeterministicEmbedding creates a deterministic embedding from query text
@@ -540,4 +521,11 @@ func LoadPretrainedSelector(algorithm, path string) (Selector, error) {
 	default:
 		return nil, fmt.Errorf("unknown algorithm: %s", algorithm)
 	}
+}
+
+// SetEmbeddingProvider supplies an explicitly prepared model for offline
+// training. Its caller retains ownership until the training operation ends.
+func (t *Trainer) SetEmbeddingProvider(provider embedding.Provider) {
+	t.EmbeddingProvider = provider
+	t.EmbeddingCache = make(map[string][]float64)
 }

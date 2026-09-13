@@ -109,7 +109,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
-	request, envelope, diagnostics, err := engine.DecodeRequestForMutation(ctx.SourceFormat, body)
+	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
 	if err != nil {
 		recordIngressProtocolError(ctx, err)
 		var protocolError *llmprotocol.ProtocolError
@@ -200,7 +200,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-	return encoded.Body, nil
+	return encodeLooperEvidence(encoded.Body, format, ctx)
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {

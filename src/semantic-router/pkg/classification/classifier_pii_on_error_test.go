@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // A token_spans.v1 provider that declares truncated_at returns the spans it did
@@ -23,7 +23,7 @@ func TestPIISignalTruncatedResponseRoutesThroughOnError(t *testing.T) {
 	cases := []struct {
 		name         string
 		onError      string
-		entities     []candle_binding.TokenEntity
+		entities     []tasks.TokenEntity
 		err          error
 		wantDetected bool
 		wantEntities []string
@@ -31,7 +31,7 @@ func TestPIISignalTruncatedResponseRoutesThroughOnError(t *testing.T) {
 		{
 			name:         "allow keeps the partial spans",
 			onError:      config.OnErrorAllow,
-			entities:     []candle_binding.TokenEntity{email},
+			entities:     []tasks.TokenEntity{email},
 			err:          ErrTokenSpansTruncated,
 			wantDetected: true,
 			wantEntities: []string{"EMAIL"},
@@ -52,7 +52,7 @@ func TestPIISignalTruncatedResponseRoutesThroughOnError(t *testing.T) {
 		{
 			name:         "block keeps the partial spans and adds the error type",
 			onError:      config.OnErrorBlock,
-			entities:     []candle_binding.TokenEntity{email},
+			entities:     []tasks.TokenEntity{email},
 			err:          ErrTokenSpansTruncated,
 			wantDetected: true,
 			wantEntities: []string{"EMAIL", PIIClassificationErrorType},
@@ -114,13 +114,13 @@ func TestPIIFailClosedMatchIsMarkedAsErrorDriven(t *testing.T) {
 
 	for _, tc := range []struct {
 		name            string
-		entities        []candle_binding.TokenEntity
+		entities        []tasks.TokenEntity
 		err             error
 		wantErrorDriven bool
 	}{
 		{"backend error under block", nil, errors.New("connection refused"), true},
 		{"declared truncation under block", nil, ErrTokenSpansTruncated, true},
-		{"real detection is not error driven", []candle_binding.TokenEntity{email}, nil, false},
+		{"real detection is not error driven", []tasks.TokenEntity{email}, nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			classifier, _, mockModel := newTestPIIClassifier()
