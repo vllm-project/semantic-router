@@ -25,15 +25,15 @@ translation:
 1. **排序候选**：应用 `escalation_order`（`size`、`small_to_large`、`declared`、`cost` 或 `automix`）。
 2. **生成**：按该顺序调用当前模型。
 3. **评估置信度**：
- - `avg_logprob`：所有输出 token 的平均对数概率。越高（越接近 0）表示越自信。
- - `margin`：每个 token 的 top-1 与 top-2 logprob 平均间隔。越高表示越自信。
- - `hybrid`：两种方法的加权组合。
- - `self_verify`：提示同一模型为自己的答案打分（返回 JSON `{confidence, reason}`）。
- - `automix_entailment`：按 arXiv:2310.12963 §3.2，将验证委托给外部 few-shot 蕴含服务器。置信度为 `verified_samples / total_samples`。
+   - `avg_logprob`：所有输出 token 的平均对数概率。越高（越接近 0）表示越自信。
+   - `margin`：每个 token 的 top-1 与 top-2 logprob 平均间隔。越高表示越自信。
+   - `hybrid`：两种方法的加权组合。
+   - `self_verify`：提示同一模型为自己的答案打分（返回 JSON `{confidence, reason}`）。
+   - `automix_entailment`：按 arXiv:2310.12963 §3.2，将验证委托给外部 few-shot 蕴含服务器。置信度为 `verified_samples / total_samples`。
 4. **决策**：
- - 置信度 >= 阈值 → 返回响应。
- - 置信度 < 阈值 → 升级到下一个模型。
- - 出错 → 跳过或失败（可配置）。
+   - 置信度 >= 阈值 → 返回响应。
+   - 置信度 < 阈值 → 升级到下一个模型。
+   - 出错 → 跳过或失败（可配置）。
 
 ## 执行流程
 
