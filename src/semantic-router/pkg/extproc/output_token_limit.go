@@ -12,7 +12,7 @@ import (
 )
 
 func snapshotClientMaxOutputTokens(request llmprotocol.Request, ctx *RequestContext) {
-	if ctx == nil {
+	if ctx == nil || ctx.LooperRequest {
 		return
 	}
 	ctx.ClientMaxOutputTokens = outputtokens.Clone(request.Sampling.MaxOutputTokens)
@@ -22,6 +22,8 @@ func parseLooperOutputTokenBoundHeaders(ctx *RequestContext) {
 	if ctx == nil || !ctx.LooperRequest {
 		return
 	}
+	ctx.ClientMaxOutputTokens = nil
+	ctx.AlgorithmStageMaxOutputTokens = nil
 	if value, ok := parsePositiveInt64Header(ctx, headers.VSRLooperClientMaxOutputTokens); ok {
 		ctx.ClientMaxOutputTokens = &value
 	}
@@ -50,13 +52,18 @@ func (r *OpenAIRouter) applyDispatchOutputTokenLimit(
 	if request == nil || ctx == nil {
 		return false
 	}
-	sources := r.outputTokenLimitSources(request, dispatch, ctx)
+	sources := r.outputTokenLimitSources(dispatch, ctx)
 	result := outputtokens.Compose(sources)
 	if outputTokenLimitBlocked(ctx) && sources.Client == nil && result.Effective == nil {
 		result.Fallback = outputtokens.FallbackBlockedParam
 	}
 	if !wireFormatSupportsOutputTokenLimit(dispatch) && result.Effective != nil {
 		result.Fallback = outputtokens.FallbackCodecUnsupported
+		result.Effective = nil
+		result.Source = ""
+	}
+	if responsesOutputTokenLimitUnsupported(dispatch, result.Effective) {
+		result.Fallback = outputtokens.FallbackResponsesMinimum
 		result.Effective = nil
 		result.Source = ""
 	}
@@ -76,7 +83,6 @@ func (r *OpenAIRouter) applyDispatchOutputTokenLimit(
 }
 
 func (r *OpenAIRouter) outputTokenLimitSources(
-	request *llmprotocol.Request,
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) outputtokens.Sources {
@@ -87,8 +93,6 @@ func (r *OpenAIRouter) outputTokenLimitSources(
 	}
 	if outputTokenLimitBlocked(ctx) {
 		sources.Client = nil
-	} else if sources.Client == nil && request != nil {
-		sources.Client = outputtokens.Clone(request.Sampling.MaxOutputTokens)
 	}
 	if ctx.VSRSelectedDecision != nil {
 		if params := ctx.VSRSelectedDecision.GetRequestParamsConfig(); params != nil {
@@ -152,6 +156,13 @@ func wireFormatSupportsOutputTokenLimit(dispatch *providerDispatch) bool {
 	default:
 		return false
 	}
+}
+
+func responsesOutputTokenLimitUnsupported(dispatch *providerDispatch, effective *int64) bool {
+	if dispatch == nil || effective == nil || dispatch.targetFormat != llmprotocol.OpenAIResponsesV1 {
+		return false
+	}
+	return *effective < outputtokens.ResponsesMinOutputTokens
 }
 
 func int64PointersEqual(left, right *int64) bool {

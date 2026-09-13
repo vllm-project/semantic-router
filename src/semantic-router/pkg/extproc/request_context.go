@@ -301,8 +301,10 @@ type RequestContext struct {
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
 
-	// Output-token limit composition. ClientMaxOutputTokens is snapshotted at
-	// decode (and replaced by Looper hop headers). Ledger is reserved for #2861.
+	// Output-token limit composition. ClientMaxOutputTokens is the immutable
+	// ingress snapshot, or the Looper hop client header. A missing snapshot
+	// means the client omitted a limit. AlgorithmStage comes from an authored
+	// Looper hop header. Ledger is reserved for #2861.
 	ClientMaxOutputTokens            *int64
 	AlgorithmStageMaxOutputTokens    *int64
 	OutputTokenLedger                outputtokens.Contributor

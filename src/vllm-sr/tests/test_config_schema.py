@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -171,3 +172,20 @@ def test_reference_config_matches_generated_structure() -> None:
         config = safe_load_router_config(stream)
 
     assert validate_config_structure(config) == []
+
+
+def test_schema_rejects_non_positive_model_ref_max_completion_tokens() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    with (repository_root / "config" / "config.yaml").open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+
+    model_ref = config["routing"]["decisions"][0]["modelRefs"][0]
+    for limit in (0, -1):
+        document = copy.deepcopy(config)
+        document["routing"]["decisions"][0]["modelRefs"][0] = {
+            **model_ref,
+            "max_completion_tokens": limit,
+        }
+        errors = validate_config_structure(document)
+        assert errors, f"schema accepted max_completion_tokens={limit}"
+        assert any("max_completion_tokens" in error for error in errors)

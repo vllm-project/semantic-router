@@ -3938,7 +3938,8 @@
           "type": "number"
         },
         "max_completion_tokens": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1
         },
         "use_reasoning": {
           "type": "boolean"

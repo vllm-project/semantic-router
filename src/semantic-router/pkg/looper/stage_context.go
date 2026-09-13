@@ -54,7 +54,7 @@ func (l *BaseLooper) dispatchModel(
 	if err := validateLooperStageContext(baseReq, stageReq, target.Name); err != nil {
 		return nil, err
 	}
-	attachOutputTokenBounds(&options, baseReq, stageReq)
+	attachOutputTokenBounds(&options, baseReq)
 	return l.client.CallModelWithOptions(ctx, *stageReq, target, options)
 }
 
@@ -72,9 +72,6 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	if err := validateLooperStageContext(baseReq, stageReq, modelName); err != nil {
 		return nil, nil, err
 	}
-	attemptCtx, attempt := startAttempt(ctx, modelAttemptSpec(
-		baseReq, stageReq, stage, role, modelName,
-	))
 	decisionName := ""
 	if baseReq != nil {
 		decisionName = baseReq.DecisionName
@@ -85,7 +82,10 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 		Mode:         responseMode(streaming),
 		Logprobs:     logprobsConfig,
 	}
-	attachOutputTokenBounds(&options, baseReq, stageReq)
+	attachOutputTokenBounds(&options, baseReq)
+	attemptCtx, attempt := startAttempt(ctx, modelAttemptSpec(
+		baseReq, stageReq, stage, role, modelName, options.StageMaxOutputTokens,
+	))
 	response, err := l.client.CallModelWithOptions(
 		attemptCtx,
 		*stageReq,
@@ -241,35 +241,19 @@ func serializedMessagesTokenEstimate(messages []openai.ChatCompletionMessagePara
 	return contextcompression.EstimateTokens(string(encoded)), nil
 }
 
-func attachOutputTokenBounds(options *CallOptions, req *Request, stageReq *openai.ChatCompletionNewParams) {
-	if options == nil {
+func attachOutputTokenBounds(options *CallOptions, req *Request) {
+	if options == nil || req == nil || options.ClientMaxOutputTokens != nil {
 		return
 	}
-	var original *openai.ChatCompletionNewParams
-	if req != nil {
-		original = req.OriginalRequest
-		if options.ClientMaxOutputTokens == nil {
-			options.ClientMaxOutputTokens = chatParamsMaxOutputTokens(original)
-		}
-	}
-	if options.StageMaxOutputTokens == nil {
-		options.StageMaxOutputTokens = stageOverrideMaxOutputTokens(original, stageReq)
-	}
+	options.ClientMaxOutputTokens = chatParamsMaxOutputTokens(req.OriginalRequest)
 }
 
-func stageOverrideMaxOutputTokens(
-	original *openai.ChatCompletionNewParams,
-	stage *openai.ChatCompletionNewParams,
-) *int64 {
-	stageBound := chatParamsMaxOutputTokens(stage)
-	if stageBound == nil {
+func authoredStageMaxOutputTokens(value int) *int64 {
+	if value < 1 {
 		return nil
 	}
-	clientBound := chatParamsMaxOutputTokens(original)
-	if clientBound != nil && *clientBound == *stageBound {
-		return nil
-	}
-	return stageBound
+	copied := int64(value)
+	return &copied
 }
 
 func chatParamsMaxOutputTokens(req *openai.ChatCompletionNewParams) *int64 {

@@ -199,6 +199,108 @@ func TestPrepareProviderDispatchRerouteUsesNewModelRefBound(t *testing.T) {
 	}
 }
 
+func TestPrepareProviderDispatchRerouteOmitsPriorDispatchAsClient(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	fallback := "fallback-responses"
+	router.Config.ModelConfig[fallback] = config.ModelParams{
+		PreferredEndpoints: []string{"backend"},
+		APIFormat:          config.APIFormatResponses,
+		ExternalModelIDs:   map[string]string{"vllm": "provider-fallback"},
+	}
+	decision := &config.Decision{
+		Name: "Omni",
+		ModelRefs: []config.ModelRef{
+			{Model: primary, MaxCompletionTokens: outputTokenTestInt(256)},
+			{Model: fallback, MaxCompletionTokens: outputTokenTestInt(1024)},
+		},
+	}
+	request := testNeutralRequest(primary, "draw a cat")
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+
+	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	if err != nil {
+		t.Fatalf("prepareProviderDispatch: %v", err)
+	}
+	if dispatch.logicalModel != fallback {
+		t.Fatalf("logical model = %s, want %s", dispatch.logicalModel, fallback)
+	}
+	if ctx.ClientMaxOutputTokens != nil {
+		t.Fatalf("omitted client snapshot = %v, want nil", ctx.ClientMaxOutputTokens)
+	}
+	if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens != 1024 {
+		t.Fatalf("MaxOutputTokens = %v, want rerouted model_ref 1024", request.Sampling.MaxOutputTokens)
+	}
+	if ctx.EffectiveMaxOutputTokensSource != outputtokens.SourceModelRef {
+		t.Fatalf("source = %q, want %s", ctx.EffectiveMaxOutputTokensSource, outputtokens.SourceModelRef)
+	}
+}
+
+func TestPrepareProviderDispatchResponsesSubMinimumModelRefDoesNotEncode(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIResponsesV1)
+	request := testNeutralRequest(model, "hello")
+	ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
+	ctx.VSRSelectedDecision = &config.Decision{
+		Name: "route",
+		ModelRefs: []config.ModelRef{{
+			Model:               model,
+			MaxCompletionTokens: outputTokenTestInt(8),
+		}},
+	}
+
+	if _, err := router.prepareProviderDispatch(request, model, "route", false, ctx); err != nil {
+		t.Fatalf("prepareProviderDispatch: %v", err)
+	}
+	if request.Sampling.MaxOutputTokens != nil {
+		t.Fatalf("MaxOutputTokens = %v, want omitted instead of widening below 16", request.Sampling.MaxOutputTokens)
+	}
+	if ctx.EffectiveMaxOutputTokens != nil || ctx.EffectiveMaxOutputTokensSource != "" {
+		t.Fatalf("effective bound must be cleared for the Responses minimum, got %v source %q", ctx.EffectiveMaxOutputTokens, ctx.EffectiveMaxOutputTokensSource)
+	}
+	if ctx.EffectiveMaxOutputTokensFallback != outputtokens.FallbackResponsesMinimum {
+		t.Fatalf("fallback = %q, want %s", ctx.EffectiveMaxOutputTokensFallback, outputtokens.FallbackResponsesMinimum)
+	}
+
+	encoded, err := protocolcodec.NewBuiltinEngine().EncodeRequest(
+		llmprotocol.OpenAIResponsesV1, *request, llmprotocol.Envelope{},
+	)
+	if err != nil {
+		t.Fatalf("EncodeRequest: %v", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(encoded.Body, &body); err != nil {
+		t.Fatalf("decode encoded body: %v", err)
+	}
+	if _, ok := body["max_output_tokens"]; ok {
+		t.Fatalf("encoded Responses body must omit max_output_tokens below 16: %s", encoded.Body)
+	}
+}
+
+func TestPrepareProviderDispatchBlockedClientKeepsAuthoredEqualStage(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	decision := outputTokenRequestParamsDecision(t, model, map[string]interface{}{
+		"blocked_params": []string{"max_tokens"},
+	})
+	decision.ModelRefs[0].MaxCompletionTokens = outputTokenTestInt(1024)
+	request := testNeutralRequest(model, "hello")
+	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.ClientMaxOutputTokens = llmprotocol.Int64(256)
+	ctx.AlgorithmStageMaxOutputTokens = llmprotocol.Int64(256)
+	ctx.VSRSelectedDecision = decision
+
+	if _, err := router.prepareProviderDispatch(request, model, decision.Name, false, ctx); err != nil {
+		t.Fatalf("prepareProviderDispatch: %v", err)
+	}
+	if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens != 256 {
+		t.Fatalf("MaxOutputTokens = %v, want authored stage 256 after blocked client", request.Sampling.MaxOutputTokens)
+	}
+	if ctx.EffectiveMaxOutputTokensSource != outputtokens.SourceAlgorithmStage {
+		t.Fatalf("source = %q, want %s", ctx.EffectiveMaxOutputTokensSource, outputtokens.SourceAlgorithmStage)
+	}
+}
+
 func TestPrepareProviderDispatchDoesNotReapplyLooperReasoning(t *testing.T) {
 	router, low, _, decision := confidenceTokenLimitFixture()
 	request := testNeutralRequest(low, "hello")
@@ -304,6 +406,18 @@ func TestBuildLooperRequestForwardsBlockedClientTokenLimit(t *testing.T) {
 	}
 	if looperReq == nil || !looperReq.ClientMaxOutputTokensBlocked {
 		t.Fatalf("looper request = %+v, want ClientMaxOutputTokensBlocked", looperReq)
+	}
+}
+
+func TestParseLooperOutputTokenBoundHeadersClearsBodySnapshotWhenClientOmitted(t *testing.T) {
+	ctx := &RequestContext{
+		LooperRequest:         true,
+		ClientMaxOutputTokens: llmprotocol.Int64(256),
+		Headers:               map[string]string{},
+	}
+	parseLooperOutputTokenBoundHeaders(ctx)
+	if ctx.ClientMaxOutputTokens != nil || ctx.AlgorithmStageMaxOutputTokens != nil {
+		t.Fatalf("omitted Looper headers must clear body snapshots: %+v", ctx)
 	}
 }
 

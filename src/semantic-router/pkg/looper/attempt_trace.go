@@ -185,7 +185,7 @@ func attemptTrackerFromContext(ctx context.Context) *attemptTracker {
 }
 
 // modelAttemptSpec derives bounded dispatch metadata and optional accounting estimates.
-func modelAttemptSpec(req *Request, stageReq *openai.ChatCompletionNewParams, stage, role, model string) attemptSpec {
+func modelAttemptSpec(req *Request, stageReq *openai.ChatCompletionNewParams, stage, role, model string, authoredStage *int64) attemptSpec {
 	spec := attemptSpec{stage: stage, role: role, model: model}
 	if reserve := looperOutputTokenReserve(stageReq); reserve > 0 {
 		value := int64(reserve)
@@ -202,7 +202,7 @@ func modelAttemptSpec(req *Request, stageReq *openai.ChatCompletionNewParams, st
 		}
 	}
 	spec.pricing = attemptPricing(req, model)
-	limit := composeAttemptOutputTokenLimit(req, stageReq, model)
+	limit := composeAttemptOutputTokenLimit(req, authoredStage, model)
 	spec.effectiveMaxOutputTokens = cloneInt64Ptr(limit.Effective)
 	spec.effectiveMaxOutputTokensSource = limit.Source
 	spec.effectiveMaxOutputTokensFallback = limit.Fallback
@@ -523,11 +523,11 @@ func attemptCurrency(spec attemptSpec) string {
 
 func composeAttemptOutputTokenLimit(
 	req *Request,
-	stageReq *openai.ChatCompletionNewParams,
+	authoredStage *int64,
 	model string,
 ) outputtokens.Result {
 	sources := outputtokens.Sources{
-		AlgorithmStage: stageOverrideMaxOutputTokens(nil, stageReq),
+		AlgorithmStage: outputtokens.Clone(authoredStage),
 	}
 	blocked := false
 	if req != nil {
@@ -537,7 +537,6 @@ func composeAttemptOutputTokenLimit(
 		}
 		sources.Plugin = outputtokens.Clone(req.PluginMaxOutputTokens)
 		sources.ModelRef = modelRefMaxCompletionTokens(req.ModelRefs, model)
-		sources.AlgorithmStage = stageOverrideMaxOutputTokens(req.OriginalRequest, stageReq)
 	}
 	result := outputtokens.Compose(sources)
 	if blocked && sources.Client == nil && result.Effective == nil {

@@ -123,9 +123,6 @@ func TestComposeAttemptOutputTokenLimitUsesCurrentModelRef(t *testing.T) {
 	original := &openai.ChatCompletionNewParams{
 		MaxCompletionTokens: openai.Int(8000),
 	}
-	stage := &openai.ChatCompletionNewParams{
-		MaxCompletionTokens: openai.Int(8000),
-	}
 	req := &Request{
 		OriginalRequest: original,
 		ModelRefs: []config.ModelRef{
@@ -133,11 +130,11 @@ func TestComposeAttemptOutputTokenLimitUsesCurrentModelRef(t *testing.T) {
 			{Model: "large", MaxCompletionTokens: &largeLimit},
 		},
 	}
-	small := composeAttemptOutputTokenLimit(req, stage, "small")
+	small := composeAttemptOutputTokenLimit(req, nil, "small")
 	if small.Effective == nil || *small.Effective != 256 || small.Source != "model_ref" {
 		t.Fatalf("small compose = %+v, want 256 from model_ref", small)
 	}
-	large := composeAttemptOutputTokenLimit(req, stage, "large")
+	large := composeAttemptOutputTokenLimit(req, nil, "large")
 	if large.Effective == nil || *large.Effective != 1024 || large.Source != "model_ref" {
 		t.Fatalf("large compose = %+v, want 1024 from model_ref", large)
 	}
@@ -145,10 +142,9 @@ func TestComposeAttemptOutputTokenLimitUsesCurrentModelRef(t *testing.T) {
 
 func TestComposeAttemptOutputTokenLimitStageCannotWidenClient(t *testing.T) {
 	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(128)}
-	stage := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(2048)}
 	result := composeAttemptOutputTokenLimit(
 		&Request{OriginalRequest: original},
-		stage,
+		authoredStageMaxOutputTokens(2048),
 		"model-a",
 	)
 	if result.Effective == nil || *result.Effective != 128 || result.Source != "client" {
@@ -167,7 +163,7 @@ func TestComposeAttemptOutputTokenLimitOmitsInheritedStageBound(t *testing.T) {
 				MaxCompletionTokens: &modelLimit,
 			}},
 		},
-		cloneRequest(original),
+		nil,
 		"model-a",
 	)
 	if result.Effective == nil || *result.Effective != 256 || result.Source != "client" {
@@ -187,7 +183,7 @@ func TestComposeAttemptOutputTokenLimitBlockedClientLetsModelRefWin(t *testing.T
 				MaxCompletionTokens: &modelLimit,
 			}},
 		},
-		cloneRequest(original),
+		nil,
 		"model-a",
 	)
 	if result.Effective == nil || *result.Effective != 1024 || result.Source != outputtokens.SourceModelRef {
@@ -198,6 +194,21 @@ func TestComposeAttemptOutputTokenLimitBlockedClientLetsModelRefWin(t *testing.T
 	}
 }
 
+func TestComposeAttemptOutputTokenLimitBlockedClientKeepsAuthoredEqualStage(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	result := composeAttemptOutputTokenLimit(
+		&Request{
+			OriginalRequest:              original,
+			ClientMaxOutputTokensBlocked: true,
+		},
+		authoredStageMaxOutputTokens(256),
+		"model-a",
+	)
+	if result.Effective == nil || *result.Effective != 256 || result.Source != outputtokens.SourceAlgorithmStage {
+		t.Fatalf("compose = %+v, want authored algorithm_stage 256 after blocked client", result)
+	}
+}
+
 func TestComposeAttemptOutputTokenLimitBlockedClientRecordsFallback(t *testing.T) {
 	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
 	result := composeAttemptOutputTokenLimit(
@@ -205,7 +216,7 @@ func TestComposeAttemptOutputTokenLimitBlockedClientRecordsFallback(t *testing.T
 			OriginalRequest:              original,
 			ClientMaxOutputTokensBlocked: true,
 		},
-		cloneRequest(original),
+		nil,
 		"model-a",
 	)
 	if result.Effective != nil || result.Source != "" || result.Fallback != outputtokens.FallbackBlockedParam {

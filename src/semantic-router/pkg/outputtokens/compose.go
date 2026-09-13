@@ -25,7 +25,12 @@ const (
 const (
 	FallbackCodecUnsupported = "codec_unsupported"
 	FallbackBlockedParam     = "blocked_param"
+	FallbackResponsesMinimum = "responses_minimum"
 )
+
+// ResponsesMinOutputTokens is the smallest max_output_tokens the Responses
+// wire format accepts. Dispatch must not encode a stricter composed ceiling.
+const ResponsesMinOutputTokens int64 = 16
 
 // Result is the strictest applicable bound and the source that produced it.
 type Result struct {
