@@ -71,56 +71,79 @@ func DecodeEnvelope(payload string) (Envelope, error) {
 	return envelope, nil
 }
 
-// estimateEnvelopeBytes approximates the stored payload before it is built.
-// Serialization is not interruptible once started, so an oversized removal is
-// rejected from this estimate rather than by cancelling a marshal in flight.
-func (a *Action) estimateEnvelopeBytes(ids []int) int {
-	total := len(EnvelopeVersion) + envelopeFixedOverhead
-	for _, id := range ids {
-		message, ok := a.detached[id]
-		if !ok {
-			continue
-		}
-		total += envelopeMessageOverhead + len(message.Role)
-		for _, content := range message.Content {
-			total += len(content.Text) + len(content.Kind) + len(content.MediaType) +
-				len(content.URL) + len(content.Data)
-			if content.ToolCall != nil {
-				total += len(content.ToolCall.ID) + len(content.ToolCall.Name) +
-					len(content.ToolCall.Arguments)
-			}
-			if content.ToolResult != nil {
-				total += len(content.ToolResult.CallID)
-				for _, nested := range content.ToolResult.Content {
-					total += len(nested.Text) + len(nested.Data)
-				}
-			}
-		}
-	}
-	return total
+// envelopeWireMessage carries an already-encoded message so the payload is
+// measured exactly, and only once, while it is being built.
+type envelopeWireMessage struct {
+	ID      int             `json:"id"`
+	TurnID  int             `json:"turn_id"`
+	Message json.RawMessage `json:"message"`
 }
 
-// Envelope encoding overheads. They only need to be the right order of
-// magnitude: the exact payload is still measured before it is stored.
-const (
-	envelopeFixedOverhead   = 64
-	envelopeMessageOverhead = 96
-)
+type envelopeWire struct {
+	Version  string                `json:"version"`
+	Removed  []envelopeWireMessage `json:"removed"`
+	Turns    int                   `json:"turns"`
+	Messages int                   `json:"messages"`
+}
+
+// errRecoveryPayloadTooLarge stops envelope construction as soon as the
+// encoded content passes the configured bound.
+var errRecoveryPayloadTooLarge = fmt.Errorf("removed history exceeds the recovery payload bound")
 
 // buildEnvelope resolves the proposed IDs against the detached pre-transform
 // messages. A missing binding is an error rather than a partial payload: the
 // action must never remove history it cannot store completely.
+// buildEnvelope resolves the proposed IDs against the detached pre-transform
+// messages and encodes them under the supplied bound. Each message is encoded
+// once and measured as it is added, so an oversized removal stops after the
+// first message that crosses the limit instead of serializing the whole
+// conversation and checking afterwards. Encoding is not interruptible, so the
+// bound is enforced between messages rather than inside one.
+//
+// A missing binding is an error rather than a partial payload: the action must
+// never remove history it cannot store completely.
 func (a *Action) buildEnvelope(
 	ids []int,
 	turns map[int]int,
+	limit int,
 ) (string, error) {
-	removed := make([]EnvelopeMessage, 0, len(ids))
+	wire := envelopeWire{Version: EnvelopeVersion, Removed: make([]envelopeWireMessage, 0, len(ids))}
+	distinct := make(map[int]struct{}, len(ids))
+	encoded := envelopeFixedOverhead + len(EnvelopeVersion)
 	for _, id := range ids {
 		message, ok := a.detached[id]
 		if !ok {
 			return "", fmt.Errorf("removed message %d has no detached content", id)
 		}
-		removed = append(removed, EnvelopeMessage{ID: id, TurnID: turns[id], Message: message})
+		payload, err := json.Marshal(message)
+		if err != nil {
+			return "", fmt.Errorf("encode removed message %d: %w", id, err)
+		}
+		encoded += len(payload) + envelopeMessageOverhead
+		if limit > 0 && encoded > limit {
+			return "", errRecoveryPayloadTooLarge
+		}
+		wire.Removed = append(wire.Removed, envelopeWireMessage{
+			ID: id, TurnID: turns[id], Message: payload,
+		})
+		distinct[turns[id]] = struct{}{}
 	}
-	return NewEnvelope(removed).Encode()
+	wire.Turns, wire.Messages = len(distinct), len(wire.Removed)
+	body, err := json.Marshal(wire)
+	if err != nil {
+		return "", fmt.Errorf("encode removed history: %w", err)
+	}
+	if limit > 0 && len(body) > limit {
+		return "", errRecoveryPayloadTooLarge
+	}
+	return string(body), nil
 }
+
+// Envelope framing overheads counted alongside each encoded message so the
+// running total stays an upper bound on the final document. The bias is
+// deliberate: the bound may refuse a payload slightly under the limit, but it
+// can never accept one above it.
+const (
+	envelopeFixedOverhead   = 96
+	envelopeMessageOverhead = 64
+)
