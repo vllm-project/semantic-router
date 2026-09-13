@@ -3,13 +3,43 @@ package main
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
+
+func TestKubernetesUpdateProtectsPublishedArtifactBeforeDownload(t *testing.T) {
+	restore := stubKubernetesUpdateSeams(t)
+	defer restore()
+	artifact := t.TempDir()
+	makeConfig := func(revision string) *config.RouterConfig {
+		cfg := &config.RouterConfig{MoMRegistry: map[string]string{artifact: "test/model"}}
+		cfg.CategoryModel.ModelID = artifact
+		cfg.CategoryMappingPath = filepath.Join(artifact, "labels.json")
+		cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
+		cfg.ModelDeployments = map[string]config.ModelDeployment{"intent": {Provider: "candle", Artifact: artifact, Revision: revision}}
+		cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "intent", Contract: "label_distribution.v1", Adapter: "mmbert32k"}}
+		return cfg
+	}
+	current := makeConfig(strings.Repeat("a", 40))
+	candidate := makeConfig(strings.Repeat("b", 40))
+	ensureKubernetesConfigModels = func(context.Context, *config.RouterConfig) error {
+		t.Fatal("candidate download must not modify published artifacts")
+		return nil
+	}
+	replaceKubernetesRuntimeConfig = func(*config.RouterConfig) {
+		t.Fatal("unsafe candidate was published")
+	}
+	err := applyKubernetesConfigUpdate(context.Background(), candidate, func() *config.RouterConfig { return current })
+	if err == nil || !strings.Contains(err.Error(), "in use") {
+		t.Fatalf("update error = %v, want live artifact rejection", err)
+	}
+}
 
 func TestApplyKubernetesConfigUpdateEnsuresModelsBeforeReplace(t *testing.T) {
 	restoreKubernetesUpdateSeams := stubKubernetesUpdateSeams(t)

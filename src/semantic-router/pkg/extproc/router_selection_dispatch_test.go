@@ -1,12 +1,15 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
@@ -25,7 +28,7 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	}))
 	defer server.Close()
 
-	embed, defaultConfig := resolveSelectionEmbeddingFunc(&config.RouterConfig{
+	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
 				EmbeddingConfig: config.HNSWConfig{
@@ -39,7 +42,15 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	cfg.ModelSelection.Enabled = true
+	cfg.ModelSelection.ML.ModelsPath = "test-model-selection"
+	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	embed, defaultConfig := resolveSelectionEmbeddingFunc(cfg, prepared)
 
 	embedding, err := embed("hello", defaultConfig)
 	if err != nil {

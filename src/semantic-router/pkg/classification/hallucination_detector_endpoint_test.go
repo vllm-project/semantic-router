@@ -28,6 +28,10 @@ func newTestEndpointDetector(t *testing.T, endpoint string, includeExplanation b
 	if err != nil {
 		t.Fatalf("NewEndpointHallucinationDetector: %v", err)
 	}
+	if err := detector.Initialize(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = detector.Close() })
 	return detector
 }
 

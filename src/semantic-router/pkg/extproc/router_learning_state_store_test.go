@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
@@ -141,7 +142,7 @@ func TestReloadWarmupFailurePreservesPublishedSessionStore(t *testing.T) {
 	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
 		return modelruntime.EmbeddingRuntimeState{AnyReady: true}, nil
 	}
-	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
 		return candidateRouter, nil
 	}
 	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {

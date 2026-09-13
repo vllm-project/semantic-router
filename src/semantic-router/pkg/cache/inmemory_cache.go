@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -21,6 +20,7 @@ const defaultEmbeddingMemoSize = 512
 
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
 type InMemoryCache struct {
+	embeddingProvider   embedding.Provider
 	entries             []CacheEntry
 	entryMap            map[string]int // requestID -> index for O(1) lookup
 	exactEntries        map[string]exactMemoryEntry
@@ -66,6 +66,7 @@ type InMemoryCache struct {
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
 type InMemoryCacheOptions struct {
+	EmbeddingProvider   embedding.Provider
 	SimilarityThreshold float32
 	MaxEntries          int
 	TTLSeconds          int
@@ -174,6 +175,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, inMemoryEmbeddingOptions(embeddingModel)),
 		polarityGuard:       options.PolarityGuard,
 		embMemo:             embedding.NewMemo(defaultEmbeddingMemoSize),
 	}
@@ -218,53 +220,15 @@ func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]f
 	}
 	if c.embMemo != nil {
 		return c.embMemo.GetOrCompute(text, func() ([]float32, error) {
-			return c.computeEmbedding(text)
+			return c.computeEmbedding(ctx, text)
 		})
 	}
-	return c.computeEmbedding(text)
+	return c.computeEmbedding(ctx, text)
 }
 
 // computeEmbedding runs the configured embedding model for text (no caching).
-func (c *InMemoryCache) computeEmbedding(text string) ([]float32, error) {
-	modelName := c.embeddingModel
-
-	switch modelName {
-	case "qwen3":
-		// Use GetEmbeddingBatched for Qwen3 with TRUE continuous batching
-		// Now properly fixed to avoid CUDA context issues!
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "gemma":
-		// Use GetEmbeddingWithModelType for Gemma (standard version)
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "mmbert":
-		// Use GetEmbedding2DMatryoshka for mmBERT with 2D Matryoshka support
-		// Default to layer 6 (~3.6x speedup) and dimension 256 for good balance
-		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 6, 256)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "multimodal":
-		// Use multimodal text encoder branch (384-dim default)
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 384)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "bert":
-		// Use traditional GetEmbedding for BERT (default)
-		return candle_binding.GetEmbedding(text, 0)
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
-	}
+func (c *InMemoryCache) computeEmbedding(ctx context.Context, text string) ([]float32, error) {
+	return invokeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
 // AddPendingRequest stores a request that is awaiting its response

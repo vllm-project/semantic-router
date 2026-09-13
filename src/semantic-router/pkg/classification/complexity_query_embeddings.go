@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -49,17 +50,23 @@ func (c *ComplexityClassifier) loadQueryEmbeddingsCached(query string, imageURL 
 }
 
 func (c *ComplexityClassifier) loadOptionalMultiModalTextEmbedding(query string) []float32 {
-	embedding, err := getMultiModalTextEmbedding(query, 0)
+	var vector []float32
+	var err error
+	if c.multiModalProvider != nil {
+		vector, err = c.multiModalProvider.Embed(context.Background(), query)
+	} else {
+		vector, err = getMultiModalTextEmbedding(query, 0)
+	}
 	if err != nil {
 		logging.Warnf("[Complexity Signal] Failed to compute multimodal text embedding: %v", err)
 		return nil
 	}
-	return embedding
+	return vector
 }
 
 func (c *ComplexityClassifier) loadOptionalMultiModalImageEmbeddingCached(imageURL string, cache *requestImageEmbeddingCache) []float32 {
 	if cache == nil {
-		embedding, err := getMultiModalImageEmbedding(imageURL, 0)
+		embedding, err := c.embedMultiModalImage(imageURL)
 		if err != nil {
 			logging.Warnf("[Complexity Signal] Failed to compute request image embedding: %v", err)
 			return nil
@@ -67,12 +74,19 @@ func (c *ComplexityClassifier) loadOptionalMultiModalImageEmbeddingCached(imageU
 		return embedding
 	}
 
-	embedding, err := cache.resolve(imageURL, 0, func() ([]float32, error) {
-		return getMultiModalImageEmbedding(imageURL, 0)
+	embedding, err := cache.resolveFor(c.multiModalProvider, imageURL, 0, func() ([]float32, error) {
+		return c.embedMultiModalImage(imageURL)
 	})
 	if err != nil {
 		logging.Warnf("[Complexity Signal] Failed to compute request image embedding: %v", err)
 		return nil
 	}
 	return embedding
+}
+
+func (c *ComplexityClassifier) embedMultiModalImage(ref string) ([]float32, error) {
+	if c.multiModalProvider != nil {
+		return embedding.Image(context.Background(), c.multiModalProvider, ref, 0)
+	}
+	return getMultiModalImageEmbedding(ref, 0)
 }

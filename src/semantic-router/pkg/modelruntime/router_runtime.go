@@ -11,10 +11,12 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 type EmbeddingRuntimeState struct {
+	Embeddings        *embedding.Set
 	AnyReady          bool
 	ToolsReady        bool
 	EmbeddingProvider *EmbeddingProviderRuntimeState
@@ -33,6 +35,7 @@ type EmbeddingProviderRuntimeState struct {
 }
 
 type PrepareRouterRuntimeOptions struct {
+	NativeRuntime              *native.Runtime
 	Component                  string
 	MaxParallelism             int
 	OnEvent                    func(Event)
@@ -82,36 +85,27 @@ func PrepareRouterRuntime(
 		component = "router"
 	}
 
-	paths := resolveEmbeddingPaths(cfg)
-	state, embeddingTasks, tracker := embeddingRuntimeTasks(cfg, component, paths)
-	if !embeddingRuntimeConfigured(cfg, paths) {
-		logMissingEmbeddingModelsConfig(component)
+	// Compatibility health probe: callers outside generation construction can
+	// inspect a remote endpoint without creating native model ownership.
+	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		_, tasks, tracker := embeddingRuntimeTasks(cfg, component, resolveEmbeddingPaths(cfg))
+		_, err := Execute(ctx, tasks, Options{MaxParallelism: options.MaxParallelism, OnEvent: options.OnEvent})
+		return tracker.snapshot(), err
 	}
 
-	tasks := append([]Task{}, embeddingTasks...)
-	tasks = append(tasks, semanticCacheBERTTask(cfg, component)...)
-	tasks = append(tasks, vectorStoreBERTTask(cfg, component)...)
-	tasks = append(tasks, memoryBERTTask(cfg, component)...)
-	tasks = append(tasks, modalityClassifierTask(cfg, component, options.InitModalityClassifierFunc)...)
-	if len(tasks) == 0 {
-		return state, nil
+	owned, err := PrepareOwnedEmbeddings(ctx, cfg, options.NativeRuntime)
+	state := EmbeddingRuntimeState{Embeddings: owned, AnyReady: owned.Ready(), ToolsReady: owned.Has("")}
+	if err != nil {
+		return state, err
 	}
-
-	_, err := Execute(ctx, tasks, Options{
-		MaxParallelism: options.MaxParallelism,
-		OnEvent:        options.OnEvent,
-	})
-	if tracker != nil {
-		state = tracker.snapshot()
+	if provider, providerErr := owned.Default(); providerErr == nil {
+		state.AnyReady = true
+		state.ToolsReady = true
+		if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+			state.EmbeddingProvider = remoteEmbeddingProviderProbeStatus(cfg, provider, provider.Dimension(), nil)
+		}
 	}
-	if embeddingRuntimeConfigured(cfg, paths) {
-		logging.ComponentEvent(component, "embedding_models_init_completed", map[string]interface{}{
-			"embedding_ready": state.AnyReady,
-			"tools_ready":     state.ToolsReady,
-			"tools_model":     cfg.EmbeddingConfig.ModelType,
-		})
-	}
-	return state, err
+	return state, nil
 }
 
 func WarmupRouter(
@@ -197,144 +191,6 @@ func embeddingRuntimeTasks(
 	requiresMultimodalTools := toolsUseMultiModalEmbeddings(cfg)
 	tracker := newEmbeddingStateTracker(EmbeddingRuntimeState{})
 	return tracker.snapshot(), buildEmbeddingRuntimeTasks(cfg, component, paths, requiresMultimodalTools, tracker), tracker
-}
-
-func semanticCacheBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if !semanticCacheNeedsBERT(cfg) {
-		return nil
-	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	return []Task{{
-		Name: "router.semantic_cache.bert",
-		Run: func(context.Context) error {
-			logging.ComponentEvent(component, "semantic_cache_bert_init_started", map[string]interface{}{
-				"model_ref": bertModelID,
-				"use_cpu":   cfg.UseCPU,
-			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-				logging.ComponentErrorEvent(component, "semantic_cache_bert_init_failed", map[string]interface{}{
-					"model_ref": bertModelID,
-					"error":     err.Error(),
-				})
-				return fmt.Errorf("failed to initialize semantic cache bert model: %w", err)
-			}
-			logging.ComponentEvent(component, "semantic_cache_bert_initialized", map[string]interface{}{
-				"model_ref": bertModelID,
-			})
-			return nil
-		},
-	}}
-}
-
-func vectorStoreBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if !vectorStoreNeedsBERT(cfg) {
-		return nil
-	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	return []Task{{
-		Name: "router.vector_store.bert",
-		Run: func(context.Context) error {
-			logging.ComponentEvent(component, "vector_store_bert_init_started", map[string]interface{}{
-				"model_ref": bertModelID,
-				"use_cpu":   cfg.UseCPU,
-			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-				logging.ComponentErrorEvent(component, "vector_store_bert_init_failed", map[string]interface{}{
-					"model_ref": bertModelID,
-					"error":     err.Error(),
-				})
-				return fmt.Errorf("failed to initialize vector store bert model: %w", err)
-			}
-			logging.ComponentEvent(component, "vector_store_bert_initialized", map[string]interface{}{
-				"model_ref": bertModelID,
-			})
-			return nil
-		},
-	}}
-}
-
-func memoryBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if !memoryNeedsBERT(cfg) || semanticCacheNeedsBERT(cfg) || vectorStoreNeedsBERT(cfg) {
-		return nil
-	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	return []Task{{
-		Name: "router.memory.bert",
-		Run: func(context.Context) error {
-			logging.ComponentEvent(component, "memory_bert_init_started", map[string]interface{}{
-				"model_ref": bertModelID,
-				"use_cpu":   cfg.UseCPU,
-			})
-			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-				logging.ComponentErrorEvent(component, "memory_bert_init_failed", map[string]interface{}{
-					"model_ref": bertModelID,
-					"error":     err.Error(),
-				})
-				return fmt.Errorf("failed to initialize memory bert model: %w", err)
-			}
-			logging.ComponentEvent(component, "memory_bert_initialized", map[string]interface{}{
-				"model_ref": bertModelID,
-			})
-			return nil
-		},
-	}}
-}
-
-func modalityClassifierTask(
-	cfg *config.RouterConfig,
-	component string,
-	initFunc func(modelPath string, useCPU bool) error,
-) []Task {
-	md := &cfg.ModalityDetector
-	if !md.Enabled {
-		return nil
-	}
-
-	method := md.GetMethod()
-	if method != config.ModalityDetectionClassifier && method != config.ModalityDetectionHybrid {
-		return nil
-	}
-	if md.Classifier == nil || md.Classifier.ModelPath == "" {
-		return nil
-	}
-
-	modelPath := config.ResolveModelPath(md.Classifier.ModelPath)
-	bestEffort := method == config.ModalityDetectionHybrid
-	return []Task{{
-		Name:       "router.modality.classifier",
-		BestEffort: bestEffort,
-		Run: func(context.Context) error {
-			logging.ComponentEvent(component, "modality_classifier_init_started", map[string]interface{}{
-				"method":    method,
-				"model_ref": modelPath,
-				"use_cpu":   md.Classifier.UseCPU,
-			})
-			if initFunc == nil {
-				return fmt.Errorf("modality classifier initializer is not configured")
-			}
-			if err := initFunc(modelPath, md.Classifier.UseCPU); err != nil {
-				event := map[string]interface{}{
-					"method":    method,
-					"model_ref": modelPath,
-					"error":     err.Error(),
-				}
-				if bestEffort {
-					event["fallback_to_keywords"] = true
-					logging.ComponentWarnEvent(component, "modality_classifier_init_failed", event)
-				} else {
-					logging.ComponentErrorEvent(component, "modality_classifier_init_failed", event)
-				}
-				return fmt.Errorf("failed to initialize modality classifier: %w", err)
-			}
-			logging.ComponentEvent(component, "modality_classifier_initialized", map[string]interface{}{
-				"method": method,
-			})
-			return nil
-		},
-	}}
 }
 
 func resolveEmbeddingPaths(cfg *config.RouterConfig) embeddingPaths {
@@ -457,12 +313,6 @@ func initializeMultiModalEmbeddingModel(component string, useCPU bool, multiModa
 	return true
 }
 
-func logMissingEmbeddingModelsConfig(component string) {
-	logging.ComponentEvent(component, "embedding_models_not_configured", map[string]interface{}{
-		"hint": "model_catalog.embeddings.semantic",
-	})
-}
-
 func toolsUseMultiModalEmbeddings(cfg *config.RouterConfig) bool {
 	return strings.EqualFold(strings.TrimSpace(cfg.EmbeddingConfig.ModelType), "multimodal")
 }
@@ -491,56 +341,13 @@ func memoryNeedsBERT(cfg *config.RouterConfig) bool {
 	return resolveMemoryEmbeddingModel(cfg) == "bert"
 }
 
-func memoryConfigured(cfg *config.RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.Decisions {
-		if decision.HasPlugin("memory") {
-			return true
-		}
-	}
-	return false
-}
-
+func memoryConfigured(cfg *config.RouterConfig) bool { return config.MemoryConfigured(cfg) }
 func resolveSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModel := strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel))
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case cfg.MmBertModelPath != "":
-		return "mmbert"
-	case cfg.MultiModalModelPath != "":
-		return "multimodal"
-	case cfg.Qwen3ModelPath != "":
-		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
-	default:
-		return "bert"
-	}
+	return config.SemanticCacheEmbeddingModel(cfg)
 }
 
 func resolveMemoryEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModel := strings.ToLower(strings.TrimSpace(cfg.Memory.EmbeddingModel))
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case cfg.MmBertModelPath != "":
-		return "mmbert"
-	case cfg.MultiModalModelPath != "":
-		return "multimodal"
-	case cfg.Qwen3ModelPath != "":
-		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
-	default:
-		return "bert"
-	}
+	return config.MemoryEmbeddingModel(cfg)
 }
 
 func resolveBertModelID(modelID string) string {
@@ -660,10 +467,6 @@ func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths 
 	})
 }
 
-func embeddingRuntimeConfigured(cfg *config.RouterConfig, paths embeddingPaths) bool {
-	return cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() || paths.hasConfiguredModels()
-}
-
 func buildEmbeddingRuntimeTasks(
 	cfg *config.RouterConfig,
 	component string,
@@ -698,6 +501,9 @@ func remoteEmbeddingRuntimeTask(
 					"error": err.Error(),
 				})
 				return fmt.Errorf("failed to initialize remote embedding provider: %w", err)
+			}
+			if closer, ok := provider.(interface{ Close() error }); ok {
+				defer closer.Close()
 			}
 			embeddingVector, err := provider.Embed(ctx, "semantic router embedding probe")
 			if err != nil {
