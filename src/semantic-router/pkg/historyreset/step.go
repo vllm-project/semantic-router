@@ -95,6 +95,15 @@ func (a *Action) propose(
 		a.record(failed(a.trigger, a.blocked))
 		return contextcompression.TransformationEdits{}, errBlocked(a.blocked)
 	}
+	// One budget covers everything this action does with the request: the
+	// selection walk and, when recovery is required, building and storing the
+	// envelope. Preparing the transformation view is the shared executor's
+	// work and happens before the callback runs, so it is outside this bound.
+	if a.policy.Timeout > 0 {
+		bounded, cancel := context.WithTimeout(ctx, a.policy.Timeout)
+		defer cancel()
+		ctx = bounded
+	}
 	edits, diagnostics := Plan(ctx, a.policy, a.trigger, view)
 	// Uncertain or unusable evidence is an evaluation failure, not a silent
 	// no-op: returning it as a failed step is what lets the declared failure
@@ -131,6 +140,11 @@ func (a *Action) persist(
 	turns := make(map[int]int, len(view.Messages))
 	for _, message := range view.Messages {
 		turns[message.ID] = message.TurnID
+	}
+	if ctx.Err() != nil {
+		diagnostics.Outcome, diagnostics.Reason = OutcomeFailed, ReasonCancelled
+		diagnostics.RecoveryStatus = RecoveryFailed
+		return errBlocked(ReasonCancelled)
 	}
 	payload, err := a.buildEnvelope(ids, turns)
 	if err != nil {

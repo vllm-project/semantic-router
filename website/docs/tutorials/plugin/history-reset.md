@@ -42,6 +42,13 @@ configuration validation with `history_reset_trigger_unavailable` because no
 by issue #3342. Disabled policies validate and round-trip today, so the
 contract can be reviewed, stored, and rendered before the trigger lands.
 
+Registration alone is not enough to enable the feature. A producer implements
+the router's topic-continuity source, and the router refuses to activate a
+configuration whose enabled policy has no such producer wired, rather than
+starting a route that could only preserve or reject every request. The producer
+is asked for its result after the permitted history is resolved, so it
+classifies the same conversation the action transforms.
+
 ## Configuration
 
 Add the plugin under `routing.decisions[].plugins`:
@@ -54,6 +61,8 @@ plugins:
       trigger:
         signal: topic_boundary
         min_confidence: 0.9
+        accepted_versions:
+          - v1
       scope: eligible_history
       failure_mode: fail_open
       limits:
@@ -73,13 +82,15 @@ plugins:
 | --- | --- | --- |
 | `enabled` | `false` | Omission or `false` performs no reset work at all. |
 | `trigger.signal` | — | Recipe-local topic-continuity signal that may authorize removal. Required when enabled. |
-| `trigger.min_confidence` | — | Acceptance threshold in `(0, 1]`. Required when enabled; there is no implicit default. |
+| `trigger.min_confidence` | — | Acceptance threshold in `(0, 1]`. Required when enabled; there is no implicit default. A confidence that is not a finite value in `[0, 1]` is rejected outright. |
+| `trigger.accepted_versions` | — | The producing signal contracts this policy trusts. Required when enabled: a result whose version is not listed cannot authorize removal, so there is no implicit "trust any version". |
 | `scope` | `eligible_history` | The only supported scope. Ranking and selective retention belong to other actions. |
 | `failure_mode` | `fail_open` | `fail_open` preserves history on failure; `fail_closed` rejects before provider dispatch. |
 | `limits.max_history_turns` | `128` | Upper bound on turns examined per request. |
 | `limits.max_history_bytes` | `1048576` | Upper bound on the history *text* the policy inspects. Tool arguments and media are not part of that view, so `timeout_ms` is the bound that covers expensive payloads of any shape. |
 | `limits.timeout_ms` | `50` | Planning budget per request, enforced as a deadline over the whole evaluation. |
 | `recovery.enabled` | `false` | When true, removed turns must be stored recoverably before removal commits. |
+| `recovery.max_bytes_per_request` | `1048576` | Per-request payload bound. When `context_compression` also enables recovery, the effective bound is the stricter of the two: neither action can widen the other's budget. |
 
 Configuration cannot widen what may be removed. Eligibility and protection are
 owned by the shared context-transformation layer, and a policy that names a
@@ -109,7 +120,7 @@ is treated as stale. Uncertainty never authorizes removal.
 | --- | --- | --- |
 | Accepted change with removable history | Remove the eligible turns | Same |
 | Continuation, or no removable history | Preserve history; normal no-op | Same |
-| Missing, unknown, conflicting, low-confidence, stale, fallback, wrong-signal, or unsupported-version evidence | Preserve history and record the reason | Reject before provider dispatch |
+| Missing, unknown, conflicting, low-confidence, invalid-confidence, stale, fallback, wrong-signal, or unsupported-version evidence | Preserve history and record the reason | Reject before provider dispatch |
 | Planning limit exceeded | Preserve history | Reject before provider dispatch |
 | Required recovery unavailable or its write fails | Preserve history | Reject before provider dispatch |
 
@@ -139,7 +150,11 @@ Recovery is one request-level facility shared with `context_compression`: one
 store, one budget, one reserved tool, one key set. When both plugins enable it,
 their `recovery.store` values must match — configuration validation rejects a
 decision that asks for two different stores — and each remaining bound resolves
-to the stricter of the two.
+to the stricter of the two, which is the bound the action actually enforces
+before it persists anything. The store is built once per process, so every
+decision that enables recovery must agree on one backend and one
+`max_total_bytes`; the router refuses to activate a configuration where two
+routes disagree.
 
 Required recovery is not supported on streaming requests, because the retrieval
 follow-up has nowhere to run. Such a request preserves its history under
