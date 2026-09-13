@@ -709,7 +709,6 @@ MODEL "qwen2.5:3b" {
   context_window_size: 32768
   description: "Compact reasoning model for general and STEM traffic"
   capabilities: ["general", "reasoning", "math"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.82 } }]
   modality: "text"
 }
 
@@ -718,7 +717,6 @@ MODEL "qwen3:70b" {
   context_window_size: 131072
   description: "Large reasoning model for urgent and difficult AI queries"
   capabilities: ["general", "reasoning", "coding", "long_context"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.94 } }]
   modality: "text"
 }
 
@@ -1557,7 +1555,7 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 		{
 			name:     "multi_factor",
 			algoType: "multi_factor",
-			body:     `weights: { quality: 0.4, latency: 0.3, cost: 0.2, load: 0.1 } slo: { max_tpot_ms: 200, max_ttft_ms: 800, max_cost_per_1m: 5, max_inflight: 20 } latency_percentile: 99 on_no_candidates: "fail"`,
+			body:     `weights: { quality: 0.4, latency: 0.3, cost: 0.2, load: 0.1 } slo: { max_tpot_ms: 200, max_ttft_ms: 800, max_cost_per_1m: 5, max_inflight: 20 } quality: { index: "vllm-sr/coding@1.0.0", on_missing: "exclude" } latency_percentile: 99 on_no_candidates: "fail"`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
 				if algo.MultiFactor == nil {
 					t.Fatal("expected multi_factor config")
@@ -1567,6 +1565,9 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 				}
 				if algo.MultiFactor.SLO == nil || algo.MultiFactor.SLO.MaxInflight != 20 {
 					t.Fatalf("slo.max_inflight = %#v, want 20", algo.MultiFactor.SLO)
+				}
+				if algo.MultiFactor.Quality == nil || algo.MultiFactor.Quality.Index != "vllm-sr/coding@1.0.0" || algo.MultiFactor.Quality.OnMissing != "exclude" {
+					t.Fatalf("quality = %#v, want coding index with exclude policy", algo.MultiFactor.Quality)
 				}
 				if algo.MultiFactor.LatencyPercentile != 99 {
 					t.Errorf("latency_percentile = %d, want 99", algo.MultiFactor.LatencyPercentile)
@@ -1633,6 +1634,10 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 							MaxCostPer1M: 5,
 							MaxInflight:  20,
 						},
+						Quality: &config.QualityEvidenceConfig{
+							Index:     "vllm-sr/coding@1.0.0",
+							OnMissing: "exclude",
+						},
 						LatencyPercentile: 99,
 						OnNoCandidates:    "fail",
 					},
@@ -1649,6 +1654,9 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 		"ALGORITHM multi_factor",
 		"latency_percentile: 99",
 		"weights:",
+		"quality:",
+		"index: \"vllm-sr/coding@1.0.0\"",
+		"on_missing: \"exclude\"",
 		"on_no_candidates: \"fail\"",
 	} {
 		if !strings.Contains(dslText, fragment) {
@@ -1673,6 +1681,9 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 	}
 	if byName["multi-factor-route"].MultiFactor.SLO.MaxInflight != 20 || byName["multi-factor-route"].MultiFactor.OnNoCandidates != "fail" {
 		t.Fatalf("round-trip multi_factor details = %#v", byName["multi-factor-route"].MultiFactor)
+	}
+	if multiFactor.Quality == nil || multiFactor.Quality.Index != "vllm-sr/coding@1.0.0" || multiFactor.Quality.OnMissing != "exclude" {
+		t.Fatalf("round-trip multi_factor quality = %#v", multiFactor.Quality)
 	}
 }
 
@@ -1714,6 +1725,18 @@ func TestCompileAllPluginTypes(t *testing.T) {
 			pluginType: "router_replay",
 			body:       `enabled: true`,
 			verifyType: "router_replay",
+		},
+		{
+			name:       "shadow_dispatch",
+			pluginType: "shadow_dispatch",
+			body:       `enabled: true model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20 forward_headers: ["x-tenant"]`,
+			verifyType: "shadow_dispatch",
+		},
+		{
+			name:       "shadow_dispatch_hyphen_alias",
+			pluginType: "shadow-dispatch",
+			body:       `enabled: true model: "candidate"`,
+			verifyType: "shadow_dispatch",
 		},
 		{
 			name:       "request_params",

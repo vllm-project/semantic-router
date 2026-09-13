@@ -178,7 +178,7 @@ func deriveLiveDeclaredShiftEvidenceLevels(
 	}
 	for receipt, caseID := range method.brokerReceipts {
 		entry, present := entries[receipt]
-		if !present || entry.Operation != workerBrokerRouterEvaluate ||
+		if !present || entry.Operation != workerBrokerRoutingPreview ||
 			entry.TrackID != "routing" || entry.CaseID != caseID {
 			return
 		}
@@ -316,7 +316,7 @@ func countLiveMoMAttestationEntries(
 		}
 		seenReceipts[entry.BrokerReceipt] = struct{}{}
 		switch entry.Operation {
-		case workerBrokerRouterEvaluate:
+		case workerBrokerRoutingPreview:
 			if _, planned := routingCases[entry.CaseID]; !planned || entry.TrackID != "routing" {
 				return liveMoMEntryCounts{}, false
 			}

@@ -25,9 +25,10 @@ from .config_contract import (
     ClassifierSignalType,
     UnknownPolicy,
 )
+from .config_schema import surface_types
+from .context_bands import normalize_token_count, validate_context_band
 
 RoutingStrategy = Literal["priority", "confidence"]
-LOCAL_CLASSIFIER_LABEL_COUNT = 2
 SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
@@ -188,12 +189,29 @@ class Language(BaseModel):
 
 
 class ContextRule(BaseModel):
-    """Context-based (token count) signal configuration."""
+    """Context-based (token count) signal configuration.
+
+    A rule is an inclusive band: min_tokens <= token_count <= max_tokens.
+    Both limits accept "1K" and "1.5M" suffixes. At least one limit must be
+    set. Omitting min_tokens means 0; omitting max_tokens makes the band
+    open-ended so every count at or above min_tokens matches. Equal limits
+    are an exact-match band.
+    """
 
     name: str
-    min_tokens: str  # Supports suffixes: "1K", "1.5M", etc.
-    max_tokens: str
+    min_tokens: Optional[str] = None
+    max_tokens: Optional[str] = None
     description: Optional[str] = None
+
+    @field_validator("min_tokens", "max_tokens", mode="before")
+    @classmethod
+    def coerce_token_count(cls, value, info):
+        return normalize_token_count(value, info.field_name)
+
+    @model_validator(mode="after")
+    def validate_band(self):
+        validate_context_band(self.min_tokens, self.max_tokens)
+        return self
 
 
 class StructureSource(BaseModel):
@@ -385,6 +403,22 @@ class JailbreakRule(BaseModel):
     description: Optional[str] = None
 
 
+class HallucinationRule(BaseModel):
+    """Hallucination signal configuration.
+
+    Checks the model's answer against the grounding context the request
+    carried, so it is observed at the response stage and consumed by the
+    selected decision's hallucination plugin; decision rules cannot read it.
+    """
+
+    name: str
+    # Ask the detector for span-level NLI explanations. A detection setting,
+    # so it lives on the rule; the plugin's use_nli is ignored once a rule
+    # is declared.
+    use_nli: bool = False
+    description: Optional[str] = None
+
+
 class PIIRule(BaseModel):
     """PII detection signal configuration."""
 
@@ -546,24 +580,18 @@ class ClassifierSignal(BaseModel):
         return self
 
     def _validate_local(self):
-        if not self.model_path:
-            raise ValueError("local classifiers require model_path")
-        if len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
-            raise ValueError("local classifiers require exactly two labels")
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError("local classifiers require at least two labels")
         if self.model or self.instructions:
             raise ValueError("local classifiers do not accept model or instructions")
 
     def _validate_llm(self):
-        if not self.model:
-            raise ValueError("llm classifiers require model")
         if not self.instructions:
             raise ValueError("llm classifiers require instructions")
         if self.model_path or self.use_cpu:
             raise ValueError("llm classifiers do not accept model_path or use_cpu")
 
     def _validate_sequence(self):
-        if not self.model:
-            raise ValueError("sequence_classifier classifiers require model")
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError(
                 "sequence_classifier classifiers require at least two labels"
@@ -591,6 +619,7 @@ class Signals(BaseModel):
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
+    hallucination: Optional[List[HallucinationRule]] = []
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []
@@ -715,22 +744,11 @@ class Rules(BaseModel):
         return data
 
 
-class PluginType(str, Enum):
-    """Supported plugin types."""
-
-    RESPONSE_CACHE = "response_cache"
-    SYSTEM_PROMPT = "system_prompt"
-    HEADER_MUTATION = "header_mutation"
-    HALLUCINATION = "hallucination"
-    ROUTER_REPLAY = "router_replay"
-    MEMORY = "memory"
-    RAG = "rag"
-    FAST_RESPONSE = "fast_response"
-    REQUEST_PARAMS = "request_params"
-    RESPONSE_JAILBREAK = "response_jailbreak"
-    TOOLS = "tools"
-    TOOL_SELECTION = "tool_selection"
-    CONTEXT_COMPRESSION = "context_compression"
+PluginType = Enum(
+    "PluginType",
+    {plugin_type.upper(): plugin_type for plugin_type in surface_types("plugins")},
+    type=str,
+)
 
 
 class ResponseCacheSemanticConfig(BaseModel):
@@ -1111,7 +1129,7 @@ class RouterReplayPluginConfig(BaseModel):
 
     The router_replay plugin captures routing decisions and payload snippets
     for later debugging and replay. Records are stored in memory and accessible
-    via the /v1/router_replay API endpoint.
+    via the /api/v1/observability/replays API endpoint.
     """
 
     enabled: bool = True
@@ -1127,6 +1145,90 @@ class RouterReplayPluginConfig(BaseModel):
         gt=0,
         description="Max bytes to capture per body (must be > 0, default: 4096)",
     )
+
+
+# Headers that carry a credential on the primary path. A shadow copy never
+# carries them and shadow_dispatch.forward_headers may not list them. Keep in
+# step with the Router's shadowCredentialHeaders in pkg/config.
+SHADOW_CREDENTIAL_HEADERS = frozenset(
+    {
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "x-api-key",
+        "api-key",
+        "x-goog-api-key",
+        "x-user-openai-key",
+        "x-user-anthropic-key",
+        "x-user-azure-openai-key",
+        "x-user-bedrock-key",
+        "x-user-gemini-key",
+        "x-user-vertex-ai-key",
+        "x-user-minimax-key",
+    }
+)
+
+
+class ShadowDispatchPluginConfig(BaseModel):
+    """Configuration for shadow_dispatch plugin.
+
+    Sends a bounded, sampled copy of the approved request to a secondary
+    configured model after the primary dispatch is finalized. The primary
+    response never waits on or changes because of the shadow call.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Required, matching the Go decoder: an omitted flag must not silently
+    # validate as enabled here and decode as disabled in the router.
+    enabled: bool
+    model: Optional[str] = Field(
+        default=None, description="Configured logical model receiving the shadow copy"
+    )
+    sample_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    max_concurrency: int = Field(default=2, ge=0)
+    max_queue_depth: int = Field(default=8, ge=0)
+    timeout_seconds: int = Field(default=30, ge=0)
+    max_response_bytes: int = Field(default=1048576, ge=0)
+    max_retries: int = Field(default=0, ge=0, le=3)
+    capture_response_body: bool = False
+    max_capture_bytes: int = Field(default=4096, ge=0)
+    tls_skip_verify: bool = False
+    forward_headers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Decision header_mutation names the shadow copy may carry; nothing "
+            "else a decision sets for the primary backend is forwarded"
+        ),
+    )
+
+    @field_validator("forward_headers")
+    @classmethod
+    def reject_credential_headers(cls, names: list[str]) -> list[str]:
+        # Mirrors the Router's validateShadowForwardHeaders so both admission
+        # paths refuse the same names.
+        for name in names:
+            stripped = name.strip()
+            if not stripped:
+                raise ValueError(
+                    "shadow_dispatch forward_headers entries cannot be empty"
+                )
+            if stripped.startswith(":"):
+                raise ValueError(
+                    f"shadow_dispatch forward_headers cannot include pseudo-header {stripped!r}"
+                )
+            if stripped.lower() in SHADOW_CREDENTIAL_HEADERS:
+                raise ValueError(
+                    "shadow_dispatch forward_headers cannot include credential header "
+                    f"{stripped!r}"
+                )
+        return names
+
+    @model_validator(mode="after")
+    def require_model_when_enabled(self):
+        if self.enabled and not (self.model or "").strip():
+            raise ValueError("shadow_dispatch model is required when enabled")
+        return self
 
 
 class MemoryPluginConfig(BaseModel):
@@ -1795,11 +1897,12 @@ class LoRAAdapter(BaseModel):
     description: Optional[str] = None
 
 
-class ModelEvaluation(BaseModel):
-    """Small operator-authored benchmark result attached to one model card."""
+class EvaluationRecord(BaseModel):
+    """Small operator-authored benchmark result linked to one model card."""
 
     model_config = ConfigDict(extra="forbid")
 
+    model: str = Field(min_length=1)
     benchmark: str = Field(
         min_length=1,
         pattern=r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$",
@@ -1836,6 +1939,142 @@ class ModelEvaluation(BaseModel):
             except ValueError as error:
                 raise ValueError("measured_at must use YYYY-MM-DD") from error
         return self
+
+
+EVALUATION_RESOURCE_ID_PATTERN = (
+    r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+" r"@[0-9]+(?:\.[0-9]+\.[0-9]+)?$"
+)
+
+
+class EvaluationBenchmarkProfile(BaseModel):
+    """One reproducible execution profile for an operator benchmark."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+
+
+class EvaluationNormalizationPoint(BaseModel):
+    """One point in a piecewise-linear metric normalization."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: float
+    output: float = Field(ge=0, le=1)
+
+
+class EvaluationNormalization(BaseModel):
+    """Maps one benchmark metric onto the common [0, 1] utility scale."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[
+        "identity",
+        "one_minus",
+        "linear_clamp",
+        "piecewise_linear",
+        "logistic",
+        "lookup",
+    ] = "identity"
+    min: Optional[float] = None
+    max: Optional[float] = None
+    k: Optional[float] = None
+    x0: Optional[float] = None
+    points: List[EvaluationNormalizationPoint] = Field(default_factory=list)
+    values: Dict[str, float] = Field(default_factory=dict)
+
+
+class EvaluationBenchmarkMetric(BaseModel):
+    """Metric semantics owned by a versioned benchmark definition."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    unit: str = Field(min_length=1)
+    direction: Literal["higher_is_better", "lower_is_better"]
+    range: List[float] = Field(min_length=2, max_length=2)
+    normalization: Optional[EvaluationNormalization] = None
+
+    @field_validator("range")
+    @classmethod
+    def validate_range(cls, value: List[float]) -> List[float]:
+        if any(not math.isfinite(item) for item in value) or value[0] >= value[1]:
+            raise ValueError("range must contain two finite increasing values")
+        return value
+
+
+class EvaluationBenchmarkDefinition(BaseModel):
+    """Operator-owned, namespaced benchmark contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=EVALUATION_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1)
+    domain: str = Field(min_length=1)
+    tags: List[str] = Field(default_factory=list)
+    source: Optional[str] = None
+    default_profile: str = Field(min_length=1)
+    profiles: List[EvaluationBenchmarkProfile] = Field(min_length=1)
+    metrics: List[EvaluationBenchmarkMetric] = Field(min_length=1)
+
+
+class EvaluationMissingPolicy(BaseModel):
+    """Completeness policy for a custom capability or aggregate index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy: Literal["require_all", "reported_only", "require_coverage"]
+    minimum: Optional[float] = Field(default=None, gt=0, le=1)
+
+
+class EvaluationIndexComponent(BaseModel):
+    """One benchmark metric or nested index in an index DAG."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmark: Optional[str] = None
+    metric: Optional[str] = None
+    benchmark_profile: Optional[str] = None
+    benchmark_profiles: List[str] = Field(default_factory=list)
+    index: Optional[str] = None
+    weight: float = Field(gt=0)
+    normalization: EvaluationNormalization = Field(
+        default_factory=EvaluationNormalization
+    )
+
+    @model_validator(mode="after")
+    def validate_reference(self):
+        if (self.metric is None) == (self.index is None):
+            raise ValueError("component must reference exactly one metric or index")
+        return self
+
+
+class EvaluationIndexDefinition(BaseModel):
+    """Operator-owned, versioned capability or aggregate index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=EVALUATION_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1)
+    description: Optional[str] = None
+    methodology: Optional[str] = None
+    aggregation: Literal["weighted_mean"]
+    scale: List[float] = Field(min_length=2, max_length=2)
+    missing: EvaluationMissingPolicy
+    domains: Dict[str, float] = Field(default_factory=dict)
+    components: List[EvaluationIndexComponent] = Field(min_length=1)
+
+
+class Evaluation(BaseModel):
+    """Unified benchmark definitions, index DAGs, and model measurements."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmarks: List[EvaluationBenchmarkDefinition] = Field(default_factory=list)
+    indices: List[EvaluationIndexDefinition] = Field(default_factory=list)
+    records: List[EvaluationRecord] = Field(default_factory=list)
 
 
 class RoutingModelPresentation(BaseModel):
@@ -1882,7 +2121,6 @@ class RoutingModel(BaseModel):
     tags: Optional[List[str]] = None
     modalities: Optional[Dict[str, List[str]]] = None
     modality: Optional[str] = None
-    evaluations: List[ModelEvaluation] = Field(default_factory=list)
 
     @field_validator("released_at", "knowledge_cutoff", mode="before")
     @classmethod
@@ -1961,16 +2199,46 @@ class Providers(BaseModel):
         return self.defaults.reasoning_effort
 
 
+class ModelBinding(BaseModel):
+    """A recipe-owned use of a router model deployment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    deployment: str
+    contract: str
+    adapter: str
+    head: Optional[str] = None
+    mapping_path: Optional[str] = None
+
+
+def _validate_unbound_classifier_selectors(profile):
+    for rule in profile.signals.classifiers or []:
+        if f"classifier.{rule.name}" in profile.model_bindings:
+            continue
+        if rule.type == CLASSIFIER_TYPE_LOCAL and not rule.model_path:
+            raise ValueError("local classifiers require model_path or a model binding")
+        if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
+            raise ValueError(
+                f"{rule.type} classifiers require model or a model binding"
+            )
+    return profile
+
+
 class Routing(BaseModel):
     """Canonical routing block."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
+    model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+
+    @model_validator(mode="after")
+    def validate_classifier_selectors(self):
+        return _validate_unbound_classifier_selectors(self)
 
 
 class Entrypoint(BaseModel):
@@ -2007,10 +2275,15 @@ class RecipeRouting(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+
+    @model_validator(mode="after")
+    def validate_classifier_selectors(self):
+        return _validate_unbound_classifier_selectors(self)
 
 
 class Recipe(BaseModel):
@@ -2073,6 +2346,7 @@ class UserConfig(BaseModel):
     version: str
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
+    evaluation: Optional[Evaluation] = None
     routing: Routing = Field(default_factory=Routing)
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)

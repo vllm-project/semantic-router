@@ -86,7 +86,11 @@ func (r *OpenAIRouter) createLooper(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (looper.Looper, error) {
-	l, err := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
+	l, err := looper.FactoryWithClient(
+		&r.Config.Looper,
+		decision.Algorithm.Type,
+		r.looperModelClient(),
+	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
 			"request_id": reqCtx.RequestID,
@@ -96,6 +100,13 @@ func (r *OpenAIRouter) createLooper(
 		})
 	}
 	return l, err
+}
+
+func (r *OpenAIRouter) looperModelClient() *looper.Client {
+	if r.looperClient != nil {
+		return r.looperClient
+	}
+	return looper.NewClient(&r.Config.Looper)
 }
 
 // handleLooperExecution executes the looper for multi-model decisions
@@ -170,6 +181,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 			if err == nil {
 				looperReq := &looper.Request{
 					OriginalRequest:    openAIRequest,
+					Grounding:          r.groundingForRecipe(reqCtx.Routing.RecipeName()),
 					BaseContextTokens:  reqCtx.VSRContextTokenCount,
 					ModelRefs:          modelRefs,
 					ModelParams:        r.getModelParams(),
@@ -235,8 +247,9 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	reqCtx.VSRSelectedModel = resp.Model
 	reqCtx.VSRSelectionMethod = resp.AlgorithmType
 
-	// Capture router replay information if enabled
-	// ModelsUsed is the execution trace; resp.Model is the final response model.
+	// Capture router replay information if enabled. Detailed attempts remain in
+	// Replay; the public response surface keeps only aggregate Looper headers.
+	reqCtx.VSRLooperDiagnostics = looperReplayDiagnostics(resp.ExecutionTrace)
 	r.startRouterReplay(reqCtx, originalModel, resp.Model, decision.Name)
 	r.updateLooperReplayUsage(reqCtx, resp.Usage)
 	if resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {
@@ -281,4 +294,18 @@ func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper
 		CompletionTokens: replayIntPtr(completionTokens),
 		TotalTokens:      replayIntPtr(totalTokens),
 	})
+}
+
+func (r *OpenAIRouter) groundingForRecipe(recipe config.RecipeName) *looper.GroundingBackends {
+	if r.RecipeClassifiers != nil {
+		classifier, ok := r.RecipeClassifiers.ForRecipe(recipe)
+		if !ok {
+			return nil
+		}
+		return classifier.GroundingBackends()
+	}
+	if recipe == "" || recipe == config.DefaultRecipeName {
+		return r.Classifier.GroundingBackends()
+	}
+	return nil
 }

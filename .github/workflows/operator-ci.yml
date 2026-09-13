@@ -55,10 +55,15 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
+      - name: Resolve golangci-lint version
+        id: golangci_lint
+        working-directory: ${{ github.workspace }}
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           working-directory: deploy/operator
           args: --timeout=5m

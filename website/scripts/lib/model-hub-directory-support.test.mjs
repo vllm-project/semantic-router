@@ -61,12 +61,9 @@ test('model hub lives in the website More menu instead of consuming a primary na
   assert.doesNotMatch(config, /label: 'Models'[\s\S]*?className: 'nav-primary'/)
 })
 
-test('website model filters collapse without hiding the restore control', () => {
+test('website model filters and reset control remain visible', () => {
   const source = readFileSync(resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubDirectory.tsx'), 'utf8')
-  const stylesheet = readFileSync(resolve(repositoryRoot, 'website/src/components/model-hub/modelHubDirectory.module.css'), 'utf8')
 
-  assert.match(source, /aria-label=\{filtersCollapsed \? 'Show model filters' : 'Hide model filters'\}/)
-  assert.match(source, /aria-controls="website-model-hub-filter-controls"/)
-  assert.match(stylesheet, /\.directoryCollapsed\s*\{\s*grid-template-columns: 2\.9rem minmax\(0, 1fr\)/)
-  assert.match(stylesheet, /\.filterRailCollapsed > header\s*\{[\s\S]*?justify-content: center/)
+  assert.match(source, /<div className=\{styles\.filterRow\} aria-label="Model filters">/)
+  assert.match(source, /className=\{styles\.resetFilters\}[\s\S]*?onClick=\{resetFilters\}/)
 })

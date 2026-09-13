@@ -212,6 +212,17 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 	return &SignalDecl{SignalType: "authz", Name: rb.Name, Fields: fields}
 }
 
+func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.UseNLI {
+		fields["use_nli"] = BoolValue{V: true}
+	}
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	return &SignalDecl{SignalType: "hallucination", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if jb.Method != "" {

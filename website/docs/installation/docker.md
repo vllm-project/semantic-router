@@ -20,7 +20,7 @@ Complete the [Quickstart](/docs/installation) to install the CLI and create a
 configuration, or start from an existing canonical YAML file:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 

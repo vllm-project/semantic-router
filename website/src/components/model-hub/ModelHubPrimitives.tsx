@@ -160,7 +160,9 @@ export function SelectControl({
       >
         <span id={labelId} className={styles.selectPrefix}>{label}</span>
         <span id={`${labelId}-value`} className={styles.selectValue}>{selected}</span>
-        <i aria-hidden="true">⌄</i>
+        <svg className={styles.selectChevron} viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m4 6 4 4 4-4" />
+        </svg>
       </button>
       {isBrowser && open
         ? createPortal(
@@ -184,7 +186,14 @@ export function SelectControl({
                       buttonRef.current?.focus()
                     }}
                   >
-                    {optionLabel}
+                    <span>{optionLabel}</span>
+                    {optionValue === value
+                      ? (
+                          <svg className={styles.selectCheck} viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="m3.5 8.25 2.75 2.75 6.25-6.25" />
+                          </svg>
+                        )
+                      : null}
                   </button>
                 </li>
               ))}

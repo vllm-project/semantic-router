@@ -1,20 +1,15 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import { useLocation } from '@docusaurus/router'
+import React, { useCallback, useMemo } from 'react'
+import { useHistory, useLocation } from '@docusaurus/router'
 import Translate from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
 import BrowseLayout from '@site/src/components/site/BrowseLayout'
 
 import catalogDocument from '../../static/model-catalog/catalog.json'
-import { ModelHubBenchmark } from '../components/model-hub/ModelHubBenchmark'
+import { ModelHubArena } from '../components/model-hub/ModelHubArena'
 import { ModelHubDirectory } from '../components/model-hub/ModelHubDirectory'
 import { ModelHubDetail } from '../components/model-hub/ModelHubDetail'
 import { ModelHubProviders } from '../components/model-hub/ModelHubProviders'
-import {
-  modelHubBenchmarkCharts,
-  modelHubBenchmarkDomain,
-  modelHubChartColors,
-  modelHubPublicEvaluations,
-} from '../data/modelHubBenchmarkSupport'
+import { modelHubPublicEvaluations } from '../data/modelHubBenchmarkSupport'
 import type {
   CatalogEvaluation,
   CatalogModel,
@@ -27,19 +22,29 @@ import {
   modelHubDirectoryDefaults,
   type ModelHubDirectoryFilters,
 } from '../data/modelHubDirectorySupport'
+import {
+  parseModelHubUrlState,
+  serializeModelHubUrlState,
+  type ModelHubUrlState,
+} from '../data/modelHubUrlState'
 import styles from './models.module.css'
 
 const catalog = catalogDocument as unknown as CatalogSnapshot
 const MODEL_PAGE_SIZE = 10
 const MODEL_HUB_SECTIONS = [
-  { key: 'models', label: 'Models', to: '/models#models' },
-  { key: 'benchmarks', label: 'Benchmarks', to: '/models#benchmarks' },
-  { key: 'providers', label: 'Providers', to: '/models#providers' },
+  { key: 'arena', label: 'Arena' },
+  { key: 'models', label: 'Models' },
+  { key: 'providers', label: 'Providers' },
 ] as const
+
+type UpdateModelHubUrlState = (
+  updater: (current: ModelHubUrlState) => ModelHubUrlState,
+  push?: boolean,
+) => void
 
 function modelHubActiveSection(hash: string): string {
   const id = hash.replace('#', '')
-  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'models'
+  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'arena'
 }
 
 const supportedLifecycle = (
@@ -78,10 +83,11 @@ function availableEvaluations(): Map<string, CatalogEvaluation[]> {
   return grouped
 }
 
-function useCatalogDirectory() {
-  const [filters, setFilters] = useState(modelHubDirectoryDefaults)
-  const [view, setView] = useState<ModelView>('list')
-  const [page, setPage] = useState(1)
+function useCatalogDirectory(
+  urlState: ModelHubUrlState,
+  updateUrlState: UpdateModelHubUrlState,
+) {
+  const { filters, view } = urlState
   const providersByModel = useMemo(modelBindings, [])
   const evaluationsByModel = useMemo(availableEvaluations, [])
   const publishers = useMemo(
@@ -138,24 +144,34 @@ function useCatalogDirectory() {
         )
       })
   }, [filters, providersByModel])
-  const updateFilters = (patch: Partial<ModelHubDirectoryFilters>) => {
-    setFilters(current => ({ ...current, ...patch }))
-    setPage(1)
-  }
   const pageCount = Math.max(1, Math.ceil(models.length / MODEL_PAGE_SIZE))
+  const page = Math.min(urlState.page, pageCount)
   const pageModels = models.slice((page - 1) * MODEL_PAGE_SIZE, page * MODEL_PAGE_SIZE)
+  const updateFilters = (patch: Partial<ModelHubDirectoryFilters>) =>
+    updateUrlState(current => ({
+      ...current,
+      filters: { ...current.filters, ...patch },
+      page: 1,
+    }))
 
   return {
     filters,
     updateFilters,
-    resetFilters: () => {
-      setFilters(modelHubDirectoryDefaults)
-      setPage(1)
-    },
+    resetFilters: () => updateUrlState(current => ({
+      ...current,
+      filters: modelHubDirectoryDefaults,
+      page: 1,
+    })),
     view,
-    setView,
+    setView: (nextView: ModelView) => updateUrlState(current => ({
+      ...current,
+      view: nextView,
+    })),
     page,
-    setPage,
+    setPage: (nextPage: number) => updateUrlState(current => ({
+      ...current,
+      page: nextPage,
+    })),
     pageCount,
     pageModels,
     models,
@@ -167,117 +183,29 @@ function useCatalogDirectory() {
   }
 }
 
-function useBenchmarkExplorer() {
-  const allCharts = useMemo(() => modelHubBenchmarkCharts(catalog), [])
-  const colors = useMemo(
-    () =>
-      modelHubChartColors(
-        catalog.models.map(model => model.id),
-        catalog.models.map(model => model.id),
-      ),
-    [],
-  )
-  const [benchmarkFilter, setBenchmarkFilter] = useState('all')
-  const [query, setQuery] = useState('')
-  const [publisher, setPublisher] = useState('all')
-  const benchmarkFilters = useMemo(() => {
-    const tagCounts = new Map<string, number>()
-    const domainCounts = new Map<string, number>()
-    allCharts.forEach((chart) => {
-      domainCounts.set(
-        chart.benchmark.domain,
-        (domainCounts.get(chart.benchmark.domain) ?? 0) + 1,
-      )
-      chart.benchmark.tags?.forEach((tag) => {
-        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
-      })
-    })
-    const tags = Array.from(tagCounts, ([tag, count]) => ({
-      id: `tag:${tag}`,
-      label: tag === 'core' ? 'Core' : tag,
-      count,
-    })).sort((left, right) => {
-      if (left.id === 'tag:core') return -1
-      if (right.id === 'tag:core') return 1
-      return left.label.localeCompare(right.label)
-    })
-    const domains = Array.from(domainCounts, ([domain, count]) => ({
-      id: `domain:${domain}`,
-      label: domain,
-      count,
-    })).sort((left, right) => left.label.localeCompare(right.label))
-    return [...tags, ...domains]
-  }, [allCharts])
-  const publishers = useMemo(
-    () =>
-      Array.from(
-        new Set(allCharts.flatMap(chart => chart.rows.map(row => row.model.publisher))),
-      ).sort((left, right) => left.localeCompare(right)),
-    [allCharts],
-  )
-  const activePublisher = publisher === 'all' || publishers.includes(publisher) ? publisher : 'all'
-  const activeBenchmarkFilter
-    = benchmarkFilter === 'all' || benchmarkFilters.some(item => item.id === benchmarkFilter)
-      ? benchmarkFilter
-      : 'all'
-  const charts = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase()
-    return allCharts
-      .filter((chart) => {
-        if (activeBenchmarkFilter === 'all') return true
-        if (activeBenchmarkFilter.startsWith('tag:')) {
-          return chart.benchmark.tags?.includes(activeBenchmarkFilter.slice(4)) ?? false
-        }
-        return chart.benchmark.domain === activeBenchmarkFilter.slice(7)
-      })
-      .map((chart) => {
-        const rows = chart.rows.filter(
-          row =>
-            (activePublisher === 'all' || row.model.publisher === activePublisher)
-            && (!needle
-              || `${row.model.display_name} ${row.model.id} ${row.model.publisher}`
-                .toLocaleLowerCase()
-                .includes(needle)),
-        )
-        return {
-          ...chart,
-          rows,
-          totalResults: chart.rows.length,
-          domain: modelHubBenchmarkDomain(
-            rows.map(row => row.value),
-            chart.metric,
-          ),
-          colors,
-        }
-      })
-      .filter(chart => chart.rows.length)
-  }, [activeBenchmarkFilter, activePublisher, allCharts, colors, query])
-
-  return {
-    charts,
-    chartCount: allCharts.length,
-    filters: benchmarkFilters,
-    filter: activeBenchmarkFilter,
-    setFilter: setBenchmarkFilter,
-    query,
-    setQuery,
-    publisher: activePublisher,
-    setPublisher,
-    publishers,
-  }
-}
-
 export default function ModelsPage() {
-  const { hash } = useLocation()
-  const directory = useCatalogDirectory()
-  const [selectedModelID, setSelectedModelID] = useState<string | null>(null)
+  const history = useHistory()
+  const location = useLocation()
+  const urlState = useMemo(
+    () => parseModelHubUrlState(location.search),
+    [location.search],
+  )
+  const updateUrlState = useCallback<UpdateModelHubUrlState>((updater, push = false) => {
+    const current = parseModelHubUrlState(location.search)
+    const nextSearch = serializeModelHubUrlState(updater(current), location.search)
+    const nextLocation = `${location.pathname}${nextSearch}${location.hash}`
+    if (push) history.push(nextLocation)
+    else history.replace(nextLocation)
+  }, [history, location.hash, location.pathname, location.search])
+  const directory = useCatalogDirectory(urlState, updateUrlState)
   const modelByID = useMemo(() => new Map(catalog.models.map(model => [model.id, model])), [])
   const reasoningFamilies = useMemo(
     () => new Map(catalog.reasoning_families.map(family => [family.id, family])),
     [],
   )
-  const benchmark = useBenchmarkExplorer()
-  const selectedModel = selectedModelID ? modelByID.get(selectedModelID) : undefined
+  const selectedModel = urlState.selectedModelID
+    ? modelByID.get(urlState.selectedModelID)
+    : undefined
   const selectedProviders = selectedModel
     ? (directory.providersByModel.get(selectedModel.id) ?? [])
     : []
@@ -289,13 +217,24 @@ export default function ModelsPage() {
   const selectedFamily = selectedModel?.reasoning_family
     ? reasoningFamilies.get(selectedModel.reasoning_family)
     : undefined
-  const closeModelDetail = useCallback(() => setSelectedModelID(null), [])
+  const selectModel = useCallback((selectedModelID: string) => {
+    updateUrlState(current => ({ ...current, selectedModelID }), true)
+  }, [updateUrlState])
+  const closeModelDetail = useCallback(() => {
+    updateUrlState(current => ({ ...current, selectedModelID: null }))
+  }, [updateUrlState])
+  const sections = useMemo(
+    () => MODEL_HUB_SECTIONS.map(section => ({
+      ...section,
+      to: `${location.pathname}${location.search}#${section.key}`,
+    })),
+    [location.pathname, location.search],
+  )
   const physicalModels = catalog.models.filter(model => model.kind === 'physical').length
   const virtualModels = catalog.models.length - physicalModels
   const creators = new Set(
     catalog.models.filter(model => model.kind === 'physical').map(model => model.publisher),
   ).size
-  const mappedProviders = catalog.providers.filter(provider => provider.models?.length).length
   const evaluations = modelHubPublicEvaluations(catalog.evaluations).length
 
   return (
@@ -305,14 +244,14 @@ export default function ModelsPage() {
     >
       <div className={styles.page}>
         <BrowseLayout
-          activeKey={modelHubActiveSection(hash)}
+          activeKey={modelHubActiveSection(location.hash)}
           description="Models, ready to route."
           eyebrow={<Translate id="models.layout.eyebrow">Catalog</Translate>}
           groups={[
             {
               key: 'explore',
               label: 'Explore',
-              items: [...MODEL_HUB_SECTIONS],
+              items: sections,
             },
           ]}
           sidebarLabel="Model Hub sections"
@@ -328,8 +267,8 @@ export default function ModelsPage() {
                 <dt>creators</dt>
               </div>
               <div>
-                <dd>{mappedProviders}</dd>
-                <dt>mapped providers</dt>
+                <dd>{catalog.providers.length}</dd>
+                <dt>providers</dt>
               </div>
               <div>
                 <dd>{evaluations}</dd>
@@ -338,9 +277,36 @@ export default function ModelsPage() {
             </dl>
           )}
         >
-          <section id="models" className={styles.section} aria-labelledby="models-heading">
+          <section className={styles.section} aria-labelledby="arena">
             <header className={styles.sectionHeading}>
-              <h2 id="models-heading">Models</h2>
+              <h2 id="arena">Arena</h2>
+              <span>One index · same rules for single and virtual models</span>
+            </header>
+            <ModelHubArena
+              catalog={catalog}
+              scope={urlState.arenaScope}
+              setScope={arenaScope => updateUrlState(current => ({ ...current, arenaScope }))}
+              layer={urlState.arenaLayer}
+              setLayer={arenaLayer => updateUrlState(current => ({ ...current, arenaLayer }))}
+              capability={urlState.arenaCapability}
+              setCapability={arenaCapability => updateUrlState(current => ({
+                ...current,
+                arenaCapability,
+                arenaLayer: 'capabilities',
+              }))}
+              benchmark={urlState.arenaBenchmark}
+              setBenchmark={arenaBenchmark => updateUrlState(current => ({
+                ...current,
+                arenaBenchmark,
+                arenaLayer: 'benchmarks',
+              }))}
+              selectModel={selectModel}
+            />
+          </section>
+
+          <section className={styles.section} aria-labelledby="models">
+            <header className={styles.sectionHeading}>
+              <h2 id="models">Models</h2>
               <span>
                 {physicalModels}
                 {' '}
@@ -354,29 +320,17 @@ export default function ModelsPage() {
             <ModelHubDirectory
               {...directory}
               pageSize={MODEL_PAGE_SIZE}
-              selectModel={setSelectedModelID}
+              selectModel={selectModel}
             />
           </section>
 
-          <section id="benchmarks" className={styles.section} aria-labelledby="benchmarks-heading">
+          <section className={styles.section} aria-labelledby="providers">
             <header className={styles.sectionHeading}>
-              <h2 id="benchmarks-heading">Benchmarks</h2>
-              <span>Exact published results</span>
-            </header>
-            <ModelHubBenchmark {...benchmark} selectModel={setSelectedModelID} />
-          </section>
-
-          <section id="providers" className={styles.section} aria-labelledby="providers-heading">
-            <header className={styles.sectionHeading}>
-              <h2 id="providers-heading">Providers</h2>
+              <h2 id="providers">Providers</h2>
               <span>
-                {mappedProviders}
-                {' '}
-                mapped ·
-                {' '}
                 {catalog.providers.length}
                 {' '}
-                runtime contracts
+                available providers
               </span>
             </header>
             <ModelHubProviders providers={catalog.providers} protocols={catalog.protocols} />

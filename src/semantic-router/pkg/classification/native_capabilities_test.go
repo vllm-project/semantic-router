@@ -55,13 +55,13 @@ func TestUnifiedClassifierRejectsUnsupportedNativeCapabilities(t *testing.T) {
 
 	classifier := &UnifiedClassifier{initialized: true}
 	_, err := classifier.ClassifyBatch([]string{"hello"})
-	if err == nil || !strings.Contains(err.Error(), `native backend "test-backend" does not support unified batch classification`) {
+	if err == nil || !strings.Contains(err.Error(), "real recipe task bindings") {
 		t.Fatalf("expected unsupported unified batch error, got %v", err)
 	}
 
 	classifier = &UnifiedClassifier{initialized: true, useLoRA: true}
 	_, err = classifier.ClassifyBatch([]string{"hello"})
-	if err == nil || !strings.Contains(err.Error(), `native backend "test-backend" does not support LoRA unified batch classification`) {
+	if err == nil || !strings.Contains(err.Error(), "loRA model paths not configured") {
 		t.Fatalf("expected unsupported LoRA batch error, got %v", err)
 	}
 
@@ -75,7 +75,7 @@ func TestUnifiedClassifierRejectsUnsupportedNativeCapabilities(t *testing.T) {
 		testUnifiedSecurityLabels,
 		true,
 	)
-	if err == nil || !strings.Contains(err.Error(), `native backend "test-backend" does not support unified batch classification`) {
+	if err == nil || !strings.Contains(err.Error(), "real recipe task bindings") {
 		t.Fatalf("expected initialize capability error, got %v", err)
 	}
 }

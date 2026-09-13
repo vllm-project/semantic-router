@@ -192,7 +192,73 @@ cluster does not already provide a compatible gateway.
 
 ### Existing Gateway
 
-Reference an existing Kubernetes Gateway when the cluster owns ingress:
+There are two distinct ways to attach an existing Gateway.
+
+#### Forward HTTP to the Operator's Envoy sidecar
+
+For a Gateway API controller that forwards HTTP, keep the Router in standalone
+mode: **omit `spec.gateway.existingRef`**. The Operator creates its Envoy
+sidecar and exposes the inference listener as Service port **8801**
+(`envoy-http`). Create an `HTTPRoute` targeting that port:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: my-router
+  namespace: default
+spec:
+  parentRefs:
+    - name: shared-gateway
+      namespace: gateway-system
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - name: my-router
+          port: 8801
+      timeouts:
+        request: 300s
+        backendRequest: 300s
+```
+
+The referenced Gateway listener must allow routes from the Router namespace
+through `allowedRoutes.namespaces`. The route and Router Service above share a
+namespace; moving the backend Service to another namespace also requires a
+`ReferenceGrant`. Configure the Gateway's hostname, TLS and authentication for
+your deployment. The Operator does not create an `HTTPRoute`; you own this
+route's lifecycle.
+
+The traffic path is Gateway → Router Service `envoy-http` → Envoy sidecar →
+ExtProc → selected model backend. The `api` port (8080 by default) serves Router
+management requests and must not be used as the inference route's backend.
+
+A complete Router and route example is available in
+[`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml).
+After adapting its existing Gateway and model Service names, apply both
+resources and check route acceptance before sending a real completion. These
+commands use that sample's resource names and namespace:
+
+```bash
+kubectl -n vllm-serving get httproute semantic-router-gateway -o yaml
+kubectl -n vllm-serving get service semantic-router-gateway -o jsonpath='{.spec.ports}'
+kubectl -n vllm-serving port-forward service/semantic-router-gateway 8801:8801
+# In another terminal, verify the same request through this local data plane.
+curl --fail-with-body http://localhost:8801/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"local/model","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+Then send the request through your Gateway URL. Its `HTTPRoute` parent status
+must report `Accepted=True` and `ResolvedRefs=True`; an accepted route alone
+does not prove backend inference succeeds.
+
+#### Let the existing Gateway invoke ExtProc
+
+Use `spec.gateway.existingRef` only when the existing Gateway will own the
+inference data plane and has the gateway-specific integration configured:
 
 ```yaml
 spec:
@@ -202,10 +268,14 @@ spec:
       namespace: gateway-system
 ```
 
-The current controller switches the Router into gateway-integration mode but
-does not create an `HTTPRoute`. Create and manage the matching route separately
-and target the Router Service on its API port. See the gateway-specific guides
-under **Deploy → Kubernetes Gateways**.
+This mode verifies the Gateway exists and omits the Envoy sidecar. You must
+configure the Gateway's ExtProc policy to call the Router Service's **gRPC port
+50051** (or your configured `service.grpc.port`), plus routes to the actual
+model backends that honor the Router's selection. Referencing a Gateway alone
+does not install those policies or routes. Follow the matching
+[Kubernetes Gateway integration guide](gateways) for its processing modes and
+backend selection contract. Do not point an inference `HTTPRoute` at the Router
+management API; it does not implement `/v1/chat/completions`.
 
 ### OpenShift Route
 

@@ -183,6 +183,7 @@ export interface ASTRecipeDecl {
 }
 
 export interface ASTProgram {
+  modelBindings?: Record<string, Record<string, string>>
   strategy?: string
   entrypoints?: ASTEntrypointDecl[]
   recipes?: ASTRecipeDecl[]

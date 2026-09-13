@@ -123,6 +123,7 @@ until the selected cases are known to be isolated.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
 - **category-remote-backend**: shared remote category `http_classify` backend.
+- **complexity-remote-backend**: shared remote complexity `score.v1` backend, with no local candidates so a verdict can only come from the remote score.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
 - **looper**: deterministic Looper algorithm contracts.
 - **istio**: sidecar, mTLS, and tracing behavior.

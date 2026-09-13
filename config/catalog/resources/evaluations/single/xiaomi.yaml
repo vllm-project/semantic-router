@@ -55,7 +55,7 @@
 - id: independent/mimo-v2-5-pro-non-reasoning-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: MiMo-V2.5-Pro (Non-reasoning)
@@ -163,7 +163,7 @@
 - id: independent/mimo-v2-5-pro-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiMo-V2.5-Pro
@@ -181,7 +181,7 @@
 - id: xiaomi/mimo-v2.5-pro-model-card-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: MiMo-V2.5-Pro
@@ -397,7 +397,7 @@
 - id: independent/mimo-v2-5-0424-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiMo-V2.5
@@ -577,7 +577,7 @@
 - id: independent/mimo-v2-flash-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: MiMo-V2-Flash (Non-reasoning)
@@ -685,7 +685,7 @@
 - id: independent/mimo-v2-flash-reasoning-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiMo-V2-Flash (Reasoning)
@@ -703,7 +703,7 @@
 - id: xiaomi/mimo-v2-flash-model-card-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: MiMo-V2-Flash

@@ -11,9 +11,9 @@ from cli.models import (
     DecisionAdaptationsConfig,
     Domain,
     Entrypoint,
+    EvaluationRecord,
     KeywordSignal,
     LoRAAdapter,
-    ModelEvaluation,
     ProjectionMapping,
     ProjectionMappingOutput,
     ProjectionScore,
@@ -285,16 +285,18 @@ def test_explicit_zero_pricing_counts_as_provider_model_metadata():
 
 def test_operator_evaluation_requires_versioned_identity_and_finite_metrics():
     with pytest.raises(PydanticValidationError, match="string_pattern_mismatch"):
-        ModelEvaluation(benchmark="support", metrics={"score": 0.8})
+        EvaluationRecord(model="private", benchmark="support", metrics={"score": 0.8})
     with pytest.raises(PydanticValidationError, match="named finite numbers"):
-        ModelEvaluation(
+        EvaluationRecord(
+            model="private",
             benchmark="acme/support@1",
             metrics={"score": float("nan")},
         )
 
 
 def test_operator_evaluation_preserves_profile_and_reasoning_effort():
-    evaluation = ModelEvaluation(
+    evaluation = EvaluationRecord(
+        model="private",
         benchmark="acme/support@1.0.0",
         benchmark_profile="published-standard",
         reasoning_effort="high",

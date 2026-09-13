@@ -8,6 +8,7 @@ from cli.commands.validate import (
     _provider_projection_errors,
     _signal_summary_lines,
 )
+from cli.config_contract import PROJECTION_FAMILY_SPECS, SIGNAL_FAMILY_SPECS
 from cli.main import main
 from cli.parser import parse_user_config
 from click.testing import CliRunner
@@ -15,59 +16,22 @@ from click.testing import CliRunner
 
 def test_signal_summary_lines_cover_v03_signal_surface():
     signals = SimpleNamespace(
-        keywords=[object()],
-        embeddings=[object()],
-        domains=[object()],
-        fact_check=[object()],
-        user_feedbacks=[object()],
-        reasks=[object()],
-        preferences=[object()],
-        language=[object()],
-        context=[object()],
-        structure=[object()],
-        complexity=[object()],
-        modality=[object()],
-        role_bindings=[object()],
-        jailbreak=[object()],
-        pii=[object()],
-        kb=[object()],
-        conversation=[object()],
-        events=[object()],
+        **{spec.signal_attr: [object()] for spec in SIGNAL_FAMILY_SPECS}
     )
 
-    lines = _signal_summary_lines(signals)
-
-    assert "  Keyword signals: 1" in lines
-    assert "  Embedding signals: 1" in lines
-    assert "  Domains: 1" in lines
-    assert "  Fact check signals: 1" in lines
-    assert "  User feedback signals: 1" in lines
-    assert "  Reask signals: 1" in lines
-    assert "  Preference signals: 1" in lines
-    assert "  Language signals: 1" in lines
-    assert "  Context signals: 1" in lines
-    assert "  Structure signals: 1" in lines
-    assert "  Complexity signals: 1" in lines
-    assert "  Modality signals: 1" in lines
-    assert "  Authz signals: 1" in lines
-    assert "  Jailbreak signals: 1" in lines
-    assert "  PII signals: 1" in lines
-    assert "  Knowledge-base signals: 1" in lines
-    assert "  Conversation signals: 1" in lines
-    assert "  Event signals: 1" in lines
+    assert _signal_summary_lines(signals) == [
+        f"  {spec.display_name}: 1" for spec in SIGNAL_FAMILY_SPECS
+    ]
 
 
 def test_projection_summary_lines_cover_v03_projection_surface():
     projections = SimpleNamespace(
-        partitions=[object()],
-        scores=[object()],
-        mappings=[object()],
+        **{spec.projection_attr: [object()] for spec in PROJECTION_FAMILY_SPECS}
     )
 
     assert _projection_summary_lines(projections) == [
-        "  Projection partitions: 1",
-        "  Projection scores: 1",
-        "  Projection mappings: 1",
+        f"  Projection {spec.display_name.lower()}: 1"
+        for spec in PROJECTION_FAMILY_SPECS
     ]
 
 
@@ -82,7 +46,12 @@ def test_aggregate_summary_lines_include_recipe_owned_routing():
     )
     profiles = [("default", default), ("accuracy-first", recipe)]
 
-    assert _aggregate_signal_summary_lines(profiles) == ["  Keyword signals: 2"]
+    keyword_label = next(
+        spec.display_name
+        for spec in SIGNAL_FAMILY_SPECS
+        if spec.signal_attr == "keywords"
+    )
+    assert _aggregate_signal_summary_lines(profiles) == [f"  {keyword_label}: 2"]
     assert _aggregate_projection_summary_lines(profiles) == [
         "  Projection scores: 1",
         "  Projection mappings: 1",
@@ -134,7 +103,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
@@ -155,7 +126,9 @@ routing:
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
@@ -174,7 +147,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "must define backend_refs or model metadata" in result.output
@@ -196,7 +171,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output
@@ -216,7 +193,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "Provider model name cannot be empty" in result.output
@@ -235,7 +214,9 @@ routing:
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "Model card name cannot be empty" in result.output
@@ -277,7 +258,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert expected_error in result.output
@@ -429,7 +412,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert expected_error in result.output
@@ -448,7 +433,9 @@ routing: {}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "must define backend_refs with an explicit Provider ID" in result.output
@@ -503,7 +490,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 1
     assert "Configuration validation failed" in result.output
@@ -567,7 +556,9 @@ routing: {{}}
 """,
     )
 
-    result = CliRunner().invoke(main, ["validate", "--config", str(config_path)])
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Configuration is valid" in result.output

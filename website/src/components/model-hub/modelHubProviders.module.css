@@ -2,11 +2,17 @@
   display: grid;
 }
 
+.providerGuide {
+  max-width: 52rem;
+  margin: 0 0 var(--space-3);
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
 
@@ -43,38 +49,6 @@
 .toolbar input:focus {
   border-color: var(--site-accent);
   box-shadow: 0 0 0 3px var(--site-accent-soft);
-}
-
-.toolbar > div {
-  display: flex;
-  gap: 2px;
-  padding: 0.18rem;
-  border: 1px solid var(--site-border);
-  border-radius: var(--radius-md);
-  background: var(--site-bg);
-}
-
-.toolbar button {
-  min-height: 2.15rem;
-  padding: 0.3rem 0.65rem;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--site-muted);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--text-sm);
-}
-
-.toolbar button[aria-pressed='true'] {
-  background: var(--site-accent-soft);
-  color: var(--site-accent-strong);
-  font-weight: var(--site-font-weight-medium);
-}
-
-.toolbar button:hover:not([aria-pressed='true']) {
-  background: var(--site-hover-chrome-bg);
-  color: var(--site-hover-text);
 }
 
 .resultCount {
@@ -308,14 +282,6 @@
 
   .toolbar > label {
     width: 100%;
-  }
-
-  .toolbar > div {
-    overflow-x: auto;
-  }
-
-  .toolbar button {
-    flex: 1 0 auto;
   }
 
   .providerCard {

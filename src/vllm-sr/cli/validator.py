@@ -14,6 +14,7 @@ from cli.models import (
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
     RouterReplayPluginConfig,
+    ShadowDispatchPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
 )
@@ -40,56 +41,19 @@ from cli.validator_workflows import (
 )
 from cli.validator_signal_references import validate_signal_references
 from cli.validator_models import validate_model_references
+from cli.validator_model_runtime import validate_model_runtime_references
+from cli.config_schema import routing_surface_catalog
 
 log = get_logger(__name__)
 
+_ALGORITHM_SURFACES = routing_surface_catalog()["algorithms"]
 EXPECTED_ALGORITHM_BLOCK_BY_TYPE = {
-    "confidence": "confidence",
-    "ratings": "ratings",
-    "remom": "remom",
-    "fusion": "fusion",
-    "workflows": "workflows",
-    "router_dc": "router_dc",
-    "automix": "automix",
-    "hybrid": "hybrid",
-    "latency_aware": "latency_aware",
-    "multi_factor": "multi_factor",
-    "prompt": "prompt",
+    surface["type"]: surface["config_field"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("config_field")
 }
-
-ALGORITHM_CONFIG_BLOCKS = (
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "latency_aware",
-    "multi_factor",
-    "prompt",
-)
-
-
-VALID_ALGORITHM_TYPES = {
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "static",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "knn",
-    "kmeans",
-    "svm",
-    "mlp",
-    "multi_factor",
-    "latency_aware",
-    "prompt",
-}
+ALGORITHM_CONFIG_BLOCKS = tuple(EXPECTED_ALGORITHM_BLOCK_BY_TYPE.values())
+VALID_ALGORITHM_TYPES = {surface["type"] for surface in _ALGORITHM_SURFACES}
 
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "elo": "global.router.learning.adaptation",
@@ -312,6 +276,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+        PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
@@ -597,6 +562,7 @@ def validate_user_config(
 
     # Validate model references
     errors.extend(validate_model_references(config))
+    errors.extend(validate_model_runtime_references(config))
     errors.extend(validate_classifier_contracts(config))
 
     # Validate plugin configurations

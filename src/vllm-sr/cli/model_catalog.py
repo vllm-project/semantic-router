@@ -434,18 +434,26 @@ def _model_assets_root():
     """Resolve installed package data, or the canonical source tree in development."""
 
     packaged = resources.files("cli.model_assets")
-    repository_root = Path(__file__).resolve().parents[3]
-    repository_assets = repository_root / "config" / "recipes" / "built-in"
     try:
         packaged_path = Path(str(packaged)).resolve()
     except (OSError, TypeError, ValueError):
         packaged_path = None
-    if (
-        packaged_path is not None
-        and repository_root in packaged_path.parents
-        and repository_assets.is_dir()
-    ):
-        return repository_assets
+    module_directory = Path(__file__).resolve().parent
+    for repository_root in module_directory.parents:
+        source_package = repository_root / "src" / "vllm-sr" / "cli"
+        repository_assets = repository_root / "config" / "recipes" / "built-in"
+        try:
+            is_source_checkout = source_package.resolve() == module_directory
+        except OSError:
+            is_source_checkout = False
+        if (
+            is_source_checkout
+            and repository_assets.is_dir()
+            and packaged_path is not None
+            and repository_root in packaged_path.parents
+        ):
+            return repository_assets
+
     if any(
         item.is_dir()
         and _CATALOG_RESOURCE_VERSION.fullmatch(item.name)
@@ -453,6 +461,4 @@ def _model_assets_root():
         for item in packaged.iterdir()
     ):
         return packaged
-    if repository_assets.is_dir():
-        return repository_assets
     return packaged

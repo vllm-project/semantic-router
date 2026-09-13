@@ -120,12 +120,12 @@ export default function InsightsPage() {
     try {
       const [listResponse, aggregateResponse] = await Promise.all([
         fetchAbortableInsightsJSON<InsightsListResponse>(
-          `/api/router/v1/router_replay${listQuery}`,
+          `/api/router/api/v1/observability/replays${listQuery}`,
           'insight records',
           abortController.signal,
         ),
         fetchAbortableInsightsJSON<InsightsAggregateResponse>(
-          `/api/router/v1/router_replay/aggregate${aggregateQuery}`,
+          `/api/router/api/v1/observability/replays/aggregate${aggregateQuery}`,
           'insight aggregates',
           abortController.signal,
         ),

@@ -6,13 +6,15 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // cachedJailbreakResult stores a cached jailbreak classification result.
 type cachedJailbreakResult struct {
-	result SequenceClassificationResult
-	err    error
+	result   SequenceClassificationResult
+	decision *tasks.LabelDecision
+	err      error
 }
 
 // JailbreakClassificationErrorType is the sentinel jailbreak type reported
@@ -74,8 +76,15 @@ func (c *Classifier) evaluateJailbreakSignal(ctx context.Context, results *Signa
 		chunks := jailbreakSignalChunks(content)
 		cached := make([]cachedJailbreakResult, 0, len(chunks))
 		for _, chunk := range chunks {
-			result, err := c.jailbreakInference.Classify(ctx, chunk)
-			cached = append(cached, cachedJailbreakResult{result, err})
+			entry := cachedJailbreakResult{}
+			if backend := jailbreakDecisionBackend(c.jailbreakInference); backend != nil {
+				decision, err := backend.Decide(ctx, chunk)
+				entry.decision = &decision
+				entry.err = err
+			} else {
+				entry.result, entry.err = c.jailbreakInference.Classify(ctx, chunk)
+			}
+			cached = append(cached, entry)
 		}
 		jailbreakCache[content] = cached
 	}
@@ -94,7 +103,9 @@ func (c *Classifier) evaluateJailbreakSignal(ctx context.Context, results *Signa
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 	results.Metrics.Jailbreak.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	if results.JailbreakConfidence > 0 {
+	available := results.JailbreakScoreAvailable
+	results.Metrics.Jailbreak.ConfidenceAvailable = &available
+	if available {
 		results.Metrics.Jailbreak.Confidence = float64(results.JailbreakConfidence)
 	}
 
@@ -154,7 +165,7 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 		if analysisResult.FailedMessages > 0 && c.Config.PromptGuard.IsBlock() {
 			logging.Errorf("[Signal Computation] Contrastive jailbreak rule %q: %d/%d messages could not be embedded; failing closed",
 				rule.Name, analysisResult.FailedMessages, analysisResult.TotalMessages)
-			c.recordJailbreakRuleMatch(rule, JailbreakClassificationErrorType, 1.0, start, results, mu)
+			c.recordJailbreakRuleMatch(rule, JailbreakClassificationErrorType, 0, start, results, mu)
 		}
 		return
 	}
@@ -171,20 +182,27 @@ func (c *Classifier) recordJailbreakRuleMatch(rule config.JailbreakRule, jailbre
 	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
 
 	mu.Lock()
+	defer mu.Unlock()
 	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
 	if jailbreakType == JailbreakClassificationErrorType {
 		if results.SignalErrorMatches == nil {
 			results.SignalErrorMatches = make(map[string]bool)
 		}
 		results.SignalErrorMatches[signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)] = true
+		if !results.JailbreakDetected {
+			results.JailbreakDetected = true
+			results.JailbreakType = jailbreakType
+		}
+		// This is a policy match on unverified content, not model evidence.
+		return
 	}
-	if confidence > results.JailbreakConfidence {
+	if !results.JailbreakScoreAvailable || confidence > results.JailbreakConfidence {
 		results.JailbreakDetected = true
 		results.JailbreakType = jailbreakType
 		results.JailbreakConfidence = confidence
+		results.JailbreakScoreAvailable = true
 	}
 	results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
-	mu.Unlock()
 }
 
 func (c *Classifier) recordJailbreakRuleError(rule config.JailbreakRule, results *SignalResults, mu *sync.Mutex) {
@@ -197,11 +215,15 @@ func (c *Classifier) recordJailbreakRuleError(rule config.JailbreakRule, results
 }
 
 func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	if jailbreakDecisionBackend(c.jailbreakInference) != nil {
+		c.evaluateCategoricalJailbreakRule(rule, contentToAnalyze, jailbreakCache, start, results, mu)
+		return
+	}
 	bestType, bestScore, unresolved := c.findBestJailbreakMatchOutcome(rule, contentToAnalyze, jailbreakCache)
 	if unresolved {
 		c.recordJailbreakRuleError(rule, results, mu)
 	}
-	if bestScore <= 0 {
+	if bestScore <= 0 && bestType != JailbreakClassificationErrorType {
 		return
 	}
 	c.recordJailbreakRuleMatch(rule, bestType, bestScore, start, results, mu)
@@ -228,6 +250,9 @@ type jailbreakCandidate struct {
 // cognitive complexity within the repo's lint gate (the same reason
 // assignScoreToMapping is split out of alignScoresToMapping).
 func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, cached cachedJailbreakResult) jailbreakCandidate {
+	if cached.err == nil {
+		cached.err = validateJailbreakDistribution(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result)
+	}
 	if cached.err != nil {
 		logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
 		return jailbreakCandidate{outcome: jailbreakCandidateUnknown}
@@ -286,19 +311,51 @@ func (c *Classifier) findBestJailbreakMatchOutcome(rule config.JailbreakRule, co
 		}
 	}
 
-	// A genuine detection wins over the fail-closed sentinel. Both block the
-	// request - the sentinel's 1.0 is >= any real score, so every decision
-	// that would fire still fires either way - but returning the sentinel
-	// when a real match exists erases the detected label and its true score,
-	// and those flow on to results.JailbreakType/JailbreakConfidence, the
-	// replay record's jailbreak_type, and the jailbreak.type span attribute.
-	// A replayed genuine attack would then be indistinguishable from an
-	// unreachable guardrail, and eval confidence would skew to 1.0.
+	// A real detection keeps its label and score even when another piece
+	// failed. An error-policy match carries only the sentinel and error flag.
 	if bestType != "" {
 		return bestType, bestScore, unresolved
 	}
 	if unresolved && c.Config.PromptGuard.IsBlock() {
-		return JailbreakClassificationErrorType, 1.0, true
+		return JailbreakClassificationErrorType, 0, true
 	}
 	return bestType, bestScore, unresolved
+}
+
+func (c *Classifier) evaluateCategoricalJailbreakRule(rule config.JailbreakRule, contents []string, cache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	var matched *tasks.LabelDecision
+	unresolved := false
+	for _, content := range contents {
+		for _, entry := range cache[content] {
+			if entry.err != nil || entry.decision == nil {
+				unresolved = true
+				continue
+			}
+			if _, ok := c.JailbreakMapping.GetIndexForJailbreakType(entry.decision.Label); !ok {
+				unresolved = true
+				continue
+			}
+			if isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, entry.decision.Label) {
+				matched = entry.decision
+			}
+		}
+	}
+	if unresolved {
+		c.recordJailbreakRuleError(rule, results, mu)
+	}
+	if matched == nil {
+		if unresolved && c.Config.PromptGuard.IsBlock() {
+			c.recordJailbreakRuleMatch(rule, JailbreakClassificationErrorType, 0, start, results, mu)
+		}
+		return
+	}
+	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+	mu.Lock()
+	defer mu.Unlock()
+	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+	results.JailbreakDetected = true
+	results.JailbreakType = matched.Label
+	results.JailbreakDecision = matched
+	// A categorical match has no entry in the probability map.
 }

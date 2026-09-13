@@ -98,6 +98,17 @@ const (
 	// "router_dc", "fusion", "remom", "workflows".
 	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
 
+	// VSRRoutingLatencyMs is the time the router spent choosing the model for
+	// this request, in milliseconds with microsecond precision. Example: "0.412"
+	VSRRoutingLatencyMs = "x-vsr-routing-latency-ms"
+
+	// VSRCost is the response's usage priced with the served model's configured
+	// pricing. Buffered responses only; omitted when the model has no pricing.
+	VSRCost = "x-vsr-cost"
+
+	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
+	VSRCostCurrency = "x-vsr-cost-currency"
+
 	// VSRSessionPhase indicates the Router Learning protection phase.
 	// Example values: "user_turn", "tool_loop", "provider_state"
 	VSRSessionPhase = "x-vsr-session-phase"
@@ -247,6 +258,11 @@ const (
 	// VSRMatchedJailbreak contains comma-separated list of matched jailbreak rule names.
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
+
+	// VSRMatchedHallucination contains comma-separated list of matched
+	// hallucination rule names. Written in the response body phase, once the
+	// model's answer has been checked against its grounding context.
+	VSRMatchedHallucination = "x-vsr-matched-hallucination"
 
 	// VSRMatchedPII contains comma-separated list of matched PII rule names.
 	// Example: "pii_strict,pii_moderate"

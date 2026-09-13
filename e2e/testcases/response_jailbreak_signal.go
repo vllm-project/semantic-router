@@ -12,27 +12,35 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
 	pkgtestcases.Register("response-jailbreak-streaming-passthrough", pkgtestcases.TestCase{
-		Description: "Verify a streamed response is delivered in full under the response-direction jailbreak rule, which is scored for buffered responses only",
+		Description: "Verify a streamed response is scored by the response-direction jailbreak rule and still delivered in full, because a streamed response is observed and never enforced",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak", "streaming"},
 		Fn:          testResponseJailbreakStreamingPassthrough,
 	})
 }
 
+// responseJailbreakSignalRule is the response-direction rule the profile
+// declares, and the series name its extraction is counted under.
+const responseJailbreakSignalRule = "unsafe_completion"
+
 // testResponseJailbreakStreamingPassthrough pins the streaming contract: the
-// response-direction rule is scored for buffered responses only, so a streamed
-// response carrying the same content past the classifier window, through the
-// same decision that blocks it buffered, is delivered in full with no block and
-// no warning header. This is the current behavior, not the target; it is
-// asserted so that scoring streamed responses is a deliberate change rather
-// than a drift.
+// response-direction rule scores a streamed response once the stream ends and
+// records the observation, and nothing enforces it. The same content through
+// the same decision that blocks it buffered is delivered in full, with no block
+// and no warning header, because its bytes were with the client before the
+// answer existed as a whole.
+//
+// Both halves are asserted together. The delivery on its own would also pass
+// with the answer never scored, which is what this case pinned before the rule
+// reached the streaming path.
 func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing that a streamed response passes through the response-stage configuration")
+		fmt.Println("[Test] Testing that a streamed response is scored and still passes through")
 	}
 
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
@@ -40,6 +48,17 @@ func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kube
 		return err
 	}
 	defer stopPortForward()
+
+	metricsSession, err := fixtures.OpenSemanticRouterMetricsSession(ctx, client, opts)
+	if err != nil {
+		return fmt.Errorf("open metrics session: %w", err)
+	}
+	defer metricsSession.Close()
+
+	scoredBefore, err := readSignalExtractionCount(ctx, metricsSession, "jailbreak", responseJailbreakSignalRule)
+	if err != nil {
+		return fmt.Errorf("read %s before the streamed request: %w", signalExtractionMetric, err)
+	}
 
 	prompt := responseJailbreakPrompt(responseJailbreakBlockProbe, responseJailbreakPhrase)
 	resp, err := sendResponseJailbreakStreamingRequest(ctx, localPort, prompt)
@@ -52,8 +71,13 @@ func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kube
 	if err != nil {
 		return fmt.Errorf("read stream: %w", err)
 	}
-	content, frames := responseJailbreakStreamedContent(streamBody)
+	content, frames := chatStreamedContent(streamBody)
 	warnings := resp.Header.Get(responseWarningsHeader)
+
+	scoredAfter, err := readSignalExtractionCount(ctx, metricsSession, "jailbreak", responseJailbreakSignalRule)
+	if err != nil {
+		return fmt.Errorf("read %s after the streamed request: %w", signalExtractionMetric, err)
+	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
@@ -61,10 +85,13 @@ func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kube
 			"frames":        frames,
 			"content_bytes": len(content),
 			"warnings":      warnings,
+			"scored_before": scoredBefore,
+			"scored_after":  scoredAfter,
 		})
 	}
 	if opts.Verbose {
-		fmt.Printf("[Test] status=%d frames=%d content_bytes=%d warnings=%q\n", resp.StatusCode, frames, len(content), warnings)
+		fmt.Printf("[Test] status=%d frames=%d content_bytes=%d warnings=%q scored=%v->%v\n",
+			resp.StatusCode, frames, len(content), warnings, scoredBefore, scoredAfter)
 	}
 
 	if resp.StatusCode != 200 {
@@ -73,8 +100,13 @@ func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kube
 	if !strings.Contains(content, responseJailbreakPhrase) {
 		return fmt.Errorf("the streamed content did not arrive in full (%d frames, %d bytes): the stream was cut or altered", frames, len(content))
 	}
+	if scoredAfter < scoredBefore+1 {
+		return fmt.Errorf("the streamed response was not scored by rule %q: %s went %v to %v",
+			responseJailbreakSignalRule, signalExtractionMetric, scoredBefore, scoredAfter)
+	}
 	if strings.Contains(warnings, responseJailbreakWarningCode) {
-		return fmt.Errorf("a streamed response carried %s = %q; streamed responses are not scored, so the warning cannot come from a detection", responseWarningsHeader, warnings)
+		return fmt.Errorf("a streamed response carried %s = %q; the bytes were already delivered, so the plugin cannot have acted on the detection",
+			responseWarningsHeader, warnings)
 	}
 
 	return nil
@@ -103,10 +135,11 @@ func sendResponseJailbreakStreamingRequest(ctx context.Context, localPort, promp
 	return (&http.Client{Timeout: 60 * time.Second}).Do(req)
 }
 
-// responseJailbreakStreamedContent joins the content deltas of an OpenAI chat
-// completion SSE stream. mock-vllm streams the echo in fixed-size chunks, so
-// the phrase under test can straddle two frames and has to be reassembled.
-func responseJailbreakStreamedContent(streamBody []byte) (string, int) {
+// chatStreamedContent joins the content deltas of an OpenAI chat completion SSE
+// stream and reports how many frames carried them. mock-vllm streams the answer
+// in fixed-size chunks, so the text under test can straddle two frames and has
+// to be reassembled.
+func chatStreamedContent(streamBody []byte) (string, int) {
 	var content strings.Builder
 	frames := 0
 	for _, data := range protocolSSEDataFrames(streamBody) {
