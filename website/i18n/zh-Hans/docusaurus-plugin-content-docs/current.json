@@ -7,37 +7,25 @@
     "message": "概述",
     "description": "The label for category Overview in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Installation": {
-    "message": "安装",
-    "description": "The label for category Installation in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Router Runtime": {
-    "message": "Router Runtime",
-    "description": "The label for category Router Runtime in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Run models": {
-    "message": "运行模型",
-    "description": "The label for category Run models in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Model guides": {
-    "message": "模型用法",
-    "description": "The label for category Model guides in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Quickstart": {
+  "sidebar.tutorialSidebar.category.Getting Started": {
     "message": "快速开始",
-    "description": "The label for category Quickstart in sidebar tutorialSidebar"
+    "description": "The label for category Getting Started in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Install with Gateways": {
-    "message": "网关集成",
-    "description": "The label for category Install with Gateways in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Plan a Deployment": {
+    "message": "规划部署",
+    "description": "The label for category Plan a Deployment in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Install with Frameworks": {
-    "message": "框架集成",
-    "description": "The label for category Install with Frameworks in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Compatibility": {
+    "message": "兼容性",
+    "description": "The label for category Compatibility in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Capacities": {
-    "message": "功能特性",
-    "description": "The label for category Capacities in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Capabilities": {
+    "message": "功能",
+    "description": "The label for category Capabilities in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Entrypoints": {
+    "message": "入口",
+    "description": "The label for category Entrypoints in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Signals": {
     "message": "信号",
@@ -71,6 +59,10 @@
     "message": "循环编排",
     "description": "The label for category Looper in sidebar tutorialSidebar"
   },
+  "sidebar.tutorialSidebar.category.Learning": {
+    "message": "学习",
+    "description": "The label for category Learning in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.Plugins": {
     "message": "插件",
     "description": "The label for category Plugins in sidebar tutorialSidebar"
@@ -87,13 +79,161 @@
     "message": "安全与生成",
     "description": "The label for category Safety and Generation in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Global": {
-    "message": "全局配置",
-    "description": "The label for category Global in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Shared Services": {
+    "message": "共享服务",
+    "description": "The label for category Shared Services in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Deploy & Operate": {
+    "message": "部署与运维",
+    "description": "The label for category Deploy & Operate in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Configure": {
+    "message": "配置",
+    "description": "The label for category Configure in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Models": {
+    "message": "模型",
+    "description": "The label for category Models in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Deploy": {
+    "message": "部署",
+    "description": "The label for category Deploy in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Docker": {
+    "message": "Docker",
+    "description": "The label for category Docker in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Kubernetes": {
+    "message": "Kubernetes",
+    "description": "The label for category Kubernetes in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Gateways": {
+    "message": "网关",
+    "description": "The label for category Gateways in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Inference Platforms": {
+    "message": "推理平台",
+    "description": "The label for category Inference Platforms in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.doc.Integrate with NVIDIA Dynamo": {
+    "message": "集成 NVIDIA Dynamo",
+    "description": "The label for sidebar doc Integrate with NVIDIA Dynamo"
+  },
+  "sidebar.tutorialSidebar.category.Hardware": {
+    "message": "硬件",
+    "description": "The label for category Hardware in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Data & Storage": {
+    "message": "数据与存储",
+    "description": "The label for category Data & Storage in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Security": {
+    "message": "安全",
+    "description": "The label for category Security in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Operations": {
+    "message": "运维",
+    "description": "The label for category Operations in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Router Runtime": {
+    "message": "路由器运行时",
+    "description": "The label for category Router Runtime in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Run models": {
+    "message": "运行模型",
+    "description": "The label for category Run models in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Model guides": {
+    "message": "模型用法",
+    "description": "The label for category Model guides in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Fleet Simulator": {
     "message": "机队模拟器",
     "description": "The label for category Fleet Simulator in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Proposals": {
+    "message": "提案",
+    "description": "The label for category Proposals in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Routing & Selection": {
+    "message": "路由与选择",
+    "description": "The label for category Routing & Selection in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Workflows, Memory & Tools": {
+    "message": "工作流、记忆与工具",
+    "description": "The label for category Workflows, Memory & Tools in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Safety & Resilience": {
+    "message": "安全与韧性",
+    "description": "The label for category Safety & Resilience in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Configuration & Protocols": {
+    "message": "配置与协议",
+    "description": "The label for category Configuration & Protocols in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Serving Integrations": {
+    "message": "服务集成",
+    "description": "The label for category Serving Integrations in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Model Training": {
+    "message": "模型训练",
+    "description": "The label for category Model Training in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Start Here": {
+    "message": "从这里开始",
+    "description": "The label for category Start Here in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Embedding Models": {
+    "message": "嵌入模型",
+    "description": "The label for category Embedding Models in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Classifier Models": {
+    "message": "分类器模型",
+    "description": "The label for category Classifier Models in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Evaluate and Select": {
+    "message": "评测与选择",
+    "description": "The label for category Evaluate and Select in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Benchmarking": {
+    "message": "评测",
+    "description": "The label for category Benchmarking in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.API Reference": {
+    "message": "接口参考",
+    "description": "The label for category API Reference in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Troubleshooting": {
+    "message": "故障排查",
+    "description": "The label for category Troubleshooting in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Contributing": {
+    "message": "贡献指南",
+    "description": "The label for category Contributing in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Installation": {
+    "message": "安装",
+    "description": "The label for category Installation in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Quickstart": {
+    "message": "快速开始",
+    "description": "The label for category Quickstart in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Install with Gateways": {
+    "message": "网关集成",
+    "description": "The label for category Install with Gateways in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Install with Frameworks": {
+    "message": "框架集成",
+    "description": "The label for category Install with Frameworks in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Capacities": {
+    "message": "功能特性",
+    "description": "The label for category Capacities in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Global": {
+    "message": "全局配置",
+    "description": "The label for category Global in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.link.Fleet Simulator PDF": {
     "message": "机队模拟器 PDF",
@@ -115,28 +255,8 @@
     "message": "可观测性",
     "description": "The label for category Observability in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Proposals": {
-    "message": "提案",
-    "description": "The label for category Proposals in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Model Training": {
-    "message": "模型训练",
-    "description": "The label for category Model Training in sidebar tutorialSidebar"
-  },
   "sidebar.tutorialSidebar.category.Cookbook": {
     "message": "实践指南",
     "description": "The label for category Cookbook in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.API Reference": {
-    "message": "API 参考",
-    "description": "The label for category API Reference in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Troubleshooting": {
-    "message": "故障排查",
-    "description": "The label for category Troubleshooting in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Contributing": {
-    "message": "贡献指南",
-    "description": "The label for category Contributing in sidebar tutorialSidebar"
   }
 }
