@@ -610,8 +610,6 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 	}
 
 	assertContainsAllModelSpecs(t, specs,
-		"models/mom-embedding-pro",
-		"models/mom-embedding-flash",
 		"models/mmbert-embed-32k-2d-matryoshka",
 		"models/mom-embedding-light",
 		"models/mmbert32k-modality-router-merged",

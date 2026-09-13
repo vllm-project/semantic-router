@@ -174,8 +174,8 @@ func writeDeclaredShiftLiveFixture(t *testing.T, targetArmID string) declaredShi
 		PolicySnapshotDigest: manifest.PolicySnapshotDigest, BackendTopologyDigest: manifest.Target.BackendTopologyDigest,
 		Digest: digestString("declared-shift-attestation"),
 		Entries: []executionAttestationEntry{
-			{Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: sourceCaseID, BrokerReceipt: sourceReceipt},
-			{Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: targetCaseID, BrokerReceipt: targetReceipt},
+			{Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: sourceCaseID, BrokerReceipt: sourceReceipt},
+			{Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: targetCaseID, BrokerReceipt: targetReceipt},
 		},
 	}
 	return declaredShiftLiveFixture{runDir: runDir, manifest: manifest, qualification: qualification, records: records, attestation: attestation}

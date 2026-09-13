@@ -210,7 +210,7 @@ func fetchShadowOutcome(
 	if len(items) != 1 {
 		return nil, fmt.Errorf("expected one replay row for session %q, got %d", sessionID, len(items))
 	}
-	raw, err := doRouterReplayManagementGETAs(ctx, apiSession, "/v1/router_replay/"+items[0].ID, routerReplayDetailToken)
+	raw, err := doRouterReplayManagementGETAs(ctx, apiSession, "/api/v1/observability/replays/"+items[0].ID, routerReplayDetailToken)
 	if err != nil {
 		return nil, fmt.Errorf("GET replay record: %w", err)
 	}

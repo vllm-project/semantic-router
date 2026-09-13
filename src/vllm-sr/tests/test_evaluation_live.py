@@ -168,7 +168,7 @@ class FakeSession:
         timeout: float,
     ) -> FakeResponse:
         self.posts.append((url, json, headers))
-        if "/api/v1/eval?trace=true" in url:
+        if "/api/v1/routing/preview?trace=true" in url:
             return FakeResponse(
                 200,
                 {
@@ -620,7 +620,7 @@ def test_live_diagnostic_routing_multimodal_and_capacity_smoke() -> None:
         if row.track_id == "capacity"
     )
 
-    assert session.posts[0][0].endswith("/api/v1/eval?trace=true")
+    assert session.posts[0][0].endswith("/api/v1/routing/preview?trace=true")
     trace_payload = json.dumps(
         [trace.model_dump(mode="json") for trace in raw.routing_traces]
     )
@@ -648,7 +648,7 @@ def test_routing_record_attests_realized_method_not_configured_algorithm() -> No
             timeout: float,
         ) -> FakeResponse:
             response = super().post(url, json, headers, timeout)
-            if "/api/v1/eval?trace=true" in url:
+            if "/api/v1/routing/preview?trace=true" in url:
                 response._payload["decision_result"]["algorithm"] = "static"
                 response._payload["selection_method"] = "confidence"
             return response

@@ -3,25 +3,26 @@ package config
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// WarnUnknownFields logs warnings for YAML keys in raw that don't match any
-// struct tag on targetType. Only field NAMES are validated, not values.
-// Called once at startup after config parsing succeeds.
-func WarnUnknownFields(raw map[string]interface{}, targetType reflect.Type) {
-	for _, w := range collectUnknownFields(raw, targetType) {
-		logging.Warnf("%s", w)
+func validateKnownFields(raw map[string]interface{}, targetType reflect.Type) error {
+	unknown := collectUnknownFields(raw, targetType)
+	if len(unknown) == 0 {
+		return nil
 	}
+	sort.Strings(unknown)
+	return fmt.Errorf("config contains unknown fields: %s", strings.Join(unknown, "; "))
 }
 
-// collectUnknownFields returns warning messages without logging them.
+// collectUnknownFields returns path-aware diagnostics for keys not represented
+// by the canonical Go contract. Opaque StructuredPayload values are excluded;
+// their discriminator-specific validators own those nested fields.
 func collectUnknownFields(raw map[string]interface{}, targetType reflect.Type) []string {
-	var warnings []string
-	collectUnknownFieldsRecursive(raw, targetType, "", &warnings)
-	return warnings
+	var diagnostics []string
+	collectUnknownFieldsRecursive(raw, targetType, "", &diagnostics)
+	return diagnostics
 }
 
 func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, path string, out *[]string) {
@@ -47,9 +48,9 @@ func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, p
 func formatUnknownField(key, path string, known map[string]fieldEntry) string {
 	fullPath := joinPath(path, key)
 	if suggestion := closestField(key, known); suggestion != "" {
-		return fmt.Sprintf("[config] Unknown field %q in %s — did you mean %q?", key, displayPath(fullPath), suggestion)
+		return fmt.Sprintf("unknown field %q in %s; did you mean %q?", key, displayPath(fullPath), suggestion)
 	}
-	return fmt.Sprintf("[config] Unknown field %q in %s", key, displayPath(fullPath))
+	return fmt.Sprintf("unknown field %q in %s", key, displayPath(fullPath))
 }
 
 // closestField returns the nearest known field name if edit distance ≤ 3.
@@ -94,23 +95,24 @@ func recurseIntoSlice(value interface{}, ft reflect.Type, path string, out *[]st
 	if !ok {
 		return
 	}
-	for _, item := range items {
+	for index, item := range items {
 		itemMap := nestedStringMap(item)
 		if len(itemMap) > 0 {
-			collectUnknownFieldsRecursive(itemMap, elemType, path, out)
+			collectUnknownFieldsRecursive(itemMap, elemType, fmt.Sprintf("%s[%d]", path, index), out)
 		}
 	}
 }
 
 func recurseIntoMap(value interface{}, ft reflect.Type, path string, out *[]string) {
-	if ft.Elem().Kind() != reflect.Struct {
+	elemType := derefType(ft.Elem())
+	if elemType.Kind() != reflect.Struct {
 		return
 	}
 	valMap := nestedStringMap(value)
 	for mapKey, mapVal := range valMap {
 		subMap := nestedStringMap(mapVal)
 		if len(subMap) > 0 {
-			collectUnknownFieldsRecursive(subMap, ft.Elem(), joinPath(path, mapKey), out)
+			collectUnknownFieldsRecursive(subMap, elemType, joinPath(path, mapKey), out)
 		}
 	}
 }

@@ -32,6 +32,9 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 }
 
 func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if err := applyOperatorModelDeployments(canonical, spec); err != nil {
+		return err
+	}
 	if spec.EmbeddingModels != nil {
 		embeddings, err := convertToTypedConfig[routerconfig.EmbeddingModels](r, spec.EmbeddingModels)
 		if err != nil {
@@ -50,7 +53,7 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		// for Variant (a per-field CRD default would be injected even when
 		// only Protocol is set, tripping mutual-exclusion validation). Apply
 		// the "neither set" default here instead, once both fields are read.
-		if promptGuard.Variant == "" && promptGuard.Protocol == "" {
+		if promptGuard.Variant == "" && promptGuard.Protocol == "" && promptGuard.Backend == nil {
 			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
 		}
 		if promptGuard.Enabled && promptGuard.JailbreakMappingPath == "" {
@@ -66,6 +69,16 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 			return fmt.Errorf("config.classifier: %w", err)
 		}
 		canonical.Global.ModelCatalog.Modules.Classifier = classifier
+	}
+	if len(spec.ExternalModels) > 0 {
+		// The CRD block mirrors the router's external catalog entry field for
+		// field, so the generic typed conversion is enough; backend blocks
+		// resolve their model against this list at router config load.
+		external, err := convertToTypedConfig[[]routerconfig.ExternalModelConfig](r, spec.ExternalModels)
+		if err != nil {
+			return fmt.Errorf("config.external_models: %w", err)
+		}
+		canonical.Global.ModelCatalog.External = external
 	}
 	return r.applyOperatorComplexityModel(canonical, spec)
 }

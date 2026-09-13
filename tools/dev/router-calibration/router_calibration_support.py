@@ -87,12 +87,12 @@ def resolve_repo_path(path: Path | None) -> Path | None:
 def fetch_router_snapshot(router_url: str) -> dict[str, Any]:
     base = normalize_router_url(router_url)
     router_cfg = ensure_success(
-        *http_json("GET", f"{base}/config/router"),
-        action="GET /config/router",
+        *http_json("GET", f"{base}/api/v1/config"),
+        action="GET /api/v1/config",
     )
     versions = ensure_success(
-        *http_json("GET", f"{base}/config/router/versions"),
-        action="GET /config/router/versions",
+        *http_json("GET", f"{base}/api/v1/config/versions"),
+        action="GET /api/v1/config/versions",
     )
     ready_status, ready_payload = http_json("GET", f"{base}/ready")
     health_status, health_payload = http_json("GET", f"{base}/health")
@@ -147,25 +147,25 @@ def wait_for_config_activation(
 
     `/ready` remains true while a replacement router is prepared off-path, so
     readiness alone cannot close the management API's read-after-write gap.
-    `/config/hash` identifies the exact runtime document that was atomically
+    `/api/v1/config/hash` identifies the exact runtime document that was atomically
     published and also detects a later deploy superseding this one.
     """
     base = normalize_router_url(router_url)
     expected = expected_runtime_hash.strip()
     if not expected:
-        raise ValueError("deploy response did not include runtime_hash")
+        raise ValueError("deploy response did not include generated_runtime_hash")
 
     deadline = time.monotonic() + timeout_seconds
     last_status = 0
     last_payload: Any = {"status": "unknown"}
     while time.monotonic() < deadline:
-        status, payload = http_json("GET", f"{base}/config/hash")
+        status, payload = http_json("GET", f"{base}/api/v1/config/hash")
         last_status = status
         last_payload = payload
         if HTTP_OK_MIN <= status < HTTP_REDIRECT_MIN and isinstance(payload, dict):
-            runtime_hash = str(payload.get("runtime_hash") or "").strip()
-            active_hash = str(payload.get("active_hash") or "").strip()
-            activation_status = str(payload.get("status") or "").strip()
+            runtime_hash = str(payload.get("generated_runtime_hash") or "").strip()
+            active_hash = str(payload.get("active_runtime_hash") or "").strip()
+            activation_status = str(payload.get("activation_status") or "").strip()
             if runtime_hash and runtime_hash != expected:
                 raise RuntimeError(
                     "config deploy was superseded before activation: "
@@ -511,20 +511,25 @@ def run_validate(dsl_path: Path | None, yaml_path: Path | None) -> dict[str, Any
             temp_dsl.unlink(missing_ok=True)
 
 
-def deploy_config(
-    router_url: str, yaml_path: Path, dsl_path: Path | None
-) -> dict[str, Any]:
+def deploy_config(router_url: str, yaml_path: Path) -> dict[str, Any]:
     yaml_path = resolve_repo_path(yaml_path)
-    dsl_path = resolve_repo_path(dsl_path)
     payload = {"yaml": yaml_path.read_text(encoding="utf-8")}
-    if dsl_path is not None:
-        payload["dsl"] = dsl_path.read_text(encoding="utf-8")
+    base = normalize_router_url(router_url)
+    plan_status, plan_response = http_json(
+        "POST",
+        f"{base}/api/v1/config/plan",
+        {**payload, "mode": "replace"},
+    )
+    plan = ensure_success(plan_status, plan_response, "POST /api/v1/config/plan")
+    if not isinstance(plan, dict) or not str(plan.get("current_etag") or "").strip():
+        raise RuntimeError("config plan did not return current_etag")
     status, response = http_json(
         "PUT",
-        f"{normalize_router_url(router_url)}/config/router",
+        f"{base}/api/v1/config",
         payload,
+        if_match=str(plan["current_etag"]),
     )
-    return ensure_success(status, response, "PUT /config/router")
+    return ensure_success(status, response, "PUT /api/v1/config")
 
 
 def write_json(path: Path, payload: Any) -> None:

@@ -13,17 +13,15 @@ import (
 // setInternalRequestHeaders attaches authenticated routing context for the
 // in-process extproc hop. These values are consumed and removed before the
 // physical model backend is invoked.
-func (c *Client) setInternalRequestHeaders(
+func setInternalRequestHeaders(
 	header http.Header,
 	ctx context.Context,
-	iteration int,
-	decisionName string,
-	fusionDepth int,
+	options CallOptions,
 ) {
 	header.Set(headers.VSRInternalAuth, internalauth.Token())
 	header.Set(headers.VSRLooperRequest, "true")
-	header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", iteration))
-	depth := fusionDepth
+	header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", options.Iteration))
+	depth := options.FusionDepth
 	if depth <= 0 {
 		depth = fusionDepthFromContext(ctx)
 	}
@@ -33,17 +31,15 @@ func (c *Client) setInternalRequestHeaders(
 	if recipe := routingRecipeFromContext(ctx); recipe != "" {
 		header.Set(headers.VSRSelectedRecipe, string(recipe))
 	}
-	if decisionName != "" {
-		header.Set(headers.VSRLooperDecision, decisionName)
+	if options.DecisionName != "" {
+		header.Set(headers.VSRLooperDecision, options.DecisionName)
 	}
 }
 
 func (c *Client) requestHeaders(
 	ctx context.Context,
-	iteration int,
-	decisionName string,
-	fusionDepth int,
-	accessKey string,
+	target ModelTarget,
+	options CallOptions,
 ) http.Header {
 	header := make(http.Header, len(c.headers)+5)
 	header.Set("Content-Type", "application/json")
@@ -55,9 +51,9 @@ func (c *Client) requestHeaders(
 	for name, value := range traceHeaders {
 		header.Set(name, value)
 	}
-	if accessKey != "" {
-		header.Set("Authorization", "Bearer "+accessKey)
+	if target.AccessKey != "" {
+		header.Set("Authorization", "Bearer "+target.AccessKey)
 	}
-	c.setInternalRequestHeaders(header, ctx, iteration, decisionName, fusionDepth)
+	setInternalRequestHeaders(header, ctx, options)
 	return header
 }

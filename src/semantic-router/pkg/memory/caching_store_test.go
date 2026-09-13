@@ -9,14 +9,14 @@ import (
 )
 
 func TestNewCachingStore_WithNilCache_ReturnsSameStore(t *testing.T) {
-	underlying := NewInMemoryStore()
+	underlying := newTestInMemoryStore()
 	wrapped := NewCachingStore(underlying, nil, "milvus")
 	// When cache is nil, NewCachingStore returns the same store (no wrapper)
 	assert.Same(t, underlying, wrapped)
 }
 
 func TestCachingStore_DelegatesToUnderlying(t *testing.T) {
-	underlying := NewInMemoryStore()
+	underlying := newTestInMemoryStore()
 	// Use a non-nil cache that we don't connect (we only test delegation)
 	// NewCachingStore with nil cache returns store; with non-nil cache returns CachingStore.
 	// So we need a real Redis cache to test the wrapper. Skip integration and just test that
@@ -53,7 +53,7 @@ func TestCachingStore_Retrieve_MissThenHit(t *testing.T) {
 	}
 	defer func() { _ = redisCache.Close() }()
 
-	underlying := NewInMemoryStore()
+	underlying := newTestInMemoryStore()
 	// Store one memory so Retrieve can return something
 	mem := &Memory{ID: "m1", Type: MemoryTypeSemantic, Content: "user likes coffee", UserID: "u1"}
 	require.NoError(t, underlying.Store(context.Background(), mem))
@@ -81,7 +81,7 @@ func TestCachingStore_Retrieve_EmptyResultsCached(t *testing.T) {
 		t.Skipf("Redis not available: %v", err)
 	}
 	defer func() { _ = redisCache.Close() }()
-	underlying := NewInMemoryStore()
+	underlying := newTestInMemoryStore()
 	wrapped := NewCachingStore(underlying, redisCache, "milvus")
 	opts := RetrieveOptions{Query: "nonexistentquery123", UserID: "u_none", Limit: 5, Threshold: 0.5}
 	// First call: miss, underlying returns some result (possibly empty)
@@ -101,7 +101,7 @@ func TestCachingStore_Store_InvalidatesCache(t *testing.T) {
 		t.Skipf("Redis not available: %v", err)
 	}
 	defer func() { _ = redisCache.Close() }()
-	underlying := NewInMemoryStore()
+	underlying := newTestInMemoryStore()
 	wrapped := NewCachingStore(underlying, redisCache, "milvus")
 	opts := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
 	// Prime cache with one memory
@@ -130,7 +130,7 @@ func TestCachingStore_ForgetByScope_InvalidatesCache(t *testing.T) {
 		t.Skipf("Redis not available: %v", err)
 	}
 	defer func() { _ = redisCache.Close() }()
-	underlying := NewInMemoryStore()
+	underlying := newTestInMemoryStore()
 	mem := &Memory{ID: "m1", Type: MemoryTypeSemantic, Content: "content", UserID: "u1"}
 	require.NoError(t, underlying.Store(context.Background(), mem))
 	wrapped := NewCachingStore(underlying, redisCache, "milvus")
@@ -153,7 +153,7 @@ func TestNewCachingStore_BackendLabel(t *testing.T) {
 	for _, label := range []string{"milvus", "valkey", "custom"} {
 		t.Run(label, func(t *testing.T) {
 			t.Parallel()
-			underlying := NewInMemoryStore()
+			underlying := newTestInMemoryStore()
 			// nil cache returns the underlying store directly (no wrapper), so use a
 			// non-nil cache to exercise the CachingStore path. Skip if Redis unavailable.
 			cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}

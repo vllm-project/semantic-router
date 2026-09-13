@@ -732,6 +732,12 @@
     },
     "CanonicalModelCatalog": {
       "properties": {
+        "deployments": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelDeployment"
+          },
+          "type": "object"
+        },
         "embeddings": {
           "$ref": "#/$defs/CanonicalEmbeddingModels"
         },
@@ -810,6 +816,12 @@
         "pii_mapping_path": {
           "type": "string"
         },
+        "backend": {
+          "$ref": "#/$defs/RemoteClassifierBackend"
+        },
+        "on_error": {
+          "type": "string"
+        },
         "model_ref": {
           "type": "string"
         }
@@ -843,6 +855,9 @@
     },
     "CanonicalPromptGuardModule": {
       "properties": {
+        "backend": {
+          "$ref": "#/$defs/RemoteClassifierBackend"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -1008,6 +1023,12 @@
     },
     "CanonicalRecipeRouting": {
       "properties": {
+        "model_bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
         "signals": {
           "$ref": "#/$defs/CanonicalSignals"
         },
@@ -1077,6 +1098,12 @@
     },
     "CanonicalRouting": {
       "properties": {
+        "model_bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
         "modelCards": {
           "items": {
             "$ref": "#/$defs/RoutingModel"
@@ -3806,6 +3833,54 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ModelBinding": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "contract": {
+          "type": "string"
+        },
+        "adapter": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string"
+        },
+        "mapping_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelDeployment": {
+      "properties": {
+        "artifact": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "external_model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/ModelInputBudget"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ModelDistribution": {
       "properties": {
         "type": {
@@ -3815,6 +3890,18 @@
           "type": "string"
         },
         "license": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ModelInputBudget": {
+      "properties": {
+        "max_tokens": {
+          "type": "integer"
+        },
+        "overflow": {
           "type": "string"
         }
       },
@@ -6633,11 +6720,11 @@
   "x-vllm-sr": {
     "contract_version": "vllm-sr/config-schema/v1",
     "config_version": "v0.3",
-    "schema_endpoint": "/config/router/schema",
+    "schema_endpoint": "/api/v1/config/schema",
     "validation": {
       "structural": "json-schema-draft-2020-12",
       "semantic": "router",
-      "endpoint": "/config/router/validate"
+      "endpoint": "/api/v1/config/validate"
     },
     "signals": [
       {
@@ -7210,6 +7297,15 @@
         "path": [
           "integrations",
           "looper"
+        ]
+      },
+      {
+        "key": "deployments",
+        "layer": "model_catalog",
+        "display_name": "Deployments",
+        "path": [
+          "model_catalog",
+          "deployments"
         ]
       },
       {

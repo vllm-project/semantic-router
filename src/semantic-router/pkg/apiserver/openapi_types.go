@@ -7,8 +7,15 @@ type OpenAPISpec struct {
 	OpenAPI    string                 `json:"openapi"`
 	Info       OpenAPIInfo            `json:"info"`
 	Servers    []OpenAPIServer        `json:"servers"`
+	Tags       []OpenAPITag           `json:"tags,omitempty"`
 	Paths      map[string]OpenAPIPath `json:"paths"`
 	Components OpenAPIComponents      `json:"components,omitempty"`
+}
+
+// OpenAPITag describes one capability group.
+type OpenAPITag struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 // OpenAPIInfo contains API metadata.
@@ -38,6 +45,8 @@ type OpenAPIOperation struct {
 	Summary     string                       `json:"summary"`
 	Description string                       `json:"description,omitempty"`
 	OperationID string                       `json:"operationId,omitempty"`
+	Tags        []string                     `json:"tags,omitempty"`
+	Deprecated  bool                         `json:"deprecated,omitempty"`
 	Parameters  []OpenAPIParameter           `json:"parameters,omitempty"`
 	Security    []OpenAPISecurityRequirement `json:"security,omitempty"`
 	Responses   map[string]OpenAPIResponse   `json:"responses"`
@@ -45,6 +54,10 @@ type OpenAPIOperation struct {
 	Permission  RoutePermission              `json:"x-vllm-sr-permission"`
 	Sensitivity RouteSensitivity             `json:"x-vllm-sr-sensitivity"`
 	AuditAction RouteAuditAction             `json:"x-vllm-sr-audit-action,omitempty"`
+	Plane       APIPlane                     `json:"x-vllm-sr-plane"`
+	Audiences   []APIAudience                `json:"x-vllm-sr-audiences"`
+	Stability   APIStability                 `json:"x-vllm-sr-stability"`
+	Visibility  APIVisibility                `json:"x-vllm-sr-visibility"`
 }
 
 // OpenAPISecurityRequirement names one authentication scheme accepted by an

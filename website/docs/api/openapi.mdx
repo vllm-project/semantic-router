@@ -20,7 +20,7 @@ directly:
 curl -sS http://localhost:8080/api/v1
 
 # One operation, without loading the complete document
-curl -sS 'http://localhost:8080/openapi.json?path=/config/router&method=PATCH'
+curl -sS 'http://localhost:8080/openapi.json?path=/api/v1/config&method=PATCH'
 
 # Complete OpenAPI document
 curl -sS http://localhost:8080/openapi.json
@@ -28,6 +28,12 @@ curl -sS http://localhost:8080/openapi.json
 
 The Dashboard is only a human-facing proxy and is not required for Agent or
 Router operation.
+
+This specification describes the Router **management listener**. Routed model
+traffic goes through Envoy and follows the separate
+[inference API contract](./router). Storage routes therefore appear only as
+`/api/v1/storage/files` and `/api/v1/storage/vector-stores`; the Router does not
+publish `/v1/files` or `/v1/vector_stores` aliases.
 
 The generated contract declares the runtime-configurable Bearer scheme and the
 permission required by each operation. When management authentication is
@@ -37,6 +43,10 @@ disabled, non-health operations also accept anonymous access; when it is set to
 JSON request fields are generated from the Go request type decoded by each
 handler. Configuration values inside the `yaml` field are defined by the
 [Configuration Schema](./configuration-schema), which is independently
-available from the Router at `GET /config/router/schema`.
+available from the Router at `GET /api/v1/config/schema`.
+
+Configuration mutation requests are YAML-only and require the current ETag in
+`If-Match`. Use `POST /api/v1/config/plan` to obtain the ETag and candidate
+identity before `PATCH` or `PUT`.
 
 <OpenAPIReference />

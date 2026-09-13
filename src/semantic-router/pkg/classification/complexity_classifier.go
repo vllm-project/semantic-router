@@ -32,6 +32,7 @@ type ComplexityClassifier struct {
 	hasImageCandidates bool   // True if any rule uses image_candidates
 	prototypeCfg       config.PrototypeScoringConfig
 	provider           embedding.Provider
+	multiModalProvider embedding.Provider
 
 	// boundaries holds each rule's resolved cut points, keyed by rule name.
 	// Resolving at construction means a malformed pair fails at startup rather
@@ -92,6 +93,10 @@ func NewComplexityClassifier(
 		provider = providers[0]
 	}
 
+	var multimodal embedding.Provider
+	if len(providers) > 1 {
+		multimodal = providers[1]
+	}
 	c := &ComplexityClassifier{
 		rules:                   rules,
 		hardEmbeddings:          make(map[string]map[string][]float32),
@@ -106,6 +111,7 @@ func NewComplexityClassifier(
 		hasImageCandidates:      config.HasImageCandidatesInRules(rules),
 		prototypeCfg:            prototypeCfg.WithDefaults(),
 		provider:                provider,
+		multiModalProvider:      multimodal,
 	}
 
 	c.boundaries = make(map[string]config.ComplexityBoundaries, len(rules))

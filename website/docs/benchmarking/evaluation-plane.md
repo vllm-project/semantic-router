@@ -16,6 +16,11 @@ run contract, one executor registry, one durable bundle layout, one report
 shape, and one server-attestation revision. CLI, Dashboard, comparison, and
 Campaign workflows consume the same evidence model.
 
+Dashboard is an optional interface, not an execution dependency. Agents can
+validate and apply YAML through the Router, preview a route, send a real routed
+request through Envoy, and run versioned workloads entirely from CLI or HTTP.
+See the [Agent Evaluation Loop](agent-evaluation-loop) for that direct path.
+
 Live evaluation is subject-bound. The catalog publishes one target for each
 request-reachable Mixture-of-Models Recipe, never a generic runtime target. A
 run freezes that Mixture's Entrypoint aliases, Recipe and decision boundaries,
@@ -159,11 +164,11 @@ With Router bearer authentication enabled, omitting
 `EVALUATION_ROUTER_API_KEY_ENV` keeps model-pool, joint, multimodal, and
 capacity work available through Envoy where their own requirements are met,
 but removes routing evaluation from the target. Supplying the dedicated token
-restores `router.evaluate`; the Go broker resolves its value server-side and
+restores `routing.preview`; the Go broker resolves its value server-side and
 adds `Authorization` only to the exact frozen Router origin.
 The Python worker carries only the `SecretRef` identity and never resolves its
 environment value or constructs an authorization header. Consequently,
-standalone `vllm-sr eval run` accepts unauthenticated targets but fails closed
+standalone `vllm-sr benchmark run` accepts unauthenticated targets but fails closed
 when a manifest references credentials without the Dashboard broker.
 
 ### Address baseline and candidate deployments together
@@ -281,7 +286,7 @@ reuse an old pseudo-outcome.
 
 One cohort produces three complementary observations:
 
-1. **Recipe routing:** `POST /api/v1/eval?trace=true` evaluates the exact frozen
+1. **Recipe routing:** `POST /api/v1/routing/preview?trace=true` evaluates the exact frozen
    Entrypoint and records the Recipe, decision, selection method, selection
    status, selected logical arm, fallback state, and trace digest.
 2. **Model pool:** every case is sent directly to every frozen logical arm.
@@ -294,7 +299,7 @@ One cohort produces three complementary observations:
    system.
 
 The worker receives visible prompts but not hidden labels. Its network sandbox
-can request only `models.list`, `router.evaluate`, `arm-chat.completions`, or
+can request only `models.list`, `routing.preview`, `arm-chat.completions`, or
 `routed-chat.completions` for the exact manifest track/case/attempt. The Go
 broker owns origins and credentials, verifies every virtual alias and Recipe,
 confines direct calls to the frozen arm, confines routed selections to the
@@ -374,18 +379,18 @@ External checkouts and native exports stay in ignored private directories. A
 parser-verified import follows one reproducible path:
 
 ```bash
-vllm-sr eval benchmarks
-vllm-sr eval normalizers
-vllm-sr eval verify-source \
+vllm-sr benchmark benchmarks
+vllm-sr benchmark normalizers
+vllm-sr benchmark verify-source \
   --adapter <adapter-id> \
   --source-root <ignored-source-root>
-vllm-sr eval suite-normalize \
+vllm-sr benchmark suite-normalize \
   --adapter <adapter-id> \
   --suite-id <suite-id> \
   --source-root <ignored-source-root> \
   --export-root <frozen-native-export> \
   --output <new-normalized-output>
-vllm-sr eval suite-install \
+vllm-sr benchmark suite-install \
   --request <new-normalized-output>/request.json \
   --bundle <new-normalized-output>/bundle \
   --source-root <ignored-source-root> \
@@ -451,7 +456,7 @@ Install it from the repository root, with the private suite store outside that
 checkout:
 
 ```bash
-vllm-sr eval benchmark-install \
+vllm-sr benchmark benchmark-install \
   --pack <clean-benchmark-pack-checkout> \
   --suite-store <private-suite-store>
 ```
@@ -915,11 +920,11 @@ The Dashboard exposes only the current resources:
 - `GET /api/evaluation/v1/campaigns/{id}/decision`
 - `GET|POST /api/evaluation/v1/campaigns/{id}/lifecycle`
 
-The CLI surface under `vllm-sr eval` provides catalog, benchmark/normalizer
+The CLI surface under `vllm-sr benchmark` provides catalog, benchmark/normalizer
 inventory, source verification, built-in suite normalization/install,
 third-party `benchmark-install`, suite list/show, manifest validation,
 execution, local worker-draft inspection, comparison, and gate checks.
-`vllm-sr eval --help` is the exact command reference for the installed build.
+`vllm-sr benchmark --help` is the exact command reference for the installed build.
 
 ## Scale and extension admission
 

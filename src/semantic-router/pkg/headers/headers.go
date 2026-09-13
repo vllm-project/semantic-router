@@ -98,6 +98,17 @@ const (
 	// "router_dc", "fusion", "remom", "workflows".
 	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
 
+	// VSRRoutingLatencyMs is the time the router spent choosing the model for
+	// this request, in milliseconds with microsecond precision. Example: "0.412"
+	VSRRoutingLatencyMs = "x-vsr-routing-latency-ms"
+
+	// VSRCost is the response's usage priced with the served model's configured
+	// pricing. Buffered responses only; omitted when the model has no pricing.
+	VSRCost = "x-vsr-cost"
+
+	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
+	VSRCostCurrency = "x-vsr-cost-currency"
+
 	// VSRSessionPhase indicates the Router Learning protection phase.
 	// Example values: "user_turn", "tool_loop", "provider_state"
 	VSRSessionPhase = "x-vsr-session-phase"

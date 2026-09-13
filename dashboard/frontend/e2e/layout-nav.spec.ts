@@ -357,7 +357,7 @@ async function mockCommon(
     })
   })
 
-  await page.route('**/api/router/v1/router_replay/*', async (route) => {
+  await page.route('**/api/router/api/v1/observability/replays/*', async (route) => {
     const requestURL = new URL(route.request().url())
     const replayID = requestURL.pathname.split('/').pop()
     if (replayID === 'aggregate') {

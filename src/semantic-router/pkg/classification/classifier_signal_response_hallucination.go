@@ -20,6 +20,7 @@ const (
 type ResponseHallucinationSignal struct {
 	MatchedRules []string
 	Confidences  map[string]float64
+	Values       map[string]float64
 	Errors       map[string]string
 }
 
@@ -31,13 +32,14 @@ type ResponseHallucinationSignal struct {
 // context, so re-running it per rule would buy nothing and cost an inference
 // each time. A rule matches when the detector found an unsupported span; the
 // detector's own threshold and span filters decide that, on hallucination_model.
-func EvaluateResponseHallucinationSignal(rules []config.HallucinationRule, detected bool, confidence float32, failureCode string) *ResponseHallucinationSignal {
+func EvaluateResponseHallucinationSignal(rules []config.HallucinationRule, detected bool, confidence float32, failureCode string, metadata ...HallucinationScore) *ResponseHallucinationSignal {
 	if len(rules) == 0 {
 		return nil
 	}
 	signal := &ResponseHallucinationSignal{
 		Confidences: make(map[string]float64, len(rules)),
 		Errors:      make(map[string]string),
+		Values:      make(map[string]float64),
 	}
 	for _, rule := range rules {
 		key := signalConfidenceKey(config.SignalTypeHallucination, rule.Name)
@@ -48,10 +50,26 @@ func EvaluateResponseHallucinationSignal(rules []config.HallucinationRule, detec
 			signal.Errors[key] = failureCode
 			continue
 		}
-		signal.Confidences[key] = float64(confidence)
+		score := HallucinationScore{Available: true, Kind: "probability"}
+		if len(metadata) > 0 {
+			score = metadata[0]
+		}
+		if score.Available {
+			if score.Kind == "probability" {
+				signal.Confidences[key] = float64(confidence)
+			} else {
+				signal.Values[key] = float64(confidence)
+			}
+		}
 		if detected {
 			signal.MatchedRules = append(signal.MatchedRules, rule.Name)
 		}
 	}
 	return signal
+}
+
+// HallucinationScore declares whether a model supplied a score and its actual units.
+type HallucinationScore struct {
+	Available bool
+	Kind      string
 }

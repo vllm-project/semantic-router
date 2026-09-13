@@ -140,3 +140,36 @@ func TestValidatePromptGuardBackend_StillRejectsUnknownOnError(t *testing.T) {
 		t.Errorf("error %q should name on_error", err)
 	}
 }
+
+func TestValidatePromptGuardNamedBackend(t *testing.T) {
+	cfg := remotePromptGuardConfig()
+	cfg.PromptGuard.Protocol = ""
+	cfg.PromptGuard.Backend = &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPChat, Contract: RemoteClassifierContractLabelDecision, Model: "guard"}
+	if err := validatePromptGuardBackend(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.IsPromptGuardEnabled() {
+		t.Fatal("named backend was silently disabled")
+	}
+	cfg.PromptGuard.Backend.Contract = RemoteClassifierContractLabelDistribution
+	if err := validatePromptGuardBackend(cfg); err == nil {
+		t.Fatal("chat cannot declare probabilities")
+	}
+	cfg.PromptGuard.Backend.Contract = RemoteClassifierContractLabelDecision
+	cfg.PromptGuard.Backend.Model = "unknown"
+	if err := validatePromptGuardBackend(cfg); err == nil {
+		t.Fatal("guard fell back to first matching role")
+	}
+}
+
+func TestCanonicalPromptGuardNamedBackendReplacesInheritedVariant(t *testing.T) {
+	raw := MustStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"backend": map[string]interface{}{"protocol": "http_chat", "model": "guard", "contract": "label_decision.v1"}}}}})
+	model := PromptGuardConfig{Variant: PromptGuardVariantMmBERT32K}
+	if err := normalizeCanonicalPromptGuardBackend(&model, raw); err != nil || model.Variant != "" {
+		t.Fatalf("model=%+v err=%v", model, err)
+	}
+	legacy := MustStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"protocol": "http_chat"}}}})
+	if err := normalizeCanonicalPromptGuardBackend(&model, legacy); err == nil || !strings.Contains(err.Error(), "migrate") {
+		t.Fatalf("legacy protocol should require migration: %v", err)
+	}
+}

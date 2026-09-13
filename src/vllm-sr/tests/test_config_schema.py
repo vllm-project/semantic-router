@@ -18,11 +18,11 @@ def test_bundled_schema_exposes_router_surface_catalog() -> None:
     catalog = routing_surface_catalog()
 
     assert document["$id"].endswith("router-config-v0.3.schema.json")
-    assert "setup" in document["properties"]
+    assert "setup" not in document["properties"]
     assert "hallucination" in surface_types("signals")
     assert "multi_factor" in surface_types("algorithms")
     assert "shadow_dispatch" in surface_types("plugins")
-    assert catalog["validation"]["endpoint"] == "/config/router/validate"
+    assert catalog["validation"]["endpoint"] == "/api/v1/config/validate"
 
 
 def test_config_schema_command_defaults_to_compact_index() -> None:
@@ -51,7 +51,25 @@ def test_config_schema_command_supports_full_section_and_surface_views() -> None
     assert section.exit_code == 0, section.output
     section_document = json.loads(section.output)
     assert section_document["x-vllm-sr-view"]["path"] == "global.router.learning"
+    assert section_document["x-vllm-sr-view"]["detail"] == "summary"
+    assert section_document["fields"]
+    assert "$defs" not in section_document
     assert len(section.output) < len(full.output)
+
+    expanded = runner.invoke(
+        main,
+        [
+            "config",
+            "schema",
+            "--section",
+            "global.router.learning",
+            "--expanded",
+        ],
+    )
+    assert expanded.exit_code == 0, expanded.output
+    expanded_document = json.loads(expanded.output)
+    assert expanded_document["x-vllm-sr-view"]["detail"] == "expanded"
+    assert "$defs" in expanded_document
 
     surface = runner.invoke(main, ["config", "schema", "--surface", "algorithm:static"])
     assert surface.exit_code == 0, surface.output
@@ -62,6 +80,82 @@ def test_config_schema_command_supports_full_section_and_surface_views() -> None
     )
     assert incompatible.exit_code != 0
     assert "use only one" in incompatible.output
+
+
+def test_config_schema_command_uses_management_origin_and_auth_client(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    class Client:
+        def __init__(self, endpoint, *, timeout, token_env):
+            captured.update(
+                endpoint=endpoint,
+                timeout=timeout,
+                token_env=token_env,
+            )
+
+        def get_config_schema(self, **kwargs):
+            captured["view"] = kwargs
+            return type("Response", (), {"payload": {"remote": True}})()
+
+    monkeypatch.setattr("cli.commands.config.RouterManagementClient", Client)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "config",
+            "schema",
+            "--endpoint",
+            "https://router.example",
+            "--token-env",
+            "ROUTER_TOKEN",
+            "--timeout",
+            "7",
+            "--surface",
+            "algorithm:multi_factor",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {"remote": True}
+    assert captured == {
+        "endpoint": "https://router.example",
+        "timeout": 7.0,
+        "token_env": "ROUTER_TOKEN",
+        "view": {
+            "view": "surface",
+            "path": None,
+            "surface_kind": "algorithm",
+            "surface_name": "multi_factor",
+            "expanded": False,
+        },
+    }
+
+
+def test_config_init_creates_valid_minimal_template_without_overwriting(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "nested" / "config.yaml"
+    runner = CliRunner()
+
+    created = runner.invoke(main, ["config", "init", "--output", str(output)])
+
+    assert created.exit_code == 0, created.output
+    config = safe_load_router_config(output.read_text(encoding="utf-8"))
+    assert validate_config_structure(config) == []
+    assert config["providers"]["models"][0]["name"] == (
+        config["routing"]["modelCards"][0]["name"]
+    )
+    assert config["routing"]["decisions"][0]["modelRefs"][0]["model"] == (
+        config["providers"]["models"][0]["name"]
+    )
+
+    original = output.read_text(encoding="utf-8")
+    refused = runner.invoke(main, ["config", "init", "--output", str(output)])
+    assert refused.exit_code != 0
+    assert "already exists" in refused.output
+    assert output.read_text(encoding="utf-8") == original
 
 
 def test_python_progressive_index_covers_every_surface_catalog() -> None:

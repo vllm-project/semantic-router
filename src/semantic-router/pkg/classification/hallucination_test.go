@@ -245,6 +245,7 @@ var _ = Describe("FactCheckClassifier", func() {
 			c, err := NewFactCheckClassifier(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c).NotTo(BeNil())
+			DeferCleanup(c.Close)
 		})
 	})
 
@@ -254,6 +255,7 @@ var _ = Describe("FactCheckClassifier", func() {
 			var err error
 			classifier, err = NewFactCheckClassifier(cfg)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(classifier.Close)
 		})
 
 		It("should initialize successfully", func() {
@@ -278,6 +280,7 @@ var _ = Describe("FactCheckClassifier", func() {
 			var err error
 			classifier, err = NewFactCheckClassifier(cfg)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(classifier.Close)
 			err = classifier.Initialize()
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -329,7 +332,8 @@ var _ = Describe("FactCheckClassifier", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).NotTo(BeNil())
 				Expect(result.NeedsFactCheck).To(BeFalse())
-				Expect(result.Confidence).To(Equal(float32(1.0)))
+				Expect(result.ConfidenceAvailable).To(BeFalse())
+				Expect(result.PolicyDefault).To(Equal("empty_text"))
 			})
 		})
 	})
@@ -371,6 +375,7 @@ var _ = Describe("HallucinationDetector", func() {
 			d, err := NewHallucinationDetector(cfg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(d).NotTo(BeNil())
+			DeferCleanup(d.Close)
 		})
 	})
 
@@ -380,6 +385,7 @@ var _ = Describe("HallucinationDetector", func() {
 			var err error
 			detector, err = NewHallucinationDetector(cfg)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(detector.Close)
 		})
 
 		It("should initialize successfully", func() {
@@ -404,6 +410,7 @@ var _ = Describe("HallucinationDetector", func() {
 			var err error
 			detector, err = NewHallucinationDetector(cfg)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(detector.Close)
 			err = detector.Initialize()
 			Expect(err).NotTo(HaveOccurred())
 		})

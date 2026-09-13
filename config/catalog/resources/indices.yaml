@@ -34,7 +34,7 @@
       normalization: {type: identity}
     - benchmark: cais/humanitys-last-exam@1.0.0
       metric: accuracy
-      benchmark_profiles: [independent-standard, no-tools]
+      benchmark_profiles: [independent-text-only, text-only]
       weight: 0.50
       normalization: {type: identity}
 
