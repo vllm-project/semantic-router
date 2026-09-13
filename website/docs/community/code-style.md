@@ -29,7 +29,7 @@ make check CHANGED_FILES="path/one path/two"
 
 ### Go
 
-- Format with `gofmt`.
+- Format with `golangci-lint fmt` (gofumpt and gci); the `go-fmt` pre-commit hook applies it to changed files.
 - Prefer cohesive packages and split only where ownership or testability improves.
 - Document exported APIs where their purpose is not self-evident.
 - Verify module metadata with `make check-go-mod-tidy`.

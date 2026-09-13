@@ -44,14 +44,6 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run go fmt
-        run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "Code is not formatted:"
-            gofmt -s -l .
-            exit 1
-          fi
-
       - name: Run go vet
         run: go vet ./...
 

@@ -206,6 +206,7 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(
 
 	return req, true
 }
+
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter, service classificationService) bool {
 	if !service.HasUnifiedClassifier() {
 		metrics.RecordBatchClassificationError("unified", "classifier_unavailable")

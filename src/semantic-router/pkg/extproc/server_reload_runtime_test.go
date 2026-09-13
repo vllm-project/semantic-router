@@ -19,6 +19,7 @@ func (reloadMemoryStore) Store(_ context.Context, _ *memory.Memory) error { retu
 func (reloadMemoryStore) Retrieve(_ context.Context, _ memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
 	return nil, nil
 }
+
 func (reloadMemoryStore) Get(_ context.Context, _ string) (*memory.Memory, error)    { return nil, nil }
 func (reloadMemoryStore) Update(_ context.Context, _ string, _ *memory.Memory) error { return nil }
 func (reloadMemoryStore) List(_ context.Context, _ memory.ListOptions) (*memory.ListResult, error) {

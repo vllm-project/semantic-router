@@ -30,11 +30,15 @@ func (s *noopMemoryStore) List(_ context.Context, _ memory.ListOptions) (*memory
 	return nil, nil
 }
 
-func (s *noopMemoryStore) Forget(_ context.Context, _ string) error                    { return nil }
+func (s *noopMemoryStore) Forget(_ context.Context, _ string) error { return nil }
+
 func (s *noopMemoryStore) ForgetByScope(_ context.Context, _ memory.MemoryScope) error { return nil }
-func (s *noopMemoryStore) IsEnabled() bool                                             { return true }
-func (s *noopMemoryStore) CheckConnection(_ context.Context) error                     { return nil }
-func (s *noopMemoryStore) Close() error                                                { return nil }
+
+func (s *noopMemoryStore) IsEnabled() bool { return true }
+
+func (s *noopMemoryStore) CheckConnection(_ context.Context) error { return nil }
+
+func (s *noopMemoryStore) Close() error { return nil }
 
 type blockingMemoryStore struct {
 	noopMemoryStore

@@ -216,11 +216,10 @@ jobs:
         run: |
           echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
           echo ""
-          echo "=== Files with gofmt issues (gofmt -l) ==="
-          gofmt -l $(find . -name "*.go" -not -path "./.git/*") || true
-          echo ""
-          echo "=== gofmt diff for all modified Go files ==="
-          gofmt -d $(find . -name "*.go" -not -path "./.git/*") || true
+          echo "=== golangci-lint fmt diff per Go module ==="
+          for module in $(git ls-files "*/go.mod" | xargs -n1 dirname); do
+            (cd "$module" && golangci-lint fmt --diff --config "$GITHUB_WORKSPACE/tools/linter/go/.golangci.yml" ./...) || true
+          done
           echo ""
           echo "=== Working tree changes after pre-commit run ==="
           git diff --name-only || true

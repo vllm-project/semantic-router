@@ -11,8 +11,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-const defaultLLMLabelClassifierMaxTokens = 128
-const llmLabelScoreSumTolerance = 0.02
+const (
+	defaultLLMLabelClassifierMaxTokens = 128
+	llmLabelScoreSumTolerance          = 0.02
+)
 
 type labelClassification struct {
 	Scores    map[string]float64

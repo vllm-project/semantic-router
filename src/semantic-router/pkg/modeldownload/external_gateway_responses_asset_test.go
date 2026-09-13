@@ -6,8 +6,9 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	yamlv3 "gopkg.in/yaml.v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestExternalGatewayResponsesProfileRequiresNoLocalModelDownloads(t *testing.T) {

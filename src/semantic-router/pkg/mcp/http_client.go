@@ -14,8 +14,10 @@ import (
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
-const defaultMCPMaxResponseBytes int64 = 16 * 1024 * 1024
-const maxMCPErrorBodyBytes int64 = 8 * 1024
+const (
+	defaultMCPMaxResponseBytes int64 = 16 * 1024 * 1024
+	maxMCPErrorBodyBytes       int64 = 8 * 1024
+)
 
 const (
 	// MCPProtocolVersion is the MCP protocol version supported by this implementation.
