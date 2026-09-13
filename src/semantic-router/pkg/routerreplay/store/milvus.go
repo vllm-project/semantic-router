@@ -489,6 +489,17 @@ func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	})
 }
 
+// UpdateRequestDemandSnapshots replaces bounded request-demand evidence for a record.
+func (m *MilvusStore) UpdateRequestDemandSnapshots(
+	ctx context.Context,
+	id string,
+	snapshots []RequestDemandSnapshot,
+) error {
+	return m.updateRecord(ctx, id, func(record *Record) {
+		setRequestDemandSnapshots(record, snapshots)
+	})
+}
+
 // UpdateToolTrace updates tool-calling trace details for a record.
 func (m *MilvusStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return m.updateRecord(ctx, id, func(record *Record) {
