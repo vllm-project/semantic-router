@@ -1,5 +1,5 @@
 ---
-title: Router Runtime
+title: 路由器运行时
 description: 配置路由分类、安全检查和嵌入模型。
 translation:
   source_commit: "dc7f402642a8b8ecec8218e2086a4c6f186ea406"
