@@ -91,14 +91,10 @@ type envelopeWire struct {
 var errRecoveryPayloadTooLarge = fmt.Errorf("removed history exceeds the recovery payload bound")
 
 // buildEnvelope resolves the proposed IDs against the detached pre-transform
-// messages. A missing binding is an error rather than a partial payload: the
-// action must never remove history it cannot store completely.
-// buildEnvelope resolves the proposed IDs against the detached pre-transform
-// messages and encodes them under the supplied bound. Each message is encoded
-// once and measured as it is added, so an oversized removal stops after the
-// first message that crosses the limit instead of serializing the whole
-// conversation and checking afterwards. Encoding is not interruptible, so the
-// bound is enforced between messages rather than inside one.
+// messages and encodes them under the supplied bound. Each message is measured
+// in raw form, encoded once, and measured again exactly, so an oversized
+// removal stops at the first message that crosses the limit instead of
+// serializing the whole conversation and checking afterwards.
 //
 // A missing binding is an error rather than a partial payload: the action must
 // never remove history it cannot store completely.
@@ -114,6 +110,16 @@ func (a *Action) buildEnvelope(
 		message, ok := a.detached[id]
 		if !ok {
 			return "", fmt.Errorf("removed message %d has no detached content", id)
+		}
+		// Encoding a message cannot be interrupted, and the neutral protocol
+		// permits single text or media fields far larger than any recovery
+		// limit. Measuring the raw content first keeps the work bounded: the
+		// encoding of a value can only grow, so raw bytes already over the
+		// limit are refused without allocating the encoded form, and anything
+		// that passes this gate encodes within a small multiple of the limit.
+		raw := messageRawBytes(message)
+		if limit > 0 && encoded+raw > limit {
+			return "", errRecoveryPayloadTooLarge
 		}
 		payload, err := json.Marshal(message)
 		if err != nil {
@@ -147,3 +153,49 @@ const (
 	envelopeFixedOverhead   = 96
 	envelopeMessageOverhead = 64
 )
+
+// messageRawBytes sums every string a message can serialize, before encoding
+// expands them. It is a lower bound on the encoded size — escaping and JSON
+// punctuation only add bytes — which is exactly what makes it safe to refuse
+// on: content already over the limit in raw form cannot encode under it.
+func messageRawBytes(message llmprotocol.Message) int {
+	total := len(message.ID) + len(message.Role)
+	for _, content := range message.Content {
+		total += contentRawBytes(content)
+	}
+	return total
+}
+
+func contentRawBytes(content llmprotocol.Content) int {
+	total := len(content.Kind) + len(content.Text) + len(content.MediaType) +
+		len(content.URL) + len(content.Data) + len(content.FileID) +
+		len(content.Filename) + len(content.Detail) + len(content.Signature) +
+		len(content.Reasoning)
+	for _, citation := range content.Citations {
+		total += len(citation.URL) + len(citation.Title) + citationIndexBytes
+	}
+	if content.Cache != nil {
+		total += len(content.Cache.Type) + len(content.Cache.TTL)
+	}
+	if content.ToolCall != nil {
+		total += len(content.ToolCall.ID) + len(content.ToolCall.Name) +
+			len(content.ToolCall.Arguments)
+	}
+	if content.ToolResult != nil {
+		total += len(content.ToolResult.CallID)
+		for _, nested := range content.ToolResult.Content {
+			total += contentRawBytes(nested)
+		}
+	}
+	if image := content.GeneratedImage; image != nil {
+		total += len(image.Status) + len(image.PartialImage) + len(image.Size) +
+			len(image.Quality) + len(image.Background) + len(image.OutputFormat)
+		if image.Result != nil {
+			total += len(*image.Result)
+		}
+	}
+	return total
+}
+
+// citationIndexBytes covers the two numeric offsets a citation serializes.
+const citationIndexBytes = 40
