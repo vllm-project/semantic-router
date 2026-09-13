@@ -77,8 +77,8 @@ plugins:
 | `scope` | `eligible_history` | The only supported scope. Ranking and selective retention belong to other actions. |
 | `failure_mode` | `fail_open` | `fail_open` preserves history on failure; `fail_closed` rejects before provider dispatch. |
 | `limits.max_history_turns` | `128` | Upper bound on turns examined per request. |
-| `limits.max_history_bytes` | `1048576` | Upper bound on history bytes examined per request. |
-| `limits.timeout_ms` | `50` | Planning budget per request. |
+| `limits.max_history_bytes` | `1048576` | Upper bound on the history *text* the policy inspects. Tool arguments and media are not part of that view, so `timeout_ms` is the bound that covers expensive payloads of any shape. |
+| `limits.timeout_ms` | `50` | Planning budget per request, enforced as a deadline over the whole evaluation. |
 | `recovery.enabled` | `false` | When true, removed turns must be stored recoverably before removal commits. |
 
 Configuration cannot widen what may be removed. Eligibility and protection are
@@ -99,8 +99,9 @@ retained depends on it. Mixed turns are kept whole.
 
 ## Evidence and Failure Behavior
 
-Only an accepted topic change authorizes removal, and the result must be bound
-to the request it describes: the router computes an identity for the resolved
+Only an accepted topic change authorizes removal. The result must identify the
+contract that produced it — an unversioned result is treated as unsupported
+rather than trusted — and it must be bound to the request it describes: the router computes an identity for the resolved
 original history and the live turn, and evidence carrying a different binding
 is treated as stale. Uncertainty never authorizes removal.
 
@@ -108,14 +109,18 @@ is treated as stale. Uncertainty never authorizes removal.
 | --- | --- | --- |
 | Accepted change with removable history | Remove the eligible turns | Same |
 | Continuation, or no removable history | Preserve history; normal no-op | Same |
-| Missing, unknown, conflicting, low-confidence, stale, or unsupported-version evidence | Preserve history and record the reason | Reject before provider dispatch |
+| Missing, unknown, conflicting, low-confidence, stale, fallback, wrong-signal, or unsupported-version evidence | Preserve history and record the reason | Reject before provider dispatch |
 | Planning limit exceeded | Preserve history | Reject before provider dispatch |
 | Required recovery unavailable or its write fails | Preserve history | Reject before provider dispatch |
 
 Every outcome records a bounded terminal reason, for example
 `evidence_continuation`, `evidence_stale`, `history_limit_exceeded`, or
 `recovery_write_failed`. A preserved request keeps its enrichment, tools,
-metadata, and generation exactly as they were.
+metadata, and generation exactly as they were. Under `fail_closed` these
+conditions answer `503`, and the rejection is captured in Router Replay like any
+other router-side refusal. A continuation, an inherited internal follow-up, and
+an accepted change with nothing eligible left to remove are ordinary no-ops:
+neither failure mode rejects them.
 
 ## Recovery
 
@@ -160,6 +165,15 @@ not prepend it a second time. Stored input, lineage, conversation membership,
 and public response IDs stay owned by the Responses API and are never altered
 by a reset. If that history cannot be resolved, the action is blocked with
 `history_unresolved` and the configured failure mode decides.
+
+One ordering constraint applies to the topic-continuity producer. Signals are
+evaluated before the stored history is resolved, so a producer that classifies
+at that point sees the pre-materialization request; its result will not carry
+this request's binding and the action rejects it as stale instead of acting on a
+partial conversation. Consuming the resolved snapshot is part of the trigger
+integration. Materialization is not moved ahead of signal extraction for all
+Responses traffic, because that would change the inputs every existing
+classifier sees.
 
 Internal router hops — the algorithm loop and recovery follow-ups — continue a
 public turn that was already evaluated. They inherit that completion and never

@@ -241,18 +241,21 @@ func TestStaleAndConflictingEvidenceCannotAuthorizeRemoval(t *testing.T) {
 	}{
 		{
 			"unbound",
-			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "topic_boundary"},
+			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "topic_boundary", Version: "v1"},
 			ReasonEvidenceStale,
 		},
 		{
 			"other_request",
-			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "topic_boundary", Binding: "other"},
+			TriggerResult{
+				Class: TriggerChange, Confidence: 1, Signal: "topic_boundary",
+				Version: "v1", Binding: "other",
+			},
 			ReasonEvidenceStale,
 		},
 		{
 			"conflicting",
 			TriggerResult{
-				Class: TriggerConflicting, Confidence: 1,
+				Class: TriggerConflicting, Confidence: 1, Version: "v1",
 				Signal: "topic_boundary", Binding: "request-binding",
 			},
 			ReasonEvidenceConflicting,

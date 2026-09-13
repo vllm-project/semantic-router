@@ -96,6 +96,14 @@ func (a *Action) propose(
 		return contextcompression.TransformationEdits{}, errBlocked(a.blocked)
 	}
 	edits, diagnostics := Plan(ctx, a.policy, a.trigger, view)
+	// Uncertain or unusable evidence is an evaluation failure, not a silent
+	// no-op: returning it as a failed step is what lets the declared failure
+	// mode preserve the request or reject it before dispatch.
+	if evaluationFailure(diagnostics.Reason) {
+		diagnostics.Outcome = OutcomeFailed
+		a.record(diagnostics)
+		return contextcompression.TransformationEdits{}, errBlocked(diagnostics.Reason)
+	}
 	if len(edits.RemoveMessages) == 0 || a.recovery == nil {
 		if len(edits.RemoveMessages) > 0 {
 			diagnostics.RecoveryStatus = RecoveryNotRequired
@@ -166,6 +174,7 @@ func (a *Action) Reconcile(
 	if !a.evaluated {
 		result = Diagnostics{
 			Signal:       a.trigger.Signal,
+			Scope:        ScopeEligibleHistory,
 			TriggerClass: a.trigger.Class,
 			Version:      a.trigger.Version,
 			Outcome:      OutcomeSkipped,

@@ -17,6 +17,11 @@ func Plan(
 	trigger TriggerResult,
 	view contextcompression.TransformationView,
 ) (contextcompression.TransformationEdits, Diagnostics) {
+	if policy.Timeout > 0 {
+		bounded, cancel := context.WithTimeout(ctx, policy.Timeout)
+		defer cancel()
+		ctx = bounded
+	}
 	if ctx.Err() != nil {
 		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonCancelled)
 	}
@@ -27,7 +32,10 @@ func Plan(
 		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonHistoryLimitExceeded)
 	}
 
-	removable := selectRemovableTurns(view)
+	removable, ok := selectRemovableTurns(ctx, view)
+	if !ok {
+		return contextcompression.TransformationEdits{}, skipped(trigger, ReasonCancelled)
+	}
 	ids, turns := collectMessages(view, removable)
 	diagnostics := countsFor(view, trigger, ids)
 	if len(ids) == 0 {
@@ -43,9 +51,15 @@ func Plan(
 // Removal is decided per turn because the shared layer rejects a partial turn,
 // and the result is then closed over tool exchanges so a retained message can
 // never lose the call or result it depends on.
-func selectRemovableTurns(view contextcompression.TransformationView) map[int]bool {
+func selectRemovableTurns(
+	ctx context.Context,
+	view contextcompression.TransformationView,
+) (map[int]bool, bool) {
 	removable := make(map[int]bool)
-	for _, message := range view.Messages {
+	for index, message := range view.Messages {
+		if index%cancellationCheckInterval == 0 && ctx.Err() != nil {
+			return nil, false
+		}
 		if _, seen := removable[message.TurnID]; !seen {
 			removable[message.TurnID] = true
 		}
@@ -53,9 +67,12 @@ func selectRemovableTurns(view contextcompression.TransformationView) map[int]bo
 			removable[message.TurnID] = false
 		}
 	}
-	closeOverExchanges(view, removable)
-	return removable
+	return removable, closeOverExchanges(ctx, view, removable)
 }
+
+// cancellationCheckInterval keeps the deadline responsive without paying for a
+// context read on every message of a short history.
+const cancellationCheckInterval = 64
 
 // eligible reports whether one message may be removed on its own merits. Both
 // conditions are required: the shared layer marks eligibility, and any
@@ -69,8 +86,15 @@ func eligible(message contextcompression.MessageView) bool {
 // retained message, repeating until the set stops shrinking. Retention
 // propagates, so one protected result can pin several turns; the set never
 // grows, which bounds the iteration by the number of turns.
-func closeOverExchanges(view contextcompression.TransformationView, removable map[int]bool) {
+func closeOverExchanges(
+	ctx context.Context,
+	view contextcompression.TransformationView,
+	removable map[int]bool,
+) bool {
 	for {
+		if ctx.Err() != nil {
+			return false
+		}
 		retained := make(map[string]bool)
 		for _, message := range view.Messages {
 			if removable[message.TurnID] {
@@ -94,7 +118,7 @@ func closeOverExchanges(view contextcompression.TransformationView, removable ma
 			}
 		}
 		if !changed {
-			return
+			return true
 		}
 	}
 }
@@ -128,6 +152,7 @@ func countsFor(
 ) Diagnostics {
 	diagnostics := Diagnostics{
 		Signal:           trigger.Signal,
+		Scope:            ScopeEligibleHistory,
 		TriggerClass:     trigger.Class,
 		Version:          trigger.Version,
 		ExaminedMessages: len(view.Messages),

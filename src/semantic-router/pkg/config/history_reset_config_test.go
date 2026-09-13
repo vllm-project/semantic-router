@@ -347,3 +347,68 @@ func TestDecisionRejectsDisagreeingContextRecoveryStores(t *testing.T) {
 	}
 	decision.Plugins[1].Configuration = matching
 }
+
+// Registering the topic-continuity family globally must not be enough on its
+// own: an enabled trigger has to name a signal the recipe actually declares.
+func TestHistoryResetTriggerReferencesResolveWithinTheRecipe(t *testing.T) {
+	if HistoryResetTriggerFamilyRegistered() {
+		t.Skip("the topic-continuity family is registered; adjust this fixture with its declaration source")
+	}
+	enabled := func(signal string) Decision {
+		return Decision{
+			Name: "reset",
+			Plugins: []DecisionPlugin{{
+				Type: DecisionPluginHistoryReset,
+				Configuration: MustStructuredPayload(map[string]interface{}{
+					"enabled": true,
+					"trigger": map[string]interface{}{
+						"signal":         signal,
+						"min_confidence": 0.9,
+					},
+				}),
+			}},
+		}
+	}
+
+	// No topic-continuity signal can be declared yet, so every enabled
+	// reference is unresolvable inside a recipe scope.
+	scoped := &RouterConfig{RoutingScope: "recipe-a"}
+	scoped.Decisions = []Decision{enabled("topic_boundary")}
+	err := validateHistoryResetTriggerReferences(scoped)
+	if err == nil {
+		t.Fatal("an undeclared trigger signal was accepted")
+	}
+	if !strings.Contains(err.Error(), "not declared in this recipe") {
+		t.Fatalf("unexpected error %v", err)
+	}
+
+	// A name that resolves to some other signal family is equally invalid: the
+	// reference is checked against the topic-continuity family, not any match.
+	scoped.KeywordRules = []KeywordRule{{Name: "topic_boundary", Operator: "OR", Keywords: []string{"x"}}}
+	if err = validateHistoryResetTriggerReferences(scoped); err == nil {
+		t.Fatal("a keyword signal was accepted as a topic-continuity trigger")
+	}
+
+	// Unscoped configuration defers to the per-recipe pass.
+	unscoped := &RouterConfig{}
+	unscoped.Decisions = []Decision{enabled("topic_boundary")}
+	if err = validateHistoryResetTriggerReferences(unscoped); err != nil {
+		t.Fatalf("unscoped configuration must defer the reference check: %v", err)
+	}
+
+	// A disabled policy never resolves its future trigger.
+	disabled := &RouterConfig{RoutingScope: "recipe-a"}
+	disabled.Decisions = []Decision{{
+		Name: "reset",
+		Plugins: []DecisionPlugin{{
+			Type: DecisionPluginHistoryReset,
+			Configuration: MustStructuredPayload(map[string]interface{}{
+				"enabled": false,
+				"trigger": map[string]interface{}{"signal": "topic_boundary", "min_confidence": 0.9},
+			}),
+		}},
+	}}
+	if err = validateHistoryResetTriggerReferences(disabled); err != nil {
+		t.Fatalf("a disabled policy must not require a declared signal: %v", err)
+	}
+}

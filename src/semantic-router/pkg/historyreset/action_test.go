@@ -88,6 +88,7 @@ func TestActionPreservesHistoryWithoutAuthorizingEvidence(t *testing.T) {
 		Class:      TriggerContinuation,
 		Confidence: 1,
 		Signal:     "topic_boundary",
+		Version:    "v1",
 	}, "")
 
 	ir, err := applyAction(t, request, action)

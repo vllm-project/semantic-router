@@ -11,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -134,6 +135,34 @@ func (r *OpenAIRouter) respondSelectionRejected(
 	return r.respondRoutingRejected(ctx, originalModel, selectionErr, "selection_rejected")
 }
 
+// respondContextTransformationRejected answers a fail-closed context stage.
+// These are exactly the outcomes that most need an audit trail, so the
+// rejection is recorded through the same Replay lifecycle as a rejected
+// routing decision instead of returning before capture begins.
+func (r *OpenAIRouter) respondContextTransformationRejected(
+	ctx *RequestContext,
+	originalModel string,
+) *ext_proc.ProcessingResponse {
+	status, message := contextTransformationFailure(ctx)
+	terminalReason := "context_transformation_rejected"
+	if ctx != nil && ctx.HistoryResetDiagnostics != nil &&
+		ctx.HistoryResetDiagnostics.Outcome == historyreset.OutcomeFailed {
+		terminalReason = "history_reset_" + ctx.HistoryResetDiagnostics.Reason
+	}
+	resp := r.createErrorResponse(status, message)
+	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(ctx.VSRSelectedDecision)
+	}
+	r.startRouterReplay(ctx, originalModel, ctx.VSRSelectedModel, ctx.VSRSelectedDecisionName)
+	r.updateRouterReplayStatus(ctx, status, false)
+	if immediate := resp.GetImmediateResponse(); immediate != nil {
+		r.attachRouterReplayResponse(ctx, immediate.Body, false)
+	}
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, terminalReason)
+	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
+	return resp
+}
+
 func (r *OpenAIRouter) respondRoutingRejected(
 	ctx *RequestContext,
 	originalModel string,
@@ -200,8 +229,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 	}
 	r.prepareContextHistorySteps(ctx, request)
 	if contextErr := r.applyContextTransformationPlan(ctx, request); contextErr != nil {
-		status, message := contextTransformationFailure(ctx)
-		return nil, r.createErrorResponse(status, message), nil
+		return nil, r.respondContextTransformationRejected(ctx, ctx.RequestModel), nil
 	}
 	return request, nil, nil
 }
