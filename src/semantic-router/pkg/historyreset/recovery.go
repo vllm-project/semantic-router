@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strconv"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -112,13 +115,10 @@ func (a *Action) buildEnvelope(
 			return "", fmt.Errorf("removed message %d has no detached content", id)
 		}
 		// Encoding a message cannot be interrupted, and the neutral protocol
-		// permits single text or media fields far larger than any recovery
-		// limit. Measuring the raw content first keeps the work bounded: the
-		// encoding of a value can only grow, so raw bytes already over the
-		// limit are refused without allocating the encoded form, and anything
-		// that passes this gate encodes within a small multiple of the limit.
-		raw := messageRawBytes(message)
-		if limit > 0 && encoded+raw > limit {
+		// permits both very large single fields and very many small blocks.
+		// Sizing the encoded form first keeps the work bounded: a message that
+		// would not fit is refused before its encoded bytes are allocated.
+		if limit > 0 && encoded+encodedMessageSize(message) > limit {
 			return "", errRecoveryPayloadTooLarge
 		}
 		payload, err := json.Marshal(message)
@@ -154,48 +154,121 @@ const (
 	envelopeMessageOverhead = 64
 )
 
-// messageRawBytes sums every string a message can serialize, before encoding
-// expands them. It is a lower bound on the encoded size — escaping and JSON
-// punctuation only add bytes — which is exactly what makes it safe to refuse
-// on: content already over the limit in raw form cannot encode under it.
-func messageRawBytes(message llmprotocol.Message) int {
-	total := len(message.ID) + len(message.Role)
-	for _, content := range message.Content {
-		total += contentRawBytes(content)
+// encodedMessageSize reports how many bytes a message will occupy once
+// encoded, without encoding it. Structure dominates for some requests: the
+// neutral content block carries no omitempty tags, so a message of empty
+// blocks encodes to tens of times its content length. Counting only the
+// strings would let such a message pass a budget check and then allocate far
+// beyond it, so the walk covers field names, delimiters, null pointers, and
+// escaping exactly.
+//
+// Reflection keeps this honest across schema drift: a field added to any
+// serialized type is counted without editing this file.
+func encodedMessageSize(message llmprotocol.Message) int {
+	return encodedValueSize(reflect.ValueOf(message))
+}
+
+func encodedValueSize(value reflect.Value) int {
+	switch value.Kind() {
+	case reflect.String:
+		return encodedStringSize(value.String())
+	case reflect.Bool:
+		if value.Bool() {
+			return len("true")
+		}
+		return len("false")
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return len(strconv.FormatInt(value.Int(), 10))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return len(strconv.FormatUint(value.Uint(), 10))
+	case reflect.Float32, reflect.Float64:
+		return len(strconv.FormatFloat(value.Float(), 'g', -1, 64))
+	case reflect.Pointer, reflect.Interface:
+		if value.IsNil() {
+			return len("null")
+		}
+		return encodedValueSize(value.Elem())
+	case reflect.Slice, reflect.Array:
+		return encodedSequenceSize(value)
+	case reflect.Struct:
+		return encodedStructSize(value)
+	default:
+		// An unexpected kind must not silently count as nothing. Charge the
+		// largest plausible scalar encoding so the bound stays conservative.
+		return unknownKindSize
+	}
+}
+
+func encodedSequenceSize(value reflect.Value) int {
+	if value.Kind() == reflect.Slice && value.IsNil() {
+		return len("null")
+	}
+	total := len("[]")
+	for index := 0; index < value.Len(); index++ {
+		if index > 0 {
+			total++ // comma
+		}
+		total += encodedValueSize(value.Index(index))
 	}
 	return total
 }
 
-func contentRawBytes(content llmprotocol.Content) int {
-	total := len(content.Kind) + len(content.Text) + len(content.MediaType) +
-		len(content.URL) + len(content.Data) + len(content.FileID) +
-		len(content.Filename) + len(content.Detail) + len(content.Signature) +
-		len(content.Reasoning)
-	for _, citation := range content.Citations {
-		total += len(citation.URL) + len(citation.Title) + citationIndexBytes
-	}
-	if content.Cache != nil {
-		total += len(content.Cache.Type) + len(content.Cache.TTL)
-	}
-	if content.ToolCall != nil {
-		total += len(content.ToolCall.ID) + len(content.ToolCall.Name) +
-			len(content.ToolCall.Arguments)
-	}
-	if content.ToolResult != nil {
-		total += len(content.ToolResult.CallID)
-		for _, nested := range content.ToolResult.Content {
-			total += contentRawBytes(nested)
+func encodedStructSize(value reflect.Value) int {
+	total := len("{}")
+	fields := 0
+	structType := value.Type()
+	for index := 0; index < structType.NumField(); index++ {
+		field := structType.Field(index)
+		if !field.IsExported() {
+			continue
 		}
+		if fields > 0 {
+			total++ // comma
+		}
+		fields++
+		// "Name": plus the encoded value.
+		total += len(field.Name) + len(`"":`) + encodedValueSize(value.Field(index))
 	}
-	if image := content.GeneratedImage; image != nil {
-		total += len(image.Status) + len(image.PartialImage) + len(image.Size) +
-			len(image.Quality) + len(image.Background) + len(image.OutputFormat)
-		if image.Result != nil {
-			total += len(*image.Result)
+	return total
+}
+
+// encodedStringSize counts a JSON string exactly, including the quotes and the
+// escapes the standard encoder emits: control characters and the HTML-sensitive
+// characters expand to six bytes, and invalid UTF-8 becomes a replacement
+// escape.
+func encodedStringSize(value string) int {
+	total := len(`""`)
+	for index := 0; index < len(value); {
+		character := value[index]
+		if character < utf8.RuneSelf {
+			switch {
+			case character == '"' || character == '\\' ||
+				character == '\n' || character == '\r' || character == '\t':
+				total += 2
+			case character < 0x20 || character == '<' || character == '>' || character == '&':
+				total += 6
+			default:
+				total++
+			}
+			index++
+			continue
+		}
+		decoded, size := utf8.DecodeRuneInString(value[index:])
+		switch {
+		case decoded == utf8.RuneError && size == 1:
+			total += 6
+			index++
+		case decoded == '\u2028' || decoded == '\u2029':
+			total += 6
+			index += size
+		default:
+			total += size
+			index += size
 		}
 	}
 	return total
 }
 
-// citationIndexBytes covers the two numeric offsets a citation serializes.
-const citationIndexBytes = 40
+// unknownKindSize is charged for a kind this walk does not model, so a future
+// field shape cannot be counted as free.
+const unknownKindSize = 64

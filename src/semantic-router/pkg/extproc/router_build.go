@@ -156,7 +156,7 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	// reload would otherwise leak clients and goroutines on every attempt
 	// while the previous router keeps serving.
 	if err = router.verifyHistoryResetTriggerWiring(cfg); err != nil {
-		if closeErr := router.Close(); closeErr != nil {
+		if closeErr := closeRejectedCandidate(router); closeErr != nil {
 			logging.ComponentWarnEvent("extproc", "rejected_router_close_failed", map[string]interface{}{
 				"error": closeErr.Error(),
 			})
@@ -164,6 +164,13 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 		return nil, err
 	}
 	return router, nil
+}
+
+// closeRejectedCandidate releases a router that failed activation. It is a
+// variable so a test can observe that the rejection path actually releases the
+// candidate, rather than only that it returned an error.
+var closeRejectedCandidate = func(router *OpenAIRouter) error {
+	return router.Close()
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
