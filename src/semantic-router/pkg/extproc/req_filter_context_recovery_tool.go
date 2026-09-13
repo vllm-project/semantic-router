@@ -8,10 +8,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// The router exposes exactly one reserved retrieval tool per request, whatever
-// mix of context actions issued recovery keys. Every action registers its keys
-// here so the model sees a single tool whose accepted keys are the union.
-
 // contextRecoveryToolConflict reports whether the request already defines the
 // reserved tool name itself. Actions preflight this before removing anything:
 // discovering the collision after a commit would leave unreachable content.
@@ -31,8 +27,10 @@ func contextRecoveryToolConflict(
 }
 
 // registerContextRecoveryKeys records newly issued keys on the request and
-// keeps the reserved tool's accepted-key set in sync. Keys stay out of
-// receipts and metrics; only their count is ever reported.
+// keeps the reserved tool's accepted-key set in sync. A request carries one
+// reserved tool whatever mix of context actions issued keys, so the model sees
+// a single tool whose accepted keys are their union. Keys stay out of receipts
+// and metrics; only their count is ever reported.
 func registerContextRecoveryKeys(
 	ctx *RequestContext,
 	request *llmprotocol.Request,

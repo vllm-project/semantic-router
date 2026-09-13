@@ -348,6 +348,7 @@ func TestEmptyEligibleHistoryIsNeverAFailure(t *testing.T) {
 }
 
 // The configured planning budget must actually bound the evaluation.
+// The action owns the budget, so the planner honours the deadline it is given.
 func TestPlanningStopsAtTheConfiguredTimeout(t *testing.T) {
 	policy := testPolicy()
 	policy.Timeout = time.Nanosecond
@@ -356,8 +357,10 @@ func TestPlanningStopsAtTheConfiguredTimeout(t *testing.T) {
 	for index := 0; index < 256; index++ {
 		messages = append(messages, historyMessage(index, index/2*2, "user"))
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), policy.Timeout)
+	defer cancel()
 	edits, diagnostics := Plan(
-		context.Background(),
+		ctx,
 		policy,
 		acceptedChange(),
 		contextcompression.TransformationView{Messages: messages},

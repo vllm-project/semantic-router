@@ -7,11 +7,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Context recovery is one request-level facility shared by every context
-// action that can remove content. Compression and history reset configure it
-// independently, so their settings are merged into a single contract here: one
-// store, one budget, one reserved retrieval tool, one key set.
-
 // defaultContextRecoveryBytesPerRequest bounds one request's stored payload
 // when the configuration omits an explicit limit, so enabling recovery can
 // never mean persisting without a size bound.

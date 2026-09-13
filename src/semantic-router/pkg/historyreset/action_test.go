@@ -3,6 +3,7 @@ package historyreset
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -227,5 +228,26 @@ func TestEnabledActionProtectsLiveHistoryEvenWhenItRemovesNothing(t *testing.T) 
 	}
 	if len(request.Messages) != 1 {
 		t.Fatal("the live turn must survive")
+	}
+}
+
+// The configured budget is applied by the action, which is what makes it cover
+// envelope construction and the recovery write as well as selection.
+func TestActionAppliesTheConfiguredTimeout(t *testing.T) {
+	policy := testPolicy()
+	policy.Timeout = time.Nanosecond
+	request := conversation()
+	action := NewAction(policy, acceptedChange(), "")
+
+	ir, err := applyAction(t, request, action)
+	if err != nil {
+		t.Fatalf("fail-open must not stop the plan: %v", err)
+	}
+	if len(request.Messages) != 5 {
+		t.Fatal("an expired budget must not remove history")
+	}
+	diagnostics := action.Reconcile(ir.Transformations.Receipts())
+	if diagnostics.Reason != ReasonCancelled {
+		t.Fatalf("unexpected diagnostics %+v", diagnostics)
 	}
 }
