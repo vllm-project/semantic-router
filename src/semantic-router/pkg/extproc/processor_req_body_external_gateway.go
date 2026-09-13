@@ -43,6 +43,7 @@ func (r *OpenAIRouter) handleExternalGatewayModelRouting(
 	ctx.VSRSelectedDecisionName = ""
 	ctx.VSRSelectedDecision = nil
 	ctx.VSRSelectedDecisionConfidence = 0
+	ctx.VSRSelectedDecisionConfidenceScored = false
 	ctx.VSRSelectionMethod = ""
 	ctx.VSRSelectionReasoning = ""
 	ctx.VSREligibleModelRefs = nil

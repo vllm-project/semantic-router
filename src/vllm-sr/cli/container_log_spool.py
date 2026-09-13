@@ -84,7 +84,12 @@ mkfifo -m 600 "$fifo"
 "$@" > "$fifo" 2>&1 &
 child_pid=$!
 
-LC_ALL=C awk \
+# mawk buffers FIFO input even when fflush() flushes each output record.
+awk_interactive=
+case "$(LC_ALL=C awk -W version </dev/null 2>/dev/null)" in
+    mawk\ *) awk_interactive=-Winteractive ;;
+esac
+LC_ALL=C awk ${awk_interactive:+"$awk_interactive"} \
     -v file="$spool_file" \
     -v max_bytes="$max_bytes" \
     -v keep_bytes="$keep_bytes" \

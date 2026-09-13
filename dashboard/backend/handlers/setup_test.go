@@ -544,6 +544,7 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	configureSetupRuntimeCLI(t)
 
 	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
 	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
@@ -620,12 +621,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
 	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
-	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
-	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
-	}
-	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
+	configureSetupRuntimeCLI(t)
 
 	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
 		t.Fatalf("failed to seed router status: %v", writeErr)

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Any
 from pydantic import ValidationError
 
+from cli.bootstrap import SETUP_MODE_KEY
 from cli.config_contract import (
     LEGACY_PROVIDER_DEFAULT_KEYS,
     LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
@@ -227,7 +228,13 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
 
     _reject_invalid_config_surfaces(data, config_path)
 
-    structural_errors = validate_config_structure(data)
+    # Setup is CLI/Dashboard lifecycle metadata, already represented by
+    # UserConfig. Validate the Router projection without widening its schema;
+    # retain the metadata for the operational projection below.
+    router_document = {
+        key: value for key, value in data.items() if key != SETUP_MODE_KEY
+    }
+    structural_errors = validate_config_structure(router_document)
     if structural_errors:
         rendered = "\n".join(f"  • {error}" for error in structural_errors)
         raise ConfigParseError(f"Configuration schema validation failed:\n{rendered}")

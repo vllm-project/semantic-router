@@ -1,7 +1,7 @@
 //! ModernBERT model implementation
 //!
 //! ModernBERT is a modernized bidirectional encoder-only Transformer model
-//! supporting extended context windows up to 32K tokens via YaRN RoPE scaling.
+//! using the context capacity and RoPE theta declared by each checkpoint.
 
 use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn::{
@@ -157,6 +157,7 @@ impl ModernBertAttention {
         uses_local_attention: bool,
         window: usize,
         block_size: usize,
+        has_padding: bool,
     ) -> Result<Tensor> {
         let (b, seq_len, d) = hidden_states.dims3()?;
         let (q, k, v) = self.project_qkv(hidden_states)?;
@@ -179,8 +180,14 @@ impl ModernBertAttention {
             q_offset: 0,
         };
 
-        // Use Flash Attention if enabled, otherwise use the shared chunked kernel
-        let xs = if self.use_flash_attn {
+        // The fixed-length Flash API below has neither a padding mask nor a
+        // sliding window. Only unpadded global layers can use it without changing
+        // model semantics; all other cases use the memory-bounded exact kernel.
+        let xs = if self.use_flash_attn
+            && !uses_local_attention
+            && !has_padding
+            && hidden_states.device().is_cuda()
+        {
             #[cfg(feature = "flash-attn")]
             {
                 // Flash Attention path
@@ -313,6 +320,7 @@ impl ModernBertLayer {
         pad_mask: &Tensor,
         window: usize,
         block_size: usize,
+        has_padding: bool,
     ) -> Result<Tensor> {
         let residual = xs.clone();
         let mut xs = xs.clone();
@@ -320,9 +328,14 @@ impl ModernBertLayer {
             xs = xs.apply(norm)?;
         }
 
-        let xs = self
-            .attn
-            .forward(&xs, pad_mask, self.uses_local_attention, window, block_size)?;
+        let xs = self.attn.forward(
+            &xs,
+            pad_mask,
+            self.uses_local_attention,
+            window,
+            block_size,
+            has_padding,
+        )?;
         let xs = (xs + residual)?;
         let mlp_out = xs.apply(&self.mlp_norm)?.apply(&self.mlp)?;
         let xs = (xs + mlp_out)?;
@@ -446,10 +459,20 @@ impl ModernBert {
         // previous (b, 1, seq, seq) expansion and the (seq, seq) sliding-window band
         // were both O(seq^2); the window is now applied inside the kernel per block.
         let pad_mask = prepare_padding_mask(mask, DType::F32)?.to_device(xs.device())?;
+        // Inspect padding once per model call, not once per layer. The transfer
+        // is only needed when Flash Attention is available on this device.
+        let has_padding = if cfg!(feature = "flash-attn") && xs.device().is_cuda() {
+            mask.flatten_all()?
+                .to_dtype(DType::U32)?
+                .to_vec1::<u32>()?
+                .contains(&0)
+        } else {
+            false
+        };
         let window = self.local_attention_size / 2;
         let mut xs = xs.apply(&self.word_embeddings)?.apply(&self.norm)?;
         for layer in self.layers.iter() {
-            xs = layer.forward(&xs, &pad_mask, window, ATTN_QUERY_BLOCK)?;
+            xs = layer.forward(&xs, &pad_mask, window, ATTN_QUERY_BLOCK, has_padding)?;
         }
         let xs = xs.apply(&self.final_norm)?;
         Ok(xs)
@@ -723,7 +746,7 @@ mod tests {
 
                 for &block in &[1usize, 3, 8, 16, ATTN_QUERY_BLOCK] {
                     let chunked = attn
-                        .forward(&hidden, &pad_mask, uses_local, window, block)
+                        .forward(&hidden, &pad_mask, uses_local, window, block, false)
                         .unwrap();
                     let diff = max_abs_diff(&chunked, &reference);
                     assert!(
@@ -761,7 +784,7 @@ mod tests {
                 dense_reference_attention(&attn, &hidden, &raw_mask, uses_local, window);
             for &block in &[3usize, 8, ATTN_QUERY_BLOCK] {
                 let chunked = attn
-                    .forward(&hidden, &pad_mask, uses_local, window, block)
+                    .forward(&hidden, &pad_mask, uses_local, window, block, true)
                     .unwrap();
                 let diff = max_abs_diff(&chunked, &reference);
                 assert!(
@@ -771,6 +794,33 @@ mod tests {
                     block,
                     diff
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn test_chunked_attention_crosses_default_context_and_query_blocks() {
+        let device = Device::Cpu;
+        let mut config = tiny_config();
+        config.hidden_size = 8;
+        config.num_attention_heads = 2;
+        config.max_position_embeddings = 32768;
+        let attn = make_test_attention(&config, &device);
+        let seq_len = 1025;
+        let mut mask = vec![1f32; seq_len];
+        mask[seq_len - 17..].fill(0.0);
+        let raw_mask = Tensor::from_vec(mask, (1, seq_len), &device).unwrap();
+        let pad_mask = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+        let hidden = Tensor::randn(0f32, 1f32, (1, seq_len, config.hidden_size), &device).unwrap();
+        let window = config.local_attention / 2;
+        for uses_local in [false, true] {
+            let reference =
+                dense_reference_attention(&attn, &hidden, &raw_mask, uses_local, window);
+            for block in [256, ATTN_QUERY_BLOCK] {
+                let actual = attn
+                    .forward(&hidden, &pad_mask, uses_local, window, block, true)
+                    .unwrap();
+                assert!(max_abs_diff(&actual, &reference) < 1e-4);
             }
         }
     }

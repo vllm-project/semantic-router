@@ -80,13 +80,22 @@ download-models: ## Download models using router's built-in download logic
 	@echo ""
 	@echo "Running router with --download-only flag..."
 	@echo "This may take a few minutes depending on your network speed..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		./bin/router -config=config/config.yaml --download-only
 	@echo ""
 	@echo "Models downloaded successfully"
 
-download-models-lora: ## Download LoRA models (same as download-models now)
+QWEN3_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
+QWEN3_EMBEDDING_DIR := mom-embedding-pro
+
+download-qwen3-embedding: ## Download the Qwen3 embedding model for binding tests and benchmarks
+	@echo "⬇️  Downloading $(QWEN3_EMBEDDING_REPO)..."
+	@mkdir -p "$(MODELS_DIR)"
+	@hf download $(QWEN3_EMBEDDING_REPO) --local-dir "$(MODELS_DIR)/$(QWEN3_EMBEDDING_DIR)"
+
+download-models-lora: ## Download models for LoRA and advanced embedding tests
 	@$(MAKE) download-models
+	@$(MAKE) download-qwen3-embedding
 
 # Minimal model set for perf/benchmarks (CI performance tests).
 # The component benchmarks initialize classifiers/embeddings directly instead
@@ -102,9 +111,6 @@ PERF_BENCH_CLASSIFIER_MODELS := \
 	mmbert32k-pii-detector-merged \
 	mmbert32k-jailbreak-detector-merged
 
-PERF_BENCH_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
-PERF_BENCH_EMBEDDING_DIR := mom-embedding-pro
-
 download-models-perf: ## Download the minimal model set for performance benchmarks
 	@echo "📦 Downloading perf benchmark models..."
 	@mkdir -p $(MODELS_DIR)
@@ -114,8 +120,7 @@ download-models-perf: ## Download the minimal model set for performance benchmar
 		hf download $(HF_ORG)/$$model --exclude "onnx/*" --local-dir $(MODELS_DIR)/$$model; \
 	done
 	@echo ""
-	@echo "⬇️  Downloading $(PERF_BENCH_EMBEDDING_REPO)..."
-	@hf download $(PERF_BENCH_EMBEDDING_REPO) --local-dir $(MODELS_DIR)/$(PERF_BENCH_EMBEDDING_DIR)
+	@$(MAKE) download-qwen3-embedding
 	@echo ""
 	@echo "Perf benchmark models downloaded to $(MODELS_DIR)/"
 

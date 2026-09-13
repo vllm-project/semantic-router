@@ -242,7 +242,7 @@ func appendLooperRoutingFacts(
 	appendOptionalHeader(setHeaders, headers.VSRSelectedModel, selectedModel)
 	appendOptionalHeader(setHeaders, headers.VSRSelectedRecipe, string(reqCtx.Routing.RecipeName()))
 	appendOptionalHeader(setHeaders, headers.VSRSelectedDecision, reqCtx.VSRSelectedDecisionName)
-	if reqCtx.VSRSelectedDecisionName != "" && reqCtx.VSRSelectedDecisionConfidence >= 0 {
+	if reqCtx.VSRSelectedDecisionName != "" && reqCtx.VSRSelectedDecisionConfidenceScored && reqCtx.VSRSelectedDecisionConfidence >= 0 {
 		appendOptionalHeader(
 			setHeaders,
 			headers.VSRSelectedConfidence,

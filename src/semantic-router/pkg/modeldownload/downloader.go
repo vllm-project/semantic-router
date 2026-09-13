@@ -78,6 +78,9 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 }
 
 func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, config DownloadConfig) error {
+	if err := validateArtifactDownload(spec); err != nil {
+		return err
+	}
 	logging.Infof("Downloading model: %s", spec.LocalPath)
 
 	args := buildDownloadArgs(spec)
@@ -111,7 +114,7 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if IsGatedModelError(err, spec.RepoID, config.HFToken) {
+		if !spec.Strict && IsGatedModelError(err, spec.RepoID, config.HFToken) {
 			logging.Warnf("⚠️  Skipping model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
 			logging.Warnf("   This is expected if HF_TOKEN is not available (e.g., PRs from forks)")
 			logging.Warnf("   To download gated models, set HF_TOKEN environment variable")
@@ -120,6 +123,24 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
 	}
 
+	if spec.Strict {
+		complete, err := isSpecComplete(spec)
+		if err != nil {
+			return fmt.Errorf("verify downloaded artifact %s: %w", spec.LocalPath, err)
+		}
+		if !complete {
+			return fmt.Errorf("downloaded artifact %s is missing required provider files", spec.LocalPath)
+		}
+		if immutableRevision(spec.Revision) {
+			matched, err := cachedRevisionMatches(spec)
+			if err != nil {
+				return err
+			}
+			if !matched {
+				return fmt.Errorf("downloaded artifact %q does not have a consistent HF snapshot at %q; use a separate empty directory", spec.LocalPath, spec.Revision)
+			}
+		}
+	}
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
 
 	return nil

@@ -75,7 +75,7 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -329,7 +329,7 @@ def test_split_runtime_mounts_evaluation_deployments_into_dashboard_only(
 def test_split_runtime_uses_explicit_envoy_log_level(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
     monkeypatch.setenv("VLLM_SR_ENVOY_LOG_LEVEL", "DeBuG")
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -478,7 +478,7 @@ def test_split_runtime_rejects_invalid_management_auth_exposure(tmp_path, monkey
 def test_envoy_host_publish_preserves_loopback_listener_address(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: local-http\n    address: 127.0.0.1\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: local-http\n    address: 127.0.0.1\n    port: 8899\n"
     )
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -510,7 +510,7 @@ def test_envoy_host_publish_preserves_loopback_listener_address(tmp_path, monkey
 def test_envoy_host_publish_brackets_ipv6_listener_address(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: local-v6\n    address: ::1\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: local-v6\n    address: ::1\n    port: 8899\n"
     )
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -544,7 +544,7 @@ def test_container_start_vllm_sr_uses_role_specific_runtime_images(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -585,7 +585,7 @@ def test_container_start_vllm_sr_skips_dashboard_image_resolution_in_minimal_mod
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
     captured_kwargs = {}
 
