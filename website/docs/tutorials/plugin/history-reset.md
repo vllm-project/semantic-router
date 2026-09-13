@@ -88,9 +88,9 @@ plugins:
 | `failure_mode` | `fail_open` | `fail_open` preserves history on failure; `fail_closed` rejects before provider dispatch. |
 | `limits.max_history_turns` | `128` | Upper bound on turns examined per request. |
 | `limits.max_history_bytes` | `1048576` | Upper bound on the history *text* the policy inspects; tool arguments and media are not part of that view. Recoverable removal is bounded separately by `recovery.max_bytes_per_request`, which is checked against an estimate of the complete payload before anything is serialized. |
-| `limits.timeout_ms` | `50` | Budget for the action's own work: selecting removable turns, closing over tool dependencies, and persisting recovery content. The topic signal and the shared transformation view are prepared before the action runs and bound their own work. |
+| `limits.timeout_ms` | `50` | Budget for the action's own work: selecting removable turns, closing over tool dependencies, and persisting recovery content. It is checked between steps, not inside one: the topic signal and the shared transformation view are prepared before the action runs, and encoding a single message for recovery cannot be interrupted once started. |
 | `recovery.enabled` | `false` | When true, removed turns must be stored recoverably before removal commits. |
-| `recovery.max_bytes_per_request` | `1048576` | Per-request payload bound. When `context_compression` also enables recovery, the effective bound is the stricter of the two: neither action can widen the other's budget. |
+| `recovery.max_bytes_per_request` | `1048576` | Per-request payload bound, enforced exactly against the encoded envelope. When `context_compression` also enables recovery, the effective bound is the stricter of the two: neither action can widen the other's budget. A message whose raw content already exceeds the remaining budget is refused before its encoded form is built, so one oversized message cannot allocate far beyond the limit. |
 
 Configuration cannot widen what may be removed. Eligibility and protection are
 owned by the shared context-transformation layer, and a policy that names a
@@ -100,7 +100,10 @@ protected message simply has its proposal rejected.
 
 - System and developer instructions.
 - The live user turn, including its tool continuation.
-- Authorization and safety context supplied as trusted router metadata.
+- Authorization and safety context, when a trusted router component has marked
+  the message. The action consumes that provenance; it never infers
+  authorization or safety significance from message text, so an unmarked
+  historical message is treated as ordinary history.
 - Multimodal and other opaque protected content.
 - Retrieved RAG and Memory content, which is outside the eligible scope.
 - Complete tool call and result pairs required by anything retained.
