@@ -6,14 +6,14 @@ ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
 ARG IMAGE_REGISTRY=docker.io/
-ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
+ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bookworm
 ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
 #
-# The router runtime image is Debian bookworm-slim. Keep the Rust and Go build
-# stages on an older libc baseline so the copied router binary and shared
-# objects do not pick up GLIBC_2.39+ requirements that fail at runtime.
+# The router runtime image is Debian bookworm-slim. Build the Rust and Go stages
+# on bookworm too, so the copied binaries need no newer glibc than the runtime.
+# Debian 11 (bullseye) security packages are no longer reliably served.
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
@@ -35,7 +35,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Configure cross-compilation environment for arm64
 # NOTE: Do NOT set OPENSSL_DIR globally — it breaks amd64 pkg-config discovery.
-# The pinned runtime-compatible Rust image (Debian bullseye) has libssl-dev pre-installed and
+# The pinned runtime-compatible Rust image (Debian bookworm) has libssl-dev pre-installed and
 # pkg-config finds it automatically for amd64. For arm64, we set OPENSSL_LIB_DIR
 # per-command below.
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
