@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -41,6 +42,10 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 		return
 	}
 	blocked := historyResetBlockedReason(ctx, request)
+	recoverySettings, settingsErr := contextRecoverySettingsForRequest(ctx)
+	if settingsErr != nil {
+		blocked = historyreset.ReasonRecoveryUnavailable
+	}
 	if blocked == "" && historyResetEvidenceBinding(ctx) == "" {
 		// Without a resolved original history there is nothing to bind evidence
 		// to, so no result can be shown to describe this request.
@@ -51,9 +56,10 @@ func (r *OpenAIRouter) prepareContextHistorySteps(ctx *RequestContext, request *
 	if blocked == "" {
 		writer, detached, blocked = r.historyResetRecovery(ctx, request)
 	}
+	policy := historyResetPolicy(ctx, ctx.HistoryResetPolicy, recoverySettings)
 	action := historyreset.NewAction(
-		historyResetPolicy(ctx, ctx.HistoryResetPolicy),
-		historyResetTrigger(ctx),
+		policy,
+		r.historyResetTrigger(ctx, policy),
 		blocked,
 	)
 	if writer != nil {
@@ -71,7 +77,7 @@ func prepareLooperContextHistorySteps(ctx *RequestContext) {
 	if ctx == nil || !ctx.HistoryResetPolicy.IsEnabled() || ctx.HistoryResetAction != nil {
 		return
 	}
-	action := historyreset.NewInheritedAction(historyResetPolicy(ctx, ctx.HistoryResetPolicy))
+	action := historyreset.NewInheritedAction(historyResetPolicy(ctx, ctx.HistoryResetPolicy, nil))
 	ctx.HistoryResetAction = action
 	ctx.ContextHistorySteps = append(ctx.ContextHistorySteps, action.Step())
 }
@@ -81,6 +87,7 @@ func prepareLooperContextHistorySteps(ctx *RequestContext) {
 func historyResetPolicy(
 	ctx *RequestContext,
 	configured *config.HistoryResetPluginConfig,
+	recovery *config.ContextCompressionRecoveryConfig,
 ) historyreset.Policy {
 	limits := configured.EffectiveLimits()
 	confidence, _ := configured.EffectiveMinConfidence()
@@ -95,21 +102,63 @@ func historyResetPolicy(
 	if configured.Trigger != nil {
 		policy.Signal = configured.Trigger.Signal
 	}
-	if configured.Recovery != nil {
-		policy.MaxRecoveryBytes = configured.Recovery.MaxBytesPerRequest
+	if configured.Trigger != nil {
+		policy.AcceptedVersions = append([]string(nil), configured.Trigger.AcceptedVersions...)
 	}
+	// The recovery budget comes from the merged request-level contract, not
+	// from this plugin's own value: one action must not be able to persist
+	// more than the contract another action agreed to.
+	policy.MaxRecoveryBytes = effectiveRecoveryBytes(recovery)
 	return policy
 }
 
-// historyResetTrigger reads the topic-continuity result for this request. The
-// producing signal is owned by its own contract; when nothing has supplied a
-// result, the action treats the evidence as missing and applies its failure
-// mode instead of assuming continuation or change.
-func historyResetTrigger(ctx *RequestContext) historyreset.TriggerResult {
-	if ctx.HistoryResetTrigger == nil {
+// historyResetTrigger resolves the topic-continuity result for this request.
+// The producer is asked here, after the permitted history has been resolved
+// and the request's binding computed, so a signal evaluated earlier in the
+// pipeline cannot classify a different view of the conversation than the one
+// the action transforms.
+//
+// A result already present on the request context wins: internal follow-ups
+// and tests supply one directly. When nothing produces a result the action
+// treats the evidence as missing and applies its failure mode rather than
+// assuming continuation or change.
+func (r *OpenAIRouter) historyResetTrigger(
+	ctx *RequestContext,
+	policy historyreset.Policy,
+) historyreset.TriggerResult {
+	if ctx.HistoryResetTrigger != nil {
+		return *ctx.HistoryResetTrigger
+	}
+	if r == nil || r.HistoryResetTriggers == nil {
 		return historyreset.TriggerResult{}
 	}
-	return *ctx.HistoryResetTrigger
+	callContext := ctx.TraceContext
+	if callContext == nil {
+		callContext = context.Background()
+	}
+	result, ok := r.HistoryResetTriggers.TopicContinuity(callContext, historyreset.TriggerRequest{
+		Signal:  policy.Signal,
+		Binding: policy.Binding,
+		History: ctx.OriginalContextHistory.Conversation(),
+	})
+	if !ok {
+		return historyreset.TriggerResult{}
+	}
+	ctx.HistoryResetTrigger = &result
+	return result
+}
+
+// effectiveRecoveryBytes reports the per-request payload bound every context
+// action shares. An omitted bound falls back to a documented default so a
+// configuration that enables recovery can never persist without one.
+func effectiveRecoveryBytes(recovery *config.ContextCompressionRecoveryConfig) int {
+	if recovery == nil {
+		return 0
+	}
+	if recovery.MaxBytesPerRequest > 0 {
+		return recovery.MaxBytesPerRequest
+	}
+	return defaultContextRecoveryBytesPerRequest
 }
 
 // historyResetBlockedReason reports a terminal condition established before

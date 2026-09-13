@@ -10,6 +10,8 @@ plugin:
     trigger:
       signal: topic_boundary
       min_confidence: 0.9
+      accepted_versions:
+        - v1
     scope: eligible_history
     failure_mode: fail_open
     limits:

@@ -44,12 +44,12 @@ type TriggerResult struct {
 // It is built from the plugin configuration by the caller; this package does
 // not read configuration or widen what the shared layer allows to be removed.
 type Policy struct {
-	Signal          string
-	SignalVersions  []string
-	MinConfidence   float64
-	MaxHistoryTurns int
-	MaxHistoryBytes int
-	FailClosed      bool
+	Signal           string
+	AcceptedVersions []string
+	MinConfidence    float64
+	MaxHistoryTurns  int
+	MaxHistoryBytes  int
+	FailClosed       bool
 	// Binding is this request's original-history and live-turn identity.
 	// Evidence that does not carry the same binding describes some other
 	// request or an older view of this one, and cannot authorize removal.
@@ -85,6 +85,7 @@ const (
 	ReasonEvidenceMissing            = "evidence_missing"
 	ReasonEvidenceUnknown            = "evidence_unknown"
 	ReasonEvidenceLowConfidence      = "evidence_low_confidence"
+	ReasonEvidenceInvalidConfidence  = "evidence_invalid_confidence"
 	ReasonEvidenceFallback           = "evidence_fallback"
 	ReasonEvidenceWrongSignal        = "evidence_wrong_signal"
 	ReasonEvidenceUnsupportedVersion = "evidence_unsupported_version"
@@ -180,19 +181,21 @@ func (p Policy) authorize(trigger TriggerResult) string {
 		return ReasonEvidenceContinuation
 	case trigger.Class != TriggerChange:
 		return ReasonEvidenceUnknown
+	case !usableConfidence(trigger.Confidence):
+		// An unusable confidence cannot be compared with the threshold, so it
+		// is rejected outright rather than silently passing the comparison.
+		return ReasonEvidenceInvalidConfidence
 	case trigger.Confidence < p.MinConfidence:
 		return ReasonEvidenceLowConfidence
 	}
 	return ""
 }
 
-// supportsVersion accepts any version when the policy declares none, so a
-// deployment that has not pinned the producing contract still works.
+// supportsVersion accepts only the contracts the policy declares. An empty set
+// accepts nothing: a policy that has not stated which producer contracts it
+// trusts cannot verify compatibility, so it must not act on the result.
 func (p Policy) supportsVersion(version string) bool {
-	if len(p.SignalVersions) == 0 {
-		return true
-	}
-	for _, supported := range p.SignalVersions {
+	for _, supported := range p.AcceptedVersions {
 		if supported == version {
 			return true
 		}

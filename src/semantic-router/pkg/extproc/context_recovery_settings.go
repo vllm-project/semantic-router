@@ -12,6 +12,11 @@ import (
 // independently, so their settings are merged into a single contract here: one
 // store, one budget, one reserved retrieval tool, one key set.
 
+// defaultContextRecoveryBytesPerRequest bounds one request's stored payload
+// when the configuration omits an explicit limit, so enabling recovery can
+// never mean persisting without a size bound.
+const defaultContextRecoveryBytesPerRequest = 1 << 20
+
 // resolveContextRecoverySettings merges the selected decision's compression and
 // history-reset recovery settings. Incompatible stores are rejected rather than
 // silently resolved in one plugin's favour, and every bound resolves to the

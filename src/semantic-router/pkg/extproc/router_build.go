@@ -145,7 +145,14 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	if err != nil {
 		return nil, err
 	}
-	return components.buildRouter(), nil
+	router := components.buildRouter()
+	// Verify runtime wiring before this router can serve. Startup and every
+	// reload reach this point, and a rejected candidate leaves the currently
+	// active router untouched.
+	if err = router.verifyHistoryResetRuntime(cfg); err != nil {
+		return nil, err
+	}
+	return router, nil
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {

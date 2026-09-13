@@ -2748,6 +2748,12 @@
         },
         "min_confidence": {
           "type": "number"
+        },
+        "accepted_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
