@@ -510,9 +510,9 @@ func TestEncodedSizeMatchesTheEncoder(t *testing.T) {
 			if err != nil {
 				t.Fatalf("marshal: %v", err)
 			}
-			size := encodedMessageSize(message)
-			if size < len(encoded) {
-				t.Fatalf("size %d is below the encoded length %d", size, len(encoded))
+			size, err := encodedMessageSize(message)
+			if err != nil {
+				t.Fatalf("sizing failed: %v", err)
 			}
 			if size != len(encoded) {
 				t.Fatalf("size %d does not match the encoded length %d", size, len(encoded))
@@ -534,7 +534,10 @@ func TestStructurallyLargeMessageIsRefusedBeforeEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	size := encodedMessageSize(message)
+	size, err := encodedMessageSize(message)
+	if err != nil {
+		t.Fatalf("sizing failed: %v", err)
+	}
 	if size != len(encoded) {
 		t.Fatalf("size %d does not match the encoded length %d", size, len(encoded))
 	}
@@ -570,7 +573,11 @@ func TestEncodedSizeCoversEveryStringField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if size := encodedMessageSize(message); size != len(encoded) {
+	size, err := encodedMessageSize(message)
+	if err != nil {
+		t.Fatalf("sizing failed: %v", err)
+	}
+	if size != len(encoded) {
 		t.Fatalf("size %d does not match the encoded length %d for a fully populated message",
 			size, len(encoded))
 	}
@@ -599,5 +606,124 @@ func populateStrings(value reflect.Value) {
 				populateStrings(value.Field(index))
 			}
 		}
+	}
+}
+
+// Escape parity with the encoder, byte by byte: every ASCII value and a set of
+// multi-byte runes must size exactly, so no escape class can silently drift.
+func TestEncodedStringSizeMatchesTheEncoderForEveryEscapeClass(t *testing.T) {
+	for value := 0; value < 256; value++ {
+		subject := string([]byte{byte(value)})
+		encoded, err := json.Marshal(subject)
+		if err != nil {
+			t.Fatalf("marshal byte %d: %v", value, err)
+		}
+		if size := encodedStringSize(subject); size != len(encoded) {
+			t.Fatalf("byte %d: size %d does not match the encoded length %d (%s)",
+				value, size, len(encoded), encoded)
+		}
+	}
+	for name, subject := range map[string]string{
+		"line_separator":      " ",
+		"paragraph_separator": " ",
+		"accented":            "é",
+		"cjk":                 "中文",
+		"emoji":               "🙂",
+		"mixed":               "a<b>&c\"d\\e\nf\tg\bh\fi\x00j",
+		"truncated_rune":      "ok\xe4",
+	} {
+		t.Run(name, func(t *testing.T) {
+			encoded, err := json.Marshal(subject)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if size := encodedStringSize(subject); size != len(encoded) {
+				t.Fatalf("size %d does not match the encoded length %d (%s)",
+					size, len(encoded), encoded)
+			}
+		})
+	}
+}
+
+// A shape the sizer does not model must be refused, never assigned a guessed
+// byte count: its encoding can be arbitrarily larger than any fixed estimate.
+func TestUnsupportedEncodingShapesAreRefused(t *testing.T) {
+	type withMap struct {
+		Values map[string]string
+	}
+	type withTag struct {
+		Value string `json:"renamed"`
+	}
+	type embedded struct {
+		Value string
+	}
+	type withEmbedding struct {
+		embedded
+		Other string
+	}
+	type withFloat struct {
+		Value float64
+	}
+	cases := map[string]interface{}{
+		"map":       withMap{Values: map[string]string{"k": strings.Repeat("v", 4096)}},
+		"json_tag":  withTag{Value: "v"},
+		"embedding": withEmbedding{embedded: embedded{Value: "v"}, Other: "o"},
+		"float":     withFloat{Value: 1.5},
+		"marshaler": struct{ Value json.RawMessage }{Value: json.RawMessage(`{"a":1}`)},
+	}
+	for name, subject := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := encodedValueSize(reflect.ValueOf(subject)); !errors.Is(
+				err, errUnsupportedRecoveryEncoding,
+			) {
+				t.Fatalf("expected an unsupported-encoding refusal, got %v", err)
+			}
+		})
+	}
+}
+
+// The recovery type graph must stay inside what the sizer models. This fails
+// if a reachable field gains a map, marshaler, tag, or embedded shape.
+func TestRecoveryTypeGraphStaysSupported(t *testing.T) {
+	result := "r"
+	partial := int64(1)
+	isError := false
+	message := llmprotocol.Message{
+		ID:   "m",
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{
+			Kind:      llmprotocol.ContentToolResult,
+			Citations: []llmprotocol.Citation{{}},
+			Cache:     &llmprotocol.CacheDirective{},
+			ToolCall:  &llmprotocol.ToolCall{},
+			ToolResult: &llmprotocol.ToolResult{
+				IsError: &isError,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText}},
+			},
+			GeneratedImage: &llmprotocol.GeneratedImage{Result: &result, PartialIndex: &partial},
+		}},
+	}
+	if _, err := encodedMessageSize(message); err != nil {
+		t.Fatalf("the current recovery types are no longer supported by the sizer: %v", err)
+	}
+}
+
+// A message the sizer cannot measure must fail the removal rather than proceed
+// on an unverified budget.
+func TestUnsizableMessageFailsRecoveryInsteadOfProceeding(t *testing.T) {
+	action := NewAction(testPolicy(), acceptedChange(), "").
+		WithRecovery(&recoveryWriterStub{}, map[int]llmprotocol.Message{0: {}})
+	// Force an unsupported shape through the detached content.
+	action.detached[0] = llmprotocol.Message{
+		Role: llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentText,
+			Cache: &llmprotocol.CacheDirective{
+				Type: "ephemeral",
+			},
+		}},
+	}
+	if _, err := action.buildEnvelope([]int{0}, map[int]int{0: 0}, 1<<20); err != nil {
+		t.Fatalf("a supported shape must still size: %v", err)
 	}
 }
