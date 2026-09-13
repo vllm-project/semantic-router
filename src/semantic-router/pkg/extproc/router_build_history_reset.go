@@ -13,7 +13,7 @@ import (
 // recipe; it cannot prove that this router has a producer wired, and a route
 // without one could only preserve or reject every request.
 func (r *OpenAIRouter) verifyHistoryResetTriggerWiring(cfg *config.RouterConfig) error {
-	if r == nil || cfg == nil {
+	if cfg == nil {
 		return nil
 	}
 	for _, decision := range cfg.AllRoutingDecisions() {

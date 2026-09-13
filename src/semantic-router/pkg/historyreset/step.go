@@ -105,7 +105,7 @@ func (a *Action) propose(
 		defer cancel()
 		ctx = bounded
 	}
-	edits, diagnostics := Plan(ctx, a.policy, a.trigger, view)
+	edits, diagnostics := plan(ctx, a.policy, a.trigger, view)
 	// Uncertain or unusable evidence is an evaluation failure, not a silent
 	// no-op: returning it as a failed step is what lets the declared failure
 	// mode preserve the request or reject it before dispatch.

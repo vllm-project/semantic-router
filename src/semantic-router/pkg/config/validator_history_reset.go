@@ -24,7 +24,7 @@ func validateHistoryResetPlugin(
 		func() error { return validateHistoryResetRecovery(typed, scope) },
 		func() error {
 			return validateHistoryResetEnablement(
-				typed, scope, historyResetTriggerFamilyRegistered(SignalCatalog()))
+				typed, scope, IsSupportedSignalType(HistoryResetTriggerSignalType))
 		},
 	}
 	for _, check := range checks {

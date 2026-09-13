@@ -57,7 +57,7 @@ func withExchange(
 
 func planIDs(t *testing.T, policy Policy, trigger TriggerResult, messages ...contextcompression.MessageView) ([]int, Diagnostics) {
 	t.Helper()
-	edits, diagnostics := Plan(
+	edits, diagnostics := plan(
 		context.Background(),
 		policy,
 		trigger,
@@ -231,7 +231,7 @@ func TestPlanRejectsTheWholeStepWhenLimitsAreExceeded(t *testing.T) {
 func TestPlanHonoursCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	edits, diagnostics := Plan(ctx, testPolicy(), acceptedChange(),
+	edits, diagnostics := plan(ctx, testPolicy(), acceptedChange(),
 		contextcompression.TransformationView{Messages: []contextcompression.MessageView{
 			historyMessage(0, 0, "user"),
 		}},
@@ -359,7 +359,7 @@ func TestPlanningStopsAtTheConfiguredTimeout(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), policy.Timeout)
 	defer cancel()
-	edits, diagnostics := Plan(
+	edits, diagnostics := plan(
 		ctx,
 		policy,
 		acceptedChange(),
@@ -381,7 +381,7 @@ func TestPlanningHonoursCallerCancellationDuringSelection(t *testing.T) {
 	for index := 0; index < 128; index++ {
 		messages = append(messages, historyMessage(index, index/2*2, "user"))
 	}
-	_, diagnostics := Plan(
+	_, diagnostics := plan(
 		ctx,
 		testPolicy(),
 		acceptedChange(),
@@ -405,7 +405,7 @@ func TestUnusableConfidenceCannotAuthorizeRemoval(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			trigger := acceptedChange()
 			trigger.Confidence = confidence
-			edits, diagnostics := Plan(
+			edits, diagnostics := plan(
 				context.Background(),
 				testPolicy(),
 				trigger,
@@ -429,7 +429,7 @@ func TestUnusableConfidenceCannotAuthorizeRemoval(t *testing.T) {
 func TestUndeclaredAcceptedVersionsRejectEveryResult(t *testing.T) {
 	policy := testPolicy()
 	policy.AcceptedVersions = nil
-	edits, diagnostics := Plan(
+	edits, diagnostics := plan(
 		context.Background(),
 		policy,
 		acceptedChange(),
