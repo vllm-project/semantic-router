@@ -288,3 +288,24 @@ func TestRecoveryAgreementIsCheckedBeforeComponentsAreBuilt(t *testing.T) {
 		t.Fatalf("construction accepted disagreeing recovery stores: %v", err)
 	}
 }
+
+// The rejection path is exercised through the real constructor, so the control
+// flow that releases a rejected candidate is covered rather than simulated.
+func TestConstructionRejectsAnEnabledPolicyWithoutAProducer(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.Decisions = []config.Decision{resetDecisionFor(t, "reset", nil)}
+
+	router, err := buildOpenAIRouterFromConfig(cfg)
+	if err == nil {
+		if router != nil {
+			_ = router.Close()
+		}
+		t.Fatal("construction accepted an enabled policy with no producer")
+	}
+	if router != nil {
+		t.Fatal("a rejected construction must not return a usable router")
+	}
+	if !strings.Contains(err.Error(), config.HistoryResetTriggerUnavailable) {
+		t.Fatalf("unexpected error %v", err)
+	}
+}

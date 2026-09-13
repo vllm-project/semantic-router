@@ -305,7 +305,7 @@ func TestMatchingBindingAuthorizesRemoval(t *testing.T) {
 }
 
 // Serialization cannot be interrupted once it starts, so an oversized removal
-// is rejected from an estimate before the envelope is built.
+// is refused before its encoded form is ever allocated.
 func TestOversizedRemovalIsRejectedBeforeSerialization(t *testing.T) {
 	policy := testPolicy()
 	policy.MaxRecoveryBytes = 64
@@ -438,5 +438,125 @@ func TestRecoveryBoundStopsAtTheCrossingMessage(t *testing.T) {
 	}
 	if _, err := action.buildEnvelope(ids, turns, 1024); !errors.Is(err, errRecoveryPayloadTooLarge) {
 		t.Fatalf("expected the bound to stop encoding, got %v", err)
+	}
+}
+
+// The running accounting must stay an upper bound on the final document at
+// every count boundary, or a payload could pass the bound and then encode
+// larger than the limit it was checked against.
+func TestRecoveryAccountingStaysAnUpperBound(t *testing.T) {
+	message := llmprotocol.Message{
+		Role:    llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "bounded"}},
+	}
+	for count := 1; count <= 16; count++ {
+		detached := make(map[int]llmprotocol.Message, count)
+		ids := make([]int, 0, count)
+		turns := make(map[int]int, count)
+		for index := 0; index < count; index++ {
+			detached[index] = message
+			ids = append(ids, index)
+			turns[index] = index
+		}
+		action := NewAction(testPolicy(), acceptedChange(), "").
+			WithRecovery(&recoveryWriterStub{}, detached)
+
+		payload, err := action.buildEnvelope(ids, turns, 0)
+		if err != nil {
+			t.Fatalf("count=%d unbounded encoding failed: %v", count, err)
+		}
+		// The smallest bound the accounting will accept must still be at least
+		// the real encoded size: the running total may only over-count.
+		accepted, err := action.buildEnvelope(ids, turns, len(payload))
+		if err == nil && len(accepted) > len(payload) {
+			t.Fatalf("count=%d accepted %d bytes under a %d byte bound",
+				count, len(accepted), len(payload))
+		}
+		if _, err = action.buildEnvelope(ids, turns, len(payload)-1); err == nil {
+			t.Fatalf("count=%d accepted a payload above its bound", count)
+		}
+	}
+}
+
+// Raw content already over the limit is refused without allocating its encoded
+// form, which is what bounds the work a single oversized message can cause.
+func TestOversizedMessageIsRefusedBeforeEncoding(t *testing.T) {
+	huge := llmprotocol.Message{
+		Role: llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentImage,
+			Data: strings.Repeat("d", 1<<20),
+		}},
+	}
+	if raw := messageRawBytes(huge); raw < 1<<20 {
+		t.Fatalf("raw accounting = %d, want the media payload counted", raw)
+	}
+	action := NewAction(testPolicy(), acceptedChange(), "").
+		WithRecovery(&recoveryWriterStub{}, map[int]llmprotocol.Message{0: huge})
+	if _, err := action.buildEnvelope([]int{0}, map[int]int{0: 0}, 4096); !errors.Is(
+		err, errRecoveryPayloadTooLarge,
+	) {
+		t.Fatalf("expected refusal before encoding, got %v", err)
+	}
+}
+
+// Every serializable field contributes to the raw measurement, so no field can
+// smuggle unbounded content past the pre-encoding gate.
+func TestRawAccountingVisitsEverySerializableField(t *testing.T) {
+	result := "generated"
+	content := llmprotocol.Content{
+		Kind:      llmprotocol.ContentToolResult,
+		Text:      "t",
+		MediaType: "m",
+		URL:       "u",
+		Data:      "d",
+		FileID:    "f",
+		Filename:  "n",
+		Detail:    "e",
+		Signature: "s",
+		Reasoning: llmprotocol.ReasoningScopeSummary,
+		Citations: []llmprotocol.Citation{{URL: "cu", Title: "ct"}},
+		Cache:     &llmprotocol.CacheDirective{Type: "ephemeral", TTL: "5m"},
+		ToolCall:  &llmprotocol.ToolCall{ID: "i", Name: "na", Arguments: "ar"},
+		ToolResult: &llmprotocol.ToolResult{
+			CallID:  "ci",
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "nested"}},
+		},
+		GeneratedImage: &llmprotocol.GeneratedImage{
+			Status: "completed", Result: &result, PartialImage: "p",
+			Size: "1024x1024", Quality: "high", Background: "opaque", OutputFormat: "png",
+		},
+	}
+	baseline := contentRawBytes(content)
+	for name, mutate := range map[string]func(*llmprotocol.Content){
+		"text":            func(c *llmprotocol.Content) { c.Text += "xxxx" },
+		"data":            func(c *llmprotocol.Content) { c.Data += "xxxx" },
+		"file_id":         func(c *llmprotocol.Content) { c.FileID += "xxxx" },
+		"filename":        func(c *llmprotocol.Content) { c.Filename += "xxxx" },
+		"detail":          func(c *llmprotocol.Content) { c.Detail += "xxxx" },
+		"signature":       func(c *llmprotocol.Content) { c.Signature += "xxxx" },
+		"citation_title":  func(c *llmprotocol.Content) { c.Citations[0].Title += "xxxx" },
+		"cache_ttl":       func(c *llmprotocol.Content) { c.Cache.TTL += "xxxx" },
+		"tool_arguments":  func(c *llmprotocol.Content) { c.ToolCall.Arguments += "xxxx" },
+		"nested_result":   func(c *llmprotocol.Content) { c.ToolResult.Content[0].Text += "xxxx" },
+		"generated_image": func(c *llmprotocol.Content) { c.GeneratedImage.PartialImage += "xxxx" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			mutated := content
+			mutated.Citations = append([]llmprotocol.Citation(nil), content.Citations...)
+			cache := *content.Cache
+			call := *content.ToolCall
+			toolResult := llmprotocol.ToolResult{
+				CallID:  content.ToolResult.CallID,
+				Content: append([]llmprotocol.Content(nil), content.ToolResult.Content...),
+			}
+			image := *content.GeneratedImage
+			mutated.Cache, mutated.ToolCall = &cache, &call
+			mutated.ToolResult, mutated.GeneratedImage = &toolResult, &image
+			mutate(&mutated)
+			if contentRawBytes(mutated) <= baseline {
+				t.Fatalf("%s did not contribute to the raw measurement", name)
+			}
+		})
 	}
 }

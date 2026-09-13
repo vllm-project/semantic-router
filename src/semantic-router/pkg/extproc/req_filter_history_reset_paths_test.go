@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -298,5 +299,49 @@ func TestResetRefusesWhenNoHistoryCanBeResolved(t *testing.T) {
 	}
 	if ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonHistoryUnresolved {
 		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+	}
+}
+
+// Trusted authorization and safety marks are provenance this action consumes,
+// not state it infers. When a trusted component supplies them for an ordinary
+// historical message, that message must survive to the provider even though
+// its role and position would otherwise make it removable.
+func TestSuppliedTrustedProtectionSurvivesToTheProvider(t *testing.T) {
+	for name, protection := range map[string]contextcompression.Protection{
+		"authorization": contextcompression.ProtectAuthorization,
+		"safety":        contextcompression.ProtectSafety,
+	} {
+		t.Run(name, func(t *testing.T) {
+			router := &OpenAIRouter{}
+			request := resetConversation()
+			ctx := enabledResetContext(t, request)
+			// A trusted component marks the prepared index of an ordinary
+			// user-role message carrying protected context.
+			ctx.ProtectedContextMessages = map[int]contextcompression.Protection{0: protection}
+			captureOriginalContextHistory(ctx)
+			ctx.HistoryResetTrigger = &historyreset.TriggerResult{
+				Class:      historyreset.TriggerChange,
+				Confidence: 0.95,
+				Signal:     "topic_boundary",
+				Version:    "v1",
+				Binding:    historyResetEvidenceBinding(ctx),
+			}
+
+			router.prepareContextHistorySteps(ctx, request)
+			if err := router.applyContextTransformationPlan(ctx, request); err != nil {
+				t.Fatalf("expected the plan to succeed: %v", err)
+			}
+
+			// The marked message and everything its turn depends on survive.
+			if len(request.Messages) != 3 {
+				t.Fatalf("a marked message was removed: %+v", request.Messages)
+			}
+			if request.Messages[0].Content[0].Text != "old question" {
+				t.Fatalf("the marked message did not reach the provider: %+v", request.Messages[0])
+			}
+			if ctx.HistoryResetDiagnostics.ProtectedMessages == 0 {
+				t.Fatalf("protection was not counted in the receipt: %+v", ctx.HistoryResetDiagnostics)
+			}
+		})
 	}
 }
