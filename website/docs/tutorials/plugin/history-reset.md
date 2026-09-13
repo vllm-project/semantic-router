@@ -87,8 +87,8 @@ plugins:
 | `scope` | `eligible_history` | The only supported scope. Ranking and selective retention belong to other actions. |
 | `failure_mode` | `fail_open` | `fail_open` preserves history on failure; `fail_closed` rejects before provider dispatch. |
 | `limits.max_history_turns` | `128` | Upper bound on turns examined per request. |
-| `limits.max_history_bytes` | `1048576` | Upper bound on the history *text* the policy inspects. Tool arguments and media are not part of that view, so `timeout_ms` is the bound that covers expensive payloads of any shape. |
-| `limits.timeout_ms` | `50` | Planning budget per request, enforced as a deadline over the whole evaluation. |
+| `limits.max_history_bytes` | `1048576` | Upper bound on the history *text* the policy inspects; tool arguments and media are not part of that view. Recoverable removal is bounded separately by `recovery.max_bytes_per_request`, which is checked against an estimate of the complete payload before anything is serialized. |
+| `limits.timeout_ms` | `50` | Budget for the action's own work: selecting removable turns, closing over tool dependencies, and persisting recovery content. The topic signal and the shared transformation view are prepared before the action runs and bound their own work. |
 | `recovery.enabled` | `false` | When true, removed turns must be stored recoverably before removal commits. |
 | `recovery.max_bytes_per_request` | `1048576` | Per-request payload bound. When `context_compression` also enables recovery, the effective bound is the stricter of the two: neither action can widen the other's budget. |
 

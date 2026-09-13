@@ -7,16 +7,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// verifyHistoryResetRuntime refuses to activate a configuration whose enabled
-// history-reset policies cannot actually run. Static validation proves the
-// configuration is well formed and that its trigger resolves inside the
-// recipe; it cannot prove that this process has a topic-continuity producer
-// wired, nor that every route agrees on one recovery backend.
-//
-// Both checks belong here rather than in the validator: they describe runtime
-// wiring, and an offline tool cannot attest to another server's composition.
-// Running them before the router becomes active means a rejected candidate
-// leaves the previously serving configuration untouched.
+// verifyHistoryResetRuntime runs both activation checks. Construction calls
+// them separately so the configuration-only one can reject a candidate before
+// components are allocated; this entry point keeps them together for callers
+// that verify an already-built router.
 func (r *OpenAIRouter) verifyHistoryResetRuntime(cfg *config.RouterConfig) error {
 	if r == nil || cfg == nil {
 		return nil
@@ -27,7 +21,15 @@ func (r *OpenAIRouter) verifyHistoryResetRuntime(cfg *config.RouterConfig) error
 	return verifyContextRecoveryAgreement(cfg)
 }
 
+// verifyHistoryResetTriggerWiring refuses to activate an enabled policy that
+// has no topic-continuity producer in this process. Static validation proves
+// the configuration is well formed and that its trigger resolves inside the
+// recipe; it cannot prove that this router has a producer wired, and a route
+// without one could only preserve or reject every request.
 func (r *OpenAIRouter) verifyHistoryResetTriggerWiring(cfg *config.RouterConfig) error {
+	if r == nil || cfg == nil {
+		return nil
+	}
 	for _, decision := range cfg.AllRoutingDecisions() {
 		if !decision.GetHistoryResetConfig().IsEnabled() {
 			continue

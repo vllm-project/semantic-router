@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type stubTriggerSource struct {
@@ -164,5 +166,125 @@ func TestAbsentProducerResultIsMissingEvidence(t *testing.T) {
 	}
 	if ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonEvidenceMissing {
 		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+	}
+}
+
+// A terminally blocked request cannot be changed by any topic result, so the
+// producer must not be asked: evaluation can be expensive, and its answer
+// could only be discarded.
+func TestBlockedRequestsNeverInvokeTheProducer(t *testing.T) {
+	cases := []struct {
+		name    string
+		prepare func(t *testing.T, ctx *RequestContext, request *llmprotocol.Request)
+		reason  string
+	}{
+		{
+			name: "history_unresolved",
+			prepare: func(_ *testing.T, _ *RequestContext, _ *llmprotocol.Request) {
+				// Leave the original history unresolved.
+			},
+			reason: historyreset.ReasonHistoryUnresolved,
+		},
+		{
+			name: "reserved_tool_conflict",
+			prepare: func(_ *testing.T, ctx *RequestContext, request *llmprotocol.Request) {
+				captureOriginalContextHistory(ctx)
+				request.Tools = []llmprotocol.Tool{{Name: contextcompression.RetrieveToolName}}
+			},
+			reason: historyreset.ReasonReservedToolConflict,
+		},
+		{
+			name: "streaming_with_required_recovery",
+			prepare: func(_ *testing.T, ctx *RequestContext, _ *llmprotocol.Request) {
+				captureOriginalContextHistory(ctx)
+				ctx.ExpectStreamingResponse = true
+			},
+			reason: historyreset.ReasonStreamingUnsupported,
+		},
+		{
+			name: "recovery_unavailable",
+			prepare: func(_ *testing.T, ctx *RequestContext, _ *llmprotocol.Request) {
+				captureOriginalContextHistory(ctx)
+			},
+			reason: historyreset.ReasonRecoveryUnavailable,
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			source := &stubTriggerSource{result: historyreset.TriggerResult{
+				Class: historyreset.TriggerChange, Confidence: 1,
+				Signal: "topic_boundary", Version: "v1",
+			}}
+			// No recovery store is wired, so a policy requiring recovery is
+			// unavailable; the reserved-tool and streaming cases are blocked
+			// before that check.
+			router := &OpenAIRouter{Config: &config.RouterConfig{}, HistoryResetTriggers: source}
+			request := resetConversation()
+			ctx := &RequestContext{
+				RequestID:           "blocked",
+				SemanticRequest:     request,
+				VSRSelectedDecision: recoverableResetDecision(t, nil),
+			}
+			bindHistoryResetPolicy(ctx)
+			test.prepare(t, ctx, request)
+
+			router.prepareContextHistorySteps(ctx, request)
+			if source.called != 0 {
+				t.Fatalf("the producer was asked %d times for a blocked request", source.called)
+			}
+			if err := router.applyContextTransformationPlan(ctx, request); err != nil {
+				t.Fatalf("fail-open must preserve the request: %v", err)
+			}
+			if len(request.Messages) != 3 {
+				t.Fatalf("a blocked request must keep its history, got %d", len(request.Messages))
+			}
+			if ctx.HistoryResetDiagnostics.Reason != test.reason {
+				t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+			}
+			if len(ctx.ContextCompressionRecoveryKeys) != 0 {
+				t.Fatal("a blocked request must not perform recovery I/O")
+			}
+		})
+	}
+}
+
+// A candidate router that fails activation must release everything it built,
+// or a rejected reload leaks resources on every attempt while the previous
+// router keeps serving.
+func TestRejectedCandidateRouterReleasesItsResources(t *testing.T) {
+	closed := false
+	router := &OpenAIRouter{resources: &resourceScope{}}
+	router.resources.add(func() error {
+		closed = true
+		return nil
+	})
+
+	cfg := &config.RouterConfig{}
+	cfg.Decisions = []config.Decision{resetDecisionFor(t, "reset", nil)}
+	if err := router.verifyHistoryResetTriggerWiring(cfg); err == nil {
+		t.Fatal("expected the candidate to be rejected")
+	}
+	if err := router.Close(); err != nil {
+		t.Fatalf("closing the rejected candidate failed: %v", err)
+	}
+	if !closed {
+		t.Fatal("the rejected candidate did not release its resources")
+	}
+}
+
+// Configuration-only disagreement is caught before any component is built.
+func TestRecoveryAgreementIsCheckedBeforeComponentsAreBuilt(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.Decisions = []config.Decision{
+		resetDecisionFor(t, "first", map[string]interface{}{
+			"enabled": true, "store": "redis",
+		}),
+		resetDecisionFor(t, "second", map[string]interface{}{
+			"enabled": true, "store": "valkey",
+		}),
+	}
+	if _, err := buildOpenAIRouterFromConfig(cfg); err == nil ||
+		!strings.Contains(err.Error(), "different context recovery stores") {
+		t.Fatalf("construction accepted disagreeing recovery stores: %v", err)
 	}
 }

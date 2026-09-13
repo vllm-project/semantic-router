@@ -141,15 +141,26 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
+	// Configuration-only contracts are checked before anything is allocated,
+	// so an invalid candidate never builds components it would have to release.
+	if err := verifyContextRecoveryAgreement(cfg); err != nil {
+		return nil, err
+	}
 	components, err := buildRouterComponents(cfg, pools...)
 	if err != nil {
 		return nil, err
 	}
 	router := components.buildRouter()
-	// Verify runtime wiring before this router can serve. Startup and every
-	// reload reach this point, and a rejected candidate leaves the currently
-	// active router untouched.
-	if err = router.verifyHistoryResetRuntime(cfg); err != nil {
+	// Runtime wiring can only be verified once the router exists. A rejected
+	// candidate releases everything it built: startup exits, but a rejected
+	// reload would otherwise leak clients and goroutines on every attempt
+	// while the previous router keeps serving.
+	if err = router.verifyHistoryResetTriggerWiring(cfg); err != nil {
+		if closeErr := router.Close(); closeErr != nil {
+			logging.ComponentWarnEvent("extproc", "rejected_router_close_failed", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
+		}
 		return nil, err
 	}
 	return router, nil
