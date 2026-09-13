@@ -20,11 +20,11 @@ type FusionLooper struct {
 }
 
 func NewFusionLooper(cfg *config.LooperConfig) *FusionLooper {
-	return newFusionLooper(cfg, nil)
+	return newFusionLooper(cfg, ownClient(NewClient(cfg)))
 }
 
-func newFusionLooper(cfg *config.LooperConfig, client *Client) *FusionLooper {
-	return &FusionLooper{BaseLooper: newBaseLooper(cfg, client)}
+func newFusionLooper(cfg *config.LooperConfig, binding clientBinding) *FusionLooper {
+	return &FusionLooper{BaseLooper: newBaseLooper(cfg, binding)}
 }
 
 type fusionExecutionConfig struct {

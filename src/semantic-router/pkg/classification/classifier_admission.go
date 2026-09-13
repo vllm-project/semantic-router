@@ -131,6 +131,16 @@ func (a admittedPIIInference) ClassifyTokens(ctx context.Context, text string) (
 	})
 }
 
+// Close forwards to the wrapped backend, as the other admission wrappers do,
+// so a remote PII backend releases its connector when the classifier is
+// retired on reload.
+func (a admittedPIIInference) Close() error {
+	if closer, ok := a.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
 func withAdmissionRegistry(registry *admission.Registry) option {
 	return func(c *Classifier) {
 		c.admissionRegistry = registry

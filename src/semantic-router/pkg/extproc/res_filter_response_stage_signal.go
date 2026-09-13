@@ -65,7 +65,7 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 		return
 	}
 	for _, rule := range rules {
-		metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, latency)
+		classifier.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, latency)
 	}
 	ctx.VSRResponseJailbreakType = scan.Type
 	ctx.VSRResponseJailbreakRisk = scan.RiskScore

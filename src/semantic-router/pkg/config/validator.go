@@ -28,6 +28,7 @@ var (
 		validateModelSelectionConfig,
 		validateCategoryModelBackendContracts,
 		validateComplexityModelBackendContracts,
+		validatePIIModelBackendContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateGlobalRouterLearningConfig,
 		validateReMoMContracts,

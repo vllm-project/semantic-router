@@ -67,6 +67,16 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		}
 		canonical.Global.ModelCatalog.Modules.Classifier = classifier
 	}
+	if len(spec.ExternalModels) > 0 {
+		// The CRD block mirrors the router's external catalog entry field for
+		// field, so the generic typed conversion is enough; backend blocks
+		// resolve their model against this list at router config load.
+		external, err := convertToTypedConfig[[]routerconfig.ExternalModelConfig](r, spec.ExternalModels)
+		if err != nil {
+			return fmt.Errorf("config.external_models: %w", err)
+		}
+		canonical.Global.ModelCatalog.External = external
+	}
 	return r.applyOperatorComplexityModel(canonical, spec)
 }
 

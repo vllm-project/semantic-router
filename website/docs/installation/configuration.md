@@ -98,6 +98,19 @@ remote call is visible through `llm_remote_connector_*` and
 `llm_complexity_*` metrics, and a scorer failure is recorded on every
 complexity rule's signal errors rather than dropped.
 
+PII attaches the same block under
+`global.model_catalog.modules.classifier.pii`. It reads one contract,
+`token_spans.v1`, so `contract` may be omitted. The remote model returns entity
+spans as code-point offsets into the exact request string it was sent, and
+every label it returns must exist in the configured `pii_mapping_path`; a
+response the contract rejects is a backend failure rather than a clean "no PII"
+result. `on_error` beside the backend selects what such a failure, or a
+provider-declared `truncated_at`, does to the rule that consumed it: `allow`
+(the default) treats the content as not matching, `block` matches it as
+`classification_error`. Spans returned before a declared truncation still
+count under both policies. A backend is mutually exclusive with the local
+`use_mmbert_32k` selector.
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.

@@ -322,7 +322,8 @@ func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PI
 
 // IsPIIClassifierEnabled checks if PII classification is enabled
 func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	return c.PIIModel.Active() && c.PIIModel.ModelID != "" && c.PIIMappingPath != ""
+	modelConfigured := c.PIIModel.ModelID != "" || c.PIIModel.Backend != nil
+	return c.PIIModel.Active() && modelConfigured && c.PIIMappingPath != ""
 }
 
 // IsCategoryClassifierEnabled checks if category classification is enabled

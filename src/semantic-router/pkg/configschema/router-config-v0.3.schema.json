@@ -810,6 +810,12 @@
         "pii_mapping_path": {
           "type": "string"
         },
+        "backend": {
+          "$ref": "#/$defs/RemoteClassifierBackend"
+        },
+        "on_error": {
+          "type": "string"
+        },
         "model_ref": {
           "type": "string"
         }

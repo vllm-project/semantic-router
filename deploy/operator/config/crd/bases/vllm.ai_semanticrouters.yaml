@@ -1078,9 +1078,63 @@ spec:
                             type: boolean
                         type: object
                       pii_model:
-                        description: PIIModelConfig defines PII model configuration
+                        description: |-
+                          PIIModelConfig defines PII model configuration.
+
+                          The contract rule sits on the consumer, as on ComplexityModelConfig: the
+                          shared backend block lists every contract any consumer reads, and each
+                          consumer narrows it to what it can parse, so a mismatch is refused at
+                          admission instead of by the router at load.
                         properties:
+                          backend:
+                            description: |-
+                              Backend names a remote token classifier speaking token_spans.v1. Its
+                              absence keeps local PII inference. The local selectors this replaces are
+                              model_id, use_modernbert and use_cpu above; the router also refuses a
+                              backend combined with the use_mmbert_32k selector that this CRD does not
+                              expose, so that combination cannot be written here.
+                            properties:
+                              contract:
+                                description: |-
+                                  Contract is the response shape the signal reads. Complexity reads two -
+                                  score.v1, one regression number interpreted through each rule's
+                                  boundaries, and label_distribution.v1, hard/easy/medium probabilities -
+                                  so the router requires it there rather than guessing per request. PII
+                                  reads token_spans.v1, entity spans with code-point offsets.
+                                enum:
+                                - score.v1
+                                - label_distribution.v1
+                                - token_spans.v1
+                                type: string
+                              deadline_ms:
+                                description: DeadlineMs bounds one remote call. Defaults
+                                  to the router's value.
+                                minimum: 1
+                                type: integer
+                              model:
+                                description: Model is the name of an entry in the
+                                  external model catalog.
+                                minLength: 1
+                                type: string
+                              protocol:
+                                description: Protocol is how the remote is called.
+                                enum:
+                                - http_classify
+                                type: string
+                            required:
+                            - model
+                            - protocol
+                            type: object
                           model_id:
+                            type: string
+                          on_error:
+                            description: |-
+                              OnError selects what a PII backend failure, or a provider-declared
+                              truncation, does to the rule that consumed it: allow (default) treats the
+                              content as not matching, block matches it as classification_error.
+                            enum:
+                            - allow
+                            - block
                             type: string
                           pii_mapping_path:
                             type: string
@@ -1094,6 +1148,11 @@ spec:
                           use_modernbert:
                             type: boolean
                         type: object
+                        x-kubernetes-validations:
+                        - message: PII reads token_spans.v1 only; omit backend.contract
+                            or set it to token_spans.v1
+                          rule: '!has(self.backend) || !has(self.backend.contract)
+                            || self.backend.contract == ''token_spans.v1'''
                     type: object
                   complexity_model:
                     description: |-
@@ -1116,10 +1175,12 @@ spec:
                               Contract is the response shape the signal reads. Complexity reads two -
                               score.v1, one regression number interpreted through each rule's
                               boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-                              so the router requires it there rather than guessing per request.
+                              so the router requires it there rather than guessing per request. PII
+                              reads token_spans.v1, entity spans with code-point offsets.
                             enum:
                             - score.v1
                             - label_distribution.v1
+                            - token_spans.v1
                             type: string
                           deadline_ms:
                             description: DeadlineMs bounds one remote call. Defaults
@@ -1145,6 +1206,10 @@ spec:
                     - message: 'complexity reads two response shapes, so backend.contract
                         must be stated: score.v1 or label_distribution.v1'
                       rule: '!has(self.backend) || has(self.backend.contract)'
+                    - message: complexity reads score.v1 or label_distribution.v1;
+                        token_spans.v1 is the PII contract
+                      rule: '!has(self.backend) || !has(self.backend.contract) ||
+                        self.backend.contract in [''score.v1'', ''label_distribution.v1'']'
                   complexity_rules:
                     description: Complexity rules for complexity-aware routing
                     items:
@@ -1553,6 +1618,68 @@ spec:
                         description: 'Use CPU for inference (default: true)'
                         type: boolean
                     type: object
+                  external_models:
+                    description: |-
+                      ExternalModels declares the remote models that classifier backends
+                      (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
+                      the prompt guard protocol refer to by name. Mirrors
+                      global.model_catalog.external[] in the router config field for field;
+                      the router's own validator decides whether a backend resolves against it.
+                    items:
+                      description: |-
+                        ExternalModelConfig is one entry of global.model_catalog.external[]: a
+                        remote model a classifier backend or the prompt guard can name. Field names
+                        are the router's YAML keys so the generic typed conversion carries them
+                        unchanged.
+                      properties:
+                        llm_endpoint:
+                          description: Endpoint is where the remote model is reached.
+                          properties:
+                            address:
+                              minLength: 1
+                              type: string
+                            port:
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                            protocol:
+                              enum:
+                              - http
+                              - https
+                              type: string
+                          required:
+                          - address
+                          - port
+                          type: object
+                        llm_model_name:
+                          description: |-
+                            ModelName is the model identifier the remote service expects, and the
+                            value a token_spans.v1 envelope's model member must equal.
+                          minLength: 1
+                          type: string
+                        llm_timeout_seconds:
+                          description: TimeoutSeconds bounds one call when the backend
+                            block sets no deadline.
+                          minimum: 1
+                          type: integer
+                        model_role:
+                          description: |-
+                            ModelRole is what the model is used for; classifier backends require
+                            "classification", the prompt guard protocol requires "guardrail".
+                          minLength: 1
+                          type: string
+                        name:
+                          description: Name is the catalog name a backend block refers
+                            to in its model field.
+                          minLength: 1
+                          type: string
+                      required:
+                      - llm_endpoint
+                      - llm_model_name
+                      - model_role
+                      - name
+                      type: object
+                    type: array
                   observability:
                     description: Observability configuration
                     properties:
