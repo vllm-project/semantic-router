@@ -2,6 +2,7 @@ package historyreset
 
 import (
 	"context"
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -118,7 +119,11 @@ func (a *Action) buildEnvelope(
 		// permits both very large single fields and very many small blocks.
 		// Sizing the encoded form first keeps the work bounded: a message that
 		// would not fit is refused before its encoded bytes are allocated.
-		if limit > 0 && encoded+encodedMessageSize(message) > limit {
+		size, err := encodedMessageSize(message)
+		if err != nil {
+			return "", fmt.Errorf("size removed message %d: %w", id, err)
+		}
+		if limit > 0 && encoded+size > limit {
 			return "", errRecoveryPayloadTooLarge
 		}
 		payload, err := json.Marshal(message)
@@ -154,38 +159,50 @@ const (
 	envelopeMessageOverhead = 64
 )
 
-// encodedMessageSize reports how many bytes a message will occupy once
+// errUnsupportedRecoveryEncoding reports a value whose JSON encoding this
+// sizer does not model. Guessing a byte count for such a value would make the
+// bound unsound, so removal fails instead and the configured failure mode
+// decides between preserving the request and rejecting it.
+var errUnsupportedRecoveryEncoding = fmt.Errorf("removed history has an unsupported encoding shape")
+
+var (
+	jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+)
+
+// encodedMessageSize reports exactly how many bytes a message occupies once
 // encoded, without encoding it. Structure dominates for some requests: the
 // neutral content block carries no omitempty tags, so a message of empty
-// blocks encodes to tens of times its content length. Counting only the
-// strings would let such a message pass a budget check and then allocate far
-// beyond it, so the walk covers field names, delimiters, null pointers, and
-// escaping exactly.
+// blocks encodes to tens of times its content length. Counting only strings
+// would let such a message pass a budget check and then allocate far beyond
+// it, so the walk covers field names, delimiters, null pointers, and escaping.
 //
-// Reflection keeps this honest across schema drift: a field added to any
-// serialized type is counted without editing this file.
-func encodedMessageSize(message llmprotocol.Message) int {
+// The walk models exactly the shapes the recovery type graph uses today.
+// Anything else is refused rather than estimated, which is what keeps the
+// bound sound as those types evolve.
+func encodedMessageSize(message llmprotocol.Message) (int, error) {
 	return encodedValueSize(reflect.ValueOf(message))
 }
 
-func encodedValueSize(value reflect.Value) int {
+func encodedValueSize(value reflect.Value) (int, error) {
+	if unsupportedEncodingType(value.Type()) {
+		return 0, errUnsupportedRecoveryEncoding
+	}
 	switch value.Kind() {
 	case reflect.String:
-		return encodedStringSize(value.String())
+		return encodedStringSize(value.String()), nil
 	case reflect.Bool:
 		if value.Bool() {
-			return len("true")
+			return len("true"), nil
 		}
-		return len("false")
+		return len("false"), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return len(strconv.FormatInt(value.Int(), 10))
+		return len(strconv.FormatInt(value.Int(), 10)), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return len(strconv.FormatUint(value.Uint(), 10))
-	case reflect.Float32, reflect.Float64:
-		return len(strconv.FormatFloat(value.Float(), 'g', -1, 64))
-	case reflect.Pointer, reflect.Interface:
+		return len(strconv.FormatUint(value.Uint(), 10)), nil
+	case reflect.Pointer:
 		if value.IsNil() {
-			return len("null")
+			return len("null"), nil
 		}
 		return encodedValueSize(value.Elem())
 	case reflect.Slice, reflect.Array:
@@ -193,57 +210,84 @@ func encodedValueSize(value reflect.Value) int {
 	case reflect.Struct:
 		return encodedStructSize(value)
 	default:
-		// An unexpected kind must not silently count as nothing. Charge the
-		// largest plausible scalar encoding so the bound stays conservative.
-		return unknownKindSize
+		// Floats, interfaces, maps, and everything else are refused: their
+		// encodings are either formatting-sensitive or unbounded here.
+		return 0, errUnsupportedRecoveryEncoding
 	}
 }
 
-func encodedSequenceSize(value reflect.Value) int {
+// unsupportedEncodingType rejects types whose JSON output does not follow the
+// plain struct/scalar rules this walk implements.
+func unsupportedEncodingType(valueType reflect.Type) bool {
+	return valueType.Implements(jsonMarshalerType) ||
+		valueType.Implements(textMarshalerType) ||
+		reflect.PointerTo(valueType).Implements(jsonMarshalerType) ||
+		reflect.PointerTo(valueType).Implements(textMarshalerType)
+}
+
+func encodedSequenceSize(value reflect.Value) (int, error) {
 	if value.Kind() == reflect.Slice && value.IsNil() {
-		return len("null")
+		return len("null"), nil
 	}
 	total := len("[]")
 	for index := 0; index < value.Len(); index++ {
 		if index > 0 {
 			total++ // comma
 		}
-		total += encodedValueSize(value.Index(index))
+		size, err := encodedValueSize(value.Index(index))
+		if err != nil {
+			return 0, err
+		}
+		total += size
 	}
-	return total
+	return total, nil
 }
 
-func encodedStructSize(value reflect.Value) int {
+func encodedStructSize(value reflect.Value) (int, error) {
 	total := len("{}")
 	fields := 0
 	structType := value.Type()
 	for index := 0; index < structType.NumField(); index++ {
 		field := structType.Field(index)
+		// Embedding is checked before export, because the encoder promotes an
+		// embedded type's exported fields into this object even when the
+		// embedded field itself is unexported. Field renaming and omitempty
+		// likewise change which keys appear and under what names. The recovery
+		// types use none of them, so refusing is safer than modelling them.
+		if field.Anonymous || field.Tag.Get("json") != "" {
+			return 0, errUnsupportedRecoveryEncoding
+		}
 		if !field.IsExported() {
 			continue
+		}
+		size, err := encodedValueSize(value.Field(index))
+		if err != nil {
+			return 0, err
 		}
 		if fields > 0 {
 			total++ // comma
 		}
 		fields++
 		// "Name": plus the encoded value.
-		total += len(field.Name) + len(`"":`) + encodedValueSize(value.Field(index))
+		total += len(field.Name) + len(`"":`) + size
 	}
-	return total
+	return total, nil
 }
 
 // encodedStringSize counts a JSON string exactly, including the quotes and the
-// escapes the standard encoder emits: control characters and the HTML-sensitive
-// characters expand to six bytes, and invalid UTF-8 becomes a replacement
-// escape.
+// escapes the standard encoder emits: quote, backslash, backspace, form feed,
+// newline, carriage return and tab take two bytes, other control characters
+// and the HTML-sensitive characters take six, and invalid UTF-8 becomes a
+// replacement escape.
 func encodedStringSize(value string) int {
 	total := len(`""`)
 	for index := 0; index < len(value); {
 		character := value[index]
 		if character < utf8.RuneSelf {
 			switch {
-			case character == '"' || character == '\\' ||
-				character == '\n' || character == '\r' || character == '\t':
+			case character == '"' || character == '\\' || character == '\b' ||
+				character == '\f' || character == '\n' || character == '\r' ||
+				character == '\t':
 				total += 2
 			case character < 0x20 || character == '<' || character == '>' || character == '&':
 				total += 6
@@ -268,7 +312,3 @@ func encodedStringSize(value string) int {
 	}
 	return total
 }
-
-// unknownKindSize is charged for a kind this walk does not model, so a future
-// field shape cannot be counted as free.
-const unknownKindSize = 64

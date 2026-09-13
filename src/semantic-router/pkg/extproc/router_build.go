@@ -138,6 +138,18 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 }
 
 func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Pool) (*OpenAIRouter, error) {
+	return buildOpenAIRouterFromConfigWithCloser(cfg, (*OpenAIRouter).Close, pools...)
+}
+
+// buildOpenAIRouterFromConfigWithCloser is the construction body.
+// closeCandidate releases a router rejected after it was built: production
+// passes Close, and a test passes an observing wrapper so the release step
+// stays covered without mutable package-level state.
+func buildOpenAIRouterFromConfigWithCloser(
+	cfg *config.RouterConfig,
+	closeCandidate func(*OpenAIRouter) error,
+	pools ...*binding.Pool,
+) (*OpenAIRouter, error) {
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
@@ -156,7 +168,7 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	// reload would otherwise leak clients and goroutines on every attempt
 	// while the previous router keeps serving.
 	if err = router.verifyHistoryResetTriggerWiring(cfg); err != nil {
-		if closeErr := closeRejectedCandidate(router); closeErr != nil {
+		if closeErr := closeCandidate(router); closeErr != nil {
 			logging.ComponentWarnEvent("extproc", "rejected_router_close_failed", map[string]interface{}{
 				"error": closeErr.Error(),
 			})
@@ -164,13 +176,6 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 		return nil, err
 	}
 	return router, nil
-}
-
-// closeRejectedCandidate releases a router that failed activation. It is a
-// variable so a test can observe that the rejection path actually releases the
-// candidate, rather than only that it returned an error.
-var closeRejectedCandidate = func(router *OpenAIRouter) error {
-	return router.Close()
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
