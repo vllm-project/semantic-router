@@ -132,18 +132,6 @@ func (c *HistoryResetPluginConfig) RequiresRecovery() bool {
 	return c != nil && c.Recovery != nil && c.Recovery.Enabled
 }
 
-// historyResetTriggerFamilyRegistered reports whether a signal catalog carries
-// the topic-continuity family. The gate opens on its own when the family is
-// registered; no build flag or manual switch is involved.
-func historyResetTriggerFamilyRegistered(catalog []SignalCatalogEntry) bool {
-	for _, entry := range catalog {
-		if entry.Type == HistoryResetTriggerSignalType {
-			return true
-		}
-	}
-	return false
-}
-
 // GetHistoryResetConfig returns route-local history-reset settings.
 func (d *Decision) GetHistoryResetConfig() *HistoryResetPluginConfig {
 	result := &HistoryResetPluginConfig{}

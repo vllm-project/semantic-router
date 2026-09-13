@@ -266,7 +266,7 @@ func TestStaleAndConflictingEvidenceCannotAuthorizeRemoval(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			edits, diagnostics := Plan(
+			edits, diagnostics := plan(
 				context.Background(),
 				policy,
 				test.trigger,
@@ -291,7 +291,7 @@ func TestMatchingBindingAuthorizesRemoval(t *testing.T) {
 	trigger := acceptedChange()
 	trigger.Binding = "request-binding"
 
-	edits, diagnostics := Plan(
+	edits, diagnostics := plan(
 		context.Background(),
 		policy,
 		trigger,

@@ -7,11 +7,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 )
 
-// Plan evaluates one request and returns the messages the action proposes to
+// plan evaluates one request and returns the messages the action proposes to
 // remove. An empty proposal is a normal outcome, not a failure. The shared
 // executor independently revalidates every proposal before committing it, so
 // this function is the first of two guards rather than the only one.
-func Plan(
+func plan(
 	ctx context.Context,
 	policy Policy,
 	trigger TriggerResult,
