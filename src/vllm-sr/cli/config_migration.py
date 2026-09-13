@@ -15,6 +15,7 @@ from cli.config_contract import (
 )
 from cli.config_migration_catalog import migrate_v03_catalog_contract
 from cli.config_migration_global import normalize_global_layout, place_global_block
+from cli.config_migration_model_runtime import migrate_prompt_guard_backend
 
 
 def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -71,6 +72,7 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         canonical,
         router_owns_transport=router_owns_transport,
     )
+    migrate_prompt_guard_backend(canonical)
 
     return canonical
 

@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/qdrant/go-client/qdrant"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -19,6 +19,7 @@ import (
 const pendingResponseMarker = "__pending__"
 
 type QdrantCache struct {
+	embeddingProvider   embedding.Provider
 	client              *qdrant.Client
 	searchFn            func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error)
 	cfg                 *config.QdrantConfig
@@ -32,6 +33,7 @@ type QdrantCache struct {
 }
 
 type QdrantCacheOptions struct {
+	EmbeddingProvider   embedding.Provider
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -76,6 +78,7 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		ttlSeconds:          opts.TTLSeconds,
 		enabled:             true,
 		embeddingModel:      embeddingModel,
+		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(0, embeddingModel), 0)),
 	}
 
 	if err := c.CheckConnection(context.Background()); err != nil {
@@ -141,41 +144,7 @@ func (c *QdrantCache) ensureCollection() error {
 // getEmbedding generates an embedding based on the configured embedding model.
 // Cancellation is best-effort here; see ctxErr.
 func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
-	if err := ctxErr(ctx); err != nil {
-		return nil, err
-	}
-	modelName := c.embeddingModel
-
-	switch modelName {
-	case "qwen3":
-		out, err := candle_binding.GetEmbeddingBatched(text, "qwen3", c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return out.Embedding, nil
-	case "gemma":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "gemma", c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return out.Embedding, nil
-	case "mmbert":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "mmbert", c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return out.Embedding, nil
-	case "multimodal":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "multimodal", c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return out.Embedding, nil
-	case "bert":
-		return candle_binding.GetEmbedding(text, 0)
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
-	}
+	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
 func (c *QdrantCache) embeddingDimension() int {

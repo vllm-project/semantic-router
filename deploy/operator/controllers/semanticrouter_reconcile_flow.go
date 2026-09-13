@@ -166,7 +166,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 		return err
 	}
 
-	gatewayMode, err := reconcileGatewayIntegration(ctx, r.Client, r.Scheme, semanticrouter)
+	gatewayMode, err := reconcileGatewayIntegration(ctx, r.Client, semanticrouter)
 	if err != nil {
 		logger.Error(err, "Gateway integration failed")
 		return err

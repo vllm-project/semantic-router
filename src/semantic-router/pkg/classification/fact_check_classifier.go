@@ -5,28 +5,30 @@ import (
 	"fmt"
 	"sync"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // FactCheckResult represents the result of fact-check classification
 type FactCheckResult struct {
-	NeedsFactCheck bool    `json:"needs_fact_check"`
-	Confidence     float32 `json:"confidence"`
-	Label          string  `json:"label"` // "FACT_CHECK_NEEDED" or "NO_FACT_CHECK_NEEDED"
+	NeedsFactCheck      bool    `json:"needs_fact_check"`
+	Confidence          float32 `json:"confidence"`
+	ConfidenceAvailable bool    `json:"confidence_available"`
+	PolicyDefault       string  `json:"policy_default,omitempty"`
+	Label               string  `json:"label"` // "FACT_CHECK_NEEDED" or "NO_FACT_CHECK_NEEDED"
 }
 
 // FactCheckClassifier handles fact-check classification to determine if a prompt
 // requires external factual verification using the halugate-sentinel ML model
 type FactCheckClassifier struct {
-	config       *config.FactCheckModelConfig
-	mapping      *FactCheckMapping
-	initialized  bool
-	useMmBERT32K bool // Track if mmBERT-32K is used for inference
-	gate         admission.Admissioner
-	mu           sync.RWMutex
+	backend     *ownedSequenceBackend
+	config      *config.FactCheckModelConfig
+	mapping     *FactCheckMapping
+	initialized bool
+	gate        admission.Admissioner
+	mu          sync.RWMutex
 }
 
 // SetAdmissioner installs the deployment's admission gate for model inference.
@@ -37,13 +39,20 @@ func (c *FactCheckClassifier) SetAdmissioner(gate admission.Admissioner) {
 }
 
 // NewFactCheckClassifier creates a new fact-check classifier
-func NewFactCheckClassifier(cfg *config.FactCheckModelConfig) (*FactCheckClassifier, error) {
+func NewFactCheckClassifier(cfg *config.FactCheckModelConfig, models ...*classifierModelRuntime) (*FactCheckClassifier, error) {
 	if cfg == nil {
 		return nil, nil // Disabled
 	}
 
+	runtime := consumerModelRuntime(models)
+	adapter := "modernbert"
+	if cfg.UseMmBERT32K {
+		adapter = "mmbert32k"
+	}
+	spec := runtime.localSpec("fact_check_classifier", cfg.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.UseCPU)
 	classifier := &FactCheckClassifier{
-		config: cfg,
+		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec},
+		config:  cfg,
 	}
 
 	return classifier, nil
@@ -75,26 +84,14 @@ func (c *FactCheckClassifier) Initialize() error {
 		return fmt.Errorf("fact-check classifier requires ModelID to be configured")
 	}
 
-	backend := "halugate_sentinel"
-
-	// Check if mmBERT-32K is configured (takes precedence)
-	if c.config.UseMmBERT32K {
-		err := candle.InitMmBert32KFactcheckClassifier(c.config.ModelID, c.config.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize mmBERT-32K fact-check model from %s: %w", c.config.ModelID, err)
-		}
-		backend = "mmbert_32k"
-		c.useMmBERT32K = true
-	} else {
-		err := candle.InitFactCheckClassifier(c.config.ModelID, c.config.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize fact-check ML model from %s: %w", c.config.ModelID, err)
-		}
+	c.backend.labels = indexedNativeLabels(c.mapping.IdxToLabel)
+	if err := c.backend.Init(c.config.ModelID, c.config.UseCPU, 2); err != nil {
+		return err
 	}
 
 	c.initialized = true
 	logging.ComponentEvent("classifier", "fact_check_classifier_initialized", map[string]interface{}{
-		"backend":   backend,
+		"backend":   c.backend.spec.Deployment.Provider,
 		"model_ref": c.config.ModelID,
 	})
 
@@ -113,16 +110,18 @@ func (c *FactCheckClassifier) Classify(ctx context.Context, text string) (*FactC
 	if text == "" {
 		return &FactCheckResult{
 			NeedsFactCheck: false,
-			Confidence:     1.0,
+			PolicyDefault:  "empty_text",
 			Label:          FactCheckLabelNotNeeded,
 		}, nil
 	}
 
-	result, err := admitModelInference(ctx, c.gate, admissionDeploymentFactCheckClassifier, func() (candle.ClassResult, error) {
-		if c.useMmBERT32K {
-			return candle.ClassifyMmBert32KFactcheck(text)
+	result, err := admitModelInference(ctx, c.gate, admissionDeploymentFactCheckClassifier, func() (tasks.ClassResultWithProbs, error) {
+		distribution, err := c.backend.Classify(ctx, text)
+		if err != nil {
+			return tasks.ClassResultWithProbs{}, err
 		}
-		return candle.ClassifyFactCheckText(text)
+		class, confidence := deriveArgmax(distribution.Probabilities)
+		return tasks.ClassResultWithProbs{Class: class, Confidence: confidence, Probabilities: distribution.Probabilities, NumClasses: len(distribution.Probabilities)}, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fact-check ML classification failed: %w", err)
@@ -150,16 +149,17 @@ func (c *FactCheckClassifier) Classify(ctx context.Context, text string) (*FactC
 		// Below threshold, flip decision
 		needsFactCheck = false
 		label = FactCheckLabelNotNeeded
-		confidence = 1.0 - confidence // Invert confidence for the new label
+		confidence = result.Probabilities[0] // Report the actual probability of the policy-selected label.
 	}
 
 	logging.Debugf("Fact-check ML classification: text_len=%d, needs_fact_check=%v, confidence=%.3f",
 		len(text), needsFactCheck, confidence)
 
 	return &FactCheckResult{
-		NeedsFactCheck: needsFactCheck,
-		Confidence:     confidence,
-		Label:          label,
+		NeedsFactCheck:      needsFactCheck,
+		Confidence:          confidence,
+		ConfidenceAvailable: true,
+		Label:               label,
 	}, nil
 }
 
@@ -175,4 +175,17 @@ func (c *FactCheckClassifier) GetMapping() *FactCheckMapping {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.mapping
+}
+
+func (c *FactCheckClassifier) Close() error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.initialized = false
+	if c.backend != nil {
+		return c.backend.Close()
+	}
+	return nil
 }

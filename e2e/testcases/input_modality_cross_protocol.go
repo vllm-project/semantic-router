@@ -33,6 +33,7 @@ type inputModalityWireCase struct {
 	path           string
 	payload        map[string]interface{}
 	wantDecision   string
+	wantModel      string
 	wantMatched    []string
 	wantNotMatched []string
 }
@@ -72,6 +73,7 @@ func testInputModalityCrossProtocol(
 				}},
 			},
 			wantDecision:   "input_modality_vision_decision",
+			wantModel:      imageFileVisionModel,
 			wantMatched:    []string{"image_input", "text_input"},
 			wantNotMatched: nil,
 		},
@@ -84,6 +86,7 @@ func testInputModalityCrossProtocol(
 				"input": "describe the mona lisa",
 			},
 			wantDecision:   "input_modality_text_decision",
+			wantModel:      imageFileTextModel,
 			wantMatched:    []string{"text_input"},
 			wantNotMatched: []string{"image_input"},
 		},
@@ -104,6 +107,7 @@ func testInputModalityCrossProtocol(
 				}},
 			},
 			wantDecision:   "input_modality_vision_decision",
+			wantModel:      imageFileVisionModel,
 			wantMatched:    []string{"image_input", "text_input"},
 			wantNotMatched: nil,
 		},
@@ -118,6 +122,7 @@ func testInputModalityCrossProtocol(
 				}},
 			},
 			wantDecision:   "input_modality_text_decision",
+			wantModel:      imageFileTextModel,
 			wantMatched:    []string{"text_input"},
 			wantNotMatched: []string{"image_input"},
 		},
@@ -169,6 +174,9 @@ func runInputModalityWireCase(ctx context.Context, session *fixtures.ServiceSess
 	if decision := response.Header.Get("x-vsr-selected-decision"); decision != tc.wantDecision {
 		return fmt.Errorf("selected decision = %q, want %q (body: %s)",
 			decision, tc.wantDecision, truncateString(string(body), 200))
+	}
+	if model := response.Header.Get("x-vsr-selected-model"); model != tc.wantModel {
+		return fmt.Errorf("selected model = %q, want %q", model, tc.wantModel)
 	}
 	return assertInputModalityHeader(response.Header.Get("x-vsr-matched-input-modality"), tc.wantMatched, tc.wantNotMatched)
 }
