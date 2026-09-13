@@ -116,7 +116,7 @@ func LoadBaselineDir(dir string) (*Baseline, error) {
 
 // SaveBaseline saves baseline data to a JSON file
 func SaveBaseline(baseline *Baseline, path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("failed to create baseline directory: %w", err)
 	}
 
@@ -125,7 +125,7 @@ func SaveBaseline(baseline *Baseline, path string) error {
 		return fmt.Errorf("failed to marshal baseline: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write baseline file: %w", err)
 	}
 

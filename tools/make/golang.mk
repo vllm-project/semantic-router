@@ -55,6 +55,14 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 			exit 1; \
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
+	@echo "Checking perf..."
+	@cd perf && go mod tidy && \
+		if ! git diff --exit-code go.mod go.sum; then \
+			echo "ERROR: go.mod or go.sum files are not tidy in perf. Please run 'go mod tidy' in perf directory and commit the changes."; \
+			git diff go.mod go.sum; \
+			exit 1; \
+		fi
+	@echo "perf go mod tidy check passed"
 	@echo "Checking shared ONNX module compatibility links..."
 	@test "$$(readlink src/semantic-router/go.onnx.mod)" = go.mod
 	@test "$$(readlink src/semantic-router/go.onnx.sum)" = go.sum
