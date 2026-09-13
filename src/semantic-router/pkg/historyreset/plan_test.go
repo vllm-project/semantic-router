@@ -3,6 +3,7 @@ package historyreset
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 )
@@ -152,21 +153,29 @@ func TestPlanSkipsWithoutAuthorizingEvidence(t *testing.T) {
 		reason  string
 	}{
 		{"missing", TriggerResult{}, ReasonEvidenceMissing},
-		{"continuation", TriggerResult{Class: TriggerContinuation, Signal: "topic_boundary"}, ReasonEvidenceContinuation},
-		{"unknown", TriggerResult{Class: TriggerUnknown, Signal: "topic_boundary"}, ReasonEvidenceUnknown},
+		{
+			"unversioned",
+			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "topic_boundary"},
+			ReasonEvidenceUnsupportedVersion,
+		},
+		{"continuation", TriggerResult{Class: TriggerContinuation, Signal: "topic_boundary", Version: "v1"}, ReasonEvidenceContinuation},
+		{"unknown", TriggerResult{Class: TriggerUnknown, Signal: "topic_boundary", Version: "v1"}, ReasonEvidenceUnknown},
 		{
 			"low_confidence",
-			TriggerResult{Class: TriggerChange, Confidence: 0.5, Signal: "topic_boundary"},
+			TriggerResult{Class: TriggerChange, Confidence: 0.5, Signal: "topic_boundary", Version: "v1"},
 			ReasonEvidenceLowConfidence,
 		},
 		{
 			"fallback",
-			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "topic_boundary", Fallback: true},
+			TriggerResult{
+				Class: TriggerChange, Confidence: 1, Signal: "topic_boundary",
+				Version: "v1", Fallback: true,
+			},
 			ReasonEvidenceFallback,
 		},
 		{
 			"wrong_signal",
-			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "other"},
+			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "other", Version: "v1"},
 			ReasonEvidenceWrongSignal,
 		},
 	}
@@ -236,5 +245,141 @@ func TestPlanReportsNoEligibleHistory(t *testing.T) {
 	}
 	if diagnostics.Outcome != OutcomeSkipped {
 		t.Fatalf("expected a skipped outcome, got %+v", diagnostics)
+	}
+}
+
+// Every evidence condition the issue names must behave differently in the two
+// failure modes: fail-open preserves the request and records why, fail-closed
+// stops the plan before the provider is called. A continuation and an empty
+// eligible set stay ordinary no-ops in both.
+func TestEvidenceOutcomesFollowTheConfiguredFailureMode(t *testing.T) {
+	bound := func(class TriggerClass, confidence float64) TriggerResult {
+		return TriggerResult{
+			Class: class, Confidence: confidence,
+			Signal: "topic_boundary", Version: "v1",
+		}
+	}
+	cases := []struct {
+		name    string
+		trigger TriggerResult
+		reason  string
+		rejects bool
+		outcome Outcome
+	}{
+		{"missing", TriggerResult{}, ReasonEvidenceMissing, true, OutcomeFailed},
+		{"unknown", bound(TriggerUnknown, 1), ReasonEvidenceUnknown, true, OutcomeFailed},
+		{"conflicting", bound(TriggerConflicting, 1), ReasonEvidenceConflicting, true, OutcomeFailed},
+		{"low_confidence", bound(TriggerChange, 0.1), ReasonEvidenceLowConfidence, true, OutcomeFailed},
+		{
+			"unsupported_version",
+			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "topic_boundary"},
+			ReasonEvidenceUnsupportedVersion, true, OutcomeFailed,
+		},
+		{
+			"wrong_signal",
+			TriggerResult{Class: TriggerChange, Confidence: 1, Signal: "other", Version: "v1"},
+			ReasonEvidenceWrongSignal, true, OutcomeFailed,
+		},
+		{
+			"fallback",
+			TriggerResult{
+				Class: TriggerChange, Confidence: 1,
+				Signal: "topic_boundary", Version: "v1", Fallback: true,
+			},
+			ReasonEvidenceFallback, true, OutcomeFailed,
+		},
+		{"continuation", bound(TriggerContinuation, 1), ReasonEvidenceContinuation, false, OutcomeSkipped},
+	}
+	for _, test := range cases {
+		for _, failClosed := range []bool{false, true} {
+			name := test.name + "_fail_open"
+			if failClosed {
+				name = test.name + "_fail_closed"
+			}
+			t.Run(name, func(t *testing.T) {
+				policy := testPolicy()
+				policy.FailClosed = failClosed
+				request := conversation()
+				action := NewAction(policy, test.trigger, "")
+
+				ir, err := applyAction(t, request, action)
+				if (err != nil) != (failClosed && test.rejects) {
+					t.Fatalf("rejection = %v, want %v (err=%v)", err != nil, failClosed && test.rejects, err)
+				}
+				if len(request.Messages) != 5 || request.Generation != 1 {
+					t.Fatalf("the request must be preserved unchanged, got %d messages", len(request.Messages))
+				}
+				diagnostics := action.Reconcile(ir.Transformations.Receipts())
+				if diagnostics.Reason != test.reason || diagnostics.Outcome != test.outcome {
+					t.Fatalf("unexpected diagnostics %+v", diagnostics)
+				}
+				if diagnostics.RemovedMessages != 0 {
+					t.Fatalf("a non-removal outcome cannot report removals: %+v", diagnostics)
+				}
+			})
+		}
+	}
+}
+
+// An accepted change with nothing eligible left to remove is a normal no-op,
+// not an evaluation failure, so fail-closed must not reject it.
+func TestEmptyEligibleHistoryIsNeverAFailure(t *testing.T) {
+	for _, failClosed := range []bool{false, true} {
+		policy := testPolicy()
+		policy.FailClosed = failClosed
+		request := conversation()
+		request.Messages = request.Messages[4:]
+		action := NewAction(policy, acceptedChange(), "")
+
+		ir, err := applyAction(t, request, action)
+		if err != nil {
+			t.Fatalf("fail_closed=%v rejected an ordinary no-op: %v", failClosed, err)
+		}
+		diagnostics := action.Reconcile(ir.Transformations.Receipts())
+		if diagnostics.Outcome != OutcomeSkipped || diagnostics.Reason != ReasonNoEligibleHistory {
+			t.Fatalf("unexpected diagnostics %+v", diagnostics)
+		}
+	}
+}
+
+// The configured planning budget must actually bound the evaluation.
+func TestPlanningStopsAtTheConfiguredTimeout(t *testing.T) {
+	policy := testPolicy()
+	policy.Timeout = time.Nanosecond
+
+	messages := make([]contextcompression.MessageView, 0, 256)
+	for index := 0; index < 256; index++ {
+		messages = append(messages, historyMessage(index, index/2*2, "user"))
+	}
+	edits, diagnostics := Plan(
+		context.Background(),
+		policy,
+		acceptedChange(),
+		contextcompression.TransformationView{Messages: messages},
+	)
+	if len(edits.RemoveMessages) != 0 {
+		t.Fatalf("an expired budget must not produce a removal, got %d ids", len(edits.RemoveMessages))
+	}
+	if diagnostics.Reason != ReasonCancelled {
+		t.Fatalf("unexpected diagnostics %+v", diagnostics)
+	}
+}
+
+// A caller's cancellation is honoured even when the policy sets no budget.
+func TestPlanningHonoursCallerCancellationDuringSelection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	messages := make([]contextcompression.MessageView, 0, 128)
+	for index := 0; index < 128; index++ {
+		messages = append(messages, historyMessage(index, index/2*2, "user"))
+	}
+	_, diagnostics := Plan(
+		ctx,
+		testPolicy(),
+		acceptedChange(),
+		contextcompression.TransformationView{Messages: messages},
+	)
+	if diagnostics.Reason != ReasonCancelled {
+		t.Fatalf("unexpected diagnostics %+v", diagnostics)
 	}
 }

@@ -138,6 +138,7 @@ func TestHistoryResetRemovesEligibleTurnsOnAcceptedChange(t *testing.T) {
 		Class:      historyreset.TriggerChange,
 		Confidence: 0.95,
 		Signal:     "topic_boundary",
+		Version:    "v1",
 		Binding:    historyResetEvidenceBinding(ctx),
 	}
 	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
@@ -178,6 +179,7 @@ func TestHistoryResetRefusesUnrecoverableRemoval(t *testing.T) {
 		Class:      historyreset.TriggerChange,
 		Confidence: 1,
 		Signal:     "topic_boundary",
+		Version:    "v1",
 		Binding:    historyResetEvidenceBinding(ctx),
 	}
 	(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
@@ -272,5 +274,132 @@ func TestHistoryResetReplayDiagnosticsCarryNoContent(t *testing.T) {
 func TestHistoryResetReplayDiagnosticsAbsentWithoutAnEvaluation(t *testing.T) {
 	if historyResetReplayDiagnostics(&RequestContext{}) != nil {
 		t.Fatal("an unevaluated request must not publish a replay record")
+	}
+}
+
+// The same evidence conditions must produce the documented response on the
+// request path, not only inside the policy: fail-open preserves and continues,
+// fail-closed rejects before the provider is called.
+func TestHistoryResetEvidenceFailureModesOnTheRequestPath(t *testing.T) {
+	cases := []struct {
+		name    string
+		trigger *historyreset.TriggerResult
+		reason  string
+	}{
+		{"missing", nil, historyreset.ReasonEvidenceMissing},
+		{
+			"unknown",
+			&historyreset.TriggerResult{
+				Class: historyreset.TriggerUnknown, Confidence: 1,
+				Signal: "topic_boundary", Version: "v1",
+			},
+			historyreset.ReasonEvidenceUnknown,
+		},
+		{
+			"conflicting",
+			&historyreset.TriggerResult{
+				Class: historyreset.TriggerConflicting, Confidence: 1,
+				Signal: "topic_boundary", Version: "v1",
+			},
+			historyreset.ReasonEvidenceConflicting,
+		},
+		{
+			"unversioned",
+			&historyreset.TriggerResult{
+				Class: historyreset.TriggerChange, Confidence: 1, Signal: "topic_boundary",
+			},
+			historyreset.ReasonEvidenceUnsupportedVersion,
+		},
+		{
+			"low_confidence",
+			&historyreset.TriggerResult{
+				Class: historyreset.TriggerChange, Confidence: 0.1,
+				Signal: "topic_boundary", Version: "v1",
+			},
+			historyreset.ReasonEvidenceLowConfidence,
+		},
+	}
+	for _, test := range cases {
+		for _, failureMode := range []string{"fail_open", "fail_closed"} {
+			t.Run(test.name+"_"+failureMode, func(t *testing.T) {
+				request := resetConversation()
+				ctx := &RequestContext{
+					SemanticRequest: request,
+					VSRSelectedDecision: historyResetDecision(t, map[string]interface{}{
+						"enabled":      true,
+						"failure_mode": failureMode,
+						"trigger": map[string]interface{}{
+							"signal":         "topic_boundary",
+							"min_confidence": 0.9,
+						},
+					}),
+				}
+				bindHistoryResetPolicy(ctx)
+				captureOriginalContextHistory(ctx)
+				if test.trigger != nil {
+					trigger := *test.trigger
+					trigger.Binding = historyResetEvidenceBinding(ctx)
+					ctx.HistoryResetTrigger = &trigger
+				}
+				(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
+
+				err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request)
+				if failureMode == "fail_closed" && err == nil {
+					t.Fatal("fail_closed accepted unusable evidence")
+				}
+				if failureMode == "fail_open" && err != nil {
+					t.Fatalf("fail_open rejected the request: %v", err)
+				}
+				if len(request.Messages) != 3 {
+					t.Fatalf("history must be preserved, got %d messages", len(request.Messages))
+				}
+				if ctx.HistoryResetDiagnostics.Reason != test.reason {
+					t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
+				}
+				if ctx.HistoryResetDiagnostics.Outcome != historyreset.OutcomeFailed {
+					t.Fatalf("unusable evidence must record a failed evaluation: %+v", ctx.HistoryResetDiagnostics)
+				}
+				if failureMode == "fail_closed" {
+					if status, _ := contextTransformationFailure(ctx); status != 503 {
+						t.Fatalf("fail_closed status = %d, want 503", status)
+					}
+				}
+			})
+		}
+	}
+}
+
+// A continuation is a normal negative: neither mode may reject it.
+func TestHistoryResetContinuationIsNeverRejected(t *testing.T) {
+	for _, failureMode := range []string{"fail_open", "fail_closed"} {
+		request := resetConversation()
+		ctx := &RequestContext{
+			SemanticRequest: request,
+			VSRSelectedDecision: historyResetDecision(t, map[string]interface{}{
+				"enabled":      true,
+				"failure_mode": failureMode,
+				"trigger": map[string]interface{}{
+					"signal":         "topic_boundary",
+					"min_confidence": 0.9,
+				},
+			}),
+		}
+		bindHistoryResetPolicy(ctx)
+		captureOriginalContextHistory(ctx)
+		ctx.HistoryResetTrigger = &historyreset.TriggerResult{
+			Class:      historyreset.TriggerContinuation,
+			Confidence: 1,
+			Signal:     "topic_boundary",
+			Version:    "v1",
+			Binding:    historyResetEvidenceBinding(ctx),
+		}
+		(&OpenAIRouter{}).prepareContextHistorySteps(ctx, request)
+		if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err != nil {
+			t.Fatalf("%s rejected a continuation: %v", failureMode, err)
+		}
+		if len(request.Messages) != 3 ||
+			ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonEvidenceContinuation {
+			t.Fatalf("unexpected outcome %+v", ctx.HistoryResetDiagnostics)
+		}
 	}
 }

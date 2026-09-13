@@ -3,7 +3,9 @@ package extproc
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -115,30 +117,38 @@ func detachedRequestMessages(request *llmprotocol.Request) map[int]llmprotocol.M
 	return detached
 }
 
+// historyResetBindingSchema identifies the binding representation so it can
+// evolve without silently comparing two different encodings.
+const historyResetBindingSchema = "vsr.history-reset.binding.v1"
+
 // historyResetEvidenceBinding identifies the resolved original history and the
 // live turn this request presents. Evidence must carry the same binding to be
-// accepted, which is what makes a stale or replayed result detectable; a
+// accepted, which is what makes stale or replayed evidence detectable; a
 // timestamp alone could not.
+//
+// The digest covers the complete canonical semantic history, not just role and
+// text: two requests that differ only in a tool call's arguments, a tool-result
+// identifier, or a content kind must not share a binding. The snapshot's own
+// deterministic encoding supplies that canonical form, and the schema label
+// plus a length prefix keep distinct inputs from colliding.
 func historyResetEvidenceBinding(ctx *RequestContext) string {
 	if ctx == nil || ctx.OriginalContextHistory == nil {
 		return ""
 	}
-	history := ctx.OriginalContextHistory.Conversation()
+	canonical, err := json.Marshal(ctx.OriginalContextHistory.Conversation())
+	if err != nil {
+		// Without a canonical form no evidence can be bound to this request,
+		// so report no binding and let the action reject unbound evidence.
+		return ""
+	}
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(canonical)))
 	sum := sha256.New()
-	for _, instruction := range history.Instructions {
-		sum.Write([]byte(instruction.Role))
-		for _, content := range instruction.Content {
-			sum.Write([]byte(content.Text))
-		}
-	}
-	for _, message := range history.Messages {
-		sum.Write([]byte{0})
-		sum.Write([]byte(message.Role))
-		for _, content := range message.Content {
-			sum.Write([]byte(content.Text))
-		}
-	}
-	return hex.EncodeToString(sum.Sum(nil)[:12])
+	sum.Write([]byte(historyResetBindingSchema))
+	sum.Write([]byte{0})
+	sum.Write(length[:])
+	sum.Write(canonical)
+	return hex.EncodeToString(sum.Sum(nil)[:16])
 }
 
 // finalizeHistoryResetRecovery publishes the issued key once the executor has

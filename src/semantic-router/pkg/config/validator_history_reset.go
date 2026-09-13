@@ -169,3 +169,36 @@ func validateDecisionContextRecoveryAgreement(decision *Decision) error {
 	}
 	return nil
 }
+
+// validateHistoryResetTriggerReferences resolves each enabled policy's trigger
+// against the signals the selected recipe actually declares, using the same
+// rules as a decision rule leaf. Registering the topic-continuity family
+// globally is not enough: the named signal must exist in this scope and belong
+// to that family, so a valid name pointing at an unrelated signal cannot
+// authorize removal.
+func validateHistoryResetTriggerReferences(cfg *RouterConfig) error {
+	if cfg == nil || cfg.RoutingScope == "" {
+		// Unscoped configuration cannot resolve recipe-local references; the
+		// per-recipe validation pass performs this check.
+		return nil
+	}
+	declared := projectionDeclaredSignals(cfg)
+	for index := range cfg.Decisions {
+		decision := &cfg.Decisions[index]
+		reset := decision.GetHistoryResetConfig()
+		if !reset.IsEnabled() || reset.Trigger == nil {
+			continue
+		}
+		name := strings.TrimSpace(reset.Trigger.Signal)
+		if projectionInputDeclared(declared, HistoryResetTriggerSignalType, name) {
+			continue
+		}
+		return fmt.Errorf(
+			"decision %q: history_reset trigger.signal %s(%q) is not declared in this recipe",
+			decision.Name,
+			HistoryResetTriggerSignalType,
+			name,
+		)
+	}
+	return nil
+}

@@ -5,7 +5,11 @@
 // Topic detection belongs to the signal that supplies the trigger result.
 package historyreset
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+import (
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+)
 
 // TriggerClass is the action's consumption view of a topic-continuity result.
 // The producing signal contract is owned separately; this package only
@@ -52,11 +56,19 @@ type Policy struct {
 	Binding string
 	// MaxRecoveryBytes bounds the payload a single request may persist.
 	MaxRecoveryBytes int
+	// Timeout bounds the whole evaluation, including preparing the view's
+	// dependency groups, not just the selection loop.
+	Timeout time.Duration
 }
 
 // Outcome describes what the action did, independently of the shared
 // executor's own receipt for the committed edit.
 type Outcome string
+
+// ScopeEligibleHistory is the only history the action may transform. It is
+// reported on every receipt so an operator can see what a reset was allowed to
+// consider, not just what it removed.
+const ScopeEligibleHistory = "eligible_history"
 
 const (
 	OutcomeApplied Outcome = "applied"
@@ -94,6 +106,7 @@ const (
 // unless the field name says turns. Nothing here identifies content.
 type Diagnostics struct {
 	Signal            string
+	Scope             string
 	TriggerClass      TriggerClass
 	Version           string
 	Outcome           Outcome
@@ -115,10 +128,28 @@ const (
 	RecoveryFailed      = "failed"
 )
 
+// evaluationFailure separates a failed evaluation from a normal negative.
+// A continuation, an inherited follow-up, and history with nothing eligible
+// are ordinary no-ops in both failure modes. Everything else means the action
+// could not decide safely, which is what the configured failure mode governs:
+// fail-open preserves the request and records the reason, fail-closed rejects
+// it before the provider is called.
+func evaluationFailure(reason string) bool {
+	switch reason {
+	case ReasonApplied,
+		ReasonEvidenceContinuation,
+		ReasonNoEligibleHistory,
+		ReasonInheritedCompleted:
+		return false
+	}
+	return true
+}
+
 // skipped builds a no-removal diagnostic carrying the terminal reason.
 func skipped(trigger TriggerResult, reason string) Diagnostics {
 	return Diagnostics{
 		Signal:       trigger.Signal,
+		Scope:        ScopeEligibleHistory,
 		TriggerClass: trigger.Class,
 		Version:      trigger.Version,
 		Outcome:      OutcomeSkipped,
@@ -134,7 +165,10 @@ func (p Policy) authorize(trigger TriggerResult) string {
 		return ReasonEvidenceMissing
 	case p.Signal != "" && trigger.Signal != p.Signal:
 		return ReasonEvidenceWrongSignal
-	case !p.supportsVersion(trigger.Version):
+	case trigger.Version == "" || !p.supportsVersion(trigger.Version):
+		// Evidence that does not identify its producing contract cannot be
+		// checked for compatibility, so it is treated as unsupported rather
+		// than trusted by default.
 		return ReasonEvidenceUnsupportedVersion
 	case p.Binding != "" && trigger.Binding != p.Binding:
 		return ReasonEvidenceStale

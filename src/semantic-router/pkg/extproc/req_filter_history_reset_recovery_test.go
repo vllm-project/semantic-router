@@ -54,6 +54,7 @@ func recoverableResetContext(t *testing.T, decision *config.Decision, request *l
 		Class:      historyreset.TriggerChange,
 		Confidence: 0.95,
 		Signal:     "topic_boundary",
+		Version:    "v1",
 		Binding:    historyResetEvidenceBinding(ctx),
 	}
 	return ctx
@@ -243,6 +244,66 @@ func TestResetRejectsEvidenceBoundToAnotherRequest(t *testing.T) {
 	}
 }
 
+// Two requests that differ only in a tool call's arguments, a tool identifier,
+// or a content kind are different conversations, so they must not share a
+// binding: evidence about one could otherwise authorize removing the other.
+func TestEvidenceBindingDistinguishesNonTextDifferences(t *testing.T) {
+	toolConversation := func(mutate func(*llmprotocol.Request)) string {
+		request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+				Kind:     llmprotocol.ContentToolCall,
+				ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: `{"q":"a"}`},
+			}}},
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentToolResult,
+				ToolResult: &llmprotocol.ToolResult{
+					CallID:  "call_1",
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "result"}},
+				},
+			}}},
+			neutralTextMessage(llmprotocol.RoleUser, "live question"),
+		}}
+		if mutate != nil {
+			mutate(request)
+		}
+		ctx := &RequestContext{SemanticRequest: request}
+		captureOriginalContextHistory(ctx)
+		return historyResetEvidenceBinding(ctx)
+	}
+
+	baseline := toolConversation(nil)
+	cases := map[string]func(*llmprotocol.Request){
+		"tool_arguments": func(request *llmprotocol.Request) {
+			request.Messages[0].Content[0].ToolCall.Arguments = `{"q":"b"}`
+		},
+		"tool_call_id": func(request *llmprotocol.Request) {
+			request.Messages[0].Content[0].ToolCall.ID = "call_2"
+		},
+		"tool_name": func(request *llmprotocol.Request) {
+			request.Messages[0].Content[0].ToolCall.Name = "search"
+		},
+		"result_link": func(request *llmprotocol.Request) {
+			request.Messages[1].Content[0].ToolResult.CallID = "call_2"
+		},
+		"content_kind": func(request *llmprotocol.Request) {
+			request.Messages[2].Content[0].Kind = llmprotocol.ContentImage
+		},
+		// The same concatenated text split across two messages is a different
+		// conversation, so field boundaries must be part of the identity.
+		"field_boundary": func(request *llmprotocol.Request) {
+			request.Messages[2].Content[0].Text = "live"
+			request.Messages = append(request.Messages, neutralTextMessage(llmprotocol.RoleUser, "question"))
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := toolConversation(mutate); got == baseline {
+				t.Fatalf("%s produced the same binding %q", name, got)
+			}
+		})
+	}
+}
+
 func TestHistoryResetEvidenceBindingFollowsTheResolvedHistory(t *testing.T) {
 	first := &RequestContext{SemanticRequest: resetConversation()}
 	captureOriginalContextHistory(first)
@@ -325,7 +386,8 @@ func TestFailClosedResetStatusMapping(t *testing.T) {
 		{"reserved_tool", historyreset.ReasonReservedToolConflict, 503},
 		{"evidence_missing", historyreset.ReasonEvidenceMissing, 503},
 		{"evidence_stale", historyreset.ReasonEvidenceStale, 503},
-		{"limit", historyreset.ReasonHistoryLimitExceeded, 500},
+		{"limit", historyreset.ReasonHistoryLimitExceeded, 503},
+		{"invariant", "invariant_violation", 500},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
