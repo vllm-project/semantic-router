@@ -38,6 +38,7 @@ var (
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
 		validateModelAdmissionContracts,
+		validateModelDeploymentContracts,
 	}
 
 	routingProfileContractValidators = []configContractValidator{

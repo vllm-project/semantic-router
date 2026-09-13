@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // classifierWithEmbeddingOnly returns a minimal *Classifier wrapping just the
@@ -118,7 +118,7 @@ func TestEvaluateEmbeddingSignal_ImageProvidedActivatesImageRules(t *testing.T) 
 func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 	// Stub the text-embedding FFI to error.
 	originalText := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		return nil, errors.New("synthetic text-FFI failure")
 	}
 	t.Cleanup(func() { getEmbedding2DMatryoshka = originalText })
@@ -162,9 +162,9 @@ func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 func TestEvaluateEmbeddingSignal_ImageOnlyContent_SkipsTextFFI(t *testing.T) {
 	var textCalls int32
 	originalText := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		atomic.AddInt32(&textCalls, 1)
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0.0, 0.0, 0.0)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(0.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() { getEmbedding2DMatryoshka = originalText })
 

@@ -50,7 +50,7 @@ func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 
 	// Generate embedding if not already set
 	if len(memory.Embedding) == 0 {
-		embedding, err := GenerateEmbedding(memory.Content, s.embeddingConfig)
+		embedding, err := GenerateEmbeddingWithContext(ctx, memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}
@@ -82,7 +82,7 @@ func (s *InMemoryStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*
 	defer s.mu.RUnlock()
 
 	// Generate embedding for query using unified embedding configuration
-	queryEmbedding, err := GenerateEmbedding(opts.Query, s.embeddingConfig)
+	queryEmbedding, err := GenerateEmbeddingWithContext(ctx, opts.Query, s.embeddingConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 
 	// Regenerate embedding before overwriting Content so the comparison is valid.
 	if existing.Content != memory.Content {
-		embedding, err := GenerateEmbedding(memory.Content, s.embeddingConfig)
+		embedding, err := GenerateEmbeddingWithContext(ctx, memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}

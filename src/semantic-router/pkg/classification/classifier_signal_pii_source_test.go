@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func newPIISignalTestResults() *SignalResults {
@@ -33,8 +33,8 @@ func TestEvaluatePIISignalUsesToolResultSourceOnly(t *testing.T) {
 	toolText := "tool payload"
 	userText := "user payload"
 	pii := piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99)
-	mockModel.setMockResponse(toolText, []candle_binding.TokenEntity{pii}, nil)
-	mockModel.setMockResponse(userText, []candle_binding.TokenEntity{pii}, nil)
+	mockModel.setMockResponse(toolText, []tasks.TokenEntity{pii}, nil)
+	mockModel.setMockResponse(userText, []tasks.TokenEntity{pii}, nil)
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
@@ -65,7 +65,7 @@ func TestEvaluateAllSignalsWithHeadersRoutesToolResultPIIToDecisionEngine(t *tes
 	}}
 
 	toolText := "tool payload"
-	mockModel.setMockResponse(toolText, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(toolText, []tasks.TokenEntity{
 		piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99),
 	}, nil)
 
@@ -102,10 +102,10 @@ func TestEvaluateAllSignalsWithHeadersPreservesLegacyPIISourceScope(t *testing.T
 
 	userText := "user payload"
 	toolText := "tool payload"
-	mockModel.setMockResponse(userText, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(userText, []tasks.TokenEntity{
 		piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99),
 	}, nil)
-	mockModel.setMockResponse(toolText, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(toolText, []tasks.TokenEntity{
 		piiEntity("EMAIL", "tool@example.com", 0, 16, 0.99),
 	}, nil)
 
@@ -182,7 +182,7 @@ func TestEvaluatePIISignalSharesToolResultCacheAcrossRules(t *testing.T) {
 	}
 
 	toolText := "repeated tool payload"
-	mockModel.setMockResponse(toolText, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(toolText, []tasks.TokenEntity{
 		piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99),
 	}, nil)
 
@@ -214,7 +214,7 @@ func TestEvaluatePIISignalKeepsLegacyCacheCompleteWhenToolBudgetIsExhausted(t *t
 		toolTexts[i] = fmt.Sprintf("tool result block %04d", i)
 	}
 	toolTexts[maxPIIToolResultInferenceCalls] = sharedText
-	mockModel.setMockResponse(sharedText, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(sharedText, []tasks.TokenEntity{
 		piiEntity("EMAIL", "customer@example.com", 7, 24, 0.99),
 	}, nil)
 
@@ -297,7 +297,7 @@ func TestEvaluatePIISignalPreservesPositiveMatchWhenToolResultExtractionIsIncomp
 	}
 
 	toolText := "tool payload"
-	mockModel.setMockResponse(toolText, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(toolText, []tasks.TokenEntity{
 		piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99),
 	}, nil)
 
@@ -324,7 +324,7 @@ func TestEvaluatePIISignalBoundsManyToolResultInferenceCalls(t *testing.T) {
 		toolTexts[i] = fmt.Sprintf("tool result block %04d", i)
 	}
 	firstToolText := toolTexts[0]
-	mockModel.setMockResponse(firstToolText, []candle_binding.TokenEntity{
+	mockModel.setMockResponse(firstToolText, []tasks.TokenEntity{
 		piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99),
 	}, nil)
 

@@ -30,11 +30,12 @@ type TestQueryRequest struct {
 
 // MatchedSignal represents a matched signal
 type MatchedSignal struct {
-	Type       string   `json:"type"`
-	Name       string   `json:"name"`
-	Confidence float64  `json:"confidence"`
-	Value      *float64 `json:"value,omitempty"`
-	Reason     string   `json:"reason,omitempty"`
+	Type                string   `json:"type"`
+	Name                string   `json:"name"`
+	Confidence          float64  `json:"confidence"`
+	ConfidenceAvailable *bool    `json:"confidenceAvailable,omitempty"`
+	Value               *float64 `json:"value,omitempty"`
+	Reason              string   `json:"reason,omitempty"`
 }
 
 // EvaluatedRule represents an evaluated decision rule
@@ -51,18 +52,21 @@ type EvaluatedRule struct {
 
 // TestQueryResult represents the test query result
 type TestQueryResult struct {
-	Query              string          `json:"query"`
-	Mode               TestQueryMode   `json:"mode"`
-	MatchedSignals     []MatchedSignal `json:"matchedSignals"`
-	MatchedDecision    string          `json:"matchedDecision"`
-	MatchedModels      []string        `json:"matchedModels"`
-	HighlightedPath    []string        `json:"highlightedPath"`
-	IsAccurate         bool            `json:"isAccurate"`
-	EvaluatedRules     []EvaluatedRule `json:"evaluatedRules,omitempty"`
-	RoutingLatency     int64           `json:"routingLatency,omitempty"`
-	Warning            string          `json:"warning,omitempty"`
-	IsFallbackDecision bool            `json:"isFallbackDecision,omitempty"` // True if matched decision is a system fallback
-	FallbackReason     string          `json:"fallbackReason,omitempty"`     // Reason for fallback (e.g., "low_confidence", "no_match")
+	DecisionConfidence          *float64        `json:"decisionConfidence"`
+	DecisionConfidenceAvailable *bool           `json:"decisionConfidenceAvailable,omitempty"`
+	SignalErrorMatches          map[string]bool `json:"signalErrorMatches,omitempty"`
+	Query                       string          `json:"query"`
+	Mode                        TestQueryMode   `json:"mode"`
+	MatchedSignals              []MatchedSignal `json:"matchedSignals"`
+	MatchedDecision             string          `json:"matchedDecision"`
+	MatchedModels               []string        `json:"matchedModels"`
+	HighlightedPath             []string        `json:"highlightedPath"`
+	IsAccurate                  bool            `json:"isAccurate"`
+	EvaluatedRules              []EvaluatedRule `json:"evaluatedRules,omitempty"`
+	RoutingLatency              int64           `json:"routingLatency,omitempty"`
+	Warning                     string          `json:"warning,omitempty"`
+	IsFallbackDecision          bool            `json:"isFallbackDecision,omitempty"` // True if matched decision is a system fallback
+	FallbackReason              string          `json:"fallbackReason,omitempty"`     // Reason for fallback (e.g., "low_confidence", "no_match")
 }
 
 // TopologyTestQueryHandler handles test query requests for topology visualization
@@ -151,20 +155,23 @@ type RouterMatchedSignals struct {
 }
 
 type RouterEvalDecisionResult struct {
-	DecisionName     string                `json:"decision_name"`
-	UsedSignals      *RouterMatchedSignals `json:"used_signals,omitempty"`
-	MatchedSignals   *RouterMatchedSignals `json:"matched_signals,omitempty"`
-	UnmatchedSignals *RouterMatchedSignals `json:"unmatched_signals,omitempty"`
+	Confidence          *float64              `json:"confidence"`
+	ConfidenceAvailable *bool                 `json:"confidence_available,omitempty"`
+	DecisionName        string                `json:"decision_name"`
+	UsedSignals         *RouterMatchedSignals `json:"used_signals,omitempty"`
+	MatchedSignals      *RouterMatchedSignals `json:"matched_signals,omitempty"`
+	UnmatchedSignals    *RouterMatchedSignals `json:"unmatched_signals,omitempty"`
 }
 
 // RouterEvalResponse is the response from Router's /api/v1/routing/preview endpoint.
 type RouterEvalResponse struct {
-	OriginalText      string                    `json:"original_text,omitempty"`
-	DecisionResult    *RouterEvalDecisionResult `json:"decision_result,omitempty"`
-	RecommendedModels []string                  `json:"recommended_models,omitempty"`
-	RoutingDecision   string                    `json:"routing_decision,omitempty"`
-	SignalConfidences map[string]float64        `json:"signal_confidences,omitempty"`
-	SignalValues      map[string]float64        `json:"signal_values,omitempty"`
+	SignalErrorMatches map[string]bool           `json:"signal_error_matches,omitempty"`
+	OriginalText       string                    `json:"original_text,omitempty"`
+	DecisionResult     *RouterEvalDecisionResult `json:"decision_result,omitempty"`
+	RecommendedModels  []string                  `json:"recommended_models,omitempty"`
+	RoutingDecision    string                    `json:"routing_decision,omitempty"`
+	SignalConfidences  map[string]float64        `json:"signal_confidences,omitempty"`
+	SignalValues       map[string]float64        `json:"signal_values,omitempty"`
 }
 
 // callRouterAPI calls the real Router API for classification

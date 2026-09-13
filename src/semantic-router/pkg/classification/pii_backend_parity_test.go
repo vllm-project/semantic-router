@@ -6,17 +6,17 @@ import (
 	"sort"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // localEntitiesFor renders a fixture the way the native Candle backend reports
 // it: byte offsets into the request string, the mapping's label spelling, the
 // entity text and score.
-func localEntitiesFor(tc tokenSpansFixtureCase) []candle_binding.TokenEntity {
-	entities := make([]candle_binding.TokenEntity, 0, len(tc.Spans))
+func localEntitiesFor(tc tokenSpansFixtureCase) []tasks.TokenEntity {
+	entities := make([]tasks.TokenEntity, 0, len(tc.Spans))
 	for _, sp := range tc.Spans {
-		entities = append(entities, candle_binding.TokenEntity{
+		entities = append(entities, tasks.TokenEntity{
 			EntityType: sp.Label,
 			Start:      sp.ByteStart,
 			End:        sp.ByteEnd,
