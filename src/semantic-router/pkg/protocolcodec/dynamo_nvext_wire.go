@@ -49,15 +49,16 @@ type dynamoRouterParamsWire struct {
 }
 
 type dynamoResponseNVExtWire struct {
-	WorkerID           *dynamoWorkerInfoWire                     `json:"worker_id,omitempty"`
-	Timing             *dynamoTimingInfoWire                     `json:"timing,omitempty"`
-	RoutedExperts      json.RawMessage                           `json:"routed_experts,omitempty"`
-	EngineData         json.RawMessage                           `json:"engine_data,omitempty"`
-	StopReason         json.RawMessage                           `json:"stop_reason,omitempty"`
-	PromptTokenIDs     []uint32                                  `json:"prompt_token_ids,omitempty"`
-	CompletionTokenIDs []uint32                                  `json:"completion_token_ids,omitempty"`
-	PromptLogprobs     []map[uint32]dynamoPromptLogprobEntryWire `json:"prompt_logprobs,omitempty"`
-	TokenIDs           []uint32                                  `json:"token_ids,omitempty"`
+	WorkerID             *dynamoWorkerInfoWire                     `json:"worker_id,omitempty"`
+	Timing               *dynamoTimingInfoWire                     `json:"timing,omitempty"`
+	RoutedExperts        json.RawMessage                           `json:"routed_experts,omitempty"`
+	EngineData           json.RawMessage                           `json:"engine_data,omitempty"`
+	StopReason           json.RawMessage                           `json:"stop_reason,omitempty"`
+	DetailedFinishReason *string                                   `json:"detailed_finish_reason,omitempty"`
+	PromptTokenIDs       []uint32                                  `json:"prompt_token_ids,omitempty"`
+	CompletionTokenIDs   []uint32                                  `json:"completion_token_ids,omitempty"`
+	PromptLogprobs       []map[uint32]dynamoPromptLogprobEntryWire `json:"prompt_logprobs,omitempty"`
+	TokenIDs             []uint32                                  `json:"token_ids,omitempty"`
 }
 
 type dynamoTimingInfoWire struct {
@@ -238,12 +239,13 @@ func decodeDynamoResponseNVExt(raw json.RawMessage, policy llmprotocol.Policy) (
 		return nil, err
 	}
 	extension := &llmprotocol.DynamoResponseNVExt{
-		RoutedExperts:      append(json.RawMessage(nil), wire.RoutedExperts...),
-		EngineData:         append(json.RawMessage(nil), wire.EngineData...),
-		StopReason:         append(json.RawMessage(nil), wire.StopReason...),
-		PromptTokenIDs:     append([]uint32(nil), wire.PromptTokenIDs...),
-		CompletionTokenIDs: append([]uint32(nil), wire.CompletionTokenIDs...),
-		TokenIDs:           append([]uint32(nil), wire.TokenIDs...),
+		RoutedExperts:        append(json.RawMessage(nil), wire.RoutedExperts...),
+		EngineData:           append(json.RawMessage(nil), wire.EngineData...),
+		StopReason:           append(json.RawMessage(nil), wire.StopReason...),
+		DetailedFinishReason: wire.DetailedFinishReason,
+		PromptTokenIDs:       append([]uint32(nil), wire.PromptTokenIDs...),
+		CompletionTokenIDs:   append([]uint32(nil), wire.CompletionTokenIDs...),
+		TokenIDs:             append([]uint32(nil), wire.TokenIDs...),
 	}
 	if wire.Timing != nil {
 		if wire.Timing.RequestReceivedMS == nil {
@@ -278,12 +280,13 @@ func encodeDynamoResponseNVExt(extension *llmprotocol.DynamoResponseNVExt, polic
 		return nil, err
 	}
 	wire := dynamoResponseNVExtWire{
-		RoutedExperts:      append(json.RawMessage(nil), extension.RoutedExperts...),
-		EngineData:         append(json.RawMessage(nil), extension.EngineData...),
-		StopReason:         append(json.RawMessage(nil), extension.StopReason...),
-		PromptTokenIDs:     append([]uint32(nil), extension.PromptTokenIDs...),
-		CompletionTokenIDs: append([]uint32(nil), extension.CompletionTokenIDs...),
-		TokenIDs:           append([]uint32(nil), extension.TokenIDs...),
+		RoutedExperts:        append(json.RawMessage(nil), extension.RoutedExperts...),
+		EngineData:           append(json.RawMessage(nil), extension.EngineData...),
+		StopReason:           append(json.RawMessage(nil), extension.StopReason...),
+		DetailedFinishReason: extension.DetailedFinishReason,
+		PromptTokenIDs:       append([]uint32(nil), extension.PromptTokenIDs...),
+		CompletionTokenIDs:   append([]uint32(nil), extension.CompletionTokenIDs...),
+		TokenIDs:             append([]uint32(nil), extension.TokenIDs...),
 	}
 	if extension.Timing != nil {
 		wire.Timing = encodeDynamoTimingInfoWire(extension.Timing)
