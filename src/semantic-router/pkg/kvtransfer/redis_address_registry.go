@@ -14,7 +14,7 @@ import (
 
 // RedisAddressRegistryOptions configures a Redis/Valkey-backed address registry.
 type RedisAddressRegistryOptions struct {
-	Address string
+	Address  string
 	Password string
 	Database int
 	Timeout  time.Duration

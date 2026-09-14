@@ -40,23 +40,23 @@ type OpenAIRouter struct {
 	Classifier           *classification.Classifier
 	// RecipeClassifiers selects the isolated classifier graph for each routing
 	// request. Classifier is the default-recipe accessor.
-	RecipeClassifiers     *classification.RecipeClassifiers
-	ClassificationService *services.ClassificationService
-	Cache                 cache.CacheBackend
-	ResponseCache         *cache.ResponseCacheService
-	responseCacheMu       sync.Mutex
+	RecipeClassifiers      *classification.RecipeClassifiers
+	ClassificationService  *services.ClassificationService
+	Cache                  cache.CacheBackend
+	ResponseCache          *cache.ResponseCacheService
+	responseCacheMu        sync.Mutex
 	kvAddressRegistryStore kvtransfer.AddressRegistry
 	kvAddressRegistryMu    sync.Mutex
-	ContextCompression    *contextcompression.Service
-	CompressionRecovery   contextcompression.RecoveryStore
-	CompressionEmbedding  embedding.Provider
-	CompressionScorer     contextcompression.RelevanceScorer
-	compressionScorers    map[string]contextcompression.RelevanceScorer
-	contextCompressionMu  sync.Mutex
-	ToolsDatabase         *tools.ToolsDatabase
-	ToolsRegistry         *tools.Registry // retriever strategy registry
-	toolSelectionDBMu     sync.Mutex
-	toolSelectionDBByPath map[string]*tools.ToolsDatabase
+	ContextCompression     *contextcompression.Service
+	CompressionRecovery    contextcompression.RecoveryStore
+	CompressionEmbedding   embedding.Provider
+	CompressionScorer      contextcompression.RelevanceScorer
+	compressionScorers     map[string]contextcompression.RelevanceScorer
+	contextCompressionMu   sync.Mutex
+	ToolsDatabase          *tools.ToolsDatabase
+	ToolsRegistry          *tools.Registry // retriever strategy registry
+	toolSelectionDBMu      sync.Mutex
+	toolSelectionDBByPath  map[string]*tools.ToolsDatabase
 	// toolEmbedder embeds request-supplied tool definitions for tool_selection
 	// filter mode, memoizing them across requests. Set once at router
 	// construction and read-only afterwards; nil (remote provider construction
