@@ -122,22 +122,40 @@ var httpTokenClassifyOperation = connector.Operation{
 
 // ClassifyTokens implements TokenClassifierBackend.
 func (h *HTTPTokenClassifierInference) ClassifyTokens(ctx context.Context, text string) (tasks.TokenClassificationResult, error) {
-	return h.classifyTokenResult(ctx, text)
+	return h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: text})
+}
+
+// ClassifyGrounded runs grounded span detection over the token_spans.v1
+// contract: the answer is the classified text and travels as inputs, so every
+// returned offset indexes the answer; context and question travel as
+// parameters. The provider sees the same three fields the native detector
+// does, without the router assembling a prompt it would then have to parse.
+func (h *HTTPTokenClassifierInference) ClassifyGrounded(ctx context.Context, input tasks.GroundedTextRequest) (tasks.TokenClassificationResult, error) {
+	if input.Context == "" {
+		return tasks.TokenClassificationResult{}, fmt.Errorf("context is required for hallucination detection")
+	}
+	return h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: input.Answer, Parameters: map[string]string{"context": input.Context, "question": input.Question}})
 }
 
 func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text string) ([]tasks.TokenEntity, error) {
-	result, err := h.classifyTokenResult(ctx, text)
+	result, err := h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: text})
 	return result.Entities, err
 }
 
-func (h *HTTPTokenClassifierInference) classifyTokenResult(ctx context.Context, text string) (tasks.TokenClassificationResult, error) {
+func (h *HTTPTokenClassifierInference) classifyTokenResult(ctx context.Context, request httpClassifyRequest) (tasks.TokenClassificationResult, error) {
+	text := request.Inputs
 	if !utf8.ValidString(text) {
 		return tasks.TokenClassificationResult{}, fmt.Errorf("token_spans input is not valid UTF-8")
+	}
+	for _, value := range request.Parameters {
+		if !utf8.ValidString(value) {
+			return tasks.TokenClassificationResult{}, fmt.Errorf("token_spans parameter is not valid UTF-8")
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
-	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
+	reqBody, err := json.Marshal(request)
 	if err != nil {
 		return tasks.TokenClassificationResult{}, fmt.Errorf("failed to marshal token_spans request: %w", err)
 	}

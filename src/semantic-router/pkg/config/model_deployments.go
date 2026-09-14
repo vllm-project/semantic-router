@@ -222,8 +222,8 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
 			return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
 		}
-		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat {
-			return fmt.Errorf("hallucination detector requires http_chat adapter")
+		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
+			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
 		}
 	}
 	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {

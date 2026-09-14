@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -122,7 +123,10 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 		if scheme == "" {
 			scheme = "http"
 		}
-		endpoint = fmt.Sprintf("%s://%s:%d/v1", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
+		endpoint = fmt.Sprintf("%s://%s:%d", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
+		if declared.Binding.Adapter == config.RemoteClassifierProtocolHTTPChat {
+			endpoint += "/v1"
+		}
 		copied := *cfg
 		copied.ModelID = external.ModelName
 		copied.Endpoint = endpoint
@@ -134,12 +138,29 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	if cfg.ModelID == "" {
 		return nil, fmt.Errorf("hallucination model_id is required")
 	}
-	client, err := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
-	if err != nil {
-		return nil, err
+	detector := &EndpointHallucinationDetector{config: cfg, endpoint: endpoint, spec: spec}
+	var closer io.Closer
+	infer := detector.classifyGrounded
+	if spec.Binding.Adapter == config.RemoteClassifierProtocolHTTPClassify {
+		// A token_spans.v1 grounding service: the answer is the classified
+		// text, context and question ride along as parameters, and spans
+		// come back with code-point offsets into the answer. The shared
+		// token_spans decoder does the alignment, so this path parses no
+		// generated text.
+		tokens, err := newHTTPTokenClassifierInference(external, hallucinationTokenLabels, external.GetTimeout())
+		if err != nil {
+			return nil, err
+		}
+		closer, infer = tokens, tokens.ClassifyGrounded
+	} else {
+		client, err := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
+		if err != nil {
+			return nil, err
+		}
+		detector.client = client
+		closer = client
 	}
-	detector := &EndpointHallucinationDetector{config: cfg, client: client, endpoint: endpoint, spec: spec}
-	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, client, detector.classifyGrounded, func(input tasks.GroundedTextRequest, out tasks.TokenClassificationResult) error {
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, closer, infer, func(input tasks.GroundedTextRequest, out tasks.TokenClassificationResult) error {
 		for _, span := range out.Entities {
 			if span.Start < 0 || span.End > len(input.Answer) || span.Start >= span.End || input.Answer[span.Start:span.End] != span.Text {
 				return fmt.Errorf("invalid grounding span")
@@ -154,6 +175,15 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	return detector, nil
 }
 
+// hallucinationTokenLabels is the label set a token_spans.v1 grounding
+// provider may return: the native detector's HALLUCINATED plus the taxonomy
+// categories the chat adapter validates. SUPPORTED and O mark grounded text
+// and must never arrive as spans.
+var hallucinationTokenLabels = tasks.TokenLabelSet{
+	Labels:  append([]string{"HALLUCINATED"}, endpointCategories...),
+	Outside: []string{"SUPPORTED", "O"},
+}
+
 func (d *EndpointHallucinationDetector) Initialize() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -163,6 +193,7 @@ func (d *EndpointHallucinationDetector) Initialize() error {
 	d.initialized = true
 	logging.ComponentEvent("classifier", "hallucination_detector_initialized", map[string]interface{}{
 		"backend":   "endpoint",
+		"adapter":   d.spec.Binding.Adapter,
 		"model_ref": d.config.ModelID,
 		"endpoint":  d.endpoint,
 	})

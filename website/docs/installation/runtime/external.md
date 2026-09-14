@@ -54,7 +54,7 @@ The service will receive the text it inspects.
 
 | Service | Configuration | Used for |
 | --- | --- | --- |
-| Classify API | `adapter: http_classify` | Domain or custom classification, prompt guard, PII, complexity |
+| Classify API | `adapter: http_classify` | Domain or custom classification, prompt guard, PII, hallucination detection, complexity |
 | Chat API | `adapter: http_chat` | Prompt guard, hallucination detection, LLM-based classification |
 | Embedding API | `backend: openai_compatible` | [Remote text embeddings](embeddings.md#remote-embeddings) |
 | MCP tool | `modules.classifier.mcp` | Classification through an existing MCP server |
@@ -74,7 +74,9 @@ embedding requests include their configured model name.
 - Classification returns every configured label with a valid score. Missing,
   duplicate, or unknown labels cause an inference error.
 - PII returns scored entities with valid text offsets. Hallucination detection
-  instead receives context, question, and answer and returns answer-relative spans.
+  receives context, question, and answer and returns answer-relative spans: a
+  classify service gets the answer as `inputs` and the context and question
+  under `parameters`; a chat service gets all three in the prompt.
 - Set request timeouts and response-size limits for the service. Leave local
   tokenizer `input` settings unset for HTTP classifiers; enforce token limits
   in the external service.
