@@ -48,6 +48,9 @@ can exhaust that default while returning HTTP 200, correct routing headers,
 `content: null`, and `finish_reason: length`. Keep this failed receipt; repeat
 with an explicitly larger supported budget when the test scope permits. Do not
 disable reasoning to hide incomplete delivery or claim the first request passed.
+This explicit budget applies to CLI probes. Ordinary Playground requests omit
+token-limit fields and use backend defaults; when those defaults truncate an
+answer, inspect the backend generation settings and available context budget.
 
 `route probe` makes a real OpenAI-compatible request through Envoy. Its receipt
 contains status, latency, routing headers, response body, and assertions. Use
@@ -148,6 +151,9 @@ Materialize frozen sources as the plan requires, keep them clean, and supply
 credentials through named environment variables. Do not substitute rolling data
 or change the suite's modality/subset under the same score label. Use the
 installed `run` contract only after the plan's prerequisites are satisfied.
+
+Live exact-answer grading reports incomplete final answers as unavailable for
+grading; reasoning output remains observed evidence rather than a final answer.
 
 Physical and virtual models follow the same evaluation contract. Evaluate a
 virtual model through its actual routed endpoint so route failures, retries,

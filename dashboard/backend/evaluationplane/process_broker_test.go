@@ -443,8 +443,12 @@ func TestRoutingBrokerAttestationBindsRealizedSelectionMethod(t *testing.T) {
 	}
 }
 
-func newTypedChatBroker(t *testing.T, chatCalls *atomic.Int64) *workerHTTPBroker {
+func newTypedChatBroker(t *testing.T, chatCalls *atomic.Int64, responseBodies ...string) *workerHTTPBroker {
 	t.Helper()
+	responseBody := `{"choices":[{"message":{"role":"assistant","content":"  exact   answer "},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`
+	if len(responseBodies) > 0 {
+		responseBody = responseBodies[0]
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
@@ -472,7 +476,7 @@ func newTypedChatBroker(t *testing.T, chatCalls *atomic.Int64) *workerHTTPBroker
 			writer.Header().Set("x-vsr-selected-model", "arm-fast")
 			writer.Header().Set("x-vsr-selected-algorithm", "static")
 			writer.Header().Set("x-vsr-selected-decision", "quality")
-			_, _ = writer.Write([]byte(`{"choices":[{"message":{"content":"  exact   answer "}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`))
+			_, _ = writer.Write([]byte(responseBody))
 		default:
 			http.NotFound(writer, request)
 		}

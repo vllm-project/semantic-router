@@ -507,6 +507,7 @@ vllm-sr-test: vllm-sr-install-cli
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		src/vllm-sr/tests/test_container_log_spool.py \
 		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
+		src/vllm-sr/tests/test_evaluation_live.py \
 		src/vllm-sr/tests/test_evaluation_worker_task_limit.py \
 		src/vllm-sr/tests/test_evaluation_worker_sandbox.py \
 		src/vllm-sr/tests/test_install_script_surface.py \
