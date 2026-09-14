@@ -98,6 +98,12 @@ type EndpointHallucinationDetector struct {
 	handle      *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
 	spec        config.ResolvedModelBinding
 	endpoint    string
+	// known and outside are the binding's span label set, compiled once. The
+	// chat adapter checks its quoted spans against the same set the classify
+	// adapter checks wire labels against, so a label the recipe did not
+	// configure is rejected on both paths.
+	known   map[string]struct{}
+	outside map[string]struct{}
 }
 
 func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*classifierModelRuntime) (*EndpointHallucinationDetector, error) {
@@ -138,7 +144,15 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	if cfg.ModelID == "" {
 		return nil, fmt.Errorf("hallucination model_id is required")
 	}
-	detector := &EndpointHallucinationDetector{config: cfg, endpoint: endpoint, spec: spec}
+	labels, err := hallucinationLabelSet(spec)
+	if err != nil {
+		return nil, err
+	}
+	known, outside, err := compileTokenLabels(labels)
+	if err != nil {
+		return nil, err
+	}
+	detector := &EndpointHallucinationDetector{config: cfg, endpoint: endpoint, spec: spec, known: known, outside: outside}
 	var closer io.Closer
 	infer := detector.classifyGrounded
 	if spec.Binding.Adapter == config.RemoteClassifierProtocolHTTPClassify {
@@ -147,15 +161,15 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 		// come back with code-point offsets into the answer. The shared
 		// token_spans decoder does the alignment, so this path parses no
 		// generated text.
-		tokens, err := newHTTPTokenClassifierInference(external, hallucinationTokenLabels, external.GetTimeout())
-		if err != nil {
-			return nil, err
+		tokens, tokensErr := newHTTPTokenClassifierInference(external, labels, external.GetTimeout())
+		if tokensErr != nil {
+			return nil, tokensErr
 		}
 		closer, infer = tokens, tokens.ClassifyGrounded
 	} else {
-		client, err := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
-		if err != nil {
-			return nil, err
+		client, clientErr := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
+		if clientErr != nil {
+			return nil, clientErr
 		}
 		detector.client = client
 		closer = client
@@ -175,13 +189,39 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	return detector, nil
 }
 
-// hallucinationTokenLabels is the label set a token_spans.v1 grounding
-// provider may return: the native detector's HALLUCINATED plus the taxonomy
-// categories the chat adapter validates. SUPPORTED and O mark grounded text
-// and must never arrive as spans.
-var hallucinationTokenLabels = tasks.TokenLabelSet{
-	Labels:  append([]string{"HALLUCINATED"}, endpointCategories...),
+// defaultHallucinationTokenLabels is the span label set a grounding provider
+// may return when the binding names no mapping file: the native detector's
+// HALLUCINATED, the contract's generic classes (unsupported at minimum,
+// contradicted and unverifiable where a provider distinguishes them), and the
+// chat adapter's taxonomy categories. SUPPORTED and O mark grounded text and
+// must never arrive as spans.
+var defaultHallucinationTokenLabels = tasks.TokenLabelSet{
+	Labels:  append([]string{"HALLUCINATED", "unsupported", "contradicted", "unverifiable"}, endpointCategories...),
 	Outside: []string{"SUPPORTED", "O"},
+}
+
+// hallucinationLabelSet resolves the binding's span labels the way PII
+// resolves its mapping: a mapping_path on the binding is a label_to_idx /
+// idx_to_label file whose class zero is the outside label; without one the
+// default set applies.
+func hallucinationLabelSet(spec config.ResolvedModelBinding) (tasks.TokenLabelSet, error) {
+	path := strings.TrimSpace(spec.Binding.MappingPath)
+	if path == "" {
+		return defaultHallucinationTokenLabels, nil
+	}
+	mapping, err := LoadPIIMapping(config.ResolveModelPath(path))
+	if err != nil {
+		return tasks.TokenLabelSet{}, fmt.Errorf("hallucination span mapping: %w", err)
+	}
+	known, outside := knownPIILabels(mapping)
+	labels := tasks.TokenLabelSet{}
+	for label := range known {
+		labels.Labels = append(labels.Labels, label)
+	}
+	for label := range outside {
+		labels.Outside = append(labels.Outside, label)
+	}
+	return labels, nil
 }
 
 func (d *EndpointHallucinationDetector) Initialize() error {
@@ -315,8 +355,17 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 	}
 
 	rawSpans := *parsed.HallucinatedSpans
-	spans := make([]tasks.TokenEntity, 0, len(rawSpans))
+	// Each quoted span becomes a token_spans.v1 wire span with code-point
+	// offsets into the answer, and the shared decoder aligns it: label set,
+	// bounds, text match, byte conversion, duplicate rejection. The model
+	// gave no offsets, so a quote is located in the answer; repeated quotes
+	// take successive occurrences rather than all claiming the first one.
+	input := newSpanInput(answer)
+	wire := make([]tokenSpanWire, 0, len(rawSpans))
+	type spanMeta struct{ subtype, explanation string }
+	meta := make([]spanMeta, 0, len(rawSpans))
 	invalidCount := 0
+	searchFrom := 0
 	for _, s := range rawSpans {
 		if s.Text == "" {
 			invalidCount++
@@ -324,12 +373,13 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 		}
 		// The span must be quoted verbatim from the answer; anything not actually
 		// present is invalid so we never emit fabricated offsets.
-		start := strings.Index(answer, s.Text)
+		start := locateQuote(answer, s.Text, searchFrom)
 		if start < 0 {
-			logging.Debugf("Endpoint hallucination span not found in answer, skipping: %q", s.Text)
+			logging.Debugf("Endpoint hallucination span not found in answer, skipping")
 			invalidCount++
 			continue
 		}
+		searchFrom = start + len(s.Text)
 
 		category := normalizeTaxonomyValue(s.Category, endpointCategories)
 		subcategory := normalizeTaxonomyValue(s.Subcategory, endpointSubcategories)
@@ -338,17 +388,40 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 			invalidCount++
 			continue
 		}
-
-		spans = append(spans, tasks.TokenEntity{Text: s.Text, Start: start, End: start + len(s.Text), EntityType: category, Subtype: subcategory, Explanation: endpointSpanExplanation(s.Explanation, category, subcategory)})
+		text := s.Text
+		cpStart := input.codePointAt(start)
+		cpEnd := input.codePointAt(start + len(text))
+		wire = append(wire, tokenSpanWire{Label: category, Text: &text, Start: &cpStart, End: &cpEnd})
+		meta = append(meta, spanMeta{subtype: subcategory, explanation: endpointSpanExplanation(s.Explanation, category, subcategory)})
 	}
 
 	// A response that returned spans but where every one failed validation is a
 	// malformed detector result, not a clean verdict. Fail open via an error
 	// rather than silently reporting hallucination_detected=false.
-	if len(spans) == 0 && invalidCount > 0 {
+	if len(wire) == 0 && invalidCount > 0 {
 		return nil, fmt.Errorf("endpoint returned %d span(s) but none were valid", invalidCount)
 	}
+	spans, err := alignTokenSpansScored(d.known, d.outside, answer, wire, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	for i := range spans {
+		spans[i].Subtype = meta[i].subtype
+		spans[i].Explanation = meta[i].explanation
+	}
 	return spans, nil
+}
+
+// locateQuote finds a quoted span in the answer, preferring the first
+// occurrence at or after from and falling back to the first occurrence
+// anywhere, so a quote that repeats earlier text still resolves.
+func locateQuote(answer, quote string, from int) int {
+	if from < len(answer) {
+		if at := strings.Index(answer[from:], quote); at >= 0 {
+			return from + at
+		}
+	}
+	return strings.Index(answer, quote)
 }
 
 // endpointSpanExplanation builds a backend-neutral explanation, preferring the
