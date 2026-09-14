@@ -543,13 +543,18 @@ func TestCascadeDeleteReportsUnendingConcurrentWrites(t *testing.T) {
 		"the response that outran the cascade must still be indexed, so a retry can find and delete it")
 }
 
-// assertCascadeContract is the invariant every cascade delete must satisfy,
-// whatever the store's state: either the call failed and left the
-// conversation exactly as it found it, or it succeeded and no payload of that
-// conversation is still live. A cascade that reports success while a payload
-// survives has broken its one promise — and that is precisely what an
-// index-unaware writer could make it do before finalization.
-func assertCascadeContract(t *testing.T, store *RedisStore, conversationID, responseID string, cascadeErr error) {
+// assertRefusedOrDrained checks the two outcomes a single-response cascade
+// fixture may legitimately end in: refused at the entry gate with the
+// conversation record, membership, and payload exactly as it found them, or
+// completed with that payload gone. A cascade that reports success while the
+// payload survives is the state an index-unaware writer could force before
+// finalization, and the one these fixtures exist to rule out.
+//
+// Deliberately narrow. It is not a general cascade contract: a multi-response
+// cascade that fails partway through a drain legitimately leaves the payloads
+// it already resolved deleted, so its error branch here — "nothing touched" —
+// describes an entry-gate refusal, not every error the cascade can return.
+func assertRefusedOrDrained(t *testing.T, store *RedisStore, conversationID, responseID string, cascadeErr error) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -587,13 +592,13 @@ func TestCascadeDeleteRefusesBeforeFinalization(t *testing.T) {
 
 	err := store.DeleteConversation(ctx, conversationID, true)
 	require.ErrorIs(t, err, ErrIndexNotFinalized)
-	assertCascadeContract(t, store, conversationID, responseID, err)
+	assertRefusedOrDrained(t, store, conversationID, responseID, err)
 
 	// The same call succeeds once the operator has drained old writers.
 	markStoreFinalized(t, store)
 	err = store.DeleteConversation(ctx, conversationID, true)
 	require.NoError(t, err)
-	assertCascadeContract(t, store, conversationID, responseID, err)
+	assertRefusedOrDrained(t, store, conversationID, responseID, err)
 }
 
 // TestCascadeDeleteOldWriterRecreationBeforeFinalization is the reviewer's
@@ -637,7 +642,7 @@ func TestCascadeDeleteOldWriterRecreationBeforeFinalization(t *testing.T) {
 	store.client.AddHook(hook)
 
 	err := store.DeleteConversation(ctx, conversationID, true)
-	assertCascadeContract(t, store, conversationID, responseID, err)
+	assertRefusedOrDrained(t, store, conversationID, responseID, err)
 	assert.ErrorIs(t, err, ErrIndexNotFinalized)
 	assert.False(t, hook.fired.Load(), "the gate must refuse before the generation-CAS delete ever runs")
 }
@@ -683,7 +688,7 @@ func TestCascadeDeleteOldWriterMoveBackBeforeFinalization(t *testing.T) {
 	store.client.AddHook(hook)
 
 	err := store.DeleteConversation(ctx, conversationID, true)
-	assertCascadeContract(t, store, conversationID, responseID, err)
+	assertRefusedOrDrained(t, store, conversationID, responseID, err)
 	assert.ErrorIs(t, err, ErrIndexNotFinalized)
 	assert.False(t, hook.fired.Load(), "the gate must refuse before the conditional unindex ever runs")
 }
