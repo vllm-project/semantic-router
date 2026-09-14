@@ -43,10 +43,14 @@ jobs:
       - name: Validate Helm chart
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 
+      - name: Resolve golangci-lint version
+        id: golangci_lint
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           args: --help
 
@@ -125,6 +129,16 @@ jobs:
 
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
+
+      - name: Set up Python for selector parity
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify trained selector parity with the native runtime
+        run: |
+          python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt
+          make test-model-selection-parity
 
       # Reuse the CPU bindings above and gate protection before external services
       # or model downloads. The report includes per-turn failures on regression.

@@ -243,6 +243,9 @@ func fillFusionModelFields(cfg *config.FusionAlgorithmConfig, fields map[string]
 }
 
 func fillFusionRuntimeFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getStringField(fields, "analysis_mode"); ok {
+		cfg.AnalysisMode = v
+	}
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
 	}

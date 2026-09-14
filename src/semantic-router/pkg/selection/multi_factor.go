@@ -211,15 +211,27 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		len(selCtx.CandidateModels), chosen.Model, bestScore, confidence, len(dropped))
 
 	return &SelectionResult{
-		SelectedModel: chosen.Model,
-		LoRAName:      chosen.LoRAName,
-		Score:         bestScore,
-		Confidence:    confidence,
-		Method:        MethodMultiFactor,
-		Tier:          TierSupported,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		EligibleModels: s.eligibleModels(kept),
+		SelectedModel:  chosen.Model,
+		LoRAName:       chosen.LoRAName,
+		Score:          bestScore,
+		Confidence:     confidence,
+		Method:         MethodMultiFactor,
+		Tier:           TierSupported,
+		Reasoning:      reasoning,
+		AllScores:      allScores,
 	}, nil
+}
+
+// Soft ranking alone does not restrict configured tier/global learning. When
+// a hard policy is active, even candidates outside the original inventory have
+// not passed that policy and must not be introduced downstream.
+func (s *MultiFactorSelector) eligibleModels(kept []config.ModelRef) []config.ModelRef {
+	if s.config.SLO == (MultiFactorSLO{}) && s.config.QualityMinScore == nil &&
+		(!s.qualityRelevant() || s.config.QualityOnMissing != config.QualityEvidenceOnMissingExclude) {
+		return nil
+	}
+	return append([]config.ModelRef{}, kept...)
 }
 
 type signalSet struct {
@@ -459,13 +471,14 @@ func selectionTokenCounts(selCtx *SelectionContext) (int, int) {
 
 func (s *MultiFactorSelector) noCandidateResult(c config.ModelRef, reason string) *SelectionResult {
 	return &SelectionResult{
-		SelectedModel: c.Model,
-		LoRAName:      c.LoRAName,
-		Score:         0,
-		Confidence:    0.0,
-		Method:        MethodMultiFactor,
-		Tier:          TierSupported,
-		Reasoning:     "multi_factor no-candidate policy: " + reason,
+		EligibleModels: []config.ModelRef{c},
+		SelectedModel:  c.Model,
+		LoRAName:       c.LoRAName,
+		Score:          0,
+		Confidence:     0.0,
+		Method:         MethodMultiFactor,
+		Tier:           TierSupported,
+		Reasoning:      "multi_factor no-candidate policy: " + reason,
 	}
 }
 

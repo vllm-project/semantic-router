@@ -5,7 +5,14 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `router_config_contract`
 
 - Router-side config schema and shared config files consumed directly by the runtime.
-- Typical paths: `src/semantic-router/pkg/config/**`, `config/**/*.yaml`
+- The canonical Go types and routing registries generate one tracked artifact,
+  `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`.
+  CLI and container builds stage that artifact without tracked mirrors; the
+  Dashboard frontend imports it directly. Do not maintain a parallel field or
+  discriminator inventory.
+- Typical paths: `src/semantic-router/pkg/config/**`,
+  `src/semantic-router/pkg/configschema/**`, `tools/configschema/**`,
+  `config/**/*.yaml`
 - Task rules: `router-core`, `repo-docs`
 
 ## `signal_runtime`

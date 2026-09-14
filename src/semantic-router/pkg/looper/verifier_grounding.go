@@ -54,7 +54,7 @@ func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest)
 	best := -1.0
 	scores := make([]CandidateScore, 0, len(req.Candidates))
 	for _, c := range req.Candidates {
-		spans, _, err := v.detect(req.TrustedContext, req.Task, c.Content)
+		spans, _, err := v.detect(ctx, req.TrustedContext, req.Task, c.Content)
 		if err != nil {
 			return nil, &VerifierError{Code: VerifierFailureUnavailable, Err: err}
 		}
@@ -124,7 +124,7 @@ func (v *PeerConsistencyVerifier) Verify(ctx context.Context, req *VerifierReque
 			}
 			// Directional consistency: does peer (premise) entail/contradict
 			// candidate c (hypothesis)?
-			entail, contradict, err := nliPairSignalWith(v.nli, peer.Content, c.Content)
+			entail, contradict, err := nliPairSignalWith(ctx, v.nli, peer.Content, c.Content)
 			if err != nil {
 				return nil, &VerifierError{Code: VerifierFailureUnavailable, Err: err}
 			}

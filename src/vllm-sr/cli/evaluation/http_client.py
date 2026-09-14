@@ -37,8 +37,8 @@ def _broker_operation(method: str, url: str, track_id: str | None) -> str:
         if track_id in {"joint", "multimodal", "capacity"}:
             return "routed-chat.completions"
         raise BrokerProtocolError("evaluation chat track has no broker operation")
-    if method == "POST" and url.endswith("/api/v1/eval?trace=true"):
-        return "router.evaluate"
+    if method == "POST" and url.endswith("/api/v1/routing/preview?trace=true"):
+        return "routing.preview"
     raise BrokerProtocolError("evaluation requested an unsupported broker operation")
 
 

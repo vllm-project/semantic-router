@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,17 +47,12 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
-	// decision carries a plugin; the plugins below then consume it.
-	assistantContent := semanticAssistantContent(semanticResponse)
-	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
-	r.evaluateHallucinationSignal(ctx, assistantContent)
+	// decision carries a plugin; the plugins below then consume it. Recorded
+	// before a block returns, so a blocked response leaves the same evidence in
+	// Router Replay as a delivered one.
+	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 
-	jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse)
-	// Recorded before a block returns, so a blocked response leaves the same
-	// evidence in Router Replay as a delivered one.
-	r.recordRouterReplayResponseJailbreak(ctx)
-	r.recordRouterReplayHallucination(ctx)
-	if jailbreakResponse != nil {
+	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
@@ -67,6 +63,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.markUnverifiedFactualResponse(ctx)
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
+	addResponseCostHeaders(ctx, response)
 	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, clientBody)
 	}
@@ -74,6 +71,21 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.updateRouterReplayHallucinationStatus(ctx)
 	r.attachRouterReplayResponse(ctx, finalBody, true)
 	return response
+}
+
+// observeResponseStageSignals scores the response-stage rules against the
+// answer and records the observation in Router Replay. Both response paths
+// share it, so a streamed response leaves the evidence a buffered one leaves.
+//
+// Only the buffered path goes on to enforce. A streamed answer exists as a
+// whole for the first time when its bytes are already with the client, so no
+// plugin can block or rewrite it and none runs; the observation is all that is
+// still possible, and the record says so.
+func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.recordRouterReplayResponseJailbreak(ctx)
+	r.recordRouterReplayHallucination(ctx)
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(
@@ -158,6 +170,18 @@ func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.Proce
 // (comma-separated codes) onto the response, merging with any existing mutation.
 func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
 	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
+}
+
+// addResponseCostHeaders reports the priced cost of a buffered response. A
+// streamed response has already sent its headers by the time usage arrives.
+func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !ctx.RequestCostPriced {
+		return
+	}
+	setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(ctx.RequestCost, 'f', -1, 64))
+	if ctx.RequestCostCurrency != "" {
+		setResponseBodyHeader(response, headers.VSRCostCurrency, ctx.RequestCostCurrency)
+	}
 }
 
 // setResponseBodyHeader sets one response header from the body phase, merging

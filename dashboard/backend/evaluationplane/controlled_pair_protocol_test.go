@@ -21,7 +21,7 @@ func TestControlledPairCoordinatorAdmitsOnlyABBAOrderedCounterparts(t *testing.T
 		"b15a6e5e-653a-438b-aa14-cbe03dbf9a41", 19, baseline, candidate,
 	)
 	request := workerBrokerRequest{
-		ID: 1, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+		ID: 1, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 		CaseID: "case-1", AttemptID: "attempt-case-1", TimeoutMS: 1000,
 	}
 	payload, err := json.Marshal(map[string]any{"model": "vllm-sr/auto", "messages": []any{}})

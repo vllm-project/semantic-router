@@ -36,7 +36,7 @@ func TestValidationProvenanceVerifiesStableActiveRouterHashes(t *testing.T) {
 		t.Fatalf("provenance hashes = %#v", result.Provenance)
 	}
 	if hashCalls.Load() != 2 {
-		t.Fatalf("/config/hash calls = %d, want pre and post observations", hashCalls.Load())
+		t.Fatalf("/api/v1/config/hash calls = %d, want pre and post observations", hashCalls.Load())
 	}
 }
 
@@ -45,10 +45,10 @@ func stableCountingProvenanceRouter(t *testing.T, routerHash string) (*httptest.
 	var hashCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/config/hash":
+		case "/api/v1/config/hash":
 			hashCalls.Add(1)
-			_, _ = fmt.Fprintf(w, `{"hash":%q,"runtime_hash":%q,"active_hash":%q,"status":"active"}`, routerHash, routerHash, routerHash)
-		case "/api/v1/eval":
+			_, _ = fmt.Fprintf(w, `{"source_config_hash":%q,"generated_runtime_hash":%q,"active_runtime_hash":%q,"activation_status":"active"}`, routerHash, routerHash, routerHash)
+		case "/api/v1/routing/preview":
 			_, _ = w.Write([]byte(successfulManagedRecipeEvalResponse))
 		default:
 			http.NotFound(w, r)
@@ -79,9 +79,9 @@ func TestValidationUsesManagedBearerCredentialForEvalAndProvenance(t *testing.T)
 		}
 		authenticated.Add(1)
 		switch r.URL.Path {
-		case "/config/hash":
-			_, _ = fmt.Fprintf(w, `{"hash":%q,"runtime_hash":%q,"active_hash":%q,"status":"active"}`, hash, hash, hash)
-		case "/api/v1/eval":
+		case "/api/v1/config/hash":
+			_, _ = fmt.Fprintf(w, `{"source_config_hash":%q,"generated_runtime_hash":%q,"active_runtime_hash":%q,"activation_status":"active"}`, hash, hash, hash)
+		case "/api/v1/routing/preview":
 			_, _ = w.Write([]byte(successfulManagedRecipeEvalResponse))
 		default:
 			http.NotFound(w, r)
@@ -199,13 +199,13 @@ func TestValidationProvenanceDetectsRouterChangeDuringEval(t *testing.T) {
 	var hashCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/config/hash":
+		case "/api/v1/config/hash":
 			hash := first
 			if hashCalls.Add(1) > 1 {
 				hash = second
 			}
-			_, _ = fmt.Fprintf(w, `{"hash":%q,"runtime_hash":%q,"active_hash":%q,"status":"active"}`, hash, hash, hash)
-		case "/api/v1/eval":
+			_, _ = fmt.Fprintf(w, `{"source_config_hash":%q,"generated_runtime_hash":%q,"active_runtime_hash":%q,"activation_status":"active"}`, hash, hash, hash)
+		case "/api/v1/routing/preview":
 			_, _ = w.Write([]byte(successfulManagedRecipeEvalResponse))
 		default:
 			http.NotFound(w, r)
@@ -230,7 +230,7 @@ func TestValidationProvenanceDetectsRouterChangeDuringEval(t *testing.T) {
 func TestValidationProvenanceIsUnverifiedWithOlderRouter(t *testing.T) {
 	directory := writeManagedRecipe(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/eval" {
+		if r.URL.Path == "/api/v1/routing/preview" {
 			_, _ = w.Write([]byte(successfulManagedRecipeEvalResponse))
 			return
 		}
@@ -276,9 +276,9 @@ func stableProvenanceRouter(t *testing.T, sourceHash, runtimeHash, status, activ
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/config/hash":
-			_, _ = fmt.Fprintf(w, `{"hash":%q,"runtime_hash":%q,"active_hash":%q,"status":%q}`, sourceHash, runtimeHash, activeHash, status)
-		case "/api/v1/eval":
+		case "/api/v1/config/hash":
+			_, _ = fmt.Fprintf(w, `{"source_config_hash":%q,"generated_runtime_hash":%q,"active_runtime_hash":%q,"activation_status":%q}`, sourceHash, runtimeHash, activeHash, status)
+		case "/api/v1/routing/preview":
 			_, _ = w.Write([]byte(successfulManagedRecipeEvalResponse))
 		default:
 			http.NotFound(w, r)

@@ -152,6 +152,14 @@ fi
 log_success "Empty canonical config fails closed instead of using chart samples"
 echo ""
 
+log_info "Testing model deployment and recipe binding preservation..."
+helm template runtime-release "$CHART_PATH" \
+    -f deploy/helm/testdata/model-runtime-values.yaml \
+    > "$TEMP_DIR/model-runtime-template.yaml"
+python3 deploy/helm/check-model-runtime.py "$TEMP_DIR/model-runtime-template.yaml"
+log_success "Model deployments, input/admission budgets and isolated bindings are preserved"
+echo ""
+
 
 
 # Test 4: Validate YAML syntax

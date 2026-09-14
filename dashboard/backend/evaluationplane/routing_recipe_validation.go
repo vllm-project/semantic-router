@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -399,15 +400,21 @@ func validRoutingRecipeInputID(value string, projection bool) bool {
 	if signalType == routerconfig.ProjectionInputKBMetric {
 		return len(parts) == 3
 	}
-	if !routerconfig.IsSupportedSignalType(signalType) {
+	signal, supported := routerconfig.LookupSignalCatalog(signalType)
+	if !supported || !signal.DecisionReferenceable {
 		return false
 	}
-	return len(parts) == 2 || routingRecipeSignalSupportsLabel(signalType)
-}
-
-func routingRecipeSignalSupportsLabel(signalType string) bool {
-	return signalType == routerconfig.SignalTypeClassifier ||
-		signalType == routerconfig.SignalTypeComplexity
+	if len(parts) == 2 {
+		return true
+	}
+	switch signal.ReferenceQualifier {
+	case routerconfig.SignalReferenceQualifierLabel:
+		return true
+	case routerconfig.SignalReferenceQualifierFixedSuffix:
+		return slices.Contains(signal.ReferenceSuffixes, parts[2])
+	default:
+		return false
+	}
 }
 
 func validRoutingRecipeDigest(value string) bool {

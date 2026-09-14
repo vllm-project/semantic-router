@@ -151,6 +151,8 @@ evaluation:
         score: 0.79
 routing:
   strategy: priority
+  # Optional recipe-local consumer bindings to named model deployments.
+  model_bindings: {}
   modelCards:
     - name: qwen3-8b
       display_name: Qwen3 8B reference model
@@ -1064,6 +1066,7 @@ routing:
           analysis_models:
             - qwen3-8b
             - qwen3-32b
+          analysis_mode: separate
           analysis_overrides:
             - model: qwen3-8b
               temperature: 0.2
@@ -1767,7 +1770,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
         max_concurrency: 8
         metrics:
           sample_rate: 1.0
@@ -2203,6 +2205,8 @@ global:
             key_prefix: "vllm-sr:flow:state:"
 
   model_catalog:
+    # Named physical deployments and their shared admission budgets.
+    deployments: {}
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
@@ -2254,8 +2258,9 @@ global:
     # on_overflow selects what happens when every slot is busy and the queue
     # is full: shed (default) rejects the request, wait blocks for a queue
     # slot and requires max_queue >= 1, fail_open admits without a slot.
-    # The gate is validated here but not yet wired into the request path;
-    # omitting admission means no gate and preserves current behavior.
+    # A shed inference surfaces as a classify error and follows the same
+    # on_error / on_unknown policy as any other inference failure.
+    # Omitting admission means no gate and preserves current behavior.
     admission:
       prompt_guard:
         max_concurrency: 4
@@ -2461,6 +2466,10 @@ global:
           use_cpu: true
           use_mmbert_32k: true
           pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          # allow (default) keeps a classify error or a provider-declared
+          # truncation as a non-match for that content; block treats it as a
+          # match on classification_error, so unverified text cannot pass as clean.
+          on_error: allow
         preference:
           use_contrastive: true
           embedding_model: models/preference-encoder

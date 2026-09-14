@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 from benchmark_normalization_fixtures import write_native_fixture
-from cli.commands.eval import eval
+from cli.commands.benchmark import benchmark
 from cli.evaluation.benchmark_normalization import normalize_benchmark_suite
 from cli.evaluation.broker_client import BrokerProtocolError
 from cli.evaluation.canonical import canonical_json_bytes
@@ -82,7 +82,7 @@ def _run_composite_cli(
 ) -> Any:
     runner = CliRunner()
     validated = runner.invoke(
-        eval,
+        benchmark,
         [
             "validate",
             "--manifest",
@@ -94,7 +94,7 @@ def _run_composite_cli(
     assert validated.exit_code == 0, validated.output
     assert json.loads(validated.output)["valid"] is True
     executed = runner.invoke(
-        eval,
+        benchmark,
         [
             "run",
             "--manifest",

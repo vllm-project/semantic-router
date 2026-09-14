@@ -70,8 +70,9 @@ func TestReleaseOnFailureReleasesOnlyWhenTheStepFails(t *testing.T) {
 func TestNewRedisCacheClosesClientOnConnectFailure(t *testing.T) {
 	closed := 0
 	c, err := NewRedisCache(RedisCacheOptions{
-		Enabled: true,
-		Config:  refusedRedisConfig(),
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		Config:            refusedRedisConfig(),
 		closeClient: func(client *redis.Client) {
 			closed++
 			_ = client.Close()
@@ -86,8 +87,9 @@ func TestNewRedisCacheClosesClientOnConnectFailure(t *testing.T) {
 func TestNewValkeyCacheFailsBeforeBuildingAClientOnRefusedDial(t *testing.T) {
 	closed := 0
 	c, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: true,
-		Config:  refusedValkeyConfig(),
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		Config:            refusedValkeyConfig(),
 		closeClient: func(client *glide.Client) {
 			closed++
 			client.Close()

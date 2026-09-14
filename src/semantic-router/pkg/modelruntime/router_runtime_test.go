@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -55,6 +56,59 @@ func TestWarmupRouterTreatsTaskFailureAsBestEffort(t *testing.T) {
 	}
 	if result := summary.Results["router.warmup.knowledge_bases"]; result.Status != TaskFailed {
 		t.Fatalf("knowledge base warmup result = %+v, want failure", result)
+	}
+}
+
+func TestExecuteReturnsWhenStartupCancellationFindsAStuckTask(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := Execute(ctx, []Task{{
+			Name: "stuck-startup-task",
+			Run: func(context.Context) error {
+				close(started)
+				<-release
+				return nil
+			},
+		}}, Options{MaxParallelism: 1})
+		done <- err
+	}()
+
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Execute() error = %v, want context canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Execute() did not return after startup cancellation")
+	}
+}
+
+func TestWarmupRouterDoesNotStartLoadAfterCancellation(t *testing.T) {
+	loadCalled := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := WarmupRouter(ctx, []RouterWarmupTask{{
+		Name:  "cancelled-warmup",
+		Ready: true,
+		Load: func() error {
+			loadCalled <- struct{}{}
+			return nil
+		},
+	}}, WarmupRouterOptions{MaxParallelism: 1})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("WarmupRouter() error = %v, want context canceled", err)
+	}
+	select {
+	case <-loadCalled:
+		t.Fatal("WarmupRouter() called Load after cancellation")
+	case <-time.After(25 * time.Millisecond):
 	}
 }
 

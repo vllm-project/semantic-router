@@ -18,6 +18,16 @@ DATETIME = $(shell date +"%Y%m%d%H%M%S")
 # REV is the short git sha of latest commit.
 REV=$(shell git rev-parse --short HEAD)
 
+# The router links all native providers in one process. Keep the build and
+# runtime search paths independent of each recipe's working directory, while
+# preserving caller-supplied vendor/OpenVINO paths and linker options.
+NATIVE_LIBRARY_DIRS := $(addsuffix /target/release,$(addprefix $(CURDIR)/,candle-binding onnx-binding ml-binding nlp-binding))
+native_empty :=
+native_space := $(native_empty) $(native_empty)
+NATIVE_LIBRARY_PATH = $(subst $(native_space),:,$(NATIVE_LIBRARY_DIRS))
+NATIVE_LDFLAGS = $(addprefix -L,$(NATIVE_LIBRARY_DIRS))
+NATIVE_ENV = LD_LIBRARY_PATH="$(NATIVE_LIBRARY_PATH)$${LD_LIBRARY_PATH:+:$${LD_LIBRARY_PATH}}" CGO_LDFLAGS="$(NATIVE_LDFLAGS)$${CGO_LDFLAGS:+ $${CGO_LDFLAGS}}"
+
 # Function Define
 
 # logging Output Function

@@ -111,9 +111,9 @@
 }
 
 .liveVerificationDotSuccess {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  border-color: rgba(74, 222, 128, 0.75);
+  background: var(--color-success, #22c55e);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
 }
 
 .liveVerificationDotError {
@@ -135,6 +135,10 @@
   font-weight: 690;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.liveVerificationLabelSuccess {
+  color: #bbf7d0;
 }
 
 .liveVerificationEvidence {

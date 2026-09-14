@@ -3,8 +3,11 @@ package classification
 import (
 	"fmt"
 	"sort"
+	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // PreloadKnowledgeBases materializes every KB referenced by this classifier.
@@ -28,6 +31,14 @@ func (c *Classifier) PreloadKnowledgeBases() error {
 
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
+	closeOnce         sync.Once
+	closeErr          error
+	polarityNLI       *HallucinationDetector
+	modalityInference *ownedModalityClassifier
+	embeddingProvider embedding.Provider
+	embeddingSet      *embedding.Set
+	ownsEmbeddingSet  bool
+	models            *classifierModelRuntime
 	// Dependencies - In-tree classifiers
 	categoryInitializer         CategoryInitializer
 	categoryInference           CategoryInference
@@ -58,6 +69,8 @@ type Classifier struct {
 
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
+
+	admissionRegistry *admission.Registry
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 
@@ -214,6 +227,8 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	for _, option := range options {
 		option(classifier)
 	}
+
+	classifier.applyAdmissionGates()
 
 	// Build category name mappings to support generic categories in config
 	classifier.buildCategoryNameMappings()

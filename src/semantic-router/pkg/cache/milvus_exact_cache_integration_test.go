@@ -33,10 +33,11 @@ func TestMilvusExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 	milvusConfig := milvusExactTestConfig(host, port)
 
 	cache, err := NewMilvusCache(MilvusCacheOptions{
-		Enabled:        true,
-		TTLSeconds:     60,
-		EmbeddingModel: "bert",
-		Config:         milvusConfig,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		TTLSeconds:        60,
+		EmbeddingModel:    "bert",
+		Config:            milvusConfig,
 	})
 	if err != nil {
 		t.Skipf("Milvus unavailable: %v", err)
@@ -98,6 +99,7 @@ func TestHybridExactCacheIntegrationDelegatesToMilvus(t *testing.T) {
 	}
 	milvusConfig := milvusExactTestConfig(host, port)
 	cache, err := NewHybridCache(HybridCacheOptions{
+		EmbeddingProvider:       cacheTestEmbeddingProvider(),
 		Enabled:                 true,
 		TTLSeconds:              60,
 		EmbeddingModel:          "bert",
