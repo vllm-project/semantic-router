@@ -296,6 +296,34 @@ func TestMaskText_CitationOverlappingSpanDropped(t *testing.T) {
 	}
 }
 
+// Regression: llmprotocol.Citation offsets are Unicode code points
+// (llmprotocol/types.go), not bytes like Span offsets (D2). A leading
+// multi-byte rune before the masked span makes the span's byte-end (8)
+// diverge from its code-point end (7); a citation starting exactly at the
+// code-point end is adjacent, not overlapping, and must be kept and shifted.
+// A byte-based comparison would wrongly treat it as overlapping and drop it.
+func TestMaskText_CitationOffsetsAreCodePointsNotBytes(t *testing.T) {
+	text := "é ALICE end"
+	start, end := byteRange(t, text, "ALICE") // byte range [3,8): matches classifier convention
+	spans := []Span{{EntityType: "PERSON", Start: start, End: end, Confidence: 1.0}}
+	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "Y"}}
+	// Code-point end of the span is 7 (é=1 code point, space=1, ALICE=5),
+	// even though its byte end is 8 (é is 2 bytes). This citation starts
+	// exactly there.
+	citations := []llmprotocol.Citation{{StartIndex: 7, EndIndex: 9}}
+
+	_, gotCitations, err := MaskText(text, spans, citations, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(gotCitations) != 1 {
+		t.Fatalf("expected the adjacent citation to survive, got %v", gotCitations)
+	}
+	if gotCitations[0].StartIndex != 3 || gotCitations[0].EndIndex != 5 {
+		t.Fatalf("expected citation shifted to [3,5), got [%d,%d)", gotCitations[0].StartIndex, gotCitations[0].EndIndex)
+	}
+}
+
 // Case: Allocator across calls — the per-type counter must not reuse an
 // index for a different value on a later MaskText call (D5).
 func TestAllocator_AcrossCallsNoIndexReuse(t *testing.T) {
