@@ -225,7 +225,9 @@ export const parseChatCompletionObject = (value: unknown): ParsedChatCompletion 
       content:
         extractTextContent(delta?.content) ||
         extractTextContent(message?.content) ||
-        extractTextContent(choice.content),
+        extractTextContent(choice.content) ||
+        asString(delta?.refusal) ||
+        asString(message?.refusal),
       reasoningContent: extractReasoningContent(delta, choice, message),
       model: asString(choice.model) || topLevelModel || undefined,
       finishReason: asString(choice.finish_reason) || undefined,

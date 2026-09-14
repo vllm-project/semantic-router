@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections.abc import Callable
@@ -346,6 +347,7 @@ def log_runtime_summary(
     dashboard_disabled: bool,
     enable_observability: bool,
     started_backends: set[str] | None = None,
+    config: dict | None = None,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
     success("vLLM Semantic Router is running")
@@ -386,7 +388,7 @@ def log_runtime_summary(
         )
 
     _log_runtime_commands(dashboard_disabled)
-    _print_curl_example(listeners, stack_layout)
+    _print_curl_example(listeners, stack_layout, config)
 
 
 def _start_named_service(service_name: str, starter: ServiceStarter) -> None:
@@ -445,7 +447,17 @@ def _log_runtime_commands(dashboard_disabled: bool) -> None:
     fields(commands)
 
 
-def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
+def _example_model(config: dict | None) -> str:
+    for entrypoint in (config or {}).get("entrypoints") or []:
+        names = entrypoint.get("model_names") or []
+        if names:
+            return names[0]
+    return "vllm-sr/auto"
+
+
+def _print_curl_example(
+    listeners, stack_layout: RuntimeStackLayout, config: dict | None = None
+) -> None:
     if not listeners:
         return
     first_port = listeners[0].get("port", DEFAULT_LISTENER_PORT)
@@ -457,7 +469,8 @@ def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
     echo(f"  curl -v http://localhost:{first_port}/v1/chat/completions \\")
     echo('    -H "Content-Type: application/json" \\')
     echo("    -d '{")
-    echo('      "model": "vllm-sr/auto",')
+    model_json = json.dumps(_example_model(config)).replace("'", "'\"'\"'")
+    echo(f'      "model": {model_json},')
     echo('      "messages": [')
     echo('        {"role": "user", "content": "What is the derivative of x^2?"}')
     echo("      ]")
