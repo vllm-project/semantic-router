@@ -354,6 +354,7 @@ func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		Config:                  components.cfg,
+		Embeddings:              components.embeddings,
 		CategoryDescriptions:    components.categoryDescriptions,
 		Classifier:              components.classifier,
 		RecipeClassifiers:       components.recipeClassifiers,
