@@ -342,7 +342,8 @@ func TestCascadeDeleteRefusesLiveLegacyPayloadBeforeFinalization(t *testing.T) {
 		"precondition: the store must not be finalized")
 
 	err := store.DeleteConversation(ctx, convID, true)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIndexNotFinalized,
+		"before finalization the cascade is refused at its entry, before any candidate is examined")
 	assert.Contains(t, err.Error(), "not finalized")
 	assert.Empty(t, optionalIndexedGeneration(t, store, convID, responseID),
 		"a failed pre-finalization cascade must not launder the legacy member into a generated witness")
@@ -387,7 +388,8 @@ func TestCascadeDeleteRefusesBlankTombstoneBeforeFinalization(t *testing.T) {
 	require.NoError(t, store.markConversationMigrated(ctx, convID, conversationIndexProofPopulated))
 
 	err := store.DeleteConversation(ctx, convID, true)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIndexNotFinalized,
+		"before finalization the cascade is refused at its entry, before any candidate is examined")
 	assert.Contains(t, err.Error(), "not finalized")
 
 	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, convID),
@@ -426,6 +428,7 @@ func TestCascadeDeleteDropsBlankTombstoneAfterFinalization(t *testing.T) {
 // indexed nowhere, which past finalization nothing rediscovers.
 func TestCascadeDeleteRepairsStaleWitnessInsteadOfRemoving(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const convID = "conv_cascade_stale_witness"

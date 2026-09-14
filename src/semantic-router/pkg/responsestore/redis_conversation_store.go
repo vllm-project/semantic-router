@@ -140,29 +140,33 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // ListResponsesByConversation, which would additionally cap the cascade at
 // a single page.
 //
-// Ensures the index is resolved before cascading: if neither the index nor
-// the empty marker exists yet, this conversation's responses may still be
-// unindexed legacy payloads (pre-#2814 data, or a write from an
-// indexing-unaware pod mid rolling upgrade). Without this,
-// ZRange below would just see a missing index, the loop would exit on its
-// first iteration having deleted nothing, and those payloads would be
-// orphaned forever — a silent regression from the pre-#2814 scan-based
-// cascade delete. ensureConversationIndex resolves the ambiguity exactly
-// as a read would: backfill from a legacy scan, or confirm the conversation
-// is genuinely empty.
+// Refused outright until FinalizeConversationIndex has run. A cascade
+// completes when the index drains, and that only means "no response of this
+// conversation remains" if every writer maintains the index. Before
+// finalization an index-unaware pod can still store or move a response into
+// this conversation at any moment without touching the ZSET or the sidecar —
+// including recreating a payload this cascade has just CAS-deleted, or moving
+// one back that it has just observed elsewhere. Neither step below can see
+// that: the sidecar witness still matches, the conditional unindex removes
+// the recreated response's only membership, the index looks empty, and the
+// cascade deletes the proof and conversation record and reports success with
+// a live payload left behind. Reads tolerate the same writers because every
+// pre-finalization proof expires and forces a rescan; a delete has no later
+// rescan to lean on, and the payload and index keys live in different hash
+// slots, so no ordering of conditional steps closes the window. Nothing an
+// old writer honors can fence it — it predates every protocol here — so the
+// only sound answer is to not cascade until those writers are drained. The
+// per-candidate refusals for legacy payloads and blank witnesses remain as
+// defense in depth behind that gate.
 //
 // Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an offsetting
 // range), atomically pairing each member with its sidecar generation. Payload
 // deletion and later ZSET/HASH cleanup are both conditional on that observed
-// generation. Before finalization, a live legacy candidate fails closed: an
-// index-unaware writer could otherwise replace its promoted payload while
-// leaving the minted sidecar stale. Once finalized, such writers are gone, so
-// a residual legacy payload is upgraded in place and then deleted through the
-// ordinary generation CAS on a later round. A legacy membership whose payload
-// is already gone is governed by the same finalization gate.
-// If a batch reports an unresolved response, this stops instead of silently
-// reporting success. Already-resolved members are gone; a stale witness left
-// by a cleanup failure remains a safe retry anchor.
+// generation. A residual legacy payload is upgraded in place and then deleted
+// through the ordinary generation CAS on a later round. If a batch reports an
+// unresolved response, this stops instead of silently reporting success.
+// Already-resolved members are gone; a stale witness left by a cleanup failure
+// remains a safe retry anchor.
 //
 // An empty read is not on its own permission to delete the index. A
 // StoreResponse landing between that read and the delete has committed a real
@@ -174,18 +178,26 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // conversation being written to faster than it can be drained gives up, and it
 // says so rather than reporting a cascade that silently left responses behind.
 func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
-	if err := s.ensureConversationIndexResolved(ctx, conversationID); err != nil {
-		return err
-	}
-
-	// Read once, before the loop: whether legacy payloads and blank-witness
-	// memberships may be cleaned up at all. The completion record only ever
+	// Read once, before anything is touched. The completion record only ever
 	// goes from absent to permanently present (and is process-cached), so one
 	// observation is as good as re-reading it every round — and a cascade that
 	// changed its mind halfway would be harder to reason about than one that
 	// does not.
-	allowLegacyCleanup, err := s.conversationIndexFinalized(ctx)
+	finalized, err := s.conversationIndexFinalized(ctx)
 	if err != nil {
+		return err
+	}
+	if !finalized {
+		return fmt.Errorf("%w: cascade delete of conversation %s is unavailable until FinalizeConversationIndex has run, "+
+			"because pre-upgrade writers can still add responses the index does not see", ErrIndexNotFinalized, conversationID)
+	}
+	// Past finalization every writer is generation-aware, so legacy payloads
+	// and blank-witness memberships may be cleaned up. Kept as an explicit
+	// value rather than folded into the gate above so the per-candidate
+	// refusals stay readable as the defense in depth they are.
+	allowLegacyCleanup := true
+
+	if err := s.ensureConversationIndexResolved(ctx, conversationID); err != nil {
 		return err
 	}
 
