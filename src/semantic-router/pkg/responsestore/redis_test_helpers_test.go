@@ -162,6 +162,18 @@ func (h *pttlValueHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redi
 	}
 }
 
+// markStoreFinalized installs the store-wide completion record directly, so a
+// test can exercise post-finalization behavior — cascade delete above all,
+// which refuses to run before it — without a keyspace sweep. Only correct
+// when everything the test has written is already indexed, which is true of
+// every StoreResponse; a test that plants unindexed legacy payloads must run
+// FinalizeConversationIndex instead so the sweep finds them.
+func markStoreFinalized(t *testing.T, store *RedisStore) {
+	t.Helper()
+	require.NoError(t, store.client.Set(context.Background(), store.conversationIndexCompletionKey(),
+		conversationIndexCompletionValue, 0).Err())
+}
+
 // conversationIndexMembers reads the index directly, so tests can assert on it
 // and not only on what a listing happens to return.
 func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID string) []string {

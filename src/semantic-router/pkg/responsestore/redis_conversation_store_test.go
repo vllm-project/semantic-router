@@ -16,6 +16,7 @@ import (
 // cascade reads the index directly, so it must not stop at DefaultListLimit.
 func TestRedisDeleteConversationCascade(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const (
@@ -108,6 +109,7 @@ func TestRedisAddResponseToConversation(t *testing.T) {
 // the cascade must loop more than once (blueprint §5 Phase 5 / §6.6).
 func TestRedisDeleteConversationCascadeBatched(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const (
@@ -151,6 +153,7 @@ func TestRedisDeleteConversationCascadeBatched(t *testing.T) {
 // ownership it cannot actually verify.
 func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const convID = "conv_cascade_failure"
@@ -214,7 +217,8 @@ func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 		"precondition: no index should exist yet for legacy data")
 
 	err := store.DeleteConversation(ctx, convID, true)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIndexNotFinalized,
+		"before finalization the cascade is refused at its entry, before any candidate is examined")
 	assert.Contains(t, err.Error(), "not finalized")
 	_, err = store.FinalizeConversationIndex(ctx)
 	require.NoError(t, err)
@@ -257,7 +261,8 @@ func TestRedisDeleteConversationCascadePartiallyMigrated(t *testing.T) {
 		"precondition: no backfill has run yet, despite the index already existing")
 
 	err := store.DeleteConversation(ctx, convID, true)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIndexNotFinalized,
+		"before finalization the cascade is refused at its entry, before any candidate is examined")
 	assert.Contains(t, err.Error(), "not finalized")
 	_, err = store.FinalizeConversationIndex(ctx)
 	require.NoError(t, err)

@@ -55,6 +55,7 @@ func commandContainsArg(cmd redis.Cmder, target string) bool {
 // cleanly.
 func TestCascadeDeleteMissingPayloadPrunesIndexMember(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const convID = "conv_cascade_missing"
@@ -81,6 +82,7 @@ func TestCascadeDeleteMissingPayloadPrunesIndexMember(t *testing.T) {
 // leave both the payload and the index member untouched for a retry.
 func TestCascadeDeleteGetFailurePreservesAndReports(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const convID = "conv_cascade_get_failure"
@@ -115,6 +117,7 @@ func TestCascadeDeleteGetFailurePreservesAndReports(t *testing.T) {
 // retry anchor, so the failure is safe and recoverable.
 func TestCascadeDeleteUnindexFailureReported(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const convID = "conv_cascade_zrem_failure"
@@ -155,6 +158,7 @@ func TestCascadeDeleteUnindexFailureReported(t *testing.T) {
 // conversation — only the stale membership is pruned.
 func TestCascadeDeleteStaleMovedMemberPreservesNewOwnerPayload(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const (
@@ -201,6 +205,7 @@ func TestCascadeDeleteStaleMovedMemberPreservesNewOwnerPayload(t *testing.T) {
 // retry, with no further interference, must complete cleanly.
 func TestCascadeDeleteConcurrentUpdatePreservesNewerPayload(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const convID = "conv_cascade_concurrent_update"
@@ -256,6 +261,7 @@ func TestCascadeDeleteConcurrentUpdatePreservesNewerPayload(t *testing.T) {
 // membership removed by a later ZREM from the old cascade attempt.
 func TestCascadeDeleteDoesNotEraseRecreatedMembership(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const (
@@ -301,6 +307,7 @@ func TestCascadeDeleteDoesNotEraseRecreatedMembership(t *testing.T) {
 // reject with CROSSSLOT.
 func TestCascadeDeleteClusterCrossSlotSafe(t *testing.T) {
 	store := newConversationIndexClusterStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const convID = "conv_cascade_cluster_crossslot"
@@ -331,6 +338,7 @@ func TestCascadeDeleteClusterCrossSlotSafe(t *testing.T) {
 // observe the missing payload and finish cleanup.
 func TestCascadeDeleteCancellationKeepsRetryWitness(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	baseCtx := context.Background()
 
 	const convID = "conv_cascade_cancelled"
@@ -472,6 +480,7 @@ func newCascadeRaceHook(t *testing.T, store *RedisStore, conversationID, respons
 // cannot be hit reliably by timing.
 func TestCascadeDeleteDrainsWriteCommittedAfterFinalEmptyRead(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const (
@@ -507,6 +516,7 @@ func TestCascadeDeleteDrainsWriteCommittedAfterFinalEmptyRead(t *testing.T) {
 // the retry has to have something to find.
 func TestCascadeDeleteReportsUnendingConcurrentWrites(t *testing.T) {
 	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
 	ctx := context.Background()
 
 	const (
@@ -531,4 +541,181 @@ func TestCascadeDeleteReportsUnendingConcurrentWrites(t *testing.T) {
 	assert.NoError(t, getErr, "the conversation record must survive a reported cascade failure, as the anchor for the retry")
 	assert.Equal(t, []string{racingID}, conversationIndexMembers(t, store, conversationID),
 		"the response that outran the cascade must still be indexed, so a retry can find and delete it")
+}
+
+// assertCascadeContract is the invariant every cascade delete must satisfy,
+// whatever the store's state: either the call failed and left the
+// conversation exactly as it found it, or it succeeded and no payload of that
+// conversation is still live. A cascade that reports success while a payload
+// survives has broken its one promise — and that is precisely what an
+// index-unaware writer could make it do before finalization.
+func assertCascadeContract(t *testing.T, store *RedisStore, conversationID, responseID string, cascadeErr error) {
+	t.Helper()
+	ctx := context.Background()
+
+	_, getErr := store.GetResponse(ctx, responseID)
+	_, convErr := store.GetConversation(ctx, conversationID)
+	if cascadeErr == nil {
+		assert.ErrorIs(t, getErr, ErrNotFound,
+			"a cascade that reported success must not leave a payload of the conversation live")
+		return
+	}
+	assert.NoError(t, getErr, "a refused cascade must leave the payload in place")
+	assert.NoError(t, convErr, "a refused cascade must leave the conversation record in place")
+	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, conversationID),
+		"a refused cascade must leave the membership in place")
+}
+
+// TestCascadeDeleteRefusesBeforeFinalization pins the gate for the case the
+// cascade used to allow: a conversation holding only generation-aware
+// responses. Even those are unsafe to cascade while index-unaware writers may
+// exist, because such a writer can recreate or move a response into the
+// conversation without touching the index at any point during the drain.
+func TestCascadeDeleteRefusesBeforeFinalization(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const (
+		conversationID = "conv_cascade_gate"
+		responseID     = "resp_cascade_gate"
+	)
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{ID: conversationID, CreatedAt: time.Now().Unix()}))
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "completed", CreatedAt: time.Now().Unix(),
+	}))
+	require.Zero(t, exists(t, store, store.conversationIndexCompletionKey()), "precondition: not finalized")
+
+	err := store.DeleteConversation(ctx, conversationID, true)
+	require.ErrorIs(t, err, ErrIndexNotFinalized)
+	assertCascadeContract(t, store, conversationID, responseID, err)
+
+	// The same call succeeds once the operator has drained old writers.
+	markStoreFinalized(t, store)
+	err = store.DeleteConversation(ctx, conversationID, true)
+	require.NoError(t, err)
+	assertCascadeContract(t, store, conversationID, responseID, err)
+}
+
+// TestCascadeDeleteOldWriterRecreationBeforeFinalization is the reviewer's
+// interleaving. An index-unaware pod recreates the response after the
+// generation-CAS delete and before the conditional unindex. That writer never
+// touches the sidecar, so the stale candidate generation still matches: the
+// unindex removes the recreated response's only membership, the index drains,
+// and the cascade deletes the proof and conversation record while a live
+// payload remains. The old writer is modeled faithfully with a raw payload
+// write that carries no generation and updates no index.
+//
+// Against the ungated cascade the hook fires and the contract is violated —
+// the proof the race is real. Against the gate the cascade is refused before
+// the CAS runs, so the hook never fires and nothing is touched.
+func TestCascadeDeleteOldWriterRecreationBeforeFinalization(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const (
+		conversationID = "conv_cascade_old_recreate"
+		responseID     = "resp_cascade_old_recreate"
+	)
+	now := time.Now().Unix()
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{ID: conversationID, CreatedAt: now}))
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "completed", CreatedAt: now,
+	}))
+	require.NoError(t, compareDeleteGenerationScript.Load(ctx, store.client).Err())
+
+	hook := &commandInterleavingHook{
+		match: func(cmd redis.Cmder) bool {
+			args := cmd.Args()
+			return cmd.Name() == "evalsha" && len(args) > 1 && args[1] == compareDeleteGenerationScript.Hash()
+		},
+		inject: func() {
+			directSetResponsePayload(t, store, &responseapi.StoredResponse{
+				ID: responseID, ConversationID: conversationID, Status: "recreated-by-old-writer", CreatedAt: now + 1,
+			})
+		},
+	}
+	store.client.AddHook(hook)
+
+	err := store.DeleteConversation(ctx, conversationID, true)
+	assertCascadeContract(t, store, conversationID, responseID, err)
+	assert.ErrorIs(t, err, ErrIndexNotFinalized)
+	assert.False(t, hook.fired.Load(), "the gate must refuse before the generation-CAS delete ever runs")
+}
+
+// TestCascadeDeleteOldWriterMoveBackBeforeFinalization is the same gap on the
+// moved branch. The cascade reads a payload that now names another
+// conversation and drops only this conversation's membership; an index-unaware
+// pod moves the response back in between, again without touching the sidecar,
+// and the membership it needs is gone.
+func TestCascadeDeleteOldWriterMoveBackBeforeFinalization(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const (
+		conversationID = "conv_cascade_old_moveback"
+		otherID        = "conv_cascade_old_moveback_other"
+		responseID     = "resp_cascade_old_moveback"
+	)
+	now := time.Now().Unix()
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{ID: conversationID, CreatedAt: now}))
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "completed", CreatedAt: now,
+	}))
+	// An old writer already moved it away: the payload names the other
+	// conversation while this conversation's membership is untouched.
+	directSetResponsePayload(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: otherID, Status: "moved-by-old-writer", CreatedAt: now,
+	})
+	require.NoError(t, conditionalUnindexScript.Load(ctx, store.client).Err())
+
+	hook := &commandInterleavingHook{
+		before: true,
+		match: func(cmd redis.Cmder) bool {
+			args := cmd.Args()
+			return cmd.Name() == "evalsha" && len(args) > 1 && args[1] == conditionalUnindexScript.Hash()
+		},
+		inject: func() {
+			directSetResponsePayload(t, store, &responseapi.StoredResponse{
+				ID: responseID, ConversationID: conversationID, Status: "moved-back-by-old-writer", CreatedAt: now,
+			})
+		},
+	}
+	store.client.AddHook(hook)
+
+	err := store.DeleteConversation(ctx, conversationID, true)
+	assertCascadeContract(t, store, conversationID, responseID, err)
+	assert.ErrorIs(t, err, ErrIndexNotFinalized)
+	assert.False(t, hook.fired.Load(), "the gate must refuse before the conditional unindex ever runs")
+}
+
+// TestCascadeBatchRefusesLegacyCandidatesWithoutCleanupAuthority keeps the
+// per-candidate refusals honest now that the entry gate makes them
+// unreachable through DeleteConversation. They remain the batch function's
+// own contract — defense in depth should the gate ever be bypassed — so they
+// are exercised directly.
+func TestCascadeBatchRefusesLegacyCandidatesWithoutCleanupAuthority(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const conversationID = "conv_cascade_batch_legacy"
+	now := time.Now().Unix()
+	// A blank-witness tombstone: membership with no payload behind it.
+	seedLegacyIndexMember(t, store, conversationID, "resp_batch_tombstone", now)
+	// A live legacy payload: membership and a generation-less payload.
+	seedLegacyIndexMember(t, store, conversationID, "resp_batch_legacy_live", now+1)
+	directSetResponsePayload(t, store, &responseapi.StoredResponse{
+		ID: "resp_batch_legacy_live", ConversationID: conversationID, Status: "completed", CreatedAt: now + 1,
+	})
+
+	candidates := []cascadeCandidate{
+		{responseID: "resp_batch_tombstone"},
+		{responseID: "resp_batch_legacy_live"},
+	}
+	progress, err := store.deleteConversationResponseBatch(ctx, conversationID, candidates, false)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "no generation witness and the store is not finalized")
+	assert.ErrorContains(t, err, "legacy payload and the store is not finalized")
+	assert.Zero(t, progress.membershipsRemoved, "no membership may be removed without cleanup authority")
+	assert.Equal(t, []string{"resp_batch_tombstone", "resp_batch_legacy_live"},
+		conversationIndexMembers(t, store, conversationID))
 }

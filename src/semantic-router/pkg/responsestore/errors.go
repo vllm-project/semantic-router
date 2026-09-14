@@ -41,4 +41,11 @@ var (
 	// response's payload. Retryable: the member may well be live, so no page
 	// whose cursor would advance past it is returned.
 	ErrPayloadReadFailed = errors.New("indexed response payload could not be read")
+
+	// ErrIndexNotFinalized is returned by an operation that can only be made
+	// correct once FinalizeConversationIndex has run — cascade delete, whose
+	// completion means "no response of this conversation remains", a claim the
+	// index cannot support while pre-upgrade writers can still add responses
+	// it never sees. Nothing is modified; retry after finalization.
+	ErrIndexNotFinalized = errors.New("conversation index is not finalized")
 )
