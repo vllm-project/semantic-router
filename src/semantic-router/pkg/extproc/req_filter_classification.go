@@ -178,19 +178,8 @@ func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector)
 }
 
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
-	if result.SelectedCandidate != nil {
-		return result.SelectedCandidate
-	}
-	for i := range selCtx.CandidateModels {
-		if selCtx.CandidateModels[i].Model == result.SelectedModel {
-			return &selCtx.CandidateModels[i]
-		}
-		if result.Method != selection.MethodPrompt &&
-			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
-			return &selCtx.CandidateModels[i]
-		}
-	}
-	return nil
+	candidate, _ := selection.ResolveSelectionCandidate(selCtx, result)
+	return candidate
 }
 
 func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
@@ -319,6 +308,7 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 		UserID:                      userID,
 		TurnIndex:                   reqCtx.TurnIndex,
 		PreviousModel:               previousModel,
+		PreviousCandidate:           snapshot.CurrentCandidate,
 		PreviousResponseID:          reqCtx.PreviousResponseID,
 		MemoryPresent:               hasMemory,
 		MemoryTurnCount:             snapshot.TurnCount,

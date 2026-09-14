@@ -113,6 +113,33 @@ func TestMultiFactorExplicitFallbackDoesNotAuthorizeOtherExcludedModels(t *testi
 	}
 }
 
+func TestMultiFactorEligibilityPreservesExactEffort(t *testing.T) {
+	router, decision := candidateEffortTestRouter(t, config.DecisionAlgorithmMultiFactor, "high")
+	floor := 75.0
+	decision.Algorithm.MultiFactor.Quality.MinScore = &floor
+	router.Config.Decisions = []config.Decision{*decision}
+	selCtx := &selection.SelectionContext{DecisionName: decision.Name, CandidateModels: decision.ModelRefs}
+	ctx := &RequestContext{VSRSelectedDecision: decision}
+	selected, _, err := router.selectModelFromCandidates(selCtx, decision.Algorithm, ctx)
+	if err != nil || selected == nil || selected.ReasoningEffort != "high" {
+		t.Fatalf("exact-effort selection = %+v, %v", selected, err)
+	}
+	if len(ctx.VSRPolicyEligibleModelRefs) != 1 || ctx.VSRPolicyEligibleModelRefs[0].ReasoningEffort != "high" {
+		t.Fatalf("quality floor admitted the low-effort sibling: %+v", ctx.VSRPolicyEligibleModelRefs)
+	}
+	learning := router.learningCandidateModels(selCtx, ctx, config.RouterLearningCandidateSetGlobal)
+	if len(learning) != 1 || learning[0].ReasoningEffort != "high" {
+		t.Fatalf("global learning expanded exact-effort eligibility: %+v", learning)
+	}
+	_, err = applySelectionEligibility(selCtx, &selection.SelectionResult{
+		SelectedModel: decision.ModelRefs[0].Model, SelectedCandidate: &decision.ModelRefs[0],
+		EligibleModels: []config.ModelRef{decision.ModelRefs[1]},
+	}, nil)
+	if !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("ineligible exact winner must fail closed, got %v", err)
+	}
+}
+
 func TestMultiFactorSoftRankingPreservesGlobalLearningInventory(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	router.Config.ModelConfig["global-sibling"] = router.Config.ModelConfig[primary]

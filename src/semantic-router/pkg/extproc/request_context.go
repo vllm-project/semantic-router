@@ -177,6 +177,10 @@ type RequestContext struct {
 	// Unlike context-only filtering, it also constrains tier/global learning.
 	VSRPolicyEligibleModelRefs []config.ModelRef
 
+	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
+	// Never recover its reasoning settings by searching model names again.
+	VSRSelectedCandidate *config.ModelRef
+
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
 	// values). It defaults to "upstream"; immediate-response paths (cache,

@@ -9,6 +9,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
+func TestSessionAwareSelectorPreservesLatencyScoreDirection(t *testing.T) {
+	selector := NewSessionAwareSelector(nil)
+	selector.SetBaseSelector(stubSessionBase{result: &SelectionResult{
+		SelectedModel: "fast", Score: 1, ScoreDirection: LowerIsBetter,
+		Method: MethodLatencyAware, AllScores: map[string]float64{"fast": 1, "slow": 2},
+	}})
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "fast"}, {Model: "slow"}, {Model: "unmeasured"}},
+		AgenticSession:  &AgenticSessionContext{PreviousModel: "fast", TurnIndex: 3},
+	})
+	if err != nil || result.SelectedModel != "fast" {
+		t.Fatalf("session policy reversed latency ranking: %+v, %v", result, err)
+	}
+	if _, exists := result.CandidateScores.Get(config.ModelRef{Model: "unmeasured"}); exists {
+		t.Fatal("missing latency became a comparable zero")
+	}
+}
+
 func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
 		BaseMethod:                 MethodStatic,

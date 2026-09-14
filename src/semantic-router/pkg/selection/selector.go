@@ -269,9 +269,11 @@ type SelectionResult struct {
 	// Later learning and provider rerouting must not expand this set.
 	EligibleModels []config.ModelRef
 
-	// AllScores maps each candidate to its computed score. Unique models use the
-	// model name; duplicate refs include candidate index and effort in the key.
-	AllScores map[string]float64
+	// CandidateScores is the typed input for composition and policy. AllScores
+	// is its compatibility/diagnostic projection, never a candidate identity.
+	CandidateScores CandidateScores
+	ScoreDirection  ScoreDirection
+	AllScores       map[string]float64
 
 	// Prompt-helper telemetry is populated only by MethodPrompt.
 	HelperModel            string

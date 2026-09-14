@@ -251,52 +251,31 @@ func (g *GMTRouterSelector) Select(ctx context.Context, selCtx *SelectionContext
 	usePersonalization := g.config.EnablePersonalization &&
 		userState.TotalInteractions >= g.config.MinInteractionsForPersonalization
 
-	allScores := make(map[string]float64)
+	ranked := make(CandidateScores, len(selCtx.CandidateModels))
 	candidateScores := make([]float64, len(selCtx.CandidateModels))
-	var selectedModel *config.ModelRef
-	var bestRank candidateRank
-	var bestScore float64
-	var reasoning string
-
 	if usePersonalization {
-		// Personalized routing using graph-based preference learning
-		scores := g.computePersonalizedScores(userID, selCtx)
-
-		for i := range selCtx.CandidateModels {
-			model := &selCtx.CandidateModels[i]
-			score := scores[i]
-			candidateScores[i] = score
-			allScores[candidateScoreKey(selCtx.CandidateModels, i)] = score
-			rank := candidateRank{score: score, evidence: evidenceForCandidate(g.modelParams, *model)}
-			if selectedModel == nil || rank.Compare(bestRank) > 0 {
-				bestScore, selectedModel, bestRank = score, model, rank
-			}
-		}
-
-		reasoning = fmt.Sprintf("GMTRouter personalized selection for user %s (%d interactions); %s",
-			userID, userState.TotalInteractions, evidenceDiagnostic(bestRank.evidence))
-
-		logging.Infof("[GMTRouter] Personalized selection for user %s: %s (score=%.4f)",
-			userID, selectedModel.Model, bestScore)
-	} else {
-		// Cold start: use model quality scores
-		for i := range selCtx.CandidateModels {
-			model := &selCtx.CandidateModels[i]
-			score, evidence := g.getDefaultModelScore(*model)
-			candidateScores[i] = score
-			allScores[candidateScoreKey(selCtx.CandidateModels, i)] = score
-			rank := candidateRank{score: score, evidence: evidence}
-			if selectedModel == nil || rank.Compare(bestRank) > 0 {
-				bestScore, selectedModel, bestRank = score, model, rank
-			}
-		}
-
-		reasoning = fmt.Sprintf("GMTRouter cold-start selection (need %d more interactions); %s",
-			g.config.MinInteractionsForPersonalization-userState.TotalInteractions, evidenceDiagnostic(bestRank.evidence))
-
-		logging.Infof("[GMTRouter] Cold-start selection: %s (user %s has %d interactions)",
-			selectedModel.Model, userID, userState.TotalInteractions)
+		candidateScores = g.computePersonalizedScores(userID, selCtx)
 	}
+	for i, candidate := range selCtx.CandidateModels {
+		score, evidence := g.getDefaultModelScore(candidate)
+		if usePersonalization {
+			score = candidateScores[i]
+		}
+		candidateScores[i] = score
+		ranked[i] = CandidateScore{Candidate: candidate, Score: score, Evidence: evidence}
+	}
+	best := ranked.Best(HigherIsBetter, true)
+	if best < 0 {
+		return nil, fmt.Errorf("GMTRouter produced no finite candidate scores")
+	}
+	selectedModel, bestScore := &ranked[best].Candidate, ranked[best].Score
+	reasoning := fmt.Sprintf("GMTRouter cold-start selection (need %d more interactions)",
+		g.config.MinInteractionsForPersonalization-userState.TotalInteractions)
+	if usePersonalization {
+		reasoning = fmt.Sprintf("GMTRouter personalized selection for user %s (%d interactions)", userID, userState.TotalInteractions)
+	}
+	reasoning += "; " + evidenceDiagnostic(ranked[best].Evidence)
+	logging.Infof("[GMTRouter] %s: %s (score=%.4f)", reasoning, selectedModel.Model, bestScore)
 
 	// Calculate confidence based on preference strength
 	confidence := g.computeConfidence(bestScore, candidateScores)
@@ -309,7 +288,8 @@ func (g *GMTRouterSelector) Select(ctx context.Context, selCtx *SelectionContext
 		Confidence:        confidence,
 		Method:            MethodGMTRouter,
 		Reasoning:         reasoning,
-		AllScores:         allScores,
+		AllScores:         ranked.Diagnostics(),
+		CandidateScores:   ranked,
 	}, nil
 }
 
