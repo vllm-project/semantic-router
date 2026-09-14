@@ -28,7 +28,7 @@ func TestBuildEarlyResourcesDefersSemanticCacheUntilClassifierRuntimeReady(t *te
 			cfg *config.RouterConfig,
 			mappings *classifierMappings,
 		) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error) {
-			classifiers, classifier, service, err := createRouterClassifier(cfg, mappings)
+			classifiers, classifier, service, err := createRouterClassifierWithMappings(cfg, mappings)
 			if err == nil {
 				order = append(order, "classifier_runtime")
 			}

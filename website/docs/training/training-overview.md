@@ -103,7 +103,7 @@ metadata required by the runtime. Then validate the complete router
 configuration:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 Finally, send representative requests through the full router path. This

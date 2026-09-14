@@ -3,16 +3,16 @@ package classification
 import (
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestEmbeddingClassifierPassesTargetLayerToBackend(t *testing.T) {
 	capturedLayer := 0
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		capturedLayer = targetLayer
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
 		getEmbedding2DMatryoshka = originalFunc

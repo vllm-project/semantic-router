@@ -11,6 +11,7 @@ or start from a maintained routing recipe.
 | Serve a packaged virtual model | `config/recipes/built-in/` |
 | Configure a storage or service backend | `config/runtime/` |
 | Validate a managed asset | `config/schemas/` |
+| Discover the compact machine-readable contract index | `vllm-sr config schema` or `GET /api/v1/config/schema` |
 
 The website's [configuration guide](../website/docs/installation/configuration.md)
 is the reader-facing reference. `config/config.yaml` is intentionally exhaustive;
@@ -48,9 +49,15 @@ global: {}
 Validate a file before serving it:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
+
+`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json` is the one
+checked-in schema generated from the Go configuration types and routing
+registries. Do not edit it directly. See the
+[Configuration Contract](../website/docs/installation/configuration-contract.md)
+for schema discovery, semantic validation, and the extension workflow.
 
 ## Choose the right asset
 
@@ -150,22 +157,33 @@ runtime dependency; they do not define routing behavior by themselves.
   winning label is the verdict. `threshold` stays the symmetric shorthand for
   the local signed margin, and the `hard`/`easy` candidate lists are unread
   once a backend supplies the score.
+- PII attaches the same block at
+  `global.model_catalog.modules.classifier.pii.backend`. It reads one contract,
+  `token_spans.v1`, so `contract` may be omitted; the remote model returns
+  entity spans as code-point offsets into the exact request string, and its
+  labels must be in the configured `pii_mapping_path`. `on_error` beside the
+  backend selects what a backend failure, or a provider-declared truncation,
+  does to the rule that consumed it: `allow` (default) treats the content as
+  not matching, `block` matches it as `classification_error`. A backend is
+  mutually exclusive with the local `use_mmbert_32k` selector.
 - External LLM classifiers use `max_response_bytes` on their
   `global.model_catalog.external[]` entry. The MCP classifier uses the same key
   under `global.model_catalog.modules.classifier.mcp`.
 
 ## Keep examples in sync
 
-When a public config field or supported routing surface changes, update its
-fragment, the exhaustive reference, affected recipes, and the matching website
-page together. Run `go test ./pkg/config/...` from `src/semantic-router`, then
-run `make check` from the repository root:
+When a public config field or supported routing surface changes, update its Go
+type or registry, then update its fragment, exhaustive reference, affected
+recipes, and the matching website page together. Regenerate the
+machine-readable contract before running the semantic and repository gates:
+
+The focused semantic gate is `go test ./pkg/config/...`; `make check` applies
+the complete changed-surface policy.
 
 ```bash
-cd src/semantic-router
+make config-schema-generate
+make config-schema-check
 go test ./pkg/config/...
-
-cd ../..
 make check
 ```
 

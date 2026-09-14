@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+  sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
 protocols:
 - id: openai/chat-completions@1
   display_name: OpenAI Chat Completions
@@ -527,6 +527,26 @@ providers:
     monochrome: false
   conformance:
     status: unverified
+- id: cloudflare-workers-ai
+  display_name: Cloudflare Workers AI
+  description: Cloudflare Workers AI OpenAI-compatible inference.
+  category: model_api
+  support_tier: compatible
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: monogram
+    monogram: Cf
+    monochrome: false
+  conformance:
+    status: unverified
 - id: cohere
   display_name: Cohere
   description: Command models through the compatibility API.
@@ -924,6 +944,52 @@ providers:
     monochrome: false
   conformance:
     status: unverified
+  models:
+  - catalog: meta/muse-glimmer-30b
+    relationship: managed_cloud
+    id: accounts/fireworks/models/muse-glimmer-30b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.35
+      cached_input_per_1m: 0.04
+      completion_per_1m: 1.5
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/muse-glimmer-30b
+  - catalog: moonshot/kimi-k3
+    relationship: managed_cloud
+    id: accounts/fireworks/models/kimi-k3
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 3.0
+      cached_input_per_1m: 0.3
+      completion_per_1m: 15.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/kimi-k3
+  - catalog: thinking-machines/inkling
+    relationship: managed_cloud
+    id: accounts/fireworks/models/inkling
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.0
+      cached_input_per_1m: 0.17
+      completion_per_1m: 4.05
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/inkling
 - id: friendli
   display_name: FriendliAI
   description: Friendli serverless model endpoints.
@@ -8245,7 +8311,7 @@ models:
     authority: vllm-sr-maintainers
     status: reproduced
     verified_at: '2026-09-04'
-    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Economy-first direct answers with bounded opt-in reasoning.
@@ -8314,7 +8380,7 @@ models:
     authority: vllm-sr-maintainers
     status: reproduced
     verified_at: '2026-09-04'
-    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Latency-first interactive, tool, vision, and heavy-workload routing.
@@ -8384,7 +8450,7 @@ models:
     authority: vllm-sr-maintainers
     status: reproduced
     verified_at: '2026-09-04'
-    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Accuracy-first direct and bounded multi-model orchestration.
@@ -8483,7 +8549,7 @@ models:
     authority: vllm-sr-maintainers
     status: reproduced
     verified_at: '2026-09-04'
-    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Local-only privacy, containment, and tool-history minimization.
@@ -8555,7 +8621,7 @@ models:
     authority: vllm-sr-maintainers
     status: reproduced
     verified_at: '2026-09-04'
-    asset_sha256: sha256:e7d6d1d29901f65f5b5d13c600624dc019116399995e2af33ce03ef47d125522
+    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
@@ -8615,20 +8681,25 @@ benchmarks:
   tags:
   - core
   source: https://agi.safe.ai/
-  default_profile: no-tools
+  default_profile: text-only
   profiles:
-  - id: no-tools
-    display_name: No tools
-    description: Text-only evaluation without browsing, code execution, or retrieval tools.
+  - id: text-only
+    display_name: Text-only
+    description: The 2,158-question May 2025 text-only subset, evaluated without browsing, code execution, or retrieval tools.
+  - id: independent-text-only
+    display_name: Independent text-only run
+    description: Independently measured pass@1 over the same 2,158-question text-only subset for the exact model variant and
+      reasoning effort.
+  - id: published-no-tools
+    display_name: Published without tools
+    description: Published evaluation without tools whose modality subset is not explicitly the frozen 2,158 text-only questions;
+      visible as evidence but excluded from Intelligence 1.0.
   - id: with-tools
     display_name: With tools
     description: Evaluation where the model may use tools; visible as evidence but excluded from the default index.
   - id: published-unspecified
     display_name: Published setup unspecified
     description: Published result whose tool policy is not stated; visible but excluded from the default index.
-  - id: independent-standard
-    display_name: Independent standard run
-    description: Independently measured HLE result for the named model variant and reasoning effort.
   metrics:
   - id: accuracy
     unit: proportion
@@ -9975,7 +10046,7 @@ evaluations:
 - id: independent/jamba-reasoning-3b-humanitys-last-exam@1.0.0
   model: ai21/jamba-reasoning-3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Jamba Reasoning 3B
@@ -10065,7 +10136,7 @@ evaluations:
 - id: independent/jamba-1-7-large-humanitys-last-exam@1.0.0
   model: ai21/jamba-large-1.7
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Jamba 1.7 Large
@@ -10155,7 +10226,7 @@ evaluations:
 - id: independent/nova-pro-humanitys-last-exam@1.0.0
   model: amazon/nova-pro-v1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: default
   subject:
     source_model: Amazon Nova Pro
@@ -10263,7 +10334,7 @@ evaluations:
 - id: independent/nova-2-0-lite-reasoning-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Nova 2.0 Lite (high)
@@ -10371,7 +10442,7 @@ evaluations:
 - id: independent/nova-2-0-lite-reasoning-low-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Nova 2.0 Lite (low)
@@ -10461,7 +10532,7 @@ evaluations:
 - id: independent/nova-2-0-lite-reasoning-medium-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Nova 2.0 Lite (medium)
@@ -10551,7 +10622,7 @@ evaluations:
 - id: independent/nova-2-0-lite-humanitys-last-exam@1.0.0
   model: amazon/nova-2-lite
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: Nova 2.0 Lite (Non-reasoning)
@@ -10641,7 +10712,7 @@ evaluations:
 - id: independent/nova-premier-humanitys-last-exam@1.0.0
   model: amazon/nova-premier-v1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Nova Premier
@@ -10771,7 +10842,7 @@ evaluations:
 - id: independent/claude-fable-5-1-high-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Claude Fable 5.1 (high with fallback)
@@ -10933,7 +11004,7 @@ evaluations:
 - id: independent/claude-fable-5-1-low-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
@@ -11135,7 +11206,7 @@ evaluations:
 - id: independent/claude-fable-5-1-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Fable 5.1 (max with fallback)
@@ -11297,7 +11368,7 @@ evaluations:
 - id: independent/claude-fable-5-1-medium-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Claude Fable 5.1 (medium with fallback)
@@ -11481,7 +11552,7 @@ evaluations:
 - id: independent/claude-fable-5-1-xhigh-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Claude Fable 5.1 (xhigh with fallback)
@@ -11663,7 +11734,7 @@ evaluations:
 - id: independent/claude-opus-5-high-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
@@ -11825,7 +11896,7 @@ evaluations:
 - id: independent/claude-opus-5-low-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
@@ -12027,7 +12098,7 @@ evaluations:
 - id: independent/claude-opus-5-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Opus 5 (max)
@@ -12189,7 +12260,7 @@ evaluations:
 - id: independent/claude-opus-5-medium-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
@@ -12373,7 +12444,7 @@ evaluations:
 - id: independent/claude-opus-5-xhigh-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Claude Opus 5 (xhigh)
@@ -12571,7 +12642,7 @@ evaluations:
 - id: independent/claude-sonnet-5-humanitys-last-exam@1.0.0
   model: anthropic/claude-sonnet-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
@@ -12809,7 +12880,7 @@ evaluations:
 - id: independent/claude-fable-5-humanitys-last-exam@1.0.0
   model: anthropic/claude-fable-5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Fable 5 (with fallback)
@@ -13005,7 +13076,7 @@ evaluations:
 - id: independent/claude-opus-4-8-humanitys-last-exam@1.0.0
   model: anthropic/claude-opus-4.8
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
@@ -14214,7 +14285,7 @@ evaluations:
 - id: independent/ernie-4.5-300b-a47b-humanitys-last-exam@1.0.0
   model: baidu/ernie-4.5-300b-a47b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: ERNIE 4.5 300B A47B
@@ -14355,7 +14426,7 @@ evaluations:
 - id: bytedance/seed-2.0-pro-model-card-humanitys-last-exam@1.0.0
   model: bytedance/seed-2.0-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: Seed2.0 Pro
@@ -14739,7 +14810,7 @@ evaluations:
 - id: independent/north-mini-code-humanitys-last-exam@1.0.0
   model: cohere/north-mini-code-1.0
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: North Mini Code
@@ -14883,7 +14954,7 @@ evaluations:
 - id: independent/command-a-plus-humanitys-last-exam@1.0.0
   model: cohere/command-a-plus-05-2026
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Command A+
@@ -15027,7 +15098,7 @@ evaluations:
 - id: independent/tiny-aya-global-humanitys-last-exam@1.0.0
   model: cohere/tiny-aya-global
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Tiny Aya Global
@@ -15192,7 +15263,7 @@ evaluations:
 - id: independent/deepseek-v3-2-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: DeepSeek V3.2 (Reasoning)
@@ -15300,7 +15371,7 @@ evaluations:
 - id: independent/deepseek-v3-2-non-reasoning-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: DeepSeek V3.2 (Non-reasoning)
@@ -15408,7 +15479,7 @@ evaluations:
 - id: independent/deepseek-r1-0120-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-r1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: default
   subject:
     source_model: DeepSeek R1 0120
@@ -15592,7 +15663,7 @@ evaluations:
 - id: deepseek/deepseek-v4-pro-model-card-max-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: max
   subject:
     variant: DeepSeek-V4-Pro
@@ -15611,7 +15682,7 @@ evaluations:
 - id: independent/deepseek-v4-pro-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: DeepSeek V4 Pro 0813 (max)
@@ -15846,7 +15917,7 @@ evaluations:
 - id: independent/deepseek-v4-flash-0420-high-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: DeepSeek V4 Flash (Reasoning, High Effort)
@@ -15990,7 +16061,7 @@ evaluations:
 - id: deepseek/deepseek-v4-flash-model-card-max-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: max
   subject:
     variant: DeepSeek-V4-Flash
@@ -16009,7 +16080,7 @@ evaluations:
 - id: independent/deepseek-v4-flash-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
@@ -16232,7 +16303,7 @@ evaluations:
 - id: independent/deepseek-v3-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: DeepSeek V3 (Dec '24)
@@ -16323,7 +16394,7 @@ evaluations:
 - id: independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3-0324
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: DeepSeek V3 0324
@@ -16515,7 +16586,7 @@ evaluations:
 - id: independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3.1-terminus
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: DeepSeek V3.1 Terminus (Reasoning)
@@ -16695,7 +16766,7 @@ evaluations:
 - id: independent/gemini-3-6-flash-humanitys-last-exam@1.0.0
   model: google/gemini-3.6-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Gemini 3.6 Flash (high)
@@ -16857,7 +16928,7 @@ evaluations:
 - id: independent/gemma-4-31b-humanitys-last-exam@1.0.0
   model: google/gemma-4-31b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Gemma 4 31B (Reasoning)
@@ -17019,7 +17090,7 @@ evaluations:
 - id: independent/gemma-4-31b-non-reasoning-humanitys-last-exam@1.0.0
   model: google/gemma-4-31b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Gemma 4 31B (Non-reasoning)
@@ -17203,7 +17274,7 @@ evaluations:
 - id: independent/gemini-3-8-flash-humanitys-last-exam@1.0.0
   model: google/gemini-3.8-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Gemini 3.8 Flash (high)
@@ -17365,7 +17436,7 @@ evaluations:
 - id: independent/gemini-3-8-flash-low-humanitys-last-exam@1.0.0
   model: google/gemini-3.8-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Gemini 3.8 Flash (low)
@@ -17527,7 +17598,7 @@ evaluations:
 - id: independent/gemini-3-8-flash-medium-humanitys-last-exam@1.0.0
   model: google/gemini-3.8-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Gemini 3.8 Flash (medium)
@@ -17689,7 +17760,7 @@ evaluations:
 - id: independent/gemini-3-7-flash-humanitys-last-exam@1.0.0
   model: google/gemini-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Gemini 3.7 Flash (high)
@@ -17851,7 +17922,7 @@ evaluations:
 - id: independent/gemini-3-7-flash-low-humanitys-last-exam@1.0.0
   model: google/gemini-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Gemini 3.7 Flash (low)
@@ -18015,7 +18086,7 @@ evaluations:
 - id: independent/gemini-3-7-flash-medium-humanitys-last-exam@1.0.0
   model: google/gemini-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Gemini 3.7 Flash (medium)
@@ -18105,7 +18176,7 @@ evaluations:
 - id: google/gemma-4-31b-model-card-humanitys-last-exam@1.0.0
   model: google/gemma-4-31b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: Gemma 4 31B
@@ -18285,7 +18356,7 @@ evaluations:
 - id: independent/gemma-3-27b-humanitys-last-exam@1.0.0
   model: google/gemma-3-27b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Gemma 3 27B Instruct
@@ -18413,7 +18484,7 @@ evaluations:
 - id: independent/gemma-3-12b-humanitys-last-exam@1.0.0
   model: google/gemma-3-12b-it
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Gemma 3 12B Instruct
@@ -18633,7 +18704,7 @@ evaluations:
 - id: independent/muse-spark-1-3-humanitys-last-exam@1.0.0
   model: meta/muse-spark-1.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Muse Spark 1.3 (max)
@@ -18889,7 +18960,7 @@ evaluations:
 - id: independent/muse-spark-1-3-xhigh-humanitys-last-exam@1.0.0
   model: meta/muse-spark-1.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Muse Spark 1.3 (xhigh)
@@ -19051,7 +19122,7 @@ evaluations:
 - id: independent/muse-spark-1-2-humanitys-last-exam@1.0.0
   model: meta/muse-spark-1.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Muse Spark 1.2 (xhigh)
@@ -19326,7 +19397,7 @@ evaluations:
 - id: independent/muse-glimmer-humanitys-last-exam@1.0.0
   model: meta/muse-glimmer-30b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Muse Glimmer (high)
@@ -19344,7 +19415,7 @@ evaluations:
 - id: meta/muse-glimmer-30b-model-card-humanitys-last-exam@1.0.0
   model: meta/muse-glimmer-30b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: Muse Glimmer 30B
@@ -19654,7 +19725,7 @@ evaluations:
 - id: independent/llama-4-maverick-humanitys-last-exam@1.0.0
   model: meta/llama-4-maverick-17b-128e-instruct
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Llama 4 Maverick
@@ -19798,7 +19869,7 @@ evaluations:
 - id: independent/llama-4-scout-humanitys-last-exam@1.0.0
   model: meta/llama-4-scout-17b-16e-instruct
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Llama 4 Scout
@@ -20877,7 +20948,7 @@ evaluations:
 - id: independent/minimax-m3-humanitys-last-exam@1.0.0
   model: minimax/minimax-m3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: adaptive
   subject:
     source_model: MiniMax-M3
@@ -21039,7 +21110,7 @@ evaluations:
 - id: independent/minimax-m2-7-humanitys-last-exam@1.0.0
   model: minimax/minimax-m2.7
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiniMax-M2.7
@@ -21129,7 +21200,7 @@ evaluations:
 - id: minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0
   model: minimax/minimax-m2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: default
   subject:
     variant: MiniMax-M2.5
@@ -21253,7 +21324,7 @@ evaluations:
 - id: independent/minimax-m2-5-humanitys-last-exam@1.0.0
   model: minimax/minimax-m2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiniMax-M2.5
@@ -21462,7 +21533,7 @@ evaluations:
 - id: independent/mistral-large-3-humanitys-last-exam@1.0.0
   model: mistral/mistral-large-3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: default
   subject:
     source_model: Mistral Large 3 (Non-reasoning)
@@ -21624,7 +21695,7 @@ evaluations:
 - id: independent/mistral-small-4-humanitys-last-exam@1.0.0
   model: mistral/mistral-small-4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Mistral Small 4 (Reasoning)
@@ -21750,7 +21821,7 @@ evaluations:
 - id: independent/mistral-small-4-non-reasoning-humanitys-last-exam@1.0.0
   model: mistral/mistral-small-4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: Mistral Small 4 (Non-reasoning)
@@ -21858,7 +21929,7 @@ evaluations:
 - id: independent/mistral-medium-3-5-humanitys-last-exam@1.0.0
   model: mistral/mistral-medium-3.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Mistral Medium 3.5
@@ -22046,7 +22117,7 @@ evaluations:
 - id: independent/mistral-small-3.2-humanitys-last-exam@1.0.0
   model: mistral/mistral-small-3.2-24b-instruct
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Mistral Small 3.2
@@ -22210,7 +22281,7 @@ evaluations:
 - id: independent/kimi-k3-low-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Kimi K3 (low)
@@ -22412,7 +22483,7 @@ evaluations:
 - id: independent/kimi-k3-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Kimi K3 (max)
@@ -22430,7 +22501,7 @@ evaluations:
 - id: moonshot/kimi-k3-model-card-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: max
   subject:
     variant: Kimi-K3
@@ -22577,7 +22648,7 @@ evaluations:
 - id: moonshot/kimi-k2.6-model-card-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k2.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: Kimi-K2.6
@@ -22683,7 +22754,7 @@ evaluations:
 - id: independent/kimi-k2-6-non-reasoning-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k2.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Kimi K2.6 (Non-reasoning)
@@ -22791,7 +22862,7 @@ evaluations:
 - id: independent/kimi-k2-6-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k2.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Kimi K2.6
@@ -22863,7 +22934,7 @@ evaluations:
 - id: moonshot/kimi-k2.5-model-card-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: Kimi-K2.5
@@ -22986,7 +23057,7 @@ evaluations:
 - id: independent/kimi-k2-5-non-reasoning-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Kimi K2.5 (Non-reasoning)
@@ -23094,7 +23165,7 @@ evaluations:
 - id: independent/kimi-k2-5-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Kimi K2.5 (Reasoning)
@@ -23238,7 +23309,7 @@ evaluations:
 - id: independent/kimi-k2-7-code-humanitys-last-exam@1.0.0
   model: moonshot/kimi-k2.7-code
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Kimi K2.7 Code
@@ -23480,7 +23551,7 @@ evaluations:
 - id: nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3.5-lightning
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
@@ -23624,7 +23695,7 @@ evaluations:
 - id: nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-ultra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
@@ -23785,7 +23856,7 @@ evaluations:
 - id: independent/nvidia-nemotron-3-ultra-550b-a55b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-ultra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Nemotron 3 Ultra 550B A55B (Reasoning)
@@ -23947,7 +24018,7 @@ evaluations:
 - id: independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-super
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Nemotron 3 Super 120B A12B (Reasoning)
@@ -24091,7 +24162,7 @@ evaluations:
 - id: independent/nemotron-3-nano-omni-30b-a3b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Nemotron 3 Nano Omni 30B A3B Reasoning
@@ -24145,7 +24216,7 @@ evaluations:
 - id: nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-cascade-2-30b-a3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: Nemotron-Cascade-2-30B-A3B
@@ -24263,6 +24334,25 @@ evaluations:
     verification: claimed
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md
     redistributable: true
+- id: nvidia/nemotron-3-super-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3-super
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    variant: NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    source_kind: official_reproducibility_documentation
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.7825
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://github.com/NVIDIA-NeMo/Nemotron/blob/907d408c67cb70e9f1ed28fb67702e7bd36e3239/docs/nemotron/super3/quantization.md
+    redistributable: true
 - id: mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0
   model: nvidia/nemotron-3-nano-30b-a3b
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -24340,7 +24430,7 @@ evaluations:
 - id: independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-nano-30b-a3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
@@ -24468,7 +24558,7 @@ evaluations:
 - id: independent/gpt-5-4-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.4 (none)
@@ -24558,7 +24648,7 @@ evaluations:
 - id: independent/gpt-5-4-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.4 (low)
@@ -24666,7 +24756,7 @@ evaluations:
 - id: independent/gpt-5-4-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.4 (xhigh)
@@ -24828,7 +24918,7 @@ evaluations:
 - id: independent/gpt-5-6-sol-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.6 Sol (high)
@@ -24990,7 +25080,7 @@ evaluations:
 - id: independent/gpt-5-6-sol-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.6 Sol (low)
@@ -25192,7 +25282,7 @@ evaluations:
 - id: independent/gpt-5-6-sol-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-5.6 Sol (max)
@@ -25354,7 +25444,7 @@ evaluations:
 - id: independent/gpt-5-6-sol-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.6 Sol (medium)
@@ -25516,7 +25606,7 @@ evaluations:
 - id: independent/gpt-5-6-sol-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.6 Sol (Non-reasoning)
@@ -25694,7 +25784,7 @@ evaluations:
 - id: independent/gpt-5-6-sol-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.6 Sol (xhigh)
@@ -25856,7 +25946,7 @@ evaluations:
 - id: independent/gpt-5-6-terra-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.6 Terra (high)
@@ -26018,7 +26108,7 @@ evaluations:
 - id: independent/gpt-5-6-terra-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.6 Terra (low)
@@ -26202,7 +26292,7 @@ evaluations:
 - id: independent/gpt-5-6-terra-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-5.6 Terra (max)
@@ -26364,7 +26454,7 @@ evaluations:
 - id: independent/gpt-5-6-terra-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.6 Terra (medium)
@@ -26508,7 +26598,7 @@ evaluations:
 - id: independent/gpt-5-6-terra-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.6 Terra (Non-reasoning)
@@ -26686,7 +26776,7 @@ evaluations:
 - id: independent/gpt-5-6-terra-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.6 Terra (xhigh)
@@ -26848,7 +26938,7 @@ evaluations:
 - id: independent/gpt-5-6-luna-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.6 Luna (high)
@@ -26992,7 +27082,7 @@ evaluations:
 - id: independent/gpt-5-6-luna-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.6 Luna (low)
@@ -27176,7 +27266,7 @@ evaluations:
 - id: independent/gpt-5-6-luna-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-5.6 Luna (max)
@@ -27338,7 +27428,7 @@ evaluations:
 - id: independent/gpt-5-6-luna-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.6 Luna (medium)
@@ -27482,7 +27572,7 @@ evaluations:
 - id: independent/gpt-5-6-luna-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.6 Luna (Non-reasoning)
@@ -27660,7 +27750,7 @@ evaluations:
 - id: independent/gpt-5-6-luna-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.6 Luna (xhigh)
@@ -27822,7 +27912,7 @@ evaluations:
 - id: independent/gpt-5-5-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.5 (high)
@@ -27966,7 +28056,7 @@ evaluations:
 - id: independent/gpt-5-5-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.5 (low)
@@ -28110,7 +28200,7 @@ evaluations:
 - id: independent/gpt-5-5-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.5 (medium)
@@ -28254,7 +28344,7 @@ evaluations:
 - id: independent/gpt-5-5-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.5 (Non-reasoning)
@@ -28326,7 +28416,7 @@ evaluations:
 - id: openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: GPT-5.5
@@ -28453,7 +28543,7 @@ evaluations:
 - id: independent/gpt-5-5-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.5 (xhigh)
@@ -28525,7 +28615,7 @@ evaluations:
 - id: openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: GPT-5.4 Thinking
@@ -28691,7 +28781,7 @@ evaluations:
 - id: independent/gpt-oss-120b-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-120b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: gpt-oss-120b (high)
@@ -28853,7 +28943,7 @@ evaluations:
 - id: independent/gpt-oss-120b-low-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-120b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: gpt-oss-120b (low)
@@ -28997,7 +29087,7 @@ evaluations:
 - id: independent/gpt-oss-20b-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-20b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: gpt-oss-20b (high)
@@ -29123,7 +29213,7 @@ evaluations:
 - id: independent/gpt-oss-20b-low-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-20b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: gpt-oss-20b (low)
@@ -29216,7 +29306,7 @@ evaluations:
 - id: openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-120b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: medium
   subject:
     variant: gpt-oss-120b
@@ -29310,7 +29400,7 @@ evaluations:
 - id: openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-20b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: medium
   subject:
     variant: gpt-oss-20b
@@ -29347,7 +29437,7 @@ evaluations:
 - id: independent/gpt-6-astra-low-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-6 Astra (low)
@@ -29429,7 +29519,7 @@ evaluations:
 - id: independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-6 Astra (medium)
@@ -29511,7 +29601,7 @@ evaluations:
 - id: independent/gpt-6-astra-high-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-6 Astra (high)
@@ -29593,7 +29683,7 @@ evaluations:
 - id: independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-6 Astra (xhigh)
@@ -29675,7 +29765,7 @@ evaluations:
 - id: independent/gpt-6-astra-max-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-6 Astra (max)
@@ -29997,7 +30087,7 @@ evaluations:
 - id: independent/qwen3-7-max-humanitys-last-exam@1.0.0
   model: qwen/qwen3.7-max
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: unspecified
   subject:
     source_model: Qwen3.7 Max
@@ -30141,7 +30231,7 @@ evaluations:
 - id: independent/qwen3-6-27b-humanitys-last-exam@1.0.0
   model: qwen/qwen3.6-27b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Qwen3.6 27B (Reasoning)
@@ -30285,7 +30375,7 @@ evaluations:
 - id: independent/qwen3-6-27b-non-reasoning-humanitys-last-exam@1.0.0
   model: qwen/qwen3.6-27b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Qwen3.6 27B (Non-reasoning)
@@ -30429,7 +30519,7 @@ evaluations:
 - id: independent/qwen3-6-35b-a3b-humanitys-last-exam@1.0.0
   model: qwen/qwen3.6-35b-a3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Qwen3.6 35B A3B (Reasoning)
@@ -30573,7 +30663,7 @@ evaluations:
 - id: independent/qwen3-6-35b-a3b-non-reasoning-humanitys-last-exam@1.0.0
   model: qwen/qwen3.6-35b-a3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: Qwen3.6 35B A3B (Non-reasoning)
@@ -30717,7 +30807,7 @@ evaluations:
 - id: independent/qwen3-8-max-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-max
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Qwen3.8 Max
@@ -30735,7 +30825,7 @@ evaluations:
 - id: qwen/qwen3.8-max-model-card-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-max
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: xhigh
   subject:
     variant: Qwen3.8-Max
@@ -30935,7 +31025,7 @@ evaluations:
 - id: independent/qwen3-8-27b-low-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-27b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Qwen3.8 27B (low)
@@ -31097,7 +31187,7 @@ evaluations:
 - id: independent/qwen3-8-27b-medium-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-27b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Qwen3.8 27B (medium)
@@ -31299,7 +31389,7 @@ evaluations:
 - id: independent/qwen3-8-27b-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-27b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Qwen3.8 27B (xhigh)
@@ -31317,7 +31407,7 @@ evaluations:
 - id: qwen/qwen3.8-27b-model-card-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-27b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: xhigh
   subject:
     variant: Qwen3.8-27B
@@ -31573,7 +31663,7 @@ evaluations:
 - id: independent/qwen3-8-flash-next-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-flash-next
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Qwen3.8-Flash-Next
@@ -31591,7 +31681,7 @@ evaluations:
 - id: qwen/qwen3.8-flash-next-model-card-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-flash-next
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: xhigh
   subject:
     variant: Qwen3.8-Flash-Next
@@ -31869,7 +31959,7 @@ evaluations:
 - id: independent/qwen3-8-2-4t-a95b-humanitys-last-exam@1.0.0
   model: qwen/qwen3.8-2.4t-a95b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Qwen3.8 2.4T A95B
@@ -32179,7 +32269,7 @@ evaluations:
 - id: independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0
   model: qwen/qwen3.5-397b-a17b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Qwen3.5 397B A17B (Reasoning)
@@ -32271,7 +32361,7 @@ evaluations:
 - id: independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0
   model: qwen/qwen3.5-122b-a10b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Qwen3.5 122B A10B (Reasoning)
@@ -32362,7 +32452,7 @@ evaluations:
 - id: independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0
   model: qwen/qwen3-235b-a22b-thinking-2507
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Qwen3 235B A22B 2507 (Reasoning)
@@ -32563,7 +32653,7 @@ evaluations:
 - id: independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0
   model: qwen/qwen3-30b-a3b-thinking-2507
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Qwen3 30B A3B 2507 (Reasoning)
@@ -32779,7 +32869,7 @@ evaluations:
 - id: independent/step-3.7-flash-high-humanitys-last-exam@1.0.0
   model: stepfun/step-3.7-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Step 3.7 Flash (high)
@@ -32923,7 +33013,7 @@ evaluations:
 - id: independent/step-3.5-flash-enabled-humanitys-last-exam@1.0.0
   model: stepfun/step-3.5-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Step 3.5 Flash (open weights)
@@ -33031,7 +33121,7 @@ evaluations:
 - id: independent/step3-vl-10b-enabled-humanitys-last-exam@1.0.0
   model: stepfun/step3-vl-10b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Step3-VL-10B
@@ -33230,7 +33320,7 @@ evaluations:
 - id: tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
   model: tencent/hy4-preview
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: Hy4 preview
@@ -33395,7 +33485,7 @@ evaluations:
 - id: independent/hy3-humanitys-last-exam@1.0.0
   model: tencent/hy3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Hy3
@@ -33413,7 +33503,7 @@ evaluations:
 - id: tencent/hy3-model-card-humanitys-last-exam@1.0.0
   model: tencent/hy3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: Hy3
@@ -33708,7 +33798,7 @@ evaluations:
 - id: independent/inkling-humanitys-last-exam@1.0.0
   model: thinking-machines/inkling
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
@@ -33726,7 +33816,7 @@ evaluations:
 - id: thinking-machines/inkling-model-card-humanitys-last-exam@1.0.0
   model: thinking-machines/inkling
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: max
   subject:
     variant: Inkling
@@ -33890,7 +33980,7 @@ evaluations:
 - id: thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0
   model: thinking-machines/inkling-small
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: max
   subject:
     variant: Inkling Small
@@ -34138,7 +34228,7 @@ evaluations:
 - id: independent/grok-4-3-non-reasoning-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: Grok 4.3 (non-reasoning)
@@ -34264,7 +34354,7 @@ evaluations:
 - id: independent/grok-4-3-low-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Grok 4.3 (low)
@@ -34354,7 +34444,7 @@ evaluations:
 - id: independent/grok-4-3-medium-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Grok 4.3 (medium)
@@ -34462,7 +34552,7 @@ evaluations:
 - id: independent/grok-4-3-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Grok 4.3 (high)
@@ -34646,7 +34736,7 @@ evaluations:
 - id: independent/grok-4-6-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Grok 4.6 (high)
@@ -34808,7 +34898,7 @@ evaluations:
 - id: independent/grok-4-6-low-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Grok 4.6 (low)
@@ -34970,7 +35060,7 @@ evaluations:
 - id: independent/grok-4-6-medium-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Grok 4.6 (medium)
@@ -35154,7 +35244,7 @@ evaluations:
 - id: independent/grok-4-6-xhigh-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Grok 4.6 (xhigh)
@@ -35316,7 +35406,7 @@ evaluations:
 - id: independent/grok-4-5-humanitys-last-exam@1.0.0
   model: xai/grok-4.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Grok 4.5 (high)
@@ -35502,7 +35592,7 @@ evaluations:
 - id: independent/mimo-v2-5-pro-non-reasoning-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: MiMo-V2.5-Pro (Non-reasoning)
@@ -35610,7 +35700,7 @@ evaluations:
 - id: independent/mimo-v2-5-pro-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiMo-V2.5-Pro
@@ -35628,7 +35718,7 @@ evaluations:
 - id: xiaomi/mimo-v2.5-pro-model-card-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: MiMo-V2.5-Pro
@@ -35844,7 +35934,7 @@ evaluations:
 - id: independent/mimo-v2-5-0424-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiMo-V2.5
@@ -36024,7 +36114,7 @@ evaluations:
 - id: independent/mimo-v2-flash-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: MiMo-V2-Flash (Non-reasoning)
@@ -36132,7 +36222,7 @@ evaluations:
 - id: independent/mimo-v2-flash-reasoning-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: MiMo-V2-Flash (Reasoning)
@@ -36150,7 +36240,7 @@ evaluations:
 - id: xiaomi/mimo-v2-flash-model-card-humanitys-last-exam@1.0.0
   model: xiaomi/mimo-v2-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: MiMo-V2-Flash
@@ -36370,7 +36460,7 @@ evaluations:
 - id: independent/glm-5-3-humanitys-last-exam@1.0.0
   model: zai/glm-5.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GLM-5.3 (max)
@@ -36626,7 +36716,7 @@ evaluations:
 - id: independent/glm-5-3-flash-humanitys-last-exam@1.0.0
   model: zai/glm-5.3-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GLM-5.3-Flash
@@ -36878,7 +36968,7 @@ evaluations:
 - id: independent/glm-5-2-non-reasoning-humanitys-last-exam@1.0.0
   model: zai/glm-5.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: GLM-5.2 (Non-reasoning)
@@ -37022,7 +37112,7 @@ evaluations:
 - id: independent/glm-5-2-humanitys-last-exam@1.0.0
   model: zai/glm-5.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GLM-5.2 (max)
@@ -37112,7 +37202,7 @@ evaluations:
 - id: zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
   model: zai/glm-5.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: GLM-5.2
@@ -37219,7 +37309,7 @@ evaluations:
 - id: independent/glm-5-1-non-reasoning-humanitys-last-exam@1.0.0
   model: zai/glm-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: GLM-5.1 (Non-reasoning)
@@ -37327,7 +37417,7 @@ evaluations:
 - id: independent/glm-5-1-humanitys-last-exam@1.0.0
   model: zai/glm-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: GLM-5.1 (Reasoning)
@@ -37522,8 +37612,8 @@ indices:
   - benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     weight: 0.5
     normalization:
       type: identity
@@ -37636,10 +37726,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/jamba-reasoning-3b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/jamba-reasoning-3b-gpqa-diamond@1.0.0
   - independent/jamba-reasoning-3b-humanitys-last-exam@1.0.0
@@ -37671,10 +37761,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/jamba-1-7-large-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/jamba-1-7-large-gpqa-diamond@1.0.0
   - independent/jamba-1-7-large-humanitys-last-exam@1.0.0
@@ -37706,10 +37796,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nova-2-0-lite-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nova-2-0-lite-reasoning-gpqa-diamond@1.0.0
   - independent/nova-2-0-lite-reasoning-humanitys-last-exam@1.0.0
@@ -37763,10 +37853,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nova-2-0-lite-reasoning-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nova-2-0-lite-reasoning-low-gpqa-diamond@1.0.0
   - independent/nova-2-0-lite-reasoning-low-humanitys-last-exam@1.0.0
@@ -37798,10 +37888,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nova-2-0-lite-reasoning-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nova-2-0-lite-reasoning-medium-gpqa-diamond@1.0.0
   - independent/nova-2-0-lite-reasoning-medium-humanitys-last-exam@1.0.0
@@ -37833,10 +37923,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nova-2-0-lite-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nova-2-0-lite-gpqa-diamond@1.0.0
   - independent/nova-2-0-lite-humanitys-last-exam@1.0.0
@@ -37868,10 +37958,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nova-premier-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nova-premier-gpqa-diamond@1.0.0
   - independent/nova-premier-humanitys-last-exam@1.0.0
@@ -37903,10 +37993,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nova-pro-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nova-pro-gpqa-diamond@1.0.0
   - independent/nova-pro-humanitys-last-exam@1.0.0
@@ -37938,10 +38028,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-fable-5-1-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-fable-5-1-low-gpqa-diamond@1.0.0
   - independent/claude-fable-5-1-low-humanitys-last-exam@1.0.0
@@ -37995,10 +38085,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-fable-5-1-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-fable-5-1-medium-gpqa-diamond@1.0.0
   - independent/claude-fable-5-1-medium-humanitys-last-exam@1.0.0
@@ -38052,10 +38142,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-fable-5-1-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-fable-5-1-high-gpqa-diamond@1.0.0
   - independent/claude-fable-5-1-high-humanitys-last-exam@1.0.0
@@ -38109,10 +38199,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-fable-5-1-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-fable-5-1-xhigh-gpqa-diamond@1.0.0
   - independent/claude-fable-5-1-xhigh-humanitys-last-exam@1.0.0
@@ -38166,10 +38256,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-fable-5-1-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-fable-5-1-gpqa-diamond@1.0.0
   - independent/claude-fable-5-1-humanitys-last-exam@1.0.0
@@ -38223,10 +38313,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-opus-5-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-opus-5-low-gpqa-diamond@1.0.0
   - independent/claude-opus-5-low-humanitys-last-exam@1.0.0
@@ -38280,10 +38370,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-opus-5-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-opus-5-medium-gpqa-diamond@1.0.0
   - independent/claude-opus-5-medium-humanitys-last-exam@1.0.0
@@ -38337,10 +38427,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-opus-5-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-opus-5-high-gpqa-diamond@1.0.0
   - independent/claude-opus-5-high-humanitys-last-exam@1.0.0
@@ -38394,10 +38484,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-opus-5-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-opus-5-xhigh-gpqa-diamond@1.0.0
   - independent/claude-opus-5-xhigh-humanitys-last-exam@1.0.0
@@ -38451,10 +38541,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-opus-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-opus-5-gpqa-diamond@1.0.0
   - independent/claude-opus-5-humanitys-last-exam@1.0.0
@@ -38530,10 +38620,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-sonnet-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-sonnet-5-gpqa-diamond@1.0.0
   - independent/claude-sonnet-5-humanitys-last-exam@1.0.0
@@ -38587,10 +38677,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-fable-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-fable-5-gpqa-diamond@1.0.0
   - independent/claude-fable-5-humanitys-last-exam@1.0.0
@@ -38688,10 +38778,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/claude-opus-4-8-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/claude-opus-4-8-gpqa-diamond@1.0.0
   - independent/claude-opus-4-8-humanitys-last-exam@1.0.0
@@ -38811,10 +38901,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/ernie-4.5-300b-a47b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/ernie-4.5-300b-a47b-gpqa-diamond@1.0.0
   - independent/ernie-4.5-300b-a47b-humanitys-last-exam@1.0.0
@@ -38865,41 +38955,6 @@ index_results:
   - bytedance/seed-2.1-turbo-model-card-terminal-bench@1.0.0
   domains:
     agentic_systems: 67.60000000000001
-- model: bytedance/seed-2.0-pro
-  reasoning_effort: unspecified
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 60.650000000000006
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.889
-    normalized: 0.889
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: bytedance/seed-2.0-pro-model-card-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.324
-    normalized: 0.324
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: bytedance/seed-2.0-pro-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - bytedance/seed-2.0-pro-model-card-gpqa-diamond@1.0.0
-  - bytedance/seed-2.0-pro-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 32.4
-    scientific_reasoning: 88.9
 - model: bytedance/seed-oss-36b-instruct
   reasoning_effort: default
   index: vllm-sr/general@1.0.0
@@ -38947,10 +39002,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/north-mini-code-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/north-mini-code-gpqa-diamond@1.0.0
   - independent/north-mini-code-humanitys-last-exam@1.0.0
@@ -39004,10 +39059,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/command-a-plus-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/command-a-plus-gpqa-diamond@1.0.0
   - independent/command-a-plus-humanitys-last-exam@1.0.0
@@ -39061,10 +39116,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/tiny-aya-global-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/tiny-aya-global-gpqa-diamond@1.0.0
   - independent/tiny-aya-global-humanitys-last-exam@1.0.0
@@ -39118,10 +39173,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v4-pro-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v4-pro-gpqa-diamond@1.0.0
   - independent/deepseek-v4-pro-humanitys-last-exam@1.0.0
@@ -39244,10 +39299,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v4-flash-0420-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v4-flash-0420-high-gpqa-diamond@1.0.0
   - independent/deepseek-v4-flash-0420-high-humanitys-last-exam@1.0.0
@@ -39323,10 +39378,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v4-flash-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v4-flash-gpqa-diamond@1.0.0
   - independent/deepseek-v4-flash-humanitys-last-exam@1.0.0
@@ -39449,10 +39504,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v3-2-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v3-2-gpqa-diamond@1.0.0
   - independent/deepseek-v3-2-humanitys-last-exam@1.0.0
@@ -39506,10 +39561,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v3-2-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v3-2-non-reasoning-gpqa-diamond@1.0.0
   - independent/deepseek-v3-2-non-reasoning-humanitys-last-exam@1.0.0
@@ -39563,10 +39618,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0
   - independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
@@ -39711,10 +39766,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v3-0324-gpqa-diamond@1.0.0
   - independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
@@ -39859,10 +39914,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-v3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-v3-gpqa-diamond@1.0.0
   - independent/deepseek-v3-humanitys-last-exam@1.0.0
@@ -40007,10 +40062,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/deepseek-r1-0120-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/deepseek-r1-0120-gpqa-diamond@1.0.0
   - independent/deepseek-r1-0120-humanitys-last-exam@1.0.0
@@ -40064,10 +40119,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemini-3-8-flash-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemini-3-8-flash-low-gpqa-diamond@1.0.0
   - independent/gemini-3-8-flash-low-humanitys-last-exam@1.0.0
@@ -40121,10 +40176,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemini-3-8-flash-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemini-3-8-flash-medium-gpqa-diamond@1.0.0
   - independent/gemini-3-8-flash-medium-humanitys-last-exam@1.0.0
@@ -40178,10 +40233,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemini-3-8-flash-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemini-3-8-flash-gpqa-diamond@1.0.0
   - independent/gemini-3-8-flash-humanitys-last-exam@1.0.0
@@ -40235,10 +40290,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemini-3-7-flash-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemini-3-7-flash-low-gpqa-diamond@1.0.0
   - independent/gemini-3-7-flash-low-humanitys-last-exam@1.0.0
@@ -40292,10 +40347,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemini-3-7-flash-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemini-3-7-flash-medium-gpqa-diamond@1.0.0
   - independent/gemini-3-7-flash-medium-humanitys-last-exam@1.0.0
@@ -40349,10 +40404,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemini-3-7-flash-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemini-3-7-flash-gpqa-diamond@1.0.0
   - independent/gemini-3-7-flash-humanitys-last-exam@1.0.0
@@ -40406,10 +40461,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemini-3-6-flash-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemini-3-6-flash-gpqa-diamond@1.0.0
   - independent/gemini-3-6-flash-humanitys-last-exam@1.0.0
@@ -40485,10 +40540,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemma-4-31b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemma-4-31b-gpqa-diamond@1.0.0
   - independent/gemma-4-31b-humanitys-last-exam@1.0.0
@@ -40611,10 +40666,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemma-4-31b-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemma-4-31b-non-reasoning-gpqa-diamond@1.0.0
   - independent/gemma-4-31b-non-reasoning-humanitys-last-exam@1.0.0
@@ -40690,10 +40745,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemma-3-27b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemma-3-27b-gpqa-diamond@1.0.0
   - independent/gemma-3-27b-humanitys-last-exam@1.0.0
@@ -40838,10 +40893,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gemma-3-12b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gemma-3-12b-gpqa-diamond@1.0.0
   - independent/gemma-3-12b-humanitys-last-exam@1.0.0
@@ -40895,10 +40950,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/muse-spark-1-3-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/muse-spark-1-3-xhigh-gpqa-diamond@1.0.0
   - independent/muse-spark-1-3-xhigh-humanitys-last-exam@1.0.0
@@ -40952,10 +41007,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/muse-spark-1-3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/muse-spark-1-3-gpqa-diamond@1.0.0
   - independent/muse-spark-1-3-humanitys-last-exam@1.0.0
@@ -41009,10 +41064,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/muse-spark-1-2-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/muse-spark-1-2-gpqa-diamond@1.0.0
   - independent/muse-spark-1-2-humanitys-last-exam@1.0.0
@@ -41066,10 +41121,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/muse-glimmer-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/muse-glimmer-gpqa-diamond@1.0.0
   - independent/muse-glimmer-humanitys-last-exam@1.0.0
@@ -41145,10 +41200,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/llama-4-maverick-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/llama-4-maverick-gpqa-diamond@1.0.0
   - independent/llama-4-maverick-humanitys-last-exam@1.0.0
@@ -41293,10 +41348,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/llama-4-scout-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/llama-4-scout-gpqa-diamond@1.0.0
   - independent/llama-4-scout-humanitys-last-exam@1.0.0
@@ -41372,10 +41427,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/minimax-m3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/minimax-m3-gpqa-diamond@1.0.0
   - independent/minimax-m3-humanitys-last-exam@1.0.0
@@ -41451,10 +41506,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/minimax-m2-7-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/minimax-m2-7-gpqa-diamond@1.0.0
   - independent/minimax-m2-7-humanitys-last-exam@1.0.0
@@ -41553,41 +41608,6 @@ index_results:
   - nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0
   - nvidia-comparative/minimax-m2.7-scicode@1.0.0
 - model: minimax/minimax-m2.5
-  reasoning_effort: default
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 52.300000000000004
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.852
-    normalized: 0.852
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.194
-    normalized: 0.194
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0
-  - minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 19.400000000000002
-    scientific_reasoning: 85.2
-- model: minimax/minimax-m2.5
   reasoning_effort: enabled
   index: vllm-sr/reasoning@1.0.0
   status: available
@@ -41612,10 +41632,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/minimax-m2-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/minimax-m2-5-gpqa-diamond@1.0.0
   - independent/minimax-m2-5-humanitys-last-exam@1.0.0
@@ -41647,10 +41667,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mistral-small-4-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mistral-small-4-gpqa-diamond@1.0.0
   - independent/mistral-small-4-humanitys-last-exam@1.0.0
@@ -41704,10 +41724,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mistral-small-4-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mistral-small-4-non-reasoning-gpqa-diamond@1.0.0
   - independent/mistral-small-4-non-reasoning-humanitys-last-exam@1.0.0
@@ -41739,10 +41759,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mistral-medium-3-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mistral-medium-3-5-gpqa-diamond@1.0.0
   - independent/mistral-medium-3-5-humanitys-last-exam@1.0.0
@@ -41796,10 +41816,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mistral-large-3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mistral-large-3-gpqa-diamond@1.0.0
   - independent/mistral-large-3-humanitys-last-exam@1.0.0
@@ -41875,10 +41895,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mistral-small-3.2-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mistral-small-3.2-gpqa-diamond@1.0.0
   - independent/mistral-small-3.2-humanitys-last-exam@1.0.0
@@ -42001,10 +42021,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/kimi-k3-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/kimi-k3-low-gpqa-diamond@1.0.0
   - independent/kimi-k3-low-humanitys-last-exam@1.0.0
@@ -42058,10 +42078,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/kimi-k3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/kimi-k3-gpqa-diamond@1.0.0
   - independent/kimi-k3-humanitys-last-exam@1.0.0
@@ -42115,10 +42135,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/kimi-k2-7-code-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/kimi-k2-7-code-gpqa-diamond@1.0.0
   - independent/kimi-k2-7-code-humanitys-last-exam@1.0.0
@@ -42194,10 +42214,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/kimi-k2-6-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/kimi-k2-6-gpqa-diamond@1.0.0
   - independent/kimi-k2-6-humanitys-last-exam@1.0.0
@@ -42320,10 +42340,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/kimi-k2-6-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/kimi-k2-6-non-reasoning-gpqa-diamond@1.0.0
   - independent/kimi-k2-6-non-reasoning-humanitys-last-exam@1.0.0
@@ -42377,10 +42397,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/kimi-k2-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/kimi-k2-5-gpqa-diamond@1.0.0
   - independent/kimi-k2-5-humanitys-last-exam@1.0.0
@@ -42503,10 +42523,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/kimi-k2-5-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/kimi-k2-5-non-reasoning-gpqa-diamond@1.0.0
   - independent/kimi-k2-5-non-reasoning-humanitys-last-exam@1.0.0
@@ -42535,41 +42555,6 @@ index_results:
   - nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0
   domains:
     general_reasoning: 81.94
-- model: nvidia/nemotron-3.5-lightning
-  reasoning_effort: enabled
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 43.58
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.7544
-    normalized: 0.7544
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: nvidia/nemotron-3.5-lightning-model-card-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.1172
-    normalized: 0.1172
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - nvidia/nemotron-3.5-lightning-model-card-gpqa-diamond@1.0.0
-  - nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 11.72
-    scientific_reasoning: 75.44
 - model: nvidia/nemotron-3.5-lightning
   reasoning_effort: enabled
   index: vllm-sr/agentic@1.0.0
@@ -42614,41 +42599,6 @@ index_results:
   - nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
   domains:
     general_reasoning: 86.8
-- model: nvidia/nemotron-3-ultra
-  reasoning_effort: high
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 57.00000000000001
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.879
-    normalized: 0.879
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.261
-    normalized: 0.261
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 26.1
-    scientific_reasoning: 87.9
 - model: nvidia/nemotron-3-ultra
   reasoning_effort: high
   index: vllm-sr/coding@1.0.0
@@ -42707,40 +42657,6 @@ index_results:
   domains:
     agentic_systems: 53.900000000000006
 - model: nvidia/nemotron-3-ultra
-  reasoning_effort: high
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 64.19
-  coverage: 1.0
-  components:
-  - weight: 0.2
-    status: available
-    value: 0.868
-    normalized: 0.868
-    index: vllm-sr/general@1.0.0
-  - weight: 0.4
-    status: available
-    value: 0.5700000000000001
-    normalized: 0.5700000000000001
-    index: vllm-sr/reasoning@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.6625
-    normalized: 0.6625
-    index: vllm-sr/coding@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.539
-    normalized: 0.539
-    index: vllm-sr/agentic@1.0.0
-  provenance:
-  - nvidia/nemotron-3-ultra-livecodebench-v6@1.0.0
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-scicode@1.0.0
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-terminal-bench@1.0.0
-- model: nvidia/nemotron-3-ultra
   reasoning_effort: enabled
   index: vllm-sr/reasoning@1.0.0
   status: available
@@ -42765,10 +42681,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nvidia-nemotron-3-ultra-550b-a55b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nvidia-nemotron-3-ultra-550b-a55b-gpqa-diamond@1.0.0
   - independent/nvidia-nemotron-3-ultra-550b-a55b-humanitys-last-exam@1.0.0
@@ -42844,16 +42760,51 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nvidia-nemotron-3-super-120b-a12b-gpqa-diamond@1.0.0
   - independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0
   domains:
     frontier_reasoning: 20.7599629286376
     scientific_reasoning: 80.0
+- model: nvidia/nemotron-3-super
+  reasoning_effort: enabled
+  index: vllm-sr/coding@1.0.0
+  status: available
+  score: 60.14999999999999
+  coverage: 1.0
+  components:
+  - weight: 0.5
+    status: available
+    value: 0.7825
+    normalized: 0.7825
+    benchmark: livecodebench/livecodebench@6.0.0
+    metric: pass_at_1
+    benchmark_profiles:
+    - independent-code-generation
+    - published-code-generation
+    evaluation: nvidia/nemotron-3-super-livecodebench-v6@1.0.0
+    benchmark_profile: published-code-generation
+  - weight: 0.5
+    status: available
+    value: 0.4205
+    normalized: 0.4205
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: nvidia/nemotron-3-super-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - nvidia/nemotron-3-super-livecodebench-v6@1.0.0
+  - nvidia/nemotron-3-super-model-card-scicode@1.0.0
+  domains:
+    competitive_programming: 78.25
+    scientific_coding: 42.05
 - model: nvidia/nemotron-3-super
   reasoning_effort: enabled
   index: vllm-sr/agentic@1.0.0
@@ -42876,6 +42827,40 @@ index_results:
   - independent/nvidia-nemotron-3-super-120b-a12b-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 38.5767790262172
+- model: nvidia/nemotron-3-super
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 56.64334839097096
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.8373
+    normalized: 0.8373
+    index: vllm-sr/general@1.0.0
+  - weight: 0.4
+    status: available
+    value: 0.503799814643188
+    normalized: 0.503799814643188
+    index: vllm-sr/reasoning@1.0.0
+  - weight: 0.2
+    status: available
+    value: 0.6014999999999999
+    normalized: 0.6014999999999999
+    index: vllm-sr/coding@1.0.0
+  - weight: 0.2
+    status: available
+    value: 0.385767790262172
+    normalized: 0.385767790262172
+    index: vllm-sr/agentic@1.0.0
+  provenance:
+  - independent/nvidia-nemotron-3-super-120b-a12b-gpqa-diamond@1.0.0
+  - independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0
+  - independent/nvidia-nemotron-3-super-120b-a12b-terminalbench-v2-1@1.0.0
+  - nvidia/nemotron-3-super-livecodebench-v6@1.0.0
+  - nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0
+  - nvidia/nemotron-3-super-model-card-scicode@1.0.0
 - model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
   reasoning_effort: enabled
   index: vllm-sr/reasoning@1.0.0
@@ -42901,10 +42886,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nemotron-3-nano-omni-30b-a3b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nemotron-3-nano-omni-30b-a3b-gpqa-diamond@1.0.0
   - independent/nemotron-3-nano-omni-30b-a3b-humanitys-last-exam@1.0.0
@@ -42955,41 +42940,6 @@ index_results:
   - nvidia/nemotron-cascade-2-model-card-mmlu-pro@1.0.0
   domains:
     general_reasoning: 79.80000000000001
-- model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: unspecified
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 46.9
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.761
-    normalized: 0.761
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.177
-    normalized: 0.177
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0
-  - nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 17.7
-    scientific_reasoning: 76.1
 - model: nvidia/nemotron-3-nano-30b-a3b
   reasoning_effort: enabled
   index: vllm-sr/general@1.0.0
@@ -43037,10 +42987,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0
   - independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
@@ -43163,10 +43113,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-6-astra-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-6-astra-low-gpqa-diamond@1.0.0
   - independent/gpt-6-astra-low-humanitys-last-exam@1.0.0
@@ -43220,10 +43170,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-6-astra-medium-gpqa-diamond@1.0.0
   - independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0
@@ -43277,10 +43227,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-6-astra-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-6-astra-high-gpqa-diamond@1.0.0
   - independent/gpt-6-astra-high-humanitys-last-exam@1.0.0
@@ -43334,10 +43284,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-6-astra-xhigh-gpqa-diamond@1.0.0
   - independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0
@@ -43391,10 +43341,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-6-astra-max-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-6-astra-max-gpqa-diamond@1.0.0
   - independent/gpt-6-astra-max-humanitys-last-exam@1.0.0
@@ -43448,10 +43398,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-sol-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-sol-low-gpqa-diamond@1.0.0
   - independent/gpt-5-6-sol-low-humanitys-last-exam@1.0.0
@@ -43505,10 +43455,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-sol-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-sol-medium-gpqa-diamond@1.0.0
   - independent/gpt-5-6-sol-medium-humanitys-last-exam@1.0.0
@@ -43562,10 +43512,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-sol-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-sol-high-gpqa-diamond@1.0.0
   - independent/gpt-5-6-sol-high-humanitys-last-exam@1.0.0
@@ -43619,10 +43569,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-sol-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-sol-xhigh-gpqa-diamond@1.0.0
   - independent/gpt-5-6-sol-xhigh-humanitys-last-exam@1.0.0
@@ -43676,10 +43626,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-sol-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-sol-gpqa-diamond@1.0.0
   - independent/gpt-5-6-sol-humanitys-last-exam@1.0.0
@@ -43733,10 +43683,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-sol-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-sol-non-reasoning-gpqa-diamond@1.0.0
   - independent/gpt-5-6-sol-non-reasoning-humanitys-last-exam@1.0.0
@@ -43812,10 +43762,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-terra-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-terra-low-gpqa-diamond@1.0.0
   - independent/gpt-5-6-terra-low-humanitys-last-exam@1.0.0
@@ -43869,10 +43819,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-terra-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-terra-medium-gpqa-diamond@1.0.0
   - independent/gpt-5-6-terra-medium-humanitys-last-exam@1.0.0
@@ -43926,10 +43876,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-terra-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-terra-high-gpqa-diamond@1.0.0
   - independent/gpt-5-6-terra-high-humanitys-last-exam@1.0.0
@@ -43983,10 +43933,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-terra-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-terra-xhigh-gpqa-diamond@1.0.0
   - independent/gpt-5-6-terra-xhigh-humanitys-last-exam@1.0.0
@@ -44040,10 +43990,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-terra-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-terra-gpqa-diamond@1.0.0
   - independent/gpt-5-6-terra-humanitys-last-exam@1.0.0
@@ -44097,10 +44047,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-terra-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-terra-non-reasoning-gpqa-diamond@1.0.0
   - independent/gpt-5-6-terra-non-reasoning-humanitys-last-exam@1.0.0
@@ -44176,10 +44126,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-luna-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-luna-low-gpqa-diamond@1.0.0
   - independent/gpt-5-6-luna-low-humanitys-last-exam@1.0.0
@@ -44233,10 +44183,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-luna-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-luna-medium-gpqa-diamond@1.0.0
   - independent/gpt-5-6-luna-medium-humanitys-last-exam@1.0.0
@@ -44290,10 +44240,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-luna-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-luna-high-gpqa-diamond@1.0.0
   - independent/gpt-5-6-luna-high-humanitys-last-exam@1.0.0
@@ -44347,10 +44297,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-luna-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-luna-xhigh-gpqa-diamond@1.0.0
   - independent/gpt-5-6-luna-xhigh-humanitys-last-exam@1.0.0
@@ -44404,10 +44354,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-luna-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-luna-gpqa-diamond@1.0.0
   - independent/gpt-5-6-luna-humanitys-last-exam@1.0.0
@@ -44461,10 +44411,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-6-luna-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-6-luna-non-reasoning-gpqa-diamond@1.0.0
   - independent/gpt-5-6-luna-non-reasoning-humanitys-last-exam@1.0.0
@@ -44540,10 +44490,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-5-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-5-low-gpqa-diamond@1.0.0
   - independent/gpt-5-5-low-humanitys-last-exam@1.0.0
@@ -44597,10 +44547,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-5-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-5-medium-gpqa-diamond@1.0.0
   - independent/gpt-5-5-medium-humanitys-last-exam@1.0.0
@@ -44654,10 +44604,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-5-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-5-high-gpqa-diamond@1.0.0
   - independent/gpt-5-5-high-humanitys-last-exam@1.0.0
@@ -44711,10 +44661,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-5-gpqa-diamond@1.0.0
   - independent/gpt-5-5-humanitys-last-exam@1.0.0
@@ -44768,10 +44718,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-5-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-5-non-reasoning-gpqa-diamond@1.0.0
   - independent/gpt-5-5-non-reasoning-humanitys-last-exam@1.0.0
@@ -44800,41 +44750,6 @@ index_results:
   - independent/gpt-5-5-non-reasoning-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 61.0486891385768
-- model: openai/gpt-5.5
-  reasoning_effort: unspecified
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 67.5
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.936
-    normalized: 0.936
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.414
-    normalized: 0.414
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0
-  - openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 41.4
-    scientific_reasoning: 93.60000000000001
 - model: openai/gpt-5.5
   reasoning_effort: unspecified
   index: vllm-sr/agentic@1.0.0
@@ -44882,10 +44797,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-4-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-4-low-gpqa-diamond@1.0.0
   - independent/gpt-5-4-low-humanitys-last-exam@1.0.0
@@ -44917,10 +44832,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-4-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-4-gpqa-diamond@1.0.0
   - independent/gpt-5-4-humanitys-last-exam@1.0.0
@@ -44974,51 +44889,16 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-5-4-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-5-4-non-reasoning-gpqa-diamond@1.0.0
   - independent/gpt-5-4-non-reasoning-humanitys-last-exam@1.0.0
   domains:
     frontier_reasoning: 11.2604263206673
     scientific_reasoning: 74.8484848484848
-- model: openai/gpt-5.4
-  reasoning_effort: unspecified
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 66.3
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.928
-    normalized: 0.928
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: openai/gpt-5.4-comparison-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.398
-    normalized: 0.398
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - openai/gpt-5.4-comparison-gpqa-diamond@1.0.0
-  - openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 39.800000000000004
-    scientific_reasoning: 92.80000000000001
 - model: openai/gpt-oss-120b
   reasoning_effort: low
   index: vllm-sr/reasoning@1.0.0
@@ -45044,10 +44924,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-oss-120b-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-oss-120b-low-gpqa-diamond@1.0.0
   - independent/gpt-oss-120b-low-humanitys-last-exam@1.0.0
@@ -45076,41 +44956,6 @@ index_results:
   - independent/gpt-oss-120b-low-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 13.8576779026217
-- model: openai/gpt-oss-120b
-  reasoning_effort: medium
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 40.849999999999994
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.731
-    normalized: 0.731
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.086
-    normalized: 0.086
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0
-  - openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 8.6
-    scientific_reasoning: 73.1
 - model: openai/gpt-oss-120b
   reasoning_effort: high
   index: vllm-sr/general@1.0.0
@@ -45158,10 +45003,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-oss-120b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-oss-120b-gpqa-diamond@1.0.0
   - independent/gpt-oss-120b-humanitys-last-exam@1.0.0
@@ -45284,51 +45129,16 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-oss-20b-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-oss-20b-low-gpqa-diamond@1.0.0
   - independent/gpt-oss-20b-low-humanitys-last-exam@1.0.0
   domains:
     frontier_reasoning: 5.28266913809083
     scientific_reasoning: 61.11111111111111
-- model: openai/gpt-oss-20b
-  reasoning_effort: medium
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 36.5
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.66
-    normalized: 0.66
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.07
-    normalized: 0.07
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0
-  - openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 7.000000000000001
-    scientific_reasoning: 66.0
 - model: openai/gpt-oss-20b
   reasoning_effort: high
   index: vllm-sr/general@1.0.0
@@ -45376,10 +45186,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/gpt-oss-20b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/gpt-oss-20b-gpqa-diamond@1.0.0
   - independent/gpt-oss-20b-humanitys-last-exam@1.0.0
@@ -45502,10 +45312,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-8-max-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-8-max-gpqa-diamond@1.0.0
   - independent/qwen3-8-max-humanitys-last-exam@1.0.0
@@ -45559,10 +45369,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-8-27b-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-8-27b-low-gpqa-diamond@1.0.0
   - independent/qwen3-8-27b-low-humanitys-last-exam@1.0.0
@@ -45616,10 +45426,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-8-27b-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-8-27b-medium-gpqa-diamond@1.0.0
   - independent/qwen3-8-27b-medium-humanitys-last-exam@1.0.0
@@ -45673,10 +45483,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-8-27b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-8-27b-gpqa-diamond@1.0.0
   - independent/qwen3-8-27b-humanitys-last-exam@1.0.0
@@ -45765,10 +45575,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-8-flash-next-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-8-flash-next-gpqa-diamond@1.0.0
   - independent/qwen3-8-flash-next-humanitys-last-exam@1.0.0
@@ -45857,10 +45667,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-8-2-4t-a95b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-8-2-4t-a95b-gpqa-diamond@1.0.0
   - independent/qwen3-8-2-4t-a95b-humanitys-last-exam@1.0.0
@@ -45914,10 +45724,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-7-max-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-7-max-gpqa-diamond@1.0.0
   - independent/qwen3-7-max-humanitys-last-exam@1.0.0
@@ -45971,10 +45781,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-6-27b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-6-27b-gpqa-diamond@1.0.0
   - independent/qwen3-6-27b-humanitys-last-exam@1.0.0
@@ -46028,10 +45838,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-6-27b-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-6-27b-non-reasoning-gpqa-diamond@1.0.0
   - independent/qwen3-6-27b-non-reasoning-humanitys-last-exam@1.0.0
@@ -46107,10 +45917,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-6-35b-a3b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-6-35b-a3b-gpqa-diamond@1.0.0
   - independent/qwen3-6-35b-a3b-humanitys-last-exam@1.0.0
@@ -46164,10 +45974,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-6-35b-a3b-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-6-35b-a3b-non-reasoning-gpqa-diamond@1.0.0
   - independent/qwen3-6-35b-a3b-non-reasoning-humanitys-last-exam@1.0.0
@@ -46265,10 +46075,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0
   - independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0
@@ -46413,10 +46223,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0
   - independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0
@@ -46561,10 +46371,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0
   - independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0
@@ -46709,10 +46519,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0
   - independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0
@@ -46835,10 +46645,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/step-3.7-flash-high-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/step-3.7-flash-high-gpqa-diamond@1.0.0
   - independent/step-3.7-flash-high-humanitys-last-exam@1.0.0
@@ -46892,10 +46702,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/step-3.5-flash-enabled-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/step-3.5-flash-enabled-gpqa-diamond@1.0.0
   - independent/step-3.5-flash-enabled-humanitys-last-exam@1.0.0
@@ -46927,51 +46737,16 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/step3-vl-10b-enabled-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/step3-vl-10b-enabled-gpqa-diamond@1.0.0
   - independent/step3-vl-10b-enabled-humanitys-last-exam@1.0.0
   domains:
     frontier_reasoning: 10.8433734939759
     scientific_reasoning: 68.989898989899
-- model: tencent/hy4-preview
-  reasoning_effort: high
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 67.85
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.923
-    normalized: 0.923
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: tencent/hy4-preview-model-card-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.434
-    normalized: 0.434
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - tencent/hy4-preview-model-card-gpqa-diamond@1.0.0
-  - tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 43.4
-    scientific_reasoning: 92.30000000000001
 - model: tencent/hy4-preview
   reasoning_effort: high
   index: vllm-sr/agentic@1.0.0
@@ -47019,10 +46794,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/hy3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/hy3-gpqa-diamond@1.0.0
   - independent/hy3-humanitys-last-exam@1.0.0
@@ -47098,10 +46873,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/inkling-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/inkling-gpqa-diamond@1.0.0
   - independent/inkling-humanitys-last-exam@1.0.0
@@ -47130,41 +46905,6 @@ index_results:
   - independent/inkling-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 55.0561797752809
-- model: thinking-machines/inkling-small
-  reasoning_effort: max
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 60.550000000000004
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.895
-    normalized: 0.895
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.316
-    normalized: 0.316
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0
-  - thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 31.6
-    scientific_reasoning: 89.5
 - model: thinking-machines/inkling-small
   reasoning_effort: max
   index: vllm-sr/agentic@1.0.0
@@ -47212,10 +46952,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-6-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-6-low-gpqa-diamond@1.0.0
   - independent/grok-4-6-low-humanitys-last-exam@1.0.0
@@ -47269,10 +47009,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-6-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-6-medium-gpqa-diamond@1.0.0
   - independent/grok-4-6-medium-humanitys-last-exam@1.0.0
@@ -47326,10 +47066,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-6-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-6-gpqa-diamond@1.0.0
   - independent/grok-4-6-humanitys-last-exam@1.0.0
@@ -47383,10 +47123,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-6-xhigh-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-6-xhigh-gpqa-diamond@1.0.0
   - independent/grok-4-6-xhigh-humanitys-last-exam@1.0.0
@@ -47440,10 +47180,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-5-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-5-gpqa-diamond@1.0.0
   - independent/grok-4-5-humanitys-last-exam@1.0.0
@@ -47497,10 +47237,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-3-low-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-3-low-gpqa-diamond@1.0.0
   - independent/grok-4-3-low-humanitys-last-exam@1.0.0
@@ -47532,10 +47272,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-3-medium-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-3-medium-gpqa-diamond@1.0.0
   - independent/grok-4-3-medium-humanitys-last-exam@1.0.0
@@ -47567,10 +47307,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-3-gpqa-diamond@1.0.0
   - independent/grok-4-3-humanitys-last-exam@1.0.0
@@ -47624,10 +47364,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/grok-4-3-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/grok-4-3-non-reasoning-gpqa-diamond@1.0.0
   - independent/grok-4-3-non-reasoning-humanitys-last-exam@1.0.0
@@ -47681,10 +47421,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mimo-v2-5-pro-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mimo-v2-5-pro-gpqa-diamond@1.0.0
   - independent/mimo-v2-5-pro-humanitys-last-exam@1.0.0
@@ -47738,10 +47478,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mimo-v2-5-pro-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mimo-v2-5-pro-non-reasoning-gpqa-diamond@1.0.0
   - independent/mimo-v2-5-pro-non-reasoning-humanitys-last-exam@1.0.0
@@ -47773,10 +47513,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mimo-v2-5-0424-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mimo-v2-5-0424-gpqa-diamond@1.0.0
   - independent/mimo-v2-5-0424-humanitys-last-exam@1.0.0
@@ -47852,10 +47592,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mimo-v2-flash-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mimo-v2-flash-reasoning-gpqa-diamond@1.0.0
   - independent/mimo-v2-flash-reasoning-humanitys-last-exam@1.0.0
@@ -47887,10 +47627,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/mimo-v2-flash-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/mimo-v2-flash-gpqa-diamond@1.0.0
   - independent/mimo-v2-flash-humanitys-last-exam@1.0.0
@@ -47944,10 +47684,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/glm-5-3-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/glm-5-3-gpqa-diamond@1.0.0
   - independent/glm-5-3-humanitys-last-exam@1.0.0
@@ -48023,10 +47763,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/glm-5-3-flash-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/glm-5-3-flash-gpqa-diamond@1.0.0
   - independent/glm-5-3-flash-humanitys-last-exam@1.0.0
@@ -48080,10 +47820,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/glm-5-2-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/glm-5-2-gpqa-diamond@1.0.0
   - independent/glm-5-2-humanitys-last-exam@1.0.0
@@ -48137,10 +47877,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/glm-5-2-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/glm-5-2-non-reasoning-gpqa-diamond@1.0.0
   - independent/glm-5-2-non-reasoning-humanitys-last-exam@1.0.0
@@ -48169,41 +47909,6 @@ index_results:
   - independent/glm-5-2-non-reasoning-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 51.685393258427005
-- model: zai/glm-5.2
-  reasoning_effort: unspecified
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 65.85000000000001
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.912
-    normalized: 0.912
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: zai/glm-5.2-model-card-gpqa-diamond@1.0.0
-    benchmark_profile: published-standard
-  - weight: 0.5
-    status: available
-    value: 0.405
-    normalized: 0.405
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - no-tools
-    evaluation: zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
-    benchmark_profile: no-tools
-  provenance:
-  - zai/glm-5.2-model-card-gpqa-diamond@1.0.0
-  - zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 40.5
-    scientific_reasoning: 91.2
 - model: zai/glm-5.2
   reasoning_effort: unspecified
   index: vllm-sr/agentic@1.0.0
@@ -48273,10 +47978,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/glm-5-1-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/glm-5-1-gpqa-diamond@1.0.0
   - independent/glm-5-1-humanitys-last-exam@1.0.0
@@ -48399,10 +48104,10 @@ index_results:
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
     benchmark_profiles:
-    - independent-standard
-    - no-tools
+    - independent-text-only
+    - text-only
     evaluation: independent/glm-5-1-non-reasoning-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-standard
+    benchmark_profile: independent-text-only
   provenance:
   - independent/glm-5-1-non-reasoning-gpqa-diamond@1.0.0
   - independent/glm-5-1-non-reasoning-humanitys-last-exam@1.0.0

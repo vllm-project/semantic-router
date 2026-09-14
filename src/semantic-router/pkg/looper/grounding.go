@@ -32,25 +32,17 @@ import (
 
 // NLIClassifyFunc returns the entailment and contradiction probabilities for the
 // hypothesis given the premise.
-type NLIClassifyFunc func(premise, hypothesis string) (entailment, contradiction float32, err error)
+type NLIClassifyFunc func(ctx context.Context, premise, hypothesis string) (entailment, contradiction float32, err error)
 
 // HallucinationDetectFunc returns the unsupported spans of answer relative to
 // context, plus the detector's confidence.
-type HallucinationDetectFunc func(context, question, answer string) (unsupportedSpans []string, confidence float32, err error)
+type HallucinationDetectFunc func(ctx context.Context, contextText, question, answer string) (unsupportedSpans []string, confidence float32, err error)
 
-// Backends are injected once at startup (see classification lifecycle) so the
-// candle/CGO dependency stays out of this package's import graph and the scoring
-// logic stays hermetically unit-testable.
-var (
-	groundingNLIClassify NLIClassifyFunc
-	groundingDetect      HallucinationDetectFunc
-)
-
-// SetGroundingBackends wires the NLI + hallucination detection backends used by
-// grounding-aware fusion. Safe to call again to replace them.
-func SetGroundingBackends(nli NLIClassifyFunc, detect HallucinationDetectFunc) {
-	groundingNLIClassify = nli
-	groundingDetect = detect
+// GroundingBackends belongs to the request's prepared recipe and generation.
+// Its model handles remain protected by the router's existing generation lease.
+type GroundingBackends struct {
+	NLI    NLIClassifyFunc
+	Detect HallucinationDetectFunc
 }
 
 // groundingScore captures the per-response groundedness outcome (parallel to the
@@ -75,6 +67,7 @@ type FusionGroundingTrace struct {
 // When grounding is disabled or unavailable (and on_error=skip), it returns the
 // panel unchanged so Fusion behaves exactly as before.
 func (l *FusionLooper) applyGrounding(
+	ctx context.Context,
 	req *Request,
 	cfg fusionExecutionConfig,
 	panel []*ModelResponse,
@@ -83,15 +76,22 @@ func (l *FusionLooper) applyGrounding(
 		return panel, nil, "", nil
 	}
 
+	backends := req.Grounding
+	if backends == nil {
+		backends = l.grounding
+	}
+	if backends == nil {
+		backends = &GroundingBackends{}
+	}
 	question := extractOriginalContent(req.OriginalRequest)
 	contextText := extractGroundingContext(req.OriginalRequest)
 	useContext := resolveGroundingReference(cfg.GroundingReference, contextText)
 
 	if useContext {
-		scores, err = scoreByContext(contextText, question, panel, cfg)
+		scores, err = scoreByContext(ctx, contextText, question, panel, cfg, backends.Detect)
 		referenceMode = config.FusionGroundingReferenceContext
 	} else {
-		scores, err = scoreByPanel(panel, cfg)
+		scores, err = scoreByPanel(ctx, panel, cfg, backends.NLI)
 		referenceMode = config.FusionGroundingReferencePanel
 	}
 	if err != nil {
@@ -156,8 +156,8 @@ const (
 // it — the panel as its own mutual reference. It routes through the shared
 // peer-consistency verifier contract (issue #2857); the scoring math is
 // unchanged.
-func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundingScore, error) {
-	if groundingNLIClassify == nil {
+func scoreByPanel(ctx context.Context, panel []*ModelResponse, cfg fusionExecutionConfig, nli NLIClassifyFunc) ([]groundingScore, error) {
+	if nli == nil {
 		return nil, fmt.Errorf("nli backend not configured")
 	}
 	penalty := cfg.GroundingNLIContradictionPenalty
@@ -165,8 +165,8 @@ func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundin
 		penalty = 1.0
 	}
 	candidates, idx := groundingVerifierCandidates(panel)
-	res, err := NewPeerConsistencyVerifier(groundingNLIClassify, penalty).
-		Verify(context.Background(), &VerifierRequest{Candidates: candidates})
+	res, err := NewPeerConsistencyVerifier(nli, penalty).
+		Verify(ctx, &VerifierRequest{Candidates: candidates})
 	if err != nil {
 		return nil, err
 	}
@@ -179,12 +179,12 @@ func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundin
 // chunked so the hypothesis is never truncated away: each hypothesis sentence
 // is scored against every bounded premise window and credited with its
 // best-supporting window, then averaged over sentences.
-func nliPairSignalWith(nli NLIClassifyFunc, premise, hypothesis string) (entail, contradict float64, err error) {
+func nliPairSignalWith(ctx context.Context, nli NLIClassifyFunc, premise, hypothesis string) (entail, contradict float64, err error) {
 	if nli == nil {
 		return 0, 0, fmt.Errorf("nli backend not configured")
 	}
 	if runeLen(premise)+runeLen(hypothesis) <= nliSingleCallBudget {
-		e, c, err := nli(premise, hypothesis)
+		e, c, err := nli(ctx, premise, hypothesis)
 		return float64(e), float64(c), err
 	}
 
@@ -192,7 +192,7 @@ func nliPairSignalWith(nli NLIClassifyFunc, premise, hypothesis string) (entail,
 	windows := chunkTextCapped(premise, nliPremiseWindowChars, nliMaxPremiseWindows)
 	if len(sentences) == 0 || len(windows) == 0 {
 		// Nothing usable to chunk; fall back to a single (truncated) call.
-		e, c, err := nli(premise, hypothesis)
+		e, c, err := nli(ctx, premise, hypothesis)
 		return float64(e), float64(c), err
 	}
 
@@ -202,7 +202,7 @@ func nliPairSignalWith(nli NLIClassifyFunc, premise, hypothesis string) (entail,
 		bestSignal := math.Inf(-1)
 		var bestE, bestC float64
 		for _, w := range windows {
-			e, c, err := nli(w, s)
+			e, c, err := nli(ctx, w, s)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -270,13 +270,13 @@ func truncateRunes(s string, max int) string {
 // scoreByContext scores each response by its faithfulness to the provided context
 // (fewer unsupported spans => higher score). It routes through the shared
 // faithfulness verifier contract (issue #2857); scoring is unchanged.
-func scoreByContext(contextText, question string, panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundingScore, error) {
-	if groundingDetect == nil {
+func scoreByContext(ctx context.Context, contextText, question string, panel []*ModelResponse, cfg fusionExecutionConfig, detect HallucinationDetectFunc) ([]groundingScore, error) {
+	if detect == nil {
 		return nil, fmt.Errorf("hallucination detector backend not configured")
 	}
 	candidates, idx := groundingVerifierCandidates(panel)
-	res, err := NewFaithfulnessVerifier(groundingDetect).
-		Verify(context.Background(), &VerifierRequest{Task: question, TrustedContext: contextText, Candidates: candidates})
+	res, err := NewFaithfulnessVerifier(detect).
+		Verify(ctx, &VerifierRequest{Task: question, TrustedContext: contextText, Candidates: candidates})
 	if err != nil {
 		return nil, err
 	}

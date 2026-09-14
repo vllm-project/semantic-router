@@ -30,7 +30,7 @@ For a reviewed YAML workflow, copy a built-in bundle before changing provider
 bindings, replicas, routing rules, or entrypoints:
 
 ```bash
-vllm-sr validate --config mom-custom.yaml
+vllm-sr config validate --config mom-custom.yaml
 vllm-sr serve --config mom-custom.yaml
 ```
 

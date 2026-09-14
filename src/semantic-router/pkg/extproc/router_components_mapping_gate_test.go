@@ -11,24 +11,18 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestLoadClassifierMappingsSkipsUnusedCoreSignals(t *testing.T) {
+func TestBuildRouterComponentsSkipsUnusedCoreSignals(t *testing.T) {
 	cfg := newCoreSignalMappingGateConfig(t)
-
-	mappings, err := loadClassifierMappings(cfg)
-	require.NoError(t, err)
-	require.NotNil(t, mappings)
-	require.Nil(t, mappings.categoryMapping)
-	require.Nil(t, mappings.piiMapping)
-	require.Nil(t, mappings.jailbreakMapping)
 
 	components, err := buildRouterComponents(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, components)
 	require.NotNil(t, components.classifier)
 	require.NotNil(t, components.classificationSvc)
+	t.Cleanup(func() { require.NoError(t, components.resources.close()) })
 }
 
-func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
+func TestBuildRouterComponentsRequiresUsedCoreSignalMappings(t *testing.T) {
 	tests := []struct {
 		name        string
 		rule        config.RuleNode
@@ -61,7 +55,8 @@ func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
 				}},
 			}}
 
-			_, err := loadClassifierMappings(cfg)
+			components, err := buildRouterComponents(cfg)
+			require.Nil(t, components)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.wantErrPart)
 		})

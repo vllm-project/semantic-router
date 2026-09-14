@@ -113,7 +113,7 @@
 - id: independent/glm-5-3-humanitys-last-exam@1.0.0
   model: zai/glm-5.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GLM-5.3 (max)
@@ -369,7 +369,7 @@
 - id: independent/glm-5-3-flash-humanitys-last-exam@1.0.0
   model: zai/glm-5.3-flash
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GLM-5.3-Flash
@@ -621,7 +621,7 @@
 - id: independent/glm-5-2-non-reasoning-humanitys-last-exam@1.0.0
   model: zai/glm-5.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: GLM-5.2 (Non-reasoning)
@@ -765,7 +765,7 @@
 - id: independent/glm-5-2-humanitys-last-exam@1.0.0
   model: zai/glm-5.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GLM-5.2 (max)
@@ -855,7 +855,7 @@
 - id: zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
   model: zai/glm-5.2
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: GLM-5.2
@@ -962,7 +962,7 @@
 - id: independent/glm-5-1-non-reasoning-humanitys-last-exam@1.0.0
   model: zai/glm-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: disabled
   subject:
     source_model: GLM-5.1 (Non-reasoning)
@@ -1070,7 +1070,7 @@
 - id: independent/glm-5-1-humanitys-last-exam@1.0.0
   model: zai/glm-5.1
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: GLM-5.1 (Reasoning)

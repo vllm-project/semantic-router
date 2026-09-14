@@ -25,7 +25,7 @@ import (
 )
 
 func TestFaithfulnessVerifierScoresBySpanCount(t *testing.T) {
-	v := NewFaithfulnessVerifier(func(contextText, question, answer string) ([]string, float32, error) {
+	v := NewFaithfulnessVerifier(func(_ context.Context, contextText, question, answer string) ([]string, float32, error) {
 		if strings.Contains(answer, "bad") {
 			return []string{"unsupported-1", "unsupported-2"}, 0.4, nil
 		}
@@ -71,7 +71,7 @@ func TestFaithfulnessVerifierNilBackendIsTyped(t *testing.T) {
 }
 
 func TestPeerConsistencyVerifierMeanScoringAndFlags(t *testing.T) {
-	nli := func(premise, hypothesis string) (float32, float32, error) {
+	nli := func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
 		if strings.Contains(hypothesis, "bad") {
 			return 0.1, 0.8, nil
 		}
@@ -107,7 +107,7 @@ func TestPeerConsistencyVerifierMeanScoringAndFlags(t *testing.T) {
 }
 
 func TestPeerConsistencyVerifierAbstainsWithoutPeers(t *testing.T) {
-	nli := func(_, _ string) (float32, float32, error) { return 0.6, 0.3, nil }
+	nli := func(_ context.Context, _, _ string) (float32, float32, error) { return 0.6, 0.3, nil }
 	v := NewPeerConsistencyVerifier(nli, 1.0)
 	res, err := v.Verify(context.Background(), &VerifierRequest{Candidates: []VerifierCandidate{
 		{ID: "p0", Content: "only one"},

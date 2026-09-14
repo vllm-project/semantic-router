@@ -6,7 +6,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-CANONICAL_VERSION = "v0.3"
+from cli.config_schema import routing_surface_catalog, schema_document
+
+CANONICAL_VERSION = str(routing_surface_catalog()["config_version"])
 
 CLASSIFIER_TYPE_LOCAL = "local"
 CLASSIFIER_TYPE_LLM = "llm"
@@ -23,18 +25,7 @@ UnknownPolicy = Literal["no_match", "match", "fail_request"]
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
 
-CANONICAL_TOP_LEVEL_KEYS = frozenset(
-    {
-        "version",
-        "listeners",
-        "providers",
-        "routing",
-        "entrypoints",
-        "recipes",
-        "global",
-        "setup",
-    }
-)
+CANONICAL_TOP_LEVEL_KEYS = frozenset(schema_document()["properties"])
 
 LEGACY_PROVIDER_DEFAULT_KEYS = (
     "default_model",
@@ -74,48 +65,64 @@ class SignalFamilySpec:
     canonical_key: str
     signal_attr: str
     condition_type: str
+    display_name: str
     legacy_key: str | None = None
     reference_suffixes: tuple[str, ...] = ()
 
 
-SIGNAL_FAMILY_SPECS = (
-    SignalFamilySpec("keywords", "keywords", "keyword", "keyword_rules"),
-    SignalFamilySpec("embeddings", "embeddings", "embedding", "embedding_rules"),
-    SignalFamilySpec("domains", "domains", CONDITION_TYPE_DOMAIN, "categories"),
-    SignalFamilySpec("fact_check", "fact_check", "fact_check", "fact_check_rules"),
+@dataclass(frozen=True)
+class ProjectionFamilySpec:
+    """Canonical inventory for one derived-routing collection."""
+
+    canonical_key: str
+    projection_attr: str
+    display_name: str
+
+
+_LEGACY_SIGNAL_KEYS = {
+    "keywords": "keyword_rules",
+    "embeddings": "embedding_rules",
+    "domains": "categories",
+    "fact_check": "fact_check_rules",
+    "user_feedbacks": "user_feedback_rules",
+    "reasks": "reask_rules",
+    "preferences": "preference_rules",
+    "language": "language_rules",
+    "context": "context_rules",
+    "structure": "structure_rules",
+    "complexity": "complexity_rules",
+    "modality": "modality_rules",
+    "role_bindings": "role_bindings",
+    "jailbreak": "jailbreak",
+    "hallucination": "hallucination",
+    "pii": "pii",
+    "kb": "kb",
+    "conversation": "conversation",
+    "events": "events",
+    "metadata": "metadata",
+    "classifiers": "classifiers",
+    "input_modality": "input_modality",
+}
+
+SIGNAL_FAMILY_SPECS = tuple(
     SignalFamilySpec(
-        "user_feedbacks",
-        "user_feedbacks",
-        "user_feedback",
-        "user_feedback_rules",
-    ),
-    SignalFamilySpec("reasks", "reasks", "reask", "reask_rules"),
-    SignalFamilySpec("preferences", "preferences", "preference", "preference_rules"),
-    SignalFamilySpec("language", "language", "language", "language_rules"),
-    SignalFamilySpec("context", "context", "context", "context_rules"),
-    SignalFamilySpec("structure", "structure", "structure", "structure_rules"),
-    SignalFamilySpec(
-        "complexity",
-        "complexity",
-        "complexity",
-        "complexity_rules",
-        ("easy", "medium", "hard"),
-    ),
-    SignalFamilySpec("modality", "modality", "modality", "modality_rules"),
-    SignalFamilySpec("role_bindings", "role_bindings", "authz", "role_bindings"),
-    SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
-    SignalFamilySpec(
-        "hallucination", "hallucination", "hallucination", "hallucination"
-    ),
-    SignalFamilySpec("pii", "pii", "pii", "pii"),
-    SignalFamilySpec("kb", "kb", "kb", "kb"),
-    SignalFamilySpec("conversation", "conversation", "conversation", "conversation"),
-    SignalFamilySpec("events", "events", "event", "events"),
-    SignalFamilySpec("metadata", "metadata", "metadata", "metadata"),
-    SignalFamilySpec("classifiers", "classifiers", "classifier", "classifiers"),
-    SignalFamilySpec(
-        "input_modality", "input_modality", "input_modality", "input_modality"
-    ),
+        canonical_key=surface["collection"],
+        signal_attr=surface["collection"],
+        condition_type=surface["type"],
+        display_name=surface["display_name"],
+        legacy_key=_LEGACY_SIGNAL_KEYS.get(surface["collection"]),
+        reference_suffixes=tuple(surface.get("reference_suffixes", ())),
+    )
+    for surface in routing_surface_catalog()["signals"]
+)
+
+PROJECTION_FAMILY_SPECS = tuple(
+    ProjectionFamilySpec(
+        canonical_key=surface["collection"],
+        projection_attr=surface["collection"],
+        display_name=surface["display_name"],
+    )
+    for surface in routing_surface_catalog()["projections"]
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {

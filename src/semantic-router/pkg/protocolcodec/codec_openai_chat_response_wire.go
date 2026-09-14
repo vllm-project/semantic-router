@@ -9,29 +9,30 @@ import (
 )
 
 type chatResponseWire struct {
-	ID                string                    `json:"id"`
-	Object            string                    `json:"object,omitempty"`
-	Created           int64                     `json:"created"`
-	Model             string                    `json:"model"`
-	Choices           []chatChoiceWire          `json:"choices"`
-	Usage             *chatUsageWire            `json:"usage,omitempty"`
-	Metadata          map[string]string         `json:"metadata,omitempty"`
-	Moderation        json.RawMessage           `json:"moderation,omitempty"`
-	Error             *chatErrorWire            `json:"error,omitempty"`
-	ServiceTier       *chatServiceTierWire      `json:"service_tier,omitempty"`
-	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
-	PromptLogprobs    *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
-	PromptTokenIDs    []int64                   `json:"prompt_token_ids,omitempty"`
-	PromptText        *chatNullOnlyWire         `json:"prompt_text,omitempty"`
-	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
-	ECTransferParams  *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
-	Metrics           *chatNullOnlyWire         `json:"metrics,omitempty"`
-	DoRemoteDecode    *bool                     `json:"do_remote_decode,omitempty"`
-	DoRemotePrefill   *bool                     `json:"do_remote_prefill,omitempty"`
-	RemoteBlockIDs    []int64                   `json:"remote_block_ids,omitempty"`
-	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
-	RemoteHost        *string                   `json:"remote_host,omitempty"`
-	RemotePort        *int64                    `json:"remote_port,omitempty"`
+	ID                  string                    `json:"id"`
+	Object              string                    `json:"object,omitempty"`
+	Created             int64                     `json:"created"`
+	Model               string                    `json:"model"`
+	Choices             []chatChoiceWire          `json:"choices"`
+	Usage               *chatUsageWire            `json:"usage,omitempty"`
+	Metadata            map[string]string         `json:"metadata,omitempty"`
+	Moderation          json.RawMessage           `json:"moderation,omitempty"`
+	Error               *chatErrorWire            `json:"error,omitempty"`
+	ServiceTier         *chatServiceTierWire      `json:"service_tier,omitempty"`
+	SystemFingerprint   *string                   `json:"system_fingerprint,omitempty"`
+	PromptLogprobs      *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
+	PromptTokenIDs      []int64                   `json:"prompt_token_ids,omitempty"`
+	PromptText          *chatNullOnlyWire         `json:"prompt_text,omitempty"`
+	PromptRoutedExperts *chatNullOnlyWire         `json:"prompt_routed_experts,omitempty"`
+	KVTransferParams    *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
+	ECTransferParams    *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
+	Metrics             *chatNullOnlyWire         `json:"metrics,omitempty"`
+	DoRemoteDecode      *bool                     `json:"do_remote_decode,omitempty"`
+	DoRemotePrefill     *bool                     `json:"do_remote_prefill,omitempty"`
+	RemoteBlockIDs      []int64                   `json:"remote_block_ids,omitempty"`
+	RemoteEngineID      *string                   `json:"remote_engine_id,omitempty"`
+	RemoteHost          *string                   `json:"remote_host,omitempty"`
+	RemotePort          *int64                    `json:"remote_port,omitempty"`
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response

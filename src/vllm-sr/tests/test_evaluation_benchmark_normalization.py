@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 from benchmark_normalization_fixtures import BUILDERS, write_native_fixture
-from cli.commands.eval import eval
+from cli.commands.benchmark import benchmark
 from cli.evaluation.benchmark_normalization import normalize_benchmark_suite
 from cli.evaluation.benchmark_normalization_io import NormalizationError
 from cli.evaluation.benchmark_normalization_registry import (
@@ -522,7 +522,7 @@ def test_suite_normalize_cli_materializes_current_contract(
     write_native_fixture("routerarena", export_root)
     runner = CliRunner()
     result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-normalize",
             "--adapter",
@@ -543,7 +543,7 @@ def test_suite_normalize_cli_materializes_current_contract(
     assert (output_root / "request.json").is_file()
     assert (output_root / "bundle/grading/outcomes.jsonl").is_file()
     install = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-install",
             "--request",
@@ -572,7 +572,7 @@ def test_suite_normalize_cli_materializes_current_contract(
 
 
 def test_normalizer_cli_runnable_surface_excludes_blocked_adapters() -> None:
-    result = CliRunner().invoke(eval, ["normalizers", "--runnable-only"])
+    result = CliRunner().invoke(benchmark, ["normalizers", "--runnable-only"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     adapter_ids = {item["adapter_id"] for item in payload["normalizers"]}

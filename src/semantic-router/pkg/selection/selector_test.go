@@ -332,6 +332,48 @@ func TestStaticSelector_Select(t *testing.T) {
 	}
 }
 
+func TestStaticSelectorScoresByMatchedDomain(t *testing.T) {
+	selector := NewStaticSelector(DefaultStaticConfig())
+	selector.InitializeFromConfig([]config.Category{
+		{
+			CategoryMetadata: config.CategoryMetadata{Name: "business"},
+			ModelScores: []config.ModelScore{
+				{Model: "small", Score: 0.2},
+				{Model: "large", Score: 0.9},
+			},
+		},
+		{CategoryMetadata: config.CategoryMetadata{Name: "unscored"}},
+	})
+
+	tests := []struct {
+		name         string
+		decisionName string
+		categoryName string
+		want         string
+	}{
+		{name: "decision named differently from the matched domain", decisionName: "business_route", categoryName: "business", want: "large"},
+		{name: "decision named after the domain without a category", decisionName: "business", want: "large"},
+		{name: "matched domain without scores falls back to the decision", decisionName: "business", categoryName: "unscored", want: "large"},
+		{name: "no scores for decision or domain", decisionName: "other_route", categoryName: "unscored", want: "small"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := selector.Select(context.Background(), &SelectionContext{
+				DecisionName:    tt.decisionName,
+				CategoryName:    tt.categoryName,
+				CandidateModels: createCandidateModels("small", "large"),
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.SelectedModel != tt.want {
+				t.Errorf("expected %s, got %s (scores %v)", tt.want, result.SelectedModel, result.AllScores)
+			}
+		})
+	}
+}
+
 func TestRegistry(t *testing.T) {
 	registry := NewRegistry()
 

@@ -2,6 +2,7 @@
 
 import importlib
 import sys
+import tempfile
 import threading
 import time
 import unittest
@@ -19,6 +20,58 @@ router_calibration_loop = importlib.import_module("router_calibration_loop")
 
 
 class RecipeScopedProbeRuntimeTest(unittest.TestCase):
+    def test_run_stops_before_deploy_when_validation_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            report_dir = Path(temp_dir) / "report"
+            args = SimpleNamespace(
+                report_dir=str(report_dir),
+                probes="probes.yaml",
+                yaml="candidate.yaml",
+                dsl=None,
+                router_url="http://router.example:8080",
+                skip_validate=False,
+                ready_timeout=30.0,
+                ready_interval=1.0,
+            )
+            pre_eval = {
+                "passed": True,
+                "success_rate": 100.0,
+                "decision_success_rate": 100.0,
+            }
+            with (
+                mock.patch.object(
+                    router_calibration_loop,
+                    "load_probe_manifest",
+                    return_value=({"schema_version": "v1"}, []),
+                ),
+                mock.patch.object(
+                    router_calibration_loop,
+                    "resolve_manifest_assets",
+                    return_value=(Path("candidate.yaml"), None),
+                ),
+                mock.patch.object(
+                    router_calibration_loop,
+                    "fetch_router_snapshot",
+                    return_value={"config": "before"},
+                ),
+                mock.patch.object(
+                    router_calibration_loop,
+                    "evaluate_probes",
+                    return_value=pre_eval,
+                ),
+                mock.patch.object(
+                    router_calibration_loop,
+                    "run_validate",
+                    return_value={"valid": False, "errors": ["invalid"]},
+                ),
+                mock.patch.object(router_calibration_loop, "deploy_config") as deploy,
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(router_calibration_loop.cmd_run(args), 1)
+
+            deploy.assert_not_called()
+            self.assertTrue((report_dir / "validate.json").is_file())
+
     def test_evaluate_probes_rejects_unknown_selected_id_before_network(self) -> None:
         probe = router_calibration_manifest.Probe(
             decision_id="direct",
@@ -253,6 +306,27 @@ class RecipeScopedProbeRuntimeTest(unittest.TestCase):
             args.probe_ids,
             ["workflow:tool_workstreams", "direct:baseline"],
         )
+
+    def test_dsl_is_only_exposed_where_it_is_consumed(self) -> None:
+        parser = router_calibration_loop.build_parser()
+        commands = next(
+            action for action in parser._actions if action.dest == "command"
+        )
+
+        deploy_options = {
+            option
+            for action in commands.choices["deploy"]._actions
+            for option in action.option_strings
+        }
+        self.assertNotIn("--dsl", deploy_options)
+
+        run_dsl = next(
+            action
+            for action in commands.choices["run"]._actions
+            if "--dsl" in action.option_strings
+        )
+        self.assertIn("local validation", run_dsl.help)
+        self.assertNotIn("archive", run_dsl.help)
 
     def test_tag_summary_groups_cross_cutting_robustness_axes(self) -> None:
         summaries = router_calibration_manifest.summarize_tag_results(

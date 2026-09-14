@@ -2,28 +2,37 @@
 
 ## Overview
 
-`fusion` asks several models to analyze a request and a judge model to
-synthesize one final answer.
+`fusion` asks several models to answer a request and a judge model to synthesize
+one final answer. The recipe-owned `analysis_mode` chooses whether the judge
+uses a separate structured analysis call, combines analysis and synthesis in
+one call, or synthesizes directly. The compatibility default is `separate`.
 
 The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
 
 ## Key Advantages
 
 - Runs analysis models concurrently instead of choosing only one model.
-- Produces structured judge analysis before final synthesis.
+- Supports explicit `separate`, `one_call`, and `none` judge execution modes.
 - Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
-- Lets clients override the judge, analysis panel, templates, trace flags, and
-  grounding policy per request with `plugins[].id = fusion`.
+- Keeps judge, panel, budget, prompt, trace, fallback, and grounding policy
+  under recipe ownership.
 - Continues after partial panel failures only when the remaining usable
   responses meet quorum, while preserving failed model metadata.
 
 ## Algorithm Principle
 
-Fusion executes a three-stage flow:
+Fusion always executes the panel first, then follows the decision's explicit
+analysis mode:
 
-1. **Panel**: dispatch the original request to the configured analysis models in parallel and require the configured usable-response quorum.
-2. **Judge analysis**: ask the judge model for structured JSON covering consensus, contradictions, partial coverage, unique insights, and blind spots.
-3. **Final synthesis**: ask the judge/calling model to write the user-facing answer using the panel responses and structured analysis.
+| Mode | Judge stages after the panel | Judge calls |
+|------|------------------------------|-------------|
+| `separate` | Tool-free structured JSON analysis, then tool-capable final synthesis | 2 |
+| `one_call` | One tool-capable call that compares the panel, resolves contradictions, and returns the final answer | 1 |
+| `none` | One tool-capable call that synthesizes directly from the panel without requesting a distinct analysis artifact | 1 |
+
+`include_analysis` controls only whether an available structured analysis is
+included in the Fusion trace. It never selects a mode or changes the number of
+model calls.
 
 A panel response is usable only when its assistant `content` or
 `reasoning_content` is non-empty after trimming whitespace. Fusion checks
@@ -47,23 +56,24 @@ flowchart TD
     C --> E{Matched decision uses algorithm.type=fusion?}
     D --> F{Matched Fusion decision?}
     E -- No --> G[Use normal selected route]
-    E -- Yes --> H[Resolve Fusion execution config]
+    E -- Yes --> H[Resolve recipe-owned Fusion config]
     F -- Yes --> H
-    F -- No --> I{Request plugin has analysis_models?}
-    I -- No --> J[Return no eligible Fusion decision error]
-    I -- Yes --> K[Build request-scoped fusion_direct decision]
-    K --> H
-    H --> L[Apply request plugin overrides]
-    L --> M[Run analysis panel concurrently]
+    F -- No --> J[Return no eligible Fusion decision error]
+    H --> M[Run analysis panel concurrently]
     M --> N{Usable responses meet quorum?}
     N -- No --> O[Return typed Fusion quorum error]
     N -- Yes --> P[Apply optional grounding]
-    P --> Q[Judge structured analysis]
-    Q --> R{JSON parsed?}
-    R -- Yes --> S[Final synthesis with structured analysis]
-    R -- No --> T[Final synthesis from raw panel responses]
-    S --> U[Return final answer + optional fusion trace]
-    T --> U
+    P --> Q{analysis_mode}
+    Q -- separate --> R[Tool-free structured analysis]
+    R --> S{JSON parsed?}
+    S -- Yes --> T[Final synthesis with structured analysis]
+    S -- No --> U[Final synthesis from panel responses]
+    Q -- one_call --> V[Combined comparison + final synthesis]
+    Q -- none --> W[Direct final synthesis]
+    T --> X[Return final answer + optional fusion trace]
+    U --> X
+    V --> X
+    W --> X
 ```
 
 ## What Problem Does It Solve?
@@ -75,7 +85,6 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 - You want a panel of models to inspect the same prompt.
 - Contradictions or blind spots matter more than lowest latency.
 - A route should return one final answer but retain panel evidence for debugging.
-- Clients need an OpenRouter-style request override for panel composition.
 
 ## Known Limitations
 
@@ -105,6 +114,7 @@ routing:
           analysis_models:
             - qwen3-32b
             - deepseek-worker
+          analysis_mode: separate
           analysis_overrides:
             - model: qwen3-32b
               temperature: 0.15
@@ -133,6 +143,7 @@ algorithm:
     analysis_models:
       - qwen3-8b
       - qwen3-32b
+    analysis_mode: separate
     analysis_overrides:
       - model: qwen3-8b
         temperature: 0.2
@@ -179,9 +190,14 @@ global:
 
 `global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
 
-The judge model, analysis panel, concurrency, templates, and error policy belong under `routing.decisions[].algorithm.fusion`. Direct slug calls evaluate only Fusion-capable decisions, so `vllm-sr/fusion` cannot silently fall back to a normal single-model route. Request-level `plugins[].id = fusion` can still override the decision panel for one call; if no Fusion decision matched, a plugin override with `analysis_models` can provide a request-only panel.
-
-`analysis_overrides` are keyed by `model` and merge field-wise with decision-level settings. In practice, if decision config sets `{temperature: 0.2}` for `panel-a` and request override sets only `{max_completion_tokens: 100}`, `panel-a` keeps `temperature: 0.2` and adds `max_completion_tokens: 100`.
+The judge model, analysis panel, analysis mode, sampling settings, concurrency,
+token and time budgets, quorum, templates, prompt version, trace visibility,
+error policy, and grounding policy belong under
+`routing.decisions[].algorithm.fusion`. Direct slug calls evaluate only
+Fusion-capable decisions, so `vllm-sr/fusion` cannot silently fall back to a
+normal single-model route. The public HTTP path executes the selected recipe
+policy and does not expose Fusion execution overrides through
+`plugins[].id = fusion`.
 
 To expose an OpenRouter-compatible alias, opt in explicitly:
 
@@ -195,67 +211,74 @@ global:
           - openrouter/fusion
 ```
 
-Request-level override:
-
-```json
-{
-  "model": "vllm-sr/fusion",
-  "messages": [{"role": "user", "content": "..."}],
-  "plugins": [{
-    "id": "fusion",
-    "model": "qwen3-32b",
-    "analysis_models": ["qwen3-8b", "qwen3-32b"],
-    "analysis_overrides": [
-      {"model": "qwen3-8b", "max_completion_tokens": 320},
-      {"model": "qwen3-32b", "temperature": 0.1}
-    ],
-    "max_concurrent": 2,
-    "max_completion_tokens": 1024,
-    "round_timeout_seconds": 90,
-    "min_successful_responses": 1,
-    "include_analysis": true,
-    "include_intermediate_responses": true,
-    "grounding": {
-      "enabled": true,
-      "reference": "hybrid",
-      "policy": "weight"
-    }
-  }]
-}
-```
-
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion execution |
-| `model` | string | first analysis model | Judge/calling model used for analysis and final synthesis |
-| `analysis_models` | list[string] | `modelRefs` | Panel models for parallel analysis |
+| `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion decision matching |
+| `model` | string | first analysis model | Recipe-owned judge/calling model used for analysis and final synthesis |
+| `analysis_models` | list[string] | `modelRefs` | Recipe-owned panel models for parallel analysis |
+| `analysis_mode` | string | `separate` | Recipe-owned judge execution: `separate`, `one_call`, or `none` |
 | `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
-| `analysis_overrides` | list[object] | none | Per-panel-model `temperature` and `max_completion_tokens`, keyed by `model`. Request-level entries merge field-wise onto the decision entry for the same model, so setting one field keeps the decision value for the other |
-| `max_concurrent` | int | panel size | Maximum concurrent panel calls |
-| `max_completion_tokens` | int | request default | Max completion tokens applied to Fusion subrequests |
-| `round_timeout_seconds` | int | wait for all | Stop waiting for a panel round after this many seconds |
-| `min_successful_responses` | int | panel size | Continue only after this many responses contain non-empty assistant content or reasoning after trimming whitespace |
-| `temperature` | float | request default | Temperature applied to Fusion subrequests |
-| `include_analysis` | bool | `true` | Include structured judge analysis in the response trace |
-| `include_intermediate_responses` | bool | `true` | Include raw panel responses in the response trace |
-| `on_error` | string | `skip` | `skip` individual failed or unusable panel responses while still enforcing quorum, or `fail` on the first such response |
-| `analysis_template` | string | built-in | Custom judge analysis prompt with `{{original}}` and `{{responses}}` |
-| `synthesis_template` | string | built-in | Custom final prompt with `{{original}}`, `{{responses}}`, and `{{analysis}}` |
-| `judge_prompt_version` | string | `fusion-v1` | Version marker included in Fusion response trace |
-| `grounding` | object | disabled | Optional grounding-aware synthesis (see below) |
+| `analysis_overrides` | list[object] | none | Recipe-owned per-panel-model `temperature` and `max_completion_tokens`, keyed by `model` |
+| `max_concurrent` | int | panel size | Recipe-owned maximum concurrent panel calls |
+| `max_completion_tokens` | int | request default | Recipe-owned max completion tokens applied to Fusion subrequests |
+| `round_timeout_seconds` | int | wait for all | Recipe-owned panel round timeout in seconds |
+| `min_successful_responses` | int | panel size | Recipe-owned quorum of responses with non-empty assistant content or reasoning after trimming whitespace |
+| `temperature` | float | request default | Recipe-owned temperature applied to Fusion subrequests |
+| `include_analysis` | bool | `true` | Recipe-owned visibility for an available structured judge analysis; this does not control execution |
+| `include_intermediate_responses` | bool | `true` | Recipe-owned visibility for raw panel responses |
+| `on_error` | string | `skip` | Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
+| `analysis_template` | string | built-in | Recipe-owned separate-analysis prompt with `{{original}}` and `{{responses}}`; rejected outside `separate` |
+| `synthesis_template` | string | built-in | Recipe-owned terminal prompt for every mode, with `{{original}}`, `{{responses}}`, and `{{analysis}}`; analysis is empty outside `separate` |
+| `judge_prompt_version` | string | `fusion-v1` | Recipe-owned version marker included in Fusion response trace |
+| `grounding` | object | disabled | Recipe-owned optional grounding-aware synthesis (see below) |
 
 Best practice:
 
-- Keep `analysis_models` stable per decision, and use `analysis_overrides` for model-specific tuning.
-- Use decision-level overrides for your baseline and request-level overrides only for one-off experiments.
-- Prefer sparse request overrides (set only the field you need) to preserve decision defaults through field-wise merge.
+- Keep `analysis_mode: separate` until matched-budget evaluation supports a
+  deliberate opt-in to a reduced-call mode.
+- Keep `analysis_models` stable per decision, and use decision
+  `analysis_overrides` for model-specific tuning.
+- Put every Fusion execution-policy and trace-visibility change in the recipe.
 - Keep `min_successful_responses` at or below the effective panel size. Invalid
   quorums are rejected; the Router does not lower them automatically.
 - A partial panel continues only when its usable responses still satisfy
   `min_successful_responses`; otherwise Fusion returns an error without running
   grounding or either judge call.
+
+## Mode Contracts
+
+The built-in prompts and stage boundaries are deliberately distinct:
+
+- `separate` asks for compact structured JSON without tools. An analysis
+  transport failure is logged and final synthesis continues from the panel. A
+  parse failure can appear as raw `parse_failed` trace evidence when
+  `include_analysis` is enabled. Final synthesis remains terminal and can use
+  request tools.
+- `one_call` makes no structured-analysis artifact. Its single terminal prompt
+  asks the judge to compare the panel, resolve contradictions, and synthesize
+  the client answer in one call. A failure is terminal.
+- `none` makes no structured-analysis artifact. Its single terminal prompt
+  asks the judge to synthesize directly from the panel without requesting a
+  separate or combined analysis. A failure is terminal.
+
+For every mode, `synthesis_template` replaces the complete built-in terminal
+prompt. `{{analysis}}` renders as an empty string in `one_call` and `none`.
+Config validation rejects a non-empty `analysis_template` in those modes rather
+than silently ignoring it.
+
+Fusion usage aggregates the full panel cost and every successful judge
+response. Reported iterations are the configured panel attempts plus two judge
+calls for `separate`, or plus one judge call for `one_call` and `none`.
+
+The effective `analysis_mode` is recorded in Fusion's internal trace carried by
+`looper.Response.IntermediateResponses`. A mode value alone does not add a
+top-level `fusion` member to the public response. The public trace envelope
+keeps its existing predicate: it is emitted only when analysis or intermediate
+responses are enabled, a panel model failed, or grounding evidence exists.
+Public mode-trace transport remains deferred to
+[issue #3378](https://github.com/vllm-project/semantic-router/issues/3378).
 
 ## Grounding-Aware Synthesis
 

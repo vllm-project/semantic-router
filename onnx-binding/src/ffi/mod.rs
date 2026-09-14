@@ -3,6 +3,7 @@
 pub mod classification;
 pub mod embedding;
 pub mod embedding_contract;
+pub mod instances;
 pub mod memory;
 #[cfg(test)]
 mod memory_test;
@@ -13,6 +14,7 @@ pub mod unified;
 pub use classification::*;
 pub use embedding::*;
 pub use embedding_contract::*;
+pub use instances::*;
 pub use memory::*;
 pub use multimodal::*;
 pub use types::*;

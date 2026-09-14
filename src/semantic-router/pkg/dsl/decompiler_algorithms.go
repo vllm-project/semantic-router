@@ -139,6 +139,7 @@ func fusionAlgorithmToFields(f *config.FusionAlgorithmConfig, fields map[string]
 	if len(f.AnalysisModels) > 0 {
 		fields["analysis_models"] = stringsToArray(f.AnalysisModels)
 	}
+	setStringValue(fields, "analysis_mode", f.AnalysisMode)
 	setIntValue(fields, "max_concurrent", f.MaxConcurrent)
 	setIntValue(fields, "max_completion_tokens", f.MaxCompletionTokens)
 	setIntValue(fields, "round_timeout_seconds", f.RoundTimeoutSeconds)

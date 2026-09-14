@@ -470,6 +470,8 @@ dependencies = [
  "candle-transformers",
  "criterion",
  "crossbeam-channel",
+ "gemm",
+ "half",
  "hf-hub",
  "image",
  "libc",

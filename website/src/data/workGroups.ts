@@ -75,6 +75,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/daii-0818.png',
         profile: 'https://github.com/daii-0818',
       },
+      {
+        name: 'Nanasis',
+        avatar: 'https://github.com/nanasis.png',
+        profile: 'https://github.com/nanasis',
+      },
     ],
   },
   {
@@ -166,6 +171,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Bevisy.png',
         profile: 'https://github.com/Bevisy',
       },
+      {
+        name: 'Haoyu Jing',
+        avatar: 'https://github.com/PharosEast.png',
+        profile: 'https://github.com/PharosEast',
+      },
     ],
   },
   {
@@ -216,6 +226,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Xuge',
         avatar: 'https://github.com/xuuuge.png',
         profile: 'https://github.com/xuuuge',
+      },
+      {
+        name: 'Abhinav Mahajan',
+        avatar: 'https://github.com/abhinav-m22.png',
+        profile: 'https://github.com/abhinav-m22',
       },
     ],
   },
@@ -314,6 +329,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Shrek Luzz',
         avatar: 'https://github.com/Zheng-Lu.png',
         profile: 'https://github.com/Zheng-Lu',
+      },
+      {
+        name: 'Ethan Jiang',
+        avatar: 'https://github.com/ethanjyx.png',
+        profile: 'https://github.com/ethanjyx',
       },
     ],
   },

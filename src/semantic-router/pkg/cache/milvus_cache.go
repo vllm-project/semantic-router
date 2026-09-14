@@ -12,8 +12,8 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"sigs.k8s.io/yaml"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -21,6 +21,7 @@ import (
 
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
 type MilvusCache struct {
+	embeddingProvider   embedding.Provider
 	client              client.Client
 	searchFn            func(context.Context, string, []float32) ([]client.SearchResult, error)
 	queryByIDFn         func(context.Context, string, string) (client.ResultSet, error)
@@ -41,6 +42,7 @@ type MilvusCache struct {
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
 type MilvusCacheOptions struct {
+	EmbeddingProvider   embedding.Provider
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -119,6 +121,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
 		effectiveDimension:  effectiveDimension,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, effectiveDimension, 0)),
 	}
 
 	// Test connection using the new CheckConnection method
@@ -220,44 +223,7 @@ func loadMilvusConfig(configPath string) (*config.MilvusConfig, error) {
 // getEmbedding generates an embedding based on the configured embedding model.
 // Cancellation is best-effort here; see ctxErr.
 func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
-	if err := ctxErr(ctx); err != nil {
-		return nil, err
-	}
-	modelName := c.embeddingModel
-
-	switch modelName {
-	case "qwen3":
-		// Use GetEmbeddingBatched for Qwen3 with batching support
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "gemma":
-		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "mmbert":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "multimodal":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "bert":
-		// Use traditional GetEmbedding for BERT (default)
-		return candle_binding.GetEmbedding(text, 0)
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
-	}
+	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
 // IsEnabled returns the current cache activation status
