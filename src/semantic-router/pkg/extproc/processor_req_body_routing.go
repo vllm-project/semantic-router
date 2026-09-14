@@ -377,6 +377,18 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
 	}
+	// Masking is the last provider-bound content mutation, so content added by
+	// any earlier plugin is covered. All five dispatch paths reach this
+	// function, so one hook covers them all (#3566).
+	if err := r.applyMaskingBeforeDispatch(ctx); err != nil {
+		metrics.RecordRequestError(dispatch.logicalModel, "masking_error")
+		logging.ComponentErrorEvent("extproc", "masking_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      dispatch.logicalModel,
+			"error":      err.Error(),
+		})
+		return nil, err
+	}
 	captureRequestDemand(
 		ctx,
 		requestDemandStageProviderBound,
