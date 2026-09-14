@@ -49,43 +49,39 @@ func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
 func (s *MultiFactorSelector) chooseCandidate(
 	signals []signalSet,
 	mins, maxs extrema,
-) (int, map[string]float64, float64, float64, []int) {
+) (int, CandidateScores, float64, float64, []int) {
 	var bestIndex int
-	var allScores map[string]float64
 	var candidateScores []float64
 	var bestScore, secondBest float64
 	var survivors []int
 	if s.config.Objective.Strategy == config.MultiFactorObjectiveLexicographic {
-		bestIndex, allScores, candidateScores, bestScore, secondBest, survivors = s.chooseLexicographic(signals)
+		bestIndex, candidateScores, bestScore, secondBest, survivors = s.chooseLexicographic(signals)
 	} else {
-		bestIndex, allScores, candidateScores, bestScore, secondBest = s.chooseWeighted(signals, mins, maxs)
+		bestIndex, candidateScores, bestScore, secondBest = s.chooseWeighted(signals, mins, maxs)
 	}
-	if s.qualityRelevant() && signals[bestIndex].hasQ {
-		bestRank := candidateRank{score: candidateScores[bestIndex], evidence: signals[bestIndex].evidence}
-		for index, signal := range signals {
-			if signal.hasQ {
-				rank := candidateRank{score: candidateScores[index], evidence: signal.evidence}
-				if rank.Compare(bestRank) > 0 {
-					bestIndex, bestRank = index, rank
-				}
-			}
+	scores := make(CandidateScores, len(signals))
+	for i, signal := range signals {
+		scores[i] = CandidateScore{Candidate: signal.candidate, Score: candidateScores[i]}
+		if signal.hasQ {
+			scores[i].Evidence = signal.evidence
 		}
 	}
-	return bestIndex, allScores, bestScore, secondBest, survivors
+	if winner := scores.Best(HigherIsBetter, s.qualityRelevant()); winner >= 0 {
+		bestIndex = winner
+	}
+	return bestIndex, scores, bestScore, secondBest, survivors
 }
 
 func (s *MultiFactorSelector) chooseWeighted(
 	signals []signalSet,
 	mins, maxs extrema,
-) (int, map[string]float64, []float64, float64, float64) {
-	allScores := make(map[string]float64, len(signals))
+) (int, []float64, float64, float64) {
 	candidateScores := make([]float64, len(signals))
 	bestIndex := 0
 	bestScore := math.Inf(-1)
 	secondBest := math.Inf(-1)
 	for index, signal := range signals {
 		score := s.scoreCandidate(signal, mins, maxs)
-		allScores[signal.scoreKey] = score
 		candidateScores[index] = score
 		if score > bestScore {
 			secondBest = bestScore
@@ -95,17 +91,16 @@ func (s *MultiFactorSelector) chooseWeighted(
 			secondBest = score
 		}
 	}
-	return bestIndex, allScores, candidateScores, bestScore, secondBest
+	return bestIndex, candidateScores, bestScore, secondBest
 }
 
 func (s *MultiFactorSelector) chooseLexicographic(
 	signals []signalSet,
-) (int, map[string]float64, []float64, float64, float64, []int) {
+) (int, []float64, float64, float64, []int) {
 	active := make([]int, len(signals))
 	for index := range signals {
 		active[index] = index
 	}
-	allScores := make(map[string]float64, len(signals))
 	candidateScores := make([]float64, len(signals))
 	denominator := float64(len(s.config.Objective.Priorities) + 1)
 	for stage, priority := range s.config.Objective.Priorities {
@@ -135,7 +130,6 @@ func (s *MultiFactorSelector) chooseLexicographic(
 				retained = append(retained, index)
 				continue
 			}
-			allScores[signals[index].scoreKey] = float64(stage) / denominator
 			candidateScores[index] = float64(stage) / denominator
 		}
 		active = retained
@@ -144,7 +138,6 @@ func (s *MultiFactorSelector) chooseLexicographic(
 		}
 	}
 	for _, index := range active {
-		allScores[signals[index].scoreKey] = 1
 		candidateScores[index] = 1
 	}
 	winner := active[0]
@@ -157,7 +150,7 @@ func (s *MultiFactorSelector) chooseLexicographic(
 	}
 	// Preserve the actual objective survivors for downstream adaptation and
 	// protection. Scores retain eliminated candidates for diagnostics only.
-	return winner, allScores, candidateScores, 1, secondBest, active
+	return winner, candidateScores, 1, secondBest, active
 }
 
 func factorValue(signal signalSet, factor string) (float64, bool, bool) {

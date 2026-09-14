@@ -87,7 +87,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		// re-applied here.
 		if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(
-				request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
+				request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.decisionForCandidate(dispatch.logicalModel),
 			)
 		}
 	}
@@ -318,7 +318,7 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		changed = r.applySemanticReasoningMode(
-			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
+			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.decisionForCandidate(dispatch.logicalModel),
 		)
 	}
 	injected, err := r.addSemanticSystemPromptIfConfigured(

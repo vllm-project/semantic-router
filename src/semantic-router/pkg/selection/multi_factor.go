@@ -227,7 +227,8 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		Method:            MethodMultiFactor,
 		Tier:              TierSupported,
 		Reasoning:         reasoning,
-		AllScores:         allScores,
+		AllScores:         allScores.Diagnostics(),
+		CandidateScores:   allScores,
 	}, nil
 }
 
@@ -250,22 +251,22 @@ func (s *MultiFactorSelector) eligibleModels(kept []config.ModelRef, survivors [
 }
 
 type signalSet struct {
-	model    string
-	scoreKey string
-	quality  float64
-	hasQ     bool
-	evidence *modelcatalog.IndexResult
-	latency  float64
-	hasLat   bool
-	cost     float64
-	hasCost  bool
-	load     float64
+	candidate config.ModelRef
+	model     string
+	quality   float64
+	hasQ      bool
+	evidence  *modelcatalog.IndexResult
+	latency   float64
+	hasLat    bool
+	cost      float64
+	hasCost   bool
+	load      float64
 }
 
 func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx *SelectionContext) []signalSet {
 	out := make([]signalSet, 0, len(candidates))
-	for index, c := range candidates {
-		sig := signalSet{model: c.Model, scoreKey: candidateScoreKey(candidates, index)}
+	for _, c := range candidates {
+		sig := signalSet{candidate: c, model: c.Model}
 		if params, ok := s.modelParams[c.Model]; ok {
 			if result, available := params.EvidenceResultAt(s.config.QualityIndex, c.ReasoningEffort); available &&
 				result.Coverage >= s.config.QualityMinCoverage {
@@ -496,14 +497,15 @@ func selectionTokenCounts(selCtx *SelectionContext) (int, int) {
 
 func (s *MultiFactorSelector) noCandidateResult(c config.ModelRef, reason string) *SelectionResult {
 	return &SelectionResult{
-		EligibleModels: []config.ModelRef{c},
-		SelectedModel:  c.Model,
-		LoRAName:       c.LoRAName,
-		Score:          0,
-		Confidence:     0.0,
-		Method:         MethodMultiFactor,
-		Tier:           TierSupported,
-		Reasoning:      "multi_factor no-candidate policy: " + reason,
+		EligibleModels:    []config.ModelRef{c},
+		SelectedModel:     c.Model,
+		SelectedCandidate: &c,
+		LoRAName:          c.LoRAName,
+		Score:             0,
+		Confidence:        0.0,
+		Method:            MethodMultiFactor,
+		Tier:              TierSupported,
+		Reasoning:         "multi_factor no-candidate policy: " + reason,
 	}
 }
 

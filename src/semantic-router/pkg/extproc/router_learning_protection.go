@@ -245,9 +245,9 @@ func (r *OpenAIRouter) protectionRescueEvidence(
 	if proposalExp.GoodFitCount > proposalExp.UnderpoweredCount {
 		return true
 	}
-	proposalScore := scoreFromSelectionResult(proposalResult, proposal)
-	currentScore := scoreFromSelectionResult(proposalResult, current)
-	return proposalScore-currentScore >= learningSwitchMargin(cfg)
+	proposalScore, proposalKnown := scoreFromSelectionResult(proposalResult, proposal)
+	currentScore, currentKnown := scoreFromSelectionResult(proposalResult, current)
+	return proposalKnown && currentKnown && proposalScore-currentScore >= learningSwitchMargin(cfg)
 }
 
 func (r *OpenAIRouter) protectionDecisionFromResult(
@@ -464,26 +464,26 @@ func sessionScopeProtectedResult(
 	if sessionScopeIdleExpired(cfg, session) {
 		return nil, false
 	}
-	score := 0.0
-	if baseResult.AllScores != nil {
-		score = baseResult.AllScores[current]
+	ref := selection.CurrentSessionCandidate(learningCtx, baseResult, current)
+	if ref == nil {
+		return nil, false
 	}
-	allScores := cloneSelectionScores(baseResult.AllScores)
-	if allScores == nil {
-		allScores = map[string]float64{}
-	}
-	allScores[current] = score
+	scores := baseResult.ScoresFor(learningCtx.CandidateModels)
+	score, _ := scores.Get(*ref)
+	allScores := scores.Diagnostics()
 	trace := sessionScopeProtectionTrace(cfg, baseResult, learningCtx, identity, current, score)
 	return &selection.SelectionResult{
-		SelectedModel: current,
-		LoRAName:      sessionScopeProtectedLoRAName(learningCtx, current),
-		Score:         score,
-		Confidence:    1,
-		Method:        baseResult.Method,
-		Tier:          selection.TierSupported,
-		Reasoning:     "router_learning protection: session scope protects current model",
-		AllScores:     allScores,
-		SessionPolicy: trace,
+		SelectedModel:     current,
+		SelectedCandidate: ref,
+		CandidateScores:   scores,
+		LoRAName:          ref.LoRAName,
+		Score:             score,
+		Confidence:        1,
+		Method:            baseResult.Method,
+		Tier:              selection.TierSupported,
+		Reasoning:         "router_learning protection: session scope protects current model",
+		AllScores:         allScores,
+		SessionPolicy:     trace,
 	}, true
 }
 
@@ -578,8 +578,8 @@ func rescueProtectionTrace(
 	if finalScores == nil {
 		finalScores = map[string]float64{}
 	}
-	currentScore := scoreFromSelectionResult(proposalResult, current)
-	proposalScore := scoreFromSelectionResult(proposalResult, proposal)
+	currentScore, _ := scoreFromSelectionResult(proposalResult, current)
+	proposalScore, _ := scoreFromSelectionResult(proposalResult, proposal)
 	finalScores[current] = currentScore
 	finalScores[proposal] = proposalScore
 	trace := &selection.SessionPolicyTrace{
@@ -633,15 +633,6 @@ func rescueProtectionTrace(
 	return trace
 }
 
-func sessionScopeProtectedLoRAName(learningCtx *selection.SelectionContext, current string) string {
-	for _, candidate := range learningCtx.CandidateModels {
-		if candidate.Model == current || candidate.LoRAName == current {
-			return candidate.LoRAName
-		}
-	}
-	return ""
-}
-
 func sessionScopeIdleExpired(cfg config.RouterLearningProtectionConfig, session *selection.AgenticSessionContext) bool {
 	if session == nil || !session.IdleKnown {
 		return false
@@ -670,15 +661,25 @@ func learningProtectionStabilityWeight(cfg config.RouterLearningProtectionConfig
 	return 1
 }
 
-func scoreFromSelectionResult(result *selection.SelectionResult, model string) float64 {
+func scoreFromSelectionResult(result *selection.SelectionResult, model string) (float64, bool) {
 	if result == nil || strings.TrimSpace(model) == "" {
-		return 0
+		return 0, false
 	}
 	if result.SelectedModel == model {
-		return result.Score
+		return result.Score, true
 	}
-	if result.AllScores != nil {
-		return result.AllScores[model]
+	if result.CandidateScores != nil {
+		refs := make([]config.ModelRef, len(result.CandidateScores))
+		for i, row := range result.CandidateScores {
+			refs[i] = row.Candidate
+		}
+		ref := selection.CandidateForModel(refs, model, nil)
+		if ref == nil {
+			return 0, false
+		}
+		return result.CandidateScores.Get(*ref)
 	}
-	return 0
+	// Compatibility with model-level learning results predating typed scores.
+	score, ok := result.AllScores[model]
+	return score, ok
 }

@@ -100,6 +100,14 @@ traffic before using them for production routing.
 
 ## Operational Boundaries
 
+- Where an algorithm accepts repeated model references, the candidate includes
+  its LoRA and reasoning controls, not just its model name. Scoring, composition,
+  and dispatch retain the exact winning reference. A legacy model-only result
+  that matches multiple different candidates is rejected rather than resolved
+  to the first reference.
+- Router Learning session memory retains the selected candidate's controls.
+  Protection can hold that exact choice across tool-loop continuations even
+  when a later base selection prefers another effort of the same model.
 - Candidate model names must resolve through `routing.modelCards` and
   `providers.models` in a complete config.
 - Learned selectors need artifacts produced for the same embedding dimension
