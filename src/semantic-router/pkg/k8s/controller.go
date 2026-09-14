@@ -60,11 +60,22 @@ func NewController(cfg ControllerConfig) (*Controller, error) {
 
 // Start starts the controller
 func (c *Controller) Start(ctx context.Context) error {
-	if err := c.reconciler.Start(ctx); err != nil {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		select {
+		case <-c.stopCh:
+			cancel()
+		case <-runCtx.Done():
+		}
+	}()
+
+	if err := c.reconciler.Start(runCtx); err != nil {
 		return err
 	}
-
-	<-c.stopCh
 	logging.Infof("Kubernetes controller stopped")
 	return nil
 }

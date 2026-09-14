@@ -133,10 +133,13 @@ func parseYAMLBytesWithOptions(
 		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
 	}
 
-	// Warn about unknown YAML fields (typos) before parsing into typed structs.
-	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-
-	cfg, err := parseRouterConfigPayload(expandedData, raw)
+	if !isCanonicalConfig(raw) {
+		return nil, canonicalConfigRequiredError(raw)
+	}
+	if validationErr := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); validationErr != nil {
+		return nil, validationErr
+	}
+	cfg, err := parseCanonicalConfigPayload(expandedData, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -505,13 +508,6 @@ func rejectUnknownMapFields(prefix string, raw map[string]interface{}, allowed [
 	return fmt.Errorf("unsupported Router Learning config fields: %s", strings.Join(unknown, ", "))
 }
 
-func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
-	if !isCanonicalConfig(raw) {
-		return nil, canonicalConfigRequiredError(raw)
-	}
-	return parseCanonicalConfigPayload(data, raw)
-}
-
 func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
 	canonical := &CanonicalConfig{}
 	if unmarshalErr := yaml.Unmarshal(data, canonical); unmarshalErr != nil {
@@ -571,6 +567,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
+	applyBatchConcurrencyMigration(cfg)
 	if err := validateConfigStructure(cfg); err != nil {
 		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
 			"error": err.Error(),

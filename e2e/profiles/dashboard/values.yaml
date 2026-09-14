@@ -1,25 +1,12 @@
-# Semantic Router Configuration for Dashboard E2E Profile
-#
-# Canonical v0.3 shape (prerequisite for issue #3233). The pre-v0.3 file kept
-# model_config/categories/decisions/strategy/model/bert_model/classifier/
-# prompt_guard/response_cache at top level; the loader dropped all of them, so
-# the router actually ran on chart-default placeholders
-# (replace-with-your-model). This file states the intent those legacy keys
-# declared, in the schema the loader reads: one base-model with a
-# general-expert LoRA, one "other" domain, one catch-all decision, priority
-# strategy, response cache disabled, no jailbreak or PII signals.
-#
-# Minimal on purpose: dashboard tests exercise the dashboard API, not routing
-# logic. routing.modelCards is the model surface deploy validation checks
-# merged fragments against (dashboard-deploy-safe-failure), so keep it
-# declared here rather than in per-test fragments.
-config:
+# Dashboard E2E exercises the API against a running Router and gateway.
+# Replace chart defaults atomically so no placeholder backend or classifier
+# configuration can leak into this deliberately small canonical runtime.
+configOverride:
   version: v0.3
   listeners: []
   providers:
     defaults:
-      model: general-expert
-      reasoning_effort: high
+      model: base-model
     models:
       - name: base-model
         reasoning:
@@ -35,20 +22,13 @@ config:
         loras:
           - name: general-expert
             description: General-purpose adapter
-      - name: general-expert
-    signals:
-      domains:
-        - name: other
-          description: General knowledge and miscellaneous topics
     decisions:
       - name: other_decision
-        description: Default decision for all requests
+        description: Default decision for Dashboard API probes
         priority: 1
         rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
+          operator: AND
+          conditions: []
         modelRefs:
           - model: base-model
             lora_name: general-expert
@@ -58,6 +38,29 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
+      modules:
+        prompt_guard:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+          jailbreak_mapping_path: ""
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            model_ref: ""
+            model_id: ""
+            pii_mapping_path: ""
+            use_mmbert_32k: false
     stores:
       response_cache:
         enabled: false
+    integrations:
+      tools:
+        enabled: false
+
+persistence:
+  enabled: false

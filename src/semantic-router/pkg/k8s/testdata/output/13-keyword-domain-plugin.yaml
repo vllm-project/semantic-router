@@ -133,11 +133,13 @@ global:
     management_api: {}
     router_replay:
       enabled: false
+      ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       enabled: false
+      ttl_seconds: 0
     memory: {}
   integrations:
     tools:
@@ -211,6 +213,7 @@ global:
           model_id: ""
           threshold: 0
           use_cpu: false
+          enable_nli_filtering: false
         explainer:
           model_id: ""
           threshold: 0

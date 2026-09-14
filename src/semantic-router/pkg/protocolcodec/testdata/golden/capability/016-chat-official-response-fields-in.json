@@ -23,6 +23,7 @@
     {"name": "moderation", "patch": {"moderation": {"status": "passed"}}},
     {"name": "object", "patch": {"object": "chat.completion"}},
     {"name": "prompt_logprobs", "patch": {"prompt_logprobs": null}},
+    {"name": "prompt_routed_experts", "patch": {"prompt_routed_experts": null}},
     {"name": "prompt_text", "patch": {"prompt_text": null}},
     {"name": "prompt_token_ids", "patch": {"prompt_token_ids": [1, 2, 3]}},
     {"name": "remote_block_ids", "patch": {"remote_block_ids": [11, 12]}},

@@ -110,6 +110,9 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 
 func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
 	deployment := r.generateDeployment(sr, gatewayMode)
+	if err := r.annotateDeploymentConfig(ctx, sr, gatewayMode, deployment); err != nil {
+		return err
+	}
 	if err := controllerutil.SetControllerReference(sr, deployment, r.Scheme); err != nil {
 		return err
 	}

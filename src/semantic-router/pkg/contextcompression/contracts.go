@@ -112,6 +112,9 @@ type Policy struct {
 }
 
 type Provenance struct {
+	// ProtectedMessages is trusted router metadata, never inferred from user text.
+	ProtectedMessages    map[int]Protection
+	OriginalHistory      *HistorySnapshot
 	RAGToolCallIDs       map[string]struct{}
 	MemoryMessageIndexes map[int]struct{}
 }

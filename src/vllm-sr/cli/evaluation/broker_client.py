@@ -41,7 +41,7 @@ _OPERATIONS = frozenset(
         "models.list",
         "arm-chat.completions",
         "routed-chat.completions",
-        "router.evaluate",
+        "routing.preview",
         "agent-task.ledger",
         "fault-recovery.ledger",
         "hard-policy.ledger",
@@ -49,7 +49,7 @@ _OPERATIONS = frozenset(
     }
 )
 _OPERATION_TRACKS = {
-    "router.evaluate": frozenset({"routing"}),
+    "routing.preview": frozenset({"routing"}),
     "arm-chat.completions": frozenset({"model_pool"}),
     "routed-chat.completions": frozenset({"joint", "multimodal", "capacity"}),
     "agent-task.ledger": frozenset({"agentic"}),

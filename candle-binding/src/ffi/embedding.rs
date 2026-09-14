@@ -2450,7 +2450,7 @@ pub extern "C" fn multimodal_encode_text(
 /// inference path used by this crate, neither matters: training data and
 /// reference inference both use opaque JPEG/PNG without orientation metadata
 /// applied.
-fn decode_resize_to_chw_f32(
+pub(crate) fn decode_resize_to_chw_f32(
     bytes: &[u8],
     target_w: u32,
     target_h: u32,

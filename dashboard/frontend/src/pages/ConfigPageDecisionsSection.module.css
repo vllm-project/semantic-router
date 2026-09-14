@@ -83,11 +83,6 @@
   font-weight: 600;
 }
 
-.editorCheckbox input {
-  width: 1rem;
-  height: 1rem;
-}
-
 .editorButtonSecondary {
   width: fit-content;
   padding: 0.55rem 0.8rem;
@@ -207,6 +202,30 @@
   font-size: 0.84rem;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.advancedEditor {
+  display: grid;
+  gap: 1rem;
+}
+
+.advancedTypeControl {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.advancedTypeControl select {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text);
+  padding: 0.5rem 0.75rem;
+  font: inherit;
 }
 
 @media (max-width: 760px) {

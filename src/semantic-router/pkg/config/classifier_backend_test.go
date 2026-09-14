@@ -422,3 +422,192 @@ func TestCanonicalCategoryVariantExportUsesCanonicalSelector(t *testing.T) {
 		t.Fatalf("canonical export retained deprecated selectors: %s", encoded)
 	}
 }
+
+func piiBackendTestConfig(backend *RemoteClassifierBackend) *RouterConfig {
+	cfg := &RouterConfig{}
+	cfg.PIIModel = PIIModel{Backend: backend, PIIMappingPath: "models/pii/pii_type_mapping.json"}
+	cfg.ExternalModels = []ExternalModelConfig{{
+		Name:          "named-pii",
+		ModelRole:     ModelRoleClassification,
+		ModelEndpoint: ClassifierVLLMEndpoint{Address: "10.0.0.5", Port: 8000},
+		ModelName:     "pii-spans",
+	}}
+	return cfg
+}
+
+func TestRemoteClassifierBackendAcceptsTokenSpansContract(t *testing.T) {
+	b := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Contract: RemoteClassifierContractTokenSpans, Model: "named-pii"}
+	if err := b.Validate(); err != nil {
+		t.Fatalf("token_spans.v1 rejected: %v", err)
+	}
+	if got := b.EffectiveContract(RemoteClassifierContractLabelDistribution); got != RemoteClassifierContractTokenSpans {
+		t.Fatalf("explicit contract %q overridden to %q", RemoteClassifierContractTokenSpans, got)
+	}
+}
+
+func TestValidatePIIModelBackend(t *testing.T) {
+	if err := ValidatePIIModelBackend(&RouterConfig{}); err != nil {
+		t.Fatalf("absent backend must be a no-op: %v", err)
+	}
+	valid := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"}
+	if err := ValidatePIIModelBackend(piiBackendTestConfig(valid)); err != nil {
+		t.Fatalf("valid backend with defaulted contract rejected: %v", err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*RouterConfig)
+		want   string
+	}{
+		{name: "label distribution is the wrong shape for PII", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Contract = RemoteClassifierContractLabelDistribution
+		}, want: "incompatible"},
+		{name: "unknown contract", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Contract = "token_spans.v0"
+		}, want: "unsupported"},
+		{name: "chat protocol not supported", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Protocol = RemoteClassifierProtocolHTTPChat
+		}, want: "not supported"},
+		{name: "wrong role", mutate: func(cfg *RouterConfig) {
+			cfg.ExternalModels[0].ModelRole = ModelRoleGuardrail
+		}, want: "model_role"},
+		{name: "missing named model", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Model = "missing"
+		}, want: "not declared"},
+		{name: "local selector alongside backend", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.UseMmBERT32K = true
+		}, want: "mutually exclusive"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := piiBackendTestConfig(&RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"})
+			tt.mutate(cfg)
+			err := ValidatePIIModelBackend(cfg)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("want error containing %q, got %v", tt.want, err)
+			}
+		})
+	}
+}
+
+// A sparse canonical override that attaches a remote PII backend must replace
+// the inherited local mmBERT selector at parse time, the same way domain does,
+// instead of failing later during classifier construction.
+func TestCanonicalPIIBackendReplacesInheritedLocalSelector(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: named-pii
+        model_role: classification
+        llm_model_name: pii-spans
+        llm_endpoint:
+          address: 127.0.0.1
+          port: 8080
+    modules:
+      classifier:
+        pii:
+          backend:
+            protocol: http_classify
+            contract: token_spans.v1
+            model: named-pii
+`)
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("remote PII canonical override rejected: %v", err)
+	}
+	if cfg.PIIModel.Backend == nil || cfg.PIIModel.Backend.Model != "named-pii" {
+		t.Fatalf("remote PII backend was not decoded: %#v", cfg.PIIModel.Backend)
+	}
+	if cfg.PIIModel.UseMmBERT32K {
+		t.Fatal("inherited local mmBERT selector was not cleared for the remote PII backend")
+	}
+	if cfg.PIIMappingPath == "" {
+		t.Fatal("the PII mapping path must survive a remote backend: the token_spans adapter needs the label set")
+	}
+	if !cfg.IsPIIClassifierEnabled() {
+		t.Fatal("a remote PII backend must count as a configured PII classifier, or the mapping loader never runs")
+	}
+	if err := ValidatePIIModelBackend(cfg); err != nil {
+		t.Fatalf("parsed remote PII config fails backend validation: %v", err)
+	}
+}
+
+// An explicit local selector next to a remote backend is a configuration error
+// and must be reported at load, not when the classifier is built.
+func TestCanonicalPIIBackendRejectsExplicitLocalSelectorAtParse(t *testing.T) {
+	mixedYAML := []byte(`
+version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: named-pii
+        model_role: classification
+        llm_model_name: pii-spans
+        llm_endpoint:
+          address: 127.0.0.1
+          port: 8080
+    modules:
+      classifier:
+        pii:
+          use_mmbert_32k: true
+          backend:
+            protocol: http_classify
+            contract: token_spans.v1
+            model: named-pii
+`)
+	_, err := ParseYAMLBytes(mixedYAML)
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("mixed local/remote PII config must fail at parse with the mutual-exclusion error, got %v", err)
+	}
+}
+
+// classifier.pii.on_error takes the shared allow|block contract and nothing else.
+func TestPIIOnErrorValidatedAtParse(t *testing.T) {
+	badYAML := []byte(`
+version: v0.3
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          on_error: retry
+`)
+	_, err := ParseYAMLBytes(badYAML)
+	if err == nil || !strings.Contains(err.Error(), "on_error") {
+		t.Fatalf("unknown pii on_error must be rejected at parse, got %v", err)
+	}
+
+	goodYAML := []byte(`
+version: v0.3
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          on_error: block
+`)
+	cfg, err := ParseYAMLBytes(goodYAML)
+	if err != nil {
+		t.Fatalf("pii on_error: block rejected: %v", err)
+	}
+	if !cfg.PIIModel.IsBlock() {
+		t.Fatal("pii on_error: block was not decoded onto PIIModel")
+	}
+}
+
+// A remote-only PII configuration must still be reported as enabled, otherwise
+// NeedsPIIMappingForRouting is false and the mapping the adapter requires is
+// never loaded.
+func TestIsPIIClassifierEnabledAcceptsRemoteBackend(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.PIIModel.Backend = &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"}
+	cfg.PIIMappingPath = "models/pii/pii_type_mapping.json"
+	if !cfg.IsPIIClassifierEnabled() {
+		t.Fatal("backend-only PII config reported disabled")
+	}
+	cfg.PIIModel.Backend = nil
+	if cfg.IsPIIClassifierEnabled() {
+		t.Fatal("PII config with neither model_id nor backend reported enabled")
+	}
+}

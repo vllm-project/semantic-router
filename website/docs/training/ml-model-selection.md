@@ -62,7 +62,7 @@ standalone canonical Router configuration. Its `config.model_selection`,
 `config.strategy`, and `config.decisions` fields must be reviewed and mapped to
 `global.router.model_selection`, `global.router.strategy`, and
 `routing.decisions` in a complete config. Add the required listeners and
-providers, then run `vllm-sr validate --config ...` before deployment.
+providers, then run `vllm-sr config validate --config ...` before deployment.
 
 :::
 
@@ -182,7 +182,7 @@ match the names recorded in the benchmark data and the configured provider
 aliases.
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## Evaluate before rollout

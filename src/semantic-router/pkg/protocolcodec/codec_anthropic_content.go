@@ -396,7 +396,7 @@ func buildAnthropicRequestWire(
 	if baseErr != nil {
 		return anthropicRequestWire{}, diagnostics, baseErr
 	}
-	if instructionErr := encodeAnthropicInstructions(&wire, request, policy, &diagnostics); instructionErr != nil {
+	if instructionErr := encodeAnthropicInstructions(&wire, request); instructionErr != nil {
 		return anthropicRequestWire{}, diagnostics, instructionErr
 	}
 	if messagesErr := appendAnthropicMessages(&wire, request.Messages); messagesErr != nil {
@@ -566,22 +566,14 @@ func validateAnthropicReasoningBudget(
 	)
 }
 
-func encodeAnthropicInstructions(
-	wire *anthropicRequestWire,
-	request llmprotocol.Request,
-	policy llmprotocol.Policy,
-	diagnostics *llmprotocol.Diagnostics,
-) error {
+func encodeAnthropicInstructions(wire *anthropicRequestWire, request llmprotocol.Request) error {
 	if len(request.Instructions) == 0 {
 		return nil
 	}
+	// developer is OpenAI's successor to system and Anthropic's system field is
+	// the same channel, so every instruction role maps onto it equivalently.
 	contents := make([]llmprotocol.Content, 0)
 	for _, instruction := range request.Instructions {
-		if instruction.Role == llmprotocol.RoleDeveloper {
-			if err := appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "instructions.role", "Messages cannot preserve developer authority"); err != nil {
-				return err
-			}
-		}
 		contents = append(contents, instruction.Content...)
 	}
 	encoded, err := encodeAnthropicContent(contents)

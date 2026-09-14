@@ -701,6 +701,12 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
     padding: 0;
   }
 
+  /* A document that hides its TOC should reclaim the reserved rail instead of
+   * leaving an empty column beside interactive references. */
+  .site-docs-shell > .row > .col:only-child {
+    grid-column: 1 / -1;
+  }
+
   /* Stretch TOC column to row height for sticky positioning. */
   .site-docs-shell > .row > .col.col--3 {
     align-self: stretch;

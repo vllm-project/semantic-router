@@ -123,7 +123,7 @@ untrusted network.
 If vLLM should own all GPU memory, keep the Router on CPU:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
@@ -132,7 +132,7 @@ To run supported Router-side ONNX embeddings and classifiers on CUDA, use
 `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image by default:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --platform nvidia --config config.yaml
 ```
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
+
 	"sigs.k8s.io/yaml"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
@@ -41,77 +42,24 @@ func testDashboardConfigRead(ctx context.Context, client *kubernetes.Clientset, 
 	if err != nil {
 		return err
 	}
-	if err = assertCanonicalConfigIdentity("config/all", configJSON); err != nil {
-		return err
-	}
 
-	yamlBody, err := fetchDashboardYAMLConfig(ctx, httpClient, baseURL, token, opts.Verbose)
+	yamlSize, err := fetchDashboardYAMLConfig(ctx, httpClient, baseURL, token, opts.Verbose)
 	if err != nil {
-		return err
-	}
-	var configYAML map[string]interface{}
-	if err = yaml.Unmarshal(yamlBody, &configYAML); err != nil {
-		return fmt.Errorf("config/yaml response is not valid YAML: %w", err)
-	}
-	if err = assertCanonicalConfigIdentity("config/yaml", configYAML); err != nil {
 		return err
 	}
 
 	if opts.Verbose {
-		fmt.Printf("[Dashboard] config-read OK: JSON keys=%d, YAML bytes=%d, base-model and other_decision present on both reads\n", len(configJSON), len(yamlBody))
+		fmt.Printf("[Dashboard] config-read OK: JSON keys=%d, YAML bytes=%d, base-model and other_decision present on both reads\n", len(configJSON), yamlSize)
 	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"config_json_keys": len(configJSON),
-			"config_yaml_size": len(yamlBody),
+			"config_yaml_size": yamlSize,
 		})
 	}
 
 	return nil
-}
-
-// assertCanonicalConfigIdentity checks that a served config document is the
-// deployed dashboard fixture (e2e/profiles/dashboard/values.yaml) rather than
-// chart placeholders: the provider surface must declare base-model and the
-// routing surface must declare other_decision. Nonempty-body checks alone
-// cannot tell those apart, because the chart-default document is also a
-// nonempty canonical config.
-func assertCanonicalConfigIdentity(source string, doc map[string]interface{}) error {
-	if err := assertNamedEntry(doc, "providers", "models", "base-model"); err != nil {
-		return fmt.Errorf("%s: %w", source, err)
-	}
-	if err := assertNamedEntry(doc, "routing", "decisions", "other_decision"); err != nil {
-		return fmt.Errorf("%s: %w", source, err)
-	}
-	return nil
-}
-
-// assertNamedEntry asserts doc[section][list] contains an entry whose name
-// field equals want. Both read paths decode into JSON-shaped maps, so one
-// walker covers the JSON and YAML responses.
-func assertNamedEntry(doc map[string]interface{}, section, list, want string) error {
-	sectionMap, ok := doc[section].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("config has no %q object", section)
-	}
-	entries, ok := sectionMap[list].([]interface{})
-	if !ok {
-		return fmt.Errorf("config %s has no %q list", section, list)
-	}
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		entryMap, ok := entry.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		name, _ := entryMap["name"].(string)
-		if name == want {
-			return nil
-		}
-		names = append(names, name)
-	}
-	return fmt.Errorf("%s.%s does not declare %q, got %v", section, list, want, names)
 }
 
 func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) (map[string]interface{}, error) {
@@ -143,14 +91,17 @@ func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL,
 		return nil, fmt.Errorf("config/all response is not valid JSON: %w", err)
 	}
 
-	if len(result) == 0 {
-		return nil, fmt.Errorf("config/all returned empty JSON object")
+	if err := assertDashboardCanonicalConfig(result); err != nil {
+		return nil, fmt.Errorf("config/all: %w", err)
+	}
+	if err := assertCanonicalConfigIdentity(result); err != nil {
+		return nil, fmt.Errorf("config/all: %w", err)
 	}
 
 	return result, nil
 }
 
-func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) ([]byte, error) {
+func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) (int, error) {
 	url := baseURL + "/api/router/config/yaml"
 	if verbose {
 		fmt.Printf("[Dashboard] GET %s\n", url)
@@ -158,30 +109,109 @@ func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL,
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create YAML config request: %w", err)
+		return 0, fmt.Errorf("create YAML config request: %w", err)
 	}
 	setDashboardAuth(req, token)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("config/yaml request failed: %w", err)
+		return 0, fmt.Errorf("config/yaml request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("config/yaml: expected 200, got %d: %s", resp.StatusCode, truncateString(string(body), 200))
+		return 0, fmt.Errorf("config/yaml: expected 200, got %d: %s", resp.StatusCode, truncateString(string(body), 200))
 	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "yaml") {
-		return nil, fmt.Errorf("config/yaml: expected Content-Type to contain 'yaml', got %q", contentType)
+		return 0, fmt.Errorf("config/yaml: expected Content-Type to contain 'yaml', got %q", contentType)
 	}
 
 	if len(strings.TrimSpace(string(body))) == 0 {
-		return nil, fmt.Errorf("config/yaml returned empty body")
+		return 0, fmt.Errorf("config/yaml returned empty body")
 	}
 
-	return body, nil
+	var document map[string]interface{}
+	if err := yaml.Unmarshal(body, &document); err != nil {
+		return 0, fmt.Errorf("config/yaml is not valid YAML: %w", err)
+	}
+	if err := assertDashboardCanonicalConfig(document); err != nil {
+		return 0, fmt.Errorf("config/yaml: %w", err)
+	}
+	if err := assertCanonicalConfigIdentity(document); err != nil {
+		return 0, fmt.Errorf("config/yaml: %w", err)
+	}
+	return len(body), nil
+}
+
+// Check the deployed document, not just whether the file endpoint returned bytes.
+// The Router's strict parser owns full validation; this assertion proves the
+// Dashboard is reading that canonical provider/routing document.
+func assertDashboardCanonicalConfig(document map[string]interface{}) error {
+	if document["version"] != "v0.3" {
+		return fmt.Errorf("expected canonical version v0.3, got %v", document["version"])
+	}
+	providers, ok := document["providers"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("canonical config must declare providers")
+	}
+	models, ok := providers["models"].([]interface{})
+	if !ok || len(models) == 0 {
+		return fmt.Errorf("canonical config must declare provider models")
+	}
+	routing, ok := document["routing"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("canonical config must declare routing")
+	}
+	decisions, ok := routing["decisions"].([]interface{})
+	if !ok || len(decisions) == 0 {
+		return fmt.Errorf("canonical config must declare routing decisions")
+	}
+	return nil
+}
+
+// assertCanonicalConfigIdentity checks that a served config document is the
+// deployed dashboard fixture (e2e/profiles/dashboard/values.yaml) rather than
+// chart placeholders: the provider surface must declare base-model and the
+// routing surface must declare other_decision. Canonical-shape checks alone
+// cannot tell those apart, because a placeholder document can also be a
+// canonical v0.3 config with nonempty models and decisions.
+func assertCanonicalConfigIdentity(doc map[string]interface{}) error {
+	if err := assertNamedEntry(doc, "providers", "models", "base-model"); err != nil {
+		return err
+	}
+	if err := assertNamedEntry(doc, "routing", "decisions", "other_decision"); err != nil {
+		return err
+	}
+	return nil
+}
+
+// assertNamedEntry asserts doc[section][list] contains an entry whose name
+// field equals want. Both read paths decode into JSON-shaped maps, so one
+// walker covers the JSON and YAML responses.
+func assertNamedEntry(doc map[string]interface{}, section, list, want string) error {
+	sectionMap, ok := doc[section].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("config has no %q object", section)
+	}
+	entries, ok := sectionMap[list].([]interface{})
+	if !ok {
+		return fmt.Errorf("config %s has no %q list", section, list)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		entryMap, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := entryMap["name"].(string)
+		if name == want {
+			return nil
+		}
+		names = append(names, name)
+	}
+	return fmt.Errorf("%s.%s does not declare %q, got %v", section, list, want, names)
 }
