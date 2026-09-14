@@ -110,12 +110,13 @@ func generateTestQueries(count int, diversity float64) []string {
 	return queries
 }
 
-// populateCache pre-fills the cache with entries using concurrent requests
-// to leverage continuous batching for faster population
+// populateCache pre-fills the cache with entries through concurrent requests,
+// exercising the same owned embedding provider used by router generations.
 func populateCache(cache *InMemoryCache, size int) error {
 	queries := generateTestQueries(size, 0.9) // High diversity for initial population
 
-	// Use high concurrency for population to maximize continuous batching
+	// Bound concurrent population so the benchmark applies realistic request
+	// pressure without creating one goroutine per in-flight model call.
 	populateConcurrency := 64
 	if size < 64 {
 		populateConcurrency = size
@@ -263,7 +264,7 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 		ConcurrencyLevel: concurrency,
 	}
 
-	// Use Qwen3 by default if no model specified (benefits from continuous batching)
+	// Use Qwen3 by default when the caller does not select an embedding model.
 	embeddingModel := config.EmbeddingModel
 	if embeddingModel == "" {
 		embeddingModel = "qwen3"
