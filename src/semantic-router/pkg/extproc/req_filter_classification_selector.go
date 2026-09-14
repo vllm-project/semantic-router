@@ -27,9 +27,8 @@ const (
 // a model. Invalid or unavailable selection falls back to the first configured
 // candidate while recording an explicit diagnostic.
 //
-// Router Learning can reject every candidate while applying a policy. That
-// rejection is fail-closed and is checked once here, so every path below -
-// selector, single candidate and fallback - is covered by the same rule.
+// A Router Learning rejection is fail-closed and is checked once here, so the
+// selector, single-candidate and fallback paths all honour it.
 func (r *OpenAIRouter) selectModelFromCandidates(
 	selCtx *selection.SelectionContext,
 	algorithm *config.AlgorithmConfig,

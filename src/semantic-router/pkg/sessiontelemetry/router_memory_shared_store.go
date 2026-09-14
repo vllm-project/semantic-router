@@ -337,16 +337,11 @@ func (s *redisRouterSessionStore) Save(snapshot RouterSessionSnapshot, ttl time.
 	return s.client.Set(ctx, s.keyPrefix+snapshot.SessionID, payload, ttl).Err()
 }
 
-// redisMergeAttempts bounds the optimistic-concurrency retries. Each attempt is
-// one WATCH round trip, so a hot session still finishes inside the configured
-// store timeout instead of blocking the request path.
+// redisMergeAttempts bounds the optimistic-concurrency retries.
 const redisMergeAttempts = 4
 
-// Merge folds the local snapshot into the stored one under a compare-and-swap.
-// A whole-snapshot SET would let two replicas that loaded the same session
-// overwrite each other and lose the outcomes and switch history the shared
-// store exists to recover, so the read-modify-write is retried whenever the
-// watched key changed underneath it.
+// Merge folds the local snapshot into the stored one under a compare-and-swap,
+// so two replicas that loaded the same session cannot overwrite each other.
 func (s *redisRouterSessionStore) Merge(local RouterSessionSnapshot, ttl time.Duration) error {
 	if local.SessionID == "" {
 		return nil
@@ -367,9 +362,9 @@ func (s *redisRouterSessionStore) Merge(local RouterSessionSnapshot, ttl time.Du
 			case err != nil:
 				return err
 			default:
-				var remote RouterSessionSnapshot
-				if unmarshalErr := json.Unmarshal(stored, &remote); unmarshalErr == nil {
-					merged = mergeRouterSessionSnapshots(remote, local)
+				merged, err = mergeStoredSnapshot(stored, local)
+				if err != nil {
+					return err
 				}
 			}
 			payload, err := json.Marshal(merged)
