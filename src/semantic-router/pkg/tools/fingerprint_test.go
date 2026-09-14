@@ -92,7 +92,17 @@ func TestToolDefinitionFingerprint_SensitiveToCachePresence(t *testing.T) {
 	}
 }
 
-func TestToolDefinitionFingerprint_NameWhitespaceNormalized(t *testing.T) {
+func TestToolDefinitionFingerprint_SensitiveToEmptyCachePresence(t *testing.T) {
+	a := sampleTool("search")
+	a.Cache = nil
+	b := sampleTool("search")
+	b.Cache = &llmprotocol.CacheDirective{}
+	if ToolDefinitionFingerprint(a) == ToolDefinitionFingerprint(b) {
+		t.Fatal("an empty cache directive must remain distinct from an absent directive")
+	}
+}
+
+func TestToolDefinitionFingerprint_SensitiveToProviderVisibleWhitespace(t *testing.T) {
 	// sampleTool bakes its argument into Description too ("looks up "+name),
 	// which would entangle a name-whitespace difference into the
 	// description as well — build both tools directly with an identical
@@ -101,8 +111,18 @@ func TestToolDefinitionFingerprint_NameWhitespaceNormalized(t *testing.T) {
 	a.Name = "search"
 	b := sampleTool("search")
 	b.Name = "  search  "
-	if ToolDefinitionFingerprint(a) != ToolDefinitionFingerprint(b) {
-		t.Fatal("surrounding whitespace in the name must not change the fingerprint")
+	if ToolDefinitionFingerprint(a) == ToolDefinitionFingerprint(b) {
+		t.Fatal("provider-visible name whitespace must change the fingerprint")
+	}
+}
+
+func TestToolDefinitionFingerprint_DifferentInvalidSchemasDoNotCollide(t *testing.T) {
+	a := sampleTool("search")
+	a.InputSchema = json.RawMessage(`{"type":`)
+	b := sampleTool("search")
+	b.InputSchema = json.RawMessage(`{"properties":`)
+	if ToolDefinitionFingerprint(a) == ToolDefinitionFingerprint(b) {
+		t.Fatal("different invalid schemas must not collapse to one fingerprint")
 	}
 }
 
@@ -122,6 +142,17 @@ func TestToolCatalogFingerprint_OrderInvariant(t *testing.T) {
 	f1, f2, f3 := ToolCatalogFingerprint(forward), ToolCatalogFingerprint(reversed), ToolCatalogFingerprint(shuffled)
 	if f1 != f2 || f1 != f3 {
 		t.Fatalf("catalog fingerprint must be order-invariant: %q %q %q", f1, f2, f3)
+	}
+}
+
+func TestToolCatalogFingerprint_DuplicateNamesRemainOrderInvariant(t *testing.T) {
+	first := sampleTool("duplicate")
+	second := sampleTool("duplicate")
+	second.Description = "a different definition with the same name"
+	forward := []llmprotocol.Tool{first, second}
+	reversed := []llmprotocol.Tool{second, first}
+	if ToolCatalogFingerprint(forward) != ToolCatalogFingerprint(reversed) {
+		t.Fatal("duplicate-name catalog entries need a complete deterministic sort key")
 	}
 }
 
@@ -159,6 +190,28 @@ func TestToolPolicyFingerprint_SensitiveToModeChange(t *testing.T) {
 	filter := &config.ToolSelectionPluginConfig{Enabled: true, Mode: "filter"}
 	if ToolPolicyFingerprint(add) == ToolPolicyFingerprint(filter) {
 		t.Fatal("a mode change must produce a distinct fingerprint")
+	}
+}
+
+func TestToolPolicyFingerprint_DefaultModeEqualsExplicitAdd(t *testing.T) {
+	omitted := &config.ToolSelectionPluginConfig{Enabled: true}
+	explicit := &config.ToolSelectionPluginConfig{Enabled: true, Mode: config.ToolSelectionModeAdd}
+	if ToolPolicyFingerprint(omitted) != ToolPolicyFingerprint(explicit) {
+		t.Fatal("omitted mode and explicit add mode have the same effective policy")
+	}
+}
+
+func TestToolPolicyFingerprint_SensitiveToEnabledAndFallback(t *testing.T) {
+	enabled := &config.ToolSelectionPluginConfig{Enabled: true, Mode: config.ToolSelectionModeAdd}
+	disabled := &config.ToolSelectionPluginConfig{Enabled: false, Mode: config.ToolSelectionModeAdd}
+	if ToolPolicyFingerprint(enabled) == ToolPolicyFingerprint(disabled) {
+		t.Fatal("enabled must participate in the policy fingerprint")
+	}
+
+	fallback := *enabled
+	fallback.FallbackToEmpty = boolPtr(true)
+	if ToolPolicyFingerprint(enabled) == ToolPolicyFingerprint(&fallback) {
+		t.Fatal("fallback_to_empty must participate in the policy fingerprint")
 	}
 }
 
@@ -231,6 +284,14 @@ func TestToolCapabilityFingerprint_OrderInvariant(t *testing.T) {
 	b := ToolCapabilityFingerprint([]string{"vision", "tools"}, "openai_responses")
 	if a != b {
 		t.Fatal("capability list order must not change the fingerprint")
+	}
+}
+
+func TestToolCapabilityFingerprint_TreatsCapabilitiesAsASet(t *testing.T) {
+	canonical := ToolCapabilityFingerprint([]string{"tools", "vision"}, "openai_responses")
+	duplicated := ToolCapabilityFingerprint([]string{" vision ", "tools", "vision", ""}, "openai_responses")
+	if canonical != duplicated {
+		t.Fatal("duplicates and surrounding whitespace must not change a capability set fingerprint")
 	}
 }
 

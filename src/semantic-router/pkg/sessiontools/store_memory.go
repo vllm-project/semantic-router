@@ -51,6 +51,11 @@ type MemoryStore struct {
 	ttl                   time.Duration
 	maxSessions           int
 	maxSessionsByIdentity int
+	// lifecycleMu keeps Close linearizable with every operation: an
+	// operation that acquired the read lock completes before Close returns,
+	// while one arriving afterwards observes ErrStoreClosed.
+	lifecycleMu sync.RWMutex
+	closed      bool
 
 	// admissionMu guards every field below and serializes admission
 	// (new-key creation, which may trigger eviction) relative to other
@@ -63,7 +68,6 @@ type MemoryStore struct {
 	keyQuota     map[string]QuotaKey
 	quotaMembers map[QuotaKey]map[string]struct{}
 	totalCount   int
-	closed       bool
 }
 
 // NewMemoryStore constructs a MemoryStore from the resolved
@@ -93,17 +97,13 @@ func (s *MemoryStore) shardFor(key string) *memoryShard {
 	return s.shards[h.Sum64()%memoryStoreShardCount]
 }
 
-func (s *MemoryStore) isClosed() bool {
-	s.admissionMu.Lock()
-	defer s.admissionMu.Unlock()
-	return s.closed
-}
-
 // Load implements Store. See store.go's Store doc comment for why this
 // returns (VersionedState, error) rather than the originally sketched
 // (VersionedState, bool, error).
 func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error) {
-	if s.isClosed() {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	if s.closed {
 		return VersionedState{}, ErrStoreClosed
 	}
 	shard := s.shardFor(key)
@@ -158,9 +158,6 @@ func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error
 func (s *MemoryStore) deleteIfExpiredLocked(key string, observedRevision uint64, observedExpiry time.Time) {
 	s.admissionMu.Lock()
 	defer s.admissionMu.Unlock()
-	if s.closed {
-		return
-	}
 
 	shard := s.shardFor(key)
 	shard.mu.Lock()
@@ -199,6 +196,11 @@ func (s *MemoryStore) CompareAndSwap(
 	ttl time.Duration,
 	quota QuotaKey,
 ) (bool, error) {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	if s.closed {
+		return false, ErrStoreClosed
+	}
 	if ttl <= 0 {
 		ttl = s.ttl
 	}
@@ -206,10 +208,6 @@ func (s *MemoryStore) CompareAndSwap(
 
 	if expectedRevision == 0 {
 		return s.compareAndSwapCreate(key, next, ttl, quota, now)
-	}
-
-	if s.isClosed() {
-		return false, ErrStoreClosed
 	}
 
 	// Update path: an existing, live entry only. A missing or expired key
@@ -249,9 +247,6 @@ func (s *MemoryStore) CompareAndSwap(
 func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Duration, quota QuotaKey, now time.Time) (bool, error) {
 	s.admissionMu.Lock()
 	defer s.admissionMu.Unlock()
-	if s.closed {
-		return false, ErrStoreClosed
-	}
 
 	shard := s.shardFor(key)
 	shard.mu.Lock()
@@ -439,7 +434,9 @@ func (s *MemoryStore) removeFromBookkeeping(key string) {
 
 // Delete implements Store.
 func (s *MemoryStore) Delete(_ context.Context, key string) error {
-	if s.isClosed() {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	if s.closed {
 		return ErrStoreClosed
 	}
 	s.removeFromBookkeeping(key)
@@ -448,8 +445,8 @@ func (s *MemoryStore) Delete(_ context.Context, key string) error {
 
 // Close implements Store. Idempotent.
 func (s *MemoryStore) Close() error {
-	s.admissionMu.Lock()
-	defer s.admissionMu.Unlock()
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	s.closed = true
 	return nil
 }

@@ -94,16 +94,17 @@ func marshalFingerprint(v interface{}) string {
 }
 
 type toolDefinitionFingerprintInput struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Strict      *bool           `json:"strict"`
-	CacheType   string          `json:"cache_type,omitempty"`
-	CacheTTL    string          `json:"cache_ttl,omitempty"`
-	InputSchema json.RawMessage `json:"input_schema"`
+	Name         string          `json:"name"`
+	Description  string          `json:"description"`
+	Strict       *bool           `json:"strict"`
+	CachePresent bool            `json:"cache_present"`
+	CacheType    string          `json:"cache_type,omitempty"`
+	CacheTTL     string          `json:"cache_ttl,omitempty"`
+	InputSchema  json.RawMessage `json:"input_schema"`
 }
 
 // ToolDefinitionFingerprint returns a canonical, deterministic fingerprint
-// of tool's definition: normalized (trimmed) name and description,
+// of tool's provider-visible definition: exact name and description,
 // strictness, cache directive, and canonical input schema. Two calls for
 // semantically identical tools — even if InputSchema's raw bytes differ in
 // key order or whitespace — produce the same fingerprint; any actual
@@ -118,15 +119,16 @@ func ToolDefinitionFingerprint(tool llmprotocol.Tool) string {
 		// the hashed input itself (rather than silently substituting
 		// "null") so it still fingerprints deterministically, and
 		// distinctly from every valid schema.
-		schema = json.RawMessage(`"invalid_input_schema"`)
+		schema, _ = json.Marshal("invalid_input_schema:" + sha256Hex(tool.InputSchema))
 	}
 	input := toolDefinitionFingerprintInput{
-		Name:        strings.TrimSpace(tool.Name),
-		Description: strings.TrimSpace(tool.Description),
+		Name:        tool.Name,
+		Description: tool.Description,
 		Strict:      tool.Strict,
 		InputSchema: schema,
 	}
 	if tool.Cache != nil {
+		input.CachePresent = true
 		input.CacheType = tool.Cache.Type
 		input.CacheTTL = tool.Cache.TTL
 	}
@@ -146,15 +148,21 @@ func ToolCatalogFingerprint(catalog []llmprotocol.Tool) string {
 	entries := make([]toolCatalogEntry, len(catalog))
 	for i, tool := range catalog {
 		entries[i] = toolCatalogEntry{
-			Name:        strings.TrimSpace(tool.Name),
+			Name:        tool.Name,
 			Fingerprint: ToolDefinitionFingerprint(tool),
 		}
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Name == entries[j].Name {
+			return entries[i].Fingerprint < entries[j].Fingerprint
+		}
+		return entries[i].Name < entries[j].Name
+	})
 	return marshalFingerprint(entries)
 }
 
 type toolPolicyFingerprintInput struct {
+	Enabled              bool                                  `json:"enabled"`
 	Mode                 string                                `json:"mode"`
 	TopK                 int                                   `json:"top_k,omitempty"`
 	SimilarityThreshold  *float32                              `json:"similarity_threshold,omitempty"`
@@ -162,6 +170,7 @@ type toolPolicyFingerprintInput struct {
 	RelevanceThreshold   *float32                              `json:"relevance_threshold,omitempty"`
 	PreserveCount        int                                   `json:"preserve_count,omitempty"`
 	AdvancedFiltering    *advancedToolFilteringFingerprintView `json:"advanced_filtering,omitempty"`
+	FallbackToEmpty      *bool                                 `json:"fallback_to_empty,omitempty"`
 	StickyEnabled        bool                                  `json:"sticky_enabled"`
 	StickyMaxTools       int                                   `json:"sticky_max_tools"`
 	StickyMaxNewPerTurn  int                                   `json:"sticky_max_new_tools_per_turn"`
@@ -200,8 +209,8 @@ func newAdvancedToolFilteringFingerprintView(c *config.AdvancedToolFilteringConf
 		Weights:                     c.Weights,
 		UseCategoryFilter:           c.UseCategoryFilter,
 		CategoryConfidenceThreshold: c.CategoryConfidenceThreshold,
-		AllowTools:                  sortedStrings(c.AllowTools),
-		BlockTools:                  sortedStrings(c.BlockTools),
+		AllowTools:                  sortedFoldedStrings(c.AllowTools),
+		BlockTools:                  sortedFoldedStrings(c.BlockTools),
 		HybridHistory:               c.HybridHistory,
 	}
 }
@@ -210,9 +219,27 @@ func sortedStrings(in []string) []string {
 	if len(in) == 0 {
 		return nil
 	}
-	sorted := append([]string(nil), in...)
+	unique := make(map[string]struct{}, len(in))
+	for _, value := range in {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			unique[value] = struct{}{}
+		}
+	}
+	sorted := make([]string, 0, len(unique))
+	for value := range unique {
+		sorted = append(sorted, value)
+	}
 	sort.Strings(sorted)
 	return sorted
+}
+
+func sortedFoldedStrings(in []string) []string {
+	folded := make([]string, len(in))
+	for i, value := range in {
+		folded[i] = strings.ToLower(value)
+	}
+	return sortedStrings(folded)
 }
 
 // ToolPolicyFingerprint returns a canonical fingerprint of the effective
@@ -230,14 +257,20 @@ func ToolPolicyFingerprint(pluginCfg *config.ToolSelectionPluginConfig) string {
 	if pluginCfg == nil {
 		return marshalFingerprint(toolPolicyFingerprintInput{})
 	}
+	mode := strings.TrimSpace(pluginCfg.Mode)
+	if mode == "" {
+		mode = config.ToolSelectionModeAdd
+	}
 	input := toolPolicyFingerprintInput{
-		Mode:                 pluginCfg.Mode,
+		Enabled:              pluginCfg.Enabled,
+		Mode:                 mode,
 		TopK:                 pluginCfg.TopK,
 		SimilarityThreshold:  pluginCfg.SimilarityThreshold,
 		Strategy:             pluginCfg.EffectiveStrategy(),
 		RelevanceThreshold:   pluginCfg.RelevanceThreshold,
 		PreserveCount:        pluginCfg.PreserveCount,
 		AdvancedFiltering:    newAdvancedToolFilteringFingerprintView(pluginCfg.AdvancedFiltering),
+		FallbackToEmpty:      pluginCfg.FallbackToEmpty,
 		StickyMaxTools:       pluginCfg.Sticky.EffectiveMaxTools(),
 		StickyMaxNewPerTurn:  pluginCfg.Sticky.EffectiveMaxNewToolsPerTurn(),
 		StickyPinCalledTools: pluginCfg.Sticky.EffectivePinCalledTools(),

@@ -164,6 +164,26 @@ func TestPopulateSessionTransitionFieldsAuthenticatedPrincipal(t *testing.T) {
 			t.Fatalf("AuthenticatedPrincipal = %q, want empty with no auth header", ctx.AuthenticatedPrincipal)
 		}
 	})
+	t.Run("custom auth header is case insensitive", func(t *testing.T) {
+		ctx := &RequestContext{
+			Headers:           map[string]string{"X-Trusted-User": "user-42"},
+			AuthzUserIDHeader: "x-trusted-user",
+		}
+		populateSessionTransitionFields(ctx)
+		if ctx.AuthenticatedPrincipal != "user-42" {
+			t.Fatalf("AuthenticatedPrincipal = %q, want %q", ctx.AuthenticatedPrincipal, "user-42")
+		}
+	})
+	t.Run("custom auth header does not trust the default header", func(t *testing.T) {
+		ctx := &RequestContext{
+			Headers:           map[string]string{headers.AuthzUserID: "client-value"},
+			AuthzUserIDHeader: "x-trusted-user",
+		}
+		populateSessionTransitionFields(ctx)
+		if ctx.AuthenticatedPrincipal != "" {
+			t.Fatalf("AuthenticatedPrincipal = %q, want empty without the configured auth header", ctx.AuthenticatedPrincipal)
+		}
+	})
 }
 
 func TestPopulatePinnedSessionFromHeadersProvenanceAndPrincipal(t *testing.T) {

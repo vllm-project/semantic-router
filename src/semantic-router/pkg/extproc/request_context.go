@@ -145,11 +145,16 @@ type RequestContext struct {
 	// authentication; this field must only ever be populated from the
 	// configured auth gateway header, never from request-body content.
 	AuthenticatedPrincipal string
-	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
+	// AuthzUserIDHeader is the effective configured gateway header name.
+	// It is captured from the router's immutable config when this request
+	// context is created so identity extraction never falls back to a
+	// different client-controlled header later in the request.
+	AuthzUserIDHeader   string
+	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation

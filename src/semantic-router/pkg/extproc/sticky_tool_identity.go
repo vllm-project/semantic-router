@@ -18,6 +18,7 @@ const (
 	stickyToolIdentityReasonMissingPrincipal    = "missing_principal"
 	stickyToolIdentityReasonUntrustedProvenance = "untrusted_provenance"
 	stickyToolIdentityReasonMissingRecipe       = "missing_recipe"
+	stickyToolIdentityReasonMissingPolicy       = "missing_policy_fingerprint"
 	stickyToolIdentityReasonMissingSecret       = "missing_secret"
 )
 
@@ -82,7 +83,7 @@ type ResolvedStickyIdentity struct {
 // but another value this same function produced — there is deliberately no
 // way to recover the raw principal or session ID from them.
 func ResolveStickyToolIdentity(ctx *RequestContext, recipeName string, policyFingerprint string) ResolvedStickyIdentity {
-	if reason := stickyToolTrustViolation(ctx, recipeName); reason != "" {
+	if reason := stickyToolTrustViolation(ctx, recipeName, policyFingerprint); reason != "" {
 		return ResolvedStickyIdentity{Reason: reason}
 	}
 	secret, ok := stickyToolIdentitySecret()
@@ -115,9 +116,9 @@ func ResolveStickyToolIdentity(ctx *RequestContext, recipeName string, policyFin
 
 // stickyToolTrustViolation returns the first trust rule ctx/recipeName
 // fails, or "" if none. Order matches the blueprint's own rule order
-// (principal, then provenance, then recipe) so Reason is deterministic
+// (principal, provenance, recipe, then policy) so Reason is deterministic
 // when a request fails more than one rule at once.
-func stickyToolTrustViolation(ctx *RequestContext, recipeName string) string {
+func stickyToolTrustViolation(ctx *RequestContext, recipeName string, policyFingerprint string) string {
 	if ctx == nil || strings.TrimSpace(ctx.AuthenticatedPrincipal) == "" {
 		return stickyToolIdentityReasonMissingPrincipal
 	}
@@ -126,6 +127,9 @@ func stickyToolTrustViolation(ctx *RequestContext, recipeName string) string {
 	}
 	if strings.TrimSpace(recipeName) == "" {
 		return stickyToolIdentityReasonMissingRecipe
+	}
+	if strings.TrimSpace(policyFingerprint) == "" {
+		return stickyToolIdentityReasonMissingPolicy
 	}
 	return ""
 }

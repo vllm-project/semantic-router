@@ -127,6 +127,19 @@ func TestResolveStickyToolIdentity_MissingRecipe_Err(t *testing.T) {
 	}
 }
 
+func TestResolveStickyToolIdentity_MissingPolicyFingerprint_Err(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
+	for _, fingerprint := range []string{"", "   "} {
+		got := ResolveStickyToolIdentity(trustedResponseAPICtx(), "recipe-a", fingerprint)
+		if got.Trusted {
+			t.Fatal("identity with an empty policy fingerprint must not be trusted")
+		}
+		if got.Reason != stickyToolIdentityReasonMissingPolicy {
+			t.Fatalf("reason = %q, want %q", got.Reason, stickyToolIdentityReasonMissingPolicy)
+		}
+	}
+}
+
 func TestResolveStickyToolIdentity_MissingSecret_Err(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
 	got := ResolveStickyToolIdentity(trustedResponseAPICtx(), "recipe-a", "policy-fp")

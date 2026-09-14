@@ -538,3 +538,52 @@ func TestMemoryStore_ClosedStoreRejectsOperations(t *testing.T) {
 		t.Fatalf("Delete after Close: err = %v, want ErrStoreClosed", err)
 	}
 }
+
+func TestMemoryStore_CloseWaitsForInflightOperation(t *testing.T) {
+	now := time.Now()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	block := false
+	clock := func() time.Time {
+		if block {
+			select {
+			case <-entered:
+			default:
+				close(entered)
+			}
+			<-release
+		}
+		return now
+	}
+	store := NewMemoryStore(config.ToolSessionStoreConfig{}, clock)
+	if _, err := store.CompareAndSwap(context.Background(), "sess-1", 0, newTestState(0), time.Hour, QuotaKey{}); err != nil {
+		t.Fatal(err)
+	}
+
+	block = true
+	loadDone := make(chan error, 1)
+	go func() {
+		_, err := store.Load(context.Background(), "sess-1")
+		loadDone <- err
+	}()
+	<-entered
+
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- store.Close() }()
+	select {
+	case err := <-closeDone:
+		t.Fatalf("Close returned before the in-flight Load completed: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(release)
+	if err := <-loadDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-closeDone; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(context.Background(), "sess-1"); !errors.Is(err, ErrStoreClosed) {
+		t.Fatalf("Load after Close: err = %v, want ErrStoreClosed", err)
+	}
+}

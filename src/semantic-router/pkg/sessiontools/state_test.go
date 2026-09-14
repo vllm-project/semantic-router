@@ -45,6 +45,24 @@ func TestState_Validate_ZeroSchemaVersion_Err(t *testing.T) {
 	}
 }
 
+func TestState_Validate_RequiredEnvelopeFields_Err(t *testing.T) {
+	cases := map[string]func(*State){
+		"revision zero":                func(s *State) { s.Revision = 0 },
+		"policy fingerprint empty":     func(s *State) { s.PolicyFingerprint = "" },
+		"catalog fingerprint empty":    func(s *State) { s.CatalogFingerprint = "" },
+		"capability fingerprint empty": func(s *State) { s.CapabilityFingerprint = "" },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := validState()
+			mutate(&s)
+			if err := s.Validate(16, 16384); err == nil {
+				t.Fatalf("expected error for %s", name)
+			}
+		})
+	}
+}
+
 func TestState_Validate_ZeroTimestamps_Err(t *testing.T) {
 	cases := map[string]func(*State){
 		"created_at zero":   func(s *State) { s.CreatedAt = time.Time{} },
