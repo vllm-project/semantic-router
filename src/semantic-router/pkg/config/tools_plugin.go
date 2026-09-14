@@ -1,5 +1,9 @@
 package config
 
+import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
+
 const (
 	DecisionPluginTools = "tools"
 
@@ -113,26 +117,31 @@ type TrustedFactsConfig struct {
 	StageRoles []string `json:"stage_roles,omitempty" yaml:"stage_roles,omitempty"`
 }
 
-// Trusted enforcement modes.
+// Trusted enforcement modes. The canonical values are owned by
+// pkg/llmprotocol so config validation and the request-path gate share one
+// vocabulary.
 const (
-	TrustedEnforcementDisabled      = "disabled"
-	TrustedEnforcementAdvisory      = "advisory"
-	TrustedEnforcementAuthoritative = "authoritative"
+	TrustedEnforcementDisabled      = string(llmprotocol.TrustedDisabled)
+	TrustedEnforcementAdvisory      = string(llmprotocol.TrustedAdvisory)
+	TrustedEnforcementAuthoritative = string(llmprotocol.TrustedAuthoritative)
 )
 
-// Trusted trust-source values.
+// Trusted trust-source values. The canonical values are owned by
+// pkg/llmprotocol; see llmprotocol.TrustedSource.Authorizes for which
+// declarations can authorize.
 const (
-	TrustedSourceOperatorPolicy  = "operator-policy"
-	TrustedSourceGatewayAttested = "gateway-attested"
-	TrustedSourceRuntimeFresh    = "runtime-fresh"
+	TrustedSourceOperatorPolicy  = string(llmprotocol.TrustedSourceOperatorPolicy)
+	TrustedSourceGatewayAttested = string(llmprotocol.TrustedSourceGatewayAttested)
+	TrustedSourceRuntimeFresh    = string(llmprotocol.TrustedSourceRuntimeFresh)
 )
 
-// Trusted Looper stage-role values.
+// Trusted Looper stage-role values. The canonical values are owned by
+// pkg/llmprotocol.
 const (
-	TrustedStageCandidate = "candidate"
-	TrustedStageVerifier  = "verifier"
-	TrustedStageAdvisor   = "advisor"
-	TrustedStageFinal     = "final"
+	TrustedStageCandidate = string(llmprotocol.TrustedStageCandidate)
+	TrustedStageVerifier  = string(llmprotocol.TrustedStageVerifier)
+	TrustedStageAdvisor   = string(llmprotocol.TrustedStageAdvisor)
+	TrustedStageFinal     = string(llmprotocol.TrustedStageFinal)
 )
 
 // TrustedFactsEnabled reports whether the decision opts in to trusted facts.

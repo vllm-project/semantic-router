@@ -13,9 +13,11 @@ type TrustedFactsReason struct {
 	Outcome      string   `json:"outcome"`
 }
 
-// NewTrustedFactsReason builds a content-minimized reason. Callers pass only
-// the already-validated enforcement/stage/sources/outcome strings; any raw
-// content passed by mistake is dropped (only counts are kept).
+// NewTrustedFactsReason builds a content-minimized reason. Callers must pass
+// only already-validated enforcement/stage/sources/outcome strings: the
+// constructor copies the sources slice so later caller mutations cannot leak
+// in, but it cannot tell a validated source name from raw content, so passing
+// anything but validated vocabulary is a caller bug.
 func NewTrustedFactsReason(enforcement, stage string, sources []string, outcome string) TrustedFactsReason {
 	cp := make([]string, 0, len(sources))
 	cp = append(cp, sources...)

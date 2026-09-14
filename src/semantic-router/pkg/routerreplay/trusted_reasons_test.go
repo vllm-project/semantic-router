@@ -1,21 +1,34 @@
 package routerreplay
 
 import (
-	"strings"
+	"reflect"
 	"testing"
 )
 
 func TestNewTrustedFactsReasonMinimized(t *testing.T) {
-	r := NewTrustedFactsReason("authoritative", "final", []string{"operator-policy"}, "allow")
+	sources := []string{"operator-policy"}
+	r := NewTrustedFactsReason("authoritative", "final", sources, "allow")
 	if r.Enforcement != "authoritative" || r.Stage != "final" || r.Outcome != "allow" {
 		t.Fatalf("unexpected reason %+v", r)
 	}
-	if len(r.TrustSources) != 1 || r.TrustSources[0] != "operator-policy" {
+	if !reflect.DeepEqual(r.TrustSources, []string{"operator-policy"}) {
 		t.Fatalf("unexpected sources %+v", r.TrustSources)
 	}
-	// Ensure no raw content field exists (serialized form must not contain prompt/args).
-	serialized := r.Enforcement + r.Stage + strings.Join(r.TrustSources, ",") + r.Outcome
-	if strings.Contains(serialized, "prompt") || strings.Contains(serialized, "credential") {
-		t.Fatalf("reason leaks raw content: %q", serialized)
+	// The reason must be decoupled from the caller slice: later mutations
+	// must not leak into the recorded reason.
+	sources[0] = "prompt text that must never be recorded"
+	if r.TrustSources[0] != "operator-policy" {
+		t.Fatalf("reason aliases caller slice: %+v", r.TrustSources)
+	}
+	// The reason carries only the bounded vocabulary: no prompt, argument,
+	// result, credential, or reasoning fields exist to populate.
+	v := reflect.ValueOf(r)
+	if v.NumField() != 4 {
+		t.Fatalf("reason must carry exactly enforcement/stage/sources/outcome, got %d fields", v.NumField())
+	}
+	for _, field := range []string{"Enforcement", "Stage", "TrustSources", "Outcome"} {
+		if !v.FieldByName(field).IsValid() {
+			t.Fatalf("reason is missing field %q", field)
+		}
 	}
 }
