@@ -27,6 +27,7 @@ from cli.container_cli import (
     container_stop_container,
     load_openclaw_registry,
 )
+from cli.grafana_credentials import grafana_password_path
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import echo, fields, heading, progress, success
 from cli.utils import get_logger
@@ -346,6 +347,7 @@ def log_runtime_summary(
     dashboard_disabled: bool,
     enable_observability: bool,
     started_backends: set[str] | None = None,
+    state_root_dir: str | None = None,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
     success("vLLM Semantic Router is running")
@@ -377,13 +379,21 @@ def log_runtime_summary(
     if enable_observability:
         echo()
         heading("Observability")
-        fields(
-            (
-                ("Jaeger UI", stack_layout.jaeger_ui_url),
-                ("Grafana", f"{stack_layout.grafana_url} (admin/admin)"),
-                ("Prometheus", stack_layout.prometheus_url),
+        observability = [
+            ("Jaeger UI", stack_layout.jaeger_ui_url),
+            ("Grafana", stack_layout.grafana_url),
+        ]
+        if state_root_dir is not None:
+            observability.append(
+                (
+                    "Grafana admin password file",
+                    str(
+                        grafana_password_path(state_root_dir, stack_layout=stack_layout)
+                    ),
+                )
             )
-        )
+        observability.append(("Prometheus", stack_layout.prometheus_url))
+        fields(observability)
 
     _log_runtime_commands(dashboard_disabled)
     _print_curl_example(listeners, stack_layout)

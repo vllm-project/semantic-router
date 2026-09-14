@@ -316,8 +316,27 @@ def read_private_state_bytes(path: Path) -> bytes | None:
 
     Hardening is unconditional, so this must not be used on a file written with
     a relaxed ``mode`` for a container to read: reading it back would revoke the
-    access the relaxed mode exists to grant.
+    access the relaxed mode exists to grant. Use
+    :func:`read_container_readable_state_bytes` for those files instead.
     """
+
+    return _read_state_file_bytes(path, harden_permissions=True)
+
+
+def read_container_readable_state_bytes(path: Path) -> bytes | None:
+    """Read a container-readable state file without revoking its relaxed mode.
+
+    The owner-only reader above would chmod such a file back to 0600, revoking
+    the access the relaxed mode grants the container uid after bind mount. A
+    missing file returns ``None``; any mode other than the two this module
+    writes is a hard error.
+    """
+
+    return _read_state_file_bytes(path, harden_permissions=False)
+
+
+def _read_state_file_bytes(path: Path, *, harden_permissions: bool) -> bytes | None:
+    """Open one validated runtime-state file, optionally hardening its mode."""
 
     path = path.expanduser().absolute()
     directory = _create_or_harden_private_directory(path.parent)
@@ -343,7 +362,10 @@ def read_private_state_bytes(path: Path) -> bytes | None:
             raise ValueError(
                 f"Runtime state file exceeds {MAX_PRIVATE_STATE_BYTES} bytes: {path}"
             )
-        _harden_private_state_file(fd, info, path)
+        if harden_permissions:
+            _harden_private_state_file(fd, info, path)
+        else:
+            _reject_unexpected_state_file_mode(info, path)
         handle = os.fdopen(fd, "rb")
         fd = -1
         with handle:
@@ -351,6 +373,23 @@ def read_private_state_bytes(path: Path) -> bytes | None:
     finally:
         if fd >= 0:
             os.close(fd)
+
+
+def _reject_unexpected_state_file_mode(info: os.stat_result, path: Path) -> None:
+    """Fail closed unless a file carries one of the modes this module writes."""
+
+    current_user_id = _current_posix_user_id()
+    if current_user_id is None:
+        return
+    if info.st_uid != current_user_id:
+        raise ValueError(
+            f"Runtime state file must be owned by the current user: {path}"
+        )
+    if stat.S_IMODE(info.st_mode) not in {
+        PRIVATE_STATE_FILE_MODE,
+        CONTAINER_READABLE_STATE_FILE_MODE,
+    }:
+        raise ValueError(f"Runtime state file has unexpected permissions: {path}")
 
 
 def _harden_private_state_file(fd: int, info: os.stat_result, path: Path) -> None:

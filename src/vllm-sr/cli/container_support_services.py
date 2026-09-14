@@ -20,6 +20,11 @@ from cli.container_observability import (
 )
 from cli.container_runtime import get_container_runtime
 from cli.container_services import _replace_existing_container
+from cli.grafana_credentials import (
+    CONTAINER_GRAFANA_PASSWORD_PATH,
+    GRAFANA_ADMIN_PASSWORD_FILE_ENV,
+    ensure_grafana_admin_password_file,
+)
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
@@ -143,6 +148,12 @@ def container_start_grafana(
             stack_layout,
         )
 
+    # Resolves and materializes the admin password into a file the value is
+    # bind-mounted from, so the mount source always exists (never in argv/env).
+    password_file = ensure_grafana_admin_password_file(
+        config_dir, stack_layout=stack_layout
+    )
+
     cmd = [
         runtime,
         "run",
@@ -152,9 +163,12 @@ def container_start_grafana(
         "--network",
         network_name,
         "-e",
-        "GF_SECURITY_ADMIN_USER=admin",
-        "-e",
-        "GF_SECURITY_ADMIN_PASSWORD=admin",
+        f"{GRAFANA_ADMIN_PASSWORD_FILE_ENV}={CONTAINER_GRAFANA_PASSWORD_PATH}",
+        "-v",
+        (
+            f"{os.path.abspath(password_file)}:"
+            f"{CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z"
+        ),
         "-e",
         f"PROMETHEUS_URL={stack_layout.prometheus_container_name}:9090",
         "-v",
@@ -168,7 +182,7 @@ def container_start_grafana(
         "-v",
         f"{os.path.abspath(os.path.join(grafana_dir, 'llm-router-dashboard.serve.json'))}:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro",
         "-p",
-        f"{stack_layout.grafana_port}:3000",
+        f"127.0.0.1:{stack_layout.grafana_port}:3000",
         "docker.io/grafana/grafana:11.5.1",
     ]
     return _run_service_start(cmd, "Grafana")
