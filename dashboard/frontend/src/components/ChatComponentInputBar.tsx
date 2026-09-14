@@ -12,6 +12,7 @@ import {
 import styles from './ChatComponent.module.css'
 import ChatComposerAddMenu from './ChatComposerAddMenu'
 import ChatComposerModelSelect from './ChatComposerModelSelect'
+import ChatComposerCompletionBudget from './ChatComposerCompletionBudget'
 import { useSpeechDictation } from '../hooks/useSpeechDictation'
 import type { RouterModelOption } from '../utils/routerModelSelection'
 import {
@@ -33,6 +34,9 @@ interface ChatComponentInputBarProps {
   modelOptions: RouterModelOption[]
   modelSelectDisabled: boolean
   selectedModel: string
+  maxCompletionTokens: number
+  exactCompletionBudget?: unknown
+  onCompletionBudgetChange: (value: number) => void
   voiceInputDisabled: boolean
   webSearchDisabled?: boolean
   onAttachFiles: (files: FileList | File[]) => void
@@ -63,6 +67,9 @@ export default function ChatComponentInputBar({
   modelOptions,
   modelSelectDisabled,
   selectedModel,
+  maxCompletionTokens,
+  exactCompletionBudget,
+  onCompletionBudgetChange,
   voiceInputDisabled,
   webSearchDisabled = false,
   onAttachFiles,
@@ -258,6 +265,11 @@ export default function ChatComponentInputBar({
               models={modelOptions}
               onChange={onModelChange}
               value={selectedModel}
+            />
+            <ChatComposerCompletionBudget
+              value={maxCompletionTokens}
+              exactValue={exactCompletionBudget}
+              onChange={onCompletionBudgetChange}
             />
           </div>
           <div className={styles.composerButtons}>

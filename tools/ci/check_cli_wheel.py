@@ -65,7 +65,11 @@ def check_wheel(wheel: Path) -> None:
             cli("config", command, "--help")
         cli("route", "preview", "--help")
         probe_help = cli("route", "probe", "--help")
-        for option in ("--expect-selected-model", "--expect-response-model"):
+        for option in (
+            "--expect-selected-model",
+            "--expect-response-model",
+            "--max-completion-tokens",
+        ):
             if option not in probe_help:
                 raise RuntimeError(f"installed route probe is missing {option}")
         config_path = root / "config.yaml"

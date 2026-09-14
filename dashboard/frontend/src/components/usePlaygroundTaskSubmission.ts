@@ -69,6 +69,7 @@ export const usePlaygroundTaskSubmission = ({
       createdAt: Date.now(),
       requestOptions: activeProbeDraft
         ? {
+            ...buildTaskRequestOptions(),
             enableClawMode: false,
             enableWebSearch: false,
             executeToolCalls: false,

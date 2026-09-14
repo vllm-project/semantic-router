@@ -127,4 +127,132 @@ describe('consumePlaygroundResponseBody', () => {
       technicalDetails: 'stream worker disconnected',
     })
   })
+  it.each(['application/json', 'text/event-stream'])(
+    'rejects budget exhaustion in %s while dispatching the partial response',
+    async (contentType) => {
+      const apply = vi.fn()
+      const choice = {
+        index: 0,
+        message: { content: 'Partial answer.', reasoning_content: 'Thinking.' },
+        finish_reason: 'length',
+      }
+      const payload = JSON.stringify({ choices: [choice] })
+      const response =
+        contentType === 'application/json'
+          ? new Response(payload, { headers: { 'content-type': contentType } })
+          : eventStreamResponse([payload, '[DONE]'])
+
+      await expect(consumePlaygroundResponseBody(response, apply)).rejects.toMatchObject({
+        productMessage: expect.stringContaining('output budget was reached'),
+        technicalDetails: expect.stringContaining('finish_reason: length'),
+      })
+      expect(apply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          choices: [expect.objectContaining({ content: 'Partial answer.' })],
+        }),
+        contentType === 'text/event-stream',
+      )
+    },
+  )
+
+  it.each(['', 'Thinking without a final answer.'])(
+    'rejects empty or reasoning-only successful responses (%s)',
+    async (reasoning) => {
+      const response = eventStreamResponse([
+        JSON.stringify({
+          choices: [{ index: 0, delta: { content: null, reasoning_content: reasoning } }],
+        }),
+        JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }),
+        '[DONE]',
+      ])
+      await expect(consumePlaygroundResponseBody(response, vi.fn())).rejects.toMatchObject({
+        productMessage: expect.stringContaining(
+          reasoning ? 'without a final answer' : 'no answer or tool calls',
+        ),
+      })
+    },
+  )
+
+  it('accepts reasoning followed by a final answer and ignores usage-only trailer chunks', async () => {
+    const response = eventStreamResponse([
+      '{"choices":[{"index":0,"delta":{"reasoning_content":"Thinking."}}]}',
+      '{"choices":[{"index":0,"delta":{"content":"Final answer."}}]}',
+      '{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
+      '{"choices":[],"usage":{"completion_tokens":3923}}',
+      '[DONE]',
+    ])
+    await expect(consumePlaygroundResponseBody(response, vi.fn())).resolves.toBeUndefined()
+  })
+
+  it('accepts a tool call with no answer text', async () => {
+    const response = new Response(
+      JSON.stringify({
+        choices: [
+          {
+            index: 0,
+            message: {
+              content: null,
+              tool_calls: [{ id: 'call-1', function: { name: 'lookup', arguments: '{}' } }],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      }),
+      { headers: { 'content-type': 'application/json' } },
+    )
+    await expect(consumePlaygroundResponseBody(response, vi.fn())).resolves.toBeUndefined()
+  })
+
+  it('rejects a stream containing only malformed events', async () => {
+    await expect(
+      consumePlaygroundResponseBody(eventStreamResponse(['not-json', '[DONE]']), vi.fn()),
+    ).rejects.toMatchObject({
+      technicalDetails: 'The response stream contained no completion choices.',
+    })
+  })
+  it('does not let a valid choice hide an empty alternative', async () => {
+    const response = new Response(
+      JSON.stringify({
+        choices: [
+          { index: 0, message: { content: 'Answer.' }, finish_reason: 'stop' },
+          {
+            index: 1,
+            message: { content: null, reasoning_content: 'Thinking.' },
+            finish_reason: 'stop',
+          },
+        ],
+      }),
+      { headers: { 'content-type': 'application/json' } },
+    )
+    await expect(consumePlaygroundResponseBody(response, vi.fn())).rejects.toMatchObject({
+      technicalDetails: 'Completion choice 1 contained no non-empty answer text or tool calls.',
+    })
+  })
+
+  it.each(['message', 'delta'])(
+    'renders a refusal in %s as a valid model response',
+    async (field) => {
+      const apply = vi.fn()
+      const payload = JSON.stringify({
+        choices: [
+          {
+            index: 0,
+            [field]: { content: null, refusal: 'I cannot help with that request.' },
+            finish_reason: 'stop',
+          },
+        ],
+      })
+      const response =
+        field === 'message'
+          ? new Response(payload, { headers: { 'content-type': 'application/json' } })
+          : eventStreamResponse([payload, '[DONE]'])
+      await consumePlaygroundResponseBody(response, apply)
+      expect(apply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          choices: [expect.objectContaining({ content: 'I cannot help with that request.' })],
+        }),
+        field === 'delta',
+      )
+    },
+  )
 })

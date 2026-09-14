@@ -43,6 +43,7 @@ import {
 } from './usePlaygroundInvocation'
 import { usePlaygroundTaskSubmission } from './usePlaygroundTaskSubmission'
 import { sanitizeMessagesForPersistence } from './chatPersistenceSupport'
+import { PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS } from './chatRequestSupport'
 
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
@@ -53,6 +54,9 @@ const ChatComponent = ({
   const [conversationMessages, setConversationMessages] = useState<Record<string, Message[]>>({})
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId())
   const [inputValue, setInputValue] = useState('')
+  const [maxCompletionTokens, setMaxCompletionTokens] = useState(
+    PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
+  )
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
   const [probeDraft, setProbeDraft] = useState<ActivePlaygroundInvocationDraft | null>(null)
   const {
@@ -328,8 +332,9 @@ const ChatComponent = ({
       enableClawMode: enableClawMode && !clawManagementDisabled,
       enableWebSearch,
       model,
+      maxCompletionTokens,
     }),
-    [clawManagementDisabled, enableClawMode, enableWebSearch, model],
+    [clawManagementDisabled, enableClawMode, enableWebSearch, model, maxCompletionTokens],
   )
 
   const buildTaskTools = useCallback(
@@ -579,6 +584,9 @@ const ChatComponent = ({
 
       removeQueuedTask(conversationId, taskId)
       setInputValue(taskToEdit.prompt)
+      setMaxCompletionTokens(
+        taskToEdit.requestOptions.maxCompletionTokens ?? PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
+      )
       restorePendingAttachments(taskToEdit.attachments)
 
       if (typeof window !== 'undefined') {
@@ -754,6 +762,14 @@ const ChatComponent = ({
                   modelOptions={routingModels}
                   modelSelectDisabled={!isRoutingModelReady || isCurrentConversationRunning}
                   selectedModel={model}
+                  maxCompletionTokens={maxCompletionTokens}
+                  exactCompletionBudget={
+                    hasActiveProbeDraft
+                      ? (probeDraft.prepared.exactRequest.max_completion_tokens ??
+                        probeDraft.prepared.exactRequest.max_tokens)
+                      : undefined
+                  }
+                  onCompletionBudgetChange={setMaxCompletionTokens}
                   voiceInputDisabled={
                     isCurrentConversationRunning || readonlyLoading || serverReadonly
                   }

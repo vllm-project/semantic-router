@@ -83,7 +83,9 @@ describe('runToolLoop', () => {
         enableClawMode: false,
         enableWebSearch: true,
         model: 'vllm-sr/blend',
+        maxCompletionTokens: 16384,
       },
+      exactRequest: { max_tokens: 512 },
     }
     let messages: Message[] = [
       {
@@ -142,7 +144,9 @@ describe('runToolLoop', () => {
       model: 'vllm-sr/blend',
       stream: true,
       tool_choice: 'auto',
+      max_tokens: 512,
     })
+    expect(JSON.parse(String(finalRequest.body)).max_completion_tokens).toBeUndefined()
     expect(messages[0]).toMatchObject({
       content: 'Final answer from the gathered evidence.',
       toolCalls: expect.arrayContaining([

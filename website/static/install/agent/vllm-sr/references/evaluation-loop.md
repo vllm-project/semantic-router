@@ -25,6 +25,7 @@ vllm-sr route preview \
 vllm-sr route probe \
   --config config.yaml --base-url "$INFERENCE_BASE_URL" --model "$ENTRYPOINT" \
   --api-key-env OPENAI_API_KEY --timeout 300 --prompt "$PROMPT" \
+  --max-completion-tokens 8192 \
   --expect-recipe balance --expect-decision simple \
   --expect-algorithm multi_factor > probe.json
 ```
@@ -39,12 +40,32 @@ as evidence. Inspect `preview.json` for the expected Recipe, decision, algorithm
 selection status, signal errors, and trace; HTTP success alone is not a route
 assertion. Repeat with other cases from the selected manifest.
 
+The completion budget is separate from the HTTP timeout. `8192` is an example,
+not a guarantee: choose a limit that fits the backend context window after the
+actual input, and allows both reasoning tokens and the final answer. Omitting
+`--max-completion-tokens` leaves the backend default unchanged. A reasoning model
+can exhaust that default while returning HTTP 200, correct routing headers,
+`content: null`, and `finish_reason: length`. Keep this failed receipt; repeat
+with an explicitly larger supported budget when the test scope permits. Do not
+disable reasoning to hide incomplete delivery or claim the first request passed.
+
 `route probe` makes a real OpenAI-compatible request through Envoy. Its receipt
 contains status, latency, routing headers, response body, and assertions. Use
 `--expect-selected-model` for the routing identity and `--expect-response-model`
 for the backend's separately calibrated top-level `model` field. An absent or
 unstable backend identity limits that assertion, not the need to verify real
 delivery. Use installed help for supported Recipe and decision assertions.
+
+For an expected successful HTTP status, `response.body.delivery` must also pass:
+every choice needs final assistant text, a structurally valid function tool call
+with JSON object arguments, or an explicit refusal, plus a recognized terminal
+finish reason. Reasoning alone, empty or malformed choices, and any `length`
+finish fail, including partially generated answers. A `content_filter` finish
+passes only with an explicit refusal. The assertion records each finish reason
+and delivery kind without repeating reasoning; the original response remains in
+the receipt. A refusal or tool call proves delivery, not answer quality or tool
+execution. Explicit non-2xx `--expect-status` cases check the expected rejection
+without demanding an assistant completion.
 
 Build cases for every relevant remaining branch, boundaries, fallback, and
 unsupported-input behavior. Candidate-selection algorithms can select from a

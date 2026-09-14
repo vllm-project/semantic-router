@@ -512,6 +512,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_install_script_surface.py \
 		src/vllm-sr/tests/test_recipe_builtin.py \
 		src/vllm-sr/tests/test_reasoning_controls.py \
+		src/vllm-sr/tests/test_route_command.py \
 		src/vllm-sr/tests/test_runtime_lifecycle.py \
 		src/vllm-sr/tests/test_runtime_observability.py \
 		src/vllm-sr/tests/test_setup_bootstrap.py \

@@ -95,7 +95,7 @@ describe('runPlaygroundTask', () => {
       tools: [probeTool],
       temperature: 0,
       stream: true,
-      max_completion_tokens: 2048,
+      max_completion_tokens: 8192,
     })
     expect(requestInit.headers).toMatchObject({ 'x-session-id': 'conversation-1' })
     expect(messages[messages.length - 1]).toMatchObject({
@@ -319,4 +319,116 @@ describe('runPlaygroundTask', () => {
     expect(failure.message).not.toContain(rawResponse)
     expect(messages).toHaveLength(1)
   })
+  it.each([false, true])(
+    'preserves and marks truncated output (tool follow-up: %s)',
+    async (toolFollowUp) => {
+      const response = (payloads: unknown[]) => {
+        const encoder = new TextEncoder()
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              payloads.forEach((payload) =>
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)),
+              )
+              controller.close()
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        )
+      }
+      const fetchMock = vi.fn()
+      if (toolFollowUp) {
+        fetchMock.mockResolvedValueOnce(
+          response([
+            {
+              choices: [
+                {
+                  index: 0,
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'call-1',
+                        function: { name: 'lookup_policy', arguments: '{}' },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ]),
+        )
+      }
+      fetchMock.mockResolvedValueOnce(
+        response([
+          {
+            choices: [
+              {
+                index: 0,
+                delta: { content: 'Partial answer.', reasoning_content: 'Partial reasoning.' },
+              },
+            ],
+          },
+          { choices: [{ index: 0, delta: {}, finish_reason: 'length' }] },
+        ]),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const task: PlaygroundTask = {
+        id: 'task-incomplete',
+        conversationId: 'conversation-incomplete',
+        prompt: 'Explain.',
+        createdAt: 1,
+        requestOptions: {
+          enableClawMode: false,
+          enableWebSearch: false,
+          model: 'vllm-sr/balance',
+          maxCompletionTokens: 16384,
+        },
+      }
+      let messages: Message[] = []
+      const setConversationError = vi.fn()
+      const executeTools = vi.fn(async () => [
+        { callId: 'call-1', name: 'lookup_policy', content: 'Evidence.' },
+      ])
+      await runPlaygroundTask({
+        buildTaskTools: () => [probeTool],
+        clawManagementDisabled: false,
+        clearConversationActiveTask: vi.fn(),
+        endpoint: '/api/router/v1/chat/completions',
+        executeTools,
+        expandedToolCardCount: 0,
+        generateId: () => crypto.randomUUID(),
+        getConversationMessagesSnapshot: () => messages,
+        registerAbortController: vi.fn(),
+        setConversationError,
+        setConversationThinking: vi.fn(),
+        setExpandedToolCards: vi.fn(),
+        task,
+        updateConversationMessages: (_id, updater) => {
+          messages = updater(messages)
+        },
+      })
+      expect(messages[messages.length - 1]).toMatchObject({
+        role: 'assistant',
+        content: 'Partial answer.',
+        thinkingProcess: 'Partial reasoning.',
+        isStreaming: false,
+        incomplete: expect.stringContaining('output budget was reached'),
+      })
+      expect(setConversationError).toHaveBeenLastCalledWith(
+        task.conversationId,
+        expect.objectContaining({ message: expect.stringContaining('output budget was reached') }),
+      )
+      expect(executeTools).toHaveBeenCalledTimes(toolFollowUp ? 1 : 0)
+      if (toolFollowUp) {
+        expect(messages[messages.length - 1]?.toolCalls).toEqual([
+          expect.objectContaining({ id: 'call-1', status: 'completed' }),
+        ])
+      }
+      for (const [, requestInit] of fetchMock.mock.calls) {
+        expect(JSON.parse(requestInit.body).max_completion_tokens).toBe(16384)
+      }
+    },
+  )
 })

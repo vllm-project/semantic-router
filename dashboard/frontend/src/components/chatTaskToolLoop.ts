@@ -1,17 +1,15 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-import {
-  consumeEventStream,
-  isEventStreamContentType,
-  parseChatCompletionPayload,
-  type ParsedChatCompletion,
-  type ParsedToolCallChunk,
-} from './chatResponseParsing'
+import { type ParsedChatCompletion, type ParsedToolCallChunk } from './chatResponseParsing'
 import {
   buildPlaygroundRequestHeaders,
-  PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
+  buildExactChatRequestBody,
   type OutboundChatMessage,
 } from './chatRequestSupport'
+import {
+  assertPlaygroundResponseSuccess,
+  consumePlaygroundResponseBody,
+} from './chatTaskResponseSupport'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import type { Message, PlaygroundTask } from './ChatComponentTypes'
 import {
@@ -147,20 +145,25 @@ export const runToolLoop = async ({
     const followUpResponse = await fetch(endpoint, {
       method: 'POST',
       headers: buildPlaygroundRequestHeaders(task.conversationId),
-      body: JSON.stringify({
-        model: task.requestOptions.model,
-        messages: currentMessages,
-        stream: true,
-        max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
-        tools: activeTools,
-        tool_choice: 'auto',
-      }),
+      body: JSON.stringify(
+        buildExactChatRequestBody(
+          {
+            model: task.requestOptions.model,
+            messages: currentMessages,
+            stream: true,
+            max_tokens: task.exactRequest?.max_tokens,
+            max_completion_tokens: task.exactRequest?.max_completion_tokens,
+            tools: activeTools,
+            tool_choice: 'auto',
+          },
+          task.requestOptions.model,
+          task.requestOptions.maxCompletionTokens,
+        ),
+      ),
       signal: abortSignal,
     })
 
-    if (!followUpResponse.ok) {
-      break
-    }
+    await assertPlaygroundResponseSuccess(followUpResponse)
 
     let followUpContent = ''
     let followUpThinking = ''
@@ -241,23 +244,11 @@ export const runToolLoop = async ({
       syncFollowUpMessage(streaming)
     }
 
-    if (!isEventStreamContentType(followUpResponse.headers.get('content-type'))) {
-      const parsedFollowUp = parseChatCompletionPayload(await followUpResponse.text())
-      if (parsedFollowUp?.errorMessage) {
-        break
-      }
-      if (parsedFollowUp && parsedFollowUp.choices.length > 0) {
-        applyFollowUpCompletion(parsedFollowUp, false)
-      }
-    } else {
-      if (!followUpResponse.body) break
-      await consumeEventStream(followUpResponse.body, (data) => {
-        const parsedFollowUpChunk = parseChatCompletionPayload(data)
-        if (!parsedFollowUpChunk || parsedFollowUpChunk.errorMessage) {
-          return
-        }
-        applyFollowUpCompletion(parsedFollowUpChunk, true)
-      })
+    try {
+      await consumePlaygroundResponseBody(followUpResponse, applyFollowUpCompletion)
+    } finally {
+      // Keep partial follow-up text and reasoning visible when completion validation fails.
+      followUpStreamingSync.drain()
     }
 
     if (activeTools.length > 0) {
@@ -283,7 +274,7 @@ export const runToolLoop = async ({
     if (streamFinishReason === 'tool_calls' && toolCallsMap.size > 0) {
       continue
     }
-    if (streamFinishReason === 'stop' || streamFinishReason === 'length' || !hasMoreToolCalls) {
+    if (streamFinishReason === 'stop' || !hasMoreToolCalls) {
       break
     }
   }

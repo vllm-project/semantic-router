@@ -70,6 +70,7 @@ export interface Message {
   images?: InlineMessageImage[]
   timestamp: Date
   isStreaming?: boolean
+  incomplete?: string
   headers?: Record<string, string>
   choices?: Choice[]
   thinkingProcess?: string
@@ -89,6 +90,7 @@ export interface PlaygroundTaskRequestOptions {
   enableWebSearch: boolean
   model: string
   executeToolCalls?: boolean
+  maxCompletionTokens?: number
 }
 
 export interface PlaygroundTask {

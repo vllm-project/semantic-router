@@ -22,6 +22,7 @@ import {
 import {
   assertPlaygroundResponseSuccess,
   consumePlaygroundResponseBody,
+  PlaygroundIncompleteResponseFailure,
 } from './chatTaskResponseSupport'
 import { ChatTaskResponseState } from './chatTaskResponseState'
 import { runToolLoop } from './chatTaskToolLoop'
@@ -180,8 +181,17 @@ const buildExecutionRequest = (
         preparedTask.attachments,
       )
   const requestBody = task.exactRequest
-    ? buildExactChatRequestBody(task.exactRequest, task.requestOptions.model)
-    : buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
+    ? buildExactChatRequestBody(
+        task.exactRequest,
+        task.requestOptions.model,
+        task.requestOptions.maxCompletionTokens,
+      )
+    : buildChatRequestBody(
+        task.requestOptions.model,
+        chatMessages,
+        activeTools,
+        task.requestOptions.maxCompletionTokens,
+      )
 
   return { activeTools, chatMessages, requestBody }
 }
@@ -254,6 +264,21 @@ const handleTaskExecutionFailure = (
   runtime: PlaygroundExecutionRuntime,
   error: unknown,
 ): void => {
+  if (error instanceof PlaygroundIncompleteResponseFailure) {
+    if (runtime.responseState.toolCallsMap.size > 0) {
+      runtime.responseState.skipPendingToolCalls()
+    }
+    runtime.responseState.finalize()
+    options.setConversationError(options.task.conversationId, playgroundErrorPresentation(error))
+    options.updateConversationMessages(options.task.conversationId, (prev) =>
+      prev.map((message) =>
+        message.id === runtime.assistantMessageId
+          ? { ...message, incomplete: error.productMessage }
+          : message,
+      ),
+    )
+    return
+  }
   runtime.responseState.cancelStreamingChoiceSync()
   if (error instanceof Error && error.name === 'AbortError') return
 

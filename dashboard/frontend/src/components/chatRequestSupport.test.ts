@@ -312,3 +312,21 @@ describe('playground request stability', () => {
     })
   })
 })
+
+describe('completion budget overrides', () => {
+  it('uses the composer budget for ordinary and unspecified exact requests', () => {
+    expect(buildChatRequestBody('balance', [], [], 16384).max_completion_tokens).toBe(16384)
+    expect(
+      buildExactChatRequestBody({ messages: [] }, 'balance', 16384).max_completion_tokens,
+    ).toBe(16384)
+  })
+
+  it.each(['max_tokens', 'max_completion_tokens'])(
+    'preserves an exact %s over the composer default',
+    (key) => {
+      const result = buildExactChatRequestBody({ messages: [], [key]: 512 }, 'balance', 16384)
+      expect(result[key]).toBe(512)
+      expect(result[key === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens']).toBeUndefined()
+    },
+  )
+})
