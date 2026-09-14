@@ -16,6 +16,7 @@ const probeTool: ToolDefinition = {
 describe('runPlaygroundTask', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('sends the server materialized probe request without injecting or executing tools', async () => {
@@ -59,6 +60,7 @@ describe('runPlaygroundTask', () => {
         messages: [{ role: 'user', content: 'Check the policy.' }],
         tools: [probeTool],
         temperature: 0,
+        max_completion_tokens: 512,
       },
     }
     const buildTaskTools = vi.fn(() => [probeTool])
@@ -94,8 +96,8 @@ describe('runPlaygroundTask', () => {
       messages: [{ role: 'user', content: 'Check the policy.' }],
       tools: [probeTool],
       temperature: 0,
+      max_completion_tokens: 512,
       stream: true,
-      max_completion_tokens: 8192,
     })
     expect(requestInit.headers).toMatchObject({ 'x-session-id': 'conversation-1' })
     expect(messages[messages.length - 1]).toMatchObject({
@@ -383,7 +385,6 @@ describe('runPlaygroundTask', () => {
           enableClawMode: false,
           enableWebSearch: false,
           model: 'vllm-sr/balance',
-          maxCompletionTokens: 16384,
         },
       }
       let messages: Message[] = []
@@ -414,11 +415,13 @@ describe('runPlaygroundTask', () => {
         content: 'Partial answer.',
         thinkingProcess: 'Partial reasoning.',
         isStreaming: false,
-        incomplete: expect.stringContaining('output budget was reached'),
+        incomplete: expect.stringContaining('backend output limit was reached'),
       })
       expect(setConversationError).toHaveBeenLastCalledWith(
         task.conversationId,
-        expect.objectContaining({ message: expect.stringContaining('output budget was reached') }),
+        expect.objectContaining({
+          message: expect.stringContaining('backend output limit was reached'),
+        }),
       )
       expect(executeTools).toHaveBeenCalledTimes(toolFollowUp ? 1 : 0)
       if (toolFollowUp) {
@@ -427,8 +430,88 @@ describe('runPlaygroundTask', () => {
         ])
       }
       for (const [, requestInit] of fetchMock.mock.calls) {
-        expect(JSON.parse(requestInit.body).max_completion_tokens).toBe(16384)
+        expect(JSON.parse(requestInit.body)).not.toHaveProperty('max_completion_tokens')
+        expect(JSON.parse(requestInit.body)).not.toHaveProperty('max_tokens')
       }
+    },
+  )
+  it.each(['complete', 'cancel'])(
+    'does not impose a chat deadline and can %s after the old timeout',
+    async (outcome) => {
+      vi.useFakeTimers()
+      let completeResponse: (response: Response) => void = () => undefined
+      const requestState: { signal?: AbortSignal } = {}
+      const fetchMock = vi.fn((_endpoint: string, request: RequestInit) => {
+        requestState.signal = request.signal as AbortSignal
+        return new Promise<Response>((resolve, reject) => {
+          completeResponse = resolve
+          requestState.signal?.addEventListener('abort', () =>
+            reject(new DOMException('User stopped generation.', 'AbortError')),
+          )
+        })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      const task: PlaygroundTask = {
+        id: 'long-chat',
+        conversationId: 'long-conversation',
+        prompt: 'Think carefully.',
+        createdAt: 1,
+        requestOptions: { enableClawMode: false, enableWebSearch: false, model: 'vllm-sr/balance' },
+      }
+      let messages: Message[] = []
+      const controllers: AbortController[] = []
+      const setConversationError = vi.fn()
+      const clearConversationActiveTask = vi.fn()
+      const execution = runPlaygroundTask({
+        buildTaskTools: () => [],
+        clawManagementDisabled: false,
+        clearConversationActiveTask,
+        endpoint: '/api/router/v1/chat/completions',
+        executeTools: vi.fn(async () => []),
+        expandedToolCardCount: 0,
+        generateId: () => crypto.randomUUID(),
+        getConversationMessagesSnapshot: () => messages,
+        registerAbortController: (_conversationId, controller) => {
+          if (controller) controllers.push(controller)
+        },
+        setConversationError,
+        setConversationThinking: vi.fn(),
+        setExpandedToolCards: vi.fn(),
+        task,
+        updateConversationMessages: (_id, updater) => {
+          messages = updater(messages)
+        },
+      })
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(requestState.signal?.aborted).toBe(false)
+      const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1].body))
+      expect(requestBody).not.toHaveProperty('max_tokens')
+      expect(requestBody).not.toHaveProperty('max_completion_tokens')
+      if (outcome === 'cancel') controllers[0].abort()
+      else
+        completeResponse(
+          new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  index: 0,
+                  message: { content: 'Completed after thinking.' },
+                  finish_reason: 'stop',
+                },
+              ],
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+        )
+      await execution
+      if (outcome === 'cancel') expect(requestState.signal?.aborted).toBe(true)
+      else
+        expect(messages[messages.length - 1]).toMatchObject({
+          content: 'Completed after thinking.',
+          isStreaming: false,
+        })
+      expect(setConversationError).toHaveBeenCalledTimes(1)
+      expect(clearConversationActiveTask).toHaveBeenCalledWith(task.conversationId, task.id)
     },
   )
 })

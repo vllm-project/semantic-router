@@ -143,7 +143,7 @@ describe('consumePlaygroundResponseBody', () => {
           : eventStreamResponse([payload, '[DONE]'])
 
       await expect(consumePlaygroundResponseBody(response, apply)).rejects.toMatchObject({
-        productMessage: expect.stringContaining('output budget was reached'),
+        productMessage: expect.stringContaining('backend output limit was reached'),
         technicalDetails: expect.stringContaining('finish_reason: length'),
       })
       expect(apply).toHaveBeenCalledWith(

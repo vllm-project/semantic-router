@@ -83,7 +83,6 @@ describe('runToolLoop', () => {
         enableClawMode: false,
         enableWebSearch: true,
         model: 'vllm-sr/blend',
-        maxCompletionTokens: 16384,
       },
       exactRequest: { max_tokens: 512 },
     }

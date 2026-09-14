@@ -157,7 +157,6 @@ export const runToolLoop = async ({
             tool_choice: 'auto',
           },
           task.requestOptions.model,
-          task.requestOptions.maxCompletionTokens,
         ),
       ),
       signal: abortSignal,

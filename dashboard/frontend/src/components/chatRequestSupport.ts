@@ -17,8 +17,6 @@ export interface OutboundChatMessage {
   tool_call_id?: string
 }
 
-export const PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS = 8192
-export const PLAYGROUND_REQUEST_TIMEOUT_MS = 120_000
 export const PLAYGROUND_MAX_REQUEST_BYTES = 10 * 1024 * 1024
 
 export const assertPlaygroundRequestSize = (request: Record<string, unknown>): void => {
@@ -33,16 +31,6 @@ export const buildPlaygroundRequestHeaders = (conversationId: string): Record<st
   'x-session-id': conversationId,
   'x-vsr-debug': 'true',
 })
-
-const withDefaultCompletionBudget = (
-  request: Record<string, unknown>,
-  maxCompletionTokens = PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
-): Record<string, unknown> => {
-  if (request.max_tokens !== undefined || request.max_completion_tokens !== undefined) {
-    return request
-  }
-  return { ...request, max_completion_tokens: maxCompletionTokens }
-}
 
 const RESPONSE_HEADER_KEYS = [
   // v0.4 keystone headers (#2203)
@@ -191,13 +179,11 @@ export const buildChatRequestBody = (
   model: string,
   messages: OutboundChatMessage[],
   activeTools: unknown[],
-  maxCompletionTokens = PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
 ): Record<string, unknown> => {
   const requestBody: Record<string, unknown> = {
     model,
     messages,
     stream: true,
-    max_completion_tokens: maxCompletionTokens,
   }
 
   if (activeTools.length > 0) {
@@ -212,20 +198,16 @@ export const buildChatRequestBody = (
 export const buildExactChatRequestBody = (
   request: Record<string, unknown>,
   fallbackModel: string,
-  maxCompletionTokens = PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
 ): Record<string, unknown> => {
   const messages = Array.isArray(request.messages) ? request.messages : []
   const requestModel = typeof request.model === 'string' ? request.model.trim() : ''
 
-  const result = withDefaultCompletionBudget(
-    {
-      ...request,
-      model: requestModel || fallbackModel,
-      messages,
-      stream: true,
-    },
-    maxCompletionTokens,
-  )
+  const result = {
+    ...request,
+    model: requestModel || fallbackModel,
+    messages,
+    stream: true,
+  }
   assertPlaygroundRequestSize(result)
   return result
 }

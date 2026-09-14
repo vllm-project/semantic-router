@@ -18,14 +18,14 @@ describe('incomplete chat messages', () => {
             content: 'Partial answer.',
             timestamp: new Date(),
             isStreaming: false,
-            incomplete: 'Increase Output budget and try again.',
+            incomplete: 'Review the backend generation settings and try again.',
           },
         ],
       }),
     )
     expect(markup).toContain('Partial answer.')
     expect(markup).toContain('Incomplete response.')
-    expect(markup).toContain('Increase Output budget and try again.')
+    expect(markup).toContain('Review the backend generation settings and try again.')
     expect(markup).not.toContain('Generating response')
   })
 })

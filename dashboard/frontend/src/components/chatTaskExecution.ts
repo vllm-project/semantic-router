@@ -6,7 +6,6 @@ import {
   buildExactChatRequestBody,
   buildPlaygroundRequestHeaders,
   collectResponseHeaders,
-  PLAYGROUND_REQUEST_TIMEOUT_MS,
   type OutboundChatMessage,
 } from './chatRequestSupport'
 import {
@@ -72,7 +71,6 @@ interface PlaygroundExecutionRuntime {
   abortController: AbortController
   assistantMessageId: string
   responseState: ChatTaskResponseState
-  timeoutHandle: ReturnType<typeof globalThis.setTimeout>
 }
 
 const preparePlaygroundTask = (task: PlaygroundTask): PreparedPlaygroundTask | null => {
@@ -125,14 +123,6 @@ const beginTaskExecution = (
 
   const assistantMessageId = generateId()
   const abortController = new AbortController()
-  const timeoutHandle = globalThis.setTimeout(() => {
-    abortController.abort(
-      new DOMException(
-        `Playground request timed out after ${PLAYGROUND_REQUEST_TIMEOUT_MS / 1000} seconds.`,
-        'TimeoutError',
-      ),
-    )
-  }, PLAYGROUND_REQUEST_TIMEOUT_MS)
   const userMessage = createUserMessage(task, preparedTask, generateId)
   const assistantMessage: Message = {
     id: assistantMessageId,
@@ -159,7 +149,6 @@ const beginTaskExecution = (
       requestStartedAt: Date.now(),
       updateConversationMessages: options.updateConversationMessages,
     }),
-    timeoutHandle,
   }
 }
 
@@ -181,17 +170,8 @@ const buildExecutionRequest = (
         preparedTask.attachments,
       )
   const requestBody = task.exactRequest
-    ? buildExactChatRequestBody(
-        task.exactRequest,
-        task.requestOptions.model,
-        task.requestOptions.maxCompletionTokens,
-      )
-    : buildChatRequestBody(
-        task.requestOptions.model,
-        chatMessages,
-        activeTools,
-        task.requestOptions.maxCompletionTokens,
-      )
+    ? buildExactChatRequestBody(task.exactRequest, task.requestOptions.model)
+    : buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
 
   return { activeTools, chatMessages, requestBody }
 }
@@ -292,7 +272,6 @@ const finishTaskExecution = (
   options: RunPlaygroundTaskOptions,
   runtime: PlaygroundExecutionRuntime,
 ): void => {
-  globalThis.clearTimeout(runtime.timeoutHandle)
   runtime.responseState.cancelStreamingChoiceSync()
   options.setConversationThinking(options.task.conversationId, false)
   options.clearConversationActiveTask(options.task.conversationId, options.task.id)

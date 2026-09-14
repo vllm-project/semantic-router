@@ -103,7 +103,7 @@ export const consumePlaygroundResponseBody = async (
 
   if ([...choices.values()].some((choice) => choice.reachedLimit)) {
     throw new PlaygroundIncompleteResponseFailure(
-      'The output budget was reached. Increase Output budget (including reasoning) and try again.',
+      'The backend output limit was reached. Review the backend generation settings and try again.',
       'The model returned finish_reason: length; the answer may be truncated or contain only reasoning.',
     )
   }
@@ -111,7 +111,7 @@ export const consumePlaygroundResponseBody = async (
   if (choices.size === 0 || emptyChoice) {
     throw new PlaygroundIncompleteResponseFailure(
       emptyChoice?.[1].hasReasoning
-        ? 'The model returned reasoning without a final answer. Increase Output budget and try again.'
+        ? 'The model returned reasoning without a final answer. Review the backend generation settings and try again.'
         : 'The model returned no answer or tool calls. Try again.',
       emptyChoice
         ? `Completion choice ${emptyChoice[0]} contained no non-empty answer text or tool calls.`

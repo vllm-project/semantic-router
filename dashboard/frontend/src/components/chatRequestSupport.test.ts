@@ -6,7 +6,6 @@ import {
   buildExactChatRequestBody,
   buildPlaygroundRequestHeaders,
   collectResponseHeaders,
-  PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
   PLAYGROUND_MAX_REQUEST_BYTES,
 } from './chatRequestSupport'
 
@@ -224,7 +223,6 @@ describe('buildExactChatRequestBody', () => {
       temperature: 0,
       model: 'team/custom-balanced',
       stream: true,
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
     })
   })
 
@@ -255,12 +253,6 @@ describe('buildExactChatRequestBody', () => {
 })
 
 describe('playground request stability', () => {
-  it('sets a bounded completion default for ordinary chat requests', () => {
-    expect(buildChatRequestBody('vllm-sr/auto', [], [])).toMatchObject({
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
-    })
-  })
-
   it('rejects an encoded request larger than the Router request envelope', () => {
     expect(() =>
       buildExactChatRequestBody(
@@ -277,7 +269,6 @@ describe('playground request stability', () => {
       model: 'vllm-sr/test',
       messages: [{ role: 'user', content: '' }],
       stream: true,
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
     }
     const emptyBytes = new TextEncoder().encode(JSON.stringify(emptyRequest)).byteLength
     const exactRequest = {
@@ -313,20 +304,25 @@ describe('playground request stability', () => {
   })
 })
 
-describe('completion budget overrides', () => {
-  it('uses the composer budget for ordinary and unspecified exact requests', () => {
-    expect(buildChatRequestBody('balance', [], [], 16384).max_completion_tokens).toBe(16384)
-    expect(
-      buildExactChatRequestBody({ messages: [] }, 'balance', 16384).max_completion_tokens,
-    ).toBe(16384)
+describe('backend generation limits', () => {
+  it('omits both token limit fields for ordinary and unspecified exact requests', () => {
+    for (const result of [
+      buildChatRequestBody('balance', [], []),
+      buildExactChatRequestBody({ messages: [] }, 'balance'),
+    ]) {
+      expect(result).not.toHaveProperty('max_completion_tokens')
+      expect(result).not.toHaveProperty('max_tokens')
+    }
   })
 
   it.each(['max_tokens', 'max_completion_tokens'])(
-    'preserves an exact %s over the composer default',
+    'preserves an exact %s without adding another limit',
     (key) => {
-      const result = buildExactChatRequestBody({ messages: [], [key]: 512 }, 'balance', 16384)
+      const result = buildExactChatRequestBody({ messages: [], [key]: 512 }, 'balance')
       expect(result[key]).toBe(512)
-      expect(result[key === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens']).toBeUndefined()
+      expect(result).not.toHaveProperty(
+        key === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens',
+      )
     },
   )
 })

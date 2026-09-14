@@ -90,7 +90,6 @@ export interface PlaygroundTaskRequestOptions {
   enableWebSearch: boolean
   model: string
   executeToolCalls?: boolean
-  maxCompletionTokens?: number
 }
 
 export interface PlaygroundTask {

@@ -1272,25 +1272,8 @@ body.playground-fullscreen .container {
 
 .inputActions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-}
-
-.completionBudget {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.completionBudget select {
-  padding: 0.3rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.4rem;
-  color: var(--color-text);
-  background: var(--color-bg);
 }
 
 .incompleteResponse {
