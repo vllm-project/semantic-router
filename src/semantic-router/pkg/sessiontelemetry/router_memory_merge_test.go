@@ -285,3 +285,43 @@ func TestMergeRouterSessionSnapshotsIgnoresExpiredRemote(t *testing.T) {
 		t.Fatalf("expired remote state was resurrected: %+v", merged)
 	}
 }
+
+// A payload the merge cannot read still holds another writer's outcomes and
+// switch history, so it must abort rather than be overwritten by the local
+// view.
+func TestMergeStoredSnapshotRefusesUnreadablePayload(t *testing.T) {
+	local := RouterSessionSnapshot{
+		SessionID:    "corrupt",
+		CurrentModel: "frontier",
+		LastSeen:     time.Now(),
+	}
+
+	if _, err := mergeStoredSnapshot([]byte("{not json"), local); err == nil {
+		t.Fatal("unreadable payload merged without an error, so a Set would overwrite it")
+	}
+}
+
+func TestMergeStoredSnapshotFoldsReadablePayload(t *testing.T) {
+	now := time.Now()
+	stored, err := json.Marshal(RouterSessionSnapshot{
+		SessionID:      "readable",
+		LastSeen:       now.Add(-time.Minute),
+		RecentOutcomes: []TurnOutcome{mergeTestOutcome("remote-turn", now.Add(-time.Minute))},
+	})
+	if err != nil {
+		t.Fatalf("marshal stored snapshot: %v", err)
+	}
+	local := RouterSessionSnapshot{
+		SessionID:      "readable",
+		LastSeen:       now,
+		RecentOutcomes: []TurnOutcome{mergeTestOutcome("local-turn", now)},
+	}
+
+	merged, err := mergeStoredSnapshot(stored, local)
+	if err != nil {
+		t.Fatalf("readable payload failed to merge: %v", err)
+	}
+	if len(merged.RecentOutcomes) != 2 {
+		t.Fatalf("merge dropped a writer's outcome: %+v", merged.RecentOutcomes)
+	}
+}
