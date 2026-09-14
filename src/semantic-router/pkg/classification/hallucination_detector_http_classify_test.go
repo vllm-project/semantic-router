@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -154,5 +155,61 @@ func TestHTTPClassifyHallucination_DetectCarriesOffsetsAndLabel(t *testing.T) {
 	span := result.Spans[0]
 	if span.Label != "contradiction" || span.Start != 16 || span.End != 20 || answer[span.Start:span.End] != span.Text || !span.ScoreAvailable || span.Confidence != 0.7 {
 		t.Fatalf("span = %+v", span)
+	}
+}
+
+// TestHallucinationAdaptersAgreeOnSpans is the parity check #2928 asks for:
+// the same detections served by a chat provider (quoted text, no offsets) and
+// by a token_spans.v1 provider (code-point offsets) come out of the two
+// adapters with identical text, byte offsets and labels.
+func TestHallucinationAdaptersAgreeOnSpans(t *testing.T) {
+	const answer = "Café opened in 1999 under señor Díaz, and again in 1999."
+	type want struct {
+		text  string
+		label string
+	}
+	wants := []want{{"1999", "contradiction"}, {"señor Díaz", "unsupported_addition"}, {"1999", "contradiction"}}
+
+	chatContent := `{"hallucinated_spans": [` +
+		`{"text": "1999", "category": "contradiction", "subcategory": "temporal"},` +
+		`{"text": "señor Díaz", "category": "unsupported_addition", "subcategory": "entity"},` +
+		`{"text": "1999", "category": "contradiction", "subcategory": "temporal"}]}`
+	chatServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, openAIResponse(chatContent))
+	}))
+	defer chatServer.Close()
+	chat := newTestEndpointDetector(t, chatServer.URL, false)
+
+	cp := func(byteOffset int) int { return len([]rune(answer[:byteOffset])) }
+	first1999 := strings.Index(answer, "1999")
+	second1999 := strings.LastIndex(answer, "1999")
+	senor := strings.Index(answer, "señor Díaz")
+	classify := newHTTPClassifyHallucinationDetector(t, func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"label": "contradiction", "text": "1999", "start": cp(first1999), "end": cp(first1999) + 4, "score": 0.9},
+			{"label": "unsupported_addition", "text": "señor Díaz", "start": cp(senor), "end": cp(senor) + len([]rune("señor Díaz")), "score": 0.9},
+			{"label": "contradiction", "text": "1999", "start": cp(second1999), "end": cp(second1999) + 4, "score": 0.9},
+		})
+	})
+
+	chatResult, err := chat.Detect(context.Background(), "ctx", "q", answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifyResult, err := classify.Detect(context.Background(), "ctx", "q", answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chatResult.Spans) != len(wants) || len(classifyResult.Spans) != len(wants) {
+		t.Fatalf("chat %d spans, classify %d spans, want %d", len(chatResult.Spans), len(classifyResult.Spans), len(wants))
+	}
+	for i, w := range wants {
+		c, k := chatResult.Spans[i], classifyResult.Spans[i]
+		if c.Text != w.text || c.Label != w.label || k.Text != w.text || k.Label != w.label {
+			t.Errorf("span %d: chat %+v classify %+v want %+v", i, c, k, w)
+		}
+		if c.Start != k.Start || c.End != k.End || answer[c.Start:c.End] != w.text {
+			t.Errorf("span %d offsets: chat [%d,%d) classify [%d,%d)", i, c.Start, c.End, k.Start, k.End)
+		}
 	}
 }
