@@ -24,6 +24,7 @@ import (
 // Calls hold the resource through admission and non-preemptible native work.
 type EmbeddingProvider struct {
 	info      embedding.ModelInfo
+	contract  *embedding.DimensionContract
 	identity  string
 	resource  *binding.Resource
 	text      *binding.Resolved[embedding.TextRequest, tasks.EmbeddingResult]
@@ -150,6 +151,7 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 	budget, gate := resourceAdmission(spec)
 	var capability binding.Capability
 	var layers []int
+	var dimensionContract *embedding.DimensionContract
 	resource, err := r.Pool.Acquire(ctx, id, budget, gate, func(context.Context) (io.Closer, error) {
 		if spec.Deployment.Provider == "candle" {
 			model, loadErr := candle.LoadEmbeddingModel(options)
@@ -191,6 +193,14 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 			capability.Limits = binding.Limits{ModelTokens: info.ArchitecturalMaxTokens, TaskTokens: info.ArchitecturalMaxTokens, DeploymentTokens: spec.Deployment.Input.MaxTokens, Overflow: spec.Deployment.Input.Overflow}
 			capability.Embedding = candleEmbeddingSemantics(info.ModelType, layer)
 			capability.Embedding.Modalities = append([]string(nil), info.Modalities...)
+			contract, contractErr := engine.candle.DimensionContract()
+			if contractErr != nil {
+				return contractErr
+			}
+			dimensionContract = &embedding.DimensionContract{
+				NativeDimension:     contract.NativeDimension,
+				SupportedDimensions: append([]int(nil), contract.SupportedDimensions...),
+			}
 			if info.ModelType == "mmbert" || info.ModelType == "mmbert_embedding" {
 				layers = candleEmbeddingLayers(options.ModelPath)
 			}
@@ -204,6 +214,13 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 			}
 			if infoErr != nil {
 				return infoErr
+			}
+			if info.NativeDimension <= 0 {
+				return fmt.Errorf("embedding instance did not report a native dimension")
+			}
+			dimensionContract = &embedding.DimensionContract{
+				NativeDimension:     info.NativeDimension,
+				SupportedDimensions: append([]int(nil), info.SupportedDimensions...),
 			}
 			capability, infoErr = ortCapability(spec, info)
 			if infoErr != nil {
@@ -265,7 +282,7 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 		return nil, err
 	}
 	key, _ := id.Key()
-	provider := &EmbeddingProvider{identity: key, resource: resource, text: text, recipe: string(spec.Recipe), backend: spec.Deployment.Provider, options: embedding.Options{Dimension: dimension, Layer: layer}}
+	provider := &EmbeddingProvider{identity: key, resource: resource, text: text, recipe: string(spec.Recipe), backend: spec.Deployment.Provider, options: embedding.Options{Dimension: dimension, Layer: layer}, contract: dimensionContract}
 	provider.text.Ready()
 	provider.dimension = capability.Embedding.Dimension
 	provider.info = embedding.ModelInfo{Layers: layers, Artifact: options.ModelPath, Backend: provider.backend, Dimension: provider.dimension, MaxTokens: capability.Limits.EffectiveTokens(), Pooling: capability.Embedding.Pooling, Normalization: capability.Embedding.Normalization, Modalities: append([]string(nil), capability.Embedding.Modalities...)}
@@ -274,6 +291,15 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 func (p *EmbeddingProvider) Close() error    { return p.text.Close() }
 func (p *EmbeddingProvider) Backend() string { return p.backend }
 func (p *EmbeddingProvider) Dimension() int  { return p.dimension }
+
+func (p *EmbeddingProvider) EmbeddingDimensionContract() (embedding.DimensionContract, error) {
+	if p.contract == nil {
+		return embedding.DimensionContract{}, fmt.Errorf("embedding provider does not expose a dimension contract")
+	}
+	contract := *p.contract
+	contract.SupportedDimensions = append([]int(nil), p.contract.SupportedDimensions...)
+	return contract, nil
+}
 func (p *EmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return p.EmbedWithOptions(ctx, text, p.options)
 }
@@ -429,7 +455,14 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 		return nil, err
 	}
 	key, _ := identity.Key()
-	p := &EmbeddingProvider{identity: key, resource: resource, text: text, recipe: string(spec.Recipe), backend: config.EmbeddingBackendOpenAICompatible}
+	p := &EmbeddingProvider{
+		identity: key,
+		resource: resource,
+		text:     text,
+		recipe:   string(spec.Recipe),
+		backend:  config.EmbeddingBackendOpenAICompatible,
+		contract: &embedding.DimensionContract{NativeDimension: len(warm), SupportedDimensions: []int{len(warm)}},
+	}
 	p.text.Ready()
 	p.dimension = len(warm)
 	p.info = embedding.ModelInfo{Artifact: cfg.Model, Backend: p.backend, Dimension: p.dimension, Modalities: []string{"text"}}

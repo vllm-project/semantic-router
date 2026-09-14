@@ -64,6 +64,7 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 
 	valkeyConfig := options.Config
 	effectiveDimension, err := semanticCacheEmbeddingDimension(
+		options.EmbeddingProvider,
 		valkeyConfig.Index.VectorField.Dimension,
 		options.EmbeddingModel,
 	)
@@ -212,9 +213,9 @@ func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32,
 
 func (c *ValkeyCache) embeddingDimension() (int, error) {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return semanticCacheEmbeddingDimension(nil, 0, "")
 	}
-	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.embeddingProvider, c.config.Index.VectorField.Dimension, c.embeddingModel)
 }
 
 // createIndex builds the Valkey index with the appropriate schema

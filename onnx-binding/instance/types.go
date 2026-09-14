@@ -85,9 +85,16 @@ type Info struct {
 	Overflow            string            `json:"overflow"`
 	Labels              []string          `json:"labels"`
 	Dimension           int               `json:"dimension"`
+	NativeDimension     int               `json:"native_dimension"`
+	SupportedDimensions []int             `json:"supported_dimensions"`
 	AvailableLayers     []int             `json:"available_layers"`
 	Sessions            []SessionEvidence `json:"sessions"`
 	CompletedInferences uint64            `json:"completed_inferences"`
+}
+
+type DimensionContract struct {
+	NativeDimension     int
+	SupportedDimensions []int
 }
 
 // TextWindow is a UTF-8 byte range in the original input (End exclusive).

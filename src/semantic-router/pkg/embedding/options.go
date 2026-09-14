@@ -90,6 +90,14 @@ func (p *providerView) Dimension() int {
 	return p.Provider.Dimension()
 }
 
+func (p *providerView) EmbeddingDimensionContract() (DimensionContract, error) {
+	contractProvider, ok := p.Provider.(DimensionContractProvider)
+	if !ok {
+		return DimensionContract{}, fmt.Errorf("embedding provider does not expose a dimension contract")
+	}
+	return contractProvider.EmbeddingDimensionContract()
+}
+
 func (p *providerView) Embed(ctx context.Context, text string) ([]float32, error) {
 	return Embed(ctx, p.Provider, text, p.options)
 }

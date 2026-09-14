@@ -11,6 +11,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -136,6 +137,17 @@ func resolveMilvusStoreEmbeddingDimension(
 	configuredMilvusDimension int,
 ) (int, error) {
 	if !deterministicEmbeddingsEnabled() {
+		if embeddingCfg.Provider != nil {
+			contractProvider, ok := embeddingCfg.Provider.(embedding.DimensionContractProvider)
+			if !ok {
+				return 0, fmt.Errorf("prepared embedding provider does not expose a dimension contract")
+			}
+			contract, err := contractProvider.EmbeddingDimensionContract()
+			if err != nil {
+				return 0, fmt.Errorf("failed to get embedding dimension contract: %w", err)
+			}
+			return contract.Resolve(embeddingCfg.Dimension)
+		}
 		return candle_binding.ResolveEmbeddingDimension(
 			string(embeddingCfg.Model),
 			embeddingCfg.Dimension,

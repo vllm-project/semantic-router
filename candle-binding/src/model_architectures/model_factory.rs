@@ -13,7 +13,8 @@ use crate::model_architectures::lora::{LoRABertClassifier, LoRAMultiTaskResult};
 use crate::model_architectures::routing::{DualPathRouter, ProcessingRequirements};
 use crate::model_architectures::traditional::TraditionalBertClassifier;
 use crate::model_architectures::traits::{
-    FineTuningType, LoRACapable, ModelType, PoolingMethod, TaskType, TraditionalModel,
+    FineTuningType, LoRACapable, LongContextEmbeddingCapable, ModelType, PoolingMethod, TaskType,
+    TraditionalModel,
 };
 use crate::model_architectures::unified_interface::{
     ConfigurableModel, CoreModel, PathSpecialization,
@@ -427,6 +428,33 @@ impl ModelFactory {
     /// Get multi-modal embedding model reference
     pub fn get_multimodal_model(&self) -> Option<&MultiModalEmbeddingModel> {
         self.multimodal_embedding_model.as_ref()
+    }
+
+    /// Return the native width and model-declared Matryoshka widths for the
+    /// loaded embedding model. The model instances remain the sole authority
+    /// for these values; this method does not maintain a model-name table.
+    pub fn embedding_dimension_contract(&self) -> Option<(usize, Vec<usize>)> {
+        if let Some(model) = self.get_qwen3_model() {
+            return Some((
+                model.get_embedding_dimension(),
+                model.get_matryoshka_dimensions(),
+            ));
+        }
+        if let Some(model) = self.get_gemma_model() {
+            return Some(model.embedding_dimension_contract());
+        }
+        if let Some(model) = self.get_mmbert_model() {
+            return Some((
+                model.get_embedding_dimension(),
+                model.get_matryoshka_dimensions(),
+            ));
+        }
+        self.get_multimodal_model().map(|model| {
+            (
+                model.get_embedding_dimension(),
+                model.get_matryoshka_dimensions(),
+            )
+        })
     }
 
     /// Get multi-modal tokenizer reference

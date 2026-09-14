@@ -96,6 +96,13 @@ pub struct MultiModalEmbeddingModel {
 }
 
 impl MultiModalEmbeddingModel {
+    pub fn embedding_dimension(&self) -> usize {
+        self.config.embedding_dim
+    }
+
+    pub fn matryoshka_dimensions(&self) -> Vec<usize> {
+        self.config.matryoshka_dims.clone()
+    }
     pub fn load<P: AsRef<Path>>(model_path: P, use_cpu: bool) -> UnifiedResult<Self> {
         Self::load_impl(model_path, use_cpu, None)
     }

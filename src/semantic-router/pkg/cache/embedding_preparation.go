@@ -25,16 +25,16 @@ func ValidateBackendEmbedding(ctx context.Context, backend LegacyCacheBackend) e
 		dimension = inMemoryEmbeddingOptions(c.embeddingModel).Dimension
 	case *RedisCache:
 		provider = c.embeddingProvider
-		dimension, err = semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, c.config.Index.VectorField.Dimension, c.embeddingModel)
 	case *ValkeyCache:
 		provider = c.embeddingProvider
-		dimension, err = semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, c.config.Index.VectorField.Dimension, c.embeddingModel)
 	case *MilvusCache:
 		provider = c.embeddingProvider
-		dimension, err = semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, c.config.Collection.VectorField.Dimension, c.embeddingModel)
 	case *QdrantCache:
 		provider = c.embeddingProvider
-		dimension, err = semanticCacheEmbeddingDimension(0, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, 0, c.embeddingModel)
 	case *HybridCache:
 		return ValidateBackendEmbedding(ctx, c.milvusCache)
 	default:

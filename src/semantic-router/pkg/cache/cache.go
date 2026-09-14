@@ -182,11 +182,20 @@ func normalizeEmbeddingModel(model string) string {
 	return normalized
 }
 
-func semanticCacheEmbeddingDimension(configured int, embeddingModel string) (int, error) {
-	// Preserve explicit dimensions from existing cache configurations. The
-	// Milvus constructor validates explicit dimensions before it can use them;
-	// the remaining cache backends keep their existing explicit-dimension
-	// behavior while propagating contract lookup failures for omitted values.
+func semanticCacheEmbeddingDimension(provider embedding.Provider, configured int, embeddingModel string) (int, error) {
+	if provider != nil {
+		contractProvider, ok := provider.(embedding.DimensionContractProvider)
+		if !ok {
+			return 0, fmt.Errorf("prepared embedding provider does not expose a dimension contract")
+		}
+		contract, err := contractProvider.EmbeddingDimensionContract()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get embedding dimension contract: %w", err)
+		}
+		return contract.Resolve(configured)
+	}
+	// Preserve the legacy explicit-dimension path for callers that do not have
+	// a prepared provider, such as standalone configuration validation.
 	if configured > 0 {
 		return configured, nil
 	}

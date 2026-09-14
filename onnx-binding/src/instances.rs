@@ -222,6 +222,8 @@ pub struct InstanceInfo {
     pub overflow: Overflow,
     pub labels: Vec<String>,
     pub dimension: usize,
+    pub native_dimension: usize,
+    pub supported_dimensions: Vec<usize>,
     pub available_layers: Vec<usize>,
     pub sessions: Vec<SessionEvidence>,
     /// Counts successfully completed real native inference calls, not loads.
@@ -231,6 +233,14 @@ pub struct InstanceInfo {
 pub fn info(handle: u64) -> UnifiedResult<InstanceInfo> {
     let instance = get(handle)?;
     let sessions = instance.options.evidence.lock().clone();
+    let (native_dimension, mut supported_dimensions) = match &*instance.model.lock() {
+        Model::Embedding(model) => (model.embedding_dimension(), model.matryoshka_dimensions()),
+        Model::MultiModal(model) => (model.embedding_dimension(), model.matryoshka_dimensions()),
+        _ => (0, vec![]),
+    };
+    if native_dimension > 0 && !supported_dimensions.contains(&native_dimension) {
+        supported_dimensions.push(native_dimension);
+    }
     Ok(InstanceInfo {
         task: instance.task,
         model_limit: instance.model_limit,
@@ -239,6 +249,8 @@ pub fn info(handle: u64) -> UnifiedResult<InstanceInfo> {
         overflow: instance.options.overflow,
         labels: instance.labels.clone(),
         dimension: instance.dimension,
+        native_dimension,
+        supported_dimensions,
         available_layers: instance.available_layers.clone(),
         sessions,
         completed_inferences: instance.completed.load(Ordering::Relaxed),

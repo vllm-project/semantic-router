@@ -18,6 +18,42 @@ type Provider interface {
 	Backend() string
 }
 
+// DimensionContract is the model-owned embedding width contract. Supported
+// dimensions are the widths explicitly declared by the loaded model, not
+// every prefix width that the inference implementation might technically
+// truncate to.
+type DimensionContract struct {
+	NativeDimension     int
+	SupportedDimensions []int
+}
+
+// Resolve validates a requested width against the model contract. Zero means
+// the model's native output width.
+func (c DimensionContract) Resolve(requested int) (int, error) {
+	if c.NativeDimension <= 0 {
+		return 0, fmt.Errorf("embedding contract has no native dimension")
+	}
+	if requested <= 0 {
+		return c.NativeDimension, nil
+	}
+	if requested == c.NativeDimension {
+		return requested, nil
+	}
+	for _, dimension := range c.SupportedDimensions {
+		if dimension == requested {
+			return requested, nil
+		}
+	}
+	return 0, fmt.Errorf("embedding dimension %d is not declared by the model (supported dimensions: %v)", requested, c.SupportedDimensions)
+}
+
+// DimensionContractProvider exposes the contract of a prepared embedding
+// runtime. Implementations must source it from the loaded model instance.
+type DimensionContractProvider interface {
+	Provider
+	EmbeddingDimensionContract() (DimensionContract, error)
+}
+
 type ProviderOptions struct {
 	BackendOverride string
 	HTTPClient      *http.Client

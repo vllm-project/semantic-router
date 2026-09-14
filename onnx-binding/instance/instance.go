@@ -12,6 +12,7 @@ import "C"
 
 import (
 	"encoding/json"
+	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -175,6 +176,34 @@ func (o *owner) Info() (Info, error) {
 	var info Info
 	err := o.withHandle(func(handle C.uint64_t) error { return decode(C.ort_instance_info(handle), &info) })
 	return info, err
+}
+
+func (m *EmbeddingModel) DimensionContract() (DimensionContract, error) {
+	info, err := m.Info()
+	if err != nil {
+		return DimensionContract{}, err
+	}
+	if info.NativeDimension <= 0 {
+		return DimensionContract{}, fmt.Errorf("embedding instance did not report a native dimension")
+	}
+	return DimensionContract{
+		NativeDimension:     info.NativeDimension,
+		SupportedDimensions: append([]int(nil), info.SupportedDimensions...),
+	}, nil
+}
+
+func (m *MultiModalModel) DimensionContract() (DimensionContract, error) {
+	info, err := m.Info()
+	if err != nil {
+		return DimensionContract{}, err
+	}
+	if info.NativeDimension <= 0 {
+		return DimensionContract{}, fmt.Errorf("embedding instance did not report a native dimension")
+	}
+	return DimensionContract{
+		NativeDimension:     info.NativeDimension,
+		SupportedDimensions: append([]int(nil), info.SupportedDimensions...),
+	}, nil
 }
 
 // FinishProfiling flushes session profiles and returns their filenames. Profiling

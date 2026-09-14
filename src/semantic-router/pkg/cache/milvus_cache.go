@@ -77,7 +77,8 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		milvusConfig = options.Config
 	}
 	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-	effectiveDimension, err := candle_binding.ResolveEmbeddingDimension(
+	effectiveDimension, err := resolveMilvusCacheEmbeddingDimension(
+		options.EmbeddingProvider,
 		embeddingModel,
 		milvusConfig.Collection.VectorField.Dimension,
 	)
@@ -143,6 +144,21 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	logging.Debugf("MilvusCache: initialization complete")
 
 	return cache, nil
+}
+
+func resolveMilvusCacheEmbeddingDimension(provider embedding.Provider, model string, configured int) (int, error) {
+	if provider != nil {
+		contractProvider, ok := provider.(embedding.DimensionContractProvider)
+		if !ok {
+			return 0, fmt.Errorf("prepared embedding provider does not expose a dimension contract")
+		}
+		contract, err := contractProvider.EmbeddingDimensionContract()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get embedding dimension contract: %w", err)
+		}
+		return contract.Resolve(configured)
+	}
+	return candle_binding.ResolveEmbeddingDimension(model, configured)
 }
 
 // loadMilvusConfig reads and parses the Milvus configuration from file (Deprecated)

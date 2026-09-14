@@ -45,6 +45,8 @@ type InstanceInfo struct {
 	Overflow               string   `json:"overflow"`
 	Labels                 []string `json:"labels"`
 	Modalities             []string `json:"modalities"`
+	NativeDimension        int      `json:"native_dimension"`
+	SupportedDimensions    []int    `json:"supported_dimensions"`
 }
 
 // InputMetadata reports the complete input and what the task actually processed.
@@ -156,6 +158,25 @@ func useInstance[T any](i *instance, call func(uint64) (T, error)) (T, error) {
 }
 
 func (i *instance) Info() (InstanceInfo, error) { return useInstance(i, nativeInstanceInfo) }
+
+// DimensionContract returns the dimension facts declared by the loaded
+// embedding model. The values come from the owned native instance rather than
+// a process-global model registry.
+func (m *EmbeddingModel) DimensionContract() (EmbeddingDimensionContract, error) {
+	info, err := m.Info()
+	if err != nil {
+		return EmbeddingDimensionContract{}, err
+	}
+	if info.NativeDimension <= 0 {
+		return EmbeddingDimensionContract{}, fmt.Errorf("embedding instance did not report a native dimension")
+	}
+	dimensions := append([]int(nil), info.SupportedDimensions...)
+	return EmbeddingDimensionContract{
+		Model:               info.ModelType,
+		NativeDimension:     info.NativeDimension,
+		SupportedDimensions: dimensions,
+	}, nil
+}
 func (i *instance) clone() (*instance, error) {
 	h, err := useInstance(i, nativeInstanceClone)
 	if err != nil {

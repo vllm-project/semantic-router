@@ -6,7 +6,6 @@ import (
 
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -93,7 +92,8 @@ func (c *MilvusCache) embeddingDimension() int {
 	if c.config == nil {
 		return 0
 	}
-	dimension, err := candle_binding.ResolveEmbeddingDimension(
+	dimension, err := resolveMilvusCacheEmbeddingDimension(
+		c.embeddingProvider,
 		c.embeddingModel,
 		c.config.Collection.VectorField.Dimension,
 	)

@@ -75,6 +75,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		redisConfig = options.Config
 	}
 	effectiveDimension, err := semanticCacheEmbeddingDimension(
+		options.EmbeddingProvider,
 		redisConfig.Index.VectorField.Dimension,
 		options.EmbeddingModel,
 	)
@@ -249,9 +250,9 @@ func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, 
 
 func (c *RedisCache) embeddingDimension() (int, error) {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return semanticCacheEmbeddingDimension(nil, 0, "")
 	}
-	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.embeddingProvider, c.config.Index.VectorField.Dimension, c.embeddingModel)
 }
 
 // createIndex builds the Redis index with the appropriate schema
