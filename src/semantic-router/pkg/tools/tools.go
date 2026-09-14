@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/openai/openai-go"
@@ -272,9 +274,12 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 		return []ToolSimilarity{}, nil
 	}
 
-	// Sort by similarity (highest first)
+	// Sort by similarity (highest first). Equal scores need an explicit
+	// identity tie-break: entries are appended by concurrent embedding
+	// workers, so preserving input order would make an otherwise unchanged
+	// catalog produce a different provider-visible prefix from run to run.
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Similarity > results[j].Similarity
+		return toolSimilarityLess(results[i], results[j])
 	})
 
 	limit := topK
@@ -290,6 +295,59 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 
 	logging.Infof("Found %d similar tools for query: %s", len(selected), logging.ContentDescriptor(query))
 	return selected, nil
+}
+
+// toolSimilarityLess defines the total ordering shared by embedding and
+// advanced-relevance retrieval. Similarity remains the primary signal; a
+// canonical identity/definition key breaks ties so worker completion order or
+// caller slice order cannot perturb deterministic tool selection. NaN scores
+// are sorted last as a defensive measure for malformed embedding providers.
+func toolSimilarityLess(left, right ToolSimilarity) bool {
+	leftNaN := math.IsNaN(float64(left.Similarity))
+	rightNaN := math.IsNaN(float64(right.Similarity))
+	if leftNaN || rightNaN {
+		if leftNaN != rightNaN {
+			return !leftNaN
+		}
+		return toolSimilarityTieKey(left) < toolSimilarityTieKey(right)
+	}
+	if left.Similarity != right.Similarity {
+		return left.Similarity > right.Similarity
+	}
+	return toolSimilarityTieKey(left) < toolSimilarityTieKey(right)
+}
+
+func descendingFloat32Less(left, right float32) bool {
+	leftNaN := math.IsNaN(float64(left))
+	rightNaN := math.IsNaN(float64(right))
+	if leftNaN != rightNaN {
+		return !leftNaN
+	}
+	if leftNaN {
+		return false
+	}
+	return left > right
+}
+
+// toolSimilarityTieKey includes the provider definition and bounded catalog
+// metadata. Names are normally unique, but retaining the complete key keeps
+// duplicate-name entries deterministic as well; when every field is equal the
+// serialized provider definition is identical, so their relative order cannot
+// affect the wire prefix.
+func toolSimilarityTieKey(candidate ToolSimilarity) string {
+	encoded, err := json.Marshal(candidate.Entry.Tool)
+	if err != nil {
+		encoded = []byte(candidate.Entry.Tool.Function.Name)
+	}
+	tags := append([]string(nil), candidate.Entry.Tags...)
+	sort.Strings(tags)
+	return strings.Join([]string{
+		candidate.Entry.Tool.Function.Name,
+		string(encoded),
+		candidate.Entry.Description,
+		candidate.Entry.Category,
+		strings.Join(tags, "\x00"),
+	}, "\x00")
 }
 
 func (db *ToolsDatabase) embedText(text string) ([]float32, error) {

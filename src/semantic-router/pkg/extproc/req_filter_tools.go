@@ -60,8 +60,11 @@ func (r *OpenAIRouter) applySelectedTools(
 		}
 		return nil
 	}
+	changed := !toolDefinitionsEqual(request.Tools, selectedTools)
 	request.Tools = append([]llmprotocol.Tool(nil), selectedTools...)
-	request.Generation++
+	if changed {
+		request.Generation++
+	}
 	logging.Infof("Auto-selected %d tools via strategy %q (confidence=%.3f, latency=%s) for query: %s",
 		len(selectedTools), strategyID, confidence, latency.Round(time.Millisecond),
 		logging.ContentDescriptor(classificationText))
