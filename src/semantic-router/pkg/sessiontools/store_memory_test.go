@@ -238,6 +238,99 @@ func TestMemoryStore_TTLSlidesOnLoad(t *testing.T) {
 	}
 }
 
+func TestMemoryStore_LoadWithMetadata_ReportsExpiredRevision(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Unix(100, 0))
+	store := newTestStore(t, clock, 100, 10, 60)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+
+	if _, err := store.CompareAndSwap(ctx, "expired", 0, newTestState(0), time.Minute, quota); err != nil {
+		t.Fatal(err)
+	}
+	clock.Advance(time.Minute)
+
+	loaded, metadata, err := store.LoadWithMetadata(ctx, "expired")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Found {
+		t.Fatal("expired state must not be returned as found")
+	}
+	if !metadata.Expired || metadata.ObservedRevision != 1 || metadata.ObservedGeneration == 0 {
+		t.Fatalf("expiry metadata = %+v, want expired revision 1", metadata)
+	}
+}
+
+func TestMemoryStore_DeleteIfTokenDoesNotDeleteNewerState(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Unix(100, 0))
+	store := newTestStore(t, clock, 100, 10, 60)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+
+	if _, err := store.CompareAndSwap(ctx, "session", 0, newTestState(0), time.Minute, quota); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(ctx, "session")
+	if err != nil || !loaded.Found {
+		t.Fatalf("load: found=%v err=%v", loaded.Found, err)
+	}
+	clock.Advance(time.Second)
+	if _, err := store.CompareAndSwap(ctx, "session", loaded.State.Revision, newTestState(0), time.Minute, quota); err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := store.DeleteIfToken(ctx, "session", StateToken{
+		Revision:   loaded.State.Revision,
+		Generation: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted {
+		t.Fatal("stale conditional delete must not remove a newer state")
+	}
+	current, err := store.Load(ctx, "session")
+	if err != nil || !current.Found {
+		t.Fatalf("newer state was lost: found=%v err=%v", current.Found, err)
+	}
+}
+
+func TestMemoryStore_DeleteIfTokenDoesNotDeleteRecreatedState(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Unix(100, 0))
+	store := newTestStore(t, clock, 100, 10, 60)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+
+	if _, err := store.CompareAndSwap(ctx, "session", 0, newTestState(0), time.Minute, quota); err != nil {
+		t.Fatal(err)
+	}
+	_, oldMetadata, err := store.LoadWithMetadata(ctx, "session")
+	if err != nil || oldMetadata.ObservedGeneration == 0 {
+		t.Fatalf("initial metadata = %+v, err=%v", oldMetadata, err)
+	}
+	if err := store.Delete(ctx, "session"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CompareAndSwap(ctx, "session", 0, newTestState(0), time.Minute, quota); err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := store.DeleteIfToken(ctx, "session", StateToken{
+		Revision:   oldMetadata.ObservedRevision,
+		Generation: oldMetadata.ObservedGeneration,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted {
+		t.Fatal("a token from before recreation must not delete the new state")
+	}
+	current, err := store.Load(ctx, "session")
+	if err != nil || !current.Found {
+		t.Fatalf("recreated state was lost: found=%v err=%v", current.Found, err)
+	}
+}
+
 // TestMemoryStore_ExpiredReadmission_ABARace guards against the ABA race
 // deleteIfExpiredLocked/compareAndSwapCreate exist to prevent: a stale
 // "this entry looked expired" observation (from Load or a losing
@@ -382,6 +475,30 @@ func TestMemoryStore_GlobalCapacityEviction(t *testing.T) {
 	}
 	if got, err := store.Load(ctx, "sess-3"); err != nil || !got.Found {
 		t.Fatalf("expected the newly admitted sess-3 to be present: found=%v err=%v", got.Found, err)
+	}
+}
+
+func TestMemoryStore_GlobalCapacityEvictionScansAllKeysDeterministically(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Unix(100, 0))
+	const capacity = 40
+	store := newTestStore(t, clock, capacity, capacity, 1800)
+
+	for i := 0; i < capacity; i++ {
+		key := fmt.Sprintf("session-%02d", i)
+		quota := QuotaKey{Principal: fmt.Sprintf("user-%02d", i), Namespace: "recipe-a"}
+		if _, err := store.CompareAndSwap(ctx, key, 0, newTestState(0), time.Hour, quota); err != nil {
+			t.Fatal(err)
+		}
+		clock.Advance(time.Second)
+	}
+
+	quota := QuotaKey{Principal: "user-new", Namespace: "recipe-a"}
+	if _, err := store.CompareAndSwap(ctx, "session-new", 0, newTestState(0), time.Hour, quota); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.Load(ctx, "session-00"); err != nil || got.Found {
+		t.Fatalf("global eviction must remove the oldest key outside any bounded sample: found=%v err=%v", got.Found, err)
 	}
 }
 

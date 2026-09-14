@@ -269,6 +269,61 @@ func TestToolPolicyFingerprint_AllowBlockListsOrderInvariant(t *testing.T) {
 	}
 }
 
+func TestEffectiveToolPolicyFingerprint_IncludesLegacyToolsPolicy(t *testing.T) {
+	selection := &config.ToolSelectionPluginConfig{Enabled: true, Mode: config.ToolSelectionModeAdd}
+	base := &config.ToolsPluginConfig{Enabled: true, Mode: config.ToolsPluginModeFiltered, AllowTools: []string{"search"}}
+	changed := *base
+	changed.BlockTools = []string{"search"}
+	if EffectiveToolPolicyFingerprint(selection, base) == EffectiveToolPolicyFingerprint(selection, &changed) {
+		t.Fatal("a legacy allow/block policy change must invalidate the effective fingerprint")
+	}
+}
+
+func TestEffectiveToolPolicyFingerprint_LegacySetOrderInvariant(t *testing.T) {
+	selection := &config.ToolSelectionPluginConfig{Enabled: true, Mode: config.ToolSelectionModeAdd}
+	forward := &config.ToolsPluginConfig{
+		Enabled:    true,
+		Mode:       config.ToolsPluginModeFiltered,
+		AllowTools: []string{"Search", "lookup", "search"},
+		BlockTools: []string{"mail", "MAIL"},
+	}
+	reversed := &config.ToolsPluginConfig{
+		Enabled:    true,
+		Mode:       config.ToolsPluginModeFiltered,
+		AllowTools: []string{"search", "lookup", "SEARCH"},
+		BlockTools: []string{"mail"},
+	}
+	if EffectiveToolPolicyFingerprint(selection, forward) != EffectiveToolPolicyFingerprint(selection, reversed) {
+		t.Fatal("legacy allow/block set order and case must not change the effective fingerprint")
+	}
+}
+
+func TestEffectiveToolPolicyFingerprint_IncludesDynamicRetrieval(t *testing.T) {
+	selection := &config.ToolSelectionPluginConfig{Enabled: true, Mode: config.ToolSelectionModeAdd}
+	base := &config.ToolsPluginConfig{
+		Enabled: true,
+		DynamicRetrieval: &config.DynamicRetrievalConfig{
+			Enabled:       true,
+			HistoryWindow: 4,
+		},
+	}
+	changed := *base
+	changed.DynamicRetrieval = &config.DynamicRetrievalConfig{
+		Enabled:       true,
+		HistoryWindow: 5,
+	}
+	if EffectiveToolPolicyFingerprint(selection, base) == EffectiveToolPolicyFingerprint(selection, &changed) {
+		t.Fatal("a dynamic retrieval policy change must invalidate the effective fingerprint")
+	}
+}
+
+func TestEffectiveToolPolicyFingerprint_NilLegacyPreservesSelectionFingerprint(t *testing.T) {
+	selection := &config.ToolSelectionPluginConfig{Enabled: true, Mode: config.ToolSelectionModeAdd}
+	if got, want := EffectiveToolPolicyFingerprint(selection, nil), ToolPolicyFingerprint(selection); got != want {
+		t.Fatalf("nil legacy fingerprint = %q, want selection fingerprint %q", got, want)
+	}
+}
+
 func intPtr(v int) *int { return &v }
 
 func TestToolCapabilityFingerprint_Deterministic(t *testing.T) {

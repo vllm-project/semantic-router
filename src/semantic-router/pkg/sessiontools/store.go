@@ -34,6 +34,47 @@ type VersionedState struct {
 	Found bool
 }
 
+// LoadMetadata carries bounded information about a load that did not return
+// a reusable state. Metadata is optional so existing Store implementations can
+// keep the narrow Load contract; managers use it when the implementation also
+// satisfies LoadMetadataStore.
+type LoadMetadata struct {
+	// Expired reports that a state was present but had passed its expiry when
+	// the store inspected it. The state itself is intentionally not returned.
+	Expired bool
+	// ObservedRevision is the CAS version of an expired state. A zero value
+	// means that the store could not provide one.
+	ObservedRevision uint64
+	// ObservedGeneration distinguishes a delete-and-recreate cycle that can
+	// legitimately reuse a revision number. A zero value means that the store
+	// does not expose a generation token.
+	ObservedGeneration uint64
+}
+
+// StateToken identifies one concrete value at a key for conditional
+// invalidation. Revision supplies the normal CAS version; Generation prevents
+// an ABA match when a key is deleted and recreated with a reset revision.
+type StateToken struct {
+	Revision   uint64
+	Generation uint64
+}
+
+// LoadMetadataStore is an optional extension to Store. It lets a manager
+// distinguish an expired entry from an ordinary miss without changing the
+// compatibility surface of Store.
+type LoadMetadataStore interface {
+	LoadWithMetadata(ctx context.Context, key string) (VersionedState, LoadMetadata, error)
+}
+
+// ConditionalDeleteStore is an optional extension to Store. Implementations
+// must delete key only when its current value matches token and return false,
+// nil when the key is absent or has changed. Generation-aware implementations
+// prevent a stale invalidation from deleting a newer value that reused a
+// revision after a delete-and-recreate cycle.
+type ConditionalDeleteStore interface {
+	DeleteIfToken(ctx context.Context, key string, token StateToken) (bool, error)
+}
+
 // QuotaKey identifies the cardinality bucket a session belongs to for
 // per-principal quota enforcement (config.ToolSessionStoreConfig's
 // max_sessions_per_identity). Both fields together are the bucket identity

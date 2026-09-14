@@ -196,6 +196,30 @@ type advancedToolFilteringFingerprintView struct {
 	HybridHistory               *config.HybridHistoryToolRetrievalConfig `json:"hybrid_history,omitempty"`
 }
 
+// legacyToolsPolicyFingerprintView is the canonical, bounded projection of
+// the decision-level legacy tools plugin. The request path merges this plugin
+// with tool_selection before it authorizes a candidate; omitting it would let
+// sticky state survive an allow/block, mode, or retrieval-policy change.
+type legacyToolsPolicyFingerprintView struct {
+	Enabled          bool                             `json:"enabled"`
+	Mode             string                           `json:"mode"`
+	SelectionEnabled bool                             `json:"selection_enabled"`
+	AllowTools       []string                         `json:"allow_tools,omitempty"`
+	BlockTools       []string                         `json:"block_tools,omitempty"`
+	StripToolHistory bool                             `json:"strip_tool_history"`
+	Strategy         string                           `json:"strategy"`
+	DynamicRetrieval *dynamicRetrievalFingerprintView `json:"dynamic_retrieval,omitempty"`
+}
+
+type dynamicRetrievalFingerprintView struct {
+	Enabled                 bool                            `json:"enabled"`
+	Strategy                string                          `json:"strategy"`
+	HistoryWindow           int                             `json:"history_window,omitempty"`
+	Weights                 *config.DynamicRetrievalWeights `json:"weights,omitempty"`
+	MinHistoryConfidence    float64                         `json:"min_history_confidence,omitempty"`
+	FallbackOnLowConfidence bool                            `json:"fallback_on_low_confidence,omitempty"`
+}
+
 func newAdvancedToolFilteringFingerprintView(c *config.AdvancedToolFilteringConfig) *advancedToolFilteringFingerprintView {
 	if c == nil {
 		return nil
@@ -212,6 +236,36 @@ func newAdvancedToolFilteringFingerprintView(c *config.AdvancedToolFilteringConf
 		AllowTools:                  sortedFoldedStrings(c.AllowTools),
 		BlockTools:                  sortedFoldedStrings(c.BlockTools),
 		HybridHistory:               c.HybridHistory,
+	}
+}
+
+func newDynamicRetrievalFingerprintView(c *config.DynamicRetrievalConfig) *dynamicRetrievalFingerprintView {
+	if c == nil || !c.Enabled {
+		return nil
+	}
+	return &dynamicRetrievalFingerprintView{
+		Enabled:                 true,
+		Strategy:                c.EffectiveStrategy(),
+		HistoryWindow:           c.HistoryWindow,
+		Weights:                 c.Weights,
+		MinHistoryConfidence:    c.MinHistoryConfidence,
+		FallbackOnLowConfidence: c.FallbackOnLowConfidence,
+	}
+}
+
+func newLegacyToolsPolicyFingerprintView(c *config.ToolsPluginConfig) *legacyToolsPolicyFingerprintView {
+	if c == nil {
+		return nil
+	}
+	return &legacyToolsPolicyFingerprintView{
+		Enabled:          c.Enabled,
+		Mode:             c.EffectiveMode(),
+		SelectionEnabled: c.SelectionEnabled(),
+		AllowTools:       sortedFoldedStrings(c.AllowTools),
+		BlockTools:       sortedFoldedStrings(c.BlockTools),
+		StripToolHistory: c.StripToolHistory,
+		Strategy:         c.EffectiveStrategy(),
+		DynamicRetrieval: newDynamicRetrievalFingerprintView(c.DynamicRetrieval),
 	}
 }
 
@@ -279,6 +333,34 @@ func ToolPolicyFingerprint(pluginCfg *config.ToolSelectionPluginConfig) string {
 		input.StickyEnabled = pluginCfg.Sticky.Enabled
 	}
 	return marshalFingerprint(input)
+}
+
+type effectiveToolPolicyFingerprintInput struct {
+	Selection string                            `json:"selection"`
+	Legacy    *legacyToolsPolicyFingerprintView `json:"legacy,omitempty"`
+}
+
+// EffectiveToolPolicyFingerprint fingerprints the effective tool-selection
+// policy after the decision-level legacy tools plugin is taken into account.
+// The legacy view is identity-only and canonicalizes unordered allow/block
+// lists, so equivalent configuration order does not invalidate a session.
+// Callers that also apply global tool defaults should fold those defaults into
+// the supplied legacy view before calling this helper.
+//
+// A nil legacy config preserves ToolPolicyFingerprint's historical output;
+// this keeps callers that only have the tool_selection plugin source
+// compatible while making the combined form explicit at the runtime seam.
+func EffectiveToolPolicyFingerprint(
+	pluginCfg *config.ToolSelectionPluginConfig,
+	legacyCfg *config.ToolsPluginConfig,
+) string {
+	if legacyCfg == nil {
+		return ToolPolicyFingerprint(pluginCfg)
+	}
+	return marshalFingerprint(effectiveToolPolicyFingerprintInput{
+		Selection: ToolPolicyFingerprint(pluginCfg),
+		Legacy:    newLegacyToolsPolicyFingerprintView(legacyCfg),
+	})
 }
 
 type toolCapabilityFingerprintInput struct {

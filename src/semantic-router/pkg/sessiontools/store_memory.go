@@ -3,6 +3,7 @@ package sessiontools
 import (
 	"context"
 	"hash/fnv"
+	"sort"
 	"sync"
 	"time"
 
@@ -17,21 +18,12 @@ import (
 // concern (unlike max_sessions/max_sessions_per_identity, which are).
 const memoryStoreShardCount = 64
 
-// memoryStoreEvictionSampleSize bounds how many entries a global-eviction
-// scan inspects when the store is at its max_sessions cap. Matches
-// pkg/sessiontelemetry/router_memory.go's evictOldestLocked: a full scan
-// across up to 100000 sessions (config.ToolSessionStoreMaxMaxSessions) on
-// every admission would be an unbounded hot-path cost for a fallback-tier
-// local store; a bounded sample gives approximate LRU at O(1) amortized
-// cost instead. Per-identity eviction stays exact — that bucket is bounded
-// by max_sessions_per_identity itself, typically far smaller.
-const memoryStoreEvictionSampleSize = 32
-
 // memoryEntry is the shard-internal record. Never returned to a caller
 // directly — every read clones State first (see MemoryStore.Load).
 type memoryEntry struct {
-	state State
-	quota QuotaKey
+	state      State
+	quota      QuotaKey
+	generation uint64
 }
 
 type memoryShard struct {
@@ -64,10 +56,11 @@ type MemoryStore struct {
 	// sessions is not serialized by store-wide bookkeeping. Lock ordering
 	// is always admissionMu outer, a shard's mu inner; a shard's mu is
 	// never held while acquiring admissionMu.
-	admissionMu  sync.Mutex
-	keyQuota     map[string]QuotaKey
-	quotaMembers map[QuotaKey]map[string]struct{}
-	totalCount   int
+	admissionMu    sync.Mutex
+	keyQuota       map[string]QuotaKey
+	quotaMembers   map[QuotaKey]map[string]struct{}
+	totalCount     int
+	nextGeneration uint64
 }
 
 // NewMemoryStore constructs a MemoryStore from the resolved
@@ -100,11 +93,19 @@ func (s *MemoryStore) shardFor(key string) *memoryShard {
 // Load implements Store. See store.go's Store doc comment for why this
 // returns (VersionedState, error) rather than the originally sketched
 // (VersionedState, bool, error).
-func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error) {
+func (s *MemoryStore) Load(ctx context.Context, key string) (VersionedState, error) {
+	result, _, err := s.LoadWithMetadata(ctx, key)
+	return result, err
+}
+
+// LoadWithMetadata is the optional expiry-aware Load extension used by the
+// manager to emit an explicit expiry receipt without changing Store's narrow
+// compatibility contract.
+func (s *MemoryStore) LoadWithMetadata(_ context.Context, key string) (VersionedState, LoadMetadata, error) {
 	s.lifecycleMu.RLock()
 	defer s.lifecycleMu.RUnlock()
 	if s.closed {
-		return VersionedState{}, ErrStoreClosed
+		return VersionedState{}, LoadMetadata{}, ErrStoreClosed
 	}
 	shard := s.shardFor(key)
 	now := s.clock()
@@ -112,10 +113,12 @@ func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error
 	shard.mu.Lock()
 	entry, ok := shard.entries[key]
 	var observedRevision uint64
+	var observedGeneration uint64
 	var observedExpiry time.Time
 	expired := false
 	if ok {
 		observedRevision = entry.state.Revision
+		observedGeneration = entry.generation
 		observedExpiry = entry.state.ExpiresAt
 		expired = !observedExpiry.After(now)
 	}
@@ -126,7 +129,10 @@ func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error
 		entry.state.ExpiresAt = now.Add(s.ttl)
 		result := entry.state.Clone()
 		shard.mu.Unlock()
-		return VersionedState{State: result, Found: true}, nil
+		return VersionedState{State: result, Found: true}, LoadMetadata{
+			ObservedRevision:   observedRevision,
+			ObservedGeneration: observedGeneration,
+		}, nil
 	}
 	shard.mu.Unlock()
 
@@ -141,21 +147,25 @@ func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error
 		// have already deleted-and-recreated this key by the time this
 		// runs, and this stale observation must not delete that fresh,
 		// live entry (an ABA race — see deleteIfExpiredLocked).
-		s.deleteIfExpiredLocked(key, observedRevision, observedExpiry)
+		s.deleteIfExpiredLocked(key, observedRevision, observedGeneration, observedExpiry)
 	}
-	return VersionedState{}, nil
+	return VersionedState{}, LoadMetadata{
+		Expired:            expired,
+		ObservedRevision:   observedRevision,
+		ObservedGeneration: observedGeneration,
+	}, nil
 }
 
 // deleteIfExpiredLocked deletes key's entry only if it is still, right now,
 // the exact same expired entry a caller (Load, or CompareAndSwap's create
-// path) observed as expired: same Revision, same ExpiresAt, still expired
-// as of the current clock reading. Without this identity check, a stale
+// path) observed as expired: same generation, revision, and ExpiresAt, still
+// expired as of the current clock reading. Without this identity check, a stale
 // "this was expired" observation acted on after the fact could delete a
 // brand-new, live entry that a concurrent CompareAndSwap(0) admitted at the
 // same key in the meantime (classic ABA: same key, different underlying
 // value). Acquires admissionMu itself — callers must not already hold a
 // shard lock.
-func (s *MemoryStore) deleteIfExpiredLocked(key string, observedRevision uint64, observedExpiry time.Time) {
+func (s *MemoryStore) deleteIfExpiredLocked(key string, observedRevision, observedGeneration uint64, observedExpiry time.Time) {
 	s.admissionMu.Lock()
 	defer s.admissionMu.Unlock()
 
@@ -167,7 +177,7 @@ func (s *MemoryStore) deleteIfExpiredLocked(key string, observedRevision uint64,
 	if !ok {
 		return
 	}
-	if entry.state.Revision != observedRevision {
+	if entry.state.Revision != observedRevision || entry.generation != observedGeneration {
 		return
 	}
 	if !entry.state.ExpiresAt.Equal(observedExpiry) {
@@ -287,6 +297,8 @@ func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, 
 	stored.LastSeenAt = now
 	stored.ExpiresAt = now.Add(ttl)
 	stored.Revision = 1
+	s.nextGeneration++
+	generation := s.nextGeneration
 
 	shard := s.shardFor(key)
 	shard.mu.Lock()
@@ -294,7 +306,7 @@ func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, 
 		shard.mu.Unlock()
 		return false, ErrRevisionMismatch
 	}
-	shard.entries[key] = &memoryEntry{state: stored, quota: quota}
+	shard.entries[key] = &memoryEntry{state: stored, quota: quota, generation: generation}
 	shard.mu.Unlock()
 
 	s.keyQuota[key] = quota
@@ -320,7 +332,12 @@ func (s *MemoryStore) evictForIdentityLocked(quota QuotaKey) {
 	var oldestSeen time.Time
 	first := true
 	now := s.clock()
+	keys := make([]string, 0, len(members))
 	for key := range members {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
 		seen, expired := s.peekLastSeenLocked(key, now)
 		if expired {
 			s.deleteEntryLocked(key)
@@ -335,10 +352,10 @@ func (s *MemoryStore) evictForIdentityLocked(quota QuotaKey) {
 	}
 }
 
-// evictForCapacityLocked evicts an approximately-least-recently-seen
-// session store-wide if admitting one more would exceed max_sessions.
-// Sampled, not exact — see memoryStoreEvictionSampleSize. Caller must hold
-// admissionMu.
+// evictForCapacityLocked evicts the least-recently-seen session store-wide if
+// admitting one more would exceed max_sessions. The key list is sorted before
+// inspection so map iteration order cannot change which tied session is
+// evicted. Caller must hold admissionMu.
 func (s *MemoryStore) evictForCapacityLocked() {
 	if s.totalCount < s.maxSessions {
 		return
@@ -346,9 +363,13 @@ func (s *MemoryStore) evictForCapacityLocked() {
 	var oldestKey string
 	var oldestSeen time.Time
 	first := true
-	sampled := 0
 	now := s.clock()
+	keys := make([]string, 0, len(s.keyQuota))
 	for key := range s.keyQuota {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
 		seen, expired := s.peekLastSeenLocked(key, now)
 		if expired {
 			s.deleteEntryLocked(key)
@@ -356,10 +377,6 @@ func (s *MemoryStore) evictForCapacityLocked() {
 		}
 		if first || seen.Before(oldestSeen) || (seen.Equal(oldestSeen) && key < oldestKey) {
 			oldestKey, oldestSeen, first = key, seen, false
-		}
-		sampled++
-		if sampled >= memoryStoreEvictionSampleSize {
-			break
 		}
 	}
 	if !first {
@@ -441,6 +458,33 @@ func (s *MemoryStore) Delete(_ context.Context, key string) error {
 	}
 	s.removeFromBookkeeping(key)
 	return nil
+}
+
+// DeleteIfToken implements ConditionalDeleteStore. A changed or missing entry
+// is left untouched and reported as not applied, allowing a stale invalidation
+// caller to continue with a fresh load/CAS cycle. Generation is checked in
+// addition to revision so a delete-and-recreate ABA cycle cannot match.
+func (s *MemoryStore) DeleteIfToken(_ context.Context, key string, token StateToken) (bool, error) {
+	s.lifecycleMu.RLock()
+	defer s.lifecycleMu.RUnlock()
+	if s.closed {
+		return false, ErrStoreClosed
+	}
+
+	s.admissionMu.Lock()
+	defer s.admissionMu.Unlock()
+	shard := s.shardFor(key)
+	shard.mu.Lock()
+	entry, exists := shard.entries[key]
+	if !exists || entry.state.Revision != token.Revision ||
+		(token.Generation > 0 && entry.generation != token.Generation) {
+		shard.mu.Unlock()
+		return false, nil
+	}
+	delete(shard.entries, key)
+	shard.mu.Unlock()
+	s.removeBookkeepingForEntryLocked(key, entry.quota)
+	return true, nil
 }
 
 // Close implements Store. Idempotent.

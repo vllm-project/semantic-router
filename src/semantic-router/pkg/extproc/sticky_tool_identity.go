@@ -24,22 +24,15 @@ const (
 
 const (
 	// stickyToolStorageKeyPrefix namespaces every sticky tool-set storage
-	// key from every other key shape sharing the same backend.
-	stickyToolStorageKeyPrefix = "vsr:st:v1"
+	// key from every other key shape sharing the same backend. Version 2
+	// removes the policy fingerprint from the key so policy changes load and
+	// explicitly invalidate the existing state instead of leaking orphaned
+	// policy-specific keys.
+	stickyToolStorageKeyPrefix = "vsr:st:v2"
 
-	// stickyToolIdentityHMACHexLen truncates each HMAC-SHA256 digest (64
-	// hex chars) to this length before use, matching
-	// pkg/cache's own userScopeNamespace truncation convention for the
-	// same secret: an internal partition token does not need the full
-	// digest, and a shorter one keeps storage keys more legible in logs
-	// and Redis tooling.
-	stickyToolIdentityHMACHexLen = 16
-
-	// stickyToolIdentityFingerprintPrefixLen bounds how much of the
-	// (already-hashed) policy fingerprint appears in the storage key, so a
-	// policy change reliably changes the key without the key growing
-	// unbounded.
-	stickyToolIdentityFingerprintPrefixLen = 16
+	// sha256DigestHexLen keeps key-shape assertions and future helpers tied to
+	// the complete HMAC-SHA256 digest rather than a collision-prone truncation.
+	sha256DigestHexLen = sha256.Size * 2
 )
 
 // ResolvedStickyIdentity is the outcome of evaluating a request against the
@@ -49,15 +42,15 @@ const (
 // are the zero value and must not be used when Trusted is false.
 type ResolvedStickyIdentity struct {
 	// StorageKey addresses this session's sticky state in the configured
-	// store. Opaque: derived entirely from HMAC-SHA256 digests of the
-	// principal and session ID, plus the (already-hashed) policy
-	// fingerprint and the operator-chosen recipe name — never the raw
-	// principal or session ID.
+	// store. Opaque: derived entirely from domain-separated HMAC-SHA256
+	// digests of the recipe, principal, and session ID — never their raw
+	// values. The policy fingerprint belongs in State and is intentionally
+	// not part of this stable identity key.
 	StorageKey string
 	// QuotaKey is the cardinality-bucket identity for
 	// config.ToolSessionStoreConfig's max_sessions_per_identity bound (see
-	// sessiontools.Store.CompareAndSwap). QuotaKey.Principal is the same
-	// opaque HMAC digest embedded in StorageKey, not the raw principal.
+	// sessiontools.Store.CompareAndSwap). Both fields are the same opaque
+	// HMAC digests embedded in StorageKey, not raw principal or recipe values.
 	QuotaKey sessiontools.QuotaKey
 	// Trusted reports whether sticky state may be read or written for this
 	// request. False for any request that fails the trust rules below,
@@ -98,17 +91,17 @@ func ResolveStickyToolIdentity(ctx *RequestContext, recipeName string, policyFin
 		return ResolvedStickyIdentity{Reason: stickyToolIdentityReasonMissingSecret}
 	}
 
-	principalHMAC := stickyToolHMACHex(secret, ctx.AuthenticatedPrincipal)
-	sessionHMAC := stickyToolHMACHex(secret, ctx.AuthenticatedPrincipal+":"+ctx.SessionID)
-	fingerprintPrefix := truncateStickyToolString(policyFingerprint, stickyToolIdentityFingerprintPrefixLen)
+	recipeHMAC := stickyToolHMACHex(secret, "recipe", recipeName)
+	principalHMAC := stickyToolHMACHex(secret, "principal", ctx.AuthenticatedPrincipal)
+	sessionHMAC := stickyToolHMACHex(secret, "session", ctx.SessionID)
 
 	storageKey := strings.Join([]string{
-		stickyToolStorageKeyPrefix, recipeName, principalHMAC, sessionHMAC, fingerprintPrefix,
+		stickyToolStorageKeyPrefix, recipeHMAC, principalHMAC, sessionHMAC,
 	}, ":")
 
 	return ResolvedStickyIdentity{
 		StorageKey: storageKey,
-		QuotaKey:   sessiontools.QuotaKey{Principal: principalHMAC, Namespace: recipeName},
+		QuotaKey:   sessiontools.QuotaKey{Principal: principalHMAC, Namespace: recipeHMAC},
 		Trusted:    true,
 		Reason:     stickyToolIdentityReasonOK,
 	}
@@ -169,15 +162,12 @@ func stickyToolIdentitySecret() (string, bool) {
 	return secret, secret != ""
 }
 
-func stickyToolHMACHex(secret, input string) string {
+func stickyToolHMACHex(secret, domain, input string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(stickyToolStorageKeyPrefix)) // hash.Hash.Write never returns an error
+	_, _ = mac.Write([]byte{0})
+	_, _ = mac.Write([]byte(domain))
+	_, _ = mac.Write([]byte{0})
 	_, _ = mac.Write([]byte(input)) // hash.Hash.Write never returns an error
-	return truncateStickyToolString(hex.EncodeToString(mac.Sum(nil)), stickyToolIdentityHMACHexLen)
-}
-
-func truncateStickyToolString(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
+	return hex.EncodeToString(mac.Sum(nil))
 }

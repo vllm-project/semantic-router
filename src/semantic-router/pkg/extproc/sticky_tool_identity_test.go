@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -35,8 +36,8 @@ func TestResolveStickyToolIdentity_TrustedResponseAPI_OK(t *testing.T) {
 	if got.StorageKey == "" {
 		t.Fatal("expected a non-empty StorageKey")
 	}
-	if got.QuotaKey.Namespace != "recipe-a" {
-		t.Fatalf("QuotaKey.Namespace = %q, want %q", got.QuotaKey.Namespace, "recipe-a")
+	if got.QuotaKey.Namespace == "recipe-a" || got.QuotaKey.Namespace == "" {
+		t.Fatalf("QuotaKey.Namespace must be an opaque recipe digest, got %q", got.QuotaKey.Namespace)
 	}
 	if got.QuotaKey.Principal == "" {
 		t.Fatal("expected a non-empty QuotaKey.Principal")
@@ -229,12 +230,15 @@ func TestResolveStickyToolIdentity_DifferentPrincipalsDifferentQuotaKeys(t *test
 	}
 }
 
-func TestResolveStickyToolIdentity_DifferentPolicyFingerprintDifferentStorageKey(t *testing.T) {
+func TestResolveStickyToolIdentity_PolicyFingerprintDoesNotChangeStorageKey(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
 	a := ResolveStickyToolIdentity(trustedResponseAPICtx(), "recipe-a", "policy-fp-1")
 	b := ResolveStickyToolIdentity(trustedResponseAPICtx(), "recipe-a", "policy-fp-2")
-	if a.StorageKey == b.StorageKey {
-		t.Fatal("a different policy fingerprint must change the storage key")
+	if a.StorageKey != b.StorageKey {
+		t.Fatal("a policy change must keep the identity storage key stable so state can be invalidated explicitly")
+	}
+	if a.QuotaKey != b.QuotaKey {
+		t.Fatal("a policy change must not change the identity quota bucket")
 	}
 }
 
@@ -247,5 +251,43 @@ func TestResolveStickyToolIdentity_DifferentRecipeDifferentKeys(t *testing.T) {
 	}
 	if a.QuotaKey == b.QuotaKey {
 		t.Fatal("different recipes must produce different quota keys (recipe partitioning)")
+	}
+}
+
+func TestResolveStickyToolIdentity_KeysUseFullDomainSeparatedHMACs(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
+	got := ResolveStickyToolIdentity(trustedResponseAPICtx(), "recipe:with:delimiters", "policy-fp")
+	if !got.Trusted {
+		t.Fatalf("expected trusted, got %+v", got)
+	}
+	parts := strings.Split(got.StorageKey, ":")
+	if len(parts) != 6 || strings.Join(parts[:3], ":") != stickyToolStorageKeyPrefix {
+		t.Fatalf("unexpected storage key shape %q", got.StorageKey)
+	}
+	for _, part := range parts[3:] {
+		if len(part) != sha256DigestHexLen {
+			t.Fatalf("HMAC segment length = %d, want %d: %q", len(part), sha256DigestHexLen, part)
+		}
+		if _, err := hex.DecodeString(part); err != nil {
+			t.Fatalf("HMAC segment is not hex: %q (%v)", part, err)
+		}
+	}
+	if strings.Contains(got.StorageKey, "recipe:with:delimiters") {
+		t.Fatalf("StorageKey must not embed raw recipe name: %q", got.StorageKey)
+	}
+}
+
+func TestResolveStickyToolIdentity_SessionAndPrincipalCompositionIsUnambiguous(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
+	aCtx := trustedResponseAPICtx()
+	aCtx.AuthenticatedPrincipal = "principal:part"
+	aCtx.SessionID = "session"
+	bCtx := trustedResponseAPICtx()
+	bCtx.AuthenticatedPrincipal = "principal"
+	bCtx.SessionID = "part:session"
+	a := ResolveStickyToolIdentity(aCtx, "recipe-a", "policy-fp")
+	b := ResolveStickyToolIdentity(bCtx, "recipe-a", "policy-fp")
+	if a.StorageKey == b.StorageKey {
+		t.Fatal("different principal/session pairs must not collide through delimiter composition")
 	}
 }
