@@ -104,7 +104,7 @@ func TestPlaygroundFeedbackExpiredClaimRecoversAfterDashboardRestart(t *testing.
 		t.Fatal(err)
 	}
 	staleClaim := time.Now().Add(-playgroundReplayClaimLease - time.Second).Unix()
-	if _, err := svc.store.db.ExecContext(
+	if _, err = svc.store.db.ExecContext(
 		ctx,
 		`UPDATE playground_feedback_replays SET claimed_at = ? WHERE replay_id = ?`,
 		staleClaim,
@@ -114,7 +114,7 @@ func TestPlaygroundFeedbackExpiredClaimRecoversAfterDashboardRestart(t *testing.
 	}
 
 	restarted := NewService(svc.store, "test-secret", 1)
-	if err := restarted.ValidatePlaygroundReplay(ctx, sessionID, "replay-restart", "model-a"); err != nil {
+	if err = restarted.ValidatePlaygroundReplay(ctx, sessionID, "replay-restart", "model-a"); err != nil {
 		t.Fatalf("stale claim validation after restart = %v", err)
 	}
 	secondKey, err := restarted.ClaimPlaygroundReplay(ctx, sessionID, "replay-restart", "model-a", 1, time.Minute)
