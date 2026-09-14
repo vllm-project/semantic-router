@@ -1,10 +1,6 @@
 package config
 
-import (
-	"errors"
-	"strings"
-	"testing"
-)
+import "testing"
 
 func float32Ptr(v float32) *float32 { return &v }
 func intPtr(v int) *int             { return &v }
@@ -66,23 +62,15 @@ func TestToolSelectionPluginValidate_StickyEnabledUnderDisabledPlugin_Err(t *tes
 	}
 }
 
-// TestToolSelectionPluginValidate_StickyEnabledRejectedInPhase1 covers the
-// maintainer-flagged silent-no-op hazard (issue #3347 phase 1 / sub-issue
-// #3392): sticky.enabled: true must be rejected outright, not accepted and
-// then never actually activated by any request path.
-func TestToolSelectionPluginValidate_StickyEnabledRejectedInPhase1(t *testing.T) {
+func TestToolSelectionPluginValidate_StickyEnabled_OK(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
 		Sticky:  &StickyToolSelectionConfig{Enabled: true},
 	}
 
-	err := c.Validate()
-	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
-		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
-	}
-	if err.Error() != ErrToolSelectionStickyUnsupported.Error() {
-		t.Fatalf("error = %q, want %q", err.Error(), ErrToolSelectionStickyUnsupported.Error())
+	if err := c.Validate(); err != nil {
+		t.Fatalf("sticky.enabled should be accepted by config validation: %v", err)
 	}
 }
 
@@ -120,22 +108,18 @@ func TestToolSelectionPluginValidate_StickyMaxToolsExplicitZero_Err(t *testing.T
 	}
 }
 
-// TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValueBeforePhaseGate
-// covers the same unset-vs-explicit-zero distinction as before
-// (EffectiveMaxNewToolsPerTurn must not silently default an explicit 0),
-// but Validate() itself now rejects sticky.enabled: true regardless — the
-// phase-support gate runs after bounds validation, so an otherwise-valid
-// explicit 0 still surfaces ErrToolSelectionStickyUnsupported, not nil.
-func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValueBeforePhaseGate(t *testing.T) {
+// TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValue
+// covers the unset-vs-explicit-zero distinction: EffectiveMaxNewToolsPerTurn
+// must not silently default an explicit 0.
+func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExplicitValue(t *testing.T) {
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
 		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxNewToolsPerTurn: intPtr(0)},
 	}
 
-	err := c.Validate()
-	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
-		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
+	if err := c.Validate(); err != nil {
+		t.Fatalf("sticky.enabled with explicit zero should validate: %v", err)
 	}
 	if got := c.Sticky.EffectiveMaxNewToolsPerTurn(); got != 0 {
 		t.Fatalf("effective max_new_tools_per_turn = %d, want 0 (explicit, not defaulted)", got)
@@ -159,8 +143,7 @@ func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnExceedsMaxTools_Err
 
 func TestToolSelectionPluginValidate_StickyPinCalledToolsExplicitFalse_OK(t *testing.T) {
 	// Enabled: false here — this test is about EffectivePinCalledTools()'s
-	// explicit-false handling, not about phase-1 runtime support, so it
-	// must not trip ErrToolSelectionStickyUnsupported.
+	// explicit-false handling.
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
@@ -207,11 +190,7 @@ func TestToolSelectionPluginValidate_StickyDisabledInvalidBounds_Err(t *testing.
 	}
 }
 
-// TestToolSelectionPluginConfigContracts_StickyEnabledRejectedInPhase1
-// covers the full admission path, not just the isolated Validate() call:
-// a decision whose tool_selection plugin enables sticky must be rejected
-// by validateConfigContracts, with decision context in the error.
-func TestToolSelectionPluginConfigContracts_StickyEnabledRejectedInPhase1(t *testing.T) {
+func TestToolSelectionPluginConfigContracts_StickyEnabled_OK(t *testing.T) {
 	payload := MustStructuredPayload(&ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
@@ -233,11 +212,7 @@ func TestToolSelectionPluginConfigContracts_StickyEnabledRejectedInPhase1(t *tes
 		},
 	}
 
-	err := validateConfigContracts(cfg)
-	if !errors.Is(err, ErrToolSelectionStickyUnsupported) {
-		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
-	}
-	if !strings.Contains(err.Error(), "decision 'sticky-decision'") {
-		t.Fatalf("error = %q, want decision context", err.Error())
+	if err := validateConfigContracts(cfg); err != nil {
+		t.Fatalf("sticky-enabled decision should pass config admission: %v", err)
 	}
 }

@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -79,39 +78,6 @@ func TestValidateStickyToolSelectionSecret_StickyEnabledSecretConfigured_OK(t *t
 	}
 }
 
-// TestValidateStickyToolSelectionPhaseSupport_StickyEnabledSecretConfigured_Err
-// covers the maintainer-flagged silent-no-op hazard directly (issue #3347
-// phase 1 / sub-issue #3392): sticky.enabled: true must be rejected even
-// when USER_SCOPE_NAMESPACE_SECRET is configured — the narrow secret
-// validator above accepts this config (correctly, for its own scope), but
-// no request path consumes ResolveStickyToolIdentity or the sessiontools
-// store yet, so a configured secret alone must not be enough to let sticky
-// through as a silent no-op.
-func TestValidateStickyToolSelectionPhaseSupport_StickyEnabledSecretConfigured_Err(t *testing.T) {
-	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
-	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{stickyEnabledDecision(t, "d1")},
-		},
-	}
-
-	err := validateStickyToolSelectionPhaseSupport(cfg)
-	if !errors.Is(err, config.ErrToolSelectionStickyUnsupported) {
-		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
-	}
-}
-
-func TestValidateStickyToolSelectionPhaseSupport_NoStickyDecisions_OK(t *testing.T) {
-	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{stickyDisabledDecision(t, "d1")},
-		},
-	}
-	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
-		t.Fatalf("no decision enables sticky, expected no error, got: %v", err)
-	}
-}
-
 func TestValidateStickyToolSelectionSecret_NilConfig_OK(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
 	if err := validateStickyToolSelectionSecret(nil); err != nil {
@@ -119,16 +85,7 @@ func TestValidateStickyToolSelectionSecret_NilConfig_OK(t *testing.T) {
 	}
 }
 
-// TestBuildOpenAIRouterFromConfig_StickyEnabledSecretConfigured_FailsUnsupportedBeforeComponentBuild
-// is the direct regression for the maintainer's reported issue (#3392): a
-// config with sticky enabled — and, notably, USER_SCOPE_NAMESPACE_SECRET
-// *configured* — must still be rejected before buildRouterComponents runs.
-// Before this fix, a configured secret was enough to let sticky.enabled:
-// true pass both config validation and router construction, even though no
-// request path consumed it — a silent no-op. Setting the secret here rules
-// that variable out, so a failure can only come from the phase-support
-// gate, not the secret gate.
-func TestBuildOpenAIRouterFromConfig_StickyEnabledSecretConfigured_FailsUnsupportedBeforeComponentBuild(t *testing.T) {
+func TestBuildStickyToolSelectionManager_EnabledLocal(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-secret")
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
@@ -136,8 +93,29 @@ func TestBuildOpenAIRouterFromConfig_StickyEnabledSecretConfigured_FailsUnsuppor
 		},
 	}
 
-	_, err := buildOpenAIRouterFromConfig(cfg)
-	if !errors.Is(err, config.ErrToolSelectionStickyUnsupported) {
-		t.Fatalf("error = %v, want ErrToolSelectionStickyUnsupported", err)
+	manager, store, err := buildStickyToolSelectionManager(cfg)
+	if err != nil {
+		t.Fatalf("buildStickyToolSelectionManager returned error: %v", err)
+	}
+	if manager == nil || store == nil {
+		t.Fatalf("sticky manager/store should be initialized, manager=%v store=%v", manager, store)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close sticky store: %v", err)
+	}
+}
+
+func TestBuildStickyToolSelectionManager_Disabled(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{stickyDisabledDecision(t, "d1")},
+		},
+	}
+	manager, store, err := buildStickyToolSelectionManager(cfg)
+	if err != nil {
+		t.Fatalf("buildStickyToolSelectionManager returned error: %v", err)
+	}
+	if manager != nil || store != nil {
+		t.Fatalf("disabled sticky selection should not initialize state, manager=%v store=%v", manager, store)
 	}
 }
