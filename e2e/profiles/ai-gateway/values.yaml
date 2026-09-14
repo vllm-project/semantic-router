@@ -765,7 +765,7 @@ config:
           description: Current user turn closely repeats the last two billing complaints.
           threshold: 0.8
           lookback_turns: 2
-      context_rules:
+      context:
         - name: long_context
           description: Requests estimated at 500 tokens or more.
           min_tokens: 500
