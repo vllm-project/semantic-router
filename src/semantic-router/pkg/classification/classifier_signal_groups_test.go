@@ -3,8 +3,8 @@ package classification
 import (
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestSignalGroupSoftmaxExclusiveChoosesSingleDomainWinner(t *testing.T) {
@@ -18,7 +18,7 @@ func TestSignalGroupSoftmaxExclusiveChoosesSingleDomainWinner(t *testing.T) {
 	}
 
 	classifier := buildGroupedDomainClassifier(&MockCategoryInference{
-		classifyWithProbsResult: candle_binding.ClassResultWithProbs{
+		classifyWithProbsResult: tasks.ClassResultWithProbs{
 			Class: 4, Confidence: 0.40,
 			Probabilities: probs, NumClasses: 14,
 		},

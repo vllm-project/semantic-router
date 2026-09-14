@@ -87,10 +87,20 @@ domains:
     owner: router-core
     documentation_check: true
     paths:
+      - src/semantic-router/pkg/apiserver/**/*.go
+      - src/semantic-router/pkg/catalog/**/*.go
+      - src/semantic-router/pkg/config/**/*.go
+      - src/semantic-router/pkg/configschema/**/*.go
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - tools/configschema/**
       - tools/openapi-gen/**
+      - tools/agent/scripts/embed_generated_index.py
+      - tools/make/docs.mk
+      - tools/make/golang.mk
+      - dashboard/frontend/src/generated/routerConfigContract.ts
       - website/docs/api/apiserver.md
       - website/static/openapi/apiserver/**
-    checks: [make api-docs-check]
+    checks: [make generated-contract-check]
     ci_jobs: [core-tests]
 
   router-core:
@@ -282,6 +292,15 @@ domains:
       - website/docs/training/**
     checks: [make test-training-contracts]
     ci_jobs: []
+
+  model-selection-parity:
+    owner: training
+    paths:
+      - src/training/model_selection/ml_model_selection/models.py
+      - src/training/model_selection/ml_model_selection/tests/**
+      - src/training/model_selection/ml_model_selection/requirements-parity.txt
+    checks: []
+    ci_jobs: [core-tests]
 
 images:
   dashboard:

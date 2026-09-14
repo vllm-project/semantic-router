@@ -62,7 +62,7 @@ clean-valkey: stop-valkey ## Clean up Valkey data
 test-valkey-vectorstore: start-valkey rust ## Test vector store with Valkey backend
 	@$(LOG_TARGET)
 	@echo "Testing vector store with Valkey backend..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
@@ -74,7 +74,7 @@ test-valkey-vectorstore: start-valkey rust ## Test vector store with Valkey back
 test-valkey-vectorstore-no-container: rust ## Test vector store against existing Valkey (VALKEY_PORT=6379)
 	@$(LOG_TARGET)
 	@echo "Testing vector store against existing Valkey on port $${VALKEY_PORT:-6379}..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 	export VALKEY_HOST=$${VALKEY_HOST:-localhost} && \
 	export VALKEY_PORT=$${VALKEY_PORT:-6379} && \
@@ -89,7 +89,7 @@ test-valkey-vectorstore-no-container: rust ## Test vector store against existing
 test-valkey-memory-unit: rust ## Run ValkeyStore unit tests (no live Valkey required)
 	@$(LOG_TARGET)
 	@echo "Running ValkeyStore unit tests..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/memory/ -run "TestValkey|TestMemoryValkeyConfig|TestNewValkeyStore|TestCachingStore|TestNewCachingStore" -count=1
 
@@ -97,7 +97,7 @@ test-valkey-memory-unit: rust ## Run ValkeyStore unit tests (no live Valkey requ
 test-valkey-memory: start-valkey rust ## Test ValkeyStore integration against containerised Valkey
 	@$(LOG_TARGET)
 	@echo "Testing Valkey memory store integration..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
@@ -109,7 +109,7 @@ test-valkey-memory: start-valkey rust ## Test ValkeyStore integration against co
 test-valkey-memory-no-container: rust ## Test ValkeyStore integration against existing Valkey (VALKEY_PORT=6379)
 	@$(LOG_TARGET)
 	@echo "Testing Valkey memory store against existing Valkey on port ${VALKEY_PORT:-6379}..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 	export VALKEY_HOST=${VALKEY_HOST:-localhost} && \
 	export VALKEY_PORT=${VALKEY_PORT:-6379} && \
@@ -124,7 +124,7 @@ test-valkey-memory-no-container: rust ## Test ValkeyStore integration against ex
 test-valkey-cache: start-valkey rust ## Test semantic cache with Valkey backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Valkey backend..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
@@ -135,7 +135,7 @@ test-valkey-cache: start-valkey rust ## Test semantic cache with Valkey backend
 test-semantic-router-valkey: build-router start-valkey ## Test semantic-router with Valkey cache backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Valkey cache backend..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
@@ -150,7 +150,7 @@ test-semantic-router-valkey: build-router start-valkey ## Test semantic-router w
 test-valkey-all: start-valkey rust ## Test all Valkey backends
 	@$(LOG_TARGET)
 	@echo "Testing all Valkey backends..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 	export VALKEY_HOST=localhost && \
 	export VALKEY_PORT=6380 && \
@@ -169,7 +169,7 @@ run-valkey-cache-example: start-valkey rust ## Run the Valkey cache example
 	@$(LOG_TARGET)
 	@echo "Running Valkey cache example..."
 	@cd src/semantic-router && \
-		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
+		export $(NATIVE_ENV) && \
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \
 		go run ../../tools/valkey/valkey-cache.go
@@ -183,7 +183,7 @@ run-valkey-cache-example-no-container: rust ## Run the Valkey cache example usin
 	@echo "Running Valkey cache example (using existing server)..."
 	@echo "Note: Expects Valkey server at VALKEY_HOST:VALKEY_PORT (default: localhost:6379)"
 	@cd src/semantic-router && \
-		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
+		export $(NATIVE_ENV) && \
 		export VALKEY_HOST=$${VALKEY_HOST:-localhost} && \
 		export VALKEY_PORT=$${VALKEY_PORT:-6379} && \
 		go run ../../tools/valkey/valkey-cache.go
@@ -195,7 +195,7 @@ run-valkey-vectorstore-example: start-valkey rust ## Run the Valkey vector store
 	@$(LOG_TARGET)
 	@echo "Running Valkey vector store example..."
 	@cd src/semantic-router && \
-		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
+		export $(NATIVE_ENV) && \
 		go run ../../tools/valkey/valkey-vectorstore.go
 	@echo ""
 	@echo "Example complete! Inspect Valkey using:"
@@ -207,7 +207,7 @@ run-valkey-vectorstore-example-no-container: rust ## Run the Valkey vector store
 	@$(LOG_TARGET)
 	@echo "Running Valkey vector store example (using existing server)..."
 	@cd src/semantic-router && \
-		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
+		export $(NATIVE_ENV) && \
 		go run ../../tools/valkey/valkey-vectorstore.go
 
 # ---------------------------------------------------------------------------
@@ -291,7 +291,7 @@ benchmark-valkey: rust start-valkey ## Run Valkey cache performance benchmark
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@mkdir -p benchmark_results/valkey
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		export USE_CPU=${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
 		export VALKEY_HOST=localhost && \

@@ -408,10 +408,13 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-looper-%d", timestamp)
-	toolName, toolArgs, toolCallID, hasToolCall := resolveToolCallForStreaming(agg)
+	toolCalls, tagged := resolveToolCallsForStreaming(agg)
 	chunks := splitIntoChunks(agg.CombinedContent, 50)
+	if tagged {
+		chunks = nil
+	}
 	sseBody := buildSimulatedChatCompletionSSE(
-		id, timestamp, agg.FinalModel, chunks, toolName, toolArgs, toolCallID, hasToolCall,
+		id, timestamp, agg.FinalModel, chunks, toolCalls,
 	)
 	resp := streamingLooperResponse(sseBody, agg.FinalModel, modelsUsed, iterations, "simple")
 	resp.Usage = usage
@@ -443,76 +446,60 @@ func concatModelSSEStreams(responses []*ModelResponse) []byte {
 	return out
 }
 
-func resolveToolCallForStreaming(agg *AggregatedResponse) (string, string, string, bool) {
+func resolveToolCallsForStreaming(agg *AggregatedResponse) ([]map[string]interface{}, bool) {
 	if len(agg.Responses) == 0 {
-		return "", "", "", false
+		return nil, false
 	}
 
 	last := agg.Responses[len(agg.Responses)-1]
-	if name, args, callID, ok := parseFirstToolCallFromRaw(last.Raw); ok {
-		return name, args, callID, true
+	var completion struct {
+		Choices []struct {
+			Message struct {
+				ToolCalls []map[string]interface{} `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if json.Unmarshal(last.Raw, &completion) == nil && len(completion.Choices) > 0 {
+		calls := completion.Choices[0].Message.ToolCalls
+		if len(calls) > 0 {
+			return prepareToolCallsForStreaming(calls), false
+		}
 	}
 
 	if name, args, ok := parseTaggedToolCall(agg.CombinedContent); ok {
-		return name, args, fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano()), true
+		return []map[string]interface{}{{
+			"index":    0,
+			"id":       fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano()),
+			"type":     "function",
+			"function": map[string]interface{}{"name": name, "arguments": args},
+		}}, true
 	}
-
-	return "", "", "", false
+	return nil, false
 }
 
-func parseFirstToolCallFromRaw(raw []byte) (string, string, string, bool) {
-	if len(raw) == 0 {
-		return "", "", "", false
+// prepareToolCallsForStreaming adapts a decoded completion to delta indexes.
+// Its maps are owned by this formatter, so candidate response history stays intact.
+func prepareToolCallsForStreaming(calls []map[string]interface{}) []map[string]interface{} {
+	for index, call := range calls {
+		if call == nil {
+			return nil
+		}
+		call["index"] = index
+		// Retain compatible-provider defaults for every call while preserving
+		// IDs and arguments supplied upstream.
+		if callID, _ := call["id"].(string); strings.TrimSpace(callID) == "" {
+			call["id"] = fmt.Sprintf("chatcmpl-tool-%d-%d", time.Now().UnixNano(), index)
+		}
+		if callType, _ := call["type"].(string); callType == "" {
+			call["type"] = "function"
+		}
+		if function, ok := call["function"].(map[string]interface{}); ok {
+			if arguments, _ := function["arguments"].(string); strings.TrimSpace(arguments) == "" {
+				function["arguments"] = "{}"
+			}
+		}
 	}
-
-	var completion map[string]interface{}
-	if err := json.Unmarshal(raw, &completion); err != nil {
-		return "", "", "", false
-	}
-
-	choices, ok := completion["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return "", "", "", false
-	}
-
-	firstChoice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	message, ok := firstChoice["message"].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	toolCalls, ok := message["tool_calls"].([]interface{})
-	if !ok || len(toolCalls) == 0 {
-		return "", "", "", false
-	}
-
-	firstTool, ok := toolCalls[0].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	function, ok := firstTool["function"].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	name, _ := function["name"].(string)
-	args, _ := function["arguments"].(string)
-	callID, _ := firstTool["id"].(string)
-	if strings.TrimSpace(name) == "" {
-		return "", "", "", false
-	}
-	if strings.TrimSpace(args) == "" {
-		args = "{}"
-	}
-	if strings.TrimSpace(callID) == "" {
-		callID = fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano())
-	}
-	return name, args, callID, true
+	return calls
 }
 
 // splitIntoChunks splits a string into chunks of approximately the given size

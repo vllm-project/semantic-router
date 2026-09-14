@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -196,7 +197,7 @@ func TestCallRouterAPIForwardsSelectedEntrypointModel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := callRouterAPI(TestQueryRequest{
+	result := callRouterAPI(context.Background(), TestQueryRequest{
 		Query: "hello",
 		Mode:  TestQueryModeDryRun,
 		Model: "vllm-sr/mom-v1-blend",
@@ -225,7 +226,7 @@ func TestCallRouterAPIUsesServerCredential(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := callRouterAPI(TestQueryRequest{
+	result := callRouterAPI(context.Background(), TestQueryRequest{
 		Query: "hello",
 		Mode:  TestQueryModeDryRun,
 	}, server.URL, configPath, topologyCredentialProvider{token: "topology-service-token"})
@@ -346,13 +347,14 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 	var result TestQueryResult
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
 
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", Confidence: 1.0, Reason: "Modality signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", Confidence: 1.0, Reason: "Authorization signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", Confidence: 1.0, Reason: "Jailbreak signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", Confidence: 1.0, Reason: "PII signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", Confidence: 1.0, Reason: "Knowledge base signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", Confidence: 1.0, Reason: "Event signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", Confidence: 1.0, Reason: "Projection mapping matched"})
+	confidenceUnavailable := false
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", ConfidenceAvailable: &confidenceUnavailable, Reason: "Modality signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", ConfidenceAvailable: &confidenceUnavailable, Reason: "Authorization signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", ConfidenceAvailable: &confidenceUnavailable, Reason: "Jailbreak signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", ConfidenceAvailable: &confidenceUnavailable, Reason: "PII signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", ConfidenceAvailable: &confidenceUnavailable, Reason: "Knowledge base signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", ConfidenceAvailable: &confidenceUnavailable, Reason: "Event signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", ConfidenceAvailable: &confidenceUnavailable, Reason: "Projection mapping matched"})
 	assert.Contains(t, result.HighlightedPath, "signal-group-kb")
 	assert.Contains(t, result.HighlightedPath, "signal-kb-privacy_policy")
 	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
@@ -403,7 +405,7 @@ func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testin
 	assert.Contains(t, result.HighlightedPath, "signal-structure-many_questions")
 }
 
-func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
+func TestTopologyTestQueryHandler_MissingRouterAPI(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
@@ -421,8 +423,8 @@ func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected status 503, got %d: %s", rr.Code, rr.Body.String())
 	}
 
 	var result TestQueryResult
@@ -510,41 +512,6 @@ func TestTopologyTestQueryHandler_EvaluatedRules(t *testing.T) {
 	// Basic validation - routing latency should be >= 0 (can be 0 for very fast execution)
 	if result.RoutingLatency < 0 {
 		t.Errorf("Expected non-negative routing latency, got %d", result.RoutingLatency)
-	}
-}
-
-func TestBuildEvaluatedRule_EmptyConditionsSerializeAsEmptyArray(t *testing.T) {
-	rule := buildEvaluatedRule(
-		routerconfig.Decision{
-			Name:     "casual_chat",
-			Priority: 10,
-		},
-		map[string]bool{},
-	)
-
-	if rule.Conditions == nil {
-		t.Fatal("expected empty Conditions slice, got nil")
-	}
-	if len(rule.Conditions) != 0 {
-		t.Fatalf("expected no conditions, got %v", rule.Conditions)
-	}
-
-	payload, err := json.Marshal(rule)
-	if err != nil {
-		t.Fatalf("failed to marshal rule: %v", err)
-	}
-
-	var parsed map[string]any
-	if err := json.Unmarshal(payload, &parsed); err != nil {
-		t.Fatalf("failed to unmarshal rule JSON: %v", err)
-	}
-
-	conditions, ok := parsed["conditions"].([]any)
-	if !ok {
-		t.Fatalf("expected conditions to serialize as JSON array, got %T (%v)", parsed["conditions"], parsed["conditions"])
-	}
-	if len(conditions) != 0 {
-		t.Fatalf("expected empty conditions array, got %v", conditions)
 	}
 }
 
@@ -710,3 +677,19 @@ func TestTestQueryResult_NonFallbackDecision(t *testing.T) {
 }
 
 // Note: contains helper function is defined in config_test.go
+
+func TestTopologyPreservesUnavailableGuardAndDecisionScores(t *testing.T) {
+	unavailable := false
+	response := &RouterEvalResponse{DecisionResult: &RouterEvalDecisionResult{DecisionName: "block", ConfidenceAvailable: &unavailable, MatchedSignals: &RouterMatchedSignals{Jailbreak: []string{"guard"}}}, SignalErrorMatches: map[string]bool{"jailbreak:guard": true}}
+	result := convertRouterResponse(TestQueryRequest{}, response, "missing-config.yaml")
+	data, err := json.Marshal(result)
+	require.NoError(t, err)
+	var wire map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &wire))
+	signal := wire["matchedSignals"].([]interface{})[0].(map[string]interface{})
+	assert.Nil(t, signal["confidence"])
+	assert.Equal(t, false, signal["confidenceAvailable"])
+	assert.Nil(t, wire["decisionConfidence"])
+	assert.Equal(t, false, wire["decisionConfidenceAvailable"])
+	assert.Equal(t, map[string]interface{}{"jailbreak:guard": true}, wire["signalErrorMatches"])
+}

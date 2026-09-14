@@ -147,6 +147,7 @@ function AssistantRatingsMessage({
             </div>
             {canSubmitFeedback &&
             !message.isStreaming &&
+            !message.incomplete &&
             choice.model &&
             message.headers?.['x-vsr-replay-id'] ? (
               <div className={styles.choiceActions}>
@@ -293,6 +294,11 @@ const MessageCard = memo(
               onToggleToolCard={onToggleToolCard}
             />
           )}
+          {message.role === 'assistant' && message.incomplete ? (
+            <div className={styles.incompleteResponse} role="status">
+              <strong>Incomplete response.</strong> {message.incomplete}
+            </div>
+          ) : null}
           {message.role === 'assistant' && message.headers ? (
             <HeaderDisplay headers={message.headers} />
           ) : null}
@@ -304,6 +310,7 @@ const MessageCard = memo(
               <MessageActionBar content={message.content} />
               {canSubmitFeedback &&
               message.role === 'assistant' &&
+              !message.incomplete &&
               message.headers?.['x-vsr-selected-model'] &&
               message.headers?.['x-vsr-replay-id'] ? (
                 <FeedbackButtons

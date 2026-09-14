@@ -13,9 +13,10 @@ func TestResponseCacheServiceMaxAgeAgainstL2(t *testing.T) {
 	ctx := context.Background()
 
 	backend := NewInMemoryCache(InMemoryCacheOptions{
-		Enabled:    true,
-		MaxEntries: 100,
-		TTLSeconds: 3600,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		MaxEntries:        100,
+		TTLSeconds:        3600,
 	})
 	service := NewResponseCacheService(
 		NewLegacyBackendAdapter(backend, InMemoryCacheType),
@@ -55,9 +56,10 @@ func TestResponseCacheServiceMaxAgeStaleMissAgainstL2(t *testing.T) {
 	ctx := context.Background()
 
 	backend := NewInMemoryCache(InMemoryCacheOptions{
-		Enabled:    true,
-		MaxEntries: 100,
-		TTLSeconds: 3600,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		MaxEntries:        100,
+		TTLSeconds:        3600,
 	})
 	service := NewResponseCacheService(
 		NewLegacyBackendAdapter(backend, InMemoryCacheType),
@@ -99,9 +101,10 @@ func TestLegacyBackendAdapterAgePropagation(t *testing.T) {
 	ctx := context.Background()
 
 	backend := NewInMemoryCache(InMemoryCacheOptions{
-		Enabled:    true,
-		MaxEntries: 100,
-		TTLSeconds: 3600,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		MaxEntries:        100,
+		TTLSeconds:        3600,
 	})
 	adapter := NewLegacyBackendAdapter(backend, InMemoryCacheType)
 

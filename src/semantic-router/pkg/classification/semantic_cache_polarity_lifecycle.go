@@ -4,54 +4,34 @@ import (
 	"context"
 	"fmt"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// needsSemanticCacheNLIForRuntime reports whether the semantic cache's NLI
-// polarity tier (#2751) is configured and therefore needs the NLI model bound.
 func (c *Classifier) needsSemanticCacheNLIForRuntime() bool {
 	return c != nil && c.Config != nil && c.Config.NeedsLocalNLIForSemanticCache()
 }
 
-// initializeSemanticCacheNLI binds the hallucination explainer NLI model for the
-// semantic cache polarity guard and injects the verifier into pkg/cache. It is
-// registered as a non-best-effort runtime task so a missing or unloadable model
-// fails startup instead of silently leaving the guard unwired.
-//
-// The native binding holds one NLI model (candle.InitNLIModel is Once-guarded),
-// so this coexists with HallucinationDetector.InitializeNLI: whichever runs
-// first loads the model and the other call is a no-op.
 func (c *Classifier) initializeSemanticCacheNLI() error {
-	guard := c.Config.SemanticCache.PolarityGuard
-	capabilities := CurrentNativeBackendCapabilities()
-	if !capabilities.LocalHallucinationNLI {
-		return fmt.Errorf(
-			"native backend %q does not support local NLI; semantic_cache.polarity_guard mode %q requires the candle backend",
-			capabilities.Name, guard.NormalizedMode(),
-		)
+	models := c.models
+	if models == nil {
+		models = standaloneModelRuntime()
 	}
-
-	nliCfg := c.Config.HallucinationMitigation.NLIModel
-	if err := candle.InitNLIModel(nliCfg.ModelID, nliCfg.UseCPU); err != nil {
-		return fmt.Errorf("failed to initialize NLI model %q for semantic cache polarity guard: %w", nliCfg.ModelID, err)
+	detector := &HallucinationDetector{models: models, nliConfig: &c.Config.HallucinationMitigation.NLIModel}
+	if err := detector.InitializeNLI(); err != nil {
+		return fmt.Errorf("prepare NLI for semantic cache polarity guard: %w", err)
 	}
-
-	cache.SetPolarityVerifier(c.admittedPolarityVerifier())
-	logging.ComponentEvent("classifier", "semantic_cache_nli_initialized", map[string]interface{}{
-		"backend":                 "candle",
-		"model_ref":               nliCfg.ModelID,
-		"mode":                    guard.NormalizedMode(),
-		"contradiction_threshold": guard.EffectiveContradictionThreshold(),
-	})
+	c.polarityNLI = detector
 	return nil
 }
 
-func (c *Classifier) admittedPolarityVerifier() func(context.Context, string, string) (float32, error) {
-	gate := c.admissionRegistry.For(admissionDeploymentHallucinationExplainer)
+// PolarityVerifier borrows this classifier's immutable model binding. Its cache
+// belongs to the same generation and drains before the binding is released.
+func (c *Classifier) PolarityVerifier() cache.PolarityVerifyFunc {
+	if c == nil || c.polarityNLI == nil {
+		return nil
+	}
 	return func(ctx context.Context, cachedQuery, incomingQuery string) (float32, error) {
-		result, err := admitNLI(ctx, gate, candle.ClassifyNLI, cachedQuery, incomingQuery)
+		result, err := c.polarityNLI.ClassifyNLI(ctx, cachedQuery, incomingQuery)
 		if err != nil {
 			return 0, err
 		}

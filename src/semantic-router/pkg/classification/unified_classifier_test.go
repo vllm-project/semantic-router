@@ -164,7 +164,7 @@ func TestUnifiedClassifier_GetStats(t *testing.T) {
 		if stats["initialized"] != false {
 			t.Errorf("Expected initialized=false, got %v", stats["initialized"])
 		}
-		if stats["architecture"] != "unified_modernbert_multi_head" {
+		if stats["architecture"] != "prepared_task_composition" {
 			t.Errorf("Expected correct architecture, got %v", stats["architecture"])
 		}
 
@@ -178,8 +178,11 @@ func TestUnifiedClassifier_GetStats(t *testing.T) {
 		if stats["batch_support"] != true {
 			t.Errorf("Expected batch_support=true, got %v", stats["batch_support"])
 		}
-		if stats["memory_efficient"] != true {
-			t.Errorf("Expected memory_efficient=true, got %v", stats["memory_efficient"])
+		if stats["batch_execution"] != "per_input_tasks" {
+			t.Errorf("Expected actual batch execution semantics, got %v", stats["batch_execution"])
+		}
+		if stats["memory_efficient"] != nil {
+			t.Errorf("Memory efficiency has not been measured: %v", stats["memory_efficient"])
 		}
 	})
 
@@ -196,8 +199,8 @@ func TestGetGlobalUnifiedClassifier(t *testing.T) {
 	classifier1 := GetGlobalUnifiedClassifier()
 	classifier2 := GetGlobalUnifiedClassifier()
 
-	if classifier1 != classifier2 {
-		t.Error("Expected same instance from GetGlobalUnifiedClassifier")
+	if classifier1 == classifier2 {
+		t.Error("Expected independent owners from compatibility constructor")
 	}
 	if classifier1 == nil {
 		t.Error("Expected non-nil classifier")
