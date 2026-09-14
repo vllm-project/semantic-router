@@ -54,6 +54,9 @@
       "additionalProperties": {"$ref": "#/$defs/stringSet"}
     },
     "matchMode": {"enum": ["contains", "exact"]},
+    "selectionStatus": {
+      "enum": ["selected", "planned_final", "fallback", "execution_required", "unavailable", "failed"]
+    },
     "coveragePercent": {"type": "number", "minimum": 0, "maximum": 100},
     "tagCategoryCounts": {
       "type": "object",
@@ -242,6 +245,7 @@
       "required": ["id"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
+        "expected_selection_status": {"$ref": "#/$defs/selectionStatus"},
         "query": {"type": "string", "minLength": 1},
         "display_prompt": {"type": "string", "minLength": 1, "maxLength": 2000},
         "playground": {"$ref": "#/$defs/playgroundPolicy"},
@@ -297,6 +301,7 @@
         "model": {"type": "string", "minLength": 1},
         "expected_recipe": {"type": "string", "minLength": 1},
         "expected_algorithm": {"type": "string", "minLength": 1},
+        "expected_selection_status": {"$ref": "#/$defs/selectionStatus"},
         "expected_plugins": {"$ref": "#/$defs/stringSet"},
         "forbidden_plugins": {"$ref": "#/$defs/stringSet"},
         "plugin_match": {"$ref": "#/$defs/matchMode"},

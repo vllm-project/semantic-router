@@ -1,6 +1,6 @@
 # Deployment and model-pool details
 
-Follow the [operations skill](../SKILL.md) for installation and capability
+Follow the [operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md) for installation and capability
 preflight. A version described as dev can still be stale; missing required
 commands are a compatibility failure before any runtime mutation.
 

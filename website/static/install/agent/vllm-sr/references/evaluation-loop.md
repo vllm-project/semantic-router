@@ -1,6 +1,6 @@
 # Routing and model evaluation details
 
-Use the [operations skill](../SKILL.md) for discovery, installation, and initial
+Use the [operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md) for discovery, installation, and initial
 verification. Set management origin, inference base URL, Recipe, and entrypoint
 from the selected deployment. Do not copy a model name from an example.
 
@@ -137,6 +137,6 @@ not a full Intelligence score.
 For optimization, capture the baseline first, make one coherent change, and
 compare the agreed quality, cost, latency, and reliability gates. Retain the
 candidate only when the evidence supports the objective without violating hard
-constraints; otherwise use the [configuration recovery path](configuration-loop.md).
+constraints; otherwise use the [configuration recovery path](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md).
 Keep raw outputs private and preserve secret-free receipts with runtime and
 config identity so the comparison can be reproduced.
