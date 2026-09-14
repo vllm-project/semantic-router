@@ -46,6 +46,27 @@ const recipeConfig: RoutingScopedConfigLike = {
 }
 
 describe('routingScopes', () => {
+  it('preserves and updates prepared model bindings only in the selected recipe', () => {
+    const base: RoutingScopedConfigLike = {
+      routing: { model_bindings: { embedding: { deployment: 'shared' } } },
+      recipes: [
+        { name: 'a', routing: { model_bindings: { pii_classifier: { deployment: 'pii-a' } } } },
+        { name: 'b', routing: { model_bindings: { pii_classifier: { deployment: 'pii-b' } } } },
+      ],
+    }
+    expect(listRoutingScopes(base).map((scope) => scope.id)).toEqual(['default', 'a', 'b'])
+    const projected = projectConfigForRoutingScope(base, 'a')
+    projected.routing!.model_bindings = { pii_classifier: { deployment: 'replacement' } }
+    const updated = applyRoutingScopeProjection(base, projected, 'a')
+    expect(updated.recipes?.[0].routing.model_bindings).toEqual(projected.routing!.model_bindings)
+    expect(updated.recipes?.[1]).toEqual(base.recipes?.[1])
+    expect(updated.routing).toEqual(base.routing)
+    projected.routing!.model_bindings = {}
+    expect(
+      applyRoutingScopeProjection(base, projected, 'a').recipes?.[0].routing.model_bindings,
+    ).toEqual({})
+  })
+
   it('lists entrypoint-owned recipes without inventing an empty default scope', () => {
     const scopes = listRoutingScopes(recipeConfig)
 
@@ -74,9 +95,7 @@ describe('routingScopes', () => {
     expect(updated.recipes?.[1].routing.signals).toEqual({
       pii: [{ name: 'updated-private-pii' }],
     })
-    expect(updated.recipes?.[1].routing.decisions).toEqual([
-      { name: 'updated-private-route' },
-    ])
+    expect(updated.recipes?.[1].routing.decisions).toEqual([{ name: 'updated-private-route' }])
     expect(updated.routing?.decisions).toEqual([])
   })
 

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 type countingEmbeddingInitializer struct {
@@ -117,11 +117,11 @@ func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T)
 		backendInitialized = true
 	}}
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		if !backendInitialized {
 			return nil, errors.New("embedding preload ran before backend initialization")
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
 		getEmbedding2DMatryoshka = originalFunc
@@ -328,7 +328,7 @@ func TestInitializeRuntimeInitializesJailbreakClassifierForResponseStageConsumer
 	}
 }
 
-func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) {
+func TestUnsupportedLocalHallucinationBackendRejectsCandidate(t *testing.T) {
 	original := nativeBackendCapabilities
 	t.Cleanup(func() { nativeBackendCapabilities = original })
 	nativeBackendCapabilities = NativeBackendCapabilities{Name: "test-backend"}
@@ -344,8 +344,8 @@ func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) 
 			continue
 		}
 		hallucinationTaskFound = true
-		if !task.BestEffort {
-			t.Fatal("unsupported local hallucination task must degrade without aborting unrelated startup")
+		if task.BestEffort {
+			t.Fatal("required hallucination task must reject an unusable candidate")
 		}
 		err := task.Run(context.Background())
 		if err == nil || !strings.Contains(err.Error(), "does not support local hallucination detection") {
@@ -355,8 +355,8 @@ func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) 
 	if !hallucinationTaskFound {
 		t.Fatal("configured local hallucination task was silently omitted")
 	}
-	if err := classifier.InitializeRuntime(); err != nil {
-		t.Fatalf("best-effort unsupported hallucination backend aborted startup: %v", err)
+	if err := classifier.InitializeRuntime(); err == nil {
+		t.Fatal("unsupported required model must reject candidate preparation")
 	}
 	if classifier.IsHallucinationDetectorReady() {
 		t.Fatal("unsupported local hallucination backend must not report ready")

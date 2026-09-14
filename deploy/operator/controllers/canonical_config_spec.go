@@ -32,6 +32,9 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 }
 
 func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if err := applyOperatorModelDeployments(canonical, spec); err != nil {
+		return err
+	}
 	if spec.EmbeddingModels != nil {
 		embeddings, err := convertToTypedConfig[routerconfig.EmbeddingModels](r, spec.EmbeddingModels)
 		if err != nil {
@@ -50,7 +53,7 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		// for Variant (a per-field CRD default would be injected even when
 		// only Protocol is set, tripping mutual-exclusion validation). Apply
 		// the "neither set" default here instead, once both fields are read.
-		if promptGuard.Variant == "" && promptGuard.Protocol == "" {
+		if promptGuard.Variant == "" && promptGuard.Protocol == "" && promptGuard.Backend == nil {
 			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
 		}
 		if promptGuard.Enabled && promptGuard.JailbreakMappingPath == "" {

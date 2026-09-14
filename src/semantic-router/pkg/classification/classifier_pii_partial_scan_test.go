@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // A partial scan must never read as a complete one. Under on_error: allow the
@@ -23,7 +23,7 @@ func TestPIIDetectionAPIsReportAnIncompleteScan(t *testing.T) {
 	t.Run("allow surfaces the truncation alongside the results", func(t *testing.T) {
 		classifier, _, mockModel := newTestPIIClassifier()
 		classifier.Config.PIIModel.OnError = config.OnErrorAllow
-		mockModel.setMockResponse(text, []candle_binding.TokenEntity{email}, ErrTokenSpansTruncated)
+		mockModel.setMockResponse(text, []tasks.TokenEntity{email}, ErrTokenSpansTruncated)
 
 		types, err := classifier.ClassifyPII(context.Background(), text)
 		if !errors.Is(err, ErrTokenSpansTruncated) {

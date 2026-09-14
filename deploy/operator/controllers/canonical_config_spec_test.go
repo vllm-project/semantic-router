@@ -27,8 +27,10 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 					FallbackToEmpty:     true,
 				},
 				PromptGuard: &vllmv1alpha1.PromptGuardConfig{
-					Enabled:        true,
-					Protocol:       "http_classify",
+					Enabled: true,
+					Backend: &vllmv1alpha1.RemoteClassifierBackendConfig{
+						Protocol: "http_classify", Contract: "label_distribution.v1", Model: "guardrail-service",
+					},
 					ModelID:        "guardrail-model",
 					Threshold:      "0.6",
 					PositiveLabels: []string{"jailbreak", "INJECTION"},
@@ -517,8 +519,8 @@ func assertOperatorPromptGuardConfig(t *testing.T, promptGuard routerconfig.Cano
 	// Regression for the operator CRD gap where PromptGuardConfig had no way
 	// to express `backend`/`positive_labels`, so the pluggable jailbreak
 	// backend (#2759) was unreachable via the Kubernetes Operator path.
-	if promptGuard.Protocol != "http_classify" {
-		t.Fatalf("unexpected prompt guard protocol: %q", promptGuard.Protocol)
+	if promptGuard.Backend == nil || promptGuard.Backend.Protocol != "http_classify" || promptGuard.Backend.Contract != "label_distribution.v1" || promptGuard.Backend.Model != "guardrail-service" {
+		t.Fatalf("unexpected prompt guard backend: %#v", promptGuard.Backend)
 	}
 	// Same gap class, for on_error (#2918): without the field on the CRD type
 	// the API server prunes it and an operator-managed deployment silently

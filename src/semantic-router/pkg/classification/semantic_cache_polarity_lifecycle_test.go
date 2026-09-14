@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -76,9 +75,6 @@ func TestSemanticCacheNLIRuntimeTaskRegistration(t *testing.T) {
 }
 
 func TestInitializeSemanticCacheNLIFailsOnUnloadableModel(t *testing.T) {
-	if candle.IsNLIModelInitialized() {
-		t.Skip("an NLI model is already loaded in this process; the failure path cannot be observed")
-	}
 	c := &Classifier{Config: polarityTestConfig(true, "nli", "/nonexistent/semantic-cache-nli-model")}
 	err := c.initializeSemanticCacheNLI()
 	if err == nil {
@@ -90,10 +86,11 @@ func TestInitializeSemanticCacheNLIFailsOnUnloadableModel(t *testing.T) {
 }
 
 func TestSemanticCachePolarityVerifierSurfacesBackendErrors(t *testing.T) {
-	if candle.IsNLIModelInitialized() {
-		t.Skip("an NLI model is loaded; the uninitialized error path cannot be observed")
+	if (&Classifier{}).PolarityVerifier() != nil {
+		t.Fatal("unprepared classifier must not borrow a global verifier")
 	}
-	if _, err := (&Classifier{}).admittedPolarityVerifier()(context.Background(), "premise", "hypothesis"); err == nil {
-		t.Fatal("verifier must return the binding error when no NLI model is loaded (the cache then fails open)")
+	classifier := &Classifier{polarityNLI: &HallucinationDetector{}}
+	if _, err := classifier.PolarityVerifier()(context.Background(), "premise", "hypothesis"); err == nil {
+		t.Fatal("uninitialized owned verifier must surface its backend error")
 	}
 }
