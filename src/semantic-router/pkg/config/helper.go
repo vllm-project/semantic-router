@@ -322,7 +322,8 @@ func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PI
 
 // IsPIIClassifierEnabled checks if PII classification is enabled
 func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	return c.PIIModel.Active() && c.PIIModel.ModelID != "" && c.PIIMappingPath != ""
+	modelConfigured := c.PIIModel.ModelID != "" || c.PIIModel.Backend != nil
+	return c.PIIModel.Active() && modelConfigured && c.PIIMappingPath != ""
 }
 
 // IsCategoryClassifierEnabled checks if category classification is enabled
@@ -346,6 +347,15 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		return false
 	}
 
+	if c.PromptGuard.Backend != nil {
+		backend := c.PromptGuard.Backend
+		contract := RemoteClassifierContractLabelDistribution
+		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
+			contract = RemoteClassifierContractLabelDecision
+		}
+		_, err := ResolveRemoteClassifierBackend(c, backend, ModelRoleGuardrail, contract)
+		return err == nil
+	}
 	// Check configuration based on the selected backend
 	if c.PromptGuard.Protocol != "" {
 		// For remote backends: need external model with role="guardrail"

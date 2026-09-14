@@ -49,7 +49,7 @@ func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *Request
 
 	// Generate one embedding per window of the query, so a long query is not
 	// searched by its opening alone.
-	queryEmbeddings, err := ragQueryEmbeddings(query)
+	queryEmbeddings, err := r.ragQueryEmbeddings(traceCtx, query, ctx)
 	if err != nil {
 		// Log full error internally but don't expose it to avoid information disclosure
 		logging.Errorf("Failed to generate embedding for RAG query: %v", err)

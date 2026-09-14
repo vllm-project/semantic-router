@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -17,9 +17,13 @@ import (
 )
 
 // createModelSelectorRegistries leaves publication to publishRouterState.
-func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader, classifiers ...*classification.RecipeClassifiers) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
-	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg)
+	var defaultSet *embedding.Set
+	if len(classifiers) > 0 && classifiers[0] != nil {
+		defaultSet = classifiers[0].Default().PreparedEmbeddings()
+	}
+	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg, defaultSet)
 	registries := make(map[config.RecipeName]*selection.Registry)
 
 	if len(cfg.Recipes) == 0 {
@@ -31,6 +35,13 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
 		scopedConfig := cfg.ConfigForRecipe(recipe)
+		var scoped *embedding.Set
+		if len(classifiers) > 0 && classifiers[0] != nil {
+			if classifier, ok := classifiers[0].ForRecipe(recipe.Name); ok {
+				scoped = classifier.PreparedEmbeddings()
+			}
+		}
+		embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(scopedConfig, scoped)
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed, defaultEmbeddingConfig)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
@@ -73,7 +84,7 @@ func createModelSelectorRegistry(
 	return registry
 }
 
-func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
+func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
 	models := cfg.EmbeddingModels
 	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
@@ -84,34 +95,20 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selec
 		ModelType:       modelType,
 		TargetDimension: selectionEmbeddingDimension(models, modelType),
 	}
-	var remoteProvider embedding.Provider
-	var remoteError error
-	if backend == config.EmbeddingBackendOpenAICompatible {
-		remoteProvider, remoteError = embedding.NewProvider(models, embedding.ProviderOptions{})
+
+	var prepared *embedding.Set
+	if len(sets) > 0 {
+		prepared = sets[0]
 	}
 	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
-		switch backend {
-		case config.EmbeddingBackendOpenAICompatible:
-			if remoteError != nil {
-				return nil, remoteError
-			}
-			return remoteProvider.Embed(context.Background(), text)
-		case config.EmbeddingBackendOpenVINO:
+		if backend == config.EmbeddingBackendOpenVINO {
 			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
-		default:
-			if candle_binding.SupportsBatchedEmbedding(embeddingConfig.ModelType) {
-				output, err := candle_binding.GetEmbeddingBatched(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
-				if err != nil {
-					return nil, err
-				}
-				return output.Embedding, nil
-			}
-			output, err := candle_binding.GetEmbeddingWithModelType(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
-			if err != nil {
-				return nil, err
-			}
-			return output.Embedding, nil
 		}
+		provider, err := prepared.Get(embeddingConfig.ModelType, embeddingConfig.TargetDimension, 0)
+		if err != nil {
+			return nil, err
+		}
+		return provider.Embed(context.Background(), text)
 	}, defaultConfig
 }
 

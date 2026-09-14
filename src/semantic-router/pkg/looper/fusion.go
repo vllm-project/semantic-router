@@ -16,15 +16,16 @@ import (
 // FusionLooper implements Fusion-style multi-model deliberation:
 // parallel panel responses, judge analysis, then a final synthesized answer.
 type FusionLooper struct {
+	grounding *GroundingBackends
 	*BaseLooper
 }
 
 func NewFusionLooper(cfg *config.LooperConfig) *FusionLooper {
-	return newFusionLooper(cfg, nil)
+	return newFusionLooper(cfg, ownClient(NewClient(cfg)))
 }
 
-func newFusionLooper(cfg *config.LooperConfig, client *Client) *FusionLooper {
-	return &FusionLooper{BaseLooper: newBaseLooper(cfg, client)}
+func newFusionLooper(cfg *config.LooperConfig, binding clientBinding) *FusionLooper {
+	return &FusionLooper{BaseLooper: newBaseLooper(cfg, binding)}
 }
 
 type fusionExecutionConfig struct {

@@ -117,15 +117,90 @@ func GetMissingModels(specs []ModelSpec) ([]ModelSpec, error) {
 	var missing []ModelSpec
 
 	for _, spec := range specs {
-		complete, err := IsModelComplete(spec.LocalPath, spec.RequiredFiles)
+		complete, err := isSpecComplete(spec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
 		}
 
-		if !complete {
+		// A complete immutable HF snapshot is reusable offline. Mutable refs and
+		// unknown/mismatched snapshots require the download path's safety check.
+		pinned := true
+		if spec.Revision != "" && spec.Revision != "main" {
+			pinned, err = cachedRevisionMatches(spec)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !complete || !pinned {
 			missing = append(missing, spec)
 		}
 	}
 
 	return missing, nil
+}
+
+func isSpecComplete(spec ModelSpec) (bool, error) {
+	if spec.FilesOnly {
+		for _, name := range spec.RequiredFiles {
+			info, err := os.Stat(filepath.Join(spec.LocalPath, name))
+			if errors.Is(err, fs.ErrNotExist) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			if info.IsDir() {
+				return false, nil
+			}
+		}
+	} else {
+		complete, err := IsModelComplete(spec.LocalPath, spec.RequiredFiles)
+		if err != nil || !complete {
+			return complete, err
+		}
+	}
+	for _, group := range spec.RequiredFileGroups {
+		found := false
+		for _, pattern := range group {
+			matches, err := filepath.Glob(filepath.Join(spec.LocalPath, pattern))
+			if err != nil {
+				return false, err
+			}
+			for _, match := range matches {
+				if info, err := os.Stat(match); err == nil && !info.IsDir() {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return false, nil
+		}
+	}
+	if spec.CheckONNX {
+		err := filepath.WalkDir(spec.LocalPath, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || filepath.Ext(path) != ".onnx" {
+				return nil
+			}
+			complete, err := onnxDependenciesPresent(path)
+			if err != nil {
+				return err
+			}
+			if !complete {
+				return fs.ErrNotExist
+			}
+			return nil
+		})
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }

@@ -944,6 +944,52 @@ providers:
     monochrome: false
   conformance:
     status: unverified
+  models:
+  - catalog: meta/muse-glimmer-30b
+    relationship: managed_cloud
+    id: accounts/fireworks/models/muse-glimmer-30b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.35
+      cached_input_per_1m: 0.04
+      completion_per_1m: 1.5
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/muse-glimmer-30b
+  - catalog: moonshot/kimi-k3
+    relationship: managed_cloud
+    id: accounts/fireworks/models/kimi-k3
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 3.0
+      cached_input_per_1m: 0.3
+      completion_per_1m: 15.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/kimi-k3
+  - catalog: thinking-machines/inkling
+    relationship: managed_cloud
+    id: accounts/fireworks/models/inkling
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.0
+      cached_input_per_1m: 0.17
+      completion_per_1m: 4.05
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/inkling
 - id: friendli
   display_name: FriendliAI
   description: Friendli serverless model endpoints.

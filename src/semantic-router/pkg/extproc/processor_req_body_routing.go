@@ -65,7 +65,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		request.Generation++
 	}
 	required := llmprotocol.RequiredCapabilities(*request)
-	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch.targetFormat, ctx); protocolErr != nil {
+	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
 		rerouted, ok := r.rerouteToQualifiedDecisionModel(request, dispatch, required, ctx)
 		if !ok {
 			return nil, protocolErr
@@ -106,24 +106,16 @@ func (r *OpenAIRouter) codecCapabilitiesForFormat(format llmprotocol.WireFormat)
 	return r.ProtocolCodecs.CapabilitiesFor(format)
 }
 
-// rejectDispatchCapabilityMismatch applies the same wire-fidelity gate the
-// codec engine enforces at encode, but at dispatch time so a request whose
-// required capabilities the chosen backend wire cannot express surfaces as a
-// protocol error instead of a generic 500 from encoding. This is the first
-// slice of capability-driven dispatch: it turns "crash with 500" into "clean
-// 400 unsupported_capability" and gives future capability-aware re-routing a
-// single check point.
+// rejectDispatchCapabilityMismatch applies both wire fidelity and declared
+// model task constraints to the primary dispatch, using the same qualification
+// as fallback candidates. A wire's ability to encode a task does not establish
+// that the selected model can execute it.
 func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	request *llmprotocol.Request,
-	format llmprotocol.WireFormat,
+	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	available, ok := r.codecCapabilitiesForFormat(format)
-	if !ok {
-		// Unknown wire formats are rejected earlier by wireFormatForModel.
-		return nil
-	}
-	if err := llmprotocol.RequireCapabilities(format, available, llmprotocol.RequiredCapabilities(*request)); err != nil {
+	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(*request)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
@@ -133,10 +125,9 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	return nil
 }
 
-// declaredModelCapabilities parses a model's configured capability
-// declarations. A model with no declaration (or an unparsable one) is treated
-// as unannotated and stays eligible on wire expressibility alone; the declared
-// filter only steers among annotated candidates.
+// declaredModelCapabilities projects recognized model facts without allowing
+// descriptive catalog labels to erase their constraints. A model with no
+// recognized declaration retains the unannotated compatibility behavior.
 func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
 	if r == nil || r.Config == nil {
 		return llmprotocol.CapabilitySet{}, false
@@ -145,11 +136,22 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 	if !ok || len(params.Capabilities) == 0 {
 		return llmprotocol.CapabilitySet{}, false
 	}
-	declared, err := llmprotocol.ParseCapabilities(params.Capabilities)
-	if err != nil {
-		return llmprotocol.CapabilitySet{}, false
+	return llmprotocol.ModelCapabilities(params.Capabilities)
+}
+
+func (r *OpenAIRouter) providerCapabilityMismatch(model string, format llmprotocol.WireFormat, required llmprotocol.CapabilitySet) error {
+	available, ok := r.codecCapabilitiesForFormat(format)
+	if !ok {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("model %q has no codec for %q", model, format), nil)
 	}
-	return declared, true
+	if err := llmprotocol.RequireCapabilities(format, available, required); err != nil {
+		return err
+	}
+	if declared, annotated := r.declaredModelCapabilities(model); annotated && !declared.Contains(required.TaskCapabilities()) {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			fmt.Sprintf("model %q does not declare the required tasks: %s", model, strings.Join(required.TaskCapabilities().Names(), ", ")), nil)
+	}
+	return nil
 }
 
 // rerouteToQualifiedDecisionModel tries to satisfy the required capabilities
@@ -174,7 +176,7 @@ func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
 	if decision == nil || decision.Name == "" {
 		return nil, false
 	}
-	model := r.findQualifiedRerouteModel(decision, selected, required)
+	model := r.findQualifiedRerouteModel(decision, selected, required, ctx)
 	if model == "" {
 		return nil, false
 	}
@@ -200,10 +202,17 @@ func (r *OpenAIRouter) findQualifiedRerouteModel(
 	decision *config.Decision,
 	selected *providerDispatch,
 	required llmprotocol.CapabilitySet,
+	ctx *RequestContext,
 ) string {
-	for _, modelRef := range decision.ModelRefs {
+	refs := decision.ModelRefs
+	if ctx.VSREligibleModelRefs != nil {
+		// Selection has already narrowed this decision's inventory. Fallback
+		// cannot resurrect candidates excluded at that boundary.
+		refs = ctx.VSREligibleModelRefs
+	}
+	for _, modelRef := range refs {
 		model := modelRef.Model
-		if model == "" || model == selected.logicalModel {
+		if model == "" || model == selected.logicalModel || r.modelRefExceedsContextWindow(modelRef, ctx.VSRContextTokenCount) {
 			continue
 		}
 		if r.qualifiedRerouteCandidate(model, required) != "" {
@@ -222,10 +231,7 @@ func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmproto
 	if err != nil {
 		return ""
 	}
-	if set, ok := r.codecCapabilitiesForFormat(format); !ok || !set.Contains(required) {
-		return ""
-	}
-	if declared, ok := r.declaredModelCapabilities(model); ok && !declared.Contains(required.TaskCapabilities()) {
+	if r.providerCapabilityMismatch(model, format, required) != nil {
 		return ""
 	}
 	return format

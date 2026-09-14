@@ -148,10 +148,14 @@ jobs:
             pkg-config \
             shellcheck
 
+      - name: Resolve golangci-lint version
+        id: golangci_lint
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           args: --help
 

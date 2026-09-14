@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:1b9e5d354f7ee9e9d3949e9e8a3122a6fc9972ebdc4083b4f5e4f6c8266b6afe"
+const builtInCatalogDigest = "sha256:5aab2dcc1ed9501f7a8549a815dd21f13e53f20233a91cc6fb6c3d7891bf6f6f"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -93014,6 +93014,68 @@ const builtInCatalogJSON = `{
       "description": "Fast serverless model inference.",
       "display_name": "Fireworks AI",
       "id": "fireworks",
+      "models": [
+        {
+          "catalog": "meta/muse-glimmer-30b",
+          "id": "accounts/fireworks/models/muse-glimmer-30b",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.04,
+            "completion_per_1m": 1.5,
+            "currency": "USD",
+            "prompt_per_1m": 0.35
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://app.fireworks.ai/models/fireworks/muse-glimmer-30b",
+            "status": "claimed",
+            "verified_at": "2026-09-10"
+          }
+        },
+        {
+          "catalog": "moonshot/kimi-k3",
+          "id": "accounts/fireworks/models/kimi-k3",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.3,
+            "completion_per_1m": 15.0,
+            "currency": "USD",
+            "prompt_per_1m": 3.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://app.fireworks.ai/models/fireworks/kimi-k3",
+            "status": "claimed",
+            "verified_at": "2026-09-10"
+          }
+        },
+        {
+          "catalog": "thinking-machines/inkling",
+          "id": "accounts/fireworks/models/inkling",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.17,
+            "completion_per_1m": 4.05,
+            "currency": "USD",
+            "prompt_per_1m": 1.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://app.fireworks.ai/models/fireworks/inkling",
+            "status": "claimed",
+            "verified_at": "2026-09-10"
+          }
+        }
+      ],
       "presentation": {
         "logo": "package:fireworks",
         "monochrome": false,
