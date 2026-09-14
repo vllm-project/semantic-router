@@ -2,75 +2,37 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
-// HallucinationResult represents the result of hallucination detection
+// HallucinationResult retains the detector verdict and its optional aggregate
+// score. Confidence is a historical field name; ScoreKind declares its units.
 type HallucinationResult struct {
 	HallucinationDetected bool     `json:"hallucination_detected"`
-	Confidence            float32  `json:"confidence"`
-	UnsupportedSpans      []string `json:"unsupported_spans,omitempty"` // Text spans not grounded in context
-	SupportedSpans        []string `json:"supported_spans,omitempty"`   // Text spans grounded in context
+	Confidence            float32  `json:"confidence,omitempty"`
+	ScoreAvailable        bool     `json:"score_available"`
+	ScoreKind             string   `json:"score_kind,omitempty"`
+	UnsupportedSpans      []string `json:"unsupported_spans,omitempty"`
+	SupportedSpans        []string `json:"supported_spans,omitempty"`
 }
 
 const (
-	// The detector scores at most 512 tokens and windows only the context, so an
-	// answer longer than that window is truncated and its tail is never scored.
-	// A long answer is scanned in bounded overlapping chunks instead, the way the
-	// response jailbreak path scans a long body. The budget leaves the rest of
-	// the window for the context and the question.
 	hallucinationAnswerChunkBudget  = 256 * 4
 	hallucinationAnswerOverlapRunes = 64
 )
 
-// hallucinationAnswerChunks returns the pieces of an answer to score. An answer
-// that fits the window yields one chunk, which is the single call the detector
-// made before.
 func hallucinationAnswerChunks(answer string) []string {
 	return securitySignalChunks(answer, hallucinationAnswerChunkBudget, hallucinationAnswerOverlapRunes)
 }
 
-// detectHallucinationsInChunks scores every part of the answer against the same
-// context. A hallucination in any chunk is a hallucination in the answer, the
-// reported confidence is that of the strongest chunk that found one, and a clean
-// answer reports its least confident chunk. Chunks overlap, so spans that repeat
-// are kept once.
-func detectHallucinationsInChunks(context, question, answer string, threshold float32) (*candle.HallucinationDetectionResult, error) {
-	chunks := hallucinationAnswerChunks(answer)
-	if len(chunks) <= 1 {
-		return candle.DetectHallucinations(context, question, answer, threshold)
-	}
-
-	merged := &candle.HallucinationDetectionResult{Confidence: 1}
-	seen := make(map[string]struct{})
-	for _, chunk := range chunks {
-		result, err := candle.DetectHallucinations(context, question, chunk, threshold)
-		if err != nil {
-			return nil, err
-		}
-		merged.Confidence = mergeChunkConfidence(merged.HasHallucination, merged.Confidence, result.HasHallucination, result.Confidence)
-		merged.HasHallucination = merged.HasHallucination || result.HasHallucination
-		for _, span := range result.Spans {
-			if _, duplicate := seen[span.Text]; duplicate {
-				continue
-			}
-			seen[span.Text] = struct{}{}
-			merged.Spans = append(merged.Spans, span)
-		}
-	}
-	return merged, nil
-}
-
-// mergeChunkConfidence folds one chunk verdict into the answer verdict: the
-// highest confidence among the chunks that reported a hallucination, or the
-// lowest among the chunks that reported none.
 func mergeChunkConfidence(merged bool, mergedConfidence float32, chunk bool, chunkConfidence float32) float32 {
 	switch {
 	case chunk && (!merged || chunkConfidence > mergedConfidence):
@@ -81,11 +43,14 @@ func mergeChunkConfidence(merged bool, mergedConfidence float32, chunk bool, chu
 	return mergedConfidence
 }
 
-// HallucinationDetector handles hallucination detection
-// It checks if an LLM answer contains claims that are not supported by the provided context
 type HallucinationDetector struct {
 	config         *config.HallucinationModelConfig
-	nliConfig      *config.NLIModelConfig // NLI model configuration for enhanced detection
+	nliConfig      *config.NLIModelConfig
+	models         *classifierModelRuntime
+	spec           config.ResolvedModelBinding
+	nliSpec        config.ResolvedModelBinding
+	handle         *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
+	nliHandle      *binding.Resolved[tasks.TextPairRequest, tasks.LabelDistribution]
 	initialized    bool
 	nliInitialized bool
 	gate           admission.Admissioner
@@ -93,7 +58,6 @@ type HallucinationDetector struct {
 	mu             sync.RWMutex
 }
 
-// SetAdmissioners installs the detector and explainer admission gates.
 func (d *HallucinationDetector) SetAdmissioners(detector, explainer admission.Admissioner) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -101,135 +65,147 @@ func (d *HallucinationDetector) SetAdmissioners(detector, explainer admission.Ad
 	d.explainerGate = explainer
 }
 
-// NewHallucinationDetector creates a new hallucination detector
-func NewHallucinationDetector(cfg *config.HallucinationModelConfig) (*HallucinationDetector, error) {
+func NewHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*classifierModelRuntime) (*HallucinationDetector, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("hallucination model config is required")
 	}
-
-	if cfg.ModelID == "" {
+	runtime := consumerModelRuntime(models)
+	spec := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
+	if spec.Deployment.Artifact == "" {
 		return nil, fmt.Errorf("hallucination model_id is required")
 	}
-
-	detector := &HallucinationDetector{
-		config: cfg,
-	}
-
-	return detector, nil
+	return &HallucinationDetector{config: cfg, models: runtime, spec: spec}, nil
 }
 
-// Initialize initializes the hallucination detection model via Candle bindings
 func (d *HallucinationDetector) Initialize() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
 	if d.initialized {
 		return nil
 	}
-
-	err := candle.InitHallucinationModel(d.config.ModelID, d.config.UseCPU)
+	handle, err := d.models.runtime.Grounded(context.Background(), d.spec, d.hallucinationThreshold())
 	if err != nil {
-		return fmt.Errorf("failed to initialize hallucination detection model from %s: %w", d.config.ModelID, err)
+		return err
 	}
-
+	d.handle = handle
 	d.initialized = true
-	logging.ComponentEvent("classifier", "hallucination_detector_initialized", map[string]interface{}{
-		"backend":   "candle",
-		"model_ref": d.config.ModelID,
-	})
-
 	return nil
 }
 
-// Detect checks if an answer contains hallucinations given the context
-// context: The tool results or RAG context that should ground the answer
-// question: The original user question
-// answer: The LLM-generated answer to verify
+// detectSpans keeps offsets in the complete answer, including overlapping long
+// answer windows. A failed/partial call remains an error, never a clean verdict.
+func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, question, answer string) (tasks.TokenClassificationResult, error) {
+	var merged tasks.TokenClassificationResult
+	if !d.initialized || d.handle == nil {
+		return merged, fmt.Errorf("hallucination detection model not initialized")
+	}
+	if answer == "" {
+		return merged, nil
+	}
+	if contextText == "" {
+		return merged, fmt.Errorf("context is required for hallucination detection")
+	}
+	chunks := hallucinationAnswerChunks(answer)
+	searchStart := 0
+	for _, chunk := range chunks {
+		start := strings.Index(answer[searchStart:], chunk)
+		if start < 0 {
+			return merged, fmt.Errorf("answer window is not a substring of the original answer")
+		}
+		start += searchStart
+		searchStart = start + 1
+		result, err := d.handle.Call(ctx, string(d.spec.Recipe), tasks.GroundedTextRequest{Context: contextText, Question: question, Answer: chunk})
+		if err != nil {
+			return merged, err
+		}
+		if result.Summary != nil {
+			if merged.Summary == nil {
+				copy := *result.Summary
+				merged.Summary = &copy
+			} else {
+				merged.Summary.Value = float64(mergeChunkConfidence(len(merged.Entities) > 0, float32(merged.Summary.Value), len(result.Entities) > 0, float32(result.Summary.Value)))
+			}
+			merged.SummarySemantics = result.SummarySemantics
+		}
+		merged.ScoresAvailable = result.ScoresAvailable
+		for _, span := range result.Entities {
+			span.Start += start
+			span.End += start
+			duplicate := false
+			for i, previous := range merged.Entities {
+				if previous.EntityType == span.EntityType && previous.Start == span.Start && previous.End == span.End {
+					if span.Confidence > previous.Confidence {
+						merged.Entities[i] = span
+					}
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				merged.Entities = append(merged.Entities, span)
+			}
+		}
+	}
+	return merged, nil
+}
+
 func (d *HallucinationDetector) Detect(ctx context.Context, contextText, question, answer string) (*HallucinationResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-
-	if !d.initialized {
-		return nil, fmt.Errorf("hallucination detection model not initialized")
-	}
-
-	if answer == "" {
-		return &HallucinationResult{
-			HallucinationDetected: false,
-			Confidence:            1.0,
-		}, nil
-	}
-
-	if contextText == "" {
-		return nil, fmt.Errorf("context is required for hallucination detection")
-	}
-
-	// Get threshold from config (default 0.5)
-	threshold := d.config.Threshold
-	if threshold <= 0 {
-		threshold = 0.5
-	}
-
-	// Call hallucination detection via candle bindings with threshold
-	// Threshold is applied at token level in Rust - only tokens with confidence >= threshold
-	// are considered hallucinated and included in spans
-	candleResult, err := admitModelInference(ctx, d.gate, admissionDeploymentHallucinationDetector, func() (*candle.HallucinationDetectionResult, error) {
-		return detectHallucinationsInChunks(contextText, question, answer, threshold)
-	})
+	spans, err := d.detectSpans(ctx, contextText, question, answer)
 	if err != nil {
-		return nil, fmt.Errorf("hallucination detection error: %w", err)
+		return nil, err
 	}
-
-	// Convert result
-	result := &HallucinationResult{
-		HallucinationDetected: candleResult.HasHallucination,
-		Confidence:            candleResult.Confidence,
-		UnsupportedSpans:      []string{},
-		SupportedSpans:        []string{},
+	result := &HallucinationResult{HallucinationDetected: len(spans.Entities) > 0}
+	if spans.Summary != nil {
+		result.Confidence = float32(spans.Summary.Value)
+		result.ScoreAvailable = true
 	}
-
-	minSpanLength := d.config.MinSpanLength
-	if minSpanLength <= 0 {
-		minSpanLength = 1 // Default minimum span length
+	if spans.SummarySemantics != nil {
+		result.ScoreKind = spans.SummarySemantics.Unit
 	}
-
-	minSpanConfidence := d.config.MinSpanConfidence
-	if minSpanConfidence < 0 {
-		minSpanConfidence = 0.0 // Default minimum span confidence
-	}
-
-	// Extract hallucinated spans (already filtered by threshold in Rust)
-	for _, span := range candleResult.Spans {
-		spanTokensLen := len(strings.Fields(span.Text))
-
-		// Skip spans below minimum length
-		if spanTokensLen < minSpanLength {
-			logging.Debugf("Filtered span (too short): '%s' (%d tokens < %d)",
-				span.Text, spanTokensLen, minSpanLength)
-			continue
+	for _, span := range spans.Entities {
+		if d.acceptSpan(span.Text, span.Confidence, spans.HasScores()) {
+			result.UnsupportedSpans = append(result.UnsupportedSpans, span.Text)
 		}
-
-		// Skip spans below confidence threshold
-		if span.Confidence < minSpanConfidence {
-			logging.Debugf("Filtered span (low confidence): '%s' (%.3f < %.3f)",
-				span.Text, span.Confidence, minSpanConfidence)
-			continue
-		}
-		result.UnsupportedSpans = append(result.UnsupportedSpans, span.Text)
 	}
-
-	if len(result.UnsupportedSpans) == 0 && len(candleResult.Spans) > 0 {
+	if len(result.UnsupportedSpans) == 0 {
 		result.HallucinationDetected = false
 	}
-	logging.Debugf("Hallucination detection: hallucination=%v, confidence=%.3f, threshold=%.3f, spans=%d",
-		result.HallucinationDetected, result.Confidence, threshold, len(result.UnsupportedSpans))
-
 	return result, nil
 }
 
-// IsInitialized returns whether the detector is initialized
+func (d *HallucinationDetector) acceptSpan(text string, confidence float32, hasScore bool) bool {
+	minimum := d.config.MinSpanLength
+	if minimum <= 0 {
+		minimum = 1
+	}
+	if len(strings.Fields(text)) < minimum {
+		return false
+	}
+	return !hasScore || confidence >= d.config.MinSpanConfidence
+}
+
 func (d *HallucinationDetector) IsInitialized() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.initialized
+}
+
+func (d *HallucinationDetector) Close() error {
+	if d == nil {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.initialized = false
+	d.nliInitialized = false
+	var errs []error
+	if d.handle != nil {
+		errs = append(errs, d.handle.Close())
+	}
+	if d.nliHandle != nil {
+		errs = append(errs, d.nliHandle.Close())
+	}
+	return errors.Join(errs...)
 }

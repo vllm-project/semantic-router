@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // RequestFacts carries untrusted request-envelope facts used by signal
@@ -63,7 +62,7 @@ func (c *Classifier) evaluateMetadataSignal(
 		results.SignalConfidences[signalConfidenceKey(config.SignalTypeMetadata, rule.Name)] = 1.0
 		mu.Unlock()
 		bestConfidence = 1.0
-		metrics.RecordSignalMatch(config.SignalTypeMetadata, rule.Name)
+		c.recordSignalMatch(config.SignalTypeMetadata, rule.Name)
 	}
 	elapsed := time.Since(start)
 	results.Metrics.Metadata.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0

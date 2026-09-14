@@ -36,6 +36,7 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 			Models:   []routerconfig.CanonicalProviderModel{},
 		},
 		Global: &routerconfig.CanonicalGlobal{
+			Router:       routerconfig.DefaultCanonicalGlobal().Router,
 			Services:     routerconfig.CanonicalServiceGlobal{},
 			Stores:       routerconfig.CanonicalStoreGlobal{},
 			Integrations: routerconfig.CanonicalIntegrationGlobal{},

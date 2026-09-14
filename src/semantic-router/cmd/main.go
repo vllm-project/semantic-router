@@ -106,6 +106,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return recordStartupError(startupWriter, "create ExtProc server", err)
 	}
 
+	embeddingRuntime = routerServer.EmbeddingRuntimeState()
 	if err = warmupRouterRuntime(ctx, routerServer, embeddingRuntime); err != nil {
 		return recordStartupError(startupWriter, "warm up router runtime", err)
 	}
@@ -302,7 +303,12 @@ func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, start
 	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, reporter)
 }
 
-func applyKubernetesConfigUpdate(ctx context.Context, newConfig *config.RouterConfig) error {
+func applyKubernetesConfigUpdate(ctx context.Context, newConfig *config.RouterConfig, currentConfig ...func() *config.RouterConfig) error {
+	if len(currentConfig) > 0 && currentConfig[0] != nil {
+		if err := modeldownload.ValidateReloadArtifacts(currentConfig[0](), newConfig); err != nil {
+			return fmt.Errorf("model artifact reload preflight failed: %w", err)
+		}
+	}
 	if err := ensureKubernetesConfigModels(ctx, newConfig); err != nil {
 		return fmt.Errorf("failed to ensure models for kubernetes config update: %w", err)
 	}
@@ -332,7 +338,7 @@ func runRouterServing(
 	}
 	if cfg.ConfigSource == config.ConfigSourceKubernetes {
 		components = append(components, func(ctx context.Context) error {
-			return startKubernetesController(ctx, cfg, opts.kubeconfig, opts.namespace)
+			return startKubernetesController(ctx, cfg, opts.kubeconfig, opts.namespace, routerServer.CurrentConfig)
 		})
 	}
 	lifecycle := startServingComponents(ctx, components...)
@@ -404,6 +410,7 @@ func startKubernetesController(
 	staticConfig *config.RouterConfig,
 	kubeconfig,
 	namespace string,
+	currentConfig ...func() *config.RouterConfig,
 ) error {
 	logging.ComponentEvent("router", "kubernetes_controller_starting", map[string]interface{}{
 		"namespace":      namespace,
@@ -415,7 +422,7 @@ func startKubernetesController(
 		Kubeconfig:   kubeconfig,
 		StaticConfig: staticConfig,
 		OnConfigUpdate: func(newConfig *config.RouterConfig) error {
-			return applyKubernetesConfigUpdate(ctx, newConfig)
+			return applyKubernetesConfigUpdate(ctx, newConfig, currentConfig...)
 		},
 	})
 	if err != nil {

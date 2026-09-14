@@ -41,7 +41,7 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
-from cli.terminal import fields, heading, success
+from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -323,9 +323,11 @@ def _execute_serve(
     default=None,
     help="Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, "
     "'nvidia' enables NVIDIA GPU passthrough (--gpus all). "
-    "When set to amd or nvidia, serve defaults to the matching GPU image "
-    "(ROCm / CUDA) and flips use_cpu to false for router internal models under "
-    "global.model_catalog, unless --image or VLLM_SR_IMAGE is provided. "
+    "Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or "
+    "VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD "
+    "semantic embeddings retain their configured use_cpu value (default true). "
+    "MIGraphX mmBERT embeddings require an explicit model binding and deployment "
+    "with an input token budget. "
     "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings. "
     "For Kubernetes, configure GPU images and resources through a Helm profile "
     "or the operator.",
@@ -562,7 +564,7 @@ def dashboard(
 
     Examples:
         vllm-sr dashboard                   # Docker dashboard
-        vllm-sr dashboard --target k8s      # Show K8s dashboard URL
+        vllm-sr dashboard --target k8s      # Show K8s address and port forward
         vllm-sr dashboard --no-open
     """
     apply_container_runtime_override(runtime)
@@ -573,6 +575,17 @@ def dashboard(
     dashboard_url = backend.get_dashboard_url()
     if dashboard_url is None:
         raise ValueError("Dashboard URL could not be determined")
+
+    if resolve_target(target) == "k8s":
+        # The Kubernetes address is a ClusterIP, reachable from inside the
+        # cluster only, so a browser on this machine cannot open it.
+        heading("Dashboard")
+        fields((("In cluster", dashboard_url),))
+        port_forward = backend.get_dashboard_port_forward()
+        if port_forward is not None:
+            heading("Local access")
+            echo(f"  {port_forward}")
+        return
 
     if no_open:
         heading("Dashboard")

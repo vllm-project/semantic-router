@@ -1,11 +1,13 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -60,7 +62,10 @@ func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(modality confi
 		return &EmbeddingClassificationResult{}, nil
 	}
 
-	queryEmbedding, err := cache.resolve(payload, c.optimizationConfig.TargetDimension, func() ([]float32, error) {
+	queryEmbedding, err := cache.resolveFor(c.provider, payload, c.optimizationConfig.TargetDimension, func() ([]float32, error) {
+		if c.provider != nil {
+			return embedding.Image(context.Background(), c.provider, payload, 0)
+		}
 		return getMultiModalImageEmbedding(payload, 0)
 	})
 	if err != nil {
