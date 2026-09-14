@@ -64,15 +64,16 @@ type DynamoRouterParams struct {
 // buffered responses and streaming chunks. Evolving backend-owned payloads
 // remain raw JSON but are validated for size, syntax, duplicates, and depth.
 type DynamoResponseNVExt struct {
-	WorkerID           *DynamoWorkerInfo
-	Timing             *DynamoTimingInfo
-	RoutedExperts      json.RawMessage
-	EngineData         json.RawMessage
-	StopReason         json.RawMessage
-	PromptTokenIDs     []uint32
-	CompletionTokenIDs []uint32
-	PromptLogprobs     []map[uint32]DynamoPromptLogprobEntry
-	TokenIDs           []uint32
+	WorkerID             *DynamoWorkerInfo
+	Timing               *DynamoTimingInfo
+	RoutedExperts        json.RawMessage
+	EngineData           json.RawMessage
+	StopReason           json.RawMessage
+	DetailedFinishReason *string
+	PromptTokenIDs       []uint32
+	CompletionTokenIDs   []uint32
+	PromptLogprobs       []map[uint32]DynamoPromptLogprobEntry
+	TokenIDs             []uint32
 }
 
 type DynamoTimingInfo struct {
@@ -101,7 +102,7 @@ type DynamoWorkerInfo struct {
 
 var supportedDynamoExtraFields = map[string]struct{}{
 	"worker_id": {}, "timing": {}, "routed_experts": {}, "engine_data": {},
-	"stop_reason": {}, "prompt_token_ids": {}, "completion_token_ids": {}, "prompt_logprobs": {},
+	"stop_reason": {}, "detailed_finish_reason": {}, "prompt_token_ids": {}, "completion_token_ids": {}, "prompt_logprobs": {},
 }
 
 // ValidateDynamoRequestNVExt enforces the bounded request-side nvext contract
@@ -239,6 +240,12 @@ func ValidateDynamoResponseNVExt(extension *DynamoResponseNVExt, limits Limits) 
 		return NewError(ErrorUpstreamUnavailable, "dynamo_nvext_token_limit", "upstream Dynamo nvext token ID limit exceeded", nil)
 	}
 	totalBytes := 4 * (len(extension.PromptTokenIDs) + len(extension.CompletionTokenIDs) + len(extension.TokenIDs))
+	if extension.DetailedFinishReason != nil {
+		if exceedsDynamoString(*extension.DetailedFinishReason, limits) {
+			return NewError(ErrorUpstreamUnavailable, "dynamo_nvext_string_limit", "upstream Dynamo detailed finish reason exceeds the configured limit", nil)
+		}
+		totalBytes += len(*extension.DetailedFinishReason)
+	}
 	if err := validateDynamoTiming(extension.Timing); err != nil {
 		return err
 	}

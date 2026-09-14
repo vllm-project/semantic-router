@@ -14,7 +14,7 @@ import (
 
 func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	engine := NewBuiltinEngine()
-	request := []byte(`{"model":"provider-model","messages":[{"role":"user","content":"hi"}],"cache_salt":"legacy","nvext":{"greed_sampling":true,"annotations":["worker_id","timing"],"extra_fields":["prompt_token_ids"],"cache_salt":"tenant-a","request_timestamp_ms":123.5,"routing_constraints":{"required_taints":["gpu"],"preferred_taints":{"zone-a":0.75}},"router":{"ttft_target":100,"itl_target":20},"agent_hints":{"priority":-2,"strict_priority":1,"osl":2048,"speculative_prefill":true,"latency_sensitivity":0.5}}}`)
+	request := []byte(`{"model":"provider-model","messages":[{"role":"user","content":"hi"}],"cache_salt":"legacy","nvext":{"greed_sampling":true,"annotations":["worker_id","timing"],"extra_fields":["prompt_token_ids","detailed_finish_reason"],"cache_salt":"tenant-a","request_timestamp_ms":123.5,"routing_constraints":{"required_taints":["gpu"],"preferred_taints":{"zone-a":0.75}},"router":{"ttft_target":100,"itl_target":20},"agent_hints":{"priority":-2,"strict_priority":1,"osl":2048,"speculative_prefill":true,"latency_sensitivity":0.5}}}`)
 	requestResult, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, request, nil)
 	if err != nil {
 		t.Fatalf("TranslateRequest() error = %v", err)
@@ -25,9 +25,9 @@ func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	assertJSONField(t, requestResult.Body, "cache_salt", "legacy")
 	assertNestedJSONField(t, requestResult.Body, "nvext", "cache_salt", "tenant-a")
 	assertNestedJSONField(t, requestResult.Body, "nvext", "request_timestamp_ms", float64(123.5))
-	assertNestedJSONField(t, requestResult.Body, "nvext", "extra_fields", []any{"prompt_token_ids"})
+	assertNestedJSONField(t, requestResult.Body, "nvext", "extra_fields", []any{"prompt_token_ids", "detailed_finish_reason"})
 
-	response := []byte(`{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"nvext":{"worker_id":{"prefill_worker_id":1,"decode_worker_id":2},"timing":{"request_received_ms":100,"ttft_ms":4.5},"prompt_token_ids":[1,2],"completion_token_ids":[10,11],"prompt_logprobs":[null,{"42":{"logprob":-0.25,"rank":1,"decoded_token":"hello"}}]}}`)
+	response := []byte(`{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"nvext":{"worker_id":{"prefill_worker_id":1,"decode_worker_id":2},"timing":{"request_received_ms":100,"ttft_ms":4.5},"detailed_finish_reason":"eos","prompt_token_ids":[1,2],"completion_token_ids":[10,11],"prompt_logprobs":[null,{"42":{"logprob":-0.25,"rank":1,"decoded_token":"hello"}}]}}`)
 	responseResult, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, response, nil)
 	if err != nil {
 		t.Fatalf("TranslateResponse() error = %v", err)
@@ -37,6 +37,7 @@ func TestDynamoNVExtBufferedChatRoundTrip(t *testing.T) {
 	}
 	assertNestedJSONField(t, responseResult.Body, "nvext", "prompt_token_ids", []any{float64(1), float64(2)})
 	assertNestedJSONField(t, responseResult.Body, "nvext", "completion_token_ids", []any{float64(10), float64(11)})
+	assertNestedJSONField(t, responseResult.Body, "nvext", "detailed_finish_reason", "eos")
 }
 
 func TestDynamoRequestIDAnnotationBypassesChatChunkDecoding(t *testing.T) {
@@ -66,7 +67,7 @@ func TestDynamoRequestIDAnnotationRejectsCrossFormatTranslation(t *testing.T) {
 func TestDynamoNVExtBufferedResponsesRoundTrip(t *testing.T) {
 	codec := OpenAIResponsesCodec{}
 	policy := llmprotocol.DefaultPolicy()
-	requestBody := []byte(`{"model":"provider-model","input":"hi","nvext":{"greed_sampling":true,"annotations":["worker_id"],"extra_fields":["prompt_token_ids"],"cache_salt":"tenant-a"}}`)
+	requestBody := []byte(`{"model":"provider-model","input":"hi","nvext":{"greed_sampling":true,"annotations":["worker_id"],"extra_fields":["prompt_token_ids","detailed_finish_reason"],"cache_salt":"tenant-a"}}`)
 	request, requestEnvelope, _, err := codec.DecodeRequest(requestBody, policy)
 	if err != nil {
 		t.Fatalf("DecodeRequest() error = %v", err)
@@ -80,9 +81,9 @@ func TestDynamoNVExtBufferedResponsesRoundTrip(t *testing.T) {
 		t.Fatalf("EncodeRequest() error = %v", err)
 	}
 	assertNestedJSONField(t, encodedRequest, "nvext", "cache_salt", "tenant-a")
-	assertNestedJSONField(t, encodedRequest, "nvext", "extra_fields", []any{"prompt_token_ids"})
+	assertNestedJSONField(t, encodedRequest, "nvext", "extra_fields", []any{"prompt_token_ids", "detailed_finish_reason"})
 
-	responseBody := []byte(`{"id":"response_1","object":"response","created_at":100,"model":"provider-model","status":"completed","error":null,"incomplete_details":null,"instructions":null,"metadata":{},"output":[{"id":"item_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}],"parallel_tool_calls":true,"temperature":null,"tool_choice":"auto","tools":[],"top_p":null,"usage":{"input_tokens":1,"input_tokens_details":{"cached_tokens":0},"output_tokens":1,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":2},"nvext":{"worker_id":{"decode_worker_id":2},"prompt_token_ids":[1,2],"completion_token_ids":[10,11]}}`)
+	responseBody := []byte(`{"id":"response_1","object":"response","created_at":100,"model":"provider-model","status":"completed","error":null,"incomplete_details":null,"instructions":null,"metadata":{},"output":[{"id":"item_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}],"parallel_tool_calls":true,"temperature":null,"tool_choice":"auto","tools":[],"top_p":null,"usage":{"input_tokens":1,"input_tokens_details":{"cached_tokens":0},"output_tokens":1,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":2},"nvext":{"worker_id":{"decode_worker_id":2},"detailed_finish_reason":"length","prompt_token_ids":[1,2],"completion_token_ids":[10,11]}}`)
 	response, responseEnvelope, _, err := codec.DecodeResponse(responseBody, policy)
 	if err != nil {
 		t.Fatalf("DecodeResponse() error = %v", err)
@@ -97,6 +98,7 @@ func TestDynamoNVExtBufferedResponsesRoundTrip(t *testing.T) {
 	}
 	assertNestedJSONField(t, encodedResponse, "nvext", "prompt_token_ids", []any{float64(1), float64(2)})
 	assertNestedJSONField(t, encodedResponse, "nvext", "completion_token_ids", []any{float64(10), float64(11)})
+	assertNestedJSONField(t, encodedResponse, "nvext", "detailed_finish_reason", "length")
 }
 
 func TestDynamoNVExtBufferedResponsesRejectsUnknownAndCrossFormat(t *testing.T) {
@@ -146,9 +148,21 @@ func TestDynamoNVExtResponseRequiresOfficialTypedFields(t *testing.T) {
 	}
 }
 
+func TestDynamoNVExtDetailedFinishReasonEnforcesStringLimit(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.Limits.DynamoNVExtStringBytes = len("eos")
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := []byte(`{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"nvext":{"detailed_finish_reason":"length"}}`)
+	_, err = engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, response, nil)
+	assertErrorCodeContains(t, err, "dynamo_nvext_string_limit")
+}
+
 func TestDynamoNVExtStreamPreservesRealChunkWithoutCopyingToTerminalFrames(t *testing.T) {
 	stream := newDynamoTestStream(t, llmprotocol.DefaultPolicy(), llmprotocol.OpenAIChatV1)
-	payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"nvext\":{\"worker_id\":{\"decode_worker_id\":2},\"stop_reason\":\"stop\",\"prompt_token_ids\":[1,2]}}\n\n" +
+	payload := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"nvext\":{\"worker_id\":{\"decode_worker_id\":2},\"stop_reason\":\"stop\",\"detailed_finish_reason\":\"eos\",\"prompt_token_ids\":[1,2]}}\n\n" +
 		"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n" +
 		"data: [DONE]\n\n")
 	frames, events, _, err := stream.Push(payload)
@@ -159,6 +173,9 @@ func TestDynamoNVExtStreamPreservesRealChunkWithoutCopyingToTerminalFrames(t *te
 	if count := bytes.Count(bytes.Join(frames, nil), []byte(`"nvext"`)); count != 1 {
 		t.Fatalf("encoded nvext count = %d, want 1; frames = %s", count, bytes.Join(frames, nil))
 	}
+	if !bytes.Contains(bytes.Join(frames, nil), []byte(`"detailed_finish_reason":"eos"`)) {
+		t.Fatalf("encoded stream dropped detailed_finish_reason: %s", bytes.Join(frames, nil))
+	}
 	var extensionEvents int
 	for _, event := range events {
 		if event.DynamoNVExt != nil {
@@ -166,6 +183,9 @@ func TestDynamoNVExtStreamPreservesRealChunkWithoutCopyingToTerminalFrames(t *te
 			if event.Type != llmprotocol.EventProviderOpaque || event.DynamoNVExt.WorkerID == nil ||
 				len(event.DynamoNVExt.PromptTokenIDs) != 2 {
 				t.Fatalf("unexpected Dynamo stream event: %#v", event)
+			}
+			if event.DynamoNVExt.DetailedFinishReason == nil || *event.DynamoNVExt.DetailedFinishReason != "eos" {
+				t.Fatalf("detailed finish reason = %#v, want eos", event.DynamoNVExt.DetailedFinishReason)
 			}
 		}
 	}
@@ -223,10 +243,16 @@ func TestDynamoNVExtResponsesStreamPreservesBoundedLifecycleResource(t *testing.
 	if count := bytes.Count(bytes.Join(frames, nil), []byte(`"nvext"`)); count != 1 {
 		t.Fatalf("encoded Responses nvext count = %d, want 1", count)
 	}
+	if !bytes.Contains(bytes.Join(frames, nil), []byte(`"detailed_finish_reason":"length"`)) {
+		t.Fatalf("encoded Responses stream dropped detailed_finish_reason: %s", bytes.Join(frames, nil))
+	}
 	for _, event := range events {
 		if event.Type == llmprotocol.EventResponseCompleted && event.DynamoNVExt != nil {
 			if len(event.DynamoNVExt.PromptTokenIDs) != 2 || len(event.DynamoNVExt.CompletionTokenIDs) != 2 {
 				t.Fatalf("unexpected Responses Dynamo extension: %#v", event.DynamoNVExt)
+			}
+			if event.DynamoNVExt.DetailedFinishReason == nil || *event.DynamoNVExt.DetailedFinishReason != "length" {
+				t.Fatalf("detailed finish reason = %#v, want length", event.DynamoNVExt.DetailedFinishReason)
 			}
 			return
 		}
@@ -255,7 +281,7 @@ func dynamoResponsesStreamFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	payload := strings.Join(fixture.Chunks, "")
-	payload = strings.Replace(payload, `"total_tokens":5}}`, `"total_tokens":5},"nvext":{"prompt_token_ids":[1,2],"completion_token_ids":[10,11]}}`, 1)
+	payload = strings.Replace(payload, `"total_tokens":5}}`, `"total_tokens":5},"nvext":{"detailed_finish_reason":"length","prompt_token_ids":[1,2],"completion_token_ids":[10,11]}}`, 1)
 	return payload
 }
 
