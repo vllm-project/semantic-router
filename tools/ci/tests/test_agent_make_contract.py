@@ -63,6 +63,28 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertNotIn("run-python-lint", HARNESS_MAKE)
         self.assertNotIn("agent-changed-files-lint", HARNESS_MAKE)
 
+    def test_ci_checks_all_generated_public_contracts(self) -> None:
+        docs_make = (REPO_ROOT / "tools/make/docs.mk").read_text()
+        check = target_block("generated-contract-check", docs_make)
+        for dependency in (
+            "config-schema-check",
+            "api-docs-check",
+            "agent-skill-check",
+        ):
+            self.assertIn(dependency, check)
+        generate = target_block("generated-contract-generate", docs_make)
+        self.assertIn("config-schema-generate", generate)
+        self.assertLess(
+            generate.index("api-docs-generate"), generate.index("agent-skill-sync")
+        )
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text()
+        )
+        steps = workflow["jobs"]["test-and-build"]["steps"]
+        self.assertTrue(
+            any(step.get("run") == "make generated-contract-check" for step in steps)
+        )
+
     def test_verify_requires_explicit_domain_or_profile(self) -> None:
         verify = target_block("verify")
 
