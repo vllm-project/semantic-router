@@ -326,7 +326,7 @@ def _probe_assertions(
             "passed": response.status_code == expected_status,
         }
     ]
-    if 200 <= expected_status < 300:
+    if HTTPStatus.OK <= expected_status < HTTPStatus.MULTIPLE_CHOICES:
         assertions.append(delivery_assertion(response_body))
     expectations = {
         "x-vsr-selected-recipe": expected_recipe,
