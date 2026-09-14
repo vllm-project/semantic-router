@@ -58,6 +58,17 @@ config:
         modelRefs:
           - model: base-model
             lora_name: general-expert
+      - name: long_context_routing
+        description: Route requests whose estimated token count matches the long_context band
+        priority: 1500
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
       - name: block_jailbreak
         description: Block jailbreak attempts
         priority: 1000
@@ -754,6 +765,10 @@ config:
           description: Current user turn closely repeats the last two billing complaints.
           threshold: 0.8
           lookback_turns: 2
+      context_rules:
+        - name: long_context
+          description: Requests estimated at 500 tokens or more.
+          min_tokens: 500
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
