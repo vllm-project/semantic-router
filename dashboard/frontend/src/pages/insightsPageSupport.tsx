@@ -31,6 +31,21 @@ export function getInsightsLifecyclePresentation(record: InsightsRecord) {
   return { state, successful, errored, pending, label }
 }
 
+export function getInsightsLifecycleStatusClass(
+  lifecycle: ReturnType<typeof getInsightsLifecyclePresentation>,
+) {
+  if (lifecycle.successful) {
+    return styles.statusSuccess
+  }
+  if (lifecycle.errored) {
+    return styles.statusError
+  }
+  if (lifecycle.pending) {
+    return styles.statusPending
+  }
+  return styles.statusUnknown
+}
+
 export function getUniqueDecisions(records: InsightsRecord[]) {
   const decisions = new Set<string>()
   records.forEach((record) => {
@@ -247,17 +262,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       render: (row) => {
         const lifecycle = getInsightsLifecyclePresentation(row)
         return (
-          <span
-            className={`${styles.statusBadge} ${
-              lifecycle.successful
-                ? styles.statusSuccess
-                : lifecycle.errored
-                  ? styles.statusError
-                  : lifecycle.pending
-                    ? styles.statusPending
-                    : styles.statusUnknown
-            }`}
-          >
+          <span className={`${styles.statusBadge} ${getInsightsLifecycleStatusClass(lifecycle)}`}>
             {lifecycle.label}
           </span>
         )
