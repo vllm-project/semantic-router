@@ -82,6 +82,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 
 	// Create cache
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
 		Enabled:             true,
@@ -421,8 +422,9 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	valkeyConfig.Connection.Port = port
 
 	disabledCache, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: false,
-		Config:  valkeyConfig,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           false,
+		Config:            valkeyConfig,
 	})
 	require.NoError(t, err)
 	defer func() { _ = disabledCache.Close() }()
@@ -437,8 +439,9 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	valkeyConfig.Connection.Port = port
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
-		Enabled: false,
-		Config:  valkeyConfig,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           false,
+		Config:            valkeyConfig,
 	})
 	require.NoError(t, err)
 	defer func() { _ = cache.Close() }()
@@ -500,6 +503,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
 		Enabled:             true,
@@ -657,6 +661,7 @@ func newIsolatedValkeyCache(t *testing.T, label, metricType string, threshold fl
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		SimilarityThreshold: threshold,
 		TTLSeconds:          300,
 		Enabled:             true,

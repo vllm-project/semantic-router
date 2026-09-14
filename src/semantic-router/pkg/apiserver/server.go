@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -29,6 +30,8 @@ type Server struct {
 	httpServer *http.Server
 	done       chan struct{}
 	serveErr   error
+	owned      *serverOwnedResources
+	ownedDone  chan struct{}
 }
 
 // Init starts the API server.
@@ -67,7 +70,10 @@ func InitWithOptions(opts InitOptions) error {
 		return err
 	}
 	<-server.done
-	return normalizeServerError(server.serveErr)
+	if server.ownedDone != nil {
+		<-server.ownedDone
+	}
+	return errors.Join(normalizeServerError(server.serveErr), server.owned.closeError())
 }
 
 func StartWithOptions(opts InitOptions) (*Server, error) {
@@ -89,8 +95,7 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 	}
 	cfg.ManagementAPI = managementCfg
 
-	classificationSvc := resolveClassificationService(cfg, opts.RuntimeRegistry)
-	classificationSvc = ensureClassificationService(cfg, opts.RuntimeRegistry, classificationSvc)
+	classificationSvc, classificationOwner := classificationServiceForStartup(cfg, opts.RuntimeRegistry)
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -159,21 +164,32 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 		"remote_exposure": managementCfg.RemoteExposure,
 		"auth_mode":       managementCfg.Auth.Mode,
 	})
-	return startHTTPServer(httpServer)
+	return startHTTPServer(httpServer, classificationOwner)
 }
 
-func startHTTPServer(httpServer *http.Server) (*Server, error) {
+func startHTTPServer(httpServer *http.Server, owners ...io.Closer) (*Server, error) {
+	owned := newServerOwnedResources(owners)
 	listener, err := net.Listen("tcp", httpServer.Addr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, owned.drainAndClose())
 	}
+	httpServer.Addr = listener.Addr().String()
 	server := &Server{
 		httpServer: httpServer,
 		done:       make(chan struct{}),
+		owned:      owned,
+	}
+	if owned != nil {
+		server.ownedDone = make(chan struct{})
+		httpServer.Handler = owned.handler(httpServer.Handler)
 	}
 	go func() {
 		server.serveErr = httpServer.Serve(listener)
 		close(server.done)
+		if owned != nil {
+			_ = owned.drainAndClose()
+			close(server.ownedDone)
+		}
 	}()
 	return server, nil
 }
@@ -182,13 +198,21 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s == nil || s.httpServer == nil {
 		return nil
 	}
+	s.owned.beginDrain()
 	shutdownErr := s.httpServer.Shutdown(ctx)
 	if shutdownErr != nil {
 		_ = s.httpServer.Close()
 	}
 	select {
 	case <-s.done:
-		return errors.Join(shutdownErr, normalizeServerError(s.serveErr))
+		if s.ownedDone != nil {
+			select {
+			case <-s.ownedDone:
+			case <-ctx.Done():
+				return errors.Join(shutdownErr, ctx.Err())
+			}
+		}
+		return errors.Join(shutdownErr, normalizeServerError(s.serveErr), s.owned.closeError())
 	case <-ctx.Done():
 		_ = s.httpServer.Close()
 		return errors.Join(shutdownErr, ctx.Err())
@@ -317,7 +341,20 @@ func buildConfigUpdater(
 			config.Replace(newCfg)
 		}
 	}
-	return runtimeRegistry.RefreshRuntimeConfig
+	// The persisted document is a candidate. The router watcher publishes the
+	// complete generation after preparation; mutating its borrowed service here
+	// would expose a new API classifier beside the old extproc/cache snapshot.
+	return func(*config.RouterConfig) {}
+}
+
+func classificationServiceForStartup(cfg *config.RouterConfig, registry *routerruntime.Registry) (*services.ClassificationService, io.Closer) {
+	service := resolveClassificationService(cfg, registry)
+	created := service == nil && registry == nil
+	service = ensureClassificationService(cfg, registry, service)
+	if created {
+		return service, service
+	}
+	return service, nil
 }
 
 // initClassify attempts to get the global classification service with retry logic

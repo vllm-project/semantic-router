@@ -428,24 +428,14 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
 	}
-	// Known names accumulate their bits even when an unknown name is present:
-	// the returned set is the recognized subset and the error names the
-	// unrecognized entries, so strict callers reject the declaration while
-	// tolerant callers keep filtering on the recognized subset (an unknown
-	// name contributes nothing, it does not void the valid bits).
 	var set CapabilitySet
-	var unknown []string
 	for _, name := range names {
 		canonical := strings.ToLower(strings.TrimSpace(name))
 		capability, found := lookup[canonical]
 		if !found {
-			unknown = append(unknown, name)
-			continue
+			return CapabilitySet{}, fmt.Errorf("unknown protocol capability %q", name)
 		}
 		set.bits |= capability
-	}
-	if len(unknown) > 0 {
-		return set, fmt.Errorf("unknown protocol capability %q", strings.Join(unknown, ", "))
 	}
 	return set, nil
 }

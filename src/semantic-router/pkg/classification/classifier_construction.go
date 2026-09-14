@@ -13,13 +13,14 @@ import (
 )
 
 type classifierOptionBuilder struct {
-	cfg                *config.RouterConfig
-	options            []option
-	multiModalInitOnce sync.Once
-	multiModalInitErr  error
-	providerInitOnce   sync.Once
-	provider           embedding.Provider
-	providerErr        error
+	cfg              *config.RouterConfig
+	models           *classifierModelRuntime
+	embeddingSet     *embedding.Set
+	ownsEmbeddingSet bool
+	options          []option
+	providerInitOnce sync.Once
+	provider         embedding.Provider
+	providerErr      error
 }
 
 func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *classifierOptionBuilder {
@@ -27,6 +28,14 @@ func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *cla
 }
 
 func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
+	if CurrentNativeBackendCapabilities().Name != "openvino" {
+		if err := b.prepareEmbeddingSet(); err != nil {
+			return nil, err
+		}
+	}
+	if b.cfg.RoutingScope == config.DefaultRecipeName && !b.cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
+		return b.options, nil
+	}
 	steps := []func() (option, error){
 		b.buildKeywordClassifierOption,
 		b.buildEmbeddingClassifierOption,
@@ -39,12 +48,13 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildKBClassifiersOption,
 		b.buildEventClassifierOption,
 		b.buildGenericClassifiersOption,
+		b.buildModalityClassifierOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
+	b.options = append(b.options, parallelOptions...)
 	if err != nil {
 		return nil, err
 	}
-	b.options = append(b.options, parallelOptions...)
 	if err := b.addCategoryClassifier(categoryMapping); err != nil {
 		return nil, err
 	}
@@ -77,9 +87,7 @@ func (b *classifierOptionBuilder) buildParallelOptions(steps []func() (option, e
 		})
 	}
 
-	if err := group.Wait(); err != nil {
-		return nil, err
-	}
+	err := group.Wait()
 
 	options := make([]option, 0, len(results))
 	for _, opt := range results {
@@ -87,7 +95,20 @@ func (b *classifierOptionBuilder) buildParallelOptions(steps []func() (option, e
 			options = append(options, opt)
 		}
 	}
-	return options, nil
+	return options, err
+}
+
+// Options carry ownership into the final classifier. A failed build applies
+// the completed options to an unpublished shell solely to release that same
+// ownership, including successful parallel steps after a sibling failed.
+func (b *classifierOptionBuilder) closePending() {
+	classifier := &Classifier{Config: b.cfg, embeddingSet: b.embeddingSet, ownsEmbeddingSet: b.ownsEmbeddingSet}
+	for _, option := range b.options {
+		if option != nil {
+			option(classifier)
+		}
+	}
+	_ = classifier.Close()
 }
 
 func classifierBuildParallelism(stepCount int) int {
@@ -109,23 +130,11 @@ func classifierBuildParallelism(stepCount int) int {
 }
 
 func (b *classifierOptionBuilder) initMultiModalIfNeeded(reason string) error {
-	b.multiModalInitOnce.Do(func() {
-		mmPath := config.ResolveModelPath(b.cfg.MultiModalModelPath)
-		if mmPath == "" {
-			b.multiModalInitErr = fmt.Errorf("%s requires embedding_models.multimodal_model_path to be set", reason)
-			return
-		}
-		if err := initMultiModalModel(mmPath, b.cfg.UseCPU); err != nil {
-			b.multiModalInitErr = fmt.Errorf("failed to initialize multimodal model for %s: %w", reason, err)
-			return
-		}
-		logging.ComponentEvent("classifier", "multimodal_embedding_initialized", map[string]interface{}{
-			"reason":    reason,
-			"model_ref": mmPath,
-			"use_cpu":   b.cfg.UseCPU,
-		})
-	})
-	return b.multiModalInitErr
+	_, err := b.embeddingProviderForModel("multimodal", 0, 0)
+	if err != nil {
+		return fmt.Errorf("%s: %w", reason, err)
+	}
+	return nil
 }
 
 func (b *classifierOptionBuilder) defaultEmbeddingModelType() string {

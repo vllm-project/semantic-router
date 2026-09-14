@@ -7,21 +7,25 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// TestQualifiedRerouteCandidateTransportOnlyDeclaration is a regression test:
-// a model declaring only transport/accounting capabilities (tools, streaming,
-// ...) carries no task bit and must stay eligible on wire expressibility
-// for a task request, exactly like an unannotated model, instead of being
-// rejected for a task it never claimed.
-func TestQualifiedRerouteCandidateTransportOnlyDeclaration(t *testing.T) {
+// TestQualifiedRerouteCandidateDeclaredCapabilities is a regression test for the
+// declared-capability filter at the dispatch seam. Eligibility is decided by the
+// same qualification the primary dispatch and the fallback candidates share: the
+// wire format must encode the request, and an annotated model must declare the
+// required task bits. Catalog input-modality aliases are projected onto the
+// protocol vocabulary before that filter, descriptive catalog labels neither
+// grant nor revoke eligibility, and a transport/accounting-only declaration
+// carries no task bit so it cannot serve a task request it never declared.
+func TestQualifiedRerouteCandidateDeclaredCapabilities(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			BackendModels: config.BackendModels{
 				ModelConfig: map[string]config.ModelParams{
-					"transport-only": {APIFormat: "openai", Capabilities: []string{"tools", "streaming"}},
 					"unannotated":    {APIFormat: "openai"},
+					"transport-only": {APIFormat: "openai", Capabilities: []string{"tools", "streaming"}},
 					"image-declared": {APIFormat: "openai", Capabilities: []string{"image_input"}},
-					"mixed-declared": {APIFormat: "openai", Capabilities: []string{"image_input", "vision"}},
-					"unknown-only":   {APIFormat: "openai", Capabilities: []string{"vision"}},
+					"alias-only":     {APIFormat: "openai", Capabilities: []string{"vision"}},
+					"mixed-declared": {APIFormat: "openai", Capabilities: []string{"image_input", "long_context"}},
+					"descriptive":    {APIFormat: "openai", Capabilities: []string{"coding", "long_context"}},
 				},
 			},
 		},
@@ -29,32 +33,34 @@ func TestQualifiedRerouteCandidateTransportOnlyDeclaration(t *testing.T) {
 	imageRequired := llmprotocol.Capabilities(llmprotocol.CapabilityImageInput)
 	audioRequired := llmprotocol.Capabilities(llmprotocol.CapabilityAudioInput)
 
-	if got := router.qualifiedRerouteCandidate("transport-only", imageRequired); got == "" {
-		t.Fatal("transport-only declared model must stay eligible on wire expressibility for an image request")
-	}
+	// A model with no declaration stays eligible on wire expressibility alone.
 	if got := router.qualifiedRerouteCandidate("unannotated", imageRequired); got == "" {
 		t.Fatal("unannotated model must stay eligible on wire expressibility for an image request")
 	}
-	// Task-annotated model matching the request stays eligible.
-	if got := router.qualifiedRerouteCandidate("image-declared", imageRequired); got == "" {
-		t.Fatal("image-declared model must satisfy an image request")
+	// Descriptive catalog labels are metadata, not capability declarations:
+	// they leave the model unannotated instead of voiding its eligibility.
+	if got := router.qualifiedRerouteCandidate("descriptive", imageRequired); got == "" {
+		t.Fatal("descriptive-label-only model must stay eligible on wire expressibility for an image request")
 	}
-	// Task-annotated model lacking the required task still gets filtered.
-	if got := router.qualifiedRerouteCandidate("image-declared", audioRequired); got != "" {
-		t.Fatalf("image-declared model must be rejected for an audio request, got format %q", got)
+	// A transport/accounting-only declaration is annotated yet carries no task
+	// bit, so it cannot serve a task it never declared.
+	if got := router.qualifiedRerouteCandidate("transport-only", imageRequired); got != "" {
+		t.Fatalf("transport-only declaration must not serve an image request, got format %q", got)
 	}
-	// A mixed known/unknown declaration keeps its valid task bits: the
-	// unrecognized "vision" word must not void the recognized image_input bit.
+	// A catalog alias projects onto the protocol vocabulary before the filter:
+	// "vision" describes image input.
+	if got := router.qualifiedRerouteCandidate("alias-only", imageRequired); got == "" {
+		t.Fatal("vision-only declaration must satisfy an image request")
+	}
+	// A descriptive label alongside a recognized task bit does not void it.
 	if got := router.qualifiedRerouteCandidate("mixed-declared", imageRequired); got == "" {
-		t.Fatal("mixed known/unknown declaration must stay eligible for an image request")
+		t.Fatal("mixed declaration must stay eligible for the image task it declares")
 	}
 	if got := router.qualifiedRerouteCandidate("mixed-declared", audioRequired); got != "" {
-		t.Fatalf("mixed known/unknown declaration must be rejected for audio, got format %q", got)
+		t.Fatalf("mixed declaration must be rejected for an audio request it never declared, got format %q", got)
 	}
-	// An invalid declaration (names all unrecognized) fails closed: it is not
-	// treated like an unannotated model, because the operator asserted
-	// capability words the protocol cannot verify.
-	if got := router.qualifiedRerouteCandidate("unknown-only", imageRequired); got != "" {
-		t.Fatalf("invalid (all-unknown) declaration must fail closed, got format %q", got)
+	// A model declaring another task does not become a candidate for this one.
+	if got := router.qualifiedRerouteCandidate("image-declared", audioRequired); got != "" {
+		t.Fatalf("image-declared model must be rejected for an audio request, got format %q", got)
 	}
 }

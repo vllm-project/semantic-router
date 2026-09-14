@@ -41,6 +41,7 @@ from cli.validator_workflows import (
 )
 from cli.validator_signal_references import validate_signal_references
 from cli.validator_models import validate_model_references
+from cli.validator_model_runtime import validate_model_runtime_references
 from cli.config_schema import routing_surface_catalog
 
 log = get_logger(__name__)
@@ -561,6 +562,7 @@ def validate_user_config(
 
     # Validate model references
     errors.extend(validate_model_references(config))
+    errors.extend(validate_model_runtime_references(config))
     errors.extend(validate_classifier_contracts(config))
 
     # Validate plugin configurations
