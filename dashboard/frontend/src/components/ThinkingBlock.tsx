@@ -76,7 +76,9 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
           </svg>
           <ThinkingOrb
             className={styles.thinkingOrb}
-            state={isStreaming ? 'working' : 'composing'}
+            state="working"
+            paused={!isStreaming}
+            aria-label={isStreaming ? 'Thinking' : 'Reasoning finished'}
             size={20}
             theme="dark"
           />
