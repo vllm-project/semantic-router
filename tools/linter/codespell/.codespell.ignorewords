@@ -88,3 +88,5 @@ wieght
 naem
 # Metric acronyms (not spelling errors)
 FPR
+# go.sum hash fragment (perf/go.sum, not a spelling error)
+NCe
