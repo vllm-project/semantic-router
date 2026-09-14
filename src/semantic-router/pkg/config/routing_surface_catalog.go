@@ -115,6 +115,7 @@ var decisionPluginRegistry = []decisionPluginRegistryEntry{
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginResponseJailbreak, DisplayName: "Response Jailbreak", Description: "Screen generated responses for jailbreak-like output."}, NewPayload: func() interface{} { return &ResponseJailbreakPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, NewPayload: func() interface{} { return &ContextCompressionPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginShadowDispatch, DisplayName: "Shadow Dispatch", Description: "Send a bounded asynchronous copy to a secondary model."}, NewPayload: func() interface{} { return &ShadowDispatchPluginConfig{} }},
+	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginMasking, DisplayName: "Masking", Description: "Replace detected PII in the provider-bound request with placeholders."}, NewPayload: func() interface{} { return &MaskingPluginConfig{} }},
 }
 
 // AlgorithmExecution identifies the runtime path for a decision algorithm.
