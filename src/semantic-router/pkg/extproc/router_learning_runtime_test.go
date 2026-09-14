@@ -113,6 +113,9 @@ func TestRouterLearningRuntimeRecordsModelOutcomeWithoutUpdatingExperience(t *te
 	if !found || len(record.Outcomes) != 1 {
 		t.Fatalf("record-only feedback was not persisted: found=%v outcomes=%#v", found, record.Outcomes)
 	}
+	if record.Outcomes[0].Source != string(routerruntime.RouterOutcomeSourceUser) {
+		t.Fatalf("persisted feedback source = %q, want user", record.Outcomes[0].Source)
+	}
 }
 
 func TestRouterLearningRuntimeRejectsMissingReplay(t *testing.T) {
@@ -193,6 +196,38 @@ func TestRouterLearningRuntimeDedupsIdempotencyKey(t *testing.T) {
 	exact := rt.experienceSnapshot("domain_code", 4, "model-a")
 	if exact.GoodFitCount != 1 {
 		t.Fatalf("duplicate must not double-count experience, got %#v", exact)
+	}
+	record, found := recorder.GetRecord("replay-1")
+	if !found || len(record.Outcomes) != 1 || record.Outcomes[0].IdempotencyKey != "idem-1" {
+		t.Fatalf("durable idempotency record = found:%v outcomes:%#v", found, record.Outcomes)
+	}
+
+	rt.shared.mu.Lock()
+	rt.shared.idempotencyKeys["idem-1"].committedAt = time.Now().Add(-learningOutcomeIdempotencyTTL - time.Second)
+	rt.shared.mu.Unlock()
+	if expired := rt.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:       "replay-1",
+		Source:         routerruntime.RouterOutcomeSourceOperator,
+		Target:         routerruntime.RouterOutcomeTargetModel,
+		Verdict:        routerruntime.RouterOutcomeVerdictGoodFit,
+		IdempotencyKey: "idem-1",
+	}); expired.Code != routerruntime.RouterOutcomeCodeDuplicate {
+		t.Fatalf("retry beyond in-memory idempotency window = %#v, want duplicate", expired)
+	}
+
+	restarted := newRouterLearningRuntime(nil, recorder, nil)
+	if afterRestart := restarted.UpdateOutcome(context.Background(), &routerruntime.RouterOutcome{
+		ReplayID:       "replay-1",
+		Source:         routerruntime.RouterOutcomeSourceOperator,
+		Target:         routerruntime.RouterOutcomeTargetModel,
+		Verdict:        routerruntime.RouterOutcomeVerdictGoodFit,
+		IdempotencyKey: "idem-1",
+	}); afterRestart.Code != routerruntime.RouterOutcomeCodeDuplicate {
+		t.Fatalf("retry after Router restart = %#v, want duplicate", afterRestart)
+	}
+	record, _ = recorder.GetRecord("replay-1")
+	if len(record.Outcomes) != 1 {
+		t.Fatalf("durable retries appended outcomes = %#v, want exactly one", record.Outcomes)
 	}
 }
 

@@ -183,6 +183,8 @@ func servePlaygroundOutcome(
 		})
 		return
 	}
+	r.Header.Set(headers.VSROutcomeSource, "user")
+	r.Header.Set(headers.VSROutcomePrincipal, "dashboard-session:"+principal.SessionID)
 
 	statusWriter := &playgroundOutcomeResponseWriter{ResponseWriter: w, status: http.StatusOK}
 	proxy.ServeHTTP(statusWriter, r)

@@ -109,9 +109,13 @@ func TestPlaygroundOutcomeProxyForcesRecordOnlyForReadRole(t *testing.T) {
 	var posted playgroundOutcomeRequest
 	var upstreamAuthorizations []string
 	var upstreamIdempotencyKeys []string
+	var upstreamOutcomeSources []string
+	var upstreamOutcomePrincipals []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamAuthorizations = append(upstreamAuthorizations, r.Header.Get("Authorization"))
 		upstreamIdempotencyKeys = append(upstreamIdempotencyKeys, r.Header.Get("Idempotency-Key"))
+		upstreamOutcomeSources = append(upstreamOutcomeSources, r.Header.Get(headers.VSROutcomeSource))
+		upstreamOutcomePrincipals = append(upstreamOutcomePrincipals, r.Header.Get(headers.VSROutcomePrincipal))
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodGet:
@@ -143,6 +147,8 @@ func TestPlaygroundOutcomeProxyForcesRecordOnlyForReadRole(t *testing.T) {
 	)
 	request.Header.Set("Authorization", "Bearer browser-token")
 	request.Header.Set("Idempotency-Key", "browser-controlled-key")
+	request.Header.Set(headers.VSROutcomeSource, "operator")
+	request.Header.Set(headers.VSROutcomePrincipal, "browser-controlled-principal")
 	request = request.WithContext(auth.WithAuthContext(request.Context(), auth.AuthContext{
 		SessionID: "session-1",
 		Role:      auth.RoleRead,
@@ -167,6 +173,12 @@ func TestPlaygroundOutcomeProxyForcesRecordOnlyForReadRole(t *testing.T) {
 	}
 	if got := upstreamIdempotencyKeys[len(upstreamIdempotencyKeys)-1]; got != "server-owned-feedback-key" {
 		t.Fatalf("upstream Idempotency-Key = %q", got)
+	}
+	if got := upstreamOutcomeSources[len(upstreamOutcomeSources)-1]; got != "user" {
+		t.Fatalf("upstream outcome source = %q", got)
+	}
+	if got := upstreamOutcomePrincipals[len(upstreamOutcomePrincipals)-1]; got != "dashboard-session:session-1" {
+		t.Fatalf("upstream outcome principal = %q", got)
 	}
 }
 

@@ -88,6 +88,50 @@ func TestPlaygroundFeedbackFailedSubmissionCanRetry(t *testing.T) {
 	}
 }
 
+func TestPlaygroundFeedbackExpiredClaimRecoversAfterDashboardRestart(t *testing.T) {
+	svc := newTestAuthService(t)
+	ctx := context.Background()
+	sessionID := newPlaygroundFeedbackSession(t, svc, "feedback-restart@example.com")
+
+	if err := svc.BindPlaygroundReplay(ctx, sessionID, "replay-restart", "model-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CompletePlaygroundReplay(ctx, sessionID, "replay-restart"); err != nil {
+		t.Fatal(err)
+	}
+	firstKey, err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-restart", "model-a", 1, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleClaim := time.Now().Add(-playgroundReplayClaimLease - time.Second).Unix()
+	if _, err := svc.store.db.ExecContext(
+		ctx,
+		`UPDATE playground_feedback_replays SET claimed_at = ? WHERE replay_id = ?`,
+		staleClaim,
+		"replay-restart",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := NewService(svc.store, "test-secret", 1)
+	if err := restarted.ValidatePlaygroundReplay(ctx, sessionID, "replay-restart", "model-a"); err != nil {
+		t.Fatalf("stale claim validation after restart = %v", err)
+	}
+	secondKey, err := restarted.ClaimPlaygroundReplay(ctx, sessionID, "replay-restart", "model-a", 1, time.Minute)
+	if err != nil {
+		t.Fatalf("reclaim after restart = %v", err)
+	}
+	if secondKey != firstKey {
+		t.Fatalf("recovered key = %q, want stable key %q", secondKey, firstKey)
+	}
+	if err := restarted.FinishPlaygroundReplay(ctx, sessionID, "replay-restart", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.ValidatePlaygroundReplay(ctx, sessionID, "replay-restart", "model-a"); !errors.Is(err, ErrPlaygroundReplayDuplicate) {
+		t.Fatalf("finished recovered claim validation = %v", err)
+	}
+}
+
 func TestPlaygroundFeedbackRateLimitUsesSession(t *testing.T) {
 	svc := newTestAuthService(t)
 	ctx := context.Background()
@@ -106,6 +150,17 @@ func TestPlaygroundFeedbackRateLimitUsesSession(t *testing.T) {
 	}
 	if _, err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-second", "model-a", 1, time.Minute); !errors.Is(err, ErrPlaygroundFeedbackRateLimited) {
 		t.Fatalf("second claim error = %v", err)
+	}
+
+	otherSessionID := newPlaygroundFeedbackSession(t, svc, "feedback-limit-other@example.com")
+	if err := svc.BindPlaygroundReplay(ctx, otherSessionID, "replay-other-session", "model-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CompletePlaygroundReplay(ctx, otherSessionID, "replay-other-session"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ClaimPlaygroundReplay(ctx, otherSessionID, "replay-other-session", "model-a", 1, time.Minute); err != nil {
+		t.Fatalf("independent session claim error = %v", err)
 	}
 }
 

@@ -16,6 +16,7 @@ const (
 	playgroundReplayStateCompleted  = "completed"
 	playgroundReplayStateSubmitting = "submitting"
 	playgroundReplayStateConsumed   = "consumed"
+	playgroundReplayClaimLease      = 30 * time.Second
 )
 
 var (
@@ -88,7 +89,7 @@ func (s *Service) ValidatePlaygroundReplay(ctx context.Context, sessionID, repla
 	}
 	return validatePlaygroundReplayRow(
 		s.store.db.QueryRowContext(ctx, `
-			SELECT target_ref, idempotency_key, state, expires_at
+			SELECT target_ref, idempotency_key, state, expires_at, claimed_at
 			FROM playground_feedback_replays
 			WHERE replay_id = ? AND session_id = ?`, strings.TrimSpace(replayID), strings.TrimSpace(sessionID)),
 		strings.TrimSpace(targetRef), time.Now().Unix(),
@@ -115,7 +116,7 @@ func (s *Service) ClaimPlaygroundReplay(
 	now := time.Now().Unix()
 	idempotencyKey, validationErr := readValidPlaygroundReplayRow(
 		tx.QueryRowContext(ctx, `
-			SELECT target_ref, idempotency_key, state, expires_at
+			SELECT target_ref, idempotency_key, state, expires_at, claimed_at
 			FROM playground_feedback_replays
 			WHERE replay_id = ? AND session_id = ?`, strings.TrimSpace(replayID), strings.TrimSpace(sessionID)),
 		strings.TrimSpace(targetRef), now,
@@ -128,8 +129,8 @@ func (s *Service) ClaimPlaygroundReplay(
 		var attempts int
 		countErr := tx.QueryRowContext(ctx, `
 			SELECT COUNT(*) FROM playground_feedback_replays
-			WHERE session_id = ? AND claimed_at >= ?`,
-			strings.TrimSpace(sessionID), now-int64(window.Seconds()),
+			WHERE session_id = ? AND replay_id <> ? AND claimed_at >= ?`,
+			strings.TrimSpace(sessionID), strings.TrimSpace(replayID), now-int64(window.Seconds()),
 		).Scan(&attempts)
 		if countErr != nil {
 			return "", fmt.Errorf("count playground feedback attempts: %w", countErr)
@@ -142,9 +143,12 @@ func (s *Service) ClaimPlaygroundReplay(
 	result, err := tx.ExecContext(ctx, `
 		UPDATE playground_feedback_replays
 		SET state = ?, claimed_at = ?
-		WHERE replay_id = ? AND session_id = ? AND state = ?`,
+		WHERE replay_id = ? AND session_id = ? AND (
+			state = ? OR (state = ? AND claimed_at IS NOT NULL AND claimed_at <= ?)
+		)`,
 		playgroundReplayStateSubmitting, now, strings.TrimSpace(replayID),
 		strings.TrimSpace(sessionID), playgroundReplayStateCompleted,
+		playgroundReplayStateSubmitting, now-int64(playgroundReplayClaimLease.Seconds()),
 	)
 	if err != nil {
 		return "", fmt.Errorf("claim playground replay: %w", err)
@@ -168,16 +172,27 @@ func (s *Service) FinishPlaygroundReplay(ctx context.Context, sessionID, replayI
 	if s == nil || s.store == nil {
 		return ErrPlaygroundReplayNotOwned
 	}
-	nextState := playgroundReplayStateCompleted
-	if submitted {
-		nextState = playgroundReplayStateConsumed
-	}
-	_, err := s.store.db.ExecContext(ctx, `
+	query := `
 		UPDATE playground_feedback_replays
 		SET state = ?
-		WHERE replay_id = ? AND session_id = ? AND state = ?`,
-		nextState, strings.TrimSpace(replayID), strings.TrimSpace(sessionID), playgroundReplayStateSubmitting,
-	)
+		WHERE replay_id = ? AND session_id = ? AND state = ?`
+	nextState := playgroundReplayStateCompleted
+	args := []any{nextState, strings.TrimSpace(replayID), strings.TrimSpace(sessionID), playgroundReplayStateSubmitting}
+	if submitted {
+		nextState = playgroundReplayStateConsumed
+		query = `
+			UPDATE playground_feedback_replays
+			SET state = ?
+			WHERE replay_id = ? AND session_id = ? AND state IN (?, ?)`
+		args = []any{
+			nextState,
+			strings.TrimSpace(replayID),
+			strings.TrimSpace(sessionID),
+			playgroundReplayStateSubmitting,
+			playgroundReplayStateCompleted,
+		}
+	}
+	_, err := s.store.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("finish playground replay: %w", err)
 	}
@@ -196,7 +211,8 @@ func validatePlaygroundReplayRow(row playgroundReplayRow, targetRef string, now 
 func readValidPlaygroundReplayRow(row playgroundReplayRow, targetRef string, now int64) (string, error) {
 	var storedTarget, idempotencyKey, state string
 	var expiresAt int64
-	if err := row.Scan(&storedTarget, &idempotencyKey, &state, &expiresAt); err != nil {
+	var claimedAt sql.NullInt64
+	if err := row.Scan(&storedTarget, &idempotencyKey, &state, &expiresAt, &claimedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrPlaygroundReplayNotOwned
 		}
@@ -216,7 +232,12 @@ func readValidPlaygroundReplayRow(row playgroundReplayRow, targetRef string, now
 		return idempotencyKey, nil
 	case playgroundReplayStateInProgress:
 		return "", ErrPlaygroundReplayInProgress
-	case playgroundReplayStateSubmitting, playgroundReplayStateConsumed:
+	case playgroundReplayStateSubmitting:
+		if claimedAt.Valid && claimedAt.Int64 <= now-int64(playgroundReplayClaimLease.Seconds()) {
+			return idempotencyKey, nil
+		}
+		return "", ErrPlaygroundReplayDuplicate
+	case playgroundReplayStateConsumed:
 		return "", ErrPlaygroundReplayDuplicate
 	default:
 		return "", ErrPlaygroundReplayNotOwned
