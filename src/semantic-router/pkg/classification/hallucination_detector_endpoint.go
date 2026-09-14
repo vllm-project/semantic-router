@@ -482,7 +482,7 @@ func (d *EndpointHallucinationDetector) DetectWithNLI(ctx context.Context, reqCo
 	}
 	enhanced := &EnhancedHallucinationResult{HallucinationDetected: len(result.Entities) > 0, Spans: make([]EnhancedHallucinationSpan, 0, len(result.Entities))}
 	for _, span := range result.Entities {
-		enhanced.Spans = append(enhanced.Spans, EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: span.Explanation})
+		enhanced.Spans = append(enhanced.Spans, EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, Label: span.EntityType, HallucinationConfidence: span.Confidence, ScoreAvailable: result.HasScores(), NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: span.Explanation})
 	}
 	return enhanced, nil
 }
@@ -511,6 +511,7 @@ func (d *EndpointHallucinationDetector) Detect(ctx context.Context, reqContext, 
 	}
 	for _, s := range enhanced.Spans {
 		res.UnsupportedSpans = append(res.UnsupportedSpans, s.Text)
+		res.Spans = append(res.Spans, HallucinationSpan{Text: s.Text, Start: s.Start, End: s.End, Label: s.Label, Confidence: s.HallucinationConfidence, ScoreAvailable: s.ScoreAvailable})
 	}
 	return res, nil
 }

@@ -135,3 +135,24 @@ func TestHTTPClassifyHallucination_GoldenFixtures(t *testing.T) {
 		})
 	}
 }
+
+func TestHTTPClassifyHallucination_DetectCarriesOffsetsAndLabel(t *testing.T) {
+	const answer = "Café opened in 1999."
+	detector := newHTTPClassifyHallucinationDetector(t, func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{{"label": "contradiction", "start": 15, "end": 19, "text": "1999", "score": 0.7}})
+	})
+	result, err := detector.Detect(context.Background(), "The café opened in 2001.", "when?", answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.UnsupportedSpans) != 1 || result.UnsupportedSpans[0] != "1999" {
+		t.Fatalf("unsupported spans = %v", result.UnsupportedSpans)
+	}
+	if len(result.Spans) != 1 {
+		t.Fatalf("spans = %+v", result.Spans)
+	}
+	span := result.Spans[0]
+	if span.Label != "contradiction" || span.Start != 16 || span.End != 20 || answer[span.Start:span.End] != span.Text || !span.ScoreAvailable || span.Confidence != 0.7 {
+		t.Fatalf("span = %+v", span)
+	}
+}
