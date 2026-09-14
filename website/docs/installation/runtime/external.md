@@ -76,7 +76,12 @@ embedding requests include their configured model name.
 - PII returns scored entities with valid text offsets. Hallucination detection
   receives context, question, and answer and returns answer-relative spans: a
   classify service gets the answer as `inputs` and the context and question
-  under `parameters`; a chat service gets all three in the prompt.
+  under `parameters`; a chat service gets all three in the prompt. Span labels
+  come from the binding's `mapping_path` when set, otherwise from the built-in
+  set (`HALLUCINATED`, `unsupported`, `contradicted`, `unverifiable` and the
+  chat taxonomy categories). The older detector form, `backend: endpoint` with
+  `endpoint` and `model_id`, is shorthand for an `http_chat` binding and keeps
+  working; an explicit `hallucination_detector` binding takes precedence.
 - Set request timeouts and response-size limits for the service. Leave local
   tokenizer `input` settings unset for HTTP classifiers; enforce token limits
   in the external service.
