@@ -47,10 +47,13 @@ func TestState_Validate_ZeroSchemaVersion_Err(t *testing.T) {
 
 func TestState_Validate_RequiredEnvelopeFields_Err(t *testing.T) {
 	cases := map[string]func(*State){
-		"revision zero":                func(s *State) { s.Revision = 0 },
-		"policy fingerprint empty":     func(s *State) { s.PolicyFingerprint = "" },
-		"catalog fingerprint empty":    func(s *State) { s.CatalogFingerprint = "" },
-		"capability fingerprint empty": func(s *State) { s.CapabilityFingerprint = "" },
+		"revision zero":                     func(s *State) { s.Revision = 0 },
+		"policy fingerprint empty":          func(s *State) { s.PolicyFingerprint = "" },
+		"policy fingerprint whitespace":     func(s *State) { s.PolicyFingerprint = " \t" },
+		"catalog fingerprint empty":         func(s *State) { s.CatalogFingerprint = "" },
+		"catalog fingerprint whitespace":    func(s *State) { s.CatalogFingerprint = "\n" },
+		"capability fingerprint empty":      func(s *State) { s.CapabilityFingerprint = "" },
+		"capability fingerprint whitespace": func(s *State) { s.CapabilityFingerprint = "  " },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -326,7 +326,7 @@ func (s *MemoryStore) evictForIdentityLocked(quota QuotaKey) {
 			s.deleteEntryLocked(key)
 			return // freed a slot without evicting a live session
 		}
-		if first || seen.Before(oldestSeen) {
+		if first || seen.Before(oldestSeen) || (seen.Equal(oldestSeen) && key < oldestKey) {
 			oldestKey, oldestSeen, first = key, seen, false
 		}
 	}
@@ -354,7 +354,7 @@ func (s *MemoryStore) evictForCapacityLocked() {
 			s.deleteEntryLocked(key)
 			return
 		}
-		if first || seen.Before(oldestSeen) {
+		if first || seen.Before(oldestSeen) || (seen.Equal(oldestSeen) && key < oldestKey) {
 			oldestKey, oldestSeen, first = key, seen, false
 		}
 		sampled++

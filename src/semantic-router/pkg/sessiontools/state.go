@@ -12,6 +12,7 @@ package sessiontools
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -78,7 +79,9 @@ func (s State) Validate(maxTools int, maxStateBytes int) error {
 	if s.Revision == 0 {
 		return fmt.Errorf("sessiontools: revision must be greater than zero")
 	}
-	if s.PolicyFingerprint == "" || s.CatalogFingerprint == "" || s.CapabilityFingerprint == "" {
+	if strings.TrimSpace(s.PolicyFingerprint) == "" ||
+		strings.TrimSpace(s.CatalogFingerprint) == "" ||
+		strings.TrimSpace(s.CapabilityFingerprint) == "" {
 		return fmt.Errorf("sessiontools: policy_fingerprint, catalog_fingerprint, and capability_fingerprint must all be set")
 	}
 	if err := s.validateTimestamps(); err != nil {

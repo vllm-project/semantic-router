@@ -424,6 +424,28 @@ func TestMemoryStore_PerIdentityCapacityEviction(t *testing.T) {
 	}
 }
 
+func TestMemoryStore_EvictionTiesBreakByKey(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Now())
+	store := newTestStore(t, clock, 2, 2, 1800)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+
+	for _, key := range []string{"sess-b", "sess-a"} {
+		if _, err := store.CompareAndSwap(ctx, key, 0, newTestState(0), time.Hour, quota); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.CompareAndSwap(ctx, "sess-c", 0, newTestState(0), time.Hour, quota); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.Load(ctx, "sess-a"); err != nil || got.Found {
+		t.Fatalf("expected lexicographically oldest tied key to be evicted: found=%v err=%v", got.Found, err)
+	}
+	if got, err := store.Load(ctx, "sess-b"); err != nil || !got.Found {
+		t.Fatalf("expected other tied key to survive: found=%v err=%v", got.Found, err)
+	}
+}
+
 func TestMemoryStore_ConcurrentCAS_DistinctKeys(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t, newSyntheticClock(time.Now()), 1000, 1000, 1800)
