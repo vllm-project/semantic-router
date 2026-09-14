@@ -1,3 +1,5 @@
+//go:build ignore
+
 // This helper runs from the router module to export its public algorithm catalog.
 package main
 

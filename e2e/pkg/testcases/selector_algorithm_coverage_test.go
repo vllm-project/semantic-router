@@ -2,6 +2,7 @@ package testcases_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +26,6 @@ type selectorCoverageEntry struct {
 func TestImplementedSelectorCoverageIsReachable(t *testing.T) {
 	entries := loadSelectorCoverage(t)
 	for _, entry := range entries {
-		entry := entry
 		t.Run(entry.Algorithm, func(t *testing.T) {
 			switch entry.Status {
 			case "planned":
@@ -122,7 +122,7 @@ func TestSelectorAlgorithmCoverageTracksRuntimeCatalog(t *testing.T) {
 // adding the router's dependency graph to the E2E module.
 func loadRuntimeAlgorithmCatalog(t *testing.T) []struct{ Type, Tier, Execution string } {
 	t.Helper()
-	helper, err := filepath.Abs("testdata/algorithm_catalog.go")
+	helper, err := filepath.Abs("algorithm_catalog_helper.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,8 @@ func loadRuntimeAlgorithmCatalog(t *testing.T) []struct{ Type, Tier, Execution s
 	cmd.Dir = "../../../src/semantic-router"
 	raw, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			t.Fatalf("read runtime algorithm catalog: %v\n%s", err, exitErr.Stderr)
 		}
 		t.Fatal(err)

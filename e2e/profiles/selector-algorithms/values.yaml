@@ -8,16 +8,18 @@ configOverride:
   listeners: []
   providers:
     defaults:
-      default_model: static-first
+      model: static-first
     models:
       - name: static-first
         backend_refs:
           - name: selector-mock-vllm
+            provider: vllm
             endpoint: selector-mock-vllm.default.svc.cluster.local:8000
             weight: 1
       - name: static-second
         backend_refs:
           - name: selector-mock-vllm
+            provider: vllm
             endpoint: selector-mock-vllm.default.svc.cluster.local:8000
             weight: 1
   routing:
