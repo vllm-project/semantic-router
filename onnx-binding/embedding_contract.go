@@ -18,14 +18,14 @@ typedef struct {
     bool error;
 } EmbeddingDimensionContractResult;
 
-extern int get_embedding_dimension_contract(
+extern int ort_get_embedding_dimension_contract(
     const char* model_type,
     EmbeddingDimensionContractResult* result
 );
-extern int get_multimodal_embedding_dimension_contract(
+extern int ort_get_multimodal_embedding_dimension_contract(
     EmbeddingDimensionContractResult* result
 );
-extern void free_embedding_dimension_contract(
+extern void ort_free_embedding_dimension_contract(
     EmbeddingDimensionContractResult* result
 );
 */
@@ -93,7 +93,7 @@ func allocateEmbeddingDimensionContract() *C.EmbeddingDimensionContractResult {
 // releaseEmbeddingDimensionContract frees the native fields and the C-owned
 // output structure returned by the dimension contract functions.
 func releaseEmbeddingDimensionContract(result *C.EmbeddingDimensionContractResult) {
-	C.free_embedding_dimension_contract(result)
+	C.ort_free_embedding_dimension_contract(result)
 	C.free(unsafe.Pointer(result))
 }
 
@@ -104,13 +104,13 @@ func loadEmbeddingDimensionContract(modelType string) (*C.EmbeddingDimensionCont
 	}
 
 	if modelType == "multimodal" {
-		status := C.get_multimodal_embedding_dimension_contract(result)
+		status := C.ort_get_multimodal_embedding_dimension_contract(result)
 		return result, status
 	}
 
 	cModelType := C.CString(modelType)
 	defer C.free(unsafe.Pointer(cModelType))
-	status := C.get_embedding_dimension_contract(cModelType, result)
+	status := C.ort_get_embedding_dimension_contract(cModelType, result)
 	return result, status
 }
 

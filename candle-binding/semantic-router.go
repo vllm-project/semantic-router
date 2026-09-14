@@ -247,8 +247,8 @@ extern int calculate_similarity_batch(const char* query, const char** candidates
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
-extern int get_embedding_dimension_contract(const char* model_type, EmbeddingDimensionContractResult* result);
-extern void free_embedding_dimension_contract(EmbeddingDimensionContractResult* result);
+extern int candle_get_embedding_dimension_contract(const char* model_type, EmbeddingDimensionContractResult* result);
+extern void candle_free_embedding_dimension_contract(EmbeddingDimensionContractResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern int embedding_text_exceeds_window(const char* text, const char* model_type);
 extern TextWindowsResult get_text_windows(const char* text, int max_length);
@@ -1987,9 +1987,9 @@ func getNativeEmbeddingDimensionContract(modelType string) (EmbeddingDimensionCo
 			normalizedModelType,
 		)
 	}
-	status := C.get_embedding_dimension_contract(cModelType, result)
+	status := C.candle_get_embedding_dimension_contract(cModelType, result)
 	defer func() {
-		C.free_embedding_dimension_contract(result)
+		C.candle_free_embedding_dimension_contract(result)
 		C.free(unsafe.Pointer(result))
 	}()
 

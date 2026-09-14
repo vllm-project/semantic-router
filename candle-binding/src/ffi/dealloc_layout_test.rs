@@ -16,8 +16,8 @@
 //! test; the full-length `slice_from_raw_parts_mut` form passes.
 
 use super::embedding::{
-    free_batch_similarity_result, free_embedding_dimension_contract, free_embedding_models_info,
-    write_embedding_dimension_contract,
+    candle_free_embedding_dimension_contract, free_batch_similarity_result,
+    free_embedding_models_info, write_embedding_dimension_contract,
 };
 use super::types::{
     BatchSimilarityResult, EmbeddingDimensionContractResult, EmbeddingModelInfo,
@@ -234,7 +234,7 @@ fn test_embedding_dimension_contract_ffi_round_trip() {
         "qwen3"
     );
 
-    free_embedding_dimension_contract(&mut result);
+    candle_free_embedding_dimension_contract(&mut result);
     let report = disarm();
 
     assert_full_layout_free(

@@ -57,7 +57,7 @@ pub extern "C" fn init_multimodal_embedding_model(
 /// Return the dimension contract of the loaded multi-modal model.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn get_multimodal_embedding_dimension_contract(
+pub extern "C" fn ort_get_multimodal_embedding_dimension_contract(
     result: *mut EmbeddingDimensionContractResult,
 ) -> i32 {
     if result.is_null() {

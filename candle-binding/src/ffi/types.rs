@@ -420,7 +420,7 @@ impl Default for EmbeddingModelsInfoResult {
 /// Dimension contract for one loaded embedding model.
 ///
 /// The arrays are allocated by the native binding and must be released with
-/// `free_embedding_dimension_contract` after the caller has copied them.
+/// `candle_free_embedding_dimension_contract` after the caller has copied them.
 #[repr(C)]
 #[derive(Debug)]
 pub struct EmbeddingDimensionContractResult {

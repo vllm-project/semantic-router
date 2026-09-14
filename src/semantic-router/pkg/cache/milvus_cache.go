@@ -12,6 +12,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"sigs.k8s.io/yaml"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"

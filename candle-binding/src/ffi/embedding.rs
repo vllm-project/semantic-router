@@ -1879,7 +1879,7 @@ fn loaded_embedding_dimension_contract(model_type: &str) -> Result<(usize, Vec<u
 /// a second model-to-dimension table.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn get_embedding_dimension_contract(
+pub extern "C" fn candle_get_embedding_dimension_contract(
     model_type: *const c_char,
     result: *mut EmbeddingDimensionContractResult,
 ) -> i32 {
@@ -1934,10 +1934,12 @@ pub extern "C" fn get_embedding_dimension_contract(
     status
 }
 
-/// Free a dimension contract returned by `get_embedding_dimension_contract`.
+/// Free a dimension contract returned by `candle_get_embedding_dimension_contract`.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
-pub extern "C" fn free_embedding_dimension_contract(result: *mut EmbeddingDimensionContractResult) {
+pub extern "C" fn candle_free_embedding_dimension_contract(
+    result: *mut EmbeddingDimensionContractResult,
+) {
     if result.is_null() {
         return;
     }
