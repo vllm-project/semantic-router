@@ -126,6 +126,22 @@ class HarnessMakeContractTests(unittest.TestCase):
             self.assertIn(f"-v /app/{binding}/target \\", PRECOMMIT_MAKE)
         self.assertIn("$$CONTAINER_CMD run --rm", PRECOMMIT_MAKE)
 
+    def test_dashboard_checks_keep_lockfiles_frozen(self) -> None:
+        for target in (
+            "dashboard-lint",
+            "dashboard-lint-fix",
+            "dashboard-type-check",
+            "dashboard-test-frontend",
+            "dashboard-test-e2e-evaluation",
+        ):
+            with self.subTest(target=target):
+                block = target_block(target, DASHBOARD_MAKE)
+                self.assertIn("npm ci", block)
+                self.assertNotIn("npm install", block)
+                for line in block.splitlines():
+                    if "npm " in line:
+                        self.assertNotIn("2>/dev/null", line)
+
     def test_dashboard_workers_use_the_installed_cli_environment_by_default(
         self,
     ) -> None:

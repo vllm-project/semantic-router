@@ -30,6 +30,7 @@ from cli.commands.runtime_looper import apply_local_looper_endpoint
 from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
 )
+from cli.commands.runtime_observability import apply_local_tracing_endpoint
 from cli.commands.runtime_paths import (
     _container_runtime_config_path,
     _write_runtime_config,
@@ -420,6 +421,7 @@ def _resolve_effective_config_document(
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_looper_endpoint(config, stack) or changed
+        changed = apply_local_tracing_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
     if (
