@@ -72,6 +72,9 @@ local function remove_index_member(index_key, member, protected_key)
 end
 
 local function remove_state(key)
+  if not owns_key(key) then
+    return
+  end
   local quota_lru
   local quota_expiry
   if redis.call("TYPE", key).ok == "hash" then
@@ -222,6 +225,9 @@ local function remove_index_member(index_key, member, protected_key)
 end
 
 local function remove_state(key)
+  if not owns_key(key) then
+    return
+  end
   local quota_lru
   local quota_expiry
   if redis.call("TYPE", key).ok == "hash" then
@@ -245,6 +251,13 @@ end
 -- leave an old quota member that accidentally evicts the newly-created state
 -- (an ABA race across Redis' independently-expiring keys).
 local function remove_slot_member(lru_key, expiry_key, member, now, require_expired, check_quota)
+  if not owns_key(member) then
+    -- A damaged index must never make this store inspect or delete a key it
+    -- does not own. Remove only the bad references from our own indexes.
+    remove_index_member(lru_key, member, state_key)
+    remove_index_member(expiry_key, member, state_key)
+    return
+  end
   local state_type = redis.call("TYPE", member).ok
   if state_type == "none" then
     remove_index_member(lru_key, member, state_key)

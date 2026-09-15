@@ -103,6 +103,7 @@ func TestRedisStoreLuaContractsKeepCASAndInvalidationAtomic(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		`local function remove_slot_member`,
+		`not owns_key(member)`,
 		`member_lru ~= lru_key`,
 		`member_expiry ~= expiry_key`,
 		`member_lru == member`,

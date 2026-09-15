@@ -405,6 +405,33 @@ func TestRedisStoreIntegrationRejectsExternalQuotaIndexesWithoutTouchingThem(t *
 	}
 }
 
+func TestRedisStoreIntegrationReclaimsExternalIndexMembersWithoutTouchingThem(t *testing.T) {
+	ctx := context.Background()
+	store, _ := newRedisIntegrationStore(t, 1, 1, 60)
+	const externalMember = "other-store:state:sentinel"
+	quota := QuotaKey{Principal: "external-member-principal", Namespace: "recipe"}
+	if err := store.client.Set(ctx, externalMember, "sentinel", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.client.Del(context.Background(), externalMember).Err() })
+	if err := store.client.ZAdd(ctx, store.globalLRUKey(), redis.Z{Score: 1, Member: externalMember}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.client.ZAdd(ctx, store.globalExpiryKey(), redis.Z{Score: 1, Member: externalMember}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	applied, err := store.CompareAndSwap(ctx, "owned-replacement", 0, redisIntegrationState("policy"), time.Minute, quota)
+	if err != nil || !applied {
+		t.Fatalf("admission with external member: applied=%v err=%v", applied, err)
+	}
+	if exists := store.client.Exists(ctx, externalMember).Val(); exists != 1 {
+		t.Fatal("an external index member must not be deleted")
+	}
+	if members := store.client.ZCard(ctx, store.globalLRUKey()).Val(); members != 1 {
+		t.Fatalf("global index members = %d, want the admitted owned state only", members)
+	}
+}
+
 func TestRedisStoreIntegrationPersistsOnlyIdentityState(t *testing.T) {
 	ctx := context.Background()
 	store, _ := newRedisIntegrationStore(t, 10, 5, 60)
