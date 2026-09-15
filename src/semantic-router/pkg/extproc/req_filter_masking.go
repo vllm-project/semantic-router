@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // maskingUnavailableMessage is all a client sees; the cause stays in server
@@ -63,6 +67,7 @@ func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
 	if err != nil {
 		return &maskingDispatchError{cause: err}
 	}
+	recordMaskingObservability(ctx, result)
 	if result.Changed {
 		// Without this the envelope still claims the original client bytes
 		// describe the request, and EncodeRequest forwards them verbatim --
@@ -70,6 +75,26 @@ func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
 		ctx.SemanticRequest.Generation++
 	}
 	return nil
+}
+
+// recordMaskingObservability records counts and entity classes only -- never
+// a value or a placeholder (#3566).
+func recordMaskingObservability(ctx *RequestContext, result masking.Result) {
+	if result.MaskedCount == 0 {
+		return
+	}
+	decisionName := ctx.VSRSelectedDecisionName
+	for entityType, count := range result.EntityCounts {
+		metrics.RecordMaskedEntities(decisionName, entityType, count)
+	}
+	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, config.DecisionPluginMasking, decisionName)
+	tracing.SetSpanAttributes(span,
+		attribute.Int("masking.count", result.MaskedCount),
+		attribute.StringSlice("masking.entity_types", result.EntityTypes),
+		attribute.Int("masking.citations_dropped", result.CitationsDropped),
+	)
+	tracing.EndPluginSpan(span, "success", 0, "pii_masked")
+	ctx.TraceContext = spanCtx
 }
 
 // maskingScanThreshold uses the plugin threshold, falling back to the PII

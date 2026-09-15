@@ -243,16 +243,35 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
-	if ctx.SemanticRequest != nil {
+	suppressBody := replaySuppressesBody(ctx)
+	if ctx.SemanticRequest != nil && !suppressBody {
 		if requestBody, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest); err == nil {
 			record.RequestBody = string(requestBody)
 		}
 	}
 
 	// Extract structured fields from neutral IR before recorder truncation.
-	record.Prompt, record.ToolDefinitions = extractSemanticPromptAndTools(ctx.SemanticRequest)
+	// Tool definitions are operator-authored, not user content, so they are
+	// kept even when the prompt is suppressed (D3, #3566).
+	prompt, toolDefinitions := extractSemanticPromptAndTools(ctx.SemanticRequest)
+	record.ToolDefinitions = toolDefinitions
+	if !suppressBody {
+		record.Prompt = prompt
+	}
 
 	return record
+}
+
+// replaySuppressesBody reports whether a masking route must not persist the
+// pre-mask request. Replay snapshots the neutral request before dispatch, so
+// the only safe option is to omit the body rather than store it raw (D3,
+// #3566).
+func replaySuppressesBody(ctx *RequestContext) bool {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return false
+	}
+	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	return cfg != nil && cfg.Enabled
 }
 
 func replayDecisionMetadata(ctx *RequestContext) (int, int) {

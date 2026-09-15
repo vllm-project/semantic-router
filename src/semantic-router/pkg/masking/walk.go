@@ -24,7 +24,8 @@ type ScanFunc func(text string) ([]Span, error)
 type Result struct {
 	Changed          bool
 	MaskedCount      int
-	EntityTypes      []string // sorted, de-duplicated
+	EntityTypes      []string       // sorted, de-duplicated
+	EntityCounts     map[string]int // masked span count per entity type; a metric label, never a value (Phase 5)
 	CitationsDropped int
 }
 
@@ -117,6 +118,7 @@ func maskTextBlock(block *llmprotocol.Content, a *Allocator, scan ScanFunc, out 
 	out.MaskedCount += len(merged)
 	for _, span := range merged {
 		out.EntityTypes = append(out.EntityTypes, span.EntityType)
+		incrementEntityCount(out, span.EntityType)
 	}
 	out.CitationsDropped += len(block.Citations) - len(survivingCitations)
 	block.Text = maskedText
@@ -180,6 +182,7 @@ func maskJSONValue(value any, a *Allocator, scan ScanFunc, out *Result) (any, bo
 		out.MaskedCount += len(merged)
 		for _, span := range merged {
 			out.EntityTypes = append(out.EntityTypes, span.EntityType)
+			incrementEntityCount(out, span.EntityType)
 		}
 		return masked, true, nil
 	case map[string]any:
@@ -212,6 +215,13 @@ func maskJSONValue(value any, a *Allocator, scan ScanFunc, out *Result) (any, bo
 		// json.Number, bool, and nil are never masked.
 		return value, false, nil
 	}
+}
+
+func incrementEntityCount(out *Result, entityType string) {
+	if out.EntityCounts == nil {
+		out.EntityCounts = make(map[string]int)
+	}
+	out.EntityCounts[entityType]++
 }
 
 func dedupSortedEntityTypes(entityTypes []string) []string {
