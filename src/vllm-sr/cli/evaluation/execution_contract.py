@@ -32,6 +32,7 @@ from cli.evaluation.target_contracts import (
 
 FIXTURE_REPLAY_EXECUTOR_ID = "fixture-replay.v1"
 MOM_REPLAY_EXECUTOR_ID = "mom-cohort-replay.v1"
+ROUTER_LEARNING_REPLAY_EXECUTOR_ID = "router-learning-replay.v1"
 LIVE_RUNTIME_EXECUTOR_ID = "live-runtime.v1"
 NORMALIZED_REPLAY_EXECUTOR_ID = "normalized-suite-replay.v1"
 NORMALIZED_LIVE_EXECUTOR_ID = "normalized-suite-live.v1"

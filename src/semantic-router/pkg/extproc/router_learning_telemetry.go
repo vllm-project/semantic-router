@@ -8,19 +8,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-const routerLearningTelemetryEWMAAlpha = 0.20
-
-type routerLearningTelemetryObservation struct {
-	LatencySeconds          float64
-	LatencyObserved         bool
-	CacheHitRatio           float64
-	CacheWritePressure      float64
-	CacheObserved           bool
-	InputCostMultiplier     float64
-	InputCostObserved       bool
-	ProviderFailureObserved bool
-}
-
 func (r *OpenAIRouter) observeRouterLearningUsageTelemetry(
 	ctx *RequestContext,
 	completionLatency time.Duration,
@@ -134,31 +121,6 @@ func (rt *routerLearningRuntime) recordModelTelemetryLocked(
 		}
 		rt.shared.experience[key] = exp
 	}
-	if observation.LatencyObserved {
-		exp.LatencyEWMA = updateRouterLearningEWMA(exp.LatencyEWMA, observation.LatencySeconds)
-	}
-	if observation.CacheObserved {
-		exp.CacheHitEWMA = updateRouterLearningEWMA(exp.CacheHitEWMA, observation.CacheHitRatio)
-		exp.CacheWriteEWMA = updateRouterLearningEWMA(exp.CacheWriteEWMA, observation.CacheWritePressure)
-	}
-	if observation.InputCostObserved {
-		exp.InputCostMultiplierEWMA = updateRouterLearningEWMA(
-			exp.InputCostMultiplierEWMA,
-			observation.InputCostMultiplier,
-		)
-	}
-	if observation.ProviderFailureObserved {
-		exp.FailedCount++
-	}
+	applyRouterLearningTelemetry(exp, observation)
 	exp.LastUpdated = time.Now()
-}
-
-func updateRouterLearningEWMA(previous float64, observed float64) float64 {
-	if observed < 0 {
-		return previous
-	}
-	if previous <= 0 {
-		return observed
-	}
-	return previous*(1-routerLearningTelemetryEWMAAlpha) + observed*routerLearningTelemetryEWMAAlpha
 }

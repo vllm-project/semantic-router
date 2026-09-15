@@ -27,19 +27,6 @@ type routerLearningSamplingDiagnostics struct {
 	seed int64
 }
 
-type routerLearningCandidateScore struct {
-	model              string
-	score              float64
-	posteriorMean      float64
-	predictedQuality   float64
-	costPenalty        float64
-	overusePenalty     float64
-	reliabilityPenalty float64
-	latencyAdjustment  float64
-	cacheAdjustment    float64
-	coldStart          bool
-}
-
 var routerLearningSamplingSeedSource = func() int64 {
 	return time.Now().UnixNano()
 }
@@ -98,31 +85,6 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 	}
 }
 
-func routingSamplingWinner(
-	scores []routerLearningCandidateScore,
-	baseModel string,
-	candidateSet string,
-	usedSampling bool,
-) routerLearningCandidateScore {
-	winner := selectRoutingSamplingWinner(scores, baseModel, candidateSet)
-	if !usedSampling {
-		return winner
-	}
-	if coldStartWinner, ok := firstColdStartCandidate(scores); ok {
-		return coldStartWinner
-	}
-	return winner
-}
-
-func firstColdStartCandidate(scores []routerLearningCandidateScore) (routerLearningCandidateScore, bool) {
-	for _, score := range scores {
-		if score.coldStart {
-			return score, true
-		}
-	}
-	return routerLearningCandidateScore{}, false
-}
-
 func baseAdaptationDecision(input routerLearningInput, policy routerLearningPolicy) routerLearningDecision {
 	return routerLearningDecision{
 		selectionContext: input.selCtx,
@@ -147,20 +109,6 @@ func protectionPreflightMode(preflight routerLearningProtectionPreflight) string
 		return config.DecisionAdaptationModeApply
 	}
 	return preflight.mode
-}
-
-func selectRoutingSamplingWinner(
-	scores []routerLearningCandidateScore,
-	baseModel string,
-	candidateSet string,
-) routerLearningCandidateScore {
-	winner := scores[0]
-	baseScore := scoreForModel(scores, baseModel)
-	requiredMargin := routingSamplingMargin(candidateSet) + candidateCostMargin(scores, baseModel, winner.model)
-	if winner.model != baseModel && winner.score < baseScore+requiredMargin {
-		return scoreByModel(scores, baseModel)
-	}
-	return winner
 }
 
 func newRoutingSamplingDiagnostics(
@@ -388,43 +336,16 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 			continue
 		}
 		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
-		alpha := exp.SeedWeight*exp.QualitySeed + float64(exp.GoodFitCount) + 1
-		beta := exp.SeedWeight*(1-exp.QualitySeed) + float64(exp.UnderpoweredCount) + 1
-		mean := alpha / (alpha + beta)
-		predicted := mean
+		var sample func(float64, float64) float64
 		if useSampling && rng != nil {
-			predicted = sampleBeta(alpha, beta, rng)
+			sample = func(alpha, beta float64) float64 { return sampleBeta(alpha, beta, rng) }
 		}
-		costPenalty := r.costPenalty(model, maxCost, candidateSet) +
-			0.03*clamp01(exp.InputCostMultiplierEWMA)
-		total := float64(exp.GoodFitCount + exp.UnderpoweredCount + exp.OverprovisionedCount + exp.FailedCount + 1)
-		overusePenalty := 0.03 * float64(exp.OverprovisionedCount) / total
-		reliabilityPenalty := 0.10 * float64(exp.FailedCount) / total
-		latencyAdjustment := -0.02 * clamp01(exp.LatencyEWMA)
-		cacheAdjustment := 0.02 * clamp01(exp.CacheHitEWMA)
-		score := predicted - costPenalty - overusePenalty - reliabilityPenalty + latencyAdjustment + cacheAdjustment
-		if baseResult != nil && baseResult.SelectedModel == model {
-			score += 0.001
-		}
-		scores = append(scores, routerLearningCandidateScore{
-			model:              model,
-			score:              score,
-			posteriorMean:      mean,
-			predictedQuality:   predicted,
-			costPenalty:        costPenalty,
-			overusePenalty:     overusePenalty,
-			reliabilityPenalty: reliabilityPenalty,
-			latencyAdjustment:  latencyAdjustment,
-			cacheAdjustment:    cacheAdjustment,
-			coldStart:          exp.LastUpdated.IsZero(),
-		})
+		scores = append(scores, scoreRoutingSamplingExperience(
+			model, exp, r.costPenalty(model, maxCost, candidateSet),
+			baseResult != nil && baseResult.SelectedModel == model, sample,
+		))
 	}
-	sort.SliceStable(scores, func(i, j int) bool {
-		if scores[i].score == scores[j].score {
-			return scores[i].model < scores[j].model
-		}
-		return scores[i].score > scores[j].score
-	})
+	sortRoutingSamplingScores(scores)
 	return scores
 }
 
@@ -439,17 +360,7 @@ func (r *OpenAIRouter) maxCandidateCost(refs []config.ModelRef) float64 {
 }
 
 func (r *OpenAIRouter) costPenalty(model string, maxCost float64, candidateSet string) float64 {
-	if maxCost <= 0 {
-		return 0
-	}
-	multiplier := 0.04
-	switch candidateSet {
-	case config.RouterLearningCandidateSetTier:
-		multiplier = 0.06
-	case config.RouterLearningCandidateSetGlobal:
-		multiplier = 0.10
-	}
-	return multiplier * clamp01(r.modelInputCost(model)/maxCost)
+	return routingSamplingCostPenalty(r.modelInputCost(model), maxCost, candidateSet)
 }
 
 func (r *OpenAIRouter) modelInputCost(model string) float64 {
@@ -461,46 +372,6 @@ func (r *OpenAIRouter) modelInputCost(model string) float64 {
 		return 0
 	}
 	return params.Pricing.PromptPer1M + params.Pricing.CompletionPer1M
-}
-
-func routingSamplingMargin(candidateSet string) float64 {
-	switch candidateSet {
-	case config.RouterLearningCandidateSetTier:
-		return 0.03
-	case config.RouterLearningCandidateSetGlobal:
-		return 0.08
-	default:
-		return 0
-	}
-}
-
-func candidateCostMargin(scores []routerLearningCandidateScore, baseModel string, winnerModel string) float64 {
-	if baseModel == "" || winnerModel == "" || baseModel == winnerModel {
-		return 0
-	}
-	base := scoreByModel(scores, baseModel)
-	winner := scoreByModel(scores, winnerModel)
-	extra := winner.costPenalty - base.costPenalty
-	if extra <= 0 {
-		return 0
-	}
-	return extra
-}
-
-func scoreForModel(scores []routerLearningCandidateScore, model string) float64 {
-	return scoreByModel(scores, model).score
-}
-
-func scoreByModel(scores []routerLearningCandidateScore, model string) routerLearningCandidateScore {
-	for _, score := range scores {
-		if score.model == model {
-			return score
-		}
-	}
-	if len(scores) > 0 {
-		return scores[0]
-	}
-	return routerLearningCandidateScore{}
 }
 
 func proposalSelectionResult(
@@ -626,19 +497,6 @@ func modelRefForName(candidates []config.ModelRef, model string) *config.ModelRe
 		}
 	}
 	return nil
-}
-
-func clamp01(value float64) float64 {
-	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0
-	}
-	if value < 0 {
-		return 0
-	}
-	if value > 1 {
-		return 1
-	}
-	return value
 }
 
 func sampleBeta(alpha float64, beta float64, rng *rand.Rand) float64 {

@@ -148,6 +148,7 @@ type executionRecordEvidence struct {
 	ProductionExperiment *productionExperimentMethodEvidence `json:"production_experiment,omitempty"`
 	OnlinePreference     *onlinePreferenceMethodEvidence     `json:"online_preference,omitempty"`
 	HardPolicy           *hardPolicyMethodEvidence           `json:"hard_policy,omitempty"`
+	RouterLearning       *routerLearningMethodEvidence       `json:"router_learning,omitempty"`
 	SafetyViolations     *int64                              `json:"safety_violations,omitempty"`
 	ShouldBlock          *bool                               `json:"should_block,omitempty"`
 	Blocked              *bool                               `json:"blocked,omitempty"`
@@ -207,6 +208,11 @@ func validateRecordsAndFailureSummary(
 	attestation, err := validateExecutionRecords(filepath.Join(runDir, "records.jsonl"), manifest.TrackIDs, cases, executor)
 	if err != nil {
 		return recordAttestation{}, err
+	}
+	if executor.ID == routerLearningReplayExecutorID {
+		if err := validateRouterLearningRunPlan(attestation.JointRecords, cases.CaseIDsByTrack["joint"], manifest.Seed); err != nil {
+			return recordAttestation{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+		}
 	}
 	if manifest.Target.Mixture != nil && containsTrack(manifest.TrackIDs, "model_pool") {
 		arms := make([]string, len(manifest.Target.Mixture.ModelArms))

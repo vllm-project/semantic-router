@@ -9,6 +9,7 @@ from cli.evaluation.metric_hard_policy import hard_policy_metrics
 from cli.evaluation.metric_production_experiment import production_experiment_metrics
 from cli.evaluation.metric_recovery import recovery_metrics
 from cli.evaluation.metric_robustness import robustness_metrics
+from cli.evaluation.metric_router_learning import router_learning_metrics
 
 
 def method_metrics(records: list[ExecutionRecord]) -> list[MetricDraft]:
@@ -19,4 +20,5 @@ def method_metrics(records: list[ExecutionRecord]) -> list[MetricDraft]:
         *(recovery_metrics(records) if "agentic" in tracks else ()),
         *(production_experiment_metrics(records) if "preference" in tracks else ()),
         *(hard_policy_metrics(records) if "safety" in tracks else ()),
+        *(router_learning_metrics(records) if "joint" in tracks else ()),
     ]

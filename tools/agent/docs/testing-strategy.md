@@ -34,6 +34,11 @@ CI path classification is deliberately coarser than developer reasoning:
 - `ci/full` selects the maintained full safety net;
 - nightly and release workflows remain independent safety nets.
 
+Dashboard fast checks require the vllm-sr CLI dependencies and `pytest` in the
+Python environment used by `make dashboard-check`. Install them with
+`python -m pip install -e src/vllm-sr pytest`; when using a separate environment,
+set `VLLM_SR_EVALUATION_TEST_PYTHON` to that environment's Python executable.
+
 The aggregate required check is `PR Gate`. Individual jobs may be skipped when
 their domain is unaffected; the gate fails if any selected job fails or is
 cancelled.
