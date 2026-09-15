@@ -872,14 +872,17 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 //
 // Parameters:
 //   - text: Input text to generate embedding for (must be non-empty and cannot contain NUL bytes)
-//   - modelType: "qwen3" (currently only Qwen3 supports batching)
+//   - modelType: "qwen3" (currently only Qwen3 supports batching; must be non-empty, cannot contain NUL bytes, and must be "qwen3")
 //   - targetDim: Target dimension (0 for default, or 768, 512, 256, 128; must be in [0, math.MaxInt32])
 //
 // Returns:
 //   - *EmbeddingOutput: Embedding output with metadata
-//   - error: Non-nil if validation fails (empty/NUL text, negative or out-of-range targetDim) or embedding generation fails
+//   - error: Non-nil if validation fails (empty/NUL text, invalid/empty/NUL modelType, negative or out-of-range targetDim) or embedding generation fails
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
 	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
+	}
+	if err := validateBatchedModelType(modelType); err != nil {
 		return nil, err
 	}
 	if err := validateTargetDim(targetDim); err != nil {

@@ -203,6 +203,9 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	if err := validateRequiredText("text", text); err != nil {
 		return nil, err
 	}
+	if err := validateBatchedModelType(modelType); err != nil {
+		return nil, err
+	}
 	if err := validateTargetDim(targetDim); err != nil {
 		return nil, err
 	}

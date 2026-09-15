@@ -2,9 +2,23 @@ package candle_binding
 
 import (
 	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// huge64BitInt returns a 64-bit int value exceeding math.MaxInt32 at runtime.
+// It computes the value dynamically so 32-bit compilers don't reject the file
+// with a constant overflow error before runtime guards can execute.
+func huge64BitInt() (int, bool) {
+	if math.MaxInt <= math.MaxInt32 {
+		return 0, false
+	}
+	var shift uint = 32
+	return int(int64(1) << shift), true
+}
 
 // This test file carries no build constraint, so it runs under both the CGO and
 // non-CGO builds. It pins the shared request validation contract from #2619:
@@ -55,8 +69,7 @@ func TestValidateSemanticHelpers(t *testing.T) {
 		if err := validateTargetDim(-1); err == nil || !strings.Contains(err.Error(), "targetDim cannot be negative") {
 			t.Fatalf("expected negative error, got %v", err)
 		}
-		if math.MaxInt > math.MaxInt32 {
-			huge := int(int64(1) << 32)
+		if huge, ok := huge64BitInt(); ok {
 			if err := validateTargetDim(huge); err == nil || !strings.Contains(err.Error(), "exceeds maximum 32-bit integer range") {
 				t.Fatalf("expected ABI overflow error for targetDim %d, got %v", huge, err)
 			}
@@ -73,8 +86,7 @@ func TestValidateSemanticHelpers(t *testing.T) {
 		if err := validateTargetLayer(-1); err == nil || !strings.Contains(err.Error(), "targetLayer cannot be negative") {
 			t.Fatalf("expected negative error, got %v", err)
 		}
-		if math.MaxInt > math.MaxInt32 {
-			huge := int(int64(1) << 32)
+		if huge, ok := huge64BitInt(); ok {
 			if err := validateTargetLayer(huge); err == nil || !strings.Contains(err.Error(), "exceeds maximum 32-bit integer range") {
 				t.Fatalf("expected ABI overflow error for targetLayer %d, got %v", huge, err)
 			}
@@ -91,8 +103,7 @@ func TestValidateSemanticHelpers(t *testing.T) {
 		if err := validateTopK(-1); err == nil || !strings.Contains(err.Error(), "topK cannot be negative") {
 			t.Fatalf("expected negative error, got %v", err)
 		}
-		if math.MaxInt > math.MaxInt32 {
-			huge := int(int64(1) << 32)
+		if huge, ok := huge64BitInt(); ok {
 			if err := validateTopK(huge); err == nil || !strings.Contains(err.Error(), "exceeds maximum 32-bit integer range") {
 				t.Fatalf("expected ABI overflow error for topK %d, got %v", huge, err)
 			}
@@ -137,8 +148,7 @@ func TestValidateSemanticHelpers(t *testing.T) {
 		if err := validateImageTensor(pixelData, 512, 512, -5); err == nil || !strings.Contains(err.Error(), "targetDim cannot be negative") {
 			t.Fatalf("expected targetDim negative error, got %v", err)
 		}
-		if math.MaxInt > math.MaxInt32 {
-			huge := int(int64(1) << 32)
+		if huge, ok := huge64BitInt(); ok {
 			if err := validateImageTensor(pixelData, huge, 512, 0); err == nil || !strings.Contains(err.Error(), "exceeds maximum 32-bit integer range") {
 				t.Fatalf("expected height ABI overflow error, got %v", err)
 			}
@@ -172,8 +182,7 @@ func TestValidateSemanticHelpers(t *testing.T) {
 		if err := validateAudioTensor(melData, 80, 100, -10); err == nil || !strings.Contains(err.Error(), "targetDim cannot be negative") {
 			t.Fatalf("expected targetDim negative error, got %v", err)
 		}
-		if math.MaxInt > math.MaxInt32 {
-			huge := int(int64(1) << 32)
+		if huge, ok := huge64BitInt(); ok {
 			if err := validateAudioTensor(melData, huge, 100, 0); err == nil || !strings.Contains(err.Error(), "exceeds maximum 32-bit integer range") {
 				t.Fatalf("expected nMels ABI overflow error, got %v", err)
 			}
@@ -240,6 +249,21 @@ func TestValidateSemanticHelpers(t *testing.T) {
 		}
 		if err := validateEmbeddingSimilarity("t1", "t2", "qwen3", -1); err == nil || !strings.Contains(err.Error(), "targetDim cannot be negative") {
 			t.Fatalf("expected targetDim negative error, got %v", err)
+		}
+	})
+
+	t.Run("validateBatchedModelType", func(t *testing.T) {
+		if err := validateBatchedModelType("qwen3"); err != nil {
+			t.Fatalf("expected 'qwen3' to be valid, got %v", err)
+		}
+		if err := validateBatchedModelType(""); err == nil || !strings.Contains(err.Error(), "modelType cannot be empty") {
+			t.Fatalf("expected empty error, got %v", err)
+		}
+		if err := validateBatchedModelType("qwen3\x00bad"); err == nil || !strings.Contains(err.Error(), "modelType cannot contain NUL bytes") {
+			t.Fatalf("expected NUL error, got %v", err)
+		}
+		if err := validateBatchedModelType("gemma"); err == nil || !strings.Contains(err.Error(), "invalid model type") {
+			t.Fatalf("expected invalid model type error, got %v", err)
 		}
 	})
 }
@@ -331,8 +355,7 @@ func TestMultiModalValidationRunsInBothModes(t *testing.T) {
 	})
 
 	t.Run("out-of-range ABI values rejected", func(t *testing.T) {
-		if math.MaxInt > math.MaxInt32 {
-			huge := int(int64(1) << 32)
+		if huge, ok := huge64BitInt(); ok {
 			if _, err := MultiModalEncodeText("valid", huge); err == nil ||
 				!strings.Contains(err.Error(), "exceeds maximum 32-bit integer range") {
 				t.Fatalf("MultiModalEncodeText: want ABI range error, got %v", err)
@@ -445,12 +468,23 @@ func TestSharedEmbeddingValidationRunsInBothModes(t *testing.T) {
 			!strings.Contains(err.Error(), "text cannot be empty") {
 			t.Fatalf("GetEmbeddingBatched: want empty text error, got %v", err)
 		}
+		if _, err := GetEmbeddingBatched("valid", "", 0); err == nil ||
+			!strings.Contains(err.Error(), "modelType cannot be empty") {
+			t.Fatalf("GetEmbeddingBatched: want empty modelType error, got %v", err)
+		}
+		if _, err := GetEmbeddingBatched("valid", "qwen3\x00bad", 0); err == nil ||
+			!strings.Contains(err.Error(), "modelType cannot contain NUL bytes") {
+			t.Fatalf("GetEmbeddingBatched: want NUL modelType error, got %v", err)
+		}
+		if _, err := GetEmbeddingBatched("valid", "gemma", 0); err == nil ||
+			!strings.Contains(err.Error(), "invalid model type") {
+			t.Fatalf("GetEmbeddingBatched: want invalid modelType error, got %v", err)
+		}
 		if _, err := GetEmbeddingBatched("valid", "qwen3", -1); err == nil ||
 			!strings.Contains(err.Error(), "targetDim cannot be negative") {
 			t.Fatalf("GetEmbeddingBatched: want negative targetDim error, got %v", err)
 		}
-		if math.MaxInt > math.MaxInt32 {
-			huge := int(int64(1) << 32)
+		if huge, ok := huge64BitInt(); ok {
 			if _, err := CalculateSimilarityBatch("q", []string{"a"}, huge, "auto", 0); err == nil ||
 				!strings.Contains(err.Error(), "exceeds maximum 32-bit integer range") {
 				t.Fatalf("CalculateSimilarityBatch: want topK ABI range error, got %v", err)
@@ -489,4 +523,25 @@ func TestSharedEmbeddingValidationRunsInBothModes(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestCrossArch32BitCompileGate verifies that the candle-binding package and test suite
+// compile cleanly for 32-bit architectures (GOARCH=386) with CGO disabled.
+// This prevents compile-time constant conversions or architecture assumptions from
+// breaking cross-build contracts.
+func TestCrossArch32BitCompileGate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping cross-architecture compilation gate in short mode")
+	}
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("go binary not found in PATH")
+	}
+	outputBinary := filepath.Join(t.TempDir(), "candle_binding_32bit.test")
+	cmd := exec.Command(goBin, "test", "-c", "-o", outputBinary, ".")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOARCH=386")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("cross-compilation for 32-bit (GOARCH=386) failed: %v\nOutput:\n%s", err, string(out))
+	}
 }

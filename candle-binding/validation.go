@@ -216,3 +216,14 @@ func validateEmbeddingSimilarity(text1, text2, modelType string, targetDim int) 
 	}
 	return nil
 }
+
+// validateBatchedModelType validates the modelType argument for GetEmbeddingBatched.
+func validateBatchedModelType(modelType string) error {
+	if err := validateRequiredText("modelType", modelType); err != nil {
+		return err
+	}
+	if modelType != "qwen3" {
+		return fmt.Errorf("invalid model type: %s (currently only 'qwen3' supports batching)", modelType)
+	}
+	return nil
+}
