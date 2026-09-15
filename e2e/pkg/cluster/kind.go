@@ -280,7 +280,7 @@ func (k *KindCluster) getHostMountPath() (string, error) {
 		// On macOS, Docker Desktop only allows mounting from specific locations
 		// Use /tmp which is allowed by default
 		tmpDir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
-		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
 		}
 		k.log("Using macOS-compatible mount path: %s", tmpDir)
@@ -288,7 +288,7 @@ func (k *KindCluster) getHostMountPath() (string, error) {
 	case "windows":
 		// On Windows, use temp directory
 		tmpDir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
-		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
 		}
 		k.log("Using Windows-compatible mount path: %s", tmpDir)
@@ -310,13 +310,13 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 	// Ensure ML models mount directory exists BEFORE Kind cluster creation
 	// This is required because Kind mounts are set up at cluster creation time
 	mlModelsDir := "/tmp/kind-ml-models"
-	if err := os.MkdirAll(mlModelsDir, 0755); err != nil {
+	if err = os.MkdirAll(mlModelsDir, 0o755); err != nil {
 		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, err)
 	}
 
 	workspaceModelsMount := ""
 	if k.WorkspaceModelsDir != "" {
-		if err := os.MkdirAll(k.WorkspaceModelsDir, 0755); err != nil {
+		if err = os.MkdirAll(k.WorkspaceModelsDir, 0o755); err != nil {
 			return "", fmt.Errorf("failed to create workspace models directory %s: %w", k.WorkspaceModelsDir, err)
 		}
 		workspaceModelsMount = fmt.Sprintf(`

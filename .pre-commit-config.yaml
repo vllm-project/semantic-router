@@ -19,7 +19,7 @@ repos:
     hooks:
       - id: go-fmt
         name: go fmt
-        entry: gofmt -w
+        entry: python3 tools/agent/scripts/go_fmt.py
         language: system
         files: \.go$
 

@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
@@ -39,12 +39,11 @@ func reconcileGatewayIntegration(ctx context.Context, c client.Client, sr *vllmv
 	}
 
 	// Validate Gateway exists
-	gateway := &gatewayv1.Gateway{}
+	gateway := &gwapiv1.Gateway{}
 	err := c.Get(ctx, types.NamespacedName{
 		Name:      sr.Spec.Gateway.ExistingRef.Name,
 		Namespace: sr.Spec.Gateway.ExistingRef.Namespace,
 	}, gateway)
-
 	if err != nil {
 		logger.Error(err, "Gateway not found", "name", sr.Spec.Gateway.ExistingRef.Name, "namespace", sr.Spec.Gateway.ExistingRef.Namespace)
 		return "", fmt.Errorf("gateway %s/%s not found: %w", sr.Spec.Gateway.ExistingRef.Namespace, sr.Spec.Gateway.ExistingRef.Name, err)

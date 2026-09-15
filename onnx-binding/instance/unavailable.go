@@ -24,7 +24,9 @@ func (*EmbeddingModel) Clone() (*EmbeddingModel, error)           { return nil, 
 func LoadMultiModal(Options) (*MultiModalModel, error)            { return nil, unavailable }
 func (*MultiModalModel) Clone() (*MultiModalModel, error)         { return nil, unavailable }
 func (*SequenceClassifier) Classify(string) (Distribution, error) { return Distribution{}, unavailable }
-func (*TokenClassifier) Detect(string) (TokenSpans, error)        { return TokenSpans{}, unavailable }
+
+func (*TokenClassifier) Detect(string) (TokenSpans, error) { return TokenSpans{}, unavailable }
+
 func (*EmbeddingModel) Encode(string, int, int) (EmbeddingResult, error) {
 	return EmbeddingResult{}, unavailable
 }

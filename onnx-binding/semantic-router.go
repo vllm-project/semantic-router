@@ -254,9 +254,7 @@ type ModelInfo struct {
 // Initialization Functions
 // ============================================================================
 
-var (
-	initMu sync.Mutex
-)
+var initMu sync.Mutex
 
 // InitMmBertEmbeddingModel initializes the mmBERT embedding model
 // This is the ONNX Runtime equivalent of candle_binding.InitMmBertEmbeddingModel
@@ -1143,6 +1141,7 @@ func (s *MLPSelector) IsTrained() bool { return false }
 func (s *MLPSelector) ToJSON() (string, error) {
 	return "", errors.New("MLP not supported in ONNX binding")
 }
+
 func (s *MLPSelector) Select(query []float64) (string, error) {
 	return "", errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
 }
