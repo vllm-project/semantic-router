@@ -111,6 +111,10 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// UpstreamBackendAddress is the selected backend host:port for this request.
+	// It is recorded after successful inference in the KV address registry (issue #2976).
+	UpstreamBackendAddress string
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64

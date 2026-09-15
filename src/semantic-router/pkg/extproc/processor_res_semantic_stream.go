@@ -389,6 +389,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		return
 	}
 	r.updateResponseCache(ctx, encoded)
+	r.updateKVAddressRegistry(ctx)
 	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.persistResponseObject(ctx)
 	r.attachRouterReplayResponse(ctx, encoded, true)

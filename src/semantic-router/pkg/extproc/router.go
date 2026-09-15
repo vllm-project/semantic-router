@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -41,21 +42,23 @@ type OpenAIRouter struct {
 	Classifier           *classification.Classifier
 	// RecipeClassifiers selects the isolated classifier graph for each routing
 	// request. Classifier is the default-recipe accessor.
-	RecipeClassifiers     *classification.RecipeClassifiers
-	ClassificationService *services.ClassificationService
-	Cache                 cache.CacheBackend
-	ResponseCache         *cache.ResponseCacheService
-	responseCacheMu       sync.Mutex
-	ContextCompression    *contextcompression.Service
-	CompressionRecovery   contextcompression.RecoveryStore
-	CompressionEmbedding  embedding.Provider
-	CompressionScorer     contextcompression.RelevanceScorer
-	compressionScorers    map[string]contextcompression.RelevanceScorer
-	contextCompressionMu  sync.Mutex
-	ToolsDatabase         *tools.ToolsDatabase
-	ToolsRegistry         *tools.Registry // retriever strategy registry
-	toolSelectionDBMu     sync.Mutex
-	toolSelectionDBByPath map[string]*tools.ToolsDatabase
+	RecipeClassifiers      *classification.RecipeClassifiers
+	ClassificationService  *services.ClassificationService
+	Cache                  cache.CacheBackend
+	ResponseCache          *cache.ResponseCacheService
+	responseCacheMu        sync.Mutex
+	kvAddressRegistryStore kvtransfer.AddressRegistry
+	kvAddressRegistryMu    sync.Mutex
+	ContextCompression     *contextcompression.Service
+	CompressionRecovery    contextcompression.RecoveryStore
+	CompressionEmbedding   embedding.Provider
+	CompressionScorer      contextcompression.RelevanceScorer
+	compressionScorers     map[string]contextcompression.RelevanceScorer
+	contextCompressionMu   sync.Mutex
+	ToolsDatabase          *tools.ToolsDatabase
+	ToolsRegistry          *tools.Registry // retriever strategy registry
+	toolSelectionDBMu      sync.Mutex
+	toolSelectionDBByPath  map[string]*tools.ToolsDatabase
 	// toolEmbedder embeds request-supplied tool definitions for tool_selection
 	// filter mode, memoizing them across requests. Set once at router
 	// construction and read-only afterwards; nil (remote provider construction
