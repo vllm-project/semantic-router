@@ -6570,7 +6570,10 @@
   "properties": {
     "version": {
       "type": "string",
-      "const": "v0.3"
+      "enum": [
+        "",
+        "v0.3"
+      ]
     },
     "listeners": {
       "items": {

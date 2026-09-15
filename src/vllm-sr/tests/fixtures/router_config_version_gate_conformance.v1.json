@@ -1,0 +1,97 @@
+{
+  "schema_version": "router-config-version-gate-conformance.v1",
+  "current_contract": {
+    "accepted_versions": [
+      "v0.3"
+    ],
+    "cases": [
+      {
+        "id": "supported-version",
+        "version_present": true,
+        "version": "v0.3",
+        "expected_valid": true
+      },
+      {
+        "id": "version-key-absent",
+        "version_present": false,
+        "version": null,
+        "expected_valid": true
+      },
+      {
+        "id": "version-empty-string",
+        "version_present": true,
+        "version": "",
+        "expected_valid": true
+      },
+      {
+        "id": "version-whitespace-only",
+        "version_present": true,
+        "version": "   ",
+        "expected_valid": false
+      },
+      {
+        "id": "version-padded-supported-version",
+        "version_present": true,
+        "version": " v0.3 ",
+        "expected_valid": false
+      },
+      {
+        "id": "version-older-contract",
+        "version_present": true,
+        "version": "v0.2",
+        "expected_valid": false
+      },
+      {
+        "id": "version-future-contract",
+        "version_present": true,
+        "version": "v99",
+        "expected_valid": false
+      },
+      {
+        "id": "version-unprefixed",
+        "version_present": true,
+        "version": "0.3",
+        "expected_valid": false
+      },
+      {
+        "id": "version-not-a-version-string",
+        "version_present": true,
+        "version": "latest",
+        "expected_valid": false
+      }
+    ]
+  },
+  "retained_contract_simulation": {
+    "description": "A release that bumps the written contract keeps the outgoing one readable for one cycle. This section simulates that build (accepted_versions has two entries) so the corpus also covers the 'retained' category without needing a real second contract to exist yet.",
+    "accepted_versions": [
+      "v0.4",
+      "v0.3"
+    ],
+    "cases": [
+      {
+        "id": "written-contract",
+        "version_present": true,
+        "version": "v0.4",
+        "expected_valid": true
+      },
+      {
+        "id": "retained-outgoing-contract",
+        "version_present": true,
+        "version": "v0.3",
+        "expected_valid": true
+      },
+      {
+        "id": "version-key-absent",
+        "version_present": false,
+        "version": null,
+        "expected_valid": true
+      },
+      {
+        "id": "dropped-contract",
+        "version_present": true,
+        "version": "v0.2",
+        "expected_valid": false
+      }
+    ]
+  }
+}

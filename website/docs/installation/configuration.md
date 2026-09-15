@@ -112,8 +112,8 @@ under the current one.
 | `version` | Behavior |
 | --- | --- |
 | `v0.3` | Accepted. The contract this build reads and writes. |
-| Absent | Accepted, with a startup warning, and interpreted as `v0.3`. |
-| Any other value | Rejected before the document is interpreted. |
+| Absent, or present and empty (`""`) | Accepted, with a startup warning, and interpreted as `v0.3`. |
+| Any other value, including padding or a differently spelled version | Rejected before the document is interpreted. |
 
 A rejected document fails with the offending field path and the set the running
 build accepts:
@@ -127,6 +127,11 @@ the Dashboard and Operator config paths all apply the same gate, so a document
 that validates on one surface is one the Router will read on the others. Every
 canonical document those surfaces emit is stamped with the version they accept,
 so an exported configuration always loads back.
+
+The generated JSON Schema that the CLI and Dashboard validate against
+(`router-config-v0.3.schema.json`) enumerates this same accepted set, plus the
+empty-string fallback, rather than restating it: the schema is generated from
+the Router's own accepted-version list, so the two cannot drift apart.
 
 ### Contract bumps
 

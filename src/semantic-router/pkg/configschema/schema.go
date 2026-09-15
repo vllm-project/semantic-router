@@ -228,7 +228,14 @@ func addRecipeRoutingDefinition(root *jsonschema.Schema) {
 }
 
 func setCoreEnums(root *jsonschema.Schema) {
-	setPropertyConst(root, root, "version", ConfigVersion)
+	// The document is valid for any contract this build reads, not only the one
+	// it writes. A release that keeps the outgoing contract readable has to say
+	// so here too, or the CLI would reject a file the Router loads. "" is listed
+	// alongside them because the Router's own gate (canonical_version.go)
+	// treats an explicit empty version the same as an absent one; the schema has
+	// no `required` for version, so an omitted key already validates, and
+	// without "" here an explicit `version: ""` would not.
+	setPropertyEnum(root, "version", append([]string{""}, routerconfig.AcceptedCanonicalVersions()...))
 	setDefinitionPropertyEnum(root, "CanonicalRouterGlobal", "config_source", []string{
 		string(routerconfig.ConfigSourceFile),
 		string(routerconfig.ConfigSourceKubernetes),
@@ -305,12 +312,24 @@ func setCoreEnums(root *jsonschema.Schema) {
 	addRouterLearningStateStoreCondition(root)
 }
 
-func setPropertyConst(_ *jsonschema.Schema, owner *jsonschema.Schema, property string, value any) {
+func setPropertyEnum(owner *jsonschema.Schema, property string, values []string) {
 	if owner == nil || owner.Properties == nil {
 		return
 	}
-	if field, ok := owner.Properties.Get(property); ok {
-		field.Const = value
+	field, ok := owner.Properties.Get(property)
+	if !ok {
+		return
+	}
+	// A single legal value stays a const rather than a one-element enum, so a
+	// schema consumer sees the same shape it would from a plain literal field.
+	if len(values) == 1 {
+		field.Const = values[0]
+		return
+	}
+	field.Const = nil
+	field.Enum = make([]any, 0, len(values))
+	for _, value := range values {
+		field.Enum = append(field.Enum, value)
 	}
 }
 
