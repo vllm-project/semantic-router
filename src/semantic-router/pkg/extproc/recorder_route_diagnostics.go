@@ -30,6 +30,7 @@ func buildReplayRouteDiagnostics(
 		SelectionMethod:                ctx.VSRSelectionMethod,
 		SelectionReasoning:             ctx.VSRSelectionReasoning,
 		FusionQuorum:                   ctx.VSRFusionQuorum,
+		Looper:                         ctx.VSRLooperDiagnostics,
 		PromptHelperModel:              ctx.VSRPromptHelperModel,
 		PromptHelperPromptTokens:       ctx.VSRPromptHelperPromptTokens,
 		PromptHelperCompletionTokens:   ctx.VSRPromptHelperCompletionTokens,
@@ -61,6 +62,7 @@ func buildReplayRouteDiagnostics(
 		ContextCompressionQuality:      ctx.ContextCompressionQuality,
 		ContextCompressionFallback:     ctx.ContextCompressionFallback,
 		ContextCompressionCostSaved:    ctx.ContextCompressionCostSaved,
+		RequestDemandSnapshots:         cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 	}

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -572,7 +573,7 @@ func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t
 		},
 	}
 
-	resp, err := service.ClassifyIntentForEval(req)
+	resp, err := service.ClassifyIntentForEval(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 

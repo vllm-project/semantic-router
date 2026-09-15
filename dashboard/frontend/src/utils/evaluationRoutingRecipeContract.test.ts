@@ -234,6 +234,29 @@ describe('routing recipe plan contract', () => {
     expect(isEvaluationRoutingRecipePlan(invalidPlan, mixtureBase)).toBe(false)
   })
 
+  it('derives request-time signal support from the Router contract', () => {
+    const inputModalityPlan = buildEvaluationRoutingRecipePlan(
+      mixtureBase,
+      [{ id: 'input_modality:image_input', value_kind: 'numeric' }],
+      [],
+    )
+    expect(isEvaluationRoutingRecipePlan(inputModalityPlan, mixtureBase)).toBe(true)
+
+    const responseOnlyPlan = buildEvaluationRoutingRecipePlan(
+      mixtureBase,
+      [{ id: 'hallucination:response', value_kind: 'numeric' }],
+      [],
+    )
+    expect(isEvaluationRoutingRecipePlan(responseOnlyPlan, mixtureBase)).toBe(false)
+
+    const unknownComplexitySuffixPlan = buildEvaluationRoutingRecipePlan(
+      mixtureBase,
+      [{ id: 'complexity:needs_reasoning:extreme', value_kind: 'numeric' }],
+      [],
+    )
+    expect(isEvaluationRoutingRecipePlan(unknownComplexitySuffixPlan, mixtureBase)).toBe(false)
+  })
+
   it('requires the Mixture producer top-k schedule rather than an arbitrary increasing subset', () => {
     const incomplete = { ...plan, top_k: [1] }
     expect(isEvaluationRoutingRecipePlan(incomplete, mixtureBase)).toBe(false)

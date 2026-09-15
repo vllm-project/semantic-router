@@ -6,6 +6,13 @@ status: Implemented
 ---
 
 > **Status:** Implemented · **Created:** 2026-09-04
+>
+> The catalog architecture in this record remains current. Its original
+> benchmark set, index weights, coverage threshold, and inventory counts are a
+> historical snapshot and are superseded by
+> [Open Intelligence Architecture](./open-intelligence-index-and-model-arena).
+> Use the [Intelligence Index](../benchmarking/open-intelligence-index) for the
+> active 1.0 contract.
 
 ## Problem
 
@@ -48,15 +55,15 @@ and a recommended model reference is not a complete built-in model card.
 The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented snapshot compiles 60
-serving providers, three protocol definitions, 83 physical Model Cards, five
-virtual Model Cards, 168 provider-owned model mappings, 64 benchmark
-definitions, and 1,360 exact evaluation records. The five default benchmark
-components produce 1,155 explicit slots over 231 model/effort rows; 124 slots
+serving providers, three protocol definitions, 84 physical Model Cards, five
+virtual Model Cards, 169 provider-owned model mappings, 64 benchmark
+definitions, and 1,365 exact evaluation records. The five default benchmark
+components produce 1,325 explicit slots over 265 model/effort rows; 125 slots
 are currently measured and every other slot stays explicitly missing. Support
 tier, lifecycle, and conformance remain independent, so catalog inclusion is
 not flattened into a native-support or benchmark claim.
 
-All 83 physical cards pass the hard admission rule: at least one exact
+All 84 physical cards pass the hard admission rule: at least one exact
 model, reasoning-effort, and evidence-provenance bucket contains five distinct
 benchmark identities.
 That does not mean every runtime-selectable effort has five published results.
@@ -74,8 +81,9 @@ first 20 individual models from any ranking or endpoint inventory. It focuses
 on roughly twenty mainstream creator companies (22 in this snapshot) and
 represents roughly their latest three generations or product lines. Closely
 related sizes or reasoning variants are included only when they are separately
-selectable and materially useful to operators. GPT-6 Astra remains
-intentionally absent for the separate Day-0 example change.
+selectable and materially useful to operators. GPT-6 Astra is added separately
+as the focused model-onboarding example rather than being folded into the
+baseline change.
 
 | Model creator (`publisher`) | Recent generations and representative lines | Models |
 | --- | --- | ---: |
@@ -164,8 +172,8 @@ and representative.
   model-and-reasoning-effort record.
 - It does not require every new model to have a composite score on release day;
   missing evidence remains explicitly unavailable.
-- GPT-6 Astra is intentionally excluded. It is the separate reference model
-  contribution after this architecture and baseline-catalog change.
+- GPT-6 Astra was intentionally excluded from the architecture baseline and is
+  added by the separate representative model-onboarding contribution.
 
 ## Design principles
 
@@ -189,14 +197,15 @@ and representative.
   fields, plus redundant names inside `providers.defaults`, are cleaned up.
 - **Less configuration, not less control.** Built-in facts materialize
   automatically, while self-hosted models may still provide handwritten cards,
-  reasoning behavior, evaluations, endpoint overrides, and pricing.
+  reasoning behavior, model-linked evaluation records, endpoint overrides, and
+  pricing.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   Builtins["Repository catalog\nprotocols · providers · models · provider mappings\nbehaviors · benchmarks · indices"]
-  User["User config\nprovider bindings · model aliases\noptional cards and evaluations"]
+  User["User config\nprovider bindings · model aliases\noptional cards · evaluation records"]
   Compiler["Generator + materializer\nvalidate · merge · bind · compute"]
   Registry["Effective Registry\nimmutable typed snapshot + provenance"]
   Router["Router\neligibility · transport · selection"]
@@ -447,31 +456,33 @@ request alias.
 
 ### Optional custom evaluations
 
-Evaluations are card metadata, so optional user-authored measurements live next
-to the relevant handwritten card. The small surface has two required fields:
+Definitions and measurements share one top-level `evaluation` owner. Records
+reference canonical Model Card identities rather than being embedded in routing
+metadata:
 
 ```yaml
-routing:
-  modelCards:
-    - name: private-reasoner
-      evaluations:
-        - benchmark: idavidrein/gpqa-diamond@1.0.0
-          benchmark_profile: published-standard
-          reasoning_effort: high
-          metrics:
-            accuracy: 0.72
-        - benchmark: acme/support-bench@1
-          metrics:
-            resolution_rate: 0.82
-          source: https://evals.example/runs/42
-          measured_at: 2026-09-01
-          metadata:
-            runtime: vllm
-            quantization: awq
+evaluation:
+  records:
+    - model: private-reasoner
+      benchmark: idavidrein/gpqa-diamond@1.0.0
+      benchmark_profile: published-standard
+      reasoning_effort: high
+      metrics:
+        accuracy: 0.72
+    - model: private-reasoner
+      benchmark: acme/support-bench@1
+      metrics:
+        resolution_rate: 0.82
+      source: https://evals.example/runs/42
+      measured_at: 2026-09-01
+      metadata:
+        runtime: vllm
+        quantization: awq
 ```
 
-`benchmark` is an explicit identity and `metrics` is an open numeric map, so
-multi-metric benchmarks do not require another schema revision.
+`model`, `benchmark`, and `metrics` are required. `model` is the custom model
+name or the built-in `catalog` identity. The open numeric metric map supports
+multi-metric benchmarks without another schema revision.
 `benchmark_profile` selects an exact benchmark profile and
 `reasoning_effort` scopes the measurement to the effort that produced it;
 both are optional. A known benchmark uses its repository default profile when
@@ -501,13 +512,14 @@ or implicitly add it to a composite index.
 
 The benchmark gallery derives its filters from catalog-owned `tags`. `All`
 remains the default unfiltered view; `Core` is the first semantic filter and
-contains exactly MMLU-Pro, GPQA Diamond, Humanity's Last Exam, SWE-bench
-Verified, Terminal-Bench 2.1, and SciCode. Domain filters follow it, and the UI
-does not maintain a second benchmark list.
+contains exactly MMLU-Pro, GPQA Diamond, Humanity's Last Exam, LiveCodeBench,
+SciCode, and Terminal-Bench 2.1. Domain filters follow it, and the UI does not
+maintain a second benchmark list.
 
-An unavailable score stays unavailable. Selection algorithms omit the quality
-factor for that candidate and renormalize the remaining available factors; they
-do not invent zero, a neutral score, or a parameter-size estimate.
+An unavailable score stays unavailable. A route explicitly chooses either to
+exclude candidates missing its selected index or to disable quality for the
+entire pool. It never invents zero, a neutral score, or a parameter-size
+estimate, and never changes factor weights for only one candidate.
 
 ## Protocol and backend API ownership
 
@@ -564,7 +576,11 @@ A provider-model mapping may further declare `reasoning_modes` or
 new user configuration. They prevent an API-specific surface from accepting a
 mode that is valid for a self-hosted runtime but invalid on that provider; the
 materializer rejects a configured decision before startup when any selected
-backend cannot carry its requested control.
+backend cannot carry its requested control. When one provider exposes the same
+model through several protocols, `reasoning_efforts_by_protocol` can only
+narrow that common set for a named bound protocol. For example, an effort that
+is Responses-only is rejected during startup for a Chat binding instead of
+being sent upstream as a known-invalid request.
 
 The public decision contract remains only `use_reasoning`, optional
 `reasoning_mode`, and optional `reasoning_effort`. At the final dispatch
@@ -651,8 +667,9 @@ The compiler performs the following deterministic stages:
    Dashboard, and website projections guarded by a generated-diff check.
 4. The Router loads the embedded snapshot and then reads
    `providers.models` aliases/backend references, optional
-   `routing.modelCards` overlays/custom cards, and optional evaluations from
-   the v0.3 hierarchy.
+   `routing.modelCards` overlays/custom cards, and optional benchmark
+   definitions, index DAGs, and model-linked records from top-level
+   `evaluation`.
 5. The materializer applies presence-aware field overlays while retaining
    `builtin`/`operator` field provenance.
 6. It joins every alias to one card and each backend binding to one Provider ID,
@@ -721,8 +738,8 @@ The initial population audit makes both coverage and gaps visible. The 64
 benchmark definitions retain all exact measurements as source records, while
 public Hub surfaces remove every exact benchmark/profile/metric tuple measured
 on fewer than ten distinct models. The default five-component matrix
-materializes 1,155 slots over 231
-model/effort rows. At this snapshot, 124 of those slots have an exact
+materializes 1,325 slots over 265
+model/effort rows. At this snapshot, 125 of those slots have an exact
 measurement. Other rows remain explicitly `missing`, `failed`,
 `not_applicable`, or `withheld`; none is fabricated as zero.
 
@@ -840,7 +857,7 @@ The migration removes the bare scalar rather than assigning it a new meaning:
 
 | Current behavior | Replacement |
 | --- | --- |
-| `routing.modelCards[].quality_score` | `routing.modelCards[].evaluations[]`, then a computed built-in `IndexResult` |
+| `routing.modelCards[].quality_score` | `evaluation.records[]`, then a computed built-in `IndexResult` |
 | MMLU-Pro average written directly into `quality_score` | Versioned MMLU-Pro `EvaluationRecord` |
 | Multi-factor selection reads one static scalar | `ScoreResolver(model, index)` returns value, coverage, status, and provenance |
 | Looper estimates quality from parameter count | Removed; missing evidence follows routing policy |
@@ -853,7 +870,10 @@ into user YAML. Selection uses it only when candidates have comparable results.
 For a missing result, the quality factor is omitted and the remaining available
 factors are renormalized. An operator rating can be represented explicitly as
 `vllm-sr/operator-rating@1.0.0`, but it is not presented as public benchmark
-evidence or an overall Model Hub rank.
+evidence. The later
+[Open Intelligence Index 1.0 and Unified Model Arena](./open-intelligence-index-and-model-arena)
+supersedes this document's initial benchmark pool, coverage threshold, and
+no-overall-rank decision.
 
 ## Dashboard experience
 
@@ -893,9 +913,9 @@ The Add Model workflow keeps provider cards and logos. Its data source changes:
 3. Selecting a built-in model saves `providers.models[].catalog`, pre-fills
    provider model ID when a provider mapping supplies one, and does not emit generated
    Model Card defaults.
-4. Selecting Custom omits `catalog` and exposes the existing handwritten
-   `routing.modelCards` fields, including optional evaluations and custom
-   reasoning.
+4. Selecting Custom omits `catalog` and exposes handwritten
+   `routing.modelCards` metadata and custom reasoning. Evaluation records are
+   managed independently under top-level `evaluation.records[]`.
 5. The model inventory labels built-in versus Custom identity and lets an
    operator intentionally edit a generated card override.
 6. The saved YAML contains only the existing provider/model bindings,
@@ -929,7 +949,10 @@ recommended backend pool.
 
 ### Benchmark-specific comparisons
 
-There is no composite model rank. Model Hub renders a benchmark gallery and
+This initial implementation did not expose a composite model rank. The later
+[Open Intelligence Index 1.0 and Unified Model Arena](./open-intelligence-index-and-model-arena)
+adds a complete-case Arena while retaining the benchmark gallery described
+here. The gallery
 shows every admitted benchmark by default. Catalog-owned domain tags narrow the
 gallery without inventing a second UI taxonomy; model search and creator filters
 apply across all visible panels. Each benchmark pins one deterministic,
@@ -1063,7 +1086,7 @@ field cleanups:
 | `providers.defaults.default_model` | `providers.defaults.model` |
 | `providers.defaults.default_reasoning_effort` | `providers.defaults.reasoning_effort` |
 | `providers.defaults.reasoning_families` + `providers.models[].reasoning_family` | Built-in family from `catalog`, or local `providers.models[].reasoning` |
-| `routing.modelCards[].quality_score` | `routing.modelCards[].evaluations[]` |
+| `routing.modelCards[].quality_score` | `evaluation.records[]` |
 | `backend_refs[].type` / free-form provider spelling | `backend_refs[].provider` using a catalog Provider ID |
 | Router-owned `api_format: anthropic` model with the legacy implicit public endpoint | Explicit `backend_refs[].provider: anthropic`; `api_format` remains only the wire format |
 
@@ -1073,8 +1096,9 @@ hierarchy remain valid. The explicit migration command rewrites only the fields
 above. A legacy custom reasoning-family definition is copied in full into each
 referencing model's inline `reasoning` block; a family reference without an
 operator definition remains a built-in family reference. A legacy scalar
-becomes a `vllm-sr/operator-rating@1.0.0` evaluation so it is not misrepresented
-as a public benchmark result. The Anthropic endpoint rewrite runs only in the
+becomes a top-level `evaluation.records[]` item for
+`vllm-sr/operator-rating@1.0.0`, so it is not misrepresented as a public
+benchmark result. The Anthropic endpoint rewrite runs only in the
 explicit migration path when the Router owns (or historically synthesized) a
 listener; an explicit `listeners: []` external-gateway configuration remains
 transport-free. Steady-state loading rejects the retired fields after migration.
@@ -1133,9 +1157,9 @@ Protocol and provider adapters remain in narrow runtime packages.
 | 5 | Dashboard catalog API/Add Model migration and website Models page | Logos, forms, Model Hub, and benchmark comparisons consume generated data |
 | 6 | Model/provider contributor guide and repository gates | A compatible model/provider change has one authored source path |
 
-The architecture PR also establishes the initial physical-model baseline. A
-separate follow-up adds GPT-6 Astra as the focused, reviewable model-support
-reference example.
+The architecture change establishes the initial physical-model baseline. The
+focused GPT-6 Astra follow-up demonstrates the complete, reviewable
+model-onboarding path.
 
 ## Acceptance criteria
 

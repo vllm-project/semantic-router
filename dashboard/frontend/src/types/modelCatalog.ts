@@ -89,6 +89,7 @@ export interface CatalogModelBinding {
     | 'deepseek_thinking'
   reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
   reasoning_efforts?: string[]
+  reasoning_efforts_by_protocol?: Record<string, string[]>
   pricing?: Record<string, string | number | boolean>
   restrictions?: Record<string, unknown>
   lifecycle: ModelCatalogLifecycle
@@ -229,6 +230,7 @@ export interface CatalogIndexComponent {
   benchmark?: string
   metric?: string
   benchmark_profile?: string
+  benchmark_profiles?: string[]
   index?: string
   weight: number
   normalization: CatalogMetricNormalization
@@ -253,13 +255,14 @@ export interface CatalogIndexResult {
   model: string
   reasoning_effort: string
   index: string
-  status: 'available'
-  score: number
+  status: 'available' | 'partial' | 'missing'
+  score: number | null
   coverage: number
   components: Array<{
     benchmark?: string
     metric?: string
     benchmark_profile?: string
+    benchmark_profiles?: string[]
     index?: string
     evaluation?: string
     weight: number

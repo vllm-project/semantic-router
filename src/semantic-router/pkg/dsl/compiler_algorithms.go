@@ -243,6 +243,9 @@ func fillFusionModelFields(cfg *config.FusionAlgorithmConfig, fields map[string]
 }
 
 func fillFusionRuntimeFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getStringField(fields, "analysis_mode"); ok {
+		cfg.AnalysisMode = v
+	}
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
 	}
@@ -478,11 +481,27 @@ func (c *Compiler) compileMultiFactorAlgo(fields map[string]Value) *config.Multi
 	cfg := &config.MultiFactorSelectionConfig{}
 	cfg.Weights = parseMultiFactorWeights(fields)
 	cfg.SLO = parseMultiFactorSLO(fields)
+	cfg.Quality = parseQualityEvidence(fields)
 	if v, ok := getIntField(fields, "latency_percentile"); ok {
 		cfg.LatencyPercentile = v
 	}
 	if v, ok := getStringField(fields, "on_no_candidates"); ok {
 		cfg.OnNoCandidates = v
+	}
+	return cfg
+}
+
+func parseQualityEvidence(fields map[string]Value) *config.QualityEvidenceConfig {
+	quality, ok := fields["quality"].(ObjectValue)
+	if !ok {
+		return nil
+	}
+	cfg := &config.QualityEvidenceConfig{}
+	if v, ok := getStringField(quality.Fields, "index"); ok {
+		cfg.Index = v
+	}
+	if v, ok := getStringField(quality.Fields, "on_missing"); ok {
+		cfg.OnMissing = v
 	}
 	return cfg
 }

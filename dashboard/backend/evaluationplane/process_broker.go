@@ -35,7 +35,7 @@ const (
 	workerBrokerListModels                 = "models.list"
 	workerBrokerRoutedChatCompletion       = "routed-chat.completions"
 	workerBrokerArmChatCompletion          = "arm-chat.completions"
-	workerBrokerRouterEvaluate             = "router.evaluate"
+	workerBrokerRoutingPreview             = "routing.preview"
 	workerBrokerAgentTaskLedger            = "agent-task.ledger"
 	workerBrokerFaultRecoveryLedger        = "fault-recovery.ledger"
 	workerBrokerHardPolicyLedger           = "hard-policy.ledger"
@@ -106,7 +106,7 @@ func newWorkerHTTPBroker(manifest RunManifest, credentials workerBrokerCredentia
 		add(workerBrokerArmChatCompletion, http.MethodPost, manifest.Target.EnvoyURL+"/v1/chat/completions", credentials.envoy, 0)
 	}
 	if manifest.Target.RouterAPIURL != "" {
-		add(workerBrokerRouterEvaluate, http.MethodPost, manifest.Target.RouterAPIURL+"/api/v1/eval?trace=true", credentials.router, 0)
+		add(workerBrokerRoutingPreview, http.MethodPost, manifest.Target.RouterAPIURL+"/api/v1/routing/preview?trace=true", credentials.router, 0)
 	}
 	if endpoint := manifest.Target.AgentTaskLedger; endpoint != nil {
 		add(workerBrokerAgentTaskLedger, http.MethodGet, endpoint.URL, credentials.agentTaskLedger, endpointTimeoutMS(endpoint))

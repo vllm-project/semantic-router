@@ -22,8 +22,8 @@ LANGUAGE_CODES = {
 # Registry of all MoM models (merged as well as LoRA)
 MODEL_REGISTRY = {
     "feedback": {
-        "id": "llm-semantic-router/mmbert-feedback-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert-feedback-detector-lora",
+        "id": "llm-semantic-router/mmbert32k-feedback-detector-merged",
+        "lora_id": "llm-semantic-router/mmbert32k-feedback-detector-lora",
         "type": "text_classification",
         "hf_dataset": "llm-semantic-router/feedback-detector-dataset",
         "labels": ["SAT", "NEED_CLARIFICATION", "WRONG_ANSWER", "WANT_DIFFERENT"],
@@ -32,8 +32,8 @@ MODEL_REGISTRY = {
         "split": "validation",
     },
     "jailbreak": {
-        "id": "llm-semantic-router/mmbert-jailbreak-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert-jailbreak-detector-lora",
+        "id": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+        "lora_id": "llm-semantic-router/mmbert32k-jailbreak-detector-lora",
         "type": "text_classification",
         "hf_dataset": "llm-semantic-router/jailbreak-detection-dataset",
         "labels": ["safe", "unsafe"],
@@ -42,8 +42,8 @@ MODEL_REGISTRY = {
         "split": "test",
     },
     "fact-check": {
-        "id": "llm-semantic-router/mmbert-fact-check-merged",
-        "lora_id": "llm-semantic-router/mmbert-fact-check-lora",
+        "id": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
+        "lora_id": "llm-semantic-router/mmbert32k-factcheck-classifier-lora",
         "type": "text_classification",
         "hf_dataset": "llm-semantic-router/fact-check-classification-dataset",
         "labels": ["NO_FACT_CHECK_NEEDED", "FACT_CHECK_NEEDED"],
@@ -52,8 +52,8 @@ MODEL_REGISTRY = {
         "split": "test",
     },
     "intent": {
-        "id": "llm-semantic-router/mmbert-intent-classifier-merged",
-        "lora_id": "llm-semantic-router/mmbert-intent-classifier-lora",
+        "id": "llm-semantic-router/mmbert32k-intent-classifier-merged",
+        "lora_id": "llm-semantic-router/mmbert32k-intent-classifier-lora",
         "type": "text_classification",
         "hf_dataset": "TIGER-Lab/MMLU-Pro",
         "labels": [
@@ -67,18 +67,18 @@ MODEL_REGISTRY = {
             "history",
             "law",
             "math",
+            "other",
             "philosophy",
             "physics",
             "psychology",
-            "other",
         ],
         "text_col": "question",
         "label_col": "category",
         "split": "test",
     },
     "pii": {
-        "id": "llm-semantic-router/mmbert-pii-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert-pii-detector-lora",
+        "id": "llm-semantic-router/mmbert32k-pii-detector-merged",
+        "lora_id": "llm-semantic-router/mmbert32k-pii-detector-lora",
         "type": "token_classification",
         "hf_dataset": "presidio",
         "labels": [

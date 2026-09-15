@@ -16,6 +16,7 @@ var signalTutorialBuckets = map[string]string{
 	"domain":         "learned",
 	"embedding":      "learned",
 	"fact-check":     "learned",
+	"hallucination":  "learned",
 	"jailbreak":      "learned",
 	"keyword":        "heuristic",
 	"language":       "heuristic",

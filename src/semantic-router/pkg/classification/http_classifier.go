@@ -196,10 +196,18 @@ func formatHTTPClassifyConnectorError(err error) error {
 	}
 	switch connectorErr.Kind {
 	case connector.KindStatus:
+		// The remote body is deliberately not interpolated. This error reaches
+		// operational logs, and a classifier's error body routinely echoes the
+		// text it was asked to classify - a user prompt - along with whatever
+		// internal detail the endpoint chose to report. Its size is still
+		// worth reporting, because "the endpoint said nothing" and "the
+		// endpoint said more than we would read" are different faults.
+		// connector.Error.ResponseBody stays available for a caller that
+		// needs the body for something other than a log line.
 		body, truncated := connectorErr.ResponseBody()
 		return fmt.Errorf(
-			"http_classify endpoint returned status %d: %s (truncated=%t): %w",
-			connectorErr.StatusCode, string(body), truncated, connectorErr,
+			"http_classify endpoint returned status %d (response body %d bytes, truncated=%t, not logged): %w",
+			connectorErr.StatusCode, len(body), truncated, connectorErr,
 		)
 	case connector.KindResponse:
 		return fmt.Errorf("failed to read http_classify response: %w", connectorErr)

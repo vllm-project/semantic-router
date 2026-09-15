@@ -162,7 +162,7 @@ func newCampaignPairedLiveRows(caseCount int, candidateFails bool) campaignPaire
 			LatencyMS: &candidateLatency, BrokerReceipt: &candidateReceipt,
 		}
 		candidateEntry := executionAttestationEntry{
-			RequestID: requestID, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+			RequestID: requestID, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 			CaseID: caseID, AttemptID: attemptID, BrokerReceipt: candidateReceipt,
 			Success: candidateSuccess, LatencyMicroseconds: int64(candidateLatency * 1000),
 		}
@@ -179,7 +179,7 @@ func newCampaignPairedLiveRows(caseCount int, candidateFails bool) campaignPaire
 		}
 		result.candidateRecords = append(result.candidateRecords, candidateRecord)
 		result.baselineEntries = append(result.baselineEntries, executionAttestationEntry{
-			RequestID: requestID, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+			RequestID: requestID, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 			CaseID: caseID, AttemptID: attemptID, BrokerReceipt: baselineReceipt,
 			Success: true, Quality: &baselineQuality, LatencyMicroseconds: int64(baselineLatency * 1000),
 			SelectedModel: &baselineArm, ArmID: &baselineArm,

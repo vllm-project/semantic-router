@@ -504,6 +504,23 @@ vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_container_log_spool.py \
+		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
+		src/vllm-sr/tests/test_evaluation_live.py \
+		src/vllm-sr/tests/test_evaluation_worker_task_limit.py \
+		src/vllm-sr/tests/test_evaluation_worker_sandbox.py \
+		src/vllm-sr/tests/test_install_package_resolution.py \
+		src/vllm-sr/tests/test_install_runtime_behavior.py \
+		src/vllm-sr/tests/test_install_script_surface.py \
+		src/vllm-sr/tests/test_recipe_builtin.py \
+		src/vllm-sr/tests/test_reasoning_controls.py \
+		src/vllm-sr/tests/test_route_command.py \
+		src/vllm-sr/tests/test_runtime_lifecycle.py \
+		src/vllm-sr/tests/test_runtime_observability.py \
+		src/vllm-sr/tests/test_setup_bootstrap.py \
+		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
+		src/vllm-sr/tests/test_split_runtime_stack.py
 
 vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli

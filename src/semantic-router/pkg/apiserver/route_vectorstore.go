@@ -104,7 +104,7 @@ func (s *ClassificationAPIServer) handleGetVectorStore(w http.ResponseWriter, r 
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/vector_stores/")
+	id := extractPathParam(r.URL.Path, apiStorageVectorStoresPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
 		return
@@ -126,7 +126,7 @@ func (s *ClassificationAPIServer) handleUpdateVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/vector_stores/")
+	id := extractPathParam(r.URL.Path, apiStorageVectorStoresPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
 		return
@@ -154,7 +154,7 @@ func (s *ClassificationAPIServer) handleDeleteVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/vector_stores/")
+	id := extractPathParam(r.URL.Path, apiStorageVectorStoresPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
 		return

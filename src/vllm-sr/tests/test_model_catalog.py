@@ -160,6 +160,23 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert all(model.verified for model in catalog.models)
 
 
+def test_model_assets_root_supports_shallow_installed_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    packaged_root = tmp_path / "cli" / "model_assets"
+    packaged_version = packaged_root / "latest"
+    packaged_version.mkdir(parents=True)
+    packaged_version.joinpath("catalog.yaml").write_text("schema_version: test\n")
+
+    monkeypatch.setattr(model_catalog, "__file__", "/app/cli/model_catalog.py")
+    monkeypatch.setattr(model_catalog.resources, "files", lambda package: packaged_root)
+
+    assert (
+        Path(str(model_catalog._model_assets_root())).resolve()
+        == packaged_root.resolve()
+    )
+
+
 def test_catalog_virtual_projection_is_independent_of_model_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

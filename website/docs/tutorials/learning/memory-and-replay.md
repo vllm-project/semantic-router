@@ -93,7 +93,7 @@ stored in learning diagnostics. Store bounded hashes and source/status fields.
 Submit typed feedback through the replay-linked outcome endpoint:
 
 ```http
-POST /v1/router/outcomes
+POST /api/v1/observability/outcomes
 ```
 
 ```json
@@ -118,7 +118,7 @@ a typed online consumer exists.
 Run the offline loop from replay:
 
 ```bash
-vllm-sr eval recipe-learning \
+vllm-sr optimize recipe-learning \
   --replay-file replay.json \
   --recipe-file config.yaml \
   --output-dir ./router-learning-report

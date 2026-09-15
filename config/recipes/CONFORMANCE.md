@@ -69,6 +69,26 @@ authoring mechanics here and release operations in the maintainer guide.
 Each variant must contain exactly one of `query` or `messages`. Add `tools` when
 tool shape is part of the contract.
 
+## Expected model selection
+
+Selection checks use the expected algorithm's normal preview statuses by default.
+An optional `expected_selection_status` on a decision declares one exact expected
+status; a variant can override it for a specific boundary case. Supported values
+are `selected`, `planned_final`, `fallback`, `execution_required`, `unavailable`,
+and `failed`.
+
+Use an explicit `unavailable` expectation in a deployment-specific probe when
+its input exceeds every configured backend's context capacity. Such a negative
+probe must return no `selected_model` and a nonempty `selection_reason`. It still
+checks the requested model, recipe, decision, algorithm, signals, and trace.
+Missing selection methods are allowed for `unavailable` and `failed`, since
+eligibility checks can reject the request before a selector runs. Other probes
+retain their normal positive selection requirements.
+
+Record these deployment assumptions in the adapted probe's notes. Keep the
+maintained recipe's original probes and report their outcomes separately; do
+not silently turn an unexpected failure into an expected negative.
+
 ## Synthetic request fixtures
 
 Keep large request boundaries declarative and reviewable:

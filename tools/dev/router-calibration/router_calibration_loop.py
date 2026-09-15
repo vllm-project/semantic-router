@@ -58,11 +58,10 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     response = deploy_config(
         args.router_url,
         Path(args.yaml),
-        Path(args.dsl) if args.dsl else None,
     )
     activation_state = wait_for_config_activation(
         args.router_url,
-        str(response.get("runtime_hash") or ""),
+        str(response.get("generated_runtime_hash") or ""),
         timeout_seconds=args.ready_timeout,
         interval_seconds=args.ready_interval,
     )
@@ -129,15 +128,22 @@ def cmd_run(args: argparse.Namespace) -> int:
         validate_result = run_validate(dsl_path, yaml_path)
         write_json(report_dir / "validate.json", validate_result)
 
+        if not validate_result.get("valid", False):
+            print(
+                f"Validation failed; deployment skipped. Report written to {report_dir}",
+                file=sys.stderr,
+            )
+            return 1
+
     deploy_result = None
     activation_result = None
     ready_result = None
     if yaml_path is not None:
-        deploy_result = deploy_config(args.router_url, yaml_path, dsl_path)
+        deploy_result = deploy_config(args.router_url, yaml_path)
         write_json(report_dir / "deploy.json", deploy_result)
         activation_result = wait_for_config_activation(
             args.router_url,
-            str(deploy_result.get("runtime_hash") or ""),
+            str(deploy_result.get("generated_runtime_hash") or ""),
             timeout_seconds=args.ready_timeout,
             interval_seconds=args.ready_interval,
         )
@@ -231,9 +237,6 @@ def add_deploy_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     deploy.add_argument("--yaml", required=True, help="Canonical router YAML path")
     deploy.add_argument(
-        "--dsl", help="Optional DSL source path to archive with the deploy"
-    )
-    deploy.add_argument(
         "--ready-timeout",
         type=float,
         default=300.0,
@@ -275,7 +278,7 @@ def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     run.add_argument(
         "--dsl",
-        help="Optional DSL source path for local validate and deploy archive. Defaults to manifest routing_assets.dsl when omitted.",
+        help="Optional DSL source path for local validation. Defaults to manifest routing_assets.dsl when omitted.",
     )
     run.add_argument("--report-dir", help="Directory for JSON and Markdown reports")
     run.add_argument(

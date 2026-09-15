@@ -1,7 +1,7 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogDocument'
 import type { DecisionConditionType } from '../types/config'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
 export interface ListenerConfig {
   name: string
@@ -183,7 +183,8 @@ export interface ModelReasoningConfig {
   disabled?: string
 }
 
-export interface ModelEvaluationConfig {
+export interface EvaluationRecordConfig {
+  model: string
   benchmark: string
   benchmark_profile?: string
   reasoning_effort?: string
@@ -253,7 +254,6 @@ export interface RoutingModelCard {
   modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   modality?: string
 }
 
@@ -268,8 +268,8 @@ export interface DecisionCondition {
 }
 
 export interface DecisionRuleSet {
-  operator: 'AND' | 'OR' | 'NOT'
-  conditions: DecisionCondition[]
+  operator?: 'AND' | 'OR' | 'NOT'
+  conditions?: DecisionCondition[]
   on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
@@ -296,7 +296,11 @@ export interface DecisionConfig {
   modelRefs: DecisionModelRef[]
   plugins?: DecisionPluginConfig[]
   algorithm?: Record<string, unknown>
-  candidateIterations?: unknown
+  action?: { type: string; destination: string }
+  adaptations?: Record<string, unknown>
+  output_contract_spec?: Record<string, unknown>
+  candidateIterations?: Array<Record<string, unknown>>
+  emits?: Array<Record<string, unknown>>
   tier?: number
   annotations?: Record<string, unknown>
   output_contract?: string
@@ -307,6 +311,7 @@ export type RoutingStrategy = (typeof ROUTING_STRATEGIES)[number]
 export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy = 'priority'
 
 export interface RoutingConfig {
+  model_bindings?: Record<string, Record<string, string>>
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
   projections?: ConfigProjections
@@ -320,6 +325,7 @@ export interface EntrypointConfig {
 }
 
 export interface RecipeRoutingConfig {
+  model_bindings?: Record<string, Record<string, string>>
   signals?: ConfigSignals
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
@@ -350,7 +356,6 @@ export interface NormalizedModel {
   capabilities?: string[]
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   card_override?: RoutingModelCard
   modality?: string
   pricing?: {
@@ -431,7 +436,6 @@ export interface MemoryConfig {
   hybrid_search?: boolean
   hybrid_mode?: string
   adaptive_threshold?: boolean
-  quality_scoring?: MemoryQualityScoringConfig
   reflection?: MemoryReflectionConfig
 }
 
@@ -778,7 +782,9 @@ export interface RouterCoreConfig {
   include_config_models_in_list?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
+  skip_processing?: { enabled?: boolean }
   model_selection?: ModelSelectionConfig
+  learning?: RouterLearningConfig
 }
 
 export interface CanonicalServiceGlobalConfig {
@@ -787,7 +793,9 @@ export interface CanonicalServiceGlobalConfig {
   observability?: ObservabilityConfig
   authz?: AuthzConfig
   ratelimit?: RateLimitConfig
+  management_api?: Record<string, unknown>
   router_replay?: RouterReplayConfig
+  startup_status?: Record<string, unknown>
 }
 
 export interface CanonicalStoreGlobalConfig {
@@ -816,6 +824,7 @@ export interface CanonicalModelModulesConfig {
   prompt_compression?: PromptCompressionConfig
   prompt_guard?: ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean }
   classifier?: CanonicalClassifierConfig
+  complexity?: Record<string, unknown>
   hallucination_mitigation?: CanonicalHallucinationModuleConfig
   feedback_detector?: FeedbackDetectorConfig & { model_ref?: string }
   modality_detector?: ModalityDetectorConfig
@@ -825,7 +834,45 @@ export interface CanonicalModelCatalogConfig {
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels
   external?: ExternalModelConfig[]
+  kbs?: Array<Record<string, unknown>>
   modules?: CanonicalModelModulesConfig
+  admission?: Record<string, Record<string, unknown>>
+}
+
+export interface RouterLearningConfig {
+  enabled?: boolean
+  adaptation?: {
+    enabled?: boolean
+    candidate_set?: 'decision' | 'tier' | 'global'
+    strategy?: string
+  }
+  protection?: {
+    enabled?: boolean
+    scope?: 'conversation' | 'session'
+    identity?: {
+      headers?: {
+        session?: string
+        conversation?: string
+      }
+    }
+    tuning?: {
+      idle_timeout_seconds?: number
+      min_turns_before_switch?: number
+      switch_margin?: number
+      stability_weight?: number
+    }
+  }
+  state_store?: {
+    backend?: string
+    ttl_seconds?: number
+    timeout_ms?: number
+    redis?: {
+      address?: string
+      password?: string
+      database?: number
+      key_prefix?: string
+    }
+  }
 }
 
 export interface CanonicalGlobalConfig {
@@ -851,11 +898,14 @@ export interface ConfigSignals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   kb?: KBSignal[]
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
   conversation?: ConversationSignal[]
+  events?: EventSignal[]
+  input_modality?: InputModalitySignal[]
 }
 
 export interface ConfigProjections {
@@ -866,12 +916,6 @@ export interface ConfigProjections {
 
 export interface DecisionPluginConfiguration {
   [key: string]: unknown
-}
-
-export interface MemoryQualityScoringConfig {
-  initial_strength_days?: number
-  prune_threshold?: number
-  max_memories_per_user?: number
 }
 
 export interface MemoryReflectionConfig {
@@ -938,56 +982,19 @@ export interface VectorStoreMilvusSearchConfig {
   consistency_level?: string
 }
 
-export interface VectorStoreMilvusConnectionPoolConfig {
-  max_connections?: number
-  max_idle_connections?: number
-  acquire_timeout?: number
-}
-
-export interface VectorStoreMilvusBatchConfig {
-  insert_batch_size?: number
-  timeout?: number
-}
-
-export interface VectorStoreMilvusPerformanceConfig {
-  connection_pool?: VectorStoreMilvusConnectionPoolConfig
-  batch?: VectorStoreMilvusBatchConfig
-}
-
-export interface VectorStoreMilvusTTLConfig {
-  enabled?: boolean
-  timestamp_field?: string
-  cleanup_interval?: number
-}
-
-export interface VectorStoreMilvusCompactionConfig {
-  enabled?: boolean
-  interval?: number
-}
-
-export interface VectorStoreMilvusDataManagementConfig {
-  ttl?: VectorStoreMilvusTTLConfig
-  compaction?: VectorStoreMilvusCompactionConfig
-}
-
 export interface VectorStoreMilvusLoggingConfig {
   level?: string
-  enable_query_log?: boolean
-  enable_metrics?: boolean
 }
 
 export interface VectorStoreMilvusDevelopmentConfig {
   drop_collection_on_startup?: boolean
   auto_create_collection?: boolean
-  verbose_errors?: boolean
 }
 
 export interface VectorStoreMilvusConfig {
   connection?: VectorStoreMilvusConnectionConfig
   collection?: VectorStoreMilvusCollectionConfig
   search?: VectorStoreMilvusSearchConfig
-  performance?: VectorStoreMilvusPerformanceConfig
-  data_management?: VectorStoreMilvusDataManagementConfig
   logging?: VectorStoreMilvusLoggingConfig
   development?: VectorStoreMilvusDevelopmentConfig
 }
@@ -1034,13 +1041,10 @@ export interface SemanticCacheRedisSearchConfig {
 export interface SemanticCacheRedisDevelopmentConfig {
   drop_index_on_startup?: boolean
   auto_create_index?: boolean
-  verbose_errors?: boolean
 }
 
 export interface SemanticCacheRedisLoggingConfig {
   level?: string
-  enable_query_log?: boolean
-  enable_metrics?: boolean
 }
 
 export interface SemanticCacheRedisConfig {
@@ -1053,16 +1057,23 @@ export interface SemanticCacheRedisConfig {
 
 export interface KeywordSignal {
   name: string
-  operator: 'AND' | 'OR'
+  operator: 'AND' | 'OR' | 'all' | 'any'
   keywords: string[]
-  case_sensitive: boolean
+  case_sensitive?: boolean
+  method?: 'regex' | 'bm25' | 'ngram'
+  fuzzy_match?: boolean
+  fuzzy_threshold?: number
+  bm25_threshold?: number
+  ngram_threshold?: number
+  ngram_arity?: number
 }
 
 export interface EmbeddingSignal {
   name: string
   threshold: number
   candidates: string[]
-  aggregation_method: string
+  aggregation_method?: string
+  query_modality?: 'text' | 'image' | 'audio'
 }
 
 export interface MetadataSignal {
@@ -1091,6 +1102,22 @@ export interface DomainSignal {
   name: string
   description: string
   mmlu_categories?: string[]
+  model_scores?: ModelScore[]
+}
+
+export interface EventSignal {
+  name: string
+  description?: string
+  event_types?: string[]
+  severities?: string[]
+  action_codes?: string[]
+  temporal?: boolean
+}
+
+export interface InputModalitySignal {
+  name: string
+  description?: string
+  modality: 'text' | 'image' | 'audio' | 'video'
 }
 
 export interface ProjectionPartition {
@@ -1171,6 +1198,12 @@ export interface FactCheckSignal {
   description: string
 }
 
+export interface HallucinationSignal {
+  name: string
+  use_nli?: boolean
+  description?: string
+}
+
 export interface UserFeedbackSignal {
   name: string
   description: string
@@ -1193,6 +1226,7 @@ export interface PreferenceSignal {
 export interface LanguageSignal {
   name: string
   description?: string
+  threshold?: number
 }
 
 export interface ContextSignal {
@@ -1250,9 +1284,13 @@ export interface ConversationSignal {
 
 export interface ComplexitySignal {
   name: string
-  threshold: number
-  hard: { candidates: string[] }
-  easy: { candidates: string[] }
+  threshold?: number
+  hard_above?: number
+  easy_below?: number
+  hard_below?: number
+  easy_above?: number
+  hard?: { candidates?: string[]; image_candidates?: string[] }
+  easy?: { candidates?: string[]; image_candidates?: string[] }
   description?: string
   composer?: {
     operator: 'AND' | 'OR' | 'NOT'
@@ -1286,6 +1324,11 @@ export interface ConfigData {
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
+  evaluation?: {
+    benchmarks?: CatalogBenchmark[]
+    indices?: CatalogIndex[]
+    records?: EvaluationRecordConfig[]
+  }
   routing?: RoutingConfig
   entrypoints?: EntrypointConfig[]
   recipes?: RecipeConfig[]
@@ -1330,39 +1373,26 @@ export interface ConfigData {
   structure_rules?: StructureSignal[]
   complexity_rules?: ComplexitySignal[]
   jailbreak?: JailbreakSignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
 }
 
-export type SignalType =
-  | 'Keywords'
-  | 'Embeddings'
-  | 'Domain'
-  | 'Preference'
-  | 'Fact Check'
-  | 'User Feedback'
-  | 'Reask'
-  | 'Language'
-  | 'Context'
-  | 'Structure'
-  | 'Complexity'
-  | 'Modality'
-  | 'Authz'
-  | 'Jailbreak'
-  | 'PII'
-  | 'KB'
-  | 'Metadata'
-  | 'Classifier'
-  | 'Conversation'
+export type SignalType = string
 
 export interface DecisionFormState {
   name: string
   description: string
   priority: number
-  operator: 'AND' | 'OR' | 'NOT'
-  on_unknown?: '' | 'no_match' | 'match' | 'fail_request'
-  conditions: DecisionCondition[]
+  rules: DecisionRuleSet
   modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
+  tier?: number
+  output_contract?: string
+  output_contract_spec: Record<string, unknown>
+  action: Record<string, unknown>
+  algorithm?: Record<string, unknown>
+  adaptations: Record<string, unknown>
+  declarative: Record<string, unknown>
 }
 
 export function mergeDecisionForSave(
@@ -1373,82 +1403,6 @@ export function mergeDecisionForSave(
     ...(existing || {}),
     ...update,
   }
-}
-
-export function decisionRulesForSave(
-  existing: DecisionRuleSet | undefined,
-  next: DecisionRuleSet,
-): DecisionRuleSet {
-  if (existing?.conditions.some(conditionHasNestedRules)) {
-    const preserved = JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
-    if (next.on_unknown) preserved.on_unknown = next.on_unknown
-    else delete preserved.on_unknown
-    return preserved
-  }
-  return next
-}
-
-export function cloneDecisionConditions(
-  conditions: DecisionCondition[] | undefined,
-): DecisionCondition[] {
-  return JSON.parse(JSON.stringify(conditions || [])) as DecisionCondition[]
-}
-
-export function conditionHasNestedRules(condition: DecisionCondition): boolean {
-  return Boolean(condition.operator || condition.conditions?.length)
-}
-
-export interface AddSignalFormState {
-  type: SignalType
-  name: string
-  description: string
-  operator: 'AND' | 'OR'
-  keywords: string[]
-  case_sensitive: boolean
-  threshold: number
-  candidates: string[]
-  aggregation_method: string
-  mmlu_categories: string[]
-  min_tokens?: string
-  max_tokens?: string
-  preference_examples?: string[]
-  preference_threshold?: number
-  lookback_turns?: number
-  complexity_threshold?: number
-  structure_feature?: StructureFeature
-  structure_predicate?: NumericPredicate
-  conversation_feature?: ConversationFeature
-  conversation_predicate?: NumericPredicate
-  role?: string
-  subjects?: Subject[]
-  hard_candidates?: string[]
-  easy_candidates?: string[]
-  composer_operator?: 'AND' | 'OR' | 'NOT'
-  composer_conditions?: DecisionCondition[]
-  jailbreak_threshold?: number
-  jailbreak_method?: string
-  jailbreak_direction?: string
-  include_history?: boolean
-  jailbreak_patterns?: string[]
-  benign_patterns?: string[]
-  pii_threshold?: number
-  pii_types_allowed?: string[]
-  pii_include_history?: boolean
-  kb_name?: string
-  target_kind?: 'label' | 'group'
-  target_value?: string
-  kb_match?: 'best' | 'threshold'
-  metadata_key?: string
-  metadata_predicate_type?: 'equals' | 'in' | 'exists'
-  metadata_equals?: string
-  metadata_in?: string[]
-  metadata_exists?: boolean
-  classifier_type?: 'local' | 'llm' | 'sequence_classifier'
-  classifier_model?: string
-  classifier_model_path?: string
-  classifier_labels?: string[]
-  classifier_instructions?: string
-  classifier_use_cpu?: boolean
 }
 
 export const formatThreshold = (value: number): string => {

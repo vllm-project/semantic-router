@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -122,6 +123,7 @@ func (r *OpenAIRouter) selectEvalCandidate(
 		CategoryName:               input.Category,
 		CandidateModels:            decision.ModelRefs,
 		CandidateIterations:        decision.CandidateIterations,
+		InputTokens:                input.ContextTokenCount,
 		CostWeight:                 costWeight,
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: tpot,
@@ -133,6 +135,9 @@ func (r *OpenAIRouter) selectEvalCandidate(
 	}
 	result, err := selector.Select(context.Background(), selectionContext)
 	if err != nil {
+		if errors.Is(err, selection.ErrNoEligibleCandidates) {
+			return evalSelectionUnavailable(err.Error())
+		}
 		return fallbackEvalModel(defaultCandidate, method, "selector failed during dry-run")
 	}
 	if err := selection.ValidateSelectionResult(selectionContext, result); err != nil {

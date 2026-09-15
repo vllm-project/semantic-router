@@ -1,4 +1,5 @@
 import decisionStyles from './ConfigPageDecisionsSection.module.css'
+import ProductCheckbox from '../components/ProductCheckbox'
 import type {
   DecisionFormState,
   DecisionModelRef,
@@ -221,8 +222,7 @@ function ModelReferenceRow({ value, modelOptions, family, onChange, onRemove }: 
       ) : null}
       <div className={decisionStyles.editorMetaRow}>
         <label className={decisionStyles.editorCheckbox}>
-          <input
-            type="checkbox"
+          <ProductCheckbox
             checked={alwaysOn || !!value.use_reasoning}
             onChange={(event) => onChange('use_reasoning', event.target.checked)}
             disabled={!family || alwaysOn}

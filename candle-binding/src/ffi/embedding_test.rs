@@ -182,3 +182,29 @@ fn test_check_position_limit_names_length_and_limit(
         "error must name the limit: {err}"
     );
 }
+
+/// The models-info table advertises what the loaded config declares, and zeros
+/// for a model that is not loaded (issue #3407).
+#[rstest]
+#[case::loaded(Some("/models/qwen3"), Some((32768usize, 1024usize)), true, 32768, 1024, "/models/qwen3")]
+#[case::gemma_2k(Some("/models/gemma"), Some((2048usize, 768usize)), true, 2048, 768, "/models/gemma")]
+#[case::not_loaded(None, None, false, 0, 0, "")]
+fn test_embedding_model_info_reports_the_loaded_config(
+    #[case] path: Option<&str>,
+    #[case] limits: Option<(usize, usize)>,
+    #[case] loaded: bool,
+    #[case] max_len: i32,
+    #[case] dim: i32,
+    #[case] want_path: &str,
+) {
+    let info = embedding_model_info("qwen3", path, limits);
+    assert_eq!(info.is_loaded, loaded);
+    assert_eq!(info.max_sequence_length, max_len);
+    assert_eq!(info.default_dimension, dim);
+    unsafe {
+        let name = CString::from_raw(info.model_name);
+        let got_path = CString::from_raw(info.model_path);
+        assert_eq!(name.to_str().unwrap(), "qwen3");
+        assert_eq!(got_path.to_str().unwrap(), want_path);
+    }
+}

@@ -75,7 +75,7 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 }
 
 func (s *ClassificationAPIServer) parseVectorStoreSearchParams(r *http.Request) (vectorStoreSearchParams, error) {
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	storeID := strings.TrimSuffix(path, "/search")
 	if storeID == "" || storeID == path {
 		return vectorStoreSearchParams{}, fmt.Errorf("vector store ID is required")

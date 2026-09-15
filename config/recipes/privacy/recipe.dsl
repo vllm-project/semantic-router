@@ -201,7 +201,6 @@ MODEL cloud/frontier-reasoning {
   description: "High-cost cloud frontier lane reserved for non-sensitive deep reasoning and synthesis."
   capabilities: ["frontier_reasoning", "deep_synthesis", "architecture_review", "long_context"]
   tags: ["deployment:cloud", "policy:non_sensitive_only", "tier:frontier", "cost:high"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.92 } }]
   modality: "text"
 }
 
@@ -215,7 +214,6 @@ MODEL local/private-qwen {
   description: "Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic."
   capabilities: ["self_hosted", "privacy_locality", "security_containment", "code", "internal_docs"]
   tags: ["deployment:self_hosted", "policy:local_first", "policy:privacy_first", "cost:free"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.74 } }]
   modality: "text"
 }
 

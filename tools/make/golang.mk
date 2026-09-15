@@ -6,6 +6,14 @@
 
 CONTROLLER_GEN_VERSION ?= v0.20.0
 
+config-schema-generate: ## Generate canonical Router config contracts for all consumers
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../..
+
+config-schema-check: ## Check that generated Router config contracts match Go source
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../.. --check
+
 go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint for src/semantic-router..."
@@ -47,14 +55,17 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 			exit 1; \
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
-	@echo "Checking src/semantic-router ONNX module..."
-	@cd src/semantic-router && go mod tidy -modfile=go.onnx.mod && \
-		if ! git diff --exit-code go.onnx.mod go.sum; then \
-			echo "ERROR: go.onnx.mod or the shared go.sum file is not tidy in src/semantic-router. Please run 'go mod tidy -modfile=go.onnx.mod' in src/semantic-router and commit the changes."; \
-			git diff go.onnx.mod go.sum; \
+	@echo "Checking perf..."
+	@cd perf && go mod tidy && \
+		if ! git diff --exit-code go.mod go.sum; then \
+			echo "ERROR: go.mod or go.sum files are not tidy in perf. Please run 'go mod tidy' in perf directory and commit the changes."; \
+			git diff go.mod go.sum; \
 			exit 1; \
 		fi
-	@echo "src/semantic-router ONNX go mod tidy check passed"
+	@echo "perf go mod tidy check passed"
+	@echo "Checking shared ONNX module compatibility links..."
+	@test "$$(readlink src/semantic-router/go.onnx.mod)" = go.mod
+	@test "$$(readlink src/semantic-router/go.onnx.sum)" = go.sum
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
@@ -83,3 +94,5 @@ generate-deepcopy: install-controller-gen ## Generate deepcopy methods using con
 
 generate-api: generate-deepcopy generate-crd ## Generate all API artifacts (deepcopy, CRDs)
 	@echo "Generated all API artifacts"
+
+.PHONY: config-schema-generate config-schema-check

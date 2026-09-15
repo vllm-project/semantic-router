@@ -91,7 +91,14 @@ def test_exact_answer_grading_normalizes_whitespace_but_preserves_case() -> None
         return HTTPResult(
             success=True,
             status_code=200,
-            payload={"choices": [{"message": {"content": content}}]},
+            payload={
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": "stop",
+                    }
+                ]
+            },
             latency_ms=1,
             headers={},
         )
@@ -99,6 +106,71 @@ def test_exact_answer_grading_normalizes_whitespace_but_preserves_case() -> None
     labels = CaseGrading(case_id="case-1", expected_answer="Au")
     assert grade_response(result("  Au\n"), labels) == 1
     assert grade_response(result("au"), labels) == 0
+
+
+@pytest.mark.parametrize(
+    ("message", "finish_reason"),
+    [
+        ({"content": None, "reasoning": "expected"}, "length"),
+        ({"content": None, "reasoning_content": "expected"}, "stop"),
+        ({"content": "expected"}, "length"),
+        ({"content": "expected"}, None),
+        ({"content": "expected"}, "content_filter"),
+        ({"content": "expected", "role": "user"}, "stop"),
+        ({"content": " "}, "stop"),
+    ],
+)
+def test_exact_answer_grading_never_scores_incomplete_provider_output(
+    message: dict[str, Any], finish_reason: str | None
+) -> None:
+    payload = {
+        "choices": [
+            {
+                "message": {"role": "assistant", **message},
+                "finish_reason": finish_reason,
+            }
+        ]
+    }
+    result = HTTPResult(
+        success=True, status_code=200, payload=payload, latency_ms=1, headers={}
+    )
+    observed = response_content(payload)
+
+    assert (
+        grade_response(
+            result, CaseGrading(case_id="case-1", expected_answer="expected")
+        )
+        is None
+    )
+    # Scoring eligibility must not alter the broker's observed-output contract.
+    assert response_content(payload) == observed
+    if "reasoning" in message or "reasoning_content" in message:
+        assert observed == "expected"
+
+
+def test_exact_answer_grading_requires_successful_complete_choices() -> None:
+    complete = {
+        "message": {"role": "assistant", "content": "expected"},
+        "finish_reason": "stop",
+    }
+    labels = CaseGrading(case_id="case-1", expected_answer="expected")
+    failed = HTTPResult(
+        success=False,
+        status_code=503,
+        payload={"choices": [complete]},
+        latency_ms=1,
+        headers={},
+    )
+    mixed = HTTPResult(
+        success=True,
+        status_code=200,
+        payload={"choices": [complete, {**complete, "finish_reason": "length"}]},
+        latency_ms=1,
+        headers={},
+    )
+
+    assert grade_response(failed, labels) is None
+    assert grade_response(mixed, labels) is None
 
 
 @pytest.mark.parametrize(
@@ -168,7 +240,7 @@ class FakeSession:
         timeout: float,
     ) -> FakeResponse:
         self.posts.append((url, json, headers))
-        if "/api/v1/eval?trace=true" in url:
+        if "/api/v1/routing/preview?trace=true" in url:
             return FakeResponse(
                 200,
                 {
@@ -216,7 +288,12 @@ class FakeSession:
         return FakeResponse(
             200,
             {
-                "choices": [{"message": {"content": answer}}],
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": answer},
+                        "finish_reason": "stop",
+                    }
+                ],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 2},
             },
             response_headers,
@@ -620,7 +697,7 @@ def test_live_diagnostic_routing_multimodal_and_capacity_smoke() -> None:
         if row.track_id == "capacity"
     )
 
-    assert session.posts[0][0].endswith("/api/v1/eval?trace=true")
+    assert session.posts[0][0].endswith("/api/v1/routing/preview?trace=true")
     trace_payload = json.dumps(
         [trace.model_dump(mode="json") for trace in raw.routing_traces]
     )
@@ -648,7 +725,7 @@ def test_routing_record_attests_realized_method_not_configured_algorithm() -> No
             timeout: float,
         ) -> FakeResponse:
             response = super().post(url, json, headers, timeout)
-            if "/api/v1/eval?trace=true" in url:
+            if "/api/v1/routing/preview?trace=true" in url:
                 response._payload["decision_result"]["algorithm"] = "static"
                 response._payload["selection_method"] = "confidence"
             return response

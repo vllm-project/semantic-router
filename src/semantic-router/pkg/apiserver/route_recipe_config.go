@@ -84,7 +84,7 @@ func (s *ClassificationAPIServer) handleGetRecipe(w http.ResponseWriter, r *http
 // live mutation, but does not create a backup or write either config path.
 func (s *ClassificationAPIServer) handleValidateRecipe(w http.ResponseWriter, r *http.Request) {
 	var req recipeMutationRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
@@ -128,7 +128,7 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 	defer guard.Release()
 
 	var req recipeMutationRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
@@ -138,7 +138,7 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 	}
 
 	doc, existingData, ok := s.readManagedConfigDocument(w)
-	if !ok || !checkConfigPrecondition(w, r, existingData, true) {
+	if !ok || !checkConfigPrecondition(w, r, existingData) {
 		return
 	}
 	created, err := applyRecipeMutation(doc, name, req)
@@ -166,7 +166,6 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 		paths,
 		existingData,
 		yamlBytes,
-		"",
 		statusCode,
 		action,
 		fmt.Sprintf("Recipe %q %s successfully.", name, verb),
@@ -190,7 +189,7 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 	defer guard.Release()
 
 	doc, existingData, ok := s.readManagedConfigDocument(w)
-	if !ok || !checkConfigPrecondition(w, r, existingData, true) {
+	if !ok || !checkConfigPrecondition(w, r, existingData) {
 		return
 	}
 	entrypoints := recipeEntrypointNames(doc, name)
@@ -219,7 +218,6 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 		paths,
 		existingData,
 		yamlBytes,
-		"",
 		http.StatusOK,
 		"recipe.delete",
 		fmt.Sprintf("Recipe %q deleted successfully.", name),

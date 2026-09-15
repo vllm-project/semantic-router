@@ -14,6 +14,7 @@ import type {
   EvaluationRoutingRecipeReport,
   EvaluationRoutingRecipeTopKReport,
 } from '../types/evaluationRoutingRecipeReport'
+import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 import {
   hasOnlyEvaluationFields,
   isEvaluationRecord,
@@ -28,29 +29,19 @@ const PORTABLE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 const MAX_ARMS = 64
 const MAX_INPUTS = 128
 const MAX_CASES = 100_000
-const SIGNAL_TYPES = new Set([
-  'authz',
-  'classifier',
-  'complexity',
-  'context',
-  'conversation',
-  'domain',
-  'embedding',
-  'event',
-  'fact_check',
-  'jailbreak',
-  'kb',
-  'keyword',
-  'language',
-  'metadata',
-  'modality',
-  'pii',
-  'preference',
-  'reask',
-  'structure',
-  'user_feedback',
-])
-const LABELED_SIGNAL_TYPES = new Set(['classifier', 'complexity'])
+type RoutingRecipeSignalSurface = {
+  type: string
+  decision_referenceable: boolean
+  reference_qualifier?: string
+  reference_suffixes?: readonly string[]
+}
+const SIGNAL_SURFACES: readonly RoutingRecipeSignalSurface[] = ROUTER_CONFIG_EXTENSION.signals
+const SIGNAL_TYPES = new Set(
+  SIGNAL_SURFACES.filter((signal) => signal.decision_referenceable).map((signal) => signal.type),
+)
+const SIGNAL_SURFACE_BY_TYPE = new Map(
+  SIGNAL_SURFACES.map((signal) => [signal.type, signal] as const),
+)
 
 function rotateRight(value: number, distance: number): number {
   return (value >>> distance) | (value << (32 - distance))
@@ -148,7 +139,15 @@ function validInputID(value: unknown, projection: boolean): value is string {
   if (projection) return parts[0] === 'projection' && parts.length === 2
   if (parts[0] === 'projection') return false
   if (parts[0] === 'kb_metric') return parts.length === 3
-  return SIGNAL_TYPES.has(parts[0]) && (parts.length === 2 || LABELED_SIGNAL_TYPES.has(parts[0]))
+  if (!SIGNAL_TYPES.has(parts[0])) return false
+  if (parts.length === 2) return true
+  const surface = SIGNAL_SURFACE_BY_TYPE.get(parts[0])
+  if (!surface) return false
+  if (surface.reference_qualifier === 'label') return true
+  return (
+    surface.reference_qualifier === 'fixed_suffix' &&
+    (surface.reference_suffixes ?? []).includes(parts[2])
+  )
 }
 
 function isInputSpec(value: unknown): value is EvaluationRoutingRecipeInputSpec {

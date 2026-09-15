@@ -349,7 +349,7 @@ class K8sBackend:
         if failed:
             raise SystemExit(failed)
 
-    def get_dashboard_url(self) -> str | None:
+    def _dashboard_service_query(self, jsonpath: str) -> str | None:
         cmd = [
             *self._kubectl_base_cmd(),
             "get",
@@ -360,12 +360,34 @@ class K8sBackend:
             f"app.kubernetes.io/instance={self.release_name},"
             "app.kubernetes.io/component=dashboard",
             "-o",
-            "jsonpath={.items[0].spec.clusterIP}:{.items[0].spec.ports[0].port}",
+            jsonpath,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if result.returncode == 0 and result.stdout.strip():
-            return f"http://{result.stdout.strip()}"
-        return None
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        return result.stdout.strip()
+
+    def get_dashboard_url(self) -> str | None:
+        """Return the in-cluster Dashboard address, not reachable from outside."""
+        address = self._dashboard_service_query(
+            "jsonpath={.items[0].spec.clusterIP}:{.items[0].spec.ports[0].port}"
+        )
+        return f"http://{address}" if address else None
+
+    def get_dashboard_port_forward(self) -> str | None:
+        """Return the command that makes the Dashboard reachable locally."""
+        service = self._dashboard_service_query(
+            "jsonpath={.items[0].metadata.name}:{.items[0].spec.ports[0].port}"
+        )
+        if service is None:
+            return None
+        name, _, port = service.partition(":")
+        if not name or not port:
+            return None
+        return (
+            f"{' '.join(self._kubectl_base_cmd())} port-forward "
+            f"--namespace {self.namespace} svc/{name} {port}:{port}"
+        )
 
     def is_running(self) -> bool:
         cmd = [
