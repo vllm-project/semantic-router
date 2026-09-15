@@ -4,6 +4,7 @@ package benchmarks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,22 +12,15 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
-const (
-	embeddingModelPathEnv    = "QWEN3_MODEL_PATH"
-	defaultEmbeddingModelDir = "models/mom-embedding-pro"
-	cacheEmbeddingModelType  = "qwen3"
-	cacheEmbeddingDeployment = "perf-cache-embedding"
-)
-
 var (
 	cacheEmbeddingOnce     sync.Once
 	cacheEmbeddingErr      error
+	cacheEmbeddingOwner    *embedding.Set
 	cacheEmbeddingProvider embedding.Provider
 )
 
@@ -44,13 +38,6 @@ func resolveCacheEmbeddingModelDir() string {
 	return filepath.Join(wd, "..", "..", defaultEmbeddingModelDir)
 }
 
-func cacheEmbeddingDevice() string {
-	if useGPU := os.Getenv("USE_GPU"); useGPU == "true" || useGPU == "1" {
-		return "cuda"
-	}
-	return "cpu"
-}
-
 // initCacheEmbeddingModels prepares the owned Qwen3 embedding provider once per
 // process and returns it for cache.BenchmarkConfig.EmbeddingProvider.
 func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
@@ -61,16 +48,9 @@ func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 			cacheEmbeddingErr = fmt.Errorf("embedding model dir not found at %s: %w", modelDir, statErr)
 			return
 		}
-		cfg := &config.RouterConfig{}
-		cfg.EmbeddingConfig.ModelType = cacheEmbeddingModelType
-		cfg.SemanticCache.Enabled = true
-		cfg.SemanticCache.EmbeddingModel = cacheEmbeddingModelType
-		cfg.ModelBindings = map[string]config.ModelBinding{
-			"embedding": {Deployment: cacheEmbeddingDeployment, Contract: "embedding.v1", Adapter: cacheEmbeddingModelType},
-		}
-		cfg.ModelDeployments = map[string]config.ModelDeployment{
-			cacheEmbeddingDeployment: {Provider: "candle", Device: cacheEmbeddingDevice(), Precision: "native", Artifact: modelDir},
-		}
+		cfg := cacheEmbeddingConfig(modelDir)
+		// Measure the same owned provider used by router generations. The legacy
+		// process-global continuous-batching FFI has different lifecycle semantics.
 		set, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
 		if err != nil {
 			cacheEmbeddingErr = fmt.Errorf("failed to prepare embedding model from %s: %w", modelDir, err)
@@ -78,15 +58,25 @@ func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 		}
 		provider, err := set.Default()
 		if err != nil {
-			cacheEmbeddingErr = err
+			cacheEmbeddingErr = errors.Join(err, set.Close())
 			return
 		}
+		cacheEmbeddingOwner = set
 		cacheEmbeddingProvider = provider
 	})
 	if cacheEmbeddingErr != nil {
 		b.Fatalf("Failed to initialize embedding models: %v", cacheEmbeddingErr)
 	}
 	return cacheEmbeddingProvider
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	code, err := closeCacheEmbeddingOwner(code, cacheEmbeddingOwner)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "close cache embedding owner: %v\n", err)
+	}
+	os.Exit(code)
 }
 
 // BenchmarkCacheSearch_1000Entries benchmarks cache search with 1000 entries

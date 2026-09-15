@@ -97,7 +97,7 @@ different address, run `go tool pprof` directly against the profile file.
 | --- | --- | --- |
 | Classification | `benchmarks/classification*_bench_test.go` | batch inference, parallel calls, CGO overhead, and intent accuracy setup |
 | Decision | `benchmarks/decision_bench_test.go` | rule evaluation, priority selection, and parallel evaluation |
-| Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths |
+| Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths through the production-style owned Qwen3 provider |
 | ExtProc data handling | `benchmarks/extproc_bench_test.go` | JSON encoding, request-body parsing, and header manipulation |
 | Looper | `../src/semantic-router/pkg/looper/*_bench_test.go` | Base, Fusion, ReMoM, and Flow helpers and execution |
 

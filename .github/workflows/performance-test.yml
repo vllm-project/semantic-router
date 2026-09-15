@@ -49,6 +49,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-perf-go-
 
+      - name: Check perf Go module is tidy
+        run: make check-perf-go-mod-tidy
+
       - name: Cache Models
         uses: actions/cache@v4
         with:
