@@ -87,7 +87,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		ParamSize:            card.ParameterSize,
 		ContextWindowSize:    card.Limits.ContextWindowSize,
 		Description:          card.Description,
-		Capabilities:         append([]string(nil), card.Capabilities...),
+		Capabilities:         declaredCardCapabilities(model.Card),
 		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),
 		Tags:                 append([]string(nil), card.Tags...),
 		ReasoningFamily:      card.ReasoningFamily,
@@ -107,6 +107,13 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		params.ExternalModelIDs["default"] = model.BindingDefaults.ModelID
 	}
 	return params
+}
+
+func declaredCardCapabilities(card modelcatalog.EffectiveModelCard) []string {
+	if _, declared := card.Provenance["capabilities"]; !declared {
+		return nil
+	}
+	return append([]string(nil), card.Card.Capabilities...)
 }
 
 func runtimeModalityFromCard(card modelcatalog.ModelCard) string {

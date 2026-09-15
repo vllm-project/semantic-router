@@ -302,10 +302,9 @@ func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
 func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
 	assertMapCoversStructFields(t, modules, reflect.TypeOf(CanonicalModelModules{}), "global.model_catalog.modules")
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
-	// protocol is mutually exclusive with variant (PromptGuardConfig); the
-	// reference config demonstrates the local variant path, so protocol has
-	// no reference-config key to cover here.
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "protocol")
+	// Remote backend and local variant are mutually exclusive. The reference
+	// demonstrates the local path; legacy protocol is migration-only.
+	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "protocol", "backend")
 	assertReferenceConfigClassifierModuleCoverage(t, mustMapAt(t, modules, "classifier"))
 	assertReferenceConfigComplexityModuleCoverage(t, mustMapAt(t, modules, "complexity"))
 	assertReferenceConfigHallucinationModuleCoverage(t, mustMapAt(t, modules, "hallucination_mitigation"))
@@ -320,7 +319,10 @@ func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[st
 	// to force a variant line that users must delete before adding a backend.
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii")
+	// pii.backend is the remote token_spans.v1 attachment and is mutually
+	// exclusive with the local use_mmbert_32k path the reference config shows,
+	// same as domain.backend above.
+	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii", "backend")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")
 	assertMapCoversStructFields(
 		t,

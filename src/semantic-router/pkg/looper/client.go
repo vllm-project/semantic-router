@@ -28,6 +28,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -264,6 +265,14 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	// Distinguish the Chat wire shape from a native provider response without
+	// discarding accounting for an empty Chat completion. Algorithms such as
+	// Fusion classify that completion as unusable after retaining its usage.
+	if !completion.JSON.Choices.Valid() ||
+		(completion.JSON.Object.Valid() && completion.Object != "chat.completion") {
+		return nil, fmt.Errorf("model %s did not return a chat completion response", modelName)
+	}
+
 	result := &ModelResponse{
 		Raw:         body,
 		Parsed:      &completion,
@@ -306,11 +315,23 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		IsStreaming: true,
 	}
 
-	// Parse SSE chunks to extract content, reasoning, and usage.
-	content, reasoning, chunks := parseSSEContent(body)
-	result.ReasoningContent = reasoning
-	result.Content = content
-	result.StreamingChunks = chunks
+	// Validate the same stream lifecycle used by the provider boundary before
+	// any algorithm can treat a partial or failed stream as a successful answer.
+	events, err := decodeModelStream(body, modelName)
+	if err != nil {
+		return nil, err
+	}
+	for _, event := range events {
+		switch event.Type {
+		case llmprotocol.EventOutputTextDelta:
+			result.Content += event.Delta
+		case llmprotocol.EventReasoningDelta:
+			result.ReasoningContent += event.Delta
+		case llmprotocol.EventToolCallDelta:
+			result.HasToolCalls = true
+		}
+	}
+	_, _, result.StreamingChunks = parseSSEContent(body)
 	result.Usage = parseStreamingUsage(body)
 
 	return result, nil

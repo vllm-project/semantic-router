@@ -582,11 +582,6 @@ var currentTranslationFallbackDocs = []string{
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "classifier-tuning.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "pii-policy.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "vllm-endpoints.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "training-overview.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "model-performance-eval.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "common-errors.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "vsr-headers.md"),
 }
 
 func TestConfigContractDocsStayAligned(t *testing.T) {

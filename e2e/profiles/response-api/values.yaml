@@ -23,6 +23,12 @@ config:
             provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
+      - name: mock/vision
+        backend_refs:
+          - name: test-endpoint
+            provider: vllm
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
       # Built-in catalog coverage: the card supplies the provider-native model ID,
       # reasoning family, pricing, limits, capabilities, and presentation.
       - name: astra-chat
@@ -60,7 +66,7 @@ config:
             - type: input_modality
               name: image_input
         modelRefs:
-          - model: openai/gpt-oss-20b
+          - model: mock/vision
             use_reasoning: false
       - name: input_modality_text_decision
         description: Text-only requests continue on the default route.
@@ -84,6 +90,11 @@ config:
     modelCards:
       - name: openai/gpt-oss-20b
       - name: mock/native-responses
+      # The simulator accepts images; the real GPT-OSS catalog card is text-only.
+      - name: mock/vision
+        capabilities:
+          - chat
+          - image_input
   global:
     router:
       strategy: priority

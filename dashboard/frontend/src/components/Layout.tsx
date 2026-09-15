@@ -333,7 +333,7 @@ const Layout: React.FC<LayoutProps> = ({
           <div className={styles.headerRight}>
             <PlatformBranding variant="inline" className={styles.headerBranding} />
             <a
-              href="https://vllm-sr.ai"
+              href="https://vllm-sr.ai/docs/intro/"
               target="_blank"
               rel="noopener noreferrer"
               className={styles.iconButton}

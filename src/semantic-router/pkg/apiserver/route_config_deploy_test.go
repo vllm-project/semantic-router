@@ -518,41 +518,57 @@ func TestNextConfigVersionAvoidsSameSecondBackupCollisions(t *testing.T) {
 	}
 }
 
-func TestHandleConfigRollbackRejectsIncompatibleLocalClassifier(t *testing.T) {
-	configDir := t.TempDir()
-	configPath := filepath.Join(configDir, "config.yaml")
-	current := []byte(localClassifierReloadConfig("models/risk-v1"))
-	if err := os.WriteFile(configPath, current, 0o600); err != nil {
-		t.Fatalf("write current config: %v", err)
-	}
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o700); err != nil {
-		t.Fatalf("create backup dir: %v", err)
-	}
-	version := "20240101-000000"
-	backupPath := filepath.Join(backupDir, "config."+version+".yaml")
-	if err := os.WriteFile(
-		backupPath,
-		[]byte(localClassifierReloadConfig("models/risk-v2")),
-		0o600,
-	); err != nil {
-		t.Fatalf("write backup config: %v", err)
-	}
-
-	response := postRollback(t, configPath, version)
-
-	if response.Code != http.StatusConflict {
-		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
-	}
-	if code := rollbackErrorCode(t, response.Body.Bytes()); code != "RESTART_REQUIRED" {
-		t.Fatalf("error code = %q, want RESTART_REQUIRED", code)
-	}
-	after, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("read current config: %v", err)
-	}
-	if !bytes.Equal(after, current) {
-		t.Fatal("incompatible rollback mutated the active config")
+func TestHandleConfigRollbackValidatesOwnedLocalClassifierCandidate(t *testing.T) {
+	for _, invalid := range []bool{false, true} {
+		t.Run(fmt.Sprintf("invalid_%t", invalid), func(t *testing.T) {
+			configDir := t.TempDir()
+			configPath := filepath.Join(configDir, "config.yaml")
+			current := []byte(localClassifierReloadConfig("models/risk-v1"))
+			if err := os.WriteFile(configPath, current, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
+			if err := os.MkdirAll(backupDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			version := "20240101-000000"
+			candidate := localClassifierReloadConfig("models/risk-v2")
+			if invalid {
+				candidate = strings.ReplaceAll(candidate, "labels: [SAFE, RISKY]", "labels: [SAFE, SAFE]")
+			}
+			if err := os.WriteFile(filepath.Join(backupDir, "config."+version+".yaml"), []byte(candidate), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			response := postRollback(t, configPath, version)
+			after, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if invalid {
+				if response.Code != http.StatusBadRequest || rollbackErrorCode(t, response.Body.Bytes()) != "BACKUP_INVALID" {
+					t.Fatalf("invalid candidate status=%d body=%s", response.Code, response.Body.String())
+				}
+				if !bytes.Equal(after, current) {
+					t.Fatal("invalid rollback mutated source config")
+				}
+				return
+			}
+			if response.Code != http.StatusOK {
+				t.Fatalf("valid candidate status=%d body=%s", response.Code, response.Body.String())
+			}
+			if !bytes.Equal(after, []byte(candidate)) {
+				t.Fatal("valid model change was not persisted for candidate preparation")
+			}
+			var result RouterConfigUpdateResponse
+			if decodeErr := json.Unmarshal(response.Body.Bytes(), &result); decodeErr != nil {
+				t.Fatal(decodeErr)
+			}
+			// This fixture has no runtime registry. Persisting a candidate must
+			// not claim that real native preparation/activation has completed.
+			if result.ActivationStatus != "unknown" {
+				t.Fatalf("unexpected activation claim: %+v", result)
+			}
+		})
 	}
 }
 

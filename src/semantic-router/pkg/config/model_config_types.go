@@ -49,6 +49,15 @@ type PIIModel struct {
 	UseCPU         bool    `yaml:"use_cpu"`
 	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
+	// Backend attaches a named remote token classifier speaking token_spans.v1.
+	// Its absence preserves local PII inference exactly as before.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
+
+	// ClassifierOnErrorConfig contributes OnError (allow|block). With block, a
+	// PII rule whose content could not be fully classified (backend error, or a
+	// provider that declared truncated_at) matches as classification_error
+	// instead of reading as clean.
+	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type EmbeddingModels struct {
@@ -154,12 +163,13 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 }
 
 type PromptGuardConfig struct {
-	Enabled              bool     `yaml:"enabled"`
-	ModelID              string   `yaml:"model_id"`
-	Threshold            float32  `yaml:"threshold"`
-	UseCPU               bool     `yaml:"use_cpu"`
-	JailbreakMappingPath string   `yaml:"jailbreak_mapping_path"`
-	PositiveLabels       []string `yaml:"positive_labels,omitempty"`
+	Backend              *RemoteClassifierBackend `yaml:"backend,omitempty"`
+	Enabled              bool                     `yaml:"enabled"`
+	ModelID              string                   `yaml:"model_id"`
+	Threshold            float32                  `yaml:"threshold"`
+	UseCPU               bool                     `yaml:"use_cpu"`
+	JailbreakMappingPath string                   `yaml:"jailbreak_mapping_path"`
+	PositiveLabels       []string                 `yaml:"positive_labels,omitempty"`
 
 	// Variant selects a local Candle-backed model variant. Mutually
 	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when

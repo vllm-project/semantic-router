@@ -1601,261 +1601,257 @@ fn test_load_with_custom_base_model_parameter_validation() {
     println!("load_with_custom_base_model parameter validation test passed");
 }
 
-// =============================================================================
-// Long-prompt truncation tests
-//
-// These tests verify that the tokenizer enforces MAX_CLASSIFICATION_SEQ_LEN
-// (512) regardless of raw input length, preventing the quadratic global-
-// attention OOM observed at ~4 000 tokens (GitHub issue #1843).
-//
-// Tests that load tokenizer.json from disk are skipped automatically when the
-// `CI` environment variable is set (CI environments have no model files) or
-// when the tokenizer file is simply not present.
-// =============================================================================
-
-/// Return the path to the mmBERT-32K candle tokenizer.
-fn mmbert_candle_tokenizer_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("models/mmbert32k-intent-classifier-merged/tokenizer.json")
+// Explicit classification input budgets, using a real tokenizer without model downloads.
+fn context_test_config(max_length: usize) -> serde_json::Value {
+    serde_json::json!({
+        "vocab_size": 6, "hidden_size": 8, "num_hidden_layers": 2,
+        "num_attention_heads": 2, "intermediate_size": 16,
+        "max_position_embeddings": max_length, "layer_norm_eps": 1e-5,
+        "pad_token_id": 5, "global_attn_every_n_layers": 3,
+        "global_rope_theta": 160000.0, "local_rope_theta": 10000.0,
+        "local_attention": 8, "id2label": {"0": "NEGATIVE", "1": "POSITIVE"},
+        "label2id": {"NEGATIVE": "0", "POSITIVE": "1"}, "classifier_pooling": "cls"
+    })
 }
 
-/// Load the long-prompt fixture JSON bundled in `test_data/`.
-fn load_long_prompt_fixtures() -> serde_json::Value {
-    let fixture_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("test_data/long_prompt_fixtures.json");
-    let raw = std::fs::read_to_string(&fixture_path)
-        .unwrap_or_else(|_| panic!("fixture not found at {:?}", fixture_path));
-    serde_json::from_str(&raw).expect("invalid fixture JSON")
-}
-
-/// Tokenize `text` with the given `DualPathTokenizer` and return the number
-/// of tokens after truncation.
-fn candle_token_count(tokenizer: &dyn DualPathTokenizer, text: &str) -> usize {
+fn context_test_tokenizer() -> tokenizers::Tokenizer {
+    use tokenizers::models::wordlevel::WordLevel;
+    use tokenizers::pre_tokenizers::whitespace::WhitespaceSplit;
+    use tokenizers::processors::template::TemplateProcessing;
+    let vocab = ["[UNK]", "[CLS]", "[SEP]", "word", "tail", "[PAD]"]
+        .into_iter()
+        .enumerate()
+        .map(|(id, token)| (token.to_string(), id as u32))
+        .collect();
+    let model = WordLevel::builder()
+        .vocab(vocab)
+        .unk_token("[UNK]".into())
+        .build()
+        .unwrap();
+    let mut tokenizer = tokenizers::Tokenizer::new(model);
+    tokenizer.with_pre_tokenizer(Some(WhitespaceSplit));
+    tokenizer.with_post_processor(Some(
+        TemplateProcessing::builder()
+            .try_single("[CLS] $A [SEP]")
+            .unwrap()
+            .special_tokens(vec![("[CLS]", 1), ("[SEP]", 2)])
+            .build()
+            .unwrap(),
+    ));
+    // Reproduce an artifact whose inherited fixed padding exceeds the requested limit.
+    tokenizer.with_padding(Some(tokenizers::PaddingParams {
+        strategy: tokenizers::PaddingStrategy::Fixed(65536),
+        pad_id: 5,
+        pad_token: "[PAD]".into(),
+        ..Default::default()
+    }));
     tokenizer
-        .tokenize(text)
-        .expect("tokenize failed")
-        .token_ids_u32
-        .len()
 }
 
-/// Confirm the constant that guards against OOM is the expected value.
-#[rstest]
-fn test_candle_max_classification_seq_len_is_512() {
-    assert_eq!(
-        MAX_CLASSIFICATION_SEQ_LEN, 512,
-        "MAX_CLASSIFICATION_SEQ_LEN must be 512 to prevent quadratic-attention OOM"
-    );
-}
-
-/// Verify that `ModernBertVariant::max_length()` returns the architectural
-/// limit, while `effective_max_length` (after the `.min(MAX_CLASSIFICATION_SEQ_LEN)` cap)
-/// never exceeds 512 for any classification variant.
-#[rstest]
-fn test_candle_effective_max_length_capped_for_all_variants() {
-    let variants = [
-        ModernBertVariant::Standard,
-        ModernBertVariant::Multilingual,
-        ModernBertVariant::Extended32K,
-        ModernBertVariant::Multilingual32K,
-    ];
-    for variant in variants {
-        let arch_max = variant.max_length();
-        // Replicate the capping logic from load_from_directory_with_variant.
-        let effective = arch_max.min(MAX_CLASSIFICATION_SEQ_LEN);
-        assert!(
-            effective <= MAX_CLASSIFICATION_SEQ_LEN,
-            "variant {:?}: effective_max_length {} exceeds MAX_CLASSIFICATION_SEQ_LEN {}",
-            variant,
-            effective,
-            MAX_CLASSIFICATION_SEQ_LEN,
-        );
-    }
-}
-
-/// Verify that for the Multilingual32K variant the architectural window (32 768)
-/// is correctly reduced to MAX_CLASSIFICATION_SEQ_LEN by the cap.
-#[rstest]
-fn test_candle_multilingual32k_effective_length_is_512() {
-    let variant = ModernBertVariant::Multilingual32K;
-    let effective = variant.max_length().min(MAX_CLASSIFICATION_SEQ_LEN);
-    assert_eq!(
-        effective, MAX_CLASSIFICATION_SEQ_LEN,
-        "Multilingual32K effective_max_length should be {}, got {}",
-        MAX_CLASSIFICATION_SEQ_LEN, effective,
-    );
-}
-
-/// Verify that the `UnifiedTokenizer` created for mmBERT classification
-/// truncates a ~4 000-token prompt to ≤ MAX_CLASSIFICATION_SEQ_LEN tokens.
-///
-/// Requires tokenizer.json on disk → skipped in CI.
-#[rstest]
-fn test_candle_tokenizer_truncates_long_prompt() {
-    if std::env::var("CI").is_ok() {
-        eprintln!("skipping test_candle_tokenizer_truncates_long_prompt: CI environment");
-        return;
-    }
-
-    let tokenizer_path = mmbert_candle_tokenizer_path();
-    if !tokenizer_path.exists() {
-        eprintln!(
-            "skipping test_candle_tokenizer_truncates_long_prompt: tokenizer not found at {:?}",
-            tokenizer_path
-        );
-        return;
-    }
-
-    let fixtures = load_long_prompt_fixtures();
-    let prompts = fixtures["prompts"].as_array().expect("prompts array");
-
-    let base_tok = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
-    let unified = crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
-        base_tok,
-        candle_core::Device::Cpu,
-        MAX_CLASSIFICATION_SEQ_LEN,
+#[test]
+fn test_candle_context_budget_reserves_actual_postprocessor_special_tokens() {
+    let config = TraditionalModernBertClassifier::parse_model_config(
+        &context_test_config(32768).to_string(),
     )
-    .expect("create tokenizer wrapper");
-
-    // Downcast back to UnifiedTokenizer to call tokenize().
-    // We use the DualPathTokenizer trait method instead.
-    for prompt in prompts {
-        let id = prompt["id"].as_str().unwrap_or("?");
-        let text = prompt["text"].as_str().expect("text field");
-        let approx_untruncated = prompt["approx_tokens_untruncated"].as_u64().unwrap_or(0);
-
-        let result = unified.tokenize(text).expect("tokenize failed");
-        let count = result.token_ids_u32.len();
-
-        assert!(
-            count <= MAX_CLASSIFICATION_SEQ_LEN,
-            "prompt '{}' produced {} tokens (approx untruncated: {}); expected ≤ {}",
-            id,
-            count,
-            approx_untruncated,
-            MAX_CLASSIFICATION_SEQ_LEN,
-        );
-    }
-}
-
-/// Regression test for GitHub issue #1843: a ~4 000-token prompt must be
-/// truncated to exactly MAX_CLASSIFICATION_SEQ_LEN tokens by the candle
-/// mmBERT tokenizer wrapper.
-///
-/// Skipped in CI.
-#[rstest]
-fn test_candle_4k_prompt_truncated_to_safe_length() {
-    if std::env::var("CI").is_ok() {
-        eprintln!("skipping test_candle_4k_prompt_truncated_to_safe_length: CI environment");
-        return;
-    }
-
-    let tokenizer_path = mmbert_candle_tokenizer_path();
-    if !tokenizer_path.exists() {
-        eprintln!(
-            "skipping test_candle_4k_prompt_truncated_to_safe_length: tokenizer not found at {:?}",
-            tokenizer_path
-        );
-        return;
-    }
-
-    let fixtures = load_long_prompt_fixtures();
-    let long_prompt = fixtures["prompts"]
-        .as_array()
-        .and_then(|p| p.iter().find(|x| x["id"] == "long_4k"))
-        .expect("long_4k fixture missing");
-
-    let text = long_prompt["text"].as_str().expect("text");
-    let approx_raw = long_prompt["approx_tokens_untruncated"]
-        .as_u64()
-        .unwrap_or(0);
-
-    assert!(
-        approx_raw > 2048,
-        "fixture too short ({} est. tokens); rebuild long_prompt_fixtures.json",
-        approx_raw
-    );
-
-    let base_tok = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
-    let unified = crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
-        base_tok,
-        candle_core::Device::Cpu,
-        MAX_CLASSIFICATION_SEQ_LEN,
-    )
-    .expect("create tokenizer wrapper");
-
-    let result = unified.tokenize(text).expect("tokenize failed");
-    let count = result.token_ids_u32.len();
-
-    assert_eq!(
-        count, MAX_CLASSIFICATION_SEQ_LEN,
-        "4k prompt must produce exactly {} tokens after truncation, got {}",
-        MAX_CLASSIFICATION_SEQ_LEN, count
-    );
-}
-
-/// Verify a short prompt is not over-truncated by the classification cap.
-///
-/// Skipped in CI.
-#[rstest]
-fn test_candle_short_prompt_not_truncated() {
-    if std::env::var("CI").is_ok() {
-        eprintln!("skipping test_candle_short_prompt_not_truncated: CI environment");
-        return;
-    }
-
-    let tokenizer_path = mmbert_candle_tokenizer_path();
-    if !tokenizer_path.exists() {
-        eprintln!(
-            "skipping test_candle_short_prompt_not_truncated: tokenizer not found at {:?}",
-            tokenizer_path
-        );
-        return;
-    }
-
-    let fixtures = load_long_prompt_fixtures();
-    let short = fixtures["prompts"]
-        .as_array()
-        .and_then(|p| p.iter().find(|x| x["id"] == "short_baseline"))
-        .expect("short_baseline fixture missing");
-    let text = short["text"].as_str().expect("text");
-
-    // Baseline: tokenizer with no cap.
-    let base_tok_uncapped = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load");
-    let uncapped =
-        crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
-            base_tok_uncapped,
+    .unwrap();
+    let configure = |tokenizer, limit| {
+        TraditionalModernBertClassifier::tokenizer_for_config(
+            tokenizer,
+            &config,
+            ModernBertVariant::Multilingual32K,
             candle_core::Device::Cpu,
-            65536, // far above any practical input
+            limit,
         )
-        .expect("create uncapped tokenizer");
-    let baseline_count = uncapped
-        .tokenize(text)
-        .expect("tokenize")
-        .token_ids_u32
-        .len();
-
-    // Production: tokenizer with the 512 cap.
-    let base_tok_capped = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load");
-    let capped = crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
-        base_tok_capped,
-        candle_core::Device::Cpu,
-        MAX_CLASSIFICATION_SEQ_LEN,
-    )
-    .expect("create capped tokenizer");
-    let capped_count = capped.tokenize(text).expect("tokenize").token_ids_u32.len();
-
+    };
+    let error = configure(context_test_tokenizer(), 1).err().unwrap();
+    assert!(error.to_string().contains("2 special tokens"));
+    let tokenizer = configure(context_test_tokenizer(), 2).unwrap();
     assert_eq!(
-        baseline_count, capped_count,
-        "short prompt ({} tokens) must not be truncated; got {} after capping",
-        baseline_count, capped_count
+        tokenizer.tokenize("word tail").unwrap().token_ids_u32,
+        vec![1, 2]
     );
-    assert!(
-        capped_count < MAX_CLASSIFICATION_SEQ_LEN,
-        "short prompt is unexpectedly long ({} tokens)",
-        capped_count
+
+    let mut tokenizer = context_test_tokenizer();
+    tokenizer.with_post_processor(None::<tokenizers::processors::template::TemplateProcessing>);
+    let tokenizer = configure(tokenizer, 1).unwrap();
+    assert_eq!(
+        tokenizer.tokenize("word tail").unwrap().token_ids_u32,
+        vec![3]
     );
+}
+
+#[test]
+fn test_candle_context_default_and_explicit_limits() {
+    for capacity in [256, 8192, 32768] {
+        let config = TraditionalModernBertClassifier::parse_model_config(
+            &context_test_config(capacity).to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            TraditionalModernBertClassifier::resolve_sequence_length(&config, None).unwrap(),
+            capacity.min(512)
+        );
+        assert_eq!(
+            TraditionalModernBertClassifier::resolve_sequence_length(&config, Some(capacity))
+                .unwrap(),
+            capacity
+        );
+        for invalid in [0, capacity + 1] {
+            assert!(TraditionalModernBertClassifier::resolve_sequence_length(
+                &config,
+                Some(invalid)
+            )
+            .is_err());
+        }
+    }
+}
+
+#[test]
+fn test_candle_context_tokenization_preserves_tail_and_model_padding() {
+    let config = TraditionalModernBertClassifier::parse_model_config(
+        &context_test_config(32768).to_string(),
+    )
+    .unwrap();
+    for limit in [512, 513, 1025, 32768] {
+        let tokenizer = TraditionalModernBertClassifier::tokenizer_for_config(
+            context_test_tokenizer(),
+            &config,
+            ModernBertVariant::Multilingual32K,
+            candle_core::Device::Cpu,
+            limit,
+        )
+        .unwrap();
+        let text = format!("{}tail", "word ".repeat(limit - 3));
+        let result = tokenizer.tokenize(&text).unwrap();
+        assert_eq!(result.token_ids_u32.len(), limit);
+        assert_eq!(
+            result.token_ids_u32[limit - 2],
+            4,
+            "tail must survive past 512"
+        );
+        assert_eq!(
+            result.token_ids_u32[limit - 1],
+            2,
+            "reserve the final special token"
+        );
+        assert_eq!(result.offsets[limit - 2].1, text.len());
+        let oversized = tokenizer.tokenize(&format!("{text} word word")).unwrap();
+        assert_eq!(oversized.token_ids_u32.len(), limit);
+        assert_eq!(oversized.token_ids_u32[limit - 1], 2);
+        let short = tokenizer.tokenize("word").unwrap();
+        assert_eq!(
+            short.token_ids_u32.len(),
+            3,
+            "remove inherited fixed padding"
+        );
+        let batch = tokenizer.tokenize_batch(&["word", "word tail"]).unwrap();
+        assert_eq!(batch.token_ids_u32[0], vec![1, 3, 2, 5]);
+        assert_eq!(batch.attention_masks[0], vec![1, 1, 1, 0]);
+    }
+}
+
+#[test]
+fn test_candle_context_config_preserves_separate_rope_theta() {
+    let mut value = context_test_config(32768);
+    value.as_object_mut().unwrap().remove("global_rope_theta");
+    value.as_object_mut().unwrap().remove("local_rope_theta");
+    value["rope_parameters"] = serde_json::json!({
+        "full_attention": {"rope_type": "default", "rope_theta": 160000.0},
+        "sliding_attention": {"rope_type": "default", "rope_theta": 10000.0}
+    });
+    let config = TraditionalModernBertClassifier::parse_model_config(&value.to_string()).unwrap();
+    assert_eq!(config.max_position_embeddings, 32768);
+    assert_eq!(config.global_rope_theta, 160000.0);
+    assert_eq!(config.local_rope_theta, 10000.0);
+    value["rope_parameters"]["full_attention"]["rope_type"] = "yarn".into();
+    assert!(TraditionalModernBertClassifier::parse_model_config(&value.to_string()).is_err());
+    let mut value = context_test_config(32768);
+    value["rope_scaling"] = serde_json::json!({"type": "yarn", "factor": 4.0});
+    assert!(TraditionalModernBertClassifier::parse_model_config(&value.to_string()).is_err());
+    value.as_object_mut().unwrap().remove("rope_scaling");
+    value["max_position_embeddings"] = 0.into();
+    assert!(TraditionalModernBertClassifier::parse_model_config(&value.to_string()).is_err());
+}
+
+#[test]
+fn test_candle_context_loaders_reject_invalid_limits_before_weights() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("config.json"),
+        context_test_config(8192).to_string(),
+    )
+    .unwrap();
+    // Legacy metadata and the explicit variant must not silently expand the cache.
+    std::fs::write(dir.path().join("training_config.json"),
+        r#"{"model_max_length":32768,"rope_scaling_type":"yarn","rope_original_max_position_embeddings":8192}"#,
+    ).unwrap();
+    let path = dir.path().to_str().unwrap();
+    for invalid in [0, 8193, 32768] {
+        let errors = [
+            TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
+                path, true, ModernBertVariant::Extended32K, invalid,
+            ).unwrap_err().to_string(),
+            TraditionalModernBertClassifier::load_with_custom_base_model_and_max_sequence_length(
+                path, path, ModernBertVariant::Extended32K, true, invalid,
+            ).unwrap_err().to_string(),
+            TraditionalModernBertTokenClassifier::new_with_variant_and_max_sequence_length(
+                path, true, ModernBertVariant::Extended32K, invalid,
+            ).unwrap_err().to_string(),
+        ];
+        for error in errors {
+            assert!(error.contains("max_sequence_length"), "{error}");
+        }
+    }
+}
+
+#[test]
+fn test_candle_context_classifier_loaders_execute_beyond_default() {
+    use candle_core::{DType, Device};
+    use candle_nn::{VarBuilder, VarMap};
+    let dir = tempfile::tempdir().unwrap();
+    let value = context_test_config(2048);
+    let config = TraditionalModernBertClassifier::parse_model_config(&value.to_string()).unwrap();
+    std::fs::write(dir.path().join("config.json"), value.to_string()).unwrap();
+    context_test_tokenizer()
+        .save(dir.path().join("tokenizer.json"), false)
+        .unwrap();
+    let vars = VarMap::new();
+    let vb = VarBuilder::from_varmap(&vars, DType::F32, &Device::Cpu);
+    super::ModernBert::load(vb.clone(), &config).unwrap();
+    FixedModernBertClassifier::load_with_classes(vb.pp("classifier"), &config, 2).unwrap();
+    vars.save(dir.path().join("model.safetensors")).unwrap();
+    let path = dir.path().to_str().unwrap();
+    let prefix = "word ".repeat(1020);
+    let text = format!("{prefix}tail");
+    let sequence = TraditionalModernBertClassifier::load_from_directory_with_max_sequence_length(
+        path, true, 1025,
+    )
+    .unwrap();
+    assert_eq!(
+        sequence.fit_prefix_to_window(&prefix, "tail").unwrap(),
+        prefix
+    );
+    assert!(sequence.classify_text(&text).unwrap().1.is_finite());
+    let custom =
+        TraditionalModernBertClassifier::load_with_custom_base_model_and_max_sequence_length(
+            path,
+            path,
+            ModernBertVariant::Extended32K,
+            true,
+            1025,
+        )
+        .unwrap();
+    assert!(custom.classify_text(&text).unwrap().1.is_finite());
+    let token =
+        TraditionalModernBertTokenClassifier::new_with_max_sequence_length(path, true, 1025)
+            .unwrap();
+    assert!(token
+        .classify_tokens(&text)
+        .unwrap()
+        .iter()
+        .any(|result| result.4 == text.len()));
+    let default = TraditionalModernBertClassifier::load_from_directory(path, true).unwrap();
+    assert!(default.fit_prefix_to_window(&prefix, "tail").unwrap().len() < prefix.len());
 }
 
 /// The confidence of a merged entity must be the arithmetic mean of the

@@ -16,7 +16,9 @@ class ModelRef(BaseModel):
     """Model reference in decision."""
 
     model: str
-    use_reasoning: bool | None = False
+    # Omission is not an authored false: runtime serialization must preserve
+    # the caller's choice and leave canonical defaulting to the Router.
+    use_reasoning: bool | None = None
     reasoning_description: str | None = None
     reasoning_mode: Literal["enabled", "disabled", "adaptive"] | None = None
     reasoning_effort: str | None = None  # Model-specific reasoning effort level.

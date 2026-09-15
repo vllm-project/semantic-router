@@ -82,7 +82,7 @@ tree, so the Router rejects a configuration that sets both.
 `prompt_guard.on_error` (`allow` or `block`) remains the compatibility
 default for jailbreak rules. Diagnostics include both the signal error and any
 terminal policy that was applied. See
-[Safety models and policy](../../global/safety-models-and-policy.md).
+[Safety models](../../../installation/runtime/safety).
 
 `sequence_classifier` classifiers also reference a named external model, but
 use the shared `http_classify` contract and preserve its full label distribution.
@@ -91,11 +91,18 @@ approximately `1.0`; sigmoid multi-label outputs and label subsets are rejected.
 They require at least two labels and do not accept `instructions`, `model_path`,
 or `use_cpu`.
 
-Local classifiers use `model_path`. One binary local classifier is supported
-per Router process, and its decision predicates use `gte: 0.5` or higher on the
-winning-label confidence. Restart the Router after changing the model or label
-order. A management API update that requires this restart returns
-`RESTART_REQUIRED`.
+Local classifiers use `model_path` and support two or more declared labels.
+Each rule owns a prepared model handle, so a recipe can declare multiple local
+classifiers. Local decision predicates retain `gte: 0.5` or higher. Model or
+label changes prepare a candidate generation before activation; a failed
+candidate leaves the current generation available.
+
+A recipe can select execution explicitly with a `classifier.<rule name>` entry
+in `model_bindings`; this replaces the rule's `model` or `model_path` selector.
+Local and sequence rules support local sequence deployments or HTTP
+`http_classify`, while LLM rules retain their scored extraction instructions
+and require HTTP `http_chat`. All use `label_distribution.v1`, with the rule's
+ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process).
 
 The local path processes request text inside the Router. Both `llm` and
 `sequence_classifier` send that text to their configured external model, so
