@@ -16,6 +16,7 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -90,6 +91,16 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	// redirect this request to a sibling modelRef, so RequestModel and the
 	// client-visible selected-model header must be the final dispatch model,
 	// not the decision-selected one.
+	//
+	// The in-flight token was opened under the model this dispatch was
+	// prepared for, and End keys by (model, token): hand it over here, where
+	// the final model becomes known, so that the success, stream and error
+	// paths end the entry they actually own. A zero token means no entry was
+	// opened and there is nothing to move.
+	if ctx.InflightToken != 0 && logicalModel != dispatch.logicalModel {
+		inflight.End(logicalModel, ctx.InflightToken)
+		ctx.InflightToken = inflight.Begin(dispatch.logicalModel)
+	}
 	ctx.RequestModel = dispatch.logicalModel
 	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{

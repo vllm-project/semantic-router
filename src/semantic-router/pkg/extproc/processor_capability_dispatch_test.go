@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -367,6 +368,48 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	}
 	if ctx.VSRSelectedModel != imageBackend {
 		t.Fatalf("ctx.VSRSelectedModel = %q, want %q (selected-model header reflects the final dispatch model)", ctx.VSRSelectedModel, imageBackend)
+	}
+}
+
+// A capability reroute must move the in-flight admission entry with the
+// request: the entry opened under the decision-selected model is closed, the
+// rerouted model carries it, and the response path ends the entry it owns.
+func TestPrepareProviderDispatchHopsInflightToReroutedModel(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	imageBackend := "image-backend"
+	router.Config.ModelConfig[imageBackend] = config.ModelParams{
+		PreferredEndpoints: []string{"backend"},
+		APIFormat:          config.APIFormatImages,
+		ExternalModelIDs:   map[string]string{"vllm": "provider-image"},
+	}
+	decision := &config.Decision{
+		Name: "Omni",
+		ModelRefs: []config.ModelRef{
+			{Model: primary},
+			{Model: imageBackend},
+		},
+	}
+	request := testNeutralRequest(primary, "draw a cat")
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
+	request.ImageGeneration = &llmprotocol.ImageGenerationOptions{Size: "1024x1024"}
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+	// The prepare phase opens the in-flight token under the decision-selected
+	// model, before any capability reroute is known.
+	ctx.InflightToken = inflight.Begin(primary)
+
+	if _, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx); err != nil {
+		t.Fatalf("expected reroute to images sibling, got error: %v", err)
+	}
+	if got := inflight.Get(primary); got != 0 {
+		t.Fatalf("inflight(%s) = %d, want 0 after the reroute hand-over", primary, got)
+	}
+	if got := inflight.Get(imageBackend); got != 1 {
+		t.Fatalf("inflight(%s) = %d, want 1 under the dispatched model", imageBackend, got)
+	}
+	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	if got := inflight.Get(imageBackend); got != 0 {
+		t.Fatalf("inflight(%s) = %d, want 0 after the response ends the token", imageBackend, got)
 	}
 }
 
