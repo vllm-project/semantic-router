@@ -33,6 +33,11 @@ def _run_harness(scenario: str) -> str:
     return result.stdout
 
 
+def _trace_entries(line: str) -> list[str]:
+    """Split a CALLS=/CALLS_TOTAL= line into the probe names it recorded."""
+    return [entry for entry in line.split("=", 1)[1].split(",") if entry]
+
+
 def test_auto_prefers_docker_when_both_ready() -> None:
     """Docker and Podman both available under --runtime auto picks Docker."""
     out = _run_harness("auto-both-ready")
@@ -61,6 +66,19 @@ def test_explicit_docker_does_not_drift_to_podman() -> None:
     assert "CONTAINER_RUNTIME=docker" in out
 
 
+def test_explicit_podman_skips_docker_detection() -> None:
+    """--runtime podman must select Podman even when Docker is also
+    available, skipping Docker detection entirely."""
+    out = _run_harness("explicit-podman-both-ready")
+
+    assert "SELECTED_RUNTIME=podman" in out
+    assert "RUNTIME_ENV_FILE=present" in out
+    assert "CONTAINER_RUNTIME=podman" in out
+    # The docker stub must not have been invoked at all.
+    assert "CALLS=podman" in out
+    assert "docker" not in out.split("CALLS=")[1].split("\n")[0]
+
+
 def test_skip_writes_no_runtime_env() -> None:
     """--runtime skip clears the selection and must not persist a file."""
     out = _run_harness("skip")
@@ -69,3 +87,42 @@ def test_skip_writes_no_runtime_env() -> None:
     # `skip` should not leave a stale CONTAINER_RUNTIME behind.
     assert "RUNTIME_ENV_FILE=absent" in out
     assert "CONTAINER_RUNTIME=" not in out
+
+
+def test_printed_commands_include_runtime_flag() -> None:
+    """When --runtime podman is selected, the printed restart/start commands
+    must carry `--runtime podman` so users copy-paste the right invocation.
+
+    print_install_plan() is the only production caller of
+    detect_existing_runtime(), and the harness takes its CALLS= snapshot
+    before that path runs. The accumulated CALLS_TOTAL= trace is therefore
+    what proves Docker is never probed across the print path (#3441)."""
+    out = _run_harness("print-command-podman")
+
+    assert "SELECTED_RUNTIME=podman" in out
+
+    early_calls = _trace_entries(
+        next(line for line in out.splitlines() if line.startswith("CALLS="))
+    )
+    total_line = next(
+        line for line in out.splitlines() if line.startswith("CALLS_TOTAL=")
+    )
+    total_calls = _trace_entries(total_line)
+
+    # Keeps the assertion below from passing on a trace that never observed
+    # the print path -- the blind spot this coverage exists to close.
+    assert len(total_calls) > len(early_calls), (
+        f"print path recorded no extra runtime probe: early={early_calls} "
+        f"total={total_calls}"
+    )
+    assert (
+        "docker" not in total_calls
+    ), f"Docker was probed despite --runtime podman: {total_line}"
+
+    restart_section = out.split("[PRINT_RESTART_COMMAND]")[1].split(
+        "[PRINT_NEXT_STEPS]"
+    )[0]
+    assert "--runtime podman" in restart_section
+
+    next_steps_section = out.split("[PRINT_NEXT_STEPS]")[1]
+    assert "--runtime podman" in next_steps_section
