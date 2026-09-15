@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from cli.commands.eval import eval
+from cli.commands.benchmark import benchmark
 from cli.evaluation.benchmark_registry import get_benchmark_adapter
 from cli.evaluation.canonical import canonical_json_bytes
 from cli.evaluation.constants import SCHEMA_VERSION
@@ -36,6 +36,7 @@ def _write_bundle(root: Path) -> None:
         (
             CaseVisible(
                 id="case-0",
+                track_ids=("routing", "model_pool", "joint"),
                 messages=({"role": "user", "content": "PRIVATE PROMPT"},),
             ).model_dump(mode="json"),
         ),
@@ -83,6 +84,7 @@ def _artifact(root: Path, role: SuiteArtifactRole) -> SuiteArtifactInstall:
 def _request(root: Path) -> BenchmarkSuiteInstallRequest:
     descriptor = get_benchmark_adapter("routerarena")
     receipt = BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id=descriptor.id,
         expected_source_revision=descriptor.source_revision,
         observed_source_revision=descriptor.source_revision,
@@ -97,7 +99,7 @@ def _request(root: Path) -> BenchmarkSuiteInstallRequest:
         decision_unit=descriptor.decision_unit,
         action_space=descriptor.action_space,
         track_ids=("routing", "model_pool", "joint"),
-        evidence_level_ceiling="E3",
+        normalization_origin="user_provided_import",
         split_protocol="frozen CLI fixture split",
         case_count=1,
         arm_ids=("private-arm",),
@@ -131,12 +133,12 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     request = _request(bundle)
     _write_request(request_path, request)
     monkeypatch.setattr(
-        "cli.evaluation.suite_store.require_verified_benchmark_source",
+        "cli.evaluation.suite_store_install.require_verified_benchmark_source",
         lambda _descriptor, _root: request.source_receipt,
     )
 
     installed_result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-install",
             "--request",
@@ -160,7 +162,7 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     }
 
     listed_result = runner.invoke(
-        eval, ["suite-list", "--suite-store", str(store_path)]
+        benchmark, ["suite-list", "--suite-store", str(store_path)]
     )
     assert listed_result.exit_code == 0, listed_result.output
     listed = json.loads(listed_result.output)
@@ -173,8 +175,29 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     assert "private-route" not in encoded_list
     assert "PRIVATE PROMPT" not in encoded_list
 
+    catalog_result = runner.invoke(
+        benchmark, ["catalog", "--suite-store", str(store_path)]
+    )
+    assert catalog_result.exit_code == 0, catalog_result.output
+    catalog = json.loads(catalog_result.output)
+    installed_catalog = next(
+        suite for suite in catalog["suites"] if suite["id"] == installed["id"]
+    )
+    assert installed_catalog["revision"] == installed["revision"]
+    assert installed_catalog["modes"] == ["replay"]
+    assert installed_catalog["evidence_level"] == "E0"
+    assert installed_catalog["executors"] == {
+        "replay": "normalized-suite-replay.v1",
+    }
+    assert all(
+        method["status"] == "configured" and not method["qualified_gate_ids"]
+        for method in installed_catalog["methods"]
+    )
+    assert "artifacts" not in catalog_result.output
+    assert "PRIVATE PROMPT" not in catalog_result.output
+
     shown_result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-show",
             "routerarena-cli-test",
@@ -203,7 +226,7 @@ def test_suite_install_strictly_rejects_unknown_request_fields(
     request_path.write_text(json.dumps(payload), encoding="utf-8")
 
     result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-install",
             "--request",
@@ -228,7 +251,7 @@ def test_suite_list_uses_private_default_store(
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
-    result = CliRunner().invoke(eval, ["suite-list"])
+    result = CliRunner().invoke(benchmark, ["suite-list"])
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["suites"] == []
@@ -239,7 +262,7 @@ def test_suite_list_uses_private_default_store(
 
 def test_suite_show_reports_missing_suite_as_user_error(tmp_path: Path) -> None:
     result = CliRunner().invoke(
-        eval,
+        benchmark,
         [
             "suite-show",
             "missing-suite",

@@ -1,0 +1,158 @@
+.methodSummary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.methodSummary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 24px;
+  padding: 0 0.65rem;
+  border-left: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.methodSummary span:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.methodSummary strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.methodDisclosure {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  --evaluation-disclosure-indicator-color: var(--text-secondary);
+  --evaluation-disclosure-indicator-size: 0.5rem;
+}
+
+.methodDisclosureSummary {
+  min-height: 58px;
+  padding: 0.7rem 0;
+  color: var(--text-primary);
+}
+
+.methodDisclosureSummary > span {
+  display: grid;
+  flex: 1;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.methodDisclosureSummary small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.methodCatalog {
+  padding: 0.2rem 0 1rem;
+}
+
+.methodFilters {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(150px, 210px)) auto;
+  align-items: end;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.methodFilters label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.methodFilters input,
+.methodFilters select {
+  width: 100%;
+}
+
+.resultCount {
+  align-self: center;
+  justify-self: end;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.methodTableFrame {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+}
+
+.methodTableFrame thead {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+}
+
+.methodTable {
+  min-width: 900px;
+}
+
+.methodTable tbody th {
+  width: 28%;
+}
+
+.methodReadiness {
+  display: grid;
+  min-width: 19rem;
+  gap: 0.4rem;
+}
+
+.methodReadiness > [data-evaluation-tag='true'] {
+  width: fit-content;
+}
+
+.methodGuidance {
+  display: block;
+  max-width: 24rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.methodTechnicalDetails {
+  width: 100%;
+}
+
+.methodEmpty {
+  padding: 1.5rem !important;
+  color: var(--text-muted) !important;
+  text-align: center !important;
+}
+
+@media (max-width: 760px) {
+  .methodFilters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .methodSearch,
+  .resultCount {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 520px) {
+  .methodSummary {
+    justify-content: flex-start;
+  }
+
+  .methodFilters {
+    grid-template-columns: 1fr;
+  }
+
+  .methodSearch,
+  .resultCount {
+    grid-column: auto;
+  }
+}

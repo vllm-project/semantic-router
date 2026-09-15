@@ -26,6 +26,8 @@ if(NOT OpenVINO_FOUND)
             COMMAND "${Python3_EXECUTABLE}" -c "import openvino; print(openvino.__path__[0])"
             OUTPUT_VARIABLE OPENVINO_PYTHON_PATH
             OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_VARIABLE OPENVINO_IMPORT_ERROR
+            ERROR_STRIP_TRAILING_WHITESPACE
             RESULT_VARIABLE PYTHON_IMPORT_RESULT
         )
         
@@ -55,38 +57,67 @@ if(NOT OpenVINO_FOUND)
                     INTERFACE_INCLUDE_DIRECTORIES "${OPENVINO_INCLUDE_DIRS}"
                 )
             endif()
+        else()
+            message(WARNING
+                "OpenVINO Python discovery failed (exit ${PYTHON_IMPORT_RESULT}): ${OPENVINO_IMPORT_ERROR}"
+            )
         endif()
     endif()
 endif()
 
 if(NOT OpenVINO_FOUND)
-    message(FATAL_ERROR "OpenVINO not found. Please install OpenVINO or set OpenVINO_DIR environment variable.")
+    message(FATAL_ERROR
+        "OpenVINO not found. Install OpenVINO or configure CMake with -DOpenVINO_DIR=<path-to-openvino/cmake>."
+    )
 endif()
 
 message(STATUS "OpenVINO found and configured successfully")
 
 # Find OpenVINO Tokenizers library
+set(OPENVINO_TOKENIZERS_PATH "" CACHE PATH "Path to the openvino_tokenizers Python package")
 set(OPENVINO_TOKENIZERS_LIB_DIR "")
-if(Python3_FOUND AND OPENVINO_PYTHON_PATH)
-    # Check if openvino_tokenizers exists in same Python installation
-    execute_process(
-        COMMAND "${Python3_EXECUTABLE}" -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])"
-        OUTPUT_VARIABLE OPENVINO_TOKENIZERS_PATH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE TOKENIZERS_IMPORT_RESULT
-    )
-    
-    if(TOKENIZERS_IMPORT_RESULT EQUAL 0 AND EXISTS "${OPENVINO_TOKENIZERS_PATH}")
+if(OPENVINO_TOKENIZERS_PATH)
+    if(EXISTS "${OPENVINO_TOKENIZERS_PATH}/lib")
         set(OPENVINO_TOKENIZERS_LIB_DIR "${OPENVINO_TOKENIZERS_PATH}/lib")
-        message(STATUS "Found OpenVINO Tokenizers: ${OPENVINO_TOKENIZERS_LIB_DIR}")
-        
-        # Verify library files exist
-        if(EXISTS "${OPENVINO_TOKENIZERS_LIB_DIR}/libopenvino_tokenizers.so")
-            message(STATUS "  ✓ libopenvino_tokenizers.so found")
+    else()
+        message(WARNING
+            "Configured OpenVINO Tokenizers path has no lib directory: ${OPENVINO_TOKENIZERS_PATH}"
+        )
+    endif()
+else()
+    if(NOT Python3_FOUND)
+        find_package(Python3 QUIET COMPONENTS Interpreter)
+    endif()
+    if(Python3_FOUND)
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])"
+            OUTPUT_VARIABLE DISCOVERED_OPENVINO_TOKENIZERS_PATH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_VARIABLE TOKENIZERS_IMPORT_ERROR
+            ERROR_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE TOKENIZERS_IMPORT_RESULT
+        )
+
+        if(TOKENIZERS_IMPORT_RESULT EQUAL 0 AND EXISTS "${DISCOVERED_OPENVINO_TOKENIZERS_PATH}/lib")
+            set(OPENVINO_TOKENIZERS_PATH "${DISCOVERED_OPENVINO_TOKENIZERS_PATH}")
+            set(OPENVINO_TOKENIZERS_LIB_DIR "${OPENVINO_TOKENIZERS_PATH}/lib")
+        else()
+            message(WARNING
+                "OpenVINO Tokenizers Python discovery failed (exit ${TOKENIZERS_IMPORT_RESULT}): ${TOKENIZERS_IMPORT_ERROR}"
+            )
         endif()
-        if(EXISTS "${OPENVINO_TOKENIZERS_LIB_DIR}/libcore_tokenizers.so")
-            message(STATUS "  ✓ libcore_tokenizers.so found")
-        endif()
+    endif()
+endif()
+
+if(OPENVINO_TOKENIZERS_LIB_DIR)
+    message(STATUS "Found OpenVINO Tokenizers: ${OPENVINO_TOKENIZERS_LIB_DIR}")
+
+    # Verify library files exist
+    if(EXISTS "${OPENVINO_TOKENIZERS_LIB_DIR}/libopenvino_tokenizers.so")
+        message(STATUS "  ✓ libopenvino_tokenizers.so found")
+    endif()
+    if(EXISTS "${OPENVINO_TOKENIZERS_LIB_DIR}/libcore_tokenizers.so")
+        message(STATUS "  ✓ libcore_tokenizers.so found")
     endif()
 endif()
 
@@ -230,4 +261,3 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "========================================")
-

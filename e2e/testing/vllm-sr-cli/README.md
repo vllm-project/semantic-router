@@ -2,7 +2,7 @@
 
 This suite checks the `vllm-sr` command surface and its local container
 topology. Unit tests inspect generated commands without starting services;
-integration tests start the split Router, Envoy, dashboard, and simulator
+integration tests start the split Router, Envoy, and dashboard
 images and exercise live APIs.
 
 ## Run through Make

@@ -18,6 +18,7 @@ def test_parse_args_defaults_to_eval_config(monkeypatch):
     assert args.output_file == "config/config.eval.yaml"
     assert args.backend_endpoint == "127.0.0.1:8000"
     assert args.backend_protocol == "http"
+    assert args.provider_id == "vllm"
     assert args.api_format == "openai"
 
 
@@ -39,7 +40,7 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
         similarity_threshold=0.85,
         backend_endpoint="127.0.0.1:9000",
         backend_protocol="http",
-        backend_type="chat",
+        provider_id="vllm",
         api_format="openai",
         provider_name="openai",
     )
@@ -49,18 +50,27 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     assert config["listeners"] == []
 
     defaults = config["providers"]["defaults"]
-    assert defaults["default_model"] == "phi4"
-    assert defaults["default_reasoning_effort"] == "medium"
+    assert defaults["model"] == "phi4"
+    assert defaults["reasoning_effort"] == "medium"
 
     provider_models = {model["name"]: model for model in config["providers"]["models"]}
     assert set(provider_models) == {"phi4", "qwen3-8b"}
     assert provider_models["phi4"]["backend_refs"][0]["endpoint"] == "127.0.0.1:9000"
+    assert provider_models["phi4"]["backend_refs"][0]["provider"] == "vllm"
     assert provider_models["phi4"]["external_model_ids"] == {"openai": "phi4"}
 
     routing_models = {model["name"]: model for model in config["routing"]["modelCards"]}
     assert set(routing_models) == {"phi4", "qwen3-8b"}
-    assert routing_models["phi4"]["quality_score"] == EXPECTED_PHI4_QUALITY_SCORE
-    assert routing_models["qwen3-8b"]["quality_score"] == EXPECTED_QWEN3_QUALITY_SCORE
+    assert routing_models["phi4"]["evaluations"] == [
+        {
+            "benchmark": "tiger-lab/mmlu-pro@1.0.0",
+            "metrics": {"average_accuracy": EXPECTED_PHI4_QUALITY_SCORE},
+            "metadata": {"aggregation": "macro_category_mean"},
+        }
+    ]
+    assert routing_models["qwen3-8b"]["evaluations"][0]["metrics"] == {
+        "average_accuracy": EXPECTED_QWEN3_QUALITY_SCORE
+    }
 
     domains = {
         domain["name"]: domain for domain in config["routing"]["signals"]["domains"]

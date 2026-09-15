@@ -3,6 +3,8 @@ package classification
 import (
 	"math"
 	"sync"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // requestImageEmbeddingCache memoizes a single image embedding computation
@@ -106,4 +108,14 @@ func truncateAndRenormalize(v []float32, targetDim int) []float32 {
 		}
 	}
 	return out
+}
+
+// Provider identity prevents two distinct image encoders from sharing results
+// merely because the image bytes and requested dimension happen to match.
+func (c *requestImageEmbeddingCache) resolveFor(provider embedding.Provider, imageRef string, dimension int, compute func() ([]float32, error)) ([]float32, error) {
+	identity := ""
+	if provider != nil {
+		identity = embedding.Identity(provider)
+	}
+	return c.resolve(identity+"\x00"+imageRef, dimension, compute)
 }

@@ -17,6 +17,7 @@ var signalCompilerByType = map[string]func(*Compiler, *SignalDecl){
 	"modality":       (*Compiler).compileModalitySignal,
 	"authz":          (*Compiler).compileAuthzSignal,
 	"jailbreak":      (*Compiler).compileJailbreakSignal,
+	"hallucination":  (*Compiler).compileHallucinationSignal,
 	"pii":            (*Compiler).compilePIISignal,
 	"kb":             (*Compiler).compileKBSignal,
 	"conversation":   (*Compiler).compileConversationSignal,

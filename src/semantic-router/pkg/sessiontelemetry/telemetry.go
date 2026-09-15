@@ -105,10 +105,16 @@ func telemetrySessionCount() int {
 	return len(store)
 }
 
-// ResponseAPIInput identifies a Response API (/v1/responses) conversation.
+// ResponseAPIInput identifies a Response API (/v1/responses) turn for
+// telemetry. ConversationID is strict OpenAI-spec external membership: empty
+// unless the request explicitly supplied conversation_id. Do not use it as a
+// session/correlation key; grouping and cumulative-state lookups must use
+// SessionTrackingID instead, which is always non-empty, namespaced, and
+// never a real conversation_id or response_id.
 type ResponseAPIInput struct {
-	ConversationID string
-	HistoryLen     int
+	ConversationID    string
+	SessionTrackingID string
+	HistoryLen        int
 }
 
 // ChatInput identifies a Chat Completions session when user id and messages are available.
@@ -165,12 +171,12 @@ func normalizeDomain(d string) string {
 
 func resolve(p TurnParams) (storeKey string, turn int, apiKind string, publicSessionID string, ok bool) {
 	if p.ResponseAPI != nil {
-		if p.ResponseAPI.ConversationID == "" {
+		if p.ResponseAPI.SessionTrackingID == "" {
 			return "", 0, "", "", false
 		}
-		cid := p.ResponseAPI.ConversationID
 		turn = p.ResponseAPI.HistoryLen + 1
-		return "respapi:" + cid, turn, "responses", cid, true
+		sid := p.ResponseAPI.SessionTrackingID
+		return sid, turn, "responses", sid, true
 	}
 	if p.Chat != nil && p.Chat.UserID != "" && len(p.Chat.Messages) > 0 {
 		sid := DeriveChatCompletionsSessionID(p.Chat.Messages, p.Chat.UserID)
@@ -313,6 +319,12 @@ func logSessionTurn(
 		"cumulative_cache_write_tokens":   cumulative.cacheWrite,
 		"cumulative_completion_tokens":    cumulative.completion,
 		"timestamp":                       t.UTC().Format(time.RFC3339Nano),
+	}
+	if p.ResponseAPI != nil && p.ResponseAPI.ConversationID != "" {
+		// Distinct from session_id (the internal SessionTrackingID grouping
+		// key): this is the client-visible OpenAI conversation_id, present
+		// only when the request explicitly used it.
+		fields["conversation_id"] = p.ResponseAPI.ConversationID
 	}
 	if p.CacheAccountingSource != "" {
 		fields["router_cache_accounting_source"] = p.CacheAccountingSource

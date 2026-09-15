@@ -8,28 +8,84 @@ export const EVALUATION_TRACK_IDS = [
   'safety',
   'capacity',
 ] as const
-
-export const EVALUATION_CHANGE_PROFILE_IDS = [
-  'schema_adapter',
-  'recipe',
-  'selector',
-  'model_pool',
-  'runtime_capacity',
-  'agent_multimodal',
-  'online_adaptation',
+export const EVALUATION_GATE_DISPOSITIONS = [
+  'required',
+  'advisory',
+  'not_applicable',
+] as const
+export const EVALUATION_SUMMARY_VERDICTS = ['pass', 'fail', 'unavailable'] as const
+export const EVALUATION_GATE_VERDICTS = [
+  ...EVALUATION_SUMMARY_VERDICTS,
+  'not_applicable',
 ] as const
 
 export const EVALUATION_SCHEMA_VERSION = 'evaluation.v1' as const
+export const EVALUATION_ATTESTATION_REVISION = 'evaluation-server-attestation.v2' as const
+export const EVALUATION_GATE_CONTRACT_VERSION = 'evaluation-release-gates.v2' as const
+export const EVALUATION_CAMPAIGN_CONTRACT_VERSION = 'evaluation-campaign.v2' as const
+export const EVALUATION_CAMPAIGN_COHORT_SCHEMA_VERSION =
+  'evaluation-campaign-cohort.v1' as const
+export const EVALUATION_CAMPAIGN_PAIRED_LIVE_CONTRACT_VERSION =
+  'evaluation-campaign-paired-live.v3' as const
+export const EVALUATION_CAMPAIGN_FIDELITY_CONTRACT_VERSION =
+  'evaluation-campaign-fidelity.v2' as const
 
 export type EvaluationSchemaVersion = typeof EVALUATION_SCHEMA_VERSION
+export type EvaluationAttestationRevision = typeof EVALUATION_ATTESTATION_REVISION
+export type EvaluationGateContractVersion = typeof EVALUATION_GATE_CONTRACT_VERSION
+export type EvaluationCampaignContractVersion = typeof EVALUATION_CAMPAIGN_CONTRACT_VERSION
+export type EvaluationCampaignCohortSchemaVersion =
+  typeof EVALUATION_CAMPAIGN_COHORT_SCHEMA_VERSION
+export type EvaluationCampaignPairedLiveContractVersion =
+  typeof EVALUATION_CAMPAIGN_PAIRED_LIVE_CONTRACT_VERSION
+export type EvaluationCampaignFidelityContractVersion =
+  typeof EVALUATION_CAMPAIGN_FIDELITY_CONTRACT_VERSION
 export type EvaluationTrackId = (typeof EVALUATION_TRACK_IDS)[number]
-export type EvaluationChangeProfileId = (typeof EVALUATION_CHANGE_PROFILE_IDS)[number]
+// Change profiles are server-owned catalog entries, not a browser-side enum.
+export type EvaluationChangeProfileId = string
 export type EvaluationMode = 'replay' | 'live'
 export type EvidenceLevel = 'E0' | 'E1' | 'E2' | 'E3' | 'E4' | 'E5'
-export type EvaluationRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type EvaluationRunStatus =
+  | 'pending'
+  | 'running'
+  | 'sealing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 export type EvaluationTrackStatus = EvaluationRunStatus | 'unavailable' | 'skipped'
-export type GateDisposition = 'required' | 'advisory' | 'not_applicable' | 'waived'
-export type GateVerdict = 'pass' | 'fail' | 'unavailable' | 'waived' | 'not_applicable'
+export type GateDisposition = (typeof EVALUATION_GATE_DISPOSITIONS)[number]
+export type EvaluationSummaryVerdict = (typeof EVALUATION_SUMMARY_VERDICTS)[number]
+export type GateVerdict = (typeof EVALUATION_GATE_VERDICTS)[number]
+export const EVALUATION_METHOD_EVIDENCE_SOURCE = Object.freeze({
+  DIAGNOSTIC_FIXTURE: 'diagnostic_fixture',
+  LIVE_RUNTIME: 'live_runtime',
+  NORMALIZED_IMPORT: 'normalized_import',
+  SERVER_BROKERED_LIVE: 'server_brokered_live',
+  LIVE_PRODUCTION: 'live_production',
+} as const)
+export type EvaluationMethodEvidenceSource =
+  (typeof EVALUATION_METHOD_EVIDENCE_SOURCE)[keyof typeof EVALUATION_METHOD_EVIDENCE_SOURCE]
+export const EVALUATION_METHOD_EVIDENCE_SOURCES = Object.freeze(
+  Object.values(EVALUATION_METHOD_EVIDENCE_SOURCE),
+)
+const EVALUATION_METHOD_EVIDENCE_SOURCE_SET: ReadonlySet<string> = new Set(
+  EVALUATION_METHOD_EVIDENCE_SOURCES,
+)
+export function isEvaluationMethodEvidenceSource(
+  value: unknown,
+): value is EvaluationMethodEvidenceSource {
+  return typeof value === 'string' && EVALUATION_METHOD_EVIDENCE_SOURCE_SET.has(value)
+}
+export type EvaluationMethodStatus = 'configured' | 'data_required'
+
+export interface EvaluationCatalogMethod {
+  id: string
+  track_id: EvaluationTrackId
+  qualified_gate_ids: string[]
+  evidence_source: EvaluationMethodEvidenceSource
+  status: EvaluationMethodStatus
+  reason?: string
+}
 
 export interface EvaluationCatalogTrack {
   id: EvaluationTrackId
@@ -37,19 +93,100 @@ export interface EvaluationCatalogTrack {
   description: string
   modes: EvaluationMode[]
   metrics: string[]
-  evidence_levels?: EvidenceLevel[]
+  evidence_levels: EvidenceLevel[]
+}
+
+export interface EvaluationCampaignProtocol {
+  schema_version: EvaluationCampaignCohortSchemaVersion
+  minimum_cases: number
 }
 
 export interface EvaluationCatalogSuite {
   id: string
+  executors: Partial<Record<EvaluationMode, string>>
   name: string
   description: string
   track_ids: EvaluationTrackId[]
   modes: EvaluationMode[]
   evidence_level: EvidenceLevel
   case_count?: number
-  revision?: string
-  tags?: string[]
+  campaign_protocol?: EvaluationCampaignProtocol
+  revision: string
+  tags: string[]
+  methods: EvaluationCatalogMethod[]
+}
+
+export interface EvaluationModelArm {
+  id: string
+  model: string
+  provider_model_id_digest: string
+  input_cost_per_million_tokens_usd: number
+  output_cost_per_million_tokens_usd: number
+  capabilities?: string[]
+  modalities?: Array<'text' | 'image' | 'document' | 'audio' | 'video'>
+  context_window_tokens?: number
+  parameter_size?: string
+  runtime_revision?: string
+  config_digest?: string
+}
+
+export interface EvaluationMixtureDecision {
+  name: string
+  algorithm: string
+  arm_ids: string[]
+}
+
+export interface EvaluationSupportModel {
+  model: string
+  provider_model_id_digest: string
+  config_digest: string
+  runtime_revision?: string
+  backend_topology_digest: string
+}
+
+export interface EvaluationRoutingRecipeInputSpec {
+  id: string
+  value_kind: 'numeric' | 'none'
+}
+
+export interface EvaluationRoutingRecipeProjectionSpec {
+  id: string
+  value_kind: 'numeric' | 'probability'
+  outcome_binding: 'selected_pool_quality' | 'selected_is_oracle'
+}
+
+export interface EvaluationRoutingRecipePlan {
+  contract_version: 'routing-recipe-plan.v1'
+  plan_digest: string
+  target_snapshot_digest: string
+  arm_ids: string[]
+  fallback_arm_id?: string
+  signals: EvaluationRoutingRecipeInputSpec[]
+  projections: EvaluationRoutingRecipeProjectionSpec[]
+  top_k: number[]
+}
+
+/**
+ * Browser-safe, immutable view of the exact Mixture-of-Models binding being
+ * evaluated. Connectivity and provider identities never cross this boundary.
+ */
+export interface EvaluationMixture {
+  id: string
+  entrypoint_model: string
+  aliases: string[]
+  recipe_name: string
+  recipe_description: string
+  recipe_digest: string
+  pool_digest: string
+  selector_policy_digest: string
+  selector_digest: string
+  adaptation_digest: string
+  binding_digest: string
+  model_arms: EvaluationModelArm[]
+  support_models: EvaluationSupportModel[]
+  fallback_arm_id?: string
+  decisions: EvaluationMixtureDecision[]
+  routing_recipe_plan: EvaluationRoutingRecipePlan
 }
 
 export interface EvaluationCatalogTarget {
@@ -59,28 +196,86 @@ export interface EvaluationCatalogTarget {
   kind: string
   track_ids: EvaluationTrackId[]
   modes: EvaluationMode[]
+  accepted_executors: Partial<Record<EvaluationMode, string[]>>
   evidence_level?: EvidenceLevel
   healthy?: boolean
   labels?: Record<string, string>
+  mixture?: EvaluationMixture
 }
 
 export interface EvaluationCatalogChangeProfile {
   id: EvaluationChangeProfileId
   name: string
   description: string
+  campaign_slots: EvaluationCatalogCampaignSlot[]
+}
+
+export const EVALUATION_CAMPAIGN_GATE_IDS = [
+  'G2',
+  'G3',
+  'G4',
+  'G5',
+  'G6',
+  'G7',
+  'G8',
+  'G9',
+] as const
+export const EVALUATION_RELEASE_GATE_IDS = [
+  'G0',
+  'G1',
+  ...EVALUATION_CAMPAIGN_GATE_IDS,
+] as const
+export type EvaluationCampaignSlotID = 'g2' | 'g3' | 'g4' | 'g5' | 'g6' | 'g7' | 'g8' | 'g9'
+export type EvaluationCampaignGateID = (typeof EVALUATION_CAMPAIGN_GATE_IDS)[number]
+export type EvaluationCampaignBindingKind = 'run' | 'controlled_pair' | 'fidelity_pair'
+
+export interface EvaluationCatalogCampaignSlot {
+  gate_id: EvaluationCampaignGateID
+  name: string
+  description: string
+  disposition: GateDisposition
+  binding_kind: EvaluationCampaignBindingKind
+  track_id: EvaluationTrackId
+  mode: EvaluationMode
+  minimum_evidence_level: EvidenceLevel
+  accepted_executor_ids: string[]
 }
 
 export interface EvaluationCatalog {
   schema_version: EvaluationSchemaVersion
-  gate_contract_version: string
-  generated_at?: string
+  gate_contract_version: EvaluationGateContractVersion
+  generated_at: string
   change_profiles: EvaluationCatalogChangeProfile[]
   tracks: EvaluationCatalogTrack[]
   suites: EvaluationCatalogSuite[]
   targets: EvaluationCatalogTarget[]
 }
 
-export interface CreateEvaluationRunRequest {
+export interface EvaluationCapacitySLO {
+  schema_version: EvaluationSchemaVersion
+  required_concurrency: number
+  max_latency_p95_ms: number
+  max_error_rate: number
+  min_throughput_rps: number
+  min_throughput_scaling_efficiency: number
+}
+
+export interface EvaluationCapacityLoadProtocol {
+  schema_version: EvaluationSchemaVersion
+  kind: 'closed-loop'
+  concurrency_levels: number[]
+  warmup_request_multiplier: number
+  measurement_requests_per_repetition: number
+  repetitions_per_level: number
+  minimum_measurement_clusters_per_level: 3
+  confidence_level: 0.95
+  max_error_rate_cluster_range: 0.05
+  max_throughput_cv: number
+  max_latency_p95_cv: number
+}
+
+export interface CreateEvaluationRunPayload {
+  client_request_id: string
   name: string
   description: string
   suite_ids: string[]
@@ -90,9 +285,14 @@ export interface CreateEvaluationRunRequest {
   change_profile: EvaluationChangeProfileId
   sample_limit: number
   concurrency: number
+  capacity_slo?: EvaluationCapacitySLO
+  capacity_load_protocol?: EvaluationCapacityLoadProtocol
   seed: number
   baseline_run_id?: string
-  auto_start: boolean
+}
+
+export interface EvaluationExperimentIntent extends CreateEvaluationRunPayload {
+  autoStart: boolean
 }
 
 export interface EvaluationRunProgress {
@@ -103,22 +303,35 @@ export interface EvaluationRunProgress {
   message?: string
 }
 
+export type EvaluationControlledPairRole = 'baseline' | 'candidate'
+
+export interface EvaluationControlledPairMembership {
+  pair_id: string
+  role: EvaluationControlledPairRole
+}
+
 export interface EvaluationRun {
   schema_version: EvaluationSchemaVersion
   id: string
+  client_request_id: string
   name: string
   description: string
   status: EvaluationRunStatus
   mode: EvaluationMode
   evidence_level: EvidenceLevel
+  track_evidence_levels: Partial<Record<EvaluationTrackId, EvidenceLevel>>
   target_id: string
+  mixture?: EvaluationMixture
   change_profile: EvaluationChangeProfileId
   suite_ids: string[]
   track_ids: EvaluationTrackId[]
   sample_limit: number
   concurrency: number
+  capacity_slo?: EvaluationCapacitySLO
+  capacity_load_protocol?: EvaluationCapacityLoadProtocol
   seed: number
   baseline_run_id?: string
+  controlled_pair?: EvaluationControlledPairMembership
   progress: EvaluationRunProgress
   created_at: string
   started_at?: string
@@ -126,183 +339,64 @@ export interface EvaluationRun {
   error?: string
 }
 
-export interface EvaluationCoverage {
-  evaluated: number
-  total: number
-  fraction: number
-  unavailable?: number
-  confidence_level?: number
-  confidence_interval?: [number, number]
+export interface EvaluationRunLedgerWarning {
+  code: string
+  evidence_id: string
+  evidence_file: string
+  message: string
 }
 
-export interface EvaluationMetric {
-  id: string
-  name: string
-  track_id?: EvaluationTrackId
-  value: number | null
-  unit: string
-  direction?: 'higher_is_better' | 'lower_is_better' | 'target'
-  baseline_value?: number | null
-  delta?: number | null
-  confidence_interval?: [number, number]
-  sample_count?: number
-}
-
-export interface EvaluationGate {
-  id: string
-  name: string
-  description?: string
-  track_id?: EvaluationTrackId
-  disposition: GateDisposition
-  verdict: GateVerdict
-  change_profile: EvaluationChangeProfileId
-  contract_version: string
-  evidence_refs: string[]
-  evidence_level?: EvidenceLevel
-  observed?: number | null
-  threshold?: {
-    operator: string
-    value: number
-    unit?: string
-  }
-  sample_count?: number
-  coverage?: EvaluationCoverage
-  owner?: string
-  evaluated_at?: string
-  rationale?: string
-}
-
-export interface EvaluationArtifact {
-  id: string
-  name: string
-  kind: string
-  uri?: string
-  digest?: string
-  media_type?: string
-  size_bytes?: number
-}
-
-export interface EvaluationProvenance {
+export interface EvaluationRunLedger {
   schema_version: EvaluationSchemaVersion
-  generated_at: string
-  code_revision?: string
-  benchmark_revisions?: Record<string, string>
-  workload_snapshot_digest?: string
-  policy_snapshot_digest?: string
-  binding_snapshot_digest?: string
-  pool_snapshot_digest?: string
-  environment_snapshot_digest?: string
-  target_id: string
-  seed: number
-  redaction_policy?: string
+  runs: EvaluationRun[]
+  next_cursor?: string
+  total_runs: number
+  ledger_complete: boolean
+  warning_count: number
+  warnings: EvaluationRunLedgerWarning[]
 }
 
-export interface EvaluationCostAmount {
-  amount: number | null
-  currency: string
-  input_tokens?: number
-  output_tokens?: number
-  gpu_seconds?: number
-  energy_kwh?: number
-}
+export type EvaluationRunEventType =
+  | 'snapshot'
+  | 'progress'
+  | 'track'
+  | 'gate'
+  | 'artifact'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
-export interface EvaluationCostLedgers {
-  runtime: EvaluationCostAmount
-  evaluation_overhead: EvaluationCostAmount
-  capacity_tco: EvaluationCostAmount
-}
-
-export interface EvaluationTrackReport {
-  track_id: EvaluationTrackId
-  status: EvaluationTrackStatus
-  evidence_level: EvidenceLevel
-  summary: string
-  coverage: EvaluationCoverage
-  metrics: EvaluationMetric[]
-  gates: EvaluationGate[]
-  artifacts?: EvaluationArtifact[]
-  error?: string
-}
-
-export interface EvaluationReportSummary {
-  verdict: GateVerdict
-  quality_score: number | null
-  latency_p95_ms: number | null
-  runtime_cost: number | null
-  capacity_tco: number | null
-  coverage: EvaluationCoverage
-  passed_gates: number
-  failed_gates: number
-  unavailable_gates: number
-}
-
-export interface EvaluationReport {
-  schema_version: EvaluationSchemaVersion
-  run: EvaluationRun
-  summary: EvaluationReportSummary
-  tracks: EvaluationTrackReport[]
-  metrics: EvaluationMetric[]
-  gates: EvaluationGate[]
-  costs: EvaluationCostLedgers
-  recommendations: string[]
-  provenance: EvaluationProvenance
-  artifacts: EvaluationArtifact[]
-}
-
-export interface EvaluationComparison {
-  schema_version: EvaluationSchemaVersion
-  baseline_run_id: string
-  candidate_run_id: string
-  verdict: GateVerdict
-  summary: string
-  metrics: EvaluationMetric[]
-  gates: EvaluationGate[]
-  recommendations: string[]
-  created_at?: string
-}
-
-export interface EvaluationRunEvent {
-  id?: string
+interface EvaluationRunEventBase {
+  id: string
   run_id: string
-  type: string
   timestamp: string
   message: string
-  track_id?: EvaluationTrackId
   progress?: EvaluationRunProgress
 }
 
-export const TRACK_PRESENTATION: Record<EvaluationTrackId, { label: string; description: string }> =
-  {
-    routing: {
-      label: 'Routing',
-      description: 'Recipe decisions, oracle regret, abstention, calibration, and eligibility.',
-    },
-    model_pool: {
-      label: 'Model pool',
-      description: 'Arm quality, complementarity, coverage, dominance, and failure isolation.',
-    },
-    joint: {
-      label: 'Routing + pool',
-      description: 'End-to-end quality, latency, cost, reliability, and decomposition.',
-    },
-    agentic: {
-      label: 'Agentic',
-      description: 'Trajectory success, tool use, state continuity, recovery, and budget.',
-    },
-    multimodal: {
-      label: 'Multimodal',
-      description: 'Modality-aware routing, perception, grounding, and cross-modal quality.',
-    },
-    preference: {
-      label: 'Preference',
-      description: 'Offline preference, online trials, stability, and feedback adaptation.',
-    },
-    safety: {
-      label: 'Safety',
-      description: 'Policy adherence, attack resistance, privacy, and unsafe regressions.',
-    },
-    capacity: {
-      label: 'Capacity',
-      description: 'Throughput, saturation, queueing, SLOs, GPU efficiency, and TCO.',
-    },
+export interface EvaluationTrackRunEvent extends EvaluationRunEventBase {
+  type: 'track'
+  track_id: EvaluationTrackId
+  progress: EvaluationRunProgress
+  payload: {
+    record_count: number
   }
+}
+
+export interface EvaluationTerminalRunEvent extends EvaluationRunEventBase {
+  type: 'completed' | 'failed' | 'cancelled'
+  progress: EvaluationRunProgress
+  track_id?: never
+  payload?: never
+}
+
+export interface EvaluationPayloadlessRunEvent extends EvaluationRunEventBase {
+  type: Exclude<EvaluationRunEventType, 'track' | EvaluationTerminalRunEvent['type']>
+  track_id?: never
+  payload?: never
+}
+
+export type EvaluationRunEvent =
+  | EvaluationTrackRunEvent
+  | EvaluationTerminalRunEvent
+  | EvaluationPayloadlessRunEvent

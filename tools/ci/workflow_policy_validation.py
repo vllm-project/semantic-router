@@ -8,22 +8,11 @@ from typing import Any, Protocol
 
 import yaml
 from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
-from test_domain_registry import (
-    domain_records,
-    load_test_domain_registry,
-)
+from domain_registry import job_records
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 LOCAL_WORKFLOW_PREFIX = "./.github/workflows/"
-REQUIRED_COMPATIBILITY_CHECKS = {
-    "Run pre-commit hooks check file lint",
-    "test-and-build",
-    "Lint",
-    "Unit Tests",
-    "Verify Manifests",
-    "Validate OLM Bundle",
-}
 REQUIRED_APPROVAL_CONDITION = "#approved-reviews-by >= 2"
 RELEASE_IMAGES = set(PRODUCTION_RELEASE_IMAGES)
 
@@ -111,28 +100,19 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
     if "pull_request" not in dispatcher.events:
         errors.append(".github/workflows/pr.yml: missing pull_request trigger")
 
-    compatibility = dispatcher.jobs.get("compatibility", {})
-    matrix = (
-        compatibility.get("strategy", {}).get("matrix", {}).get("check", [])
-        if isinstance(compatibility, dict)
-        else []
-    )
-    if set(matrix) != REQUIRED_COMPATIBILITY_CHECKS:
-        errors.append(
-            ".github/workflows/pr.yml: compatibility matrix does not preserve "
-            "the required branch-protection and Mergify contexts"
-        )
-    registry_contexts = set(
-        load_test_domain_registry().get("compatibility_contexts", [])
-    )
-    if registry_contexts != REQUIRED_COMPATIBILITY_CHECKS:
-        errors.append(
-            "tools/agent/test-domain-registry.yaml compatibility contexts "
-            "do not match workflow policy"
-        )
+    if "compatibility" in dispatcher.jobs:
+        errors.append(".github/workflows/pr.yml: compatibility matrix must be removed")
     gate = dispatcher.jobs.get("pr-gate", {})
     if not isinstance(gate, dict) or gate.get("name") != "PR Gate":
         errors.append(".github/workflows/pr.yml: missing stable 'PR Gate' aggregate")
+    else:
+        expected_needs = {"changes", *job_records()}
+        actual_needs = needs(gate)
+        if actual_needs != expected_needs:
+            errors.append(
+                ".github/workflows/pr.yml: PR Gate must aggregate exactly the "
+                "classifier and registered jobs"
+            )
 
     validate_pr_selection_contract(dispatcher, workflows, errors)
     validate_registry_dispatch_contract(dispatcher, workflows, errors)
@@ -164,26 +144,23 @@ def validate_registry_dispatch_contract(
     workflows: dict[str, WorkflowLike],
     errors: list[str],
 ) -> None:
-    for domain_name, domain in domain_records().items():
-        if "pr" not in domain.get("cadence", []):
-            continue
-        job_id = domain["pr_job"]
-        workflow_name = Path(domain["workflow"]).name
+    for job_id, registered_job in job_records().items():
+        workflow_name = Path(registered_job["workflow"]).name
         job = dispatcher.jobs.get(job_id)
         if not isinstance(job, dict):
             errors.append(
-                f".github/workflows/pr.yml: missing registry domain job {job_id!r}"
+                f".github/workflows/pr.yml: missing registered job {job_id!r}"
             )
             continue
         if local_target(job) != workflow_name:
             errors.append(
-                f".github/workflows/pr.yml: registry domain {domain_name!r} "
-                f"must call {workflow_name!r}"
+                f".github/workflows/pr.yml: registered job {job_id!r} must call "
+                f"{workflow_name!r}"
             )
         workflow = workflows.get(workflow_name)
         if workflow is None or "workflow_call" not in workflow.events:
             errors.append(
-                f"{domain['workflow']}: registry domain workflow must be reusable"
+                f"{registered_job['workflow']}: registered workflow must be reusable"
             )
 
 
@@ -217,6 +194,34 @@ def validate_classifier_contract(
     if "dorny/paths-filter" in text:
         errors.append(
             ".github/workflows/ci-changes.yml: hidden dorny product filters remain"
+        )
+    call_contract = classifier.events.get("workflow_call", {})
+    workflow_outputs = (
+        set(call_contract.get("outputs", {}))
+        if isinstance(call_contract, dict)
+        else set()
+    )
+    expected_outputs = {
+        str(job["output"]) for job in job_records().values() if job.get("output")
+    }
+    expected_outputs.update(
+        {
+            "website",
+            "helm",
+            "e2e",
+            "e2e_profiles",
+            "full_e2e_profiles",
+            "images",
+            "pr_images",
+            "publish_images",
+            "docs_only",
+            "full",
+        }
+    )
+    if workflow_outputs != expected_outputs:
+        errors.append(
+            ".github/workflows/ci-changes.yml: outputs must match the consumed "
+            "registry contract exactly"
         )
 
 
@@ -362,6 +367,8 @@ def validate_removed_workflows(errors: list[str]) -> None:
         "docker-release.yml",
         "issue-manager.yml",
         "owner-notification.yml",
+        "anti-spam-filter.yml",
+        "performance-nightly.yml",
         "skill-review.yml",
     }
     existing = sorted(name for name in removed if (WORKFLOW_DIR / name).exists())
@@ -375,19 +382,19 @@ def validate_mergify_contract(errors: list[str]) -> None:
     sections = ("queue_conditions", "merge_conditions")
     queue_rules = data.get("queue_rules", [])
     default_rule = queue_rules[0] if queue_rules else {}
-    required = REQUIRED_COMPATIBILITY_CHECKS - {"Run pre-commit hooks check file lint"}
-    required.add("PR Gate")
     for section in sections:
         serialized = json.dumps(default_rule.get(section, []))
-        missing = sorted(
-            context
-            for context in required
-            if f"check-success = {context}" not in serialized
+        if "check-success = PR Gate" not in serialized:
+            errors.append(f".mergify.yml: {section} must require PR Gate")
+        obsolete = (
+            "test-and-build",
+            "Lint",
+            "Unit Tests",
+            "Verify Manifests",
+            "Validate OLM Bundle",
         )
-        if missing:
-            errors.append(
-                f".mergify.yml: {section} is missing contexts: " + ", ".join(missing)
-            )
+        if any(f"check-success = {context}" in serialized for context in obsolete):
+            errors.append(f".mergify.yml: {section} retains compatibility contexts")
     pull_request_rules = data.get("pull_request_rules", [])
     queue_rules = [
         rule

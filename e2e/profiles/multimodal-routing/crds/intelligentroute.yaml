@@ -5,17 +5,18 @@ metadata:
   namespace: default
 spec:
   signals:
-    # Image-modality embedding rules mirroring the opt-in pack shipped in
-    # config/fragments/signal/embedding/image-routing.yaml (PR #1896). Each rule's
-    # candidates are short text anchors that get embedded in the shared
-    # multimodal text/image space; the request-path image embedding
-    # cosine-matches against them. Requires
+    # Image-modality embedding rules use the same text anchors as the opt-in
+    # image-routing pack. The profile threshold is calibrated against the
+    # checked-in fixtures and pinned multi-modal-embed-small model so every
+    # positive and cross-rule negative remains an acceptance assertion. Each
+    # candidate is embedded in the shared multimodal text/image space and the
+    # request-path image embedding cosine-matches against it. Requires
     # global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal
     # in values.yaml.
     embeddings:
       - name: "identifier_document_imagery"
         queryModality: "image"
-        threshold: 0.10
+        threshold: 0.42
         aggregationMethod: "max"
         candidates:
           - "photograph of a passport page"
@@ -29,7 +30,7 @@ spec:
 
       - name: "code_or_terminal_imagery"
         queryModality: "image"
-        threshold: 0.10
+        threshold: 0.42
         aggregationMethod: "max"
         candidates:
           - "screenshot of source code in an editor"
@@ -43,7 +44,7 @@ spec:
 
       - name: "ambient_office_imagery"
         queryModality: "image"
-        threshold: 0.10
+        threshold: 0.42
         aggregationMethod: "max"
         candidates:
           - "photograph of a whiteboard with handwritten notes"

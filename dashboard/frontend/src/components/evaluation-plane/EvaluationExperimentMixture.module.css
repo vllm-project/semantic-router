@@ -1,0 +1,193 @@
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.mixtureSnapshot {
+  overflow: hidden;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+}
+
+.mixtureHeader {
+  align-items: flex-start;
+  padding: 0.75rem 0;
+}
+
+.mixtureSnapshot[open] .mixtureHeader {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mixtureSummaryCopy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.mixtureLabel {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.mixtureHeader strong {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.mixtureHeader small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.mixtureFacts {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 0.6rem;
+  margin-left: auto;
+}
+
+.mixtureFacts span {
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.mixtureColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.mixtureColumns > div {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.mixtureColumns > div + div {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.decisionList,
+.armList {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.decisionList article,
+.armList article {
+  min-width: 0;
+  padding: 0.62rem 0.7rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.decisionList article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.decisionList article:last-child,
+.armList article:last-child {
+  border-bottom: 0;
+}
+
+.decisionList article > div,
+.armList article {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.decisionList strong,
+.armList strong {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.decisionList code,
+.decisionList span,
+.decisionList small,
+.armList span,
+.armList small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.decisionList small {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.supportModels {
+  margin: 0.15rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.mixtureLineageDetails {
+  border-top: 1px solid var(--border-subtle);
+  --evaluation-disclosure-indicator-size: 0.4rem;
+}
+
+.mixtureLineageSummary {
+  min-height: 42px;
+  padding: 0.55rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.mixtureLineage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.mixtureLineage code {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 680px) {
+  .mixtureHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mixtureFacts {
+    justify-content: flex-start;
+  }
+
+  .mixtureColumns {
+    grid-template-columns: 1fr;
+  }
+
+  .mixtureColumns > div + div {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .fieldWide {
+    grid-column: auto;
+  }
+}

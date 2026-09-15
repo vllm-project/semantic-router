@@ -1,10 +1,12 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -109,37 +111,110 @@ func createCategoryInitializer() CategoryInitializer {
 	return &CategoryInitializerImpl{}
 }
 
+// CandleCategoryInitializerImpl is the explicit candle variant. Unlike the
+// historical auto-detecting initializer, it never probes or falls back to
+// ModernBERT.
+type CandleCategoryInitializerImpl struct{}
+
+func (c *CandleCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	classes := 0
+	if len(numClasses) > 0 {
+		classes = numClasses[0]
+	}
+	if !candle_binding.InitCandleBertClassifier(modelID, classes, useCPU) {
+		return fmt.Errorf("failed to initialize Candle category classifier")
+	}
+	logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
+		"backend":   "candle",
+		"model_ref": modelID,
+	})
+	return nil
+}
+
+func createCandleCategoryInitializer() CategoryInitializer {
+	return &CandleCategoryInitializerImpl{}
+}
+
+// CandleCategoryInferenceImpl keeps explicit candle selection from silently
+// switching to ModernBERT. Candle currently exposes top-1 classification only,
+// so its probability interface returns the same historical top-1 result.
+type CandleCategoryInferenceImpl struct{}
+
+func (CandleCategoryInferenceImpl) Classify(_ context.Context, text string) (tasks.ClassResult, error) {
+	return nativeClassResult(candle_binding.ClassifyCandleBertText(text))
+}
+
+func (c CandleCategoryInferenceImpl) ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
+	result, err := c.Classify(ctx, text)
+	if err != nil {
+		return tasks.ClassResultWithProbs{}, err
+	}
+	return tasks.ClassResultWithProbs{Class: result.Class, Confidence: result.Confidence}, nil
+}
+
+// ModernBERTCategoryInitializerImpl keeps the canonical modernbert selector
+// explicit. The historical empty selector still uses CategoryInitializerImpl's
+// auto-detecting path, while variant: modernbert must not depend on model-name
+// heuristics to choose its local runtime.
+type ModernBERTCategoryInitializerImpl struct{}
+
+func (c *ModernBERTCategoryInitializerImpl) Init(modelID string, useCPU bool, _ ...int) error {
+	if err := candle_binding.InitModernBertClassifier(modelID, useCPU); err != nil {
+		return fmt.Errorf("failed to initialize ModernBERT category classifier: %w", err)
+	}
+	logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
+		"backend":   "modernbert",
+		"model_ref": modelID,
+	})
+	return nil
+}
+
+func createModernBERTCategoryInitializer() CategoryInitializer {
+	return &ModernBERTCategoryInitializerImpl{}
+}
+
 // createMmBERT32KCategoryInitializer creates an mmBERT-32K category initializer.
 func createMmBERT32KCategoryInitializer() CategoryInitializer {
 	return &MmBERT32KCategoryInitializerImpl{}
 }
 
-type CategoryInference interface {
-	Classify(text string) (candle_binding.ClassResult, error)
-	ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error)
-}
-
 type CategoryInferenceImpl struct{}
 
-func (c *CategoryInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+func (c *CategoryInferenceImpl) Classify(_ context.Context, text string) (tasks.ClassResult, error) {
 	// Try Candle BERT first, fall back to ModernBERT if it fails
 	result, err := candle_binding.ClassifyCandleBertText(text)
 	if err != nil {
 		// Candle BERT not initialized or failed, try ModernBERT
-		return candle_binding.ClassifyModernBertText(text)
+		return nativeClassResult(candle_binding.ClassifyModernBertText(text))
 	}
-	return result, nil
+	return nativeClassResult(result, nil)
 }
 
-func (c *CategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+func (c *CategoryInferenceImpl) ClassifyWithProbabilities(_ context.Context, text string) (tasks.ClassResultWithProbs, error) {
 	// Note: CandleBert doesn't have WithProbabilities yet, fall back to ModernBERT
 	// This will work correctly if ModernBERT was initialized as fallback
-	return candle_binding.ClassifyModernBertTextWithProbabilities(text)
+	return nativeClassResultWithProbs(candle_binding.ClassifyModernBertTextWithProbabilities(text))
 }
 
 // createCategoryInference creates the category inference (auto-detecting).
 func createCategoryInference() CategoryInference {
 	return &CategoryInferenceImpl{}
+}
+
+// ModernBERTCategoryInferenceImpl keeps explicit ModernBERT selection from
+// falling through to the auto-detecting Candle-first implementation.
+type ModernBERTCategoryInferenceImpl struct{}
+
+func (ModernBERTCategoryInferenceImpl) Classify(_ context.Context, text string) (tasks.ClassResult, error) {
+	return nativeClassResult(candle_binding.ClassifyModernBertText(text))
+}
+
+func (ModernBERTCategoryInferenceImpl) ClassifyWithProbabilities(_ context.Context, text string) (tasks.ClassResultWithProbs, error) {
+	return nativeClassResultWithProbs(candle_binding.ClassifyModernBertTextWithProbabilities(text))
+}
+
+func createModernBERTCategoryInference() CategoryInference {
+	return ModernBERTCategoryInferenceImpl{}
 }
 
 // MmBERT32KCategoryInferenceImpl uses mmBERT-32K for intent classification.
@@ -153,10 +228,10 @@ func (c *MmBERT32KCategoryInferenceImpl) getBackend() string {
 	return "candle"
 }
 
-func (c *MmBERT32KCategoryInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+func (c *MmBERT32KCategoryInferenceImpl) Classify(_ context.Context, text string) (tasks.ClassResult, error) {
 	backend := c.getBackend()
 	start := time.Now()
-	var result candle_binding.ClassResult
+	var result tasks.ClassResult
 	var err error
 
 	switch backend {
@@ -165,13 +240,13 @@ func (c *MmBERT32KCategoryInferenceImpl) Classify(text string) (candle_binding.C
 		if ovErr != nil {
 			err = ovErr
 		} else {
-			result = candle_binding.ClassResult{
+			result = tasks.ClassResult{
 				Class:      ovResult.Class,
 				Confidence: ovResult.Confidence,
 			}
 		}
 	default:
-		result, err = candle_binding.ClassifyMmBert32KIntent(text)
+		result, err = nativeClassResult(candle_binding.ClassifyMmBert32KIntent(text))
 	}
 
 	elapsed := time.Since(start)
@@ -181,12 +256,12 @@ func (c *MmBERT32KCategoryInferenceImpl) Classify(text string) (candle_binding.C
 	return result, err
 }
 
-func (c *MmBERT32KCategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
-	result, err := c.Classify(text)
+func (c *MmBERT32KCategoryInferenceImpl) ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
+	result, err := c.Classify(ctx, text)
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, err
+		return tasks.ClassResultWithProbs{}, err
 	}
-	return candle_binding.ClassResultWithProbs{
+	return tasks.ClassResultWithProbs{
 		Class:      result.Class,
 		Confidence: result.Confidence,
 	}, nil

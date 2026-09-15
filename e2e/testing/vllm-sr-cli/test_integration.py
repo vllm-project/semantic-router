@@ -8,6 +8,7 @@ They are slower than unit tests and should be run with --integration flag.
 """
 
 import os
+import shutil
 import subprocess
 import time
 import unittest
@@ -20,10 +21,11 @@ from urllib import request as urllib_request
 from cli_test_base import CLITestBase
 from serve_session import ServeSessionMixin
 
-DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
-MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_SIM_IMAGE"
+DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
 MOCK_OPENAI_SERVER_PORT = 18080
 MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
+PULL_POLICY_PROBE_IMAGE = "example.invalid/vllm-sr-cli/pull-policy-probe:always"
 
 
 class TestServeIntegration(ServeSessionMixin, CLITestBase):
@@ -34,6 +36,39 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
 
     def _create_minimal_config(self, port: int = 8888) -> str:
         return self.write_minimal_canonical_config(port=port)
+
+    def _pull_interceptor_env(self) -> tuple[dict[str, str], Path]:
+        """Intercept runtime pulls without replacing the rest of the CLI stack."""
+        real_runtime = shutil.which(self.container_runtime)
+        self.assertIsNotNone(real_runtime, f"{self.container_runtime} is not on PATH")
+
+        wrapper_dir = Path(self.test_dir) / "pull-interceptor"
+        wrapper_dir.mkdir()
+        wrapper_path = wrapper_dir / self.container_runtime
+        pull_log = wrapper_dir / "pulls.log"
+        wrapper_path.write_text(
+            """#!/bin/sh
+set -eu
+if [ "$1" = "pull" ]; then
+  printf '%s\\n' "$2" >> "$VLLM_SR_TEST_PULL_LOG"
+  printf 'Intercepted test pull: %s\\n' "$2" >&2
+  exit 1
+fi
+exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
+""",
+            encoding="utf-8",
+        )
+        wrapper_path.chmod(0o755)
+
+        return (
+            {
+                "CONTAINER_RUNTIME": self.container_runtime,
+                "PATH": f"{wrapper_dir}{os.pathsep}{os.environ['PATH']}",
+                "VLLM_SR_TEST_PULL_LOG": str(pull_log),
+                "VLLM_SR_TEST_REAL_RUNTIME": real_runtime or "",
+            },
+            pull_log,
+        )
 
     def test_wait_for_serve_success_does_not_terminate_a_successful_process(self):
         process = mock.Mock(spec=subprocess.Popen)
@@ -349,7 +384,7 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         """Verify the logs command returns container output for one service."""
         time.sleep(5)
         service_failures: list[str] = []
-        for service in ("router", "envoy", "dashboard", "simulator"):
+        for service in ("router", "envoy", "dashboard"):
             return_code, stdout, stderr = self.run_cli(["logs", service])
             output = stdout + stderr
             if return_code == 0 and output.strip():
@@ -454,53 +489,6 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_fleet_sim_sidecar_contracts(self):
-        """Test that serve starts the simulator sidecar and exposes its health."""
-        self.print_test_header(
-            "Fleet Sim Sidecar Integration Test",
-            "Verifies serve starts vllm-sr-sim, wires TARGET_FLEET_SIM_URL, and exposes /healthz",
-        )
-
-        with self._running_serve():
-            if not self.wait_for_container_running(
-                timeout=60, container_name=self.SIM_CONTAINER_NAME
-            ):
-                self.fail("Fleet simulator sidecar did not reach running state")
-
-            return_code, stdout, stderr = self.inspect_container(
-                "{{.Config.Env}}",
-                container_name=self.resolve_runtime_inspect_container_name(),
-            )
-            if return_code != 0:
-                self.fail(f"router container inspect failed: {stderr}")
-            self.assertIn(
-                (
-                    "TARGET_FLEET_SIM_URL=http://"
-                    f"{self.runtime_stack.fleet_sim_container_name}:8000"
-                ),
-                stdout,
-            )
-
-            with urllib_request.urlopen(
-                f"{self.runtime_stack.fleet_sim_url}/healthz", timeout=10
-            ) as response:
-                body = response.read().decode("utf-8")
-                self.assertEqual(response.status, 200)
-                self.assertIn('"service":"vllm-sr-sim"', body.replace(" ", ""))
-
-            print("  ✓ Simulator sidecar is running")
-            print("  ✓ Router container received TARGET_FLEET_SIM_URL")
-            print(
-                "  ✓ Simulator health endpoint responded on "
-                f"localhost:{self.runtime_stack.fleet_sim_port}"
-            )
-
-        self.print_test_result(True, "Fleet simulator sidecar contracts verified")
-
-    @unittest.skipUnless(
-        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
-        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
-    )
     def test_stop_terminates_container(self):
         """Test that vllm-sr stop actually stops the container."""
         self.print_test_header(
@@ -524,7 +512,6 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
 
             managed_names = (
                 *self._runtime_container_names(),
-                self.SIM_CONTAINER_NAME,
                 *self.AUXILIARY_CONTAINER_NAMES,
             )
             remaining = {
@@ -584,39 +571,43 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
             "Verifies 'always' policy attempts to pull from registry",
         )
 
-        try:
-            # Step 1: Create a lean active config
-            self.write_minimal_canonical_config()
+        self.write_minimal_canonical_config()
+        interceptor_env, pull_log = self._pull_interceptor_env()
+        cmd = [
+            "serve",
+            "--router-image",
+            PULL_POLICY_PROBE_IMAGE,
+            "--envoy-image",
+            PULL_POLICY_PROBE_IMAGE,
+            "--dashboard-image",
+            PULL_POLICY_PROBE_IMAGE,
+            "--image-pull-policy",
+            "always",
+        ]
+        return_code, stdout, stderr = self.run_cli(
+            cmd,
+            timeout=20,
+            env=interceptor_env,
+        )
 
-            # Step 2: Run serve briefly with always policy
-            # We use run_cli with a short timeout - if it accepts the flag, test passes
-            cmd = ["serve", "--image-pull-policy", "always"]
-            print(f"\nRunning: vllm-sr {' '.join(cmd)}")
-
-            # Use run_cli which handles timeouts gracefully
-            _return_code, stdout, stderr = self.run_cli(cmd, timeout=20)
-            output = (stdout + stderr).lower()
-
-            # Check for pull-related messages in output
-            pull_indicators = ["pull", "pulling", "downloading", "download"]
-            pull_detected = any(ind in output for ind in pull_indicators)
-
-            if pull_detected:
-                print("  ✓ Pull attempt detected in output")
-                self.print_test_result(True, "always policy attempts pull")
-            elif self.container_status() == "running":
-                # Container running means policy worked (image was up-to-date)
-                print("  ✓ Container running (image was up-to-date)")
-                self.print_test_result(True, "always policy works")
-            else:
-                # Policy was accepted by CLI (didn't error on the flag)
-                # Even timeout means it started processing
-                print("  ✓ always policy was accepted by CLI")
-                self.print_test_result(True, "always policy accepted")
-
-        finally:
-            # Clean up any running container
-            self.run_cli(["stop"], timeout=10)
+        self.assertNotEqual(
+            return_code,
+            0,
+            "the pull interceptor must stop serve immediately after the probe",
+        )
+        self.assertTrue(pull_log.exists(), "always policy did not invoke image pull")
+        pulled_images = pull_log.read_text(encoding="utf-8").splitlines()
+        self.assertGreaterEqual(len(pulled_images), 1)
+        self.assertEqual(
+            set(pulled_images),
+            {PULL_POLICY_PROBE_IMAGE},
+            "the pull probe must not touch suite runtime image tags",
+        )
+        self.assertIn(
+            f"pulling container image: {PULL_POLICY_PROBE_IMAGE}",
+            (stdout + stderr).lower(),
+        )
+        self.print_test_result(True, "always policy attempts an isolated pull")
 
     def tearDown(self):
         """Clean up after integration tests."""

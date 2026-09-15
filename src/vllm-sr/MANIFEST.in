@@ -2,13 +2,16 @@
 include README.md
 include QUICKSTART.md
 include PUBLISHING.md
+include build_support.py
 
 # Include templates (now in cli package)
 recursive-include cli/templates *.yaml
 recursive-include cli/templates *.json
 recursive-include cli/templates *.ini
 recursive-include cli/model_assets *.yaml *.md *.dsl
-recursive-include cli/evaluation/golden *.json
+include cli/evaluation/golden/metric_analysis_catalog.v1.json
+include cli/evaluation/golden/research_benchmark_inventory.v1.json
+recursive-include cli/evaluation/resources *.json
 
 # Include requirements
 include requirements.txt

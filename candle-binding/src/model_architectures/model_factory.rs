@@ -24,7 +24,7 @@ use crate::model_architectures::embedding::{
     Qwen3EmbeddingModel,
 };
 use candle_nn::VarBuilder;
-use tokenizers::Tokenizer;
+use tokenizers::{Tokenizer, TruncationDirection, TruncationParams, TruncationStrategy};
 
 /// Model factory configuration
 #[derive(Debug, Clone)]
@@ -195,7 +195,7 @@ impl ModelFactory {
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(
-                &[safetensors_path.clone()],
+                std::slice::from_ref(&safetensors_path),
                 candle_core::DType::F32,
                 &self.device,
             )
@@ -208,12 +208,29 @@ impl ModelFactory {
 
         // Load tokenizer
         let tokenizer_path = format!("{}/tokenizer.json", model_path);
-        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
             E::msg(format!(
                 "Failed to load Gemma tokenizer from {}: {:?}",
                 tokenizer_path, e
             ))
         })?;
+
+        // The upstream EmbeddingGemma tokenizer.json ships with truncation disabled, and
+        // the RoPE caches are sized to max_position_embeddings, so clamp every encoding
+        // to the model's context window instead of failing inside the forward pass.
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: config.max_position_embeddings,
+                strategy: TruncationStrategy::LongestFirst,
+                stride: 0,
+                direction: TruncationDirection::Right,
+            }))
+            .map_err(|e| {
+                E::msg(format!(
+                    "Failed to configure Gemma tokenizer truncation: {:?}",
+                    e
+                ))
+            })?;
 
         self.gemma_embedding_model = Some(model);
         self.gemma_tokenizer = Some(tokenizer);

@@ -6,14 +6,14 @@ ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG GIT_SSL_NO_VERIFY=0
 ARG IMAGE_REGISTRY=docker.io/
-ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
+ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bookworm
 ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm
 
 # Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
 #
-# The router runtime image is Debian bookworm-slim. Keep the Rust and Go build
-# stages on an older libc baseline so the copied router binary and shared
-# objects do not pick up GLIBC_2.39+ requirements that fail at runtime.
+# The router runtime image is Debian bookworm-slim. Build the Rust and Go stages
+# on bookworm too, so the copied binaries need no newer glibc than the runtime.
+# Debian 11 (bullseye) security packages are no longer reliably served.
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
@@ -35,9 +35,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Configure cross-compilation environment for arm64
 # NOTE: Do NOT set OPENSSL_DIR globally — it breaks amd64 pkg-config discovery.
-# The pinned runtime-compatible Rust image (Debian bullseye) has libssl-dev pre-installed and
-# pkg-config finds it automatically for amd64. For arm64, we set OPENSSL_LIB_DIR
-# per-command below.
+# The pinned runtime-compatible Rust image (Debian bookworm) has libssl-dev pre-installed and
+# pkg-config finds native OpenSSL for host build dependencies. Target-specific
+# overrides below keep ARM64 libraries out of those host build scripts.
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
@@ -51,7 +51,7 @@ COPY candle-binding/Cargo.toml candle-binding/Cargo.loc[k] ./
 RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
     mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
       cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
       cargo build --release --no-default-features; \
@@ -66,7 +66,7 @@ COPY candle-binding/go.mod candle-binding/semantic-router.go ./
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
     if [ "$TARGETARCH" = "arm64" ]; then \
-      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
       cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
       cargo build --release --no-default-features; \
@@ -198,6 +198,32 @@ RUN mkdir -p /build/out && \
     echo "=== Built nlp-binding library ===" && \
     ls -la /build/out/
 
+# Build independent ORT instances using the existing CPU cross toolchain.
+FROM rust-builder AS onnx-builder
+ARG TARGETARCH
+WORKDIR /build/onnx
+COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
+COPY onnx-binding/src/ ./src/
+RUN mkdir -p /build/onnx-out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu && \
+      cp target/aarch64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/onnx-out/; \
+    else \
+      cargo build --release --lib --locked --no-default-features --features dynamic && \
+      cp target/release/libonnx_semantic_router.so /build/onnx-out/; \
+    fi
+
+# ort rc.10 uses ORT API 22; keep the shared CPU runtime on that version.
+ARG ONNXRUNTIME_VERSION=1.22.0
+RUN case "$TARGETARCH" in arm64) ort_arch=aarch64 ;; amd64) ort_arch=x64 ;; *) exit 1 ;; esac && \
+    mkdir -p /build/onnx-runtime && \
+    curl --fail --location --retry 3 \
+      "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ort_arch}-${ONNXRUNTIME_VERSION}.tgz" \
+      -o /tmp/onnxruntime.tgz && \
+    tar -xzf /tmp/onnxruntime.tgz --strip-components=1 -C /build/onnx-runtime && \
+    cp -a /build/onnx-runtime/lib/libonnxruntime*.so* /build/onnx-out/ && \
+    rm /tmp/onnxruntime.tgz
+
 # Stage 2: Build Go semantic router
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
 ARG TARGETARCH
@@ -205,13 +231,19 @@ WORKDIR /build
 
 # Copy Rust libraries from all builders
 COPY --from=rust-builder /build/out/ /usr/local/lib/
+COPY --from=onnx-builder /build/onnx-out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/ /usr/local/lib/
 COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY candle-binding/go.mod candle-binding/*.go /build/../candle-binding/
+COPY --from=rust-builder /build/out/ /build/../candle-binding/target/release/
+
+COPY onnx-binding/go.mod /build/../onnx-binding/
+COPY onnx-binding/instance/ /build/../onnx-binding/instance/
+COPY --from=onnx-builder /build/onnx-out/ /build/../onnx-binding/target/release/
 
 # Copy ml-binding Go files (needed for go.mod replace directive)
 # Also copy the built library to ml-binding/target/release/ for CGO linking
@@ -230,6 +262,11 @@ RUN mkdir -p /build/../openvino-binding && \
 # Copy Go source (go.mod has local replace directives, so go mod download
 # requires candle-binding and ml-binding to be present first)
 COPY src/semantic-router/ .
+COPY tools/docker/check-native-abi.sh /build/check-native-abi.sh
+RUN bash /build/check-native-abi.sh \
+    /usr/local/lib/libcandle_semantic_router.so \
+    /usr/local/lib/libonnx_semantic_router.so
+
 
 # Build router (cross-compile for arm64 when TARGETARCH=arm64)
 # arm64: need libssl-dev:arm64 because libcandle_semantic_router.so dynamically links OpenSSL
@@ -277,16 +314,20 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=onnx-builder /build/onnx-out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
 
 WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY src/vllm-sr/cli/ /app/cli/
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
+COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
 

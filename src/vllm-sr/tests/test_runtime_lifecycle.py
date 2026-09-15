@@ -87,8 +87,10 @@ def test_runtime_summary_is_clean_human_stdout(capsys):
         stack_layout,
         dashboard_disabled=False,
         enable_observability=True,
-        fleet_sim_enabled=True,
         started_backends={"postgres", "redis"},
+        config={
+            "entrypoints": [{"model_names": ["vllm-sr/balance"], "recipe": "balance"}]
+        },
     )
 
     captured = capsys.readouterr()
@@ -101,6 +103,15 @@ def test_runtime_summary_is_clean_human_stdout(capsys):
     assert "Observability" in captured.out
     assert "Commands" in captured.out
     assert "Try it" in captured.out
+    assert '"model": "vllm-sr/balance"' in captured.out
+    assert "vllm-sr/auto" not in captured.out
+
+
+def test_runtime_example_retains_automatic_model_for_default_routing(capsys):
+    runtime_lifecycle._print_curl_example(
+        [{"port": 8899}], resolve_runtime_stack(), {"routing": {"decisions": []}}
+    )
+    assert '"model": "vllm-sr/auto"' in capsys.readouterr().out
 
 
 def test_router_startup_diagnostics_use_stderr(capsys):

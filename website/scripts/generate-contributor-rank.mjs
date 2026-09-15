@@ -402,7 +402,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
   return [
     {
       id: 'v03ToNow',
-      label: 'v0.3 -> Now',
+      label: 'v0.3 → Now',
       startTagName: releaseTimeline.v03.tagName,
       endTagName: null,
       startDate: releaseTimeline.v03.publishedAt.slice(0, 10),
@@ -411,7 +411,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
     },
     {
       id: 'v02ToV03',
-      label: 'v0.2 -> v0.3',
+      label: 'v0.2 → v0.3',
       startTagName: releaseTimeline.v02.tagName,
       endTagName: releaseTimeline.v03.tagName,
       startDate: releaseTimeline.v02.publishedAt.slice(0, 10),
@@ -420,7 +420,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
     },
     {
       id: 'v01ToV02',
-      label: 'v0.1 -> v0.2',
+      label: 'v0.1 → v0.2',
       startTagName: releaseTimeline.v01.tagName,
       endTagName: releaseTimeline.v02.tagName,
       startDate: releaseTimeline.v01.publishedAt.slice(0, 10),
@@ -429,7 +429,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
     },
     {
       id: 'v0ToV01',
-      label: 'v0 -> v0.1',
+      label: 'v0 → v0.1',
       startTagName: null,
       endTagName: releaseTimeline.v01.tagName,
       startDate: null,

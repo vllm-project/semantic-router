@@ -7,9 +7,10 @@ import sys
 from pathlib import Path
 
 from cli.evaluation.canonical import canonical_json_bytes
-from cli.evaluation.orchestrator import load_manifest, run_evaluation
-from cli.evaluation.reporting import WorkerEvent
-from cli.evaluation.store import LocalArtifactStore
+from cli.evaluation.orchestrator import load_manifest, run_worker_evaluation
+from cli.evaluation.store import WorkerArtifactStore
+from cli.evaluation.suite_store import NormalizedSuiteStore
+from cli.evaluation.worker_report import WorkerEvent
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -18,6 +19,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--store", required=True, type=Path)
+    parser.add_argument("--suite-store", required=True, type=Path)
     parser.add_argument("--events-stdout", action="store_true")
     return parser
 
@@ -33,12 +35,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         manifest = load_manifest(args.manifest)
-        store = LocalArtifactStore(args.store)
-        run_evaluation(
+        # Dashboard gives each worker a unique staging tree. Its explicit store
+        # owns only process-local coordination, so no control file enters the
+        # evidence bundle.
+        store = WorkerArtifactStore(args.store)
+        suite_store = NormalizedSuiteStore.open_read_only(args.suite_store)
+        run_worker_evaluation(
             manifest,
             store,
+            suite_store=suite_store,
             event_sink=emit,
-            manage_control_state=False,
         )
     # The process boundary must turn every worker failure into a non-zero exit;
     # the Dashboard accepts only the fixed stdout protocol.

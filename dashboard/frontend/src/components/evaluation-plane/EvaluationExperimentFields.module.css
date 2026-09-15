@@ -1,0 +1,181 @@
+.fieldGrid,
+.numericGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+}
+
+.numericGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fieldGrid label,
+.numericGrid label {
+  display: grid;
+  gap: 0.38rem;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.fieldControl {
+  display: grid;
+  align-content: start;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.fieldWide,
+.choiceGroup {
+  grid-column: 1 / -1;
+}
+
+.fieldGrid input:not([type='radio']):not([type='checkbox']),
+.fieldGrid textarea,
+.fieldGrid select,
+.numericGrid input {
+  width: 100%;
+}
+
+.fieldGrid textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.fieldGrid small,
+.numericGrid small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.choiceGroup {
+  display: grid;
+  gap: 0.38rem;
+  width: min(100%, 36rem);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choiceGroup legend {
+  margin-bottom: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.choiceOptions {
+  display: flex;
+  min-width: 0;
+}
+
+.choiceCard,
+.autoStart {
+  display: flex;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.choiceCard:hover,
+.autoStart:hover {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.choiceCard:has(input:checked) {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 2px 0 0 var(--brand-amd);
+}
+
+.choiceCard {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  align-items: center;
+  flex: 1 1 0;
+  height: var(--control-height);
+  min-height: var(--control-height);
+}
+
+.choiceCard input[type='radio'] {
+  width: 1rem;
+  min-height: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.choiceCard:first-of-type {
+  border-radius: var(--control-radius) 0 0 var(--control-radius);
+}
+
+.choiceCard:last-of-type {
+  margin-left: -1px;
+  border-radius: 0 var(--control-radius) var(--control-radius) 0;
+}
+
+.choiceCard input,
+.autoStart input {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  accent-color: var(--text-primary);
+}
+
+.autoStart span {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.choiceCard strong,
+.autoStart strong {
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+}
+
+.choiceHelp {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.autoStart small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.autoStart {
+  width: fit-content;
+  margin-top: 0.9rem;
+  border-color: transparent;
+  border-radius: var(--control-radius);
+}
+
+@media (max-width: 680px) {
+  .fieldGrid,
+  .numericGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fieldWide,
+  .choiceGroup {
+    grid-column: auto;
+  }
+}

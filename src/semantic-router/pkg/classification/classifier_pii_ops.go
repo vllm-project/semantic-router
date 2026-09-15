@@ -1,19 +1,33 @@
 package classification
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // ClassifyPII performs PII token classification on the given text and returns detected PII types
-func (c *Classifier) ClassifyPII(text string) ([]string, error) {
-	return c.ClassifyPIIWithThreshold(text, c.Config.PIIModel.Threshold)
+func (c *Classifier) ClassifyPII(ctx context.Context, text string) ([]string, error) {
+	return c.ClassifyPIIWithThreshold(ctx, text, c.Config.PIIModel.Threshold)
+}
+
+// partialScanError reports a scan that returned valid spans for only part of
+// its input. Callers that care get ErrTokenSpansTruncated alongside the
+// results, so a partial answer is never mistaken for a complete one; callers
+// that ignore the error keep the detections they were always given.
+func partialScanError(partial bool) error {
+	if partial {
+		return ErrTokenSpansTruncated
+	}
+	return nil
 }
 
 // ClassifyPIIWithThreshold performs PII token classification with a custom threshold
-func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([]string, error) {
+func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, threshold float32) ([]string, error) {
 	if !c.IsPIIEnabled() {
 		return []string{}, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -23,9 +37,17 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	}
 
 	// Use ModernBERT PII token classifier for entity detection
-	tokenResult, err := c.piiInference.ClassifyTokens(text)
+	partial := false
+	tokenResult, err := c.classifyPIITokens(ctx, text)
 	if err != nil {
-		return nil, fmt.Errorf("PII token classification error: %w", err)
+		// Same policy as the routing signal and scanPIIChunks: a declared
+		// truncation carries valid spans for the part the provider saw, and
+		// classifier.pii.on_error decides what the unseen remainder means.
+		if !errors.Is(err, ErrTokenSpansTruncated) || c.Config.PIIModel.IsBlock() {
+			return nil, fmt.Errorf("PII token classification error: %w", err)
+		}
+		logging.Warnf("PII classification: provider truncated its input; reporting the types it did return")
+		partial = true
 	}
 
 	if len(tokenResult.Entities) > 0 {
@@ -55,16 +77,16 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 		logging.Infof("Detected PII types: %v", result)
 	}
 
-	return result, nil
+	return result, partialScanError(partial)
 }
 
 // ClassifyPIIWithDetails performs PII token classification and returns full entity details including confidence scores
-func (c *Classifier) ClassifyPIIWithDetails(text string) ([]PIIDetection, error) {
-	return c.ClassifyPIIWithDetailsAndThreshold(text, c.Config.PIIModel.Threshold)
+func (c *Classifier) ClassifyPIIWithDetails(ctx context.Context, text string) ([]PIIDetection, error) {
+	return c.ClassifyPIIWithDetailsAndThreshold(ctx, text, c.Config.PIIModel.Threshold)
 }
 
 // ClassifyPIIWithDetailsAndThreshold performs PII token classification with a custom threshold and returns full entity details
-func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold float32) ([]PIIDetection, error) {
+func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(ctx context.Context, text string, threshold float32) ([]PIIDetection, error) {
 	if !c.IsPIIEnabled() {
 		return []PIIDetection{}, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -73,34 +95,9 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 		return []PIIDetection{}, nil
 	}
 
-	// Use PII token classifier for entity detection
-	tokenResult, err := c.piiInference.ClassifyTokens(text)
-	if err != nil {
-		return nil, fmt.Errorf("PII token classification error: %w", err)
-	}
-
-	if len(tokenResult.Entities) > 0 {
-		logging.Infof("PII token classification found %d entities", len(tokenResult.Entities))
-	}
-
-	// Convert token entities to PII detections, filtering by threshold
-	// Translate class_X format to named types using PII mapping
-	var detections []PIIDetection
-	for _, entity := range tokenResult.Entities {
-		if entity.Confidence >= threshold {
-			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
-			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
-			detection := PIIDetection{
-				EntityType: translatedType,
-				Start:      entity.Start,
-				End:        entity.End,
-				Text:       entity.Text,
-				Confidence: entity.Confidence,
-			}
-			detections = append(detections, detection)
-			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, translatedType, entity.Text, entity.Start, entity.End, entity.Confidence)
-		}
+	detections, err := c.scanPIIChunks(ctx, text, threshold)
+	if err != nil && !errors.Is(err, ErrTokenSpansTruncated) {
+		return nil, err
 	}
 
 	if len(detections) > 0 {
@@ -116,11 +113,95 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 		logging.Infof("Detected PII types: %v", types)
 	}
 
-	return detections, nil
+	return detections, err
+}
+
+// scanPIIChunks runs PII token classification over the whole text.
+//
+// The classifier truncates at MAX_CLASSIFICATION_SEQ_LEN, so one call over a
+// long text only ever scores its start. The PII routing signal already scans in
+// bounded overlapping chunks (evaluatePIISignal); this does the same, and maps
+// every entity back onto the original text because this surface reports
+// positions and the routing signal does not.
+func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold float32) ([]PIIDetection, error) {
+	var detections []PIIDetection
+	seen := make(map[piiDetectionKey]int)
+	classified := 0
+	partial := false
+
+	for _, span := range piiSignalChunkSpans(text) {
+		tokenResult, err := c.classifyPIITokens(ctx, span.Text)
+		if err != nil {
+			// A declared truncation carries valid spans for the part the
+			// provider saw. classifier.pii.on_error decides what the unseen
+			// remainder means here too: block refuses the whole scan, allow
+			// reports what was found. Any other error is fatal either way.
+			if !errors.Is(err, ErrTokenSpansTruncated) || c.Config.PIIModel.IsBlock() {
+				return nil, fmt.Errorf("PII token classification error: %w", err)
+			}
+			logging.Warnf("PII scan: provider truncated its input; reporting the spans it did return")
+			partial = true
+		}
+
+		classified += len(tokenResult.Entities)
+
+		for _, entity := range tokenResult.Entities {
+			if entity.Confidence < threshold {
+				continue
+			}
+
+			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
+			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
+			detection := PIIDetection{
+				EntityType: translatedType,
+				Start:      span.StartByte + entity.Start,
+				End:        span.StartByte + entity.End,
+				Text:       entity.Text,
+				Confidence: entity.Confidence,
+			}
+
+			// Chunks overlap, so an entity inside the overlap window is reported
+			// by both chunks. Keep one detection at the higher confidence.
+			key := piiDetectionKey{translatedType, detection.Start, detection.End}
+			if existing, reported := seen[key]; reported {
+				if detection.Confidence > detections[existing].Confidence {
+					detections[existing].Confidence = detection.Confidence
+				}
+				continue
+			}
+			seen[key] = len(detections)
+			detections = append(detections, detection)
+
+			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, entity.Text, detection.Start, detection.End, entity.Confidence)
+		}
+	}
+
+	if classified > 0 {
+		logging.Infof("PII token classification found %d entities", classified)
+	}
+
+	// A single call returned entities in ascending position; keep that contract
+	// now that they arrive chunk by chunk.
+	sort.SliceStable(detections, func(i, j int) bool {
+		if detections[i].Start != detections[j].Start {
+			return detections[i].Start < detections[j].Start
+		}
+		return detections[i].End < detections[j].End
+	})
+
+	return detections, partialScanError(partial)
+}
+
+// piiDetectionKey identifies one entity occurrence in the original text.
+type piiDetectionKey struct {
+	entityType string
+	start      int
+	end        int
 }
 
 // DetectPIIInContent performs PII classification on all provided content
-func (c *Classifier) DetectPIIInContent(allContent []string) []string {
+func (c *Classifier) DetectPIIInContent(ctx context.Context, allContent []string) []string {
 	var detectedPII []string
 	seenPII := make(map[string]bool)
 
@@ -129,8 +210,8 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 			continue
 		}
 		// TODO: classifier may not handle the entire content, so we need to split the content into smaller chunks
-		piiTypes, err := c.ClassifyPII(content)
-		if err != nil {
+		piiTypes, err := c.ClassifyPII(ctx, content)
+		if err != nil && !errors.Is(err, ErrTokenSpansTruncated) {
 			logging.Errorf("PII classification error: %v", err)
 			// Continue without PII enforcement on error
 			continue
@@ -150,12 +231,12 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 }
 
 // AnalyzeContentForPII performs detailed PII analysis on multiple content pieces
-func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnalysisResult, error) {
-	return c.AnalyzeContentForPIIWithThreshold(contentList, c.Config.PIIModel.Threshold)
+func (c *Classifier) AnalyzeContentForPII(ctx context.Context, contentList []string) (bool, []PIIAnalysisResult, error) {
+	return c.AnalyzeContentForPIIWithThreshold(ctx, contentList, c.Config.PIIModel.Threshold)
 }
 
 // AnalyzeContentForPIIWithThreshold performs detailed PII analysis with a custom threshold
-func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, threshold float32) (bool, []PIIAnalysisResult, error) {
+func (c *Classifier) AnalyzeContentForPIIWithThreshold(ctx context.Context, contentList []string, threshold float32) (bool, []PIIAnalysisResult, error) {
 	if !c.IsPIIEnabled() {
 		return false, nil, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -163,6 +244,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 	var analysisResults []PIIAnalysisResult
 	hasPII := false
 	failedCount := 0
+	partial := false
 	var lastErr error
 
 	for i, content := range contentList {
@@ -175,12 +257,25 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		result.ContentIndex = i
 
 		// Use ModernBERT PII token classifier for detailed analysis
-		tokenResult, err := c.piiInference.ClassifyTokens(content)
+		tokenResult, err := c.classifyPIITokens(ctx, content)
 		if err != nil {
-			logging.Errorf("Error analyzing content %d: %v", i, err)
-			failedCount++
-			lastErr = err
-			continue
+			// As in scanPIIChunks: a truncation still carries valid spans, and
+			// on_error decides whether the unseen remainder voids them. Under
+			// block the batch is refused outright rather than returning a
+			// result set that silently omits the item nobody could verify -
+			// the other two entry points already refuse, and an omitted item
+			// is indistinguishable from a clean one to the caller.
+			if c.Config.PIIModel.IsBlock() {
+				return false, nil, fmt.Errorf("PII classification failed for content %d and on_error is block: %w", i, err)
+			}
+			if !errors.Is(err, ErrTokenSpansTruncated) {
+				logging.Errorf("Error analyzing content %d: %v", i, err)
+				failedCount++
+				lastErr = err
+				continue
+			}
+			logging.Warnf("PII analysis of content %d: provider truncated its input; keeping the spans it did return", i)
+			partial = true
 		}
 
 		// Convert token entities to PII detections
@@ -210,7 +305,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		return false, nil, fmt.Errorf("PII classification failed for all %d content item(s): %w", failedCount, lastErr)
 	}
 
-	return hasPII, analysisResults, nil
+	return hasPII, analysisResults, partialScanError(partial)
 }
 
 // collectPIIRuleContents builds the list of text contents to analyze for a PII rule.
@@ -230,8 +325,9 @@ func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHis
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.
-func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) map[string]bool {
+func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) (map[string]bool, bool) {
 	entityTypes := make(map[string]bool)
+	failed := false
 	for _, content := range ruleContents {
 		cachedResults, ok := piiCache[content]
 		if !ok {
@@ -239,8 +335,15 @@ func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName strin
 		}
 		for _, cached := range cachedResults {
 			if cached.err != nil {
-				logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
-				continue
+				failed = true
+				if !errors.Is(cached.err, ErrTokenSpansTruncated) {
+					logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
+					continue
+				}
+				// A declared truncation still carries valid spans for the part
+				// the provider saw; they count, and the rule is marked as not
+				// fully evaluated so on_error decides what the unseen part means.
+				logging.Warnf("[Signal Computation] PII rule %q: provider truncated its input, spans are partial", ruleName)
 			}
 			for _, entity := range cached.result.Entities {
 				if entity.Confidence >= threshold {
@@ -249,7 +352,7 @@ func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName strin
 			}
 		}
 	}
-	return entityTypes
+	return entityTypes, failed
 }
 
 // findDeniedEntities returns entity types not covered by the allow-list.

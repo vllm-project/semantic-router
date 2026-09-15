@@ -10,6 +10,11 @@ DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io/vllm-project/semantic-router}"
 DOCKER_TAG="${DOCKER_TAG:-latest}"
 VLLM_SR_IMAGE="${VLLM_SR_IMAGE:-ghcr.io/vllm-project/semantic-router/vllm-sr:latest}"
 VLLM_SR_STACK_NAME="${VLLM_SR_STACK_NAME:-vllm-sr}"
+VLLM_SR_PORT_OFFSET="${VLLM_SR_PORT_OFFSET:-0}"
+if ! [[ "${VLLM_SR_PORT_OFFSET}" =~ ^[0-9]+$ ]]; then
+    echo "VLLM_SR_PORT_OFFSET must be a non-negative integer" >&2
+    exit 1
+fi
 if [[ "${VLLM_SR_STACK_NAME}" == "vllm-sr" ]]; then
     VLLM_SR_NETWORK="${VLLM_SR_NETWORK:-vllm-sr-network}"
 else
@@ -21,7 +26,8 @@ PID_FILE="${TEST_DIR}/serve.pid"
 SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
-ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/ready}"
+ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:$((8080 + VLLM_SR_PORT_OFFSET))/ready}"
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT:-http://localhost:$((8888 + VLLM_SR_PORT_OFFSET))}"
 LLM_KATAN_HOST_PORT="${LLM_KATAN_HOST_PORT:-8000}"
 MODEL_DIR="${MEMORY_TEST_MODEL_DIR:-${TEST_DIR}/models}"
 if [[ "${MODEL_DIR}" != /* ]]; then
@@ -307,7 +313,7 @@ fi
 
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
-ROUTER_ENDPOINT=http://localhost:8888 \
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
 ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS=localhost:19530 \
 MILVUS_COLLECTION=memory_test_ci \

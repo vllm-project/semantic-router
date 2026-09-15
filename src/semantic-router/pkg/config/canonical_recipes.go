@@ -42,10 +42,11 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 			Name:        RecipeName(recipe.Name),
 			Description: recipe.Description,
 			Profile: RoutingProfile{
-				Signals:     normalizeSignals(recipe.Routing.Signals, decisions),
-				Projections: normalizeProjections(recipe.Routing.Projections),
-				Decisions:   decisions,
-				Strategy:    strategy,
+				ModelBindings: cloneModelMap(recipe.Routing.ModelBindings),
+				Signals:       normalizeSignals(recipe.Routing.Signals, decisions),
+				Projections:   normalizeProjections(recipe.Routing.Projections),
+				Decisions:     decisions,
+				Strategy:      strategy,
 			},
 		})
 	}
@@ -57,15 +58,17 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 		cfg.Projections = explicitDefault.Profile.Projections
 		cfg.Decisions = explicitDefault.Profile.Decisions
 		cfg.Strategy = explicitDefault.Profile.Strategy
+		cfg.ModelBindings = cloneModelMap(explicitDefault.Profile.ModelBindings)
 	} else {
 		// The top-level routing profile is the default recipe.
 		recipes = append([]RoutingRecipe{{
 			Name: DefaultRecipeName,
 			Profile: RoutingProfile{
-				Signals:     cfg.Signals,
-				Projections: cfg.Projections,
-				Decisions:   cfg.Decisions,
-				Strategy:    cfg.Strategy,
+				ModelBindings: cloneModelMap(cfg.ModelBindings),
+				Signals:       cfg.Signals,
+				Projections:   cfg.Projections,
+				Decisions:     cfg.Decisions,
+				Strategy:      cfg.Strategy,
 			},
 		}}, recipes...)
 	}
@@ -81,9 +84,13 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 
 func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 	modelCards := canonicalRoutingModels(canonical.Routing)
-	modelsByName := make(map[string]RoutingModel, len(modelCards))
+	cardsByName := make(map[string]RoutingModel, len(modelCards))
 	for _, model := range modelCards {
-		modelsByName[model.Name] = model
+		cardsByName[model.Name] = model
+	}
+	aliases := make(map[string]CanonicalProviderModel, len(canonical.Providers.Models))
+	for _, model := range canonical.Providers.Models {
+		aliases[model.Name] = model
 	}
 
 	seen := make(map[RecipeName]struct{}, len(canonical.Recipes))
@@ -109,7 +116,7 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 		if len(recipe.Routing.ModelCards) > 0 {
 			return fmt.Errorf("recipes[%s].routing.modelCards: the model catalog is shared; define modelCards under top-level routing", name)
 		}
-		if err := validateCanonicalDecisions(recipe.Routing.Decisions, modelsByName, modelCards); err != nil {
+		if err := validateCanonicalDecisions(recipe.Routing.Decisions, aliases, cardsByName); err != nil {
 			return fmt.Errorf("recipes[%s]: %w", name, err)
 		}
 	}
@@ -160,14 +167,37 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 // routable name would silently hijack it, because requestModelActsAsAuto stops
 // treating the name as an explicitly specified model.
 func entrypointNameConflict(cfg *RouterConfig, canonical *CanonicalConfig, name string) string {
-	for _, model := range canonicalRoutingModels(canonical.Routing) {
+	if conflict := configuredEntrypointNameConflict(canonical, name); conflict != "" {
+		return conflict
+	}
+	return algorithmEntrypointNameConflict(cfg, name)
+}
+
+func configuredEntrypointNameConflict(canonical *CanonicalConfig, name string) string {
+	cards := canonicalRoutingModels(canonical.Routing)
+	for _, model := range canonical.Providers.Models {
 		if model.Name == name {
 			return "a configured model"
 		}
-		if routingModelHasLoRA(model, name) {
+		cardID := model.Catalog
+		if cardID == "" {
+			cardID = model.Name
+		}
+		for _, card := range cards {
+			if card.Name == cardID && routingModelHasLoRA(card, name) {
+				return "a configured LoRA adapter"
+			}
+		}
+	}
+	for _, card := range cards {
+		if routingModelHasLoRA(card, name) {
 			return "a configured LoRA adapter"
 		}
 	}
+	return ""
+}
+
+func algorithmEntrypointNameConflict(cfg *RouterConfig, name string) string {
 	switch {
 	case cfg.IsAutoModelName(name):
 		return "an auto-model alias"
@@ -197,10 +227,11 @@ func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
 			Name:        string(recipe.Name),
 			Description: recipe.Description,
 			Routing: CanonicalRouting{
-				Signals:     canonicalSignalsFromSignals(recipe.Profile.Signals),
-				Projections: canonicalProjectionsFromProjections(recipe.Profile.Projections),
-				Decisions:   copyDecisions(recipe.Profile.Decisions),
-				Strategy:    recipe.Profile.Strategy,
+				ModelBindings: cloneModelMap(recipe.Profile.ModelBindings),
+				Signals:       canonicalSignalsFromSignals(recipe.Profile.Signals),
+				Projections:   canonicalProjectionsFromProjections(recipe.Profile.Projections),
+				Decisions:     copyDecisions(recipe.Profile.Decisions),
+				Strategy:      recipe.Profile.Strategy,
 			},
 		})
 	}
@@ -238,6 +269,9 @@ func findRecipe(recipes []RoutingRecipe, name RecipeName) *RoutingRecipe {
 // content (signals, projections, or decisions). modelCards do not count: they
 // are the shared model catalog, not part of any one profile.
 func canonicalRoutingHasProfile(routing CanonicalRouting) bool {
+	if len(routing.ModelBindings) > 0 {
+		return true
+	}
 	if routing.Strategy != "" {
 		return true
 	}

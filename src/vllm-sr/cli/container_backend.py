@@ -15,7 +15,7 @@ log = get_logger(__name__)
 
 
 class ContainerBackend:
-    """DeploymentBackend implementation for local Docker workflows."""
+    """Local Docker deployment backend."""
 
     def deploy(
         self,
@@ -28,7 +28,6 @@ class ContainerBackend:
         router_image: str | None = None,
         envoy_image: str | None = None,
         dashboard_image: str | None = None,
-        sim_image: str | None = None,
         topology: str | None = None,
         pull_policy: str | None = None,
         enable_observability: bool = True,
@@ -49,7 +48,6 @@ class ContainerBackend:
                 router_image=router_image,
                 envoy_image=envoy_image,
                 dashboard_image=dashboard_image,
-                sim_image=sim_image,
                 topology=topology,
                 pull_policy=pull_policy,
                 enable_observability=enable_observability,

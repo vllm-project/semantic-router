@@ -1,6 +1,6 @@
 import type { EditFormData } from '../components/EditModal'
 import { EMBEDDING_MODELS_STRUCTURED_FIELDS } from './configPageEmbeddingStructuredSchema'
-import type { RouterSystemKey } from './configPageRouterDefaultsSupport'
+import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import {
   boolean,
   number,
@@ -62,37 +62,12 @@ const milvusSchema = (label: string): RouterStructuredSchema =>
       topk: number('Top K', { min: 1 }),
       consistency_level: text('Consistency Level'),
     }),
-    performance: object('Performance', {
-      connection_pool: object('Connection Pool', {
-        max_connections: number('Max Connections', { min: 1 }),
-        max_idle_connections: number('Max Idle Connections', { min: 0 }),
-        acquire_timeout: number('Acquire Timeout', { min: 0 }),
-      }),
-      batch: object('Batch', {
-        insert_batch_size: number('Insert Batch Size', { min: 1 }),
-        timeout: number('Timeout', { min: 0 }),
-      }),
-    }),
-    data_management: object('Data Management', {
-      ttl: object('TTL', {
-        enabled: boolean('Enabled'),
-        timestamp_field: text('Timestamp Field'),
-        cleanup_interval: number('Cleanup Interval', { min: 0 }),
-      }),
-      compaction: object('Compaction', {
-        enabled: boolean('Enabled'),
-        interval: number('Interval', { min: 0 }),
-      }),
-    }),
     logging: object('Logging', {
       level: select('Level', ['debug', 'info', 'warn', 'error']),
-      enable_query_log: boolean('Query Log'),
-      enable_metrics: boolean('Metrics'),
     }),
     development: object('Development', {
       drop_collection_on_startup: boolean('Drop Collection On Startup'),
       auto_create_collection: boolean('Auto Create Collection'),
-      verbose_errors: boolean('Verbose Errors'),
     }),
   })
 
@@ -128,12 +103,9 @@ const redisSchema = object('Redis Backend', {
   development: object('Development', {
     drop_index_on_startup: boolean('Drop Index On Startup'),
     auto_create_index: boolean('Auto Create Index'),
-    verbose_errors: boolean('Verbose Errors'),
   }),
   logging: object('Logging', {
     level: select('Level', ['debug', 'info', 'warn', 'error']),
-    enable_query_log: boolean('Query Log'),
-    enable_metrics: boolean('Metrics'),
   }),
 })
 
@@ -214,7 +186,6 @@ const metricsSchema = object('Metrics', {
     enabled: boolean('Enabled'),
     time_windows: stringList('Time Windows', '5m'),
     update_interval: text('Update Interval'),
-    model_metrics: boolean('Model Metrics'),
     queue_depth_estimation: boolean('Queue Depth Estimation'),
     max_models: number('Max Models', { min: 1 }),
   }),
@@ -236,6 +207,60 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
         enabled: boolean('Enabled'),
         max_bytes: number('Max Bytes', { min: 1 }),
         timeout_sec: number('Timeout Seconds', { min: 0 }),
+      }),
+    },
+    skip_processing: {
+      label: 'Skip Processing Header',
+      description:
+        'Allow callers to opt out of semantic-router processing with the supported header.',
+      schema: object('Skip Processing Header', {
+        enabled: boolean('Enabled'),
+      }),
+    },
+  },
+  learning: {
+    adaptation: {
+      label: 'Online Adaptation',
+      description: 'How online evidence updates model selection.',
+      schema: object('Online Adaptation', {
+        enabled: boolean('Enabled'),
+        candidate_set: select('Candidate Set', ['decision', 'tier', 'global']),
+        strategy: text('Strategy'),
+      }),
+    },
+    protection: {
+      label: 'Model-switch Protection',
+      description: 'Identity and stability controls that protect multi-turn continuity.',
+      schema: object('Model-switch Protection', {
+        enabled: boolean('Enabled'),
+        scope: select('Scope', ['conversation', 'session']),
+        identity: object('Identity', {
+          headers: object('Headers', {
+            session: text('Session Header'),
+            conversation: text('Conversation Header'),
+          }),
+        }),
+        tuning: object('Tuning', {
+          idle_timeout_seconds: number('Idle Timeout Seconds', { min: 0 }),
+          min_turns_before_switch: number('Minimum Turns Before Switch', { min: 0 }),
+          switch_margin: number('Switch Margin', { min: 0 }),
+          stability_weight: number('Stability Weight', { min: 0 }),
+        }),
+      }),
+    },
+    state_store: {
+      label: 'Learning State Store',
+      description: 'Shared state used to enforce protection across router replicas.',
+      schema: object('Learning State Store', {
+        backend: select('Backend', ['local', 'redis']),
+        ttl_seconds: number('TTL Seconds', { min: 0 }),
+        timeout_ms: number('Timeout Milliseconds', { min: 0 }),
+        redis: object('Redis', {
+          address: text('Address'),
+          password: password('Password'),
+          database: number('Database', { min: 0 }),
+          key_prefix: text('Key Prefix'),
+        }),
       }),
     },
   },
@@ -300,15 +325,6 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
         collection: text('Collection'),
         dimension: number('Dimension', { min: 1 }),
         num_partitions: number('Partitions', { min: 1 }),
-      }),
-    },
-    quality_scoring: {
-      label: 'Quality Scoring',
-      description: 'Memory strength, pruning, and capacity policy.',
-      schema: object('Quality Scoring', {
-        initial_strength_days: number('Initial Strength Days', { min: 0 }),
-        prune_threshold: number('Prune Threshold', { min: 0, max: 1, step: 0.01 }),
-        max_memories_per_user: number('Max Memories Per User', { min: 1 }),
       }),
     },
     reflection: {
@@ -513,11 +529,6 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   modality_detector: {
-    prompt_prefixes: {
-      label: 'Prompt Prefixes',
-      description: 'Prefixes that indicate a modality-specific request.',
-      schema: stringList('Prompt Prefix', 'generate an image of '),
-    },
     classifier: {
       label: 'Classifier',
       description: 'Modality classifier model and device.',
@@ -737,6 +748,8 @@ export function normalizeRouterStructuredValue(
       }
       return { ...record }
     }
+    case 'json':
+      return value
     case 'object': {
       const record = asRecord(value)
       if (!record) throw new Error(`${path} must be an object.`)

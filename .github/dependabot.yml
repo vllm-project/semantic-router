@@ -1,0 +1,101 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /dashboard/frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 0
+    groups:
+      dashboard-frontend-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /dashboard/wizmap
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 0
+    groups:
+      dashboard-wizmap-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 0
+    groups:
+      website-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /src/semantic-router
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      router-go-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /perf
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      performance-go-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /e2e
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      e2e-go-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: /candle-binding
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      candle-rust-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /src/vllm-sr
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      cli-python-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /tools/mock-vllm
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      mock-vllm-python-security:
+        applies-to: security-updates
+        patterns: ["*"]

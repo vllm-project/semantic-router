@@ -43,6 +43,7 @@ var pluginTutorialBuckets = map[string]string{
 	"request-params":      "response-and-mutation",
 	"response-jailbreak":  "safety-and-generation",
 	"router-replay":       "retrieval-and-memory",
+	"shadow-dispatch":     "retrieval-and-memory",
 	"response-cache":      "retrieval-and-memory",
 	"system-prompt":       "response-and-mutation",
 	"tool-selection":      "response-and-mutation",

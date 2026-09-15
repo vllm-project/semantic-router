@@ -1,0 +1,218 @@
+.compareHero {
+  min-width: 0;
+  padding: 1.3rem 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.compareIntro {
+  max-width: 52rem;
+}
+
+.compareHero h2 {
+  margin: 0.3rem 0 0;
+  color: var(--text-primary);
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  letter-spacing: -0.03em;
+}
+
+.compareIntro > p {
+  max-width: 52rem;
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.compareControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.55rem 1rem;
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.compareLoading {
+  margin: 1.2rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.compareFields {
+  display: grid;
+  grid-row: 1;
+  grid-column: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.compareFields label,
+.baselineField {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.compareFields select {
+  width: 100%;
+}
+
+.baselineField strong {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0.45rem 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compareFooter {
+  display: contents;
+}
+
+.compareFooter p {
+  grid-row: 2;
+  grid-column: 1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.compareFooter button {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 10.5rem;
+}
+
+.comparabilityStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.comparabilityStrip > div {
+  min-width: 0;
+  padding: 0.8rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.comparabilityStrip > div:first-child {
+  border-left: 0;
+}
+
+.comparabilityStrip dt {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.comparabilityStrip dd {
+  margin: 0.12rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.selectionScope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.routingComparisonBoundary {
+  margin: 0;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.routingComparisonBoundary strong {
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+@media (max-width: 800px) {
+  .comparabilityStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .comparabilityStrip > div:nth-child(3) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .comparabilityStrip > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .compareFields {
+    grid-row: auto;
+    grid-column: 1;
+    grid-template-columns: 1fr;
+  }
+
+  .compareControls {
+    grid-template-columns: 1fr;
+  }
+
+  .compareFooter p,
+  .compareFooter button {
+    grid-row: auto;
+    grid-column: 1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .compareHero {
+    padding: 1rem 0;
+  }
+
+  .comparabilityStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .comparabilityStrip > div,
+  .comparabilityStrip > div:nth-child(3),
+  .comparabilityStrip > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .comparabilityStrip > div:first-child {
+    border-top: 0;
+  }
+
+  .selectionScope {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

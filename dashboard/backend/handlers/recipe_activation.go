@@ -648,9 +648,9 @@ func activationDigest(data []byte) string {
 }
 
 type routerConfigHash struct {
-	RuntimeHash string `json:"runtime_hash"`
-	ActiveHash  string `json:"active_hash"`
-	Status      string `json:"status"`
+	GeneratedRuntimeHash string `json:"generated_runtime_hash"`
+	ActiveRuntimeHash    string `json:"active_runtime_hash"`
+	ActivationStatus     string `json:"activation_status"`
 }
 
 func newRouterActivationVerifier(routerAPIURL string, client *http.Client, credentialProvider ...routerauth.CredentialProvider) func(context.Context, string) error {
@@ -679,7 +679,7 @@ func newRouterActivationVerifier(routerAPIURL string, client *http.Client, crede
 			response, err := fetchRouterConfigHash(ctx, client, endpoint, provider)
 			if err == nil {
 				last = response
-				if response.Status == "active" && response.RuntimeHash == expected && response.ActiveHash == expected {
+				if response.ActivationStatus == "active" && response.GeneratedRuntimeHash == expected && response.ActiveRuntimeHash == expected {
 					return nil
 				}
 			}
@@ -689,7 +689,7 @@ func newRouterActivationVerifier(routerAPIURL string, client *http.Client, crede
 			case <-time.After(500 * time.Millisecond):
 			}
 		}
-		return fmt.Errorf("router config did not become active (last status %q)", last.Status)
+		return fmt.Errorf("router config did not become active (last status %q)", last.ActivationStatus)
 	}
 }
 
@@ -698,7 +698,7 @@ func routerConfigHashURL(base string) (string, error) {
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return "", errors.New("router API URL is not configured")
 	}
-	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/config/hash"
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/api/v1/config/hash"
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	parsed.User = nil

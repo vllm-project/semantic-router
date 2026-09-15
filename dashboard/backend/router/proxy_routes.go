@@ -61,7 +61,6 @@ func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvi
 	registerRouterAPIProxy(mux, cfg, proxies.envoy, provider)
 	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
-	registerFleetSimRoutes(mux, cfg)
 
 	registerSmartAPIRouter(mux, proxies)
 	registerMetricsRoutes(mux, cfg)
@@ -143,7 +142,7 @@ func serveRouterAPIProxy(
 		writeDisallowedRouterManagementResponse(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
+	if strings.HasPrefix(r.URL.Path, "/api/router/api/v1/observability/replays") {
 		// Let the proxy transport negotiate decompression so replay JSON can
 		// be redacted safely for read-only Dashboard principals.
 		r.Header.Del("Accept-Encoding")
@@ -171,13 +170,17 @@ func writeDisallowedRouterManagementResponse(w http.ResponseWriter, r *http.Requ
 
 func routerManagementProxyRouteAllowed(method, path string) bool {
 	if method == http.MethodGet &&
-		(path == "/api/router/v1/router_replay" || strings.HasPrefix(path, "/api/router/v1/router_replay/")) {
+		(path == "/api/router/api/v1/observability/replays" || strings.HasPrefix(path, "/api/router/api/v1/observability/replays/")) {
 		return true
 	}
 	switch path {
+	case "/api/router/api/v1/config/hash":
+		return method == http.MethodGet
+	case "/api/router/api/v1", "/api/router/openapi.json", "/api/router/docs":
+		return method == http.MethodGet || method == http.MethodHead
 	case "/api/router/v1/models":
 		return method == http.MethodGet || method == http.MethodHead
-	case "/api/router/v1/router/outcomes":
+	case "/api/router/api/v1/observability/outcomes":
 		return method == http.MethodPost
 	case "/api/router/api/v1/response-cache/capabilities",
 		"/api/router/api/v1/response-cache/health",
@@ -405,39 +408,4 @@ func registerPrometheusRoutes(mux *http.ServeMux, cfg *config.Config) {
 		prometheusProxy.ServeHTTP(w, r)
 	})
 	log.Printf("Prometheus proxy configured: %s", cfg.PrometheusURL)
-}
-
-func registerFleetSimRoutes(mux *http.ServeMux, cfg *config.Config) {
-	if cfg.FleetSimURL == "" {
-		mux.HandleFunc("/api/fleet-sim/", func(w http.ResponseWriter, r *http.Request) {
-			if middleware.HandleCORSPreflight(w, r) {
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			http.Error(
-				w,
-				`{"error":"Service not available","message":"Fleet simulator is not configured"}`,
-				http.StatusBadGateway,
-			)
-		})
-		log.Printf("Info: Fleet simulator URL not configured (optional)")
-		return
-	}
-
-	fleetSimProxy, err := proxy.NewReverseProxy(cfg.FleetSimURL, "/api/fleet-sim", false)
-	if err != nil {
-		log.Fatalf("fleet simulator proxy error: %v", err)
-	}
-	originalDirector := fleetSimProxy.Director
-	fleetSimProxy.Director = func(r *http.Request) {
-		originalDirector(r)
-		r.Header.Set("X-Forwarded-Prefix", "/api/fleet-sim")
-	}
-	mux.HandleFunc("/api/fleet-sim/", func(w http.ResponseWriter, r *http.Request) {
-		if middleware.HandleCORSPreflight(w, r) {
-			return
-		}
-		fleetSimProxy.ServeHTTP(w, r)
-	})
-	log.Printf("Fleet simulator proxy configured: %s → /api/fleet-sim/*", cfg.FleetSimURL)
 }

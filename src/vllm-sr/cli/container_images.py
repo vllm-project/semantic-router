@@ -15,7 +15,6 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_ROCM,
     VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
-    VLLM_SR_SIM_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.container_runtime import (
     container_image_exists,
@@ -400,24 +399,6 @@ def get_runtime_images(
     return selected_images
 
 
-def get_fleet_sim_container_image(image=None, pull_policy=None):
-    """Resolve the simulator image and ensure it is available locally."""
-    if pull_policy is None:
-        pull_policy = DEFAULT_IMAGE_PULL_POLICY
-
-    if image:
-        selected_image = image
-        log.info(f"Using specified simulator image: {selected_image}")
-    else:
-        selected_image = os.getenv(
-            "VLLM_SR_SIM_IMAGE", VLLM_SR_SIM_CONTAINER_IMAGE_DEFAULT
-        ).strip()
-        log.info(f"Using simulator image: {selected_image}")
-
-    _ensure_image_available(selected_image, pull_policy)
-    return selected_image
-
-
 def _show_image_not_found_error(image_name):
     """Show helpful error message when image is not found."""
     runtime = get_container_runtime()
@@ -438,7 +419,6 @@ def _show_image_not_found_error(image_name):
         "     vllm-sr serve --config config.yaml --dashboard-image your-dashboard:tag"
     )
     log.error("     vllm-sr serve --config config.yaml --envoy-image your-envoy:tag")
-    log.error("     vllm-sr serve --config config.yaml --sim-image your-sim:tag")
     log.error("")
     log.error("  3. Change pull policy to always:")
     log.error("     vllm-sr serve config.yaml --image-pull-policy always")

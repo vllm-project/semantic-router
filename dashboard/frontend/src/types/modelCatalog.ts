@@ -1,10 +1,120 @@
 export type ModelCatalogChannel = 'latest' | 'release'
+export type ProviderSupportTier = 'native' | 'compatible' | 'runtime'
+export type ModelCatalogLifecycle = 'experimental' | 'active' | 'deprecated' | 'removed'
+export type CatalogEvidenceStatus = 'claimed' | 'imported' | 'reproduced'
+export type CatalogResultStatus = 'available' | 'missing' | 'failed' | 'not_applicable' | 'withheld'
+export type CatalogModelRelationship = 'first_party' | 'managed_cloud' | 'gateway' | 'self_hosted'
 
 export interface BuiltInModelCatalogVersion {
   catalog_version: string
   channel: ModelCatalogChannel
   default_model: string
   enabled_models: string[]
+  default_intelligence_index: string
+}
+
+export interface CatalogProtocolOperation {
+  id: string
+  method: 'GET' | 'POST' | 'DELETE'
+  path: string
+}
+
+export interface CatalogProtocol {
+  id: string
+  display_name: string
+  wire_format: string
+  default_base_path: string
+  operations: CatalogProtocolOperation[]
+  capabilities: string[]
+}
+
+export interface CatalogProvider {
+  id: string
+  display_name: string
+  description: string
+  category: 'start_here' | 'model_api' | 'private_runtime'
+  support_tier: ProviderSupportTier
+  default_base_url?: string
+  protocols: string[]
+  default_protocol: string
+  supported_operations: string[]
+  path_overrides?: Record<string, string>
+  default_headers?: Record<string, string>
+  reasoning_transport?:
+    | 'chat_template_kwargs'
+    | 'top_level_effort'
+    | 'top_level_boolean'
+    | 'top_level_effort_template_switch'
+    | 'top_level_effort_boolean_switch'
+    | 'reasoning_object'
+    | 'thinking_object'
+    | 'thinking_object_effort'
+    | 'output_config_effort'
+    | 'deepseek_thinking'
+  api_version_query?: boolean
+  auth: {
+    strategy: 'none' | 'bearer' | 'api_key_header'
+    header: string
+    prefix: string
+    injected_header?: string
+  }
+  presentation: {
+    logo: string
+    monogram: string
+    monochrome: boolean
+    featured?: boolean
+  }
+  conformance: {
+    status: 'unverified' | 'fixture_verified' | 'live_verified'
+    verified_at?: string
+  }
+  models?: CatalogModelBinding[]
+}
+
+export interface CatalogModelBinding {
+  catalog: string
+  relationship: CatalogModelRelationship
+  id: string
+  protocols: string[]
+  reasoning_transport?:
+    | 'chat_template_kwargs'
+    | 'top_level_effort'
+    | 'top_level_boolean'
+    | 'top_level_effort_template_switch'
+    | 'top_level_effort_boolean_switch'
+    | 'reasoning_object'
+    | 'thinking_object'
+    | 'thinking_object_effort'
+    | 'output_config_effort'
+    | 'deepseek_thinking'
+  reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  reasoning_efforts?: string[]
+  reasoning_efforts_by_protocol?: Record<string, string[]>
+  pricing?: Record<string, string | number | boolean>
+  restrictions?: Record<string, unknown>
+  lifecycle: ModelCatalogLifecycle
+  verification: {
+    status: CatalogEvidenceStatus
+    verified_at?: string
+    source?: string
+  }
+}
+
+export interface CatalogReasoningFamily {
+  id: string
+  type:
+    | 'chat_template_kwargs'
+    | 'reasoning_effort'
+    | 'reasoning_mode'
+    | 'top_level_reasoning_effort'
+  parameter: string
+  activation_parameter?: string
+  effort_flags?: Record<string, string>
+  levels?: string[]
+  default?: string
+  modes: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode: 'enabled' | 'disabled' | 'adaptive'
+  disabled?: string
 }
 
 export interface BuiltInModelRole {
@@ -16,34 +126,163 @@ export interface BuiltInModelRole {
 }
 
 export interface BuiltInModelVerification {
-  status: 'verified' | 'unverified'
   authority: string
-  asset_sha256: string
+  status: CatalogEvidenceStatus
+  verified_at: string
+  source?: string
+  asset_sha256?: string
+}
+
+export interface CatalogPresentation {
+  logo: string
+  monogram: string
+  monochrome: boolean
+}
+
+export interface CatalogModelDistribution {
+  type: 'proprietary_api' | 'open_weights' | 'router_recipe'
+  source: string
+  license?: string
 }
 
 export interface BuiltInModelMetadata {
   id: string
   display_name: string
   description: string
-  kind: string
+  kind: 'physical' | 'virtual'
+  publisher: string
+  presentation: CatalogPresentation
+  distribution: CatalogModelDistribution
   family: string
-  generation: number
-  policy_version: string
-  entrypoint: string
-  recipe: string
-  protocols: string[]
-  traits: string[]
-  roles: BuiltInModelRole[]
-  catalog_version: string
-  channel: ModelCatalogChannel
-  compatible: boolean
-  compatibility_reason: string
-  enabled_by_default: boolean
-  default: boolean
+  parameter_size?: string
+  revision?: string
+  released_at?: string
+  knowledge_cutoff?: string
+  lifecycle: ModelCatalogLifecycle
+  limits?: {
+    context_window_size?: number
+    max_output_tokens?: number
+  }
+  capabilities: string[]
+  modalities: { input: string[]; output: string[] }
+  reasoning_family?: string
+  tags?: string[]
+  generation?: number
+  policy_version?: string
+  asset?: string
+  entrypoint?: string
+  recipe?: string
+  traits?: string[]
+  roles?: BuiltInModelRole[]
   verification: BuiltInModelVerification
 }
 
+export interface CatalogBenchmarkMetric {
+  id: string
+  unit: string
+  direction: 'higher_is_better' | 'lower_is_better'
+  range: [number, number]
+  normalization?: CatalogMetricNormalization
+}
+
+export interface CatalogMetricNormalization {
+  type: 'identity' | 'one_minus' | 'linear_clamp' | 'piecewise_linear' | 'logistic' | 'lookup'
+  min?: number
+  max?: number
+  k?: number
+  x0?: number
+  points?: Array<{ input: number; output: number }>
+  values?: Record<string, number>
+}
+
+export interface CatalogBenchmark {
+  id: string
+  display_name: string
+  domain: string
+  tags?: string[]
+  source?: string
+  default_profile: string
+  profiles: Array<{ id: string; display_name: string; description: string }>
+  metrics: CatalogBenchmarkMetric[]
+}
+
+export interface CatalogEvaluation {
+  id: string
+  model: string
+  benchmark: string
+  benchmark_profile: string
+  reasoning_effort: string
+  subject: Record<string, unknown>
+  metrics: Record<string, number>
+  status: CatalogResultStatus
+  measured_at?: string
+  observed_at?: string
+  evidence: {
+    provenance: 'vendor_claimed' | 'third_party' | 'vllm_sr_reproduced' | 'operator'
+    verification: CatalogEvidenceStatus
+    source?: string
+    artifact?: string
+    redistributable: boolean
+  }
+}
+
+export interface CatalogIndexComponent {
+  benchmark?: string
+  metric?: string
+  benchmark_profile?: string
+  benchmark_profiles?: string[]
+  index?: string
+  weight: number
+  normalization: CatalogMetricNormalization
+}
+
+export interface CatalogIndex {
+  id: string
+  display_name: string
+  description: string
+  methodology?: string
+  aggregation: 'weighted_mean'
+  scale: [number, number]
+  missing: {
+    policy: 'require_all' | 'require_coverage' | 'reported_only'
+    minimum?: number
+  }
+  domains: Record<string, number>
+  components: CatalogIndexComponent[]
+}
+
+export interface CatalogIndexResult {
+  model: string
+  reasoning_effort: string
+  index: string
+  status: 'available' | 'partial' | 'missing'
+  score: number | null
+  coverage: number
+  components: Array<{
+    benchmark?: string
+    metric?: string
+    benchmark_profile?: string
+    benchmark_profiles?: string[]
+    index?: string
+    evaluation?: string
+    weight: number
+    status: CatalogResultStatus
+    value?: number | null
+    normalized?: number | null
+  }>
+  domains?: Record<string, number>
+  provenance: string[]
+}
+
 export interface BuiltInModelCatalog {
+  schema_version: 'vllm-sr/model-catalog/v2'
   catalogs: BuiltInModelCatalogVersion[]
+  protocols: CatalogProtocol[]
+  providers: CatalogProvider[]
+  reasoning_families: CatalogReasoningFamily[]
   models: BuiltInModelMetadata[]
+  benchmarks: CatalogBenchmark[]
+  evaluations: CatalogEvaluation[]
+  indices: CatalogIndex[]
+  index_results: CatalogIndexResult[]
 }

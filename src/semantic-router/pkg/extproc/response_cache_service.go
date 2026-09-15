@@ -16,10 +16,14 @@ func (r *OpenAIRouter) responseCacheService() *cache.ResponseCacheService {
 		return r.ResponseCache
 	}
 	backendType, options := r.responseCacheServiceConfig()
-	r.ResponseCache = cache.NewResponseCacheService(
-		cache.NewLegacyBackendAdapter(r.Cache, backendType),
-		options,
-	)
+	adapter := cache.NewLegacyBackendAdapter(r.Cache, backendType)
+	if r.Config != nil {
+		adapter.WithEmbeddingModel(detectSemanticCacheEmbeddingModel(r.Config))
+		if provider, err := r.Embeddings.Get(detectSemanticCacheEmbeddingModel(r.Config), 0, 0); err == nil {
+			adapter.WithEmbeddingProvider(provider)
+		}
+	}
+	r.ResponseCache = cache.NewResponseCacheService(adapter, options)
 	return r.ResponseCache
 }
 

@@ -1,12 +1,21 @@
+from typing import get_args
+
 import pytest
 from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    UNKNOWN_POLICY_VALUES,
+    UnknownPolicy,
     build_projection_reference_index,
     build_signal_reference_index,
     signal_reference_exists,
 )
 from cli.models import Decision, Projections, Signals
+
+
+def test_unknown_policy_literal_matches_allowed_values():
+    assert get_args(UnknownPolicy) == UNKNOWN_POLICY_VALUES
+    assert UNKNOWN_POLICY_VALUES == ("no_match", "match", "fail_request")
 
 
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():

@@ -36,7 +36,6 @@ type WindowedMetricsConfig struct {
 	Enabled              bool     `yaml:"enabled"`
 	TimeWindows          []string `yaml:"time_windows,omitempty"`
 	UpdateInterval       string   `yaml:"update_interval,omitempty"`
-	ModelMetrics         bool     `yaml:"model_metrics"`
 	QueueDepthEstimation bool     `yaml:"queue_depth_estimation"`
 	MaxModels            int      `yaml:"max_models,omitempty"`
 }
@@ -52,12 +51,12 @@ type TracingConfig struct {
 type TracingExporterConfig struct {
 	Type     string `yaml:"type"`
 	Endpoint string `yaml:"endpoint,omitempty"`
-	Insecure bool   `yaml:"insecure,omitempty"`
+	Insecure bool   `yaml:"insecure"`
 }
 
 type TracingSamplingConfig struct {
 	Type string  `yaml:"type"`
-	Rate float64 `yaml:"rate,omitempty"`
+	Rate float64 `yaml:"rate"`
 }
 
 type TracingResourceConfig struct {

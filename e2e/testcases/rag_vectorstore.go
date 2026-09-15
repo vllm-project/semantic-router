@@ -91,7 +91,7 @@ func createVectorStore(ctx context.Context, client *http.Client, baseURL string,
 		"name": "e2e-test-store",
 	})
 
-	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/vector_stores", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/v1/storage/vector-stores", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -153,7 +153,7 @@ For questions about PTO, contact HR at hr@company.example.com.`
 	}
 	w.Close()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/files", &buf)
+	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/v1/storage/files", &buf)
 	if err != nil {
 		return "", err
 	}
@@ -191,7 +191,7 @@ func attachFile(ctx context.Context, client *http.Client, baseURL, vectorStoreID
 		"file_id": fileID,
 	})
 
-	url := fmt.Sprintf("%s/v1/vector_stores/%s/files", baseURL, vectorStoreID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s/files", baseURL, vectorStoreID)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -216,7 +216,7 @@ func attachFile(ctx context.Context, client *http.Client, baseURL, vectorStoreID
 }
 
 func waitForIngestion(ctx context.Context, client *http.Client, baseURL, vectorStoreID string, opts pkgtestcases.TestCaseOptions) error {
-	url := fmt.Sprintf("%s/v1/vector_stores/%s/files", baseURL, vectorStoreID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s/files", baseURL, vectorStoreID)
 	deadline := time.Now().Add(60 * time.Second)
 
 	for time.Now().Before(deadline) {
@@ -278,7 +278,7 @@ func searchAndVerify(ctx context.Context, client *http.Client, baseURL, vectorSt
 		"max_num_results": 3,
 	})
 
-	url := fmt.Sprintf("%s/v1/vector_stores/%s/search", baseURL, vectorStoreID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s/search", baseURL, vectorStoreID)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -336,7 +336,7 @@ func searchAndVerify(ctx context.Context, client *http.Client, baseURL, vectorSt
 }
 
 func deleteVectorStore(ctx context.Context, client *http.Client, baseURL, vectorStoreID string) {
-	url := fmt.Sprintf("%s/v1/vector_stores/%s", baseURL, vectorStoreID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s", baseURL, vectorStoreID)
 	req, _ := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	resp, err := client.Do(req)
 	if err == nil {

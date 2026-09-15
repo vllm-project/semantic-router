@@ -52,6 +52,9 @@ func candidateIterationModelRefOptions(model *config.ModelRef) string {
 	if model.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", model.ReasoningEffort))
 	}
+	if model.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", model.ReasoningMode))
+	}
 	if model.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", model.LoRAName))
 	}
@@ -205,6 +208,9 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 	}
 	if ruleExpr := decompileRuleNode(&dec.Rules); ruleExpr != "" {
 		d.write("  WHEN %s\n", ruleExpr)
+	}
+	if dec.Action != nil {
+		d.write("  ACTION %s %q\n", dec.Action.Type, dec.Action.Destination)
 	}
 	d.writeDecisionModels(dec)
 	for _, iter := range dec.CandidateIterations {

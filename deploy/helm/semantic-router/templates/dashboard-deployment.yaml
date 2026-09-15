@@ -48,8 +48,10 @@ spec:
       {{- end }}
       containers:
       - name: dashboard
-        image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
+        image: "{{ .Values.dashboard.image.repository }}:{{ default .Chart.AppVersion .Values.dashboard.image.tag }}"
         imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.dashboard.securityContext | nindent 10 }}
         ports:
         - containerPort: {{ .Values.dashboard.service.targetPort }}
           name: http

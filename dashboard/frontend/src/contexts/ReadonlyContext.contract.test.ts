@@ -32,8 +32,9 @@ describe('Dashboard capability settings fail closed', () => {
       expect(source.indexOf(reset)).toBeGreaterThan(-1)
       expect(source.indexOf(reset)).toBeLessThan(fetchStart)
     }
-    expect(source).toContain('if (response.ok)')
-    expect(source).toContain("typeof data.readonlyMode !== 'boolean'")
+    expect(source).toContain('decodeDashboardSettings(await response.json())')
+    expect(source).not.toContain('Older Dashboard responses')
+    expect(source).not.toContain('!effectiveReadonly')
     expect(source).toContain('if (controller.signal.aborted) return')
     expect(source).toContain('return () => controller.abort()')
   })

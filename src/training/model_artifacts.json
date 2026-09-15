@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "collections": {
+    "mom-multilingual-embed": [
+      {
+        "artifact": "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+        "owner": "src/training/model_embeddings/mmbert_32k",
+        "entrypoint": "embedder.py",
+        "config": "configs/embedder.json"
+      },
+      {
+        "artifact": "llm-semantic-router/multi-modal-embed-small",
+        "owner": "src/training/model_embeddings/multimodal/small",
+        "entrypoint": "train.py",
+        "config": "configs/production.yaml"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert-rerank-32k-2d-matryoshka",
+        "owner": "src/training/model_embeddings/mmbert_32k",
+        "entrypoint": "reranker.py",
+        "config": "configs/reranker.json"
+      },
+      {
+        "artifact": "llm-semantic-router/multi-modal-embed-large",
+        "owner": "src/training/model_embeddings/multimodal/large",
+        "entrypoint": "train.py",
+        "config": "configs/production.yaml"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert-32k-yarn",
+        "owner": "src/training/model_embeddings/mmbert_32k",
+        "entrypoint": "foundation.py",
+        "config": "configs/foundation.json"
+      }
+    ],
+    "mom-multilingual-class": [
+      {
+        "artifact": "llm-semantic-router/mmbert32k-intent-classifier-merged",
+        "owner": "src/training/model_classifier/classifier_model_fine_tuning_lora",
+        "entrypoint": "ft_linear_lora.py",
+        "artifact_type": "merged"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+        "owner": "src/training/model_classifier/prompt_guard_fine_tuning_lora",
+        "entrypoint": "jailbreak_bert_finetuning_lora.py",
+        "artifact_type": "merged"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-feedback-detector-merged",
+        "owner": "src/training/model_classifier/user_feedback_classifier",
+        "entrypoint": "train_feedback_detector.py",
+        "artifact_type": "merged"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-feedback-detector-lora",
+        "owner": "src/training/model_classifier/user_feedback_classifier",
+        "entrypoint": "train_feedback_detector.py",
+        "artifact_type": "lora"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-jailbreak-detector-lora",
+        "owner": "src/training/model_classifier/prompt_guard_fine_tuning_lora",
+        "entrypoint": "jailbreak_bert_finetuning_lora.py",
+        "artifact_type": "lora"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-modality-router-lora",
+        "owner": "src/training/model_classifier/modality_routing_classifier",
+        "entrypoint": "modality_routing_bert_finetuning_lora.py",
+        "artifact_type": "lora"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
+        "owner": "src/training/model_classifier/fact_check_fine_tuning_lora",
+        "entrypoint": "fact_check_bert_finetuning_lora.py",
+        "artifact_type": "merged"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-factcheck-classifier-lora",
+        "owner": "src/training/model_classifier/fact_check_fine_tuning_lora",
+        "entrypoint": "fact_check_bert_finetuning_lora.py",
+        "artifact_type": "lora"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-intent-classifier-lora",
+        "owner": "src/training/model_classifier/classifier_model_fine_tuning_lora",
+        "entrypoint": "ft_linear_lora.py",
+        "artifact_type": "lora"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-pii-detector-merged",
+        "owner": "src/training/model_classifier/pii_model_fine_tuning_lora",
+        "entrypoint": "pii_bert_finetuning_lora.py",
+        "artifact_type": "merged"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-pii-detector-lora",
+        "owner": "src/training/model_classifier/pii_model_fine_tuning_lora",
+        "entrypoint": "pii_bert_finetuning_lora.py",
+        "artifact_type": "lora"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert32k-modality-router-merged",
+        "owner": "src/training/model_classifier/modality_routing_classifier",
+        "entrypoint": "modality_routing_bert_finetuning_lora.py",
+        "artifact_type": "merged"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert-safety-binary-merged",
+        "owner": "src/training/model_classifier/safety_classifier",
+        "entrypoint": "train.py",
+        "config": "configs/training-v1.json",
+        "task": "level1",
+        "artifact_type": "lora",
+        "artifact_base_model": "jhu-clsp/mmBERT-base"
+      },
+      {
+        "artifact": "llm-semantic-router/mmbert-safety-binary-hazard",
+        "owner": "src/training/model_classifier/safety_classifier",
+        "entrypoint": "train.py",
+        "config": "configs/training-v1.json",
+        "task": "level2",
+        "artifact_type": "lora",
+        "artifact_base_model": "jhu-clsp/mmBERT-base"
+      }
+    ]
+  }
+}

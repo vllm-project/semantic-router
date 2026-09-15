@@ -16,6 +16,7 @@ interface EntrypointsListProps {
   isReadonly: boolean
   onAdd: () => void
   onUsage: (entrypoint: EntrypointConfig) => void
+  onEvaluate: (entrypoint: EntrypointConfig) => void
   onEdit: (entrypoint: EntrypointConfig, index: number) => void
   onDelete: (entrypoint: EntrypointConfig, index: number) => void
   onTopology: (entrypoint: EntrypointConfig, recipe: RecipeConfig) => void
@@ -35,6 +36,7 @@ export function ConfigPageMoMEntrypointsList({
   isReadonly,
   onAdd,
   onUsage,
+  onEvaluate,
   onEdit,
   onDelete,
   onTopology,
@@ -96,24 +98,45 @@ export function ConfigPageMoMEntrypointsList({
                 </div>
                 <div className={pageStyles.rowActions}>
                   {recipe ? (
-                    <button type="button" onClick={() => onTopology(entrypoint, recipe)}>
+                    <button
+                      type="button"
+                      aria-label={`View topology for ${entrypoint.model_names.join(', ')}`}
+                      onClick={() => onTopology(entrypoint, recipe)}
+                    >
                       <ProductIcon name="topology" />
                       Topology
                     </button>
                   ) : null}
-                  <button type="button" onClick={() => onUsage(entrypoint)}>
+                  <button
+                    type="button"
+                    aria-label={`View usage for ${entrypoint.model_names.join(', ')}`}
+                    onClick={() => onUsage(entrypoint)}
+                  >
                     <ProductIcon name="link" />
                     Usage
                   </button>
+                  <button
+                    type="button"
+                    aria-label={`Evaluate ${entrypoint.model_names.join(', ')}`}
+                    onClick={() => onEvaluate(entrypoint)}
+                  >
+                    <ProductIcon name="chart" />
+                    Evaluate
+                  </button>
                   {!isReadonly ? (
                     <>
-                      <button type="button" onClick={() => onEdit(entrypoint, originalIndex)}>
+                      <button
+                        type="button"
+                        aria-label={`Edit ${entrypoint.model_names.join(', ')}`}
+                        onClick={() => onEdit(entrypoint, originalIndex)}
+                      >
                         <ProductIcon name="edit" />
                         Edit
                       </button>
                       <button
                         type="button"
                         className={pageStyles.deleteAction}
+                        aria-label={`Delete ${entrypoint.model_names.join(', ')}`}
                         onClick={() => onDelete(entrypoint, originalIndex)}
                       >
                         <ProductIcon name="trash" />
@@ -204,19 +227,28 @@ export function ConfigPageMoMRecipesList({
                   {syntheticDefault ? <span>Built in</span> : null}
                 </div>
                 <div className={pageStyles.rowActions}>
-                  <button type="button" onClick={() => onView(recipe)}>
+                  <button
+                    type="button"
+                    aria-label={`View recipe ${recipe.name}`}
+                    onClick={() => onView(recipe)}
+                  >
                     <ProductIcon name="eye" />
                     View
                   </button>
                   {!isReadonly && !syntheticDefault ? (
                     <>
-                      <button type="button" onClick={() => onEdit(recipe)}>
+                      <button
+                        type="button"
+                        aria-label={`Edit recipe ${recipe.name}`}
+                        onClick={() => onEdit(recipe)}
+                      >
                         <ProductIcon name="edit" />
                         Edit
                       </button>
                       <button
                         type="button"
                         className={pageStyles.deleteAction}
+                        aria-label={`Delete recipe ${recipe.name}`}
                         onClick={() => onDelete(recipe)}
                       >
                         <ProductIcon name="trash" />

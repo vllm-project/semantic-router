@@ -1,0 +1,86 @@
+{
+  "schema_version": "capacity-cluster-metric-parity.v1",
+  "confidence_level": 0.95,
+  "minimum_measurement_clusters_per_level": 3,
+  "max_error_rate_cluster_range": 0.05,
+  "levels": [
+    {
+      "concurrency": 1,
+      "clusters": [
+        {
+          "load_phase": "measurement",
+          "load_repetition": 1,
+          "requests": 100,
+          "errors": 0,
+          "error_rate": 0.0,
+          "error_rate_upper_bound": 0.026342720783174324
+        },
+        {
+          "load_phase": "measurement",
+          "load_repetition": 2,
+          "requests": 100,
+          "errors": 1,
+          "error_rate": 0.01,
+          "error_rate_upper_bound": 0.04358177353405608
+        },
+        {
+          "load_phase": "measurement",
+          "load_repetition": 3,
+          "requests": 100,
+          "errors": 2,
+          "error_rate": 0.02,
+          "error_rate_upper_bound": 0.058648368356835213
+        }
+      ],
+      "expected": {
+        "measurement_cluster_count": 3,
+        "error_rate": 0.01,
+        "error_rate_upper_bound": 0.058648368356835213,
+        "error_rate_cluster_range": 0.02
+      }
+    },
+    {
+      "concurrency": 2,
+      "clusters": [
+        {
+          "load_phase": "measurement",
+          "load_repetition": 1,
+          "requests": 100,
+          "errors": 1,
+          "error_rate": 0.01,
+          "error_rate_upper_bound": 0.04358177353405608
+        },
+        {
+          "load_phase": "measurement",
+          "load_repetition": 2,
+          "requests": 100,
+          "errors": 6,
+          "error_rate": 0.06,
+          "error_rate_upper_bound": 0.11184096522645968
+        },
+        {
+          "load_phase": "measurement",
+          "load_repetition": 3,
+          "requests": 100,
+          "errors": 0,
+          "error_rate": 0.0,
+          "error_rate_upper_bound": 0.026342720783174324
+        }
+      ],
+      "expected": {
+        "measurement_cluster_count": 3,
+        "error_rate": 0.023333333333333334,
+        "error_rate_upper_bound": 0.11184096522645968,
+        "error_rate_cluster_range": 0.06
+      }
+    }
+  ],
+  "expected_summary": {
+    "measurement_cluster_count": 6,
+    "measurement_cluster_count_min": 3,
+    "error_rate": 0.016666666666666666,
+    "success_rate": 0.9833333333333333,
+    "error_rate_upper_bound": 0.11184096522645968,
+    "error_rate_cluster_range_max": 0.06
+  }
+}

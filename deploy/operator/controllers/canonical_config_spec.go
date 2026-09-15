@@ -32,6 +32,9 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 }
 
 func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if err := applyOperatorModelDeployments(canonical, spec); err != nil {
+		return err
+	}
 	if spec.EmbeddingModels != nil {
 		embeddings, err := convertToTypedConfig[routerconfig.EmbeddingModels](r, spec.EmbeddingModels)
 		if err != nil {
@@ -50,7 +53,7 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		// for Variant (a per-field CRD default would be injected even when
 		// only Protocol is set, tripping mutual-exclusion validation). Apply
 		// the "neither set" default here instead, once both fields are read.
-		if promptGuard.Variant == "" && promptGuard.Protocol == "" {
+		if promptGuard.Variant == "" && promptGuard.Protocol == "" && promptGuard.Backend == nil {
 			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
 		}
 		if promptGuard.Enabled && promptGuard.JailbreakMappingPath == "" {
@@ -67,7 +70,17 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		}
 		canonical.Global.ModelCatalog.Modules.Classifier = classifier
 	}
-	return nil
+	if len(spec.ExternalModels) > 0 {
+		// The CRD block mirrors the router's external catalog entry field for
+		// field, so the generic typed conversion is enough; backend blocks
+		// resolve their model against this list at router config load.
+		external, err := convertToTypedConfig[[]routerconfig.ExternalModelConfig](r, spec.ExternalModels)
+		if err != nil {
+			return fmt.Errorf("config.external_models: %w", err)
+		}
+		canonical.Global.ModelCatalog.External = external
+	}
+	return r.applyOperatorComplexityModel(canonical, spec)
 }
 
 func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
@@ -105,11 +118,8 @@ func operatorResponseCacheConfig(
 }
 
 func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
-	if spec.ReasoningFamilies != nil {
-		canonical.Providers.Defaults.ReasoningFamilies = convertReasoningFamilies(spec.ReasoningFamilies)
-	}
-	if spec.DefaultReasoningEffort != "" {
-		canonical.Providers.Defaults.DefaultReasoningEffort = spec.DefaultReasoningEffort
+	if spec.ReasoningEffort != "" {
+		canonical.Providers.Defaults.DefaultReasoningEffort = spec.ReasoningEffort
 	}
 	return nil
 }
@@ -208,20 +218,6 @@ func convertCompositionConditions(conditions []vllmv1alpha1.CompositionCondition
 			Type: condition.Type,
 			Name: condition.Name,
 		})
-	}
-	return result
-}
-
-func convertReasoningFamilies(spec map[string]vllmv1alpha1.ReasoningFamily) map[string]routerconfig.ReasoningFamilyConfig {
-	if len(spec) == 0 {
-		return nil
-	}
-	result := make(map[string]routerconfig.ReasoningFamilyConfig, len(spec))
-	for name, family := range spec {
-		result[name] = routerconfig.ReasoningFamilyConfig{
-			Type:      family.Type,
-			Parameter: family.Parameter,
-		}
 	}
 	return result
 }

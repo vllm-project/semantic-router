@@ -42,7 +42,6 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 			Capabilities:      append([]string(nil), model.Capabilities...),
 			LoRAs:             copyLoRAAdapters(model.LoRAs),
 			Tags:              append([]string(nil), model.Tags...),
-			QualityScore:      model.QualityScore,
 			Modality:          model.Modality,
 		}
 	}

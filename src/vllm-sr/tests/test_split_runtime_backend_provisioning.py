@@ -15,7 +15,9 @@ def _backend_provisioning_config():
     }
 
 
-def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch):
+def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(
+    monkeypatch, tmp_path
+):
     load_paths = []
     provisioned = {}
 
@@ -58,9 +60,6 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
         record("container_create_network"),
     )
     monkeypatch.setattr(
-        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", False)
-    )
-    monkeypatch.setattr(
         core, "container_start_vllm_sr", record("container_start_vllm_sr")
     )
     monkeypatch.setattr(
@@ -84,18 +83,22 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
     monkeypatch.setattr(
         core, "recover_openclaw_containers", lambda *args, **kwargs: None
     )
-    monkeypatch.setattr(core, "log_runtime_summary", lambda *args, **kwargs: None)
+    monkeypatch.setattr(core, "log_runtime_summary", record("log_runtime_summary"))
     monkeypatch.setattr(core, "maybe_finish_setup_mode", lambda *args, **kwargs: False)
 
     core.start_vllm_sr(
-        "/tmp/effective-config.yaml",
+        str(tmp_path / "effective-config.yaml"),
         env_vars={},
         enable_observability=False,
-        source_config_file="/tmp/source-config.yaml",
-        runtime_config_file="/tmp/runtime-config.yaml",
+        source_config_file=str(tmp_path / "source-config.yaml"),
+        runtime_config_file=str(tmp_path / "runtime-config.yaml"),
     )
 
-    assert load_paths == ["/tmp/runtime-config.yaml"]
+    assert load_paths == [str(tmp_path / "runtime-config.yaml")]
+    summary = next(
+        call for call in provisioned["calls"] if call[0] == "log_runtime_summary"
+    )
+    assert summary[2]["config"] == _backend_provisioning_config()
     assert provisioned["config"]["global"]["services"]["response_api"][
         "store_backend"
     ] == ("redis")

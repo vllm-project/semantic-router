@@ -69,20 +69,16 @@ func (s *ClassificationAPIServer) publishConfigMutation(newCfg *config.RouterCon
 	if s == nil {
 		return
 	}
+	if s.runtimeRegistry != nil {
+		// Persistence has queued the candidate for the router watcher. Only its
+		// whole-generation publish may replace live service/config references.
+		return
+	}
 	s.configMu.Lock()
 	s.config = newCfg
 	s.configMu.Unlock()
 	if s.runtimeConfig != nil {
 		s.runtimeConfig.Update(newCfg)
-		return
-	}
-	if s.runtimeRegistry != nil {
-		s.runtimeRegistry.UpdateConfig(newCfg)
-		if s.classificationSvc != nil {
-			s.classificationSvc.RefreshRuntimeConfig(newCfg)
-		} else if svc := s.runtimeRegistry.ClassificationService(); svc != nil {
-			svc.RefreshRuntimeConfig(newCfg)
-		}
 		return
 	}
 	config.Replace(newCfg)

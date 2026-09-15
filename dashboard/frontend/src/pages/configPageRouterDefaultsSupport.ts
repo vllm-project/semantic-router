@@ -1,10 +1,6 @@
 import type { EditFormData, FieldConfig } from '../components/EditModal'
-import {
-  DEFAULT_SECTIONS,
-  OPTIONAL_ROUTER_KEYS,
-  PYTHON_ROUTER_KEYS,
-  SECTION_META,
-} from './configPageRouterDefaultsCatalog'
+import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
+import { DEFAULT_SECTIONS, SECTION_META } from './configPageRouterDefaultsCatalog'
 import { routerStructuredField } from './configPageRouterStructuredFields'
 import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
 import {
@@ -15,35 +11,18 @@ import {
   embeddingModelsSummary,
 } from './configPageEmbeddingModelsSupport'
 import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
+import {
+  generatedRouterValueField,
+  mergeGeneratedRouterFields,
+} from './configPageGeneratedFieldSupport'
+import {
+  CURATED_ROUTER_SECTIONS,
+  type RouterLayerKey,
+  type RouterSystemKey,
+} from './configPageRouterSectionCatalog'
 
-export type RouterSystemKey =
-  | 'router_core'
-  | 'response_api'
-  | 'router_replay'
-  | 'authz'
-  | 'ratelimit'
-  | 'memory'
-  | 'response_cache'
-  | 'vector_store'
-  | 'tools'
-  | 'prompt_guard'
-  | 'classifier'
-  | 'hallucination_mitigation'
-  | 'feedback_detector'
-  | 'external_models'
-  | 'system_models'
-  | 'embedding_models'
-  | 'prompt_compression'
-  | 'modality_detector'
-  | 'observability'
-  | 'looper'
-  | 'clear_route_cache'
-  | 'model_selection'
-  | 'api'
-
+export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
-
-export type RouterLayerKey = 'router' | 'services' | 'stores' | 'integrations' | 'model_catalog'
 
 export interface RouterSectionBadge {
   label: string
@@ -56,8 +35,8 @@ export interface RouterSectionSummaryItem {
 }
 
 export interface RouterSectionCard {
-  key: RouterSystemKey
-  layer: RouterLayerKey
+  key: string
+  layer: string
   path: string[]
   title: string
   eyebrow: string
@@ -105,60 +84,20 @@ export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; descript
   },
 }
 
+export function routerLayerMeta(layer: string): { title: string; description: string } {
+  return (
+    ROUTER_LAYER_META[layer as RouterLayerKey] ?? {
+      title: layer
+        .split('_')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' '),
+      description: 'Canonical router-wide configuration generated from the Router contract.',
+    }
+  )
+}
+
 function cloneDefaultSection(key: RouterSystemKey): unknown {
   return JSON.parse(JSON.stringify(DEFAULT_SECTIONS[key]))
-}
-
-const GLOBAL_SECTION_PATHS: Record<RouterSystemKey, string[]> = {
-  router_core: ['router'],
-  response_api: ['services', 'response_api'],
-  router_replay: ['services', 'router_replay'],
-  authz: ['services', 'authz'],
-  ratelimit: ['services', 'ratelimit'],
-  memory: ['stores', 'memory'],
-  response_cache: ['stores', 'response_cache'],
-  vector_store: ['stores', 'vector_store'],
-  tools: ['integrations', 'tools'],
-  prompt_guard: ['model_catalog', 'modules', 'prompt_guard'],
-  classifier: ['model_catalog', 'modules', 'classifier'],
-  hallucination_mitigation: ['model_catalog', 'modules', 'hallucination_mitigation'],
-  feedback_detector: ['model_catalog', 'modules', 'feedback_detector'],
-  external_models: ['model_catalog', 'external'],
-  system_models: ['model_catalog', 'system'],
-  embedding_models: ['model_catalog', 'embeddings'],
-  prompt_compression: ['model_catalog', 'modules', 'prompt_compression'],
-  modality_detector: ['model_catalog', 'modules', 'modality_detector'],
-  observability: ['services', 'observability'],
-  looper: ['integrations', 'looper'],
-  clear_route_cache: ['router', 'clear_route_cache'],
-  model_selection: ['router', 'model_selection'],
-  api: ['services', 'api'],
-}
-
-const ROUTER_SECTION_LAYERS: Record<RouterSystemKey, RouterLayerKey> = {
-  router_core: 'router',
-  response_api: 'services',
-  router_replay: 'services',
-  authz: 'services',
-  ratelimit: 'services',
-  memory: 'stores',
-  response_cache: 'stores',
-  vector_store: 'stores',
-  tools: 'integrations',
-  prompt_guard: 'model_catalog',
-  classifier: 'model_catalog',
-  hallucination_mitigation: 'model_catalog',
-  feedback_detector: 'model_catalog',
-  external_models: 'model_catalog',
-  system_models: 'model_catalog',
-  embedding_models: 'model_catalog',
-  prompt_compression: 'model_catalog',
-  modality_detector: 'model_catalog',
-  observability: 'services',
-  looper: 'integrations',
-  clear_route_cache: 'router',
-  model_selection: 'router',
-  api: 'services',
 }
 
 const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
@@ -251,7 +190,7 @@ function sourceBadge(
   return { label: 'Router default available', tone: 'inactive' }
 }
 
-function getNestedValue(value: unknown, path: string[]): unknown {
+function getNestedValue(value: unknown, path: readonly string[]): unknown {
   let current: unknown = value
   for (const segment of path) {
     const objectValue = asObject(current)
@@ -263,7 +202,7 @@ function getNestedValue(value: unknown, path: string[]): unknown {
   return current
 }
 
-function buildNestedPatch(path: string[], value: unknown): Record<string, unknown> {
+function buildNestedPatch(path: readonly string[], value: unknown): Record<string, unknown> {
   if (path.length === 0) {
     return {}
   }
@@ -282,13 +221,14 @@ function getSectionValue(
     return undefined
   }
 
-  const canonicalValue = getNestedValue(config, GLOBAL_SECTION_PATHS[key])
+  const sectionPath = CURATED_ROUTER_SECTIONS[key].path
+  const canonicalValue = getNestedValue(config, sectionPath)
   if (canonicalValue !== undefined) {
     return canonicalValue
   }
 
   const maybeConfig = config as ConfigData
-  const globalValue = getNestedValue(maybeConfig.global, GLOBAL_SECTION_PATHS[key])
+  const globalValue = getNestedValue(maybeConfig.global, sectionPath)
   if (globalValue !== undefined) {
     return globalValue
   }
@@ -311,6 +251,22 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           value: Array.isArray(section?.auto_model_names)
             ? section.auto_model_names.join(', ')
             : 'Not set',
+        },
+      ]
+    case 'learning':
+      return [
+        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
+        {
+          label: 'Candidate set',
+          value: stringOrFallback(asObject(section?.adaptation)?.candidate_set, 'decision'),
+        },
+        {
+          label: 'Protection scope',
+          value: stringOrFallback(asObject(section?.protection)?.scope, 'conversation'),
+        },
+        {
+          label: 'State backend',
+          value: stringOrFallback(asObject(section?.state_store)?.backend, 'local'),
         },
       ]
     case 'response_api':
@@ -343,6 +299,17 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           label: 'Rules',
           value: `${(asArray(section?.providers) || []).flatMap((provider) => asArray(provider.rules) || []).length}`,
         },
+      ]
+    case 'management_api':
+      return [
+        { label: 'Bind address', value: stringOrFallback(section?.bind_address) },
+        { label: 'Port', value: stringOrFallback(section?.port) },
+        { label: 'Remote exposure', value: stringOrFallback(section?.remote_exposure, 'Disabled') },
+      ]
+    case 'startup_status':
+      return [
+        { label: 'Store backend', value: stringOrFallback(section?.store_backend) },
+        { label: 'Redis', value: asObject(section?.redis) ? 'Configured' : 'Not configured' },
       ]
     case 'memory':
       return [
@@ -451,6 +418,18 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         },
       ]
     }
+    case 'knowledge_bases':
+      return [{ label: 'Knowledge bases', value: `${Array.isArray(data) ? data.length : 0}` }]
+    case 'admission':
+      return [{ label: 'Policies', value: `${section ? Object.keys(section).length : 0}` }]
+    case 'complexity':
+      return [
+        {
+          label: 'Prototype scoring',
+          value: asObject(section?.prototype_scoring) ? 'Configured' : 'Not configured',
+        },
+        { label: 'Backend', value: asObject(section?.backend) ? 'Configured' : 'Local' },
+      ]
     case 'system_models':
       return [
         { label: 'Prompt Guard', value: compactPathLikeString(section?.prompt_guard) },
@@ -475,10 +454,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       return [
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
         { label: 'Method', value: stringOrFallback(section?.method) },
-        {
-          label: 'Prompt prefixes',
-          value: `${Array.isArray(section?.prompt_prefixes) ? section.prompt_prefixes.length : 0}`,
-        },
       ]
     case 'observability':
       return [
@@ -592,7 +567,7 @@ function statusForKey(data: unknown): RouterSectionBadge {
   return enabledBadge(typeof section?.enabled === 'boolean' ? section.enabled : undefined)
 }
 
-function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
+function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
   switch (key) {
     case 'router_core':
       return [
@@ -622,6 +597,14 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
           type: 'boolean',
         },
         routerStructuredField(key, 'streamed_body'),
+        routerStructuredField(key, 'skip_processing'),
+      ]
+    case 'learning':
+      return [
+        { name: 'enabled', label: 'Enable Router Learning', type: 'boolean' },
+        routerStructuredField(key, 'adaptation'),
+        routerStructuredField(key, 'protection'),
+        routerStructuredField(key, 'state_store'),
       ]
     case 'response_api':
       return [
@@ -678,16 +661,9 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
           type: 'percentage',
           placeholder: '70',
         },
-        {
-          name: 'extraction_batch_size',
-          label: 'Extraction Batch Size',
-          type: 'number',
-          placeholder: '10',
-        },
         { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
         { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
         { name: 'adaptive_threshold', label: 'Adaptive Threshold', type: 'boolean' },
-        routerStructuredField(key, 'quality_scoring'),
         routerStructuredField(key, 'reflection'),
       ]
     case 'response_cache':
@@ -758,6 +734,12 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
           placeholder: '384',
         },
         { name: 'ingestion_workers', label: 'Ingestion Workers', type: 'number', placeholder: '2' },
+        {
+          name: 'ingestion_drain_timeout_seconds',
+          label: 'Ingestion Drain Timeout (s)',
+          type: 'number',
+          placeholder: '25',
+        },
         routerStructuredField(key, 'supported_formats'),
         routerStructuredField(key, 'memory'),
         routerStructuredField(key, 'milvus'),
@@ -813,12 +795,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'hallucination_mitigation':
       return [
         { name: 'enabled', label: 'Enable Hallucination Mitigation', type: 'boolean' },
-        {
-          name: 'on_hallucination_detected',
-          label: 'On Detection Action',
-          type: 'text',
-          placeholder: 'block',
-        },
         routerStructuredField(key, 'fact_check'),
         routerStructuredField(key, 'detector'),
         routerStructuredField(key, 'explainer'),
@@ -950,7 +926,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'modality_detector':
       return [
         { name: 'enabled', label: 'Enable Modality Detector', type: 'boolean' },
-        routerStructuredField(key, 'prompt_prefixes'),
         {
           name: 'method',
           label: 'Detection Method',
@@ -1024,12 +999,53 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
   return []
 }
 
+function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
+  const curated = curatedFieldsForKey(key)
+  if (key === 'external_models') {
+    return curated
+  }
+  if (key === 'knowledge_bases') {
+    return [
+      generatedRouterValueField(
+        ['global', ...CURATED_ROUTER_SECTIONS[key].path],
+        'items',
+        'Knowledge Bases',
+      ),
+    ]
+  }
+  if (key === 'admission') {
+    return [
+      generatedRouterValueField(
+        ['global', ...CURATED_ROUTER_SECTIONS[key].path],
+        'value',
+        'Admission Policies',
+      ),
+    ]
+  }
+  if (key === 'clear_route_cache' || key === 'embedding_models') {
+    return curated
+  }
+
+  const omit =
+    key === 'router_core'
+      ? ['clear_route_cache', 'model_selection', 'learning']
+      : key === 'model_selection'
+        ? ['method', 'ml']
+        : []
+  return mergeGeneratedRouterFields(['global', ...CURATED_ROUTER_SECTIONS[key].path], curated, {
+    omit,
+  })
+}
+
 function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
   if (key === 'clear_route_cache') {
     return { value: Boolean(data) }
   }
-  if (key === 'external_models') {
+  if (key === 'external_models' || key === 'knowledge_bases') {
     return { items: Array.isArray(data) ? data : cloneDefaultSection(key) }
+  }
+  if (key === 'admission') {
+    return { value: asObject(data) || cloneDefaultSection(key) }
   }
   if (key === 'router_core') {
     const router = asObject(data)
@@ -1061,7 +1077,6 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
     return {
       ...(hallucination || {}),
       enabled: hallucination?.enabled,
-      on_hallucination_detected: hallucination?.on_hallucination_detected,
       fact_check: asObject(hallucination?.fact_check) || {},
       detector: asObject(hallucination?.detector) || {},
       explainer: asObject(hallucination?.explainer) || {},
@@ -1093,18 +1108,27 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
 function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<ConfigData> {
   if (key === 'embedding_models') {
     return buildNestedPatch(
-      GLOBAL_SECTION_PATHS[key],
+      CURATED_ROUTER_SECTIONS[key].path,
       embeddingModelsCatalogValue(rawData),
     ) as Partial<ConfigData>
   }
   const data = normalizeRouterStructuredFields(key, rawData)
   if (key === 'clear_route_cache') {
-    return buildNestedPatch(GLOBAL_SECTION_PATHS[key], Boolean(data.value)) as Partial<ConfigData>
-  }
-  if (key === 'external_models') {
     return buildNestedPatch(
-      GLOBAL_SECTION_PATHS[key],
+      CURATED_ROUTER_SECTIONS[key].path,
+      Boolean(data.value),
+    ) as Partial<ConfigData>
+  }
+  if (key === 'external_models' || key === 'knowledge_bases') {
+    return buildNestedPatch(
+      CURATED_ROUTER_SECTIONS[key].path,
       Array.isArray(data.items) ? data.items : [],
+    ) as Partial<ConfigData>
+  }
+  if (key === 'admission') {
+    return buildNestedPatch(
+      CURATED_ROUTER_SECTIONS[key].path,
+      asObject(data.value) || {},
     ) as Partial<ConfigData>
   }
   if (key === 'router_core') {
@@ -1123,10 +1147,10 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     } else {
       delete routerCore.auto_model_names
     }
-    return buildNestedPatch(GLOBAL_SECTION_PATHS[key], routerCore) as Partial<ConfigData>
+    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, routerCore) as Partial<ConfigData>
   }
   if (key === 'classifier') {
-    return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
+    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
       ...data,
       domain: asObject(data.domain) || {},
       pii: asObject(data.pii) || {},
@@ -1135,10 +1159,9 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
     }) as Partial<ConfigData>
   }
   if (key === 'hallucination_mitigation') {
-    return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
+    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
       ...data,
       enabled: Boolean(data.enabled),
-      on_hallucination_detected: data.on_hallucination_detected,
       fact_check: asObject(data.fact_check) || {},
       detector: asObject(data.detector) || {},
       explainer: asObject(data.explainer) || {},
@@ -1146,7 +1169,7 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
   }
   if (key === 'model_selection') {
     const { default_algorithm, models_path, knn, kmeans, svm, ml, ...selectionFields } = data
-    return buildNestedPatch(GLOBAL_SECTION_PATHS[key], {
+    return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, {
       ...selectionFields,
       enabled: Boolean(data.enabled),
       method: default_algorithm,
@@ -1162,79 +1185,32 @@ function saveForKey(key: RouterSystemKey, rawData: EditFormData): Partial<Config
       },
     }) as Partial<ConfigData>
   }
-  return buildNestedPatch(GLOBAL_SECTION_PATHS[key], data) as Partial<ConfigData>
+  return buildNestedPatch(CURATED_ROUTER_SECTIONS[key].path, data) as Partial<ConfigData>
 }
 
 export function buildEffectiveRouterConfig(
   routerDefaults: CanonicalGlobalConfig | null,
   config: ConfigData | null,
 ): RouterConfigSectionData {
-  return {
-    router_core:
-      getSectionValue(routerDefaults, 'router_core') ?? getSectionValue(config, 'router_core'),
-    response_api:
-      getSectionValue(routerDefaults, 'response_api') ?? getSectionValue(config, 'response_api'),
-    router_replay:
-      getSectionValue(routerDefaults, 'router_replay') ?? getSectionValue(config, 'router_replay'),
-    authz: getSectionValue(routerDefaults, 'authz') ?? getSectionValue(config, 'authz'),
-    ratelimit: getSectionValue(routerDefaults, 'ratelimit') ?? getSectionValue(config, 'ratelimit'),
-    memory: getSectionValue(routerDefaults, 'memory') ?? getSectionValue(config, 'memory'),
-    response_cache:
-      getSectionValue(routerDefaults, 'response_cache') ??
-      getSectionValue(config, 'response_cache'),
-    vector_store:
-      getSectionValue(routerDefaults, 'vector_store') ?? getSectionValue(config, 'vector_store'),
-    tools: getSectionValue(routerDefaults, 'tools') ?? getSectionValue(config, 'tools'),
-    prompt_guard:
-      getSectionValue(routerDefaults, 'prompt_guard') ?? getSectionValue(config, 'prompt_guard'),
-    classifier:
-      getSectionValue(routerDefaults, 'classifier') ?? getSectionValue(config, 'classifier'),
-    hallucination_mitigation:
-      getSectionValue(routerDefaults, 'hallucination_mitigation') ??
-      getSectionValue(config, 'hallucination_mitigation'),
-    feedback_detector:
-      getSectionValue(routerDefaults, 'feedback_detector') ??
-      getSectionValue(config, 'feedback_detector'),
-    external_models:
-      getSectionValue(routerDefaults, 'external_models') ??
-      getSectionValue(config, 'external_models'),
-    system_models:
-      getSectionValue(routerDefaults, 'system_models') ?? getSectionValue(config, 'system_models'),
-    embedding_models:
-      getSectionValue(routerDefaults, 'embedding_models') ??
-      getSectionValue(config, 'embedding_models'),
-    prompt_compression:
-      getSectionValue(routerDefaults, 'prompt_compression') ??
-      getSectionValue(config, 'prompt_compression'),
-    modality_detector:
-      getSectionValue(routerDefaults, 'modality_detector') ??
-      getSectionValue(config, 'modality_detector'),
-    observability:
-      getSectionValue(routerDefaults, 'observability') ?? getSectionValue(config, 'observability'),
-    looper: getSectionValue(routerDefaults, 'looper') ?? getSectionValue(config, 'looper'),
-    clear_route_cache:
-      getSectionValue(routerDefaults, 'clear_route_cache') ??
-      getSectionValue(config, 'clear_route_cache'),
-    model_selection:
-      getSectionValue(routerDefaults, 'model_selection') ??
-      getSectionValue(config, 'model_selection'),
-    api: getSectionValue(routerDefaults, 'api') ?? getSectionValue(config, 'api'),
+  const effective: RouterConfigSectionData = {}
+  for (const key of Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]) {
+    effective[key] = getSectionValue(routerDefaults, key) ?? getSectionValue(config, key)
   }
+  return effective
 }
 
 export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectionCard[] {
-  const optionalKeys = OPTIONAL_ROUTER_KEYS.filter((key) => ctx.routerConfig[key] !== undefined)
-  const orderedKeys = [...PYTHON_ROUTER_KEYS, ...optionalKeys]
+  const orderedKeys = Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]
 
-  return orderedKeys.map((key) => {
+  const curatedCards: RouterSectionCard[] = orderedKeys.map((key) => {
     const data = ctx.routerConfig[key]
     const meta = SECTION_META[key]
     const source = sourceBadge(key, ctx.routerDefaults, data)
 
     return {
       key,
-      layer: ROUTER_SECTION_LAYERS[key],
-      path: GLOBAL_SECTION_PATHS[key],
+      layer: CURATED_ROUTER_SECTIONS[key].layer,
+      path: [...CURATED_ROUTER_SECTIONS[key].path],
       title: meta.title,
       eyebrow: meta.eyebrow,
       description: meta.description,
@@ -1249,4 +1225,56 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
       save: (nextData) => saveForKey(key, nextData),
     }
   })
+
+  const curatedPaths = new Set(
+    Object.values(CURATED_ROUTER_SECTIONS).map(({ path }) => path.join('.')),
+  )
+  const generatedCards: RouterSectionCard[] = ROUTER_CONFIG_EXTENSION.global_sections
+    .filter((surface) => !curatedPaths.has(surface.path.join('.')))
+    .map((surface) => {
+      const schemaPath = ['global', ...surface.path]
+      const generatedFields = mergeGeneratedRouterFields(schemaPath, [])
+      const objectForm = generatedFields.length > 0
+      const defaultData = getNestedValue(ctx.routerDefaults, surface.path)
+      const overrideData = getNestedValue(ctx.config?.global, surface.path)
+      const data = defaultData ?? overrideData
+      const editData = objectForm ? { ...(asObject(data) || {}) } : { value: data }
+      const editFields = objectForm
+        ? generatedFields
+        : [generatedRouterValueField(schemaPath, 'value', surface.display_name)]
+      const source =
+        defaultData !== undefined
+          ? { label: 'router effective defaults', tone: 'active' as const }
+          : overrideData !== undefined
+            ? { label: 'config.yaml override', tone: 'info' as const }
+            : { label: 'Router default available', tone: 'inactive' as const }
+
+      return {
+        key: `schema:${surface.path.join('.')}`,
+        layer: surface.layer,
+        path: [...surface.path],
+        title: surface.display_name,
+        eyebrow: routerLayerMeta(surface.layer).title,
+        description: 'Canonical configuration surfaced automatically from the Router schema.',
+        data,
+        sourceLabel: source.label,
+        sourceTone: source.tone,
+        status: statusForKey(data),
+        badges: [],
+        summary: Array.isArray(data)
+          ? [{ label: 'Entries', value: `${data.length}` }]
+          : asObject(data)
+            ? [{ label: 'Fields', value: `${Object.keys(asObject(data) || {}).length}` }]
+            : [{ label: 'Value', value: stringOrFallback(data) }],
+        editData,
+        editFields,
+        save: (nextData) =>
+          buildNestedPatch(
+            surface.path,
+            objectForm ? nextData : nextData.value,
+          ) as Partial<ConfigData>,
+      }
+    })
+
+  return [...curatedCards, ...generatedCards]
 }

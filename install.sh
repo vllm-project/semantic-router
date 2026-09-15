@@ -498,6 +498,11 @@ detect_existing_runtime() {
     return
   fi
 
+  if podman_ready; then
+    printf 'podman\n'
+    return
+  fi
+
   return 1
 }
 
@@ -628,9 +633,10 @@ EOF
 
 resolve_latest_dev_version() {
   local versions_line dev_version
+  # A cached catalog can omit the latest published dev package.
   versions_line="$(
     "$INSTALL_ROOT/venv/bin/python" -m pip index versions \
-      --disable-pip-version-check --pre vllm-sr 2>/dev/null \
+      --disable-pip-version-check --no-cache-dir --pre vllm-sr 2>/dev/null \
       | sed -n 's/^Available versions: //p' \
       | head -n 1
   )"
@@ -643,6 +649,25 @@ resolve_latest_dev_version() {
   [ -n "$dev_version" ] || return 1
   printf '%s\n' "$dev_version"
 }
+
+install_dev_package() (
+  local dev_version download_dir
+  dev_version="$1"
+  download_dir="$(mktemp -d)"
+  trap 'rm -rf "$download_dir"' EXIT
+
+  # The pinned download also consults the catalog. Refresh only vllm-sr,
+  # then install the local artifact with the normal dependency cache.
+  run_quiet_step \
+    "Downloading vLLM Semantic Router development package $dev_version" \
+    "$INSTALL_ROOT/venv/bin/python" -m pip download \
+      --disable-pip-version-check --no-cache-dir --no-deps --quiet \
+      --dest "$download_dir" "vllm-sr==$dev_version"
+  run_quiet_step \
+    "Installing vLLM Semantic Router development package $dev_version" \
+    "$INSTALL_ROOT/venv/bin/python" -m pip install \
+      --disable-pip-version-check --upgrade --quiet "$download_dir"/*
+)
 
 install_requested_package() {
   local dev_version
@@ -657,9 +682,7 @@ install_requested_package() {
     dev)
       dev_version="$(resolve_latest_dev_version)" || die \
         "No published vllm-sr development package was found. Use --channel stable or --pip-spec."
-      run_quiet_step \
-        "Installing vLLM Semantic Router development package $dev_version" \
-        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet "vllm-sr==$dev_version"
+      install_dev_package "$dev_version"
       ;;
     stable)
       run_quiet_step \
@@ -708,6 +731,10 @@ install_cli() {
 
 docker_ready() {
   has_cmd docker && docker info >/dev/null 2>&1
+}
+
+podman_ready() {
+  has_cmd podman && podman info >/dev/null 2>&1
 }
 
 choose_runtime_preference() {
@@ -766,7 +793,11 @@ install_linux_docker_runtime() {
 }
 
 write_runtime_env() {
+  local runtime="${1:-${SELECTED_RUNTIME:-}}"
   rm -f "$INSTALL_ROOT/runtime.env"
+  if [ -n "$runtime" ]; then
+    printf 'CONTAINER_RUNTIME=%s\n' "$runtime" > "$INSTALL_ROOT/runtime.env"
+  fi
 }
 
 ensure_runtime() {
@@ -781,6 +812,13 @@ ensure_runtime() {
     SELECTED_RUNTIME="docker"
     write_runtime_env
     done_step "Using existing Docker runtime"
+    return
+  fi
+
+  if [ "$REQUESTED_RUNTIME" = "auto" ] && podman_ready; then
+    SELECTED_RUNTIME="podman"
+    write_runtime_env "podman"
+    done_step "Using existing Podman runtime"
     return
   fi
 

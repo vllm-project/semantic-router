@@ -61,6 +61,12 @@ typedef struct {
     bool error;
 } EmbeddingModelsInfoResult;
 
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+
 // ============================================================================
 // Classification Types
 // ============================================================================
@@ -104,6 +110,9 @@ extern int get_embeddings_batch(const char** texts, int num_texts, int target_la
 extern int calculate_embedding_similarity(const char* text1, const char* text2, int target_layer, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -121,6 +130,10 @@ extern int detect_pii(const char* classifier_name, const char* text, PIIResultFF
 extern void free_classification_result(ClassificationResultFFI* result);
 extern void free_pii_result(PIIResultFFI* result);
 
+static inline void release_classification_result(ClassificationResultFFI result) {
+    free_classification_result(&result);
+}
+
 // ============================================================================
 // Multi-Modal Embedding Types & Functions
 // ============================================================================
@@ -136,19 +149,16 @@ typedef struct {
 extern bool init_multimodal_embedding_model(const char* model_path, bool use_cpu);
 extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_image_from_bytes(const unsigned char* bytes_ptr, size_t bytes_len, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
 extern void free_multimodal_embedding(float* data, int length);
 */
 import "C"
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"net/http"
 	"strings"
@@ -201,6 +211,7 @@ type ClassResultWithProbs struct {
 	Class         int
 	Confidence    float32
 	Probabilities []float32
+	NumClasses    int
 }
 
 // TokenEntity represents a detected PII entity (candle_binding compatible)
@@ -481,6 +492,61 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 	}
 }
 
+// EmbeddingTextExceedsWindow reports whether text tokenizes past the context
+// window of the loaded embedding model, so its embedding would be truncated.
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	switch C.embedding_text_exceeds_window(cText, cModelType) {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("embedding model %q not loaded", modelType)
+	}
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns overlapping byte ranges that cover all tokens in text.
+// A non-positive maxLength uses the loaded model's configured sequence limit.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	if !IsMmBertModelInitialized() {
+		return nil, errors.New("mmBERT embedding model not initialized")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+	if bool(result.error) {
+		return nil, errors.New("failed to window text")
+	}
+
+	count := int(result.window_count)
+	if count == 0 || result.offsets == nil {
+		return nil, nil
+	}
+	offsets := (*[1 << 28]C.int)(unsafe.Pointer(result.offsets))[: count*2 : count*2]
+	windows := make([]TextWindow, count)
+	for i := range windows {
+		windows[i] = TextWindow{
+			Start: int(offsets[i*2]),
+			End:   int(offsets[i*2+1]),
+		}
+	}
+	return windows, nil
+}
+
 // ============================================================================
 // Similarity Functions
 // ============================================================================
@@ -586,25 +652,21 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
-// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection and
-// returns the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to a
-// confidence-based estimate.
+// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection
+// and returns the full probability distribution.
 func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyMmBert32KFeedback classifies text for feedback detection
 func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
+}
+
+// ClassifyMmBert32KFeedbackWithProbs classifies text for feedback detection
+// and returns the full probability distribution.
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierProbabilities("feedback", text)
 }
 
 // ClassifyMmBert32KPII detects PII entities in text
@@ -649,6 +711,17 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 }
 
 func classifyWithClassifier(name, text string) (ClassResult, error) {
+	result, err := classifyWithClassifierProbabilities(name, text)
+	if err != nil {
+		return ClassResult{Class: -1, Confidence: 0}, err
+	}
+	return ClassResult{
+		Class:      result.Class,
+		Confidence: result.Confidence,
+	}, nil
+}
+
+func classifyWithClassifierProbabilities(name, text string) (ClassResultWithProbs, error) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 	cText := C.CString(text)
@@ -656,36 +729,32 @@ func classifyWithClassifier(name, text string) (ClassResult, error) {
 
 	var result C.ClassificationResultFFI
 	status := C.classify_text(cName, cText, &result)
+	defer C.release_classification_result(result)
 
 	if status != 0 || result.error {
-		return ClassResult{Class: -1, Confidence: 0}, fmt.Errorf("%s classification failed", name)
+		return ClassResultWithProbs{}, fmt.Errorf("%s classification failed", name)
 	}
 
-	defer C.free_classification_result(&result)
+	numClasses := int(result.num_classes)
+	probabilities := make([]float32, numClasses)
+	if result.probabilities != nil && numClasses > 0 {
+		cProbabilities := unsafe.Slice(result.probabilities, numClasses)
+		for index, probability := range cProbabilities {
+			probabilities[index] = float32(probability)
+		}
+	}
 
-	return ClassResult{
-		Class:      int(result.class_id),
-		Confidence: float32(result.confidence),
+	return ClassResultWithProbs{
+		Class:         int(result.class_id),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    numClasses,
 	}, nil
 }
 
 // ClassifyTextWithProbabilities classifies text with the generic classifier.
-// The ONNX FFI currently exposes the winning class and confidence; callers
-// receive a sparse probability vector with the winning score populated.
 func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("generic", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	probabilities := make([]float32, result.Class+1)
-	if result.Class >= 0 {
-		probabilities[result.Class] = result.Confidence
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: probabilities,
-	}, nil
+	return classifyWithClassifierProbabilities("generic", text)
 }
 
 // ============================================================================
@@ -795,15 +864,7 @@ func ClassifyModernBertText(text string) (ClassResult, error) {
 
 // ClassifyModernBertTextWithProbabilities classifies with probabilities
 func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("modernbert", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("modernbert", text)
 }
 
 // ClassifyModernBertJailbreakText classifies for jailbreak
@@ -812,19 +873,9 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 }
 
 // ClassifyModernBertJailbreakTextWithProbs classifies for jailbreak and returns
-// the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to
-// a confidence-based estimate.
+// the full probability distribution.
 func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyJailbreakText classifies for jailbreak (legacy)
@@ -832,20 +883,10 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
-// ClassifyJailbreakTextWithProbs classifies for jailbreak (legacy) and returns
-// the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to
-// a confidence-based estimate.
+// ClassifyJailbreakTextWithProbs classifies for jailbreak and returns the full
+// probability distribution.
 func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyCandleBertTokens classifies tokens
@@ -1005,6 +1046,12 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies text for feedback detection
 func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
+}
+
+// ClassifyFeedbackTextWithProbs classifies text for feedback detection and
+// returns the full probability distribution.
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierProbabilities("feedback", text)
 }
 
 // ============================================================================
@@ -1213,17 +1260,41 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 	}, nil
 }
 
-// MultiModalEncodeImageFromBytes decodes raw JPEG/PNG bytes, resizes to 512×512,
-// and encodes to a multi-modal embedding.
+// MultiModalEncodeImageFromBytes decodes raw JPEG/PNG bytes, resizes to
+// 512×512 using the same Catmull-Rom cubic resize as candle-binding, and
+// encodes to a multi-modal embedding. All preprocessing happens in Rust
+// (see multimodal_encode_image_from_bytes in src/ffi/multimodal.rs) so the
+// two bindings share one pixel pipeline instead of each doing their own
+// decode/resize — see #2166.
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if len(imageBytes) == 0 {
 		return nil, errors.New("imageBytes cannot be empty")
 	}
-	pixelData, err := decodeAndResizeImageOnnx(imageBytes, 512, 512)
-	if err != nil {
-		return nil, fmt.Errorf("image decode error: %w", err)
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_image_from_bytes(
+		(*C.uchar)(unsafe.Pointer(&imageBytes[0])),
+		C.size_t(len(imageBytes)),
+		C.int(targetDim),
+		&result,
+	)
+	if status != 0 || result.error {
+		return nil, errors.New("multi-modal image encoding from bytes failed")
 	}
-	return MultiModalEncodeImage(pixelData, 512, 512, targetDim)
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal image encoding returned empty result")
+	}
+	defer C.free_multimodal_embedding(result.data, result.length)
+
+	emb := make([]float32, int(result.length))
+	cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+	copy(emb, cData)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        emb,
+		Modality:         modalityToString(int(result.modality)),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
 }
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it.
@@ -1283,28 +1354,4 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, fmt.Errorf("read body error: %w", err)
 	}
 	return MultiModalEncodeImageFromBytes(data, targetDim)
-}
-
-// decodeAndResizeImageOnnx decodes JPEG/PNG and returns CHW float32 [0,1] pixels.
-func decodeAndResizeImageOnnx(data []byte, targetW, targetH int) ([]float32, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	bounds := img.Bounds()
-	srcW := bounds.Dx()
-	srcH := bounds.Dy()
-
-	pixels := make([]float32, 3*targetH*targetW)
-	for y := 0; y < targetH; y++ {
-		srcY := y * srcH / targetH
-		for x := 0; x < targetW; x++ {
-			srcX := x * srcW / targetW
-			r, g, b, _ := img.At(bounds.Min.X+srcX, bounds.Min.Y+srcY).RGBA()
-			pixels[0*targetH*targetW+y*targetW+x] = float32(r) / 65535.0
-			pixels[1*targetH*targetW+y*targetW+x] = float32(g) / 65535.0
-			pixels[2*targetH*targetW+y*targetW+x] = float32(b) / 65535.0
-		}
-	}
-	return pixels, nil
 }

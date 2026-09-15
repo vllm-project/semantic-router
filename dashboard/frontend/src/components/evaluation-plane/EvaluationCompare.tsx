@@ -1,161 +1,96 @@
-import type { EvaluationComparison, EvaluationRun } from '../../types/evaluationPlane'
-import EvaluationGateList from './EvaluationGateList'
-import { effectiveGateVerdict, formatDelta, formatMetric } from './evaluationPresentation'
-import { GateVerdictBadge } from './EvaluationPrimitives'
-import styles from './EvaluationReport.module.css'
+import type { EvaluationRun } from '../../types/evaluationPlane'
+import type { EvaluationComparison } from '../../types/evaluationComparison'
+import EvaluationCompareAvailability from './EvaluationCompareAvailability'
+import EvaluationCompareCohort from './EvaluationCompareCohort'
+import { buildEvaluationCompareModel } from './evaluationCompareModel'
+import EvaluationCompareSelection from './EvaluationCompareSelection'
+import EvaluationComparisonResults from './EvaluationComparisonResults'
+import EvaluationIssueDetails from './EvaluationIssueDetails'
+import heroStyles from './EvaluationReportHero.module.css'
+import reportStyles from './EvaluationReportLayout.module.css'
 
 interface EvaluationCompareProps {
   runs: EvaluationRun[]
   baselineID: string
   candidateID: string
   comparison: EvaluationComparison | null
+  runLedgerAvailable: boolean
+  runLedgerComplete: boolean
+  totalRuns: number
+  hasMoreRuns: boolean
+  loadingMoreRuns: boolean
+  resourcesLoading: boolean
+  resourcesError: string | null
   loading: boolean
   error: string | null
-  onBaselineChange: (id: string) => void
-  onCandidateChange: (id: string) => void
+  onPairChange: (candidateID: string, baselineID: string) => void
   onCompare: () => void
+  onLoadMoreRuns: () => void
+  onRetryResources: () => void
+  onCreateRun?: () => void
 }
 
-export default function EvaluationCompare({
-  runs,
-  baselineID,
-  candidateID,
-  comparison,
-  loading,
-  error,
-  onBaselineChange,
-  onCandidateChange,
-  onCompare,
-}: EvaluationCompareProps) {
-  const completedRuns = runs.filter((run) => run.status === 'completed')
-  const baselineRun = completedRuns.find((run) => run.id === baselineID)
-  const candidateRun = completedRuns.find((run) => run.id === candidateID)
-  const profileMismatch = Boolean(
-    baselineRun && candidateRun && baselineRun.change_profile !== candidateRun.change_profile,
-  )
-  const invalidPair = !baselineID || !candidateID || baselineID === candidateID || profileMismatch
-  const comparisonVerdict = comparison
-    ? effectiveGateVerdict(comparison.verdict, comparison.gates)
-    : null
-  return (
-    <div className={styles.report}>
-      <section className={styles.compareHero}>
-        <div>
-          <span className={styles.eyebrow}>Paired evidence</span>
-          <h2>Compare candidate against baseline</h2>
-          <p>Review metric deltas and promotion gates on two completed, reproducible runs.</p>
-        </div>
-        <div className={styles.compareControls}>
-          <label>
-            Baseline
-            <select value={baselineID} onChange={(event) => onBaselineChange(event.target.value)}>
-              <option value="">Select baseline</option>
-              {completedRuns.map((run) => (
-                <option
-                  key={run.id}
-                  value={run.id}
-                  disabled={
-                    run.id === candidateID ||
-                    Boolean(candidateRun && run.change_profile !== candidateRun.change_profile)
-                  }
-                >
-                  {run.name} · {run.change_profile}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Candidate
-            <select value={candidateID} onChange={(event) => onCandidateChange(event.target.value)}>
-              <option value="">Select candidate</option>
-              {completedRuns.map((run) => (
-                <option
-                  key={run.id}
-                  value={run.id}
-                  disabled={
-                    run.id === baselineID ||
-                    Boolean(baselineRun && run.change_profile !== baselineRun.change_profile)
-                  }
-                >
-                  {run.name} · {run.change_profile}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" disabled={invalidPair || loading} onClick={onCompare}>
-            {loading ? 'Comparing…' : 'Compare runs'}
-          </button>
-        </div>
-      </section>
+export default function EvaluationCompare(props: EvaluationCompareProps) {
+  const model = buildEvaluationCompareModel(props)
+  const chooseCandidate = (id: string) => {
+    const next = model.completed.get(id)
+    props.onPairChange(id, next?.baseline_run_id || '')
+  }
+  const showPrompt =
+    props.runLedgerAvailable &&
+    props.runLedgerComplete &&
+    !props.resourcesLoading &&
+    !props.resourcesError &&
+    !props.comparison &&
+    !props.error &&
+    model.candidates.length > 0
 
-      {error ? (
-        <div className={styles.error} role="alert">
-          {error}
+  return (
+    <div className={reportStyles.report} aria-busy={props.loading}>
+      <EvaluationCompareSelection
+        model={model}
+        candidateID={props.candidateID}
+        runLedgerAvailable={props.runLedgerAvailable}
+        runLedgerComplete={props.runLedgerComplete}
+        resourcesLoading={props.resourcesLoading}
+        loading={props.loading}
+        onChooseCandidate={chooseCandidate}
+        onCompare={props.onCompare}
+      />
+      <EvaluationCompareAvailability
+        model={model}
+        runsLoaded={props.runs.length}
+        totalRuns={props.totalRuns}
+        runLedgerAvailable={props.runLedgerAvailable}
+        runLedgerComplete={props.runLedgerComplete}
+        hasMoreRuns={props.hasMoreRuns}
+        loadingMoreRuns={props.loadingMoreRuns}
+        resourcesLoading={props.resourcesLoading}
+        resourcesError={props.resourcesError}
+        onLoadMoreRuns={props.onLoadMoreRuns}
+        onRetryResources={props.onRetryResources}
+        onCreateRun={props.onCreateRun}
+      />
+      <EvaluationCompareCohort model={model} runLedgerComplete={props.runLedgerComplete} />
+      {props.error ? (
+        <div className={heroStyles.error} role="alert">
+          <span>The comparison could not be calculated. Retry after checking both runs.</span>
+          <EvaluationIssueDetails
+            issues={[{ label: 'Comparison service', message: props.error }]}
+          />
         </div>
       ) : null}
-      {profileMismatch ? (
-        <div className={styles.error} role="alert">
-          Baseline and candidate must use the same change profile.
+      {showPrompt ? (
+        <div className={reportStyles.empty}>
+          Choose a candidate, then calculate its paired comparison.
         </div>
       ) : null}
-      {!comparison && !error ? (
-        <div className={styles.empty}>
-          Choose two different completed runs, then calculate the comparison.
-        </div>
-      ) : null}
-      {comparison ? (
-        <>
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <span className={styles.eyebrow}>Comparison verdict</span>
-                <h3>{comparison.summary}</h3>
-              </div>
-              {comparisonVerdict ? <GateVerdictBadge verdict={comparisonVerdict} /> : null}
-            </div>
-            <div className={styles.deltaGrid}>
-              {comparison.metrics.map((metric) => (
-                <article key={metric.id}>
-                  <span>{metric.name}</span>
-                  <strong>{formatMetric(metric)}</strong>
-                  <small
-                    className={
-                      (metric.delta || 0) < 0 ? styles.negativeDelta : styles.positiveDelta
-                    }
-                  >
-                    {formatDelta(metric) || 'No delta'} vs baseline
-                  </small>
-                </article>
-              ))}
-            </div>
-          </section>
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <span className={styles.eyebrow}>Regression boundary</span>
-                <h3>Comparison gates</h3>
-              </div>
-            </div>
-            <EvaluationGateList gates={comparison.gates} />
-          </section>
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <span className={styles.eyebrow}>Next actions</span>
-                <h3>Recommendations</h3>
-              </div>
-            </div>
-            {comparison.recommendations.length ? (
-              <ol className={styles.recommendations}>
-                {comparison.recommendations.map((item, index) => (
-                  <li key={`${index}-${item}`}>{item}</li>
-                ))}
-              </ol>
-            ) : (
-              <p className={styles.empty}>No comparison recommendations were generated.</p>
-            )}
-          </section>
-        </>
+      {props.runLedgerComplete && props.comparison && model.comparisonVerdict ? (
+        <EvaluationComparisonResults
+          comparison={props.comparison}
+          verdict={model.comparisonVerdict}
+          evidenceLevel={model.candidate?.evidence_level}
+        />
       ) : null}
     </div>
   )

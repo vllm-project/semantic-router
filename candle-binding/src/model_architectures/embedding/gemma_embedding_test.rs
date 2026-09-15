@@ -1070,3 +1070,38 @@ fn test_gemma_matryoshka_dimensions(
     }
     println!("{}", "=".repeat(80));
 }
+
+/// Sequences longer than max_position_embeddings must be rejected with an error that
+/// names the limit instead of failing inside the RoPE index_select (issue #3388).
+#[rstest]
+#[serial(gemma_model)]
+fn test_embedding_forward_rejects_sequence_over_max_position_embeddings(
+    gemma_embedding_model: Arc<GemmaEmbeddingModel>,
+) {
+    let max_len = gemma_embedding_model.config().max_position_embeddings;
+    let seq_len = max_len + 1;
+    let device = gemma_embedding_model.device();
+
+    let input_ids = Tensor::zeros((1, seq_len), candle_core::DType::U32, &device)
+        .expect("Failed to create input_ids");
+    let attention_mask = Tensor::ones((1, seq_len), candle_core::DType::F32, &device)
+        .expect("Failed to create attention_mask");
+
+    let err = gemma_embedding_model
+        .embedding_forward(&input_ids, Some(&attention_mask))
+        .expect_err("forward pass over max_position_embeddings must fail");
+
+    match err {
+        UnifiedError::Validation {
+            field,
+            expected,
+            actual,
+            ..
+        } => {
+            assert_eq!(field, "seq_len");
+            assert_eq!(expected, format!("<= {}", max_len));
+            assert_eq!(actual, seq_len.to_string());
+        }
+        other => panic!("expected Validation error, got {:?}", other),
+    }
+}

@@ -28,7 +28,7 @@ describe('Mixture-of-Models workspace contracts', () => {
     expect(source).toContain('getRecipeProbe(')
     expect(source).toContain('validateRecipeProbe(')
     expect(source).toContain('createRecipeProbeRunPlan(')
-    expect(source).not.toContain('/api/v1/eval')
+    expect(source).not.toContain('/api/v1/routing/preview')
     expect(source).not.toContain('simulate')
   })
 
@@ -47,6 +47,8 @@ describe('Mixture-of-Models workspace contracts', () => {
     const usage = readSource('./ConfigPageModelUsageDialog.tsx')
 
     expect(lists).toContain('onUsage(entrypoint)')
+    expect(lists).toContain('onEvaluate(entrypoint)')
+    expect(lists).toContain('Evaluate')
     expect(lists).not.toContain('Catalog metadata is unavailable')
     expect(lists).not.toContain('RecipeModelPool')
     expect(usage).toContain('/v1/chat/completions')
