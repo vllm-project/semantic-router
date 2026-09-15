@@ -158,6 +158,9 @@ routing:
         easy_below: 0.30
 ```
 
+Leave `threshold` out of a rule that states a pair. The Router and the CRD
+both refuse the combination, and a written `threshold: 0` counts as written.
+
 For a model whose score falls as difficulty rises - one predicting the chance
 of a correct answer, for instance - use `hard_below` with `easy_above`
 instead. Encoding the direction in the field names means there is no separate

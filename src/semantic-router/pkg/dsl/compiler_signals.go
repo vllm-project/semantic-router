@@ -245,6 +245,9 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	rule := config.ComplexityRule{Name: s.Name}
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.Threshold = v
+		// Presence is recorded as it is for YAML, so a written `threshold: 0`
+		// next to a boundary pair is refused on this path too.
+		rule.ThresholdSet = true
 	}
 	rule.HardAbove = complexityBoundaryField(s.Fields, "hard_above")
 	rule.EasyBelow = complexityBoundaryField(s.Fields, "easy_below")
