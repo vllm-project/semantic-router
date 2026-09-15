@@ -2180,6 +2180,25 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "masking"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/MaskingPluginConfig"
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -2190,6 +2209,7 @@
             "fast_response",
             "hallucination",
             "header_mutation",
+            "masking",
             "memory",
             "rag",
             "request_params",
@@ -3312,6 +3332,30 @@
         },
         "role": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "placeholders": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -7108,6 +7152,12 @@
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
         "schema_ref": "#/$defs/ShadowDispatchPluginConfig"
+      },
+      {
+        "type": "masking",
+        "display_name": "Masking",
+        "description": "Replace detected PII in the provider-bound request with placeholders.",
+        "schema_ref": "#/$defs/MaskingPluginConfig"
       }
     ],
     "projections": [

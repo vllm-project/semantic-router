@@ -24,6 +24,7 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"rag":                 emitRAGPluginConfig,
 	"header_mutation":     emitHeaderMutationPluginConfig,
 	"response_jailbreak":  emitResponseJailbreakPluginConfig,
+	"masking":             emitStructuredPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {

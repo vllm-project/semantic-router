@@ -365,6 +365,7 @@ export interface PluginConfig {
     | 'response_jailbreak'
     | 'context_compression'
     | 'shadow_dispatch'
+    | 'masking'
   configuration: Record<string, unknown>
 }
 
