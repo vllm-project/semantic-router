@@ -77,6 +77,37 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 	assertStringPtr(t, record.BaselineModel, "premium-model", "baseline model")
 }
 
+func TestRecorderUpdateRequestDemandSnapshotsClonesStoredValues(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recordID, err := recorder.AddRecord(RoutingRecord{
+		ID: "replay-demand-1",
+		RouteDiagnostics: &RouteDiagnostics{
+			SelectionMethod: "static",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to add record: %v", err)
+	}
+	snapshots := []RequestDemandSnapshot{{
+		Stage: "provider_bound", PromptTokens: 128, CountingSource: "fallback",
+	}}
+	if err := recorder.UpdateRequestDemandSnapshots(recordID, snapshots); err != nil {
+		t.Fatalf("failed to update request demand snapshots: %v", err)
+	}
+
+	snapshots[0].PromptTokens = 999
+	record, found := recorder.GetRecord(recordID)
+	if !found || record.RouteDiagnostics == nil {
+		t.Fatalf("updated replay record missing: %+v", record)
+	}
+	if record.RouteDiagnostics.SelectionMethod != "static" {
+		t.Fatalf("request demand update replaced other route diagnostics: %+v", record.RouteDiagnostics)
+	}
+	if got := record.RouteDiagnostics.RequestDemandSnapshots; len(got) != 1 || got[0].PromptTokens != 128 {
+		t.Fatalf("stored request demand snapshots alias input: %+v", got)
+	}
+}
+
 func TestRecorderUpdateToolTraceClonesStoredValues(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
 	recordID, err := recorder.AddRecord(RoutingRecord{

@@ -312,6 +312,17 @@ func (q *QdrantStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	})
 }
 
+// UpdateRequestDemandSnapshots replaces bounded request-demand evidence for a record.
+func (q *QdrantStore) UpdateRequestDemandSnapshots(
+	ctx context.Context,
+	id string,
+	snapshots []RequestDemandSnapshot,
+) error {
+	return q.updateRecord(ctx, id, func(record *Record) {
+		setRequestDemandSnapshots(record, snapshots)
+	})
+}
+
 func (q *QdrantStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.ToolTrace = cloneToolTrace(&trace)

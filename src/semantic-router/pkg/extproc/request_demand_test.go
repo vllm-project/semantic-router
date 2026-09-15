@@ -1,14 +1,18 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 func TestRequestDemandSnapshotSeparatesPromptAndOutputReserve(t *testing.T) {
@@ -95,6 +99,10 @@ func TestUpsertRequestDemandSnapshotIsBoundedAndStageOrdered(t *testing.T) {
 func TestConcreteModelDispatchCapturesAllRequestDemandStages(t *testing.T) {
 	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	router.Cache = cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	router.ReplayRecorder = recorder
+	replayConfig := config.DefaultRouterReplayPluginConfig()
+	replayConfig.Enabled = true
 	body, err := json.Marshal(map[string]interface{}{
 		"model": model,
 		"messages": []map[string]interface{}{{
@@ -105,7 +113,11 @@ func TestConcreteModelDispatchCapturesAllRequestDemandStages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := &RequestContext{Headers: map[string]string{}, RequestID: "demand-stages"}
+	ctx := &RequestContext{
+		Headers:                  map[string]string{},
+		RequestID:                "demand-stages",
+		RouterReplayPluginConfig: &replayConfig,
+	}
 
 	response, err := router.HandleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
 		RequestBody: &ext_proc.HttpBody{Body: body},
@@ -138,6 +150,73 @@ func TestConcreteModelDispatchCapturesAllRequestDemandStages(t *testing.T) {
 			t.Fatalf("snapshot[%d] lost demand provenance: %+v", index, snapshot)
 		}
 	}
+
+	if ctx.RouterReplayID == "" {
+		t.Fatal("request demand flow did not start Router Replay")
+	}
+	startedRecord, found := recorder.GetRecord(ctx.RouterReplayID)
+	if !found || startedRecord.RouteDiagnostics == nil {
+		t.Fatalf("Replay record %q missing route diagnostics: %+v", ctx.RouterReplayID, startedRecord)
+	}
+	if got := len(startedRecord.RouteDiagnostics.RequestDemandSnapshots); got != len(wantStages)-1 {
+		t.Fatalf("in-progress Replay snapshots = %d, want %d before terminal enrichment", got, len(wantStages)-1)
+	}
+
+	router.finalizeRouterReplay(ctx, routerreplay.LifecycleCompleted, "test_complete")
+	record, found := recorder.GetRecord(ctx.RouterReplayID)
+	if !found || record.RouteDiagnostics == nil {
+		t.Fatalf("final Replay record %q missing route diagnostics: %+v", ctx.RouterReplayID, record)
+	}
+	persisted := record.RouteDiagnostics.RequestDemandSnapshots
+	if len(persisted) != len(wantStages) {
+		t.Fatalf("Replay snapshots = %+v, want stages %v", persisted, wantStages)
+	}
+	for index, want := range wantStages {
+		if persisted[index].Stage != want {
+			t.Fatalf("Replay snapshot[%d].Stage = %q, want %q", index, persisted[index].Stage, want)
+		}
+	}
+}
+
+func TestProviderBoundReplayDemandUpdateFailsOpen(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	router.Cache = cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})
+	router.ReplayRecorder = routerreplay.NewRecorder(&failingRequestDemandStore{
+		Storage: store.NewMemoryStore(10, 0),
+	})
+	replayConfig := config.DefaultRouterReplayPluginConfig()
+	replayConfig.Enabled = true
+	body := []byte(`{"model":"` + model + `","messages":[{"role":"user","content":"fail open"}],"max_tokens":32}`)
+	ctx := &RequestContext{
+		Headers:                  map[string]string{},
+		RequestID:                "demand-update-fail-open",
+		RouterReplayPluginConfig: &replayConfig,
+	}
+
+	response, err := router.HandleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
+		RequestBody: &ext_proc.HttpBody{Body: body},
+	}, ctx)
+	if err != nil || response.GetRequestBody() == nil {
+		t.Fatalf("Replay enrichment changed dispatch: response=%#v err=%v", response, err)
+	}
+
+	router.finalizeRouterReplay(ctx, routerreplay.LifecycleCompleted, "test_complete")
+	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+	if !found || record.LifecycleState != routerreplay.LifecycleCompleted {
+		t.Fatalf("Replay enrichment failure blocked lifecycle completion: %+v", record)
+	}
+}
+
+type failingRequestDemandStore struct {
+	store.Storage
+}
+
+func (f *failingRequestDemandStore) UpdateRequestDemandSnapshots(
+	context.Context,
+	string,
+	[]store.RequestDemandSnapshot,
+) error {
+	return errors.New("request demand store unavailable")
 }
 
 func TestReplayRouteDiagnosticsCopyRequestDemandSnapshots(t *testing.T) {
