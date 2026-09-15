@@ -319,6 +319,15 @@ export interface TestQueryResult {
   highlightedPath: string[]
   isAccurate: boolean
   evaluatedRules?: EvaluatedRule[]
+  evalTrace?: Array<Record<string, unknown>>
+  signalErrors?: Record<string, string>
+  appliedUnknownPolicies?: Record<string, string>
+  decisionError?: string
+  selectedModel?: string
+  recommendedModels?: string[]
+  selectionStatus?: string
+  selectionMethod?: string
+  selectionReason?: string
   routingLatency?: number
   warning?: string
   decisionConfidence?: number | null
@@ -343,6 +352,7 @@ export interface MatchedSignal {
 export interface EvaluatedRule {
   decisionName: string
   condition: string
+  state?: string
   result: boolean
   priority: number
   matchedConditions?: number

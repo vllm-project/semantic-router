@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -72,8 +74,13 @@ func CLIDecompile(inputPath, outputPath string) error {
 		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
-	cfg, err := config.ParseYAMLBytes(data)
+	// Decompilation is an offline source operation. Preserve environment
+	// references and do not require locally installed inference assets.
+	cfg, err := config.ParseYAMLBytesWithoutEnvExpansion(data)
 	if err != nil {
+		if !isRoutingOnlyFragment(data) {
+			return fmt.Errorf("failed to parse YAML: %w", err)
+		}
 		cfg, err = config.ParseRoutingYAMLBytes(data)
 		if err != nil {
 			return fmt.Errorf("failed to parse YAML: %w", err)
@@ -86,6 +93,22 @@ func CLIDecompile(inputPath, outputPath string) error {
 	}
 
 	return writeOutput([]byte(dslText), outputPath)
+}
+
+// A routing-only fallback intentionally skips provider validation. Never use
+// it for a complete document: it would silently discard invalid recipe and
+// entrypoint scopes while returning successful but incomplete DSL.
+func isRoutingOnlyFragment(data []byte) bool {
+	var fields map[string]interface{}
+	if err := yaml.Unmarshal(data, &fields); err != nil || fields["routing"] == nil {
+		return false
+	}
+	for key := range fields {
+		if key != "version" && key != "routing" {
+			return false
+		}
+	}
+	return true
 }
 
 // TestBlockRunnerFactory constructs a TEST block runner for a parsed program.
