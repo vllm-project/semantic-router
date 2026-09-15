@@ -27,7 +27,6 @@ jobs:
         uses: ./.github/actions/free-disk-space
 
       - uses: docker/setup-qemu-action@v3
-        if: matrix.image == 'dashboard'
         with:
           platforms: arm64
 
@@ -56,6 +55,7 @@ jobs:
             extproc)
               CONTEXT="."
               DOCKERFILE="./tools/docker/Dockerfile.extproc"
+              PLATFORMS="linux/amd64,linux/arm64"
               ;;
             extproc-rocm)
               CONTEXT="."
@@ -76,6 +76,7 @@ jobs:
             vllm-sr)
               CONTEXT="."
               DOCKERFILE="./src/vllm-sr/Dockerfile"
+              PLATFORMS="linux/amd64,linux/arm64"
               ;;
             vllm-sr-cuda)
               CONTEXT="."

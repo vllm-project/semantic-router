@@ -317,7 +317,21 @@ images:
       - tools/docker/Dockerfile.extproc
   extproc-rocm:
     pr_paths: [tools/docker/Dockerfile.extproc-rocm]
-    publish_paths: [tools/docker/Dockerfile.extproc-rocm]
+    publish_paths:
+      - src/semantic-router/**
+      - config/**
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - onnx-binding/**
+      - openvino-binding/**
+      - tools/docker/Dockerfile.extproc-rocm
+      - tools/docker/check-native-abi.sh
+      - tools/docker/entrypoint.sh
+      - tools/make/**
+      - Makefile
+      - .dockerignore
+      - tools/agent/domains.yaml
   operator:
     pr_paths: [deploy/operator/Dockerfile*]
     publish_paths: [deploy/operator/**]
@@ -344,7 +358,18 @@ images:
       - tools/docker/*cuda*
   vllm-sr-rocm:
     pr_paths: [src/vllm-sr/Dockerfile.rocm]
-    publish_paths: [src/vllm-sr/Dockerfile.rocm]
+    publish_paths:
+      - src/vllm-sr/**
+      - src/semantic-router/**
+      - config/**
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - onnx-binding/**
+      - openvino-binding/**
+      - tools/docker/check-native-abi.sh
+      - .dockerignore
+      - tools/agent/domains.yaml
   anthropic-shim:
     pr_paths: [e2e/testing/anthropic-shim/Dockerfile]
     publish_paths: []
