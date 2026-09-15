@@ -216,3 +216,29 @@ func TestHandleToolSelectionWithoutTrustedFactsUnchanged(t *testing.T) {
 		t.Fatalf("absent trusted-facts block must leave tools untouched, got %v", req.Tools)
 	}
 }
+
+func TestHandleToolSelectionDisabledParentDisengagesGate(t *testing.T) {
+	// Disabled parent plus enabled nested block: the gate must not engage,
+	// since the nested policy never passed startup validation for a disabled
+	// parent. Tools flow reaches the parent-disabled guard unchanged.
+	cfg := &config.ToolsPluginConfig{
+		Enabled:           false,
+		Mode:              config.ToolsPluginModePassthrough,
+		SemanticSelection: boolPtr(false),
+		TrustedFacts: &config.TrustedFactsConfig{
+			Enabled:      true,
+			Enforcement:  config.TrustedEnforcementAuthoritative,
+			TrustSources: []string{config.TrustedSourceOperatorPolicy},
+			StageRoles:   []string{config.TrustedStageCandidate},
+		},
+	}
+	router := &OpenAIRouter{}
+	req := trustedFactsTestRequest()
+	resp := &ext_proc.ProcessingResponse{}
+	if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
+		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
+	}
+	if len(req.Tools) != 2 {
+		t.Fatalf("disabled parent must leave tools untouched, got %v", req.Tools)
+	}
+}

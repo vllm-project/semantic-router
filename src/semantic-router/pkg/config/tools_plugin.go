@@ -145,10 +145,13 @@ const (
 )
 
 // TrustedFactsEnabled reports whether the decision opts in to trusted facts.
-// Returns false for nil receivers and for configurations where the
-// trusted_facts block is unset or disabled.
+// Returns false for nil receivers, when the parent tools plugin is disabled,
+// and when the trusted_facts block is unset or disabled. The parent flag is
+// required because ToolsPluginConfig.Validate skips nested validation for a
+// disabled parent: without this, a disabled parent plus an enabled nested
+// block could enforce policy that never passed startup validation.
 func (c *ToolsPluginConfig) TrustedFactsEnabled() bool {
-	if c == nil || c.TrustedFacts == nil {
+	if c == nil || !c.Enabled || c.TrustedFacts == nil {
 		return false
 	}
 	return c.TrustedFacts.Enabled

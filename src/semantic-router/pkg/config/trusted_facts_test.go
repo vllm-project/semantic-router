@@ -107,4 +107,23 @@ func TestToolsPluginTrustedFactsWiring(t *testing.T) {
 	if err := withBad.Validate(); err == nil {
 		t.Fatalf("untrusted source via ToolsPluginConfig should fail")
 	}
+	// Disabled parent plus enabled nested block must not engage the gate:
+	// Validate skips nested validation for a disabled parent, so enforcing
+	// there would apply policy that never passed startup validation.
+	parentDisabled := &ToolsPluginConfig{
+		Enabled: false,
+		Mode:    ToolsPluginModePassthrough,
+		TrustedFacts: &TrustedFactsConfig{
+			Enabled:      true,
+			Enforcement:  TrustedEnforcementAuthoritative,
+			TrustSources: []string{TrustedSourceOperatorPolicy},
+			StageRoles:   []string{TrustedStageCandidate},
+		},
+	}
+	if parentDisabled.TrustedFactsEnabled() {
+		t.Fatalf("disabled parent must report trusted facts disabled")
+	}
+	if err := parentDisabled.Validate(); err != nil {
+		t.Fatalf("disabled parent should skip validation: %v", err)
+	}
 }
