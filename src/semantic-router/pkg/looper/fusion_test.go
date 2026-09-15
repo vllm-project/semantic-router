@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
@@ -895,6 +896,59 @@ func TestFusionLooperRejectsInvalidOnError(t *testing.T) {
 	_, err := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"}).Execute(context.Background(), req)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fusion on_error must be")
+}
+
+func TestFusionHopSendsAuthoredStageBoundWhenEqualToClient(t *testing.T) {
+	var (
+		mu           sync.Mutex
+		stageHeaders []string
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		stageHeaders = append(stageHeaders, r.Header.Get(headers.VSRLooperStageMaxOutputTokens))
+		mu.Unlock()
+		var payload struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		prompt := ""
+		if len(payload.Messages) > 0 {
+			prompt = payload.Messages[len(payload.Messages)-1].Content
+		}
+		if payload.Model == "judge" && strings.Contains(prompt, "return only valid JSON") {
+			writeFusionTestCompletion(w, payload.Model, `{"consensus":["ok"],"contradictions":[],"partial_coverage":[],"unique_insights":[],"blind_spots":[]}`, http.StatusOK)
+			return
+		}
+		writeFusionTestCompletion(w, payload.Model, "ok", http.StatusOK)
+	}))
+	defer server.Close()
+
+	req := newFusionTestRequest()
+	req.OriginalRequest.MaxCompletionTokens = openai.Int(256)
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: "fusion",
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:               "judge",
+			AnalysisModels:      []string{"panel-a"},
+			MaxCompletionTokens: 256,
+		},
+	}
+
+	_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.NotEmpty(t, stageHeaders)
+	for _, got := range stageHeaders {
+		assert.Equal(t, "256", got, "independently authored Fusion ceiling must stay a stage bound when it equals the client limit")
+	}
 }
 
 func TestFusionAnalysisPromptRequestsCompactJSON(t *testing.T) {

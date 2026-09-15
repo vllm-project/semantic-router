@@ -34,6 +34,15 @@ func setInternalRequestHeaders(
 	if options.DecisionName != "" {
 		header.Set(headers.VSRLooperDecision, options.DecisionName)
 	}
+	setOptionalInt64Header(header, headers.VSRLooperClientMaxOutputTokens, options.ClientMaxOutputTokens)
+	setOptionalInt64Header(header, headers.VSRLooperStageMaxOutputTokens, options.StageMaxOutputTokens)
+}
+
+func setOptionalInt64Header(header http.Header, name string, value *int64) {
+	if value == nil || *value < 1 {
+		return
+	}
+	header.Set(name, fmt.Sprintf("%d", *value))
 }
 
 func (c *Client) requestHeaders(
@@ -41,7 +50,7 @@ func (c *Client) requestHeaders(
 	target ModelTarget,
 	options CallOptions,
 ) http.Header {
-	header := make(http.Header, len(c.headers)+5)
+	header := make(http.Header, len(c.headers)+7)
 	header.Set("Content-Type", "application/json")
 	for name, value := range c.headers {
 		header.Set(name, value)

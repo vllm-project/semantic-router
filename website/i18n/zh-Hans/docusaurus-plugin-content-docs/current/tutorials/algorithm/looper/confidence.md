@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "4905de382e4434229fe7331e2a3ad45140d54351"
+  source_commit: "bef43a20a96e7b329d314473083be6aa4bad0f03"
   source_file: "docs/tutorials/algorithm/looper/confidence.md"
   outdated: false
 ---
@@ -128,7 +128,9 @@ algorithm:
 
 ## 尝试可观测性
 
-置信度执行会创建一个 `looper.execute` 追踪 span，并为每次派发的候选或验证器调用创建一个 `looper.attempt` 子 span。路由回放在 `route_diagnostics.looper` 下存储对应的有界、不含内容的尝试记录，包括状态、阈值结果、token 用量、延迟和最终尝试序号。提示词、响应、推理、端点 URL、凭据和原始错误从不写入该结构。
+置信度执行会创建一个 `looper.execute` 追踪 span，并为每次派发的候选或验证器调用创建一个 `looper.attempt` 子 span。路由回放在 `route_diagnostics.looper` 下存储对应的有界、不含内容的尝试记录，包括状态、阈值结果、token 用量、延迟、最终尝试序号，以及每次尝试的有效补全 token 上限。提示词、响应、推理、端点 URL、凭据和原始错误从不写入该结构。
+
+当候选应使用不同补全上限时，设置 `routing.decisions[].modelRefs[].max_completion_tokens`。Provider 派发会把该可选 ModelRef 上限与客户端请求、`request_params.max_tokens_limit` 以及任何算法/阶段上限按最严格值合成。Confidence 没有单独的 token 或推理改写路径；每个内部 hop 复用共享派发缝，并在该次尝试上记录自己的有效上限。
 
 首个详细尝试实现覆盖 Confidence。其他 Looper 算法在采用共享尝试生命周期之前，仍暴露现有的聚合诊断。
 

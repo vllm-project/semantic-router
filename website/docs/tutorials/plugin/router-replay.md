@@ -50,9 +50,12 @@ plugins:
 Confidence Looper records include a versioned `route_diagnostics.looper`
 object. It contains bounded attempt metadata, token and cost accounting,
 latencies, disposition reason codes, the OpenTelemetry trace ID when tracing is
-active, and `final_attempt_ordinal`. Attempt details are omitted from
-viewer-redacted responses and remain available to principals with replay-detail
-permission.
+active, and `final_attempt_ordinal`. Ordinary records also include
+`effective_max_output_tokens`, `effective_max_output_tokens_source`, and
+`effective_max_output_tokens_fallback` on `route_diagnostics`. Looper attempts
+repeat those three fields so Confidence escalation can show each model's
+composed ceiling. Attempt details are omitted from viewer-redacted responses
+and remain available to principals with replay-detail permission.
 
 Looper diagnostics never contain prompts, responses, hidden reasoning, tool
 arguments, endpoint URLs, credentials, or raw errors. Attempt count and encoded

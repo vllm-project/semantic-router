@@ -2936,6 +2936,107 @@ ROUTE test {
 	}
 }
 
+func TestModelMaxCompletionTokensCompileAndRoundTrip(t *testing.T) {
+	input := `
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m:1b" (reasoning = false, max_completion_tokens = 256)
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	tokens := cfg.Decisions[0].ModelRefs[0].MaxCompletionTokens
+	if tokens == nil || *tokens != 256 {
+		t.Errorf("max_completion_tokens = %v", tokens)
+	}
+
+	decompiled, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(decompiled, "max_completion_tokens = 256") {
+		t.Fatalf("decompiled DSL omitted max_completion_tokens:\n%s", decompiled)
+	}
+
+	yamlBytes, err := EmitYAMLFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("emit error: %v", err)
+	}
+	rt, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v", err)
+	}
+	rtTokens := rt.Decisions[0].ModelRefs[0].MaxCompletionTokens
+	if rtTokens == nil || *rtTokens != 256 {
+		t.Errorf("round-trip max_completion_tokens = %v", rtTokens)
+	}
+}
+
+func TestCompileRejectsInvalidModelRefMaxCompletionTokens(t *testing.T) {
+	cases := []struct {
+		name    string
+		option  string
+		wantSub string
+	}{
+		{name: "float", option: `max_completion_tokens = 512.0`, wantSub: "must be a positive integer, got float"},
+		{name: "string", option: `max_completion_tokens = "512"`, wantSub: "must be a positive integer, got string"},
+		{name: "zero", option: `max_completion_tokens = 0`, wantSub: "must be >= 1 when set"},
+		{name: "negative", option: `max_completion_tokens = -1`, wantSub: "must be >= 1 when set"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := fmt.Sprintf(`
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m:1b" (%s)
+}
+`, tc.option)
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatal("expected compile to reject invalid max_completion_tokens")
+			}
+			if !strings.Contains(fmt.Sprint(errs), tc.wantSub) {
+				t.Fatalf("compile errors = %v, want substring %q", errs, tc.wantSub)
+			}
+		})
+	}
+}
+
+func TestCompileRejectsInvalidCandidateIterationMaxCompletionTokens(t *testing.T) {
+	cases := []struct {
+		name    string
+		option  string
+		wantSub string
+	}{
+		{name: "float", option: `max_completion_tokens = 512.0`, wantSub: "must be a positive integer, got float"},
+		{name: "zero", option: `max_completion_tokens = 0`, wantSub: "must be >= 1 when set"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := fmt.Sprintf(`
+ROUTE switch_gate {
+  FOR candidate IN ["m:1b" (%s)] {
+    MODEL candidate
+  }
+}
+`, tc.option)
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatal("expected compile to reject invalid candidate-iteration max_completion_tokens")
+			}
+			if !strings.Contains(fmt.Sprint(errs), tc.wantSub) {
+				t.Fatalf("compile errors = %v, want substring %q", errs, tc.wantSub)
+			}
+		})
+	}
+}
+
 // ---------- P2-14: No GLOBAL Block ----------
 
 func TestCompileWithoutGlobal(t *testing.T) {
@@ -6254,6 +6355,62 @@ func TestExplicitModelListRoundTripOmitsModelDirective(t *testing.T) {
 	}
 	if len(recompiled.Decisions[0].ModelRefs) != 2 {
 		t.Fatalf("recompiled model refs = %d, want 2", len(recompiled.Decisions[0].ModelRefs))
+	}
+}
+
+func TestCandidateIterationCoverageKeepsDifferingMaxCompletionTokens(t *testing.T) {
+	routeLimit := 100
+	iterLimit := 200
+	useReasoning := false
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:     "switch_gate",
+				Priority: 1,
+				ModelRefs: []config.ModelRef{{
+					Model:                 "a",
+					MaxCompletionTokens:   &routeLimit,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &useReasoning},
+				}},
+				CandidateIterations: []config.CandidateIterationConfig{{
+					Variable: "candidate",
+					Source:   "models",
+					Models: []config.ModelRef{{
+						Model:                 "a",
+						MaxCompletionTokens:   &iterLimit,
+						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &useReasoning},
+					}},
+					Outputs: []config.CandidateIterationOutputConfig{{
+						Type:  "model",
+						Value: "candidate",
+					}},
+				}},
+			}},
+		},
+	}
+
+	if candidateIterationsCoverModelRefs(cfg.Decisions[0]) {
+		t.Fatal("iteration with a different max_completion_tokens must not cover ModelRefs")
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(dslText, `MODEL "a"`) {
+		t.Fatalf("decompiled DSL dropped MODEL despite differing max_completion_tokens:\n%s", dslText)
+	}
+	if !strings.Contains(dslText, "max_completion_tokens = 100") {
+		t.Fatalf("decompiled DSL omitted route max_completion_tokens:\n%s", dslText)
+	}
+
+	recompiled, errs := Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
+	}
+	tokens := recompiled.Decisions[0].ModelRefs[0].MaxCompletionTokens
+	if tokens == nil || *tokens != 100 {
+		t.Fatalf("recompiled max_completion_tokens = %v, want 100", tokens)
 	}
 }
 

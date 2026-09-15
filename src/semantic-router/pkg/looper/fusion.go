@@ -202,10 +202,13 @@ func (l *FusionLooper) callFusionModel(
 	} else if cfg.Temperature != nil {
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
+	var authoredStage *int64
 	if override.MaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(override.MaxCompletionTokens))
+		authoredStage = authoredStageMaxOutputTokens(override.MaxCompletionTokens)
 	} else if cfg.MaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
+		authoredStage = authoredStageMaxOutputTokens(cfg.MaxCompletionTokens)
 	}
 	return l.dispatchModel(
 		ctx,
@@ -213,10 +216,11 @@ func (l *FusionLooper) callFusionModel(
 		callReq,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
 		CallOptions{
-			DecisionName: req.DecisionName,
-			Iteration:    iteration,
-			FusionDepth:  1,
-			Mode:         responseMode(streaming),
+			DecisionName:         req.DecisionName,
+			Iteration:            iteration,
+			FusionDepth:          1,
+			Mode:                 responseMode(streaming),
+			StageMaxOutputTokens: authoredStage,
 		},
 	)
 }

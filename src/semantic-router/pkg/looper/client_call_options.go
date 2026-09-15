@@ -49,11 +49,13 @@ func responseMode(streaming bool) ResponseMode {
 // CallOptions carries request-scoped Looper execution metadata. Keeping this
 // data off Client allows one Client to be reused safely by concurrent calls.
 type CallOptions struct {
-	DecisionName string
-	Iteration    int
-	FusionDepth  int
-	Mode         ResponseMode
-	Logprobs     *LogprobsConfig
+	DecisionName          string
+	Iteration             int
+	FusionDepth           int
+	Mode                  ResponseMode
+	Logprobs              *LogprobsConfig
+	ClientMaxOutputTokens *int64
+	StageMaxOutputTokens  *int64
 }
 
 func (options CallOptions) validate(target ModelTarget) error {

@@ -187,8 +187,10 @@ config:
         modelRefs:
           - model: confidence-model-low
             use_reasoning: false
+            max_completion_tokens: 256
           - model: confidence-model-high
             use_reasoning: false
+            max_completion_tokens: 1024
         algorithm:
           type: confidence
           confidence:

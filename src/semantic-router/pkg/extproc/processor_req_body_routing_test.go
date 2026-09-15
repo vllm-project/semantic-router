@@ -597,11 +597,17 @@ func routingTestRouter(model string) *OpenAIRouter {
 }
 
 func routingTestContext(format llmprotocol.WireFormat, request *llmprotocol.Request) *RequestContext {
-	return &RequestContext{
+	ctx := &RequestContext{
 		Headers:         map[string]string{},
 		SourceFormat:    format,
 		SemanticRequest: request,
 		RequestID:       "routing-test-request",
 		TraceContext:    context.Background(),
 	}
+	if request != nil {
+		// Match prepareProtocolRequest: compose from the ingress snapshot, not
+		// a later request mutation or an unset client slot.
+		snapshotClientMaxOutputTokens(*request, ctx)
+	}
+	return ctx
 }

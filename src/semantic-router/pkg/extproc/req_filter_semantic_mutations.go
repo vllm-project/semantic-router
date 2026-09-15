@@ -218,12 +218,6 @@ func (r *OpenAIRouter) applySemanticRequestParams(
 			metrics.RecordBlockedParam(decisionKey, field)
 		}
 	}
-	if params.MaxTokensLimit != nil && request.Sampling.MaxOutputTokens != nil &&
-		*request.Sampling.MaxOutputTokens > int64(*params.MaxTokensLimit) {
-		request.Sampling.MaxOutputTokens = llmprotocol.Int64(int64(*params.MaxTokensLimit))
-		metrics.RecordMaxTokensCapped(decisionKey)
-		changed = true
-	}
 	if params.MaxN != nil && request.CandidateCount != nil &&
 		*request.CandidateCount > int64(*params.MaxN) {
 		request.CandidateCount = llmprotocol.Int64(int64(*params.MaxN))

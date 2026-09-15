@@ -703,17 +703,24 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	if cfg.Temperature != nil {
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
+	var authoredStage *int64
 	if cfg.MaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
+		authoredStage = authoredStageMaxOutputTokens(cfg.MaxCompletionTokens)
 	}
 	if modelName == cfg.PlannerModel && cfg.PlannerMaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.PlannerMaxCompletionTokens))
+		authoredStage = authoredStageMaxOutputTokens(cfg.PlannerMaxCompletionTokens)
 	}
 	return l.dispatchModel(
 		ctx,
 		baseReq,
 		callReq,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(baseReq, modelName)},
-		CallOptions{DecisionName: baseReq.DecisionName, Iteration: iteration},
+		CallOptions{
+			DecisionName:         baseReq.DecisionName,
+			Iteration:            iteration,
+			StageMaxOutputTokens: authoredStage,
+		},
 	)
 }
