@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -109,7 +110,8 @@ func TestHandleCaching_ExactHitSkipsSemanticEmbeddingLookup(t *testing.T) {
 		},
 	}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
+		Headers:             map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity:     authz.TrustedIdentity{UserID: "cache-test-user"},
 		RequestID:           "req-exact",
 		SemanticRequest:     testNeutralRequest("MoM", "hello"),
 		VSRSelectedDecision: &router.Config.Decisions[0],
@@ -152,7 +154,8 @@ func TestHandleCaching_ReplaysExactHitForAnthropicClient(t *testing.T) {
 		},
 	}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
+		Headers:             map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity:     authz.TrustedIdentity{UserID: "cache-test-user"},
 		SourceFormat:        llmprotocol.AnthropicMessagesV1,
 		RequestID:           "req-anthropic",
 		SemanticRequest:     testNeutralRequest("claude", "hello"),
@@ -239,9 +242,8 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 		},
 	}
 	ctx := &RequestContext{
-		Headers: map[string]string{
-			"x-authz-user-id": "alice",
-		},
+		Headers:             map[string]string{"x-authz-user-id": "spoofed-alice"},
+		TrustedIdentity:     authz.TrustedIdentity{UserID: "alice"},
 		RequestID:           "req-1",
 		VSRSelectedDecision: &router.Config.Decisions[0],
 		SemanticRequest:     testNeutralRequest("MoM", "hello"),
@@ -257,9 +259,8 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 
 	alicePartition := mockCache.findSimilarModel
 	bobCtx := &RequestContext{
-		Headers: map[string]string{
-			"x-authz-user-id": "bob",
-		},
+		Headers:             map[string]string{"x-authz-user-id": "spoofed-bob"},
+		TrustedIdentity:     authz.TrustedIdentity{UserID: "bob"},
 		RequestID:           "req-2",
 		SemanticRequest:     testNeutralRequest("MoM", "hello"),
 		VSRSelectedDecision: &router.Config.Decisions[0],

@@ -14,11 +14,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
@@ -190,13 +195,31 @@ func (m *mockMemoryStore) Close() error                            { return nil 
 // Test Helpers
 // =============================================================================
 
-// newTestServer creates a ClassificationAPIServer with a pre-populated mock store
+// newTestServer creates a ClassificationAPIServer with a pre-populated mock
+// store and a verified header-injection ingress for positive handler tests.
 func newTestServer() (*ClassificationAPIServer, *mockMemoryStore) {
 	store := newMockMemoryStore()
 	server := &ClassificationAPIServer{
 		memoryStore: store,
+		config: &config.RouterConfig{
+			Authz: config.AuthzConfig{
+				Identity: config.IdentityConfig{
+					Ingress: config.IdentityIngressHeaderInjection,
+				},
+			},
+		},
 	}
 	return server, store
+}
+
+// newMemoryRequest keeps legacy test URLs readable while supplying identity
+// through the same header-only contract used by production handlers.
+func newMemoryRequest(method, target string, body io.Reader) *http.Request {
+	req := httptest.NewRequest(method, target, body)
+	if userID := req.URL.Query().Get("user_id"); userID != "" {
+		req.Header.Set(headers.AuthzUserID, userID)
+	}
+	return req
 }
 
 // seedTestMemories populates the mock store with test data

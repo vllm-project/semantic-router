@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
@@ -23,7 +24,7 @@ func TestHandleListMemories_InvalidType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&type=invalid_type", nil)
+	req := newMemoryRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&type=invalid_type", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -38,11 +39,120 @@ func TestHandleListMemories_InvalidType(t *testing.T) {
 	}
 }
 
+func TestHandleListMemories_DoesNotAcceptUserIDQueryParameter(t *testing.T) {
+	server, store := newTestServer()
+	seedTestMemories(store)
+
+	req := newMemoryRequest(http.MethodGet, "/v1/memory", nil)
+	req.URL.RawQuery = "user_id=user-alice"
+	w := httptest.NewRecorder()
+
+	server.handleListMemories(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("query-only identity status = %d, want 401", w.Code)
+	}
+	if code := parseErrorResponse(t, w.Body.Bytes()); code != "MISSING_USER_ID" {
+		t.Fatalf("error code = %q, want MISSING_USER_ID", code)
+	}
+}
+
+func TestHandleListMemories_UsesConfiguredCaseInsensitiveIdentityHeader(t *testing.T) {
+	server, store := newTestServer()
+	seedTestMemories(store)
+	server.config = &config.RouterConfig{
+		Authz: config.AuthzConfig{Identity: config.IdentityConfig{
+			UserIDHeader: "X-JWT-Sub",
+			Ingress:      config.IdentityIngressHeaderInjection,
+		}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
+	req.Header.Set("x-jwt-sub", "user-alice")
+	w := httptest.NewRecorder()
+
+	server.handleListMemories(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("configured mixed-case identity status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMemoryRoutesRejectIdentityWithoutVerifiedIngress(t *testing.T) {
+	server, store := newTestServer()
+	seedTestMemories(store)
+	server.config = &config.RouterConfig{}
+
+	tests := []struct {
+		name    string
+		method  string
+		target  string
+		id      string
+		handler http.HandlerFunc
+	}{
+		{
+			name:    "list",
+			method:  http.MethodGet,
+			target:  "/v1/memory",
+			handler: server.handleListMemories,
+		},
+		{
+			name:    "get",
+			method:  http.MethodGet,
+			target:  "/v1/memory/mem-1",
+			id:      "mem-1",
+			handler: server.handleGetMemory,
+		},
+		{
+			name:    "delete",
+			method:  http.MethodDelete,
+			target:  "/v1/memory/mem-1",
+			id:      "mem-1",
+			handler: server.handleDeleteMemory,
+		},
+		{
+			name:    "delete by scope",
+			method:  http.MethodDelete,
+			target:  "/v1/memory",
+			handler: server.handleDeleteMemoriesByScope,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.target, nil)
+			if tc.id != "" {
+				req.SetPathValue("id", tc.id)
+			}
+			req.Header.Set("x-authz-user-id", "user-bob")
+			w := httptest.NewRecorder()
+
+			tc.handler(w, req)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401: %s", w.Code, w.Body.String())
+			}
+			if code := parseErrorResponse(t, w.Body.Bytes()); code != "MISSING_USER_ID" {
+				t.Fatalf("error code = %q, want MISSING_USER_ID", code)
+			}
+		})
+	}
+
+	result, _ := store.List(context.Background(), memory.ListOptions{UserID: "user-alice"})
+	if result.Total != 3 {
+		t.Errorf("expected user-alice memories to remain unchanged, got %d", result.Total)
+	}
+	result, _ = store.List(context.Background(), memory.ListOptions{UserID: "user-bob"})
+	if result.Total != 1 {
+		t.Errorf("expected user-bob memories to remain unchanged, got %d", result.Total)
+	}
+}
+
 func TestHandleListMemories_InvalidTypeInMultiple(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&type=semantic,bogus", nil)
+	req := newMemoryRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&type=semantic,bogus", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -61,7 +171,7 @@ func TestHandleDeleteMemoriesByScope_InvalidType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories?user_id=user-alice&type=fake", nil)
+	req := newMemoryRequest(http.MethodDelete, "/api/v1/storage/memories?user_id=user-alice&type=fake", nil)
 	w := httptest.NewRecorder()
 
 	server.handleDeleteMemoriesByScope(w, req)
@@ -93,7 +203,7 @@ func TestHandleListMemories_UserIDInjectionAttempt(t *testing.T) {
 	}
 
 	for _, payload := range injectionPayloads {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories", nil)
+		req := newMemoryRequest(http.MethodGet, "/api/v1/storage/memories", nil)
 		req.Header.Set("x-authz-user-id", payload)
 		w := httptest.NewRecorder()
 
@@ -123,7 +233,7 @@ func TestHandleListMemories_ValidUserIDFormats(t *testing.T) {
 	}
 
 	for _, userID := range validIDs {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id="+userID, nil)
+		req := newMemoryRequest(http.MethodGet, "/api/v1/storage/memories?user_id="+userID, nil)
 		w := httptest.NewRecorder()
 
 		server.handleListMemories(w, req)
@@ -148,7 +258,7 @@ func TestHandleGetMemory_MemoryIDInjectionAttempt(t *testing.T) {
 	}
 
 	for _, id := range injectionIDs {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/"+id+"?user_id=user-alice", nil)
+		req := newMemoryRequest(http.MethodGet, "/api/v1/storage/memories/"+id+"?user_id=user-alice", nil)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 
@@ -167,7 +277,7 @@ func TestHandleDeleteMemoriesByScope_UserIDInjection(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories", nil)
+	req := newMemoryRequest(http.MethodDelete, "/api/v1/storage/memories", nil)
 	req.Header.Set("x-authz-user-id", `alice" || user_id != "`)
 	w := httptest.NewRecorder()
 

@@ -98,6 +98,13 @@ routing:
             auto_store: true
 global:
   services:
+    authz:
+      # The memory E2E client simulates the upstream external authorization
+      # boundary by injecting x-authz-user-id before the router ingress.
+      # The local llm-katan echo backend intentionally has no API key.
+      fail_open: true
+      identity:
+        ingress: header-injection
     response_api:
       enabled: true
       store_backend: memory

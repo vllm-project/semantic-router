@@ -76,7 +76,7 @@ func loadClassifierMappings(
 }
 
 func (r *nativeTestBlockRunner) EvaluateTestBlockQuery(query string) (*dsl.TestBlockResult, error) {
-	signals, err := r.classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
+	signals, err := r.classifier.EvaluateAllSignalsWithIdentity(classification.SignalEvaluationInput{
 		Text:            query,
 		ContextText:     query,
 		CurrentUserText: query,

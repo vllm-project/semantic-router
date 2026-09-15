@@ -7,6 +7,9 @@ sidebar_position: 10
 This runbook covers how to upgrade, pin, and roll back each release surface of
 the vLLM Semantic Router in a production environment.
 
+For the identity trust-boundary change, follow the [Identity Ingress Trust
+Migration](./identity-ingress-migration) guide before starting a rollout.
+
 ---
 
 ## Release Channels

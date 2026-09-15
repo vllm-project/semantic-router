@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -17,7 +18,8 @@ func TestExtractMemoryInfoUsesNeutralConversationAndAuthenticatedIdentity(t *tes
 	ctx := &RequestContext{
 		SemanticRequest: request,
 		SessionID:       "session-7",
-		Headers:         map[string]string{"x-authz-user-id": "user-7"},
+		Headers:         map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-7"},
 	}
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 	if err != nil {
@@ -37,7 +39,8 @@ func TestExtractMemoryInfoPrefixesRetainedObjectHistory(t *testing.T) {
 		SemanticRequest: &llmprotocol.Request{Generation: 1, Messages: []llmprotocol.Message{
 			neutralTextMessage(llmprotocol.RoleUser, "current"),
 		}},
-		Headers: map[string]string{"x-authz-user-id": "user-7"},
+		Headers:         map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-7"},
 		ResponseObjectState: &ResponseObjectState{ConversationHistory: []*responseapi.StoredResponse{{
 			Input: []responseapi.InputItem{{
 				Type: responseapi.ItemTypeMessage, Role: responseapi.RoleUser,

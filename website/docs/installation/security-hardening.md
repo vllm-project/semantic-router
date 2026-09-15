@@ -50,6 +50,48 @@ request_headers_to_remove:
   - x-authz-user-groups
 ```
 
+The Router also enforces this boundary for its semantic request view. Identity
+headers are discarded before authz signals, rate limits, memory, or other
+user-scoped behavior can use them unless the configuration explicitly declares
+a verified identity ingress:
+
+```yaml
+global:
+  services:
+    authz:
+      identity:
+        user_id_header: x-jwt-sub
+        user_groups_header: x-jwt-groups
+        ingress: header-injection
+```
+
+`authz.identity.ingress` is separate from `authz.providers`. The latter's
+`header-injection` provider only resolves per-user model credentials; it does
+not prove that identity headers were authenticated. Configure the identity
+ingress only when a trusted external authorization layer validates the caller
+and injects the configured headers. The ingress creates one typed trusted
+identity snapshot, and authz, rate limits, cache, memory, replay, Responses,
+and learning consume that snapshot rather than re-reading raw headers or
+request metadata. Identity headers are removed before the request is forwarded
+to model providers as well.
+
+The default local configuration uses `ingress: none` because the local Envoy
+fixture has no external authorization filter. Client-supplied custom identity
+headers are therefore ignored and stripped.
+
+For existing deployments, see the [identity ingress migration
+guide](./identity-ingress-migration).
+
+### Identity consumer contract
+
+All request-time authentication and user-scoped behavior must consume
+`RequestContext.TrustedIdentity`. New code must not derive identity by reading
+`ctx.Headers`, request metadata, query parameters, or environment fallbacks.
+`ctx.Headers` is a transport/control-header view and may contain
+client-controlled values; it is not an authentication API. Provider credential
+resolution is the only separate header-based path, and those credential
+headers must still be stripped before forwarding to model providers.
+
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
 boundary and allow only that component to supply identity headers.

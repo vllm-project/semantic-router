@@ -95,10 +95,11 @@ spec:
       request: 60s
       backendRequest: 60s
 ---
-# EnvoyPatchPolicy to add ExtProc filter for semantic-router
-# Also strips client-supplied identity headers before JWT/auth processing
-# SECURITY: Identity headers (x-authz-user-id, x-authz-user-groups) must only come
-# from validated auth backends (JWT, Authorino, etc.), not from client requests.
+# EnvoyPatchPolicy to add ExtProc filter for semantic-router.
+# This profile has no JWT validator or external authorization service, so it
+# strips client-supplied identity headers and keeps verified identity ingress
+# disabled in values.yaml. A production deployment may add validation and
+# post-validation identity injection before enabling header-injection ingress.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyPatchPolicy
 metadata:
@@ -106,8 +107,8 @@ metadata:
   namespace: default
 spec:
   jsonPatches:
-  # Add header removal filter BEFORE ext_proc to strip client-supplied identity headers
-  # This prevents header spoofing attacks - identity headers should only come from validated JWT
+  # Add header removal filter BEFORE ext_proc to strip client-supplied identity headers.
+  # This prevents spoofing; this profile does not re-inject identity after removal.
   - name: default/semantic-router/http
     operation:
       op: add
@@ -119,7 +120,7 @@ spec:
           inlineCode: |
             function envoy_on_request(request_handle)
               -- Remove client-supplied identity headers to prevent spoofing
-              -- These headers should only be set by validated auth backends (JWT, Authorino, etc.)
+              -- A production auth layer may set these after validation; this profile does not.
               request_handle:headers():remove("x-authz-user-id")
               request_handle:headers():remove("x-authz-user-groups")
             end

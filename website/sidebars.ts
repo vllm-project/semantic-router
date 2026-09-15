@@ -349,6 +349,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Security',
           items: [
+            'installation/identity-ingress-migration',
             'installation/security-hardening',
           ],
         },

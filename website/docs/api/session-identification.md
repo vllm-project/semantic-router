@@ -30,13 +30,13 @@ this order becomes the router session id:
 
 1. `x-session-id` supplied by the application or gateway.
 2. `x-claude-code-session-id` on Anthropic Messages requests.
-3. Anthropic `metadata.user_id`, stored with an `ant-md-` prefix.
-4. A fingerprint of the message history and authenticated user identity.
-5. A fingerprint of the message structure when no user identity is available.
-6. A hash derived from `x-request-id` as the final fallback.
+3. A fingerprint of the message history and ingress-derived user identity.
+4. A fingerprint of the message structure when no user identity is available.
+5. A hash derived from `x-request-id` as the final fallback.
 
 This order keeps explicit conversation keys stable while still giving clients
-that send only message history a usable fallback. Derived fingerprints should
+that send only message history a usable fallback. Request metadata such as
+`user_id` is never used as an identity fallback. Derived fingerprints should
 not be treated as durable application identifiers: editing history or changing
 identity context can change them.
 

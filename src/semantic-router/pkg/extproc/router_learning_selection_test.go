@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -414,7 +415,7 @@ func TestRouterLearningProtectionMissingIdentityNoOps(t *testing.T) {
 
 	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
 	ctx := &RequestContext{
-		Headers: map[string]string{"x-session-id": "session-a"},
+		TrustedIdentity: authz.TrustedIdentity{SessionID: "session-a"},
 	}
 	ctx.VSRSelectedDecision = &config.Decision{Name: "simple"}
 

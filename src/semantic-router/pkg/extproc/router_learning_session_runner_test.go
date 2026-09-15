@@ -42,7 +42,7 @@ func runProtectionScenario(t *testing.T, scenario protectionScenario) []protecti
 func protectionScenarioInput(router *OpenAIRouter, scenario protectionScenario, step protectionStep, turn int, request *llmprotocol.Request) routerLearningInput {
 	ctx := routerLearningRequestContext(scenario.ID, step.Conversation)
 	if step.MissingIdentity {
-		delete(ctx.Headers, "x-session-id")
+		ctx.TrustedIdentity.SessionID = ""
 	}
 	ctx.TurnIndex = turn
 	ctx.PreviousResponseID = step.PreviousResponseID

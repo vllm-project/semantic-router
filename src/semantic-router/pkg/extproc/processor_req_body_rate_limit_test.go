@@ -3,6 +3,7 @@ package extproc
 import (
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -21,10 +22,13 @@ func TestApplyRateLimitEnforcesRequestRulesAndRetainsSettlementContext(t *testin
 		}},
 	}}
 	router := &OpenAIRouter{Config: cfg, RateLimiter: buildRateLimitResolver(cfg)}
-	first := &RequestContext{Headers: map[string]string{
-		cfg.Authz.Identity.GetUserIDHeader():     "user-1",
-		cfg.Authz.Identity.GetUserGroupsHeader(): "team-a, team-b",
-	}}
+	first := &RequestContext{
+		Headers: map[string]string{
+			cfg.Authz.Identity.GetUserIDHeader():     "spoofed-user",
+			cfg.Authz.Identity.GetUserGroupsHeader(): "spoofed-group",
+		},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-1", Groups: []string{"team-a", "team-b"}},
+	}
 	if response := router.applyRateLimit(first, "model-1"); response != nil {
 		t.Fatalf("first request was rejected: %+v", response)
 	}
@@ -33,7 +37,7 @@ func TestApplyRateLimitEnforcesRequestRulesAndRetainsSettlementContext(t *testin
 		t.Fatalf("settlement context = %+v", first.RateLimitCtx)
 	}
 
-	second := &RequestContext{Headers: first.Headers}
+	second := &RequestContext{TrustedIdentity: first.TrustedIdentity}
 	response := router.applyRateLimit(second, "model-1")
 	if response == nil || response.GetImmediateResponse().GetStatus().GetCode() != 429 {
 		t.Fatalf("second request response = %+v, want 429", response)

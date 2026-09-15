@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -67,7 +68,8 @@ func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 	}
 	request := testNeutralRequest("entrypoint", "What did I say?")
 	ctx := &RequestContext{
-		Headers:                 map[string]string{"x-authz-user-id": "user-1"},
+		Headers:                 map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity:         authz.TrustedIdentity{UserID: "user-1"},
 		TraceContext:            context.Background(),
 		VSRSelectedDecisionName: "balance",
 		SemanticRequest:         request,
@@ -99,7 +101,8 @@ func TestMemoryRuntimeInjectsNeutralMessage(t *testing.T) {
 		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Answer concisely."}},
 	}}
 	ctx := &RequestContext{
-		Headers:         map[string]string{"x-authz-user-id": "user-1"},
+		Headers:         map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-1"},
 		TraceContext:    context.Background(),
 		SemanticRequest: request,
 	}

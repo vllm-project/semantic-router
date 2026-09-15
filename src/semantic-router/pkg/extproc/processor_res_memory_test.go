@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
@@ -158,7 +158,7 @@ func TestResponseMemoryStoreHoldsGenerationUntilBackgroundWriteCompletes(t *test
 	}
 	service := NewRouterService(router)
 	reqCtx := &RequestContext{
-		Headers: map[string]string{headers.AuthzUserID: "user-1"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-1"},
 		SemanticRequest: &llmprotocol.Request{
 			Generation: 1,
 			Messages: []llmprotocol.Message{{

@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"fmt"
-	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -46,28 +45,12 @@ func (r *OpenAIRouter) applyRateLimit(ctx *RequestContext, selectedModel string)
 }
 
 func (r *OpenAIRouter) buildRateLimitContext(ctx *RequestContext, selectedModel string) ratelimit.Context {
-	userHeader, groupsHeader := "", ""
-	if r != nil && r.Config != nil {
-		userHeader = r.Config.Authz.Identity.GetUserIDHeader()
-		groupsHeader = r.Config.Authz.Identity.GetUserGroupsHeader()
-	}
 	return ratelimit.Context{
-		UserID:     ctx.Headers[userHeader],
-		Groups:     splitRateLimitGroups(ctx.Headers[groupsHeader]),
+		UserID:     ctx.TrustedIdentity.UserID,
+		Groups:     append([]string(nil), ctx.TrustedIdentity.Groups...),
 		Model:      selectedModel,
-		Headers:    ctx.Headers,
 		TokenCount: ctx.VSRContextTokenCount,
 	}
-}
-
-func splitRateLimitGroups(value string) []string {
-	groups := make([]string, 0)
-	for _, group := range strings.Split(value, ",") {
-		if group = strings.TrimSpace(group); group != "" {
-			groups = append(groups, group)
-		}
-	}
-	return groups
 }
 
 func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ext_proc.ProcessingResponse {
