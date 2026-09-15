@@ -114,6 +114,7 @@ def _compare_probe_outcome(
     selected_model = str(data.get("selected_model") or "").strip()
     selection_status = str(data.get("selection_status") or "").strip()
     selection_method = str(data.get("selection_method") or "").strip()
+    selection_reason = str(data.get("selection_reason") or "").strip()
     signal_errors = data.get("signal_errors") or {}
     actual_recipe = str(data.get("recipe") or "").strip()
     expected_recipe = probe.expected_recipe or "default"
@@ -146,6 +147,8 @@ def _compare_probe_outcome(
         status=selection_status,
         method=selection_method,
         recommended_models=actual_models,
+        expected_status=probe.expected_selection_status,
+        reason=selection_reason,
     )
     checks = {
         "decision": actual_decision == probe.expected_decision,
@@ -170,6 +173,7 @@ def _compare_probe_outcome(
         "selected_model": selected_model,
         "selection_status": selection_status,
         "selection_method": selection_method,
+        "selection_reason": selection_reason,
         "signal_errors": signal_errors,
         "actual_recipe": actual_recipe,
         "expected_recipe": expected_recipe,
@@ -202,6 +206,8 @@ def _build_probe_result(
         "actual_model": outcome["actual_model"],
         "selected_model": outcome["selected_model"],
         "selection_status": outcome["selection_status"],
+        "expected_selection_status": probe.expected_selection_status,
+        "selection_reason": outcome["selection_reason"],
         "selection_method": outcome["selection_method"],
         "signal_errors": outcome["signal_errors"],
         "expected_recipe": outcome["expected_recipe"],
@@ -345,10 +351,12 @@ def compare_eval_selection(
     status: str,
     method: str,
     recommended_models: tuple[str, ...],
+    expected_status: str | None = None,
+    reason: str = "",
 ) -> dict[str, Any]:
     """Require an honest final-selection contract when the probe names an algorithm."""
     normalized_algorithm = str(algorithm or "").strip()
-    if not normalized_algorithm:
+    if not normalized_algorithm and expected_status is None:
         return {"matched": True, "errors": []}
 
     expected_statuses = {
@@ -365,6 +373,8 @@ def compare_eval_selection(
         "remom": {"planned_final", "execution_required"},
         "confidence": {"execution_required"},
     }.get(normalized_algorithm)
+    if expected_status is not None:
+        expected_statuses = {expected_status}
     errors: list[str] = []
     if not status:
         errors.append("selection_status is missing")
@@ -374,22 +384,28 @@ def compare_eval_selection(
             f"{sorted(expected_statuses)!r} "
             f"for algorithm {normalized_algorithm!r}"
         )
-    if not method:
-        errors.append("selection_method is missing")
-    elif method != normalized_algorithm and not (
-        method == "single" and status == "selected"
+    negative = status in {"unavailable", "failed"}
+    if normalized_algorithm and (
+        not negative or expected_status not in {"unavailable", "failed"} or method
     ):
-        errors.append(f"selection_method={method!r}, want {normalized_algorithm!r}")
-    if status in {"selected", "planned_final"} and not selected_model:
+        if not method:
+            errors.append("selection_method is missing")
+        elif method != normalized_algorithm and not (
+            method == "single" and status == "selected"
+        ):
+            errors.append(f"selection_method={method!r}, want {normalized_algorithm!r}")
+    if status in {"selected", "planned_final", "fallback"} and not selected_model:
         errors.append(f"selected_model is required for {status}")
     if (
-        status == "selected"
+        status in {"selected", "fallback"}
         and selected_model
         and selected_model not in recommended_models
     ):
         errors.append("selected_model is not a recommended decision candidate")
-    if status == "execution_required" and selected_model:
-        errors.append("execution_required must not fabricate selected_model")
+    if status in {"execution_required", "unavailable", "failed"} and selected_model:
+        errors.append(f"{status} must not fabricate selected_model")
+    if negative and not reason.strip():
+        errors.append(f"selection_reason is required for {status}")
     return {"matched": not errors, "errors": errors}
 
 

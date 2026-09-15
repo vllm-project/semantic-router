@@ -3,106 +3,68 @@
 package extproc
 
 import (
-	"errors"
-	"fmt"
+	"context"
+	"slices"
+	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
-func TestSelectionEmbeddingCapabilitiesResolvedOnceDuringConstruction(t *testing.T) {
-	cfg := &config.RouterConfig{
-		InlineModels: config.InlineModels{
-			EmbeddingModels: config.EmbeddingModels{
-				EmbeddingConfig: config.HNSWConfig{ModelType: "unknown"},
-			},
-		},
+func TestSelectionEmbeddingUsesPreparedModels(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig = config.HNSWConfig{Backend: config.EmbeddingBackendCandle, ModelType: "  MMBERT  "}
+	calls := make(map[string]int)
+	vectors := map[string][]float32{"mmbert": {1, 0}, "qwen3": {0, 1}}
+	providers := make(map[string]embedding.Provider)
+	for model, vector := range vectors {
+		provider, err := embedding.NewFuncProvider(config.EmbeddingBackendCandle, 2, func(_ context.Context, text string) ([]float32, error) {
+			if text != "hello" {
+				t.Fatalf("embedding text = %q, want hello", text)
+			}
+			calls[model]++
+			return vector, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		providers[model] = provider
 	}
-	queryCalls := 0
-	embed, defaultConfig := resolveSelectionEmbeddingFuncWithCapabilities(
-		cfg,
-		[]*config.RouterConfig{cfg},
-		func(modelType string) (candle_binding.EmbeddingCapabilities, error) {
-			queryCalls++
-			return candle_binding.EmbeddingCapabilities{}, fmt.Errorf("%w: %q", candle_binding.ErrUnsupportedModelType, modelType)
-		},
-	)
-	if queryCalls != 1 {
-		t.Fatalf("capability queries during construction = %d, want 1", queryCalls)
-	}
-
-	_, err := embed("hello", defaultConfig)
-	if !errors.Is(err, candle_binding.ErrUnsupportedModelType) {
-		t.Fatalf("embedding error = %v, want captured ErrUnsupportedModelType", err)
-	}
-	if queryCalls != 1 {
-		t.Fatalf("capability queries after request = %d, want construction-time count 1", queryCalls)
-	}
-}
-
-func TestSelectionEmbeddingCapabilitiesResolveRecipeMLModelsDuringConstruction(t *testing.T) {
-	root := &config.RouterConfig{
-		InlineModels: config.InlineModels{
-			EmbeddingModels: config.EmbeddingModels{
-				EmbeddingConfig: config.HNSWConfig{ModelType: "mmbert"},
-			},
-		},
-	}
-	recipe := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			ModelSelection: config.ModelSelectionConfig{
-				ML: config.MLSelectionConfig{ModelType: " Qwen3 "},
-			},
-		},
-	}
-	queries := make(map[string]int)
-	_, defaultConfig := resolveSelectionEmbeddingFuncWithCapabilities(
-		root,
-		[]*config.RouterConfig{root, recipe},
-		func(modelType string) (candle_binding.EmbeddingCapabilities, error) {
-			key := normalizeSelectionEmbeddingModelType(modelType)
-			queries[key]++
-			return candle_binding.EmbeddingCapabilities{
-				ModelType:        candle_binding.ModelType(key),
-				SupportsBatching: key == "qwen3",
-			}, nil
-		},
-	)
-
+	prepared := embedding.NewSet(providers, "mmbert")
+	defer prepared.Close()
+	embed, defaultConfig := resolveSelectionEmbeddingFunc(cfg, prepared)
 	if defaultConfig.ModelType != "mmbert" {
-		t.Fatalf("default model type = %q, want mmbert", defaultConfig.ModelType)
+		t.Fatalf("default model = %q, want mmbert", defaultConfig.ModelType)
 	}
-	if queries["mmbert"] != 1 || queries["qwen3"] != 1 || len(queries) != 2 {
-		t.Fatalf("construction-time capability queries = %#v, want mmbert and qwen3 once", queries)
+	if len(calls) != 0 {
+		t.Fatal("constructing selection performed inference")
+	}
+	for range 2 {
+		for _, request := range []selection.EmbeddingConfig{defaultConfig, {ModelType: " Qwen3 "}} {
+			got, err := embed("hello", request)
+			model := strings.ToLower(strings.TrimSpace(request.ModelType))
+			if err != nil || !slices.Equal(got, vectors[model]) {
+				t.Fatalf("prepared %s embedding = %v, %v", model, got, err)
+			}
+		}
+	}
+	if calls["mmbert"] != 2 || calls["qwen3"] != 2 {
+		t.Fatalf("prepared provider calls = %v, want two per model", calls)
+	}
+	if _, err := embed("hello", selection.EmbeddingConfig{ModelType: "gemma"}); err == nil || !strings.Contains(err.Error(), "not prepared") {
+		t.Fatalf("unprepared model error = %v", err)
 	}
 }
 
-func TestSelectionEmbeddingCapabilitiesCanonicalizeModelType(t *testing.T) {
-	_, defaultConfig := resolveSelectionEmbeddingFunc(&config.RouterConfig{
-		InlineModels: config.InlineModels{
-			EmbeddingModels: config.EmbeddingModels{
-				EmbeddingConfig: config.HNSWConfig{ModelType: "  MMBERT  "},
-			},
-		},
-	})
-
-	if defaultConfig.ModelType != "mmbert" {
-		t.Fatalf("default model type = %q, want native canonical value %q", defaultConfig.ModelType, "mmbert")
-	}
-}
-
-func TestSelectionEmbeddingCapabilitiesRejectUnknownModel(t *testing.T) {
-	embed, defaultConfig := resolveSelectionEmbeddingFunc(&config.RouterConfig{
-		InlineModels: config.InlineModels{
-			EmbeddingModels: config.EmbeddingModels{
-				EmbeddingConfig: config.HNSWConfig{ModelType: "unknown"},
-			},
-		},
-	})
-
-	_, err := embed("hello", defaultConfig)
-	if !errors.Is(err, candle_binding.ErrUnsupportedModelType) {
-		t.Fatalf("embedding error = %v, want ErrUnsupportedModelType", err)
+func TestSelectionEmbeddingRequiresPreparedSet(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig = config.HNSWConfig{Backend: config.EmbeddingBackendCandle, ModelType: "qwen3"}
+	embed, defaultConfig := resolveSelectionEmbeddingFunc(cfg)
+	if _, err := embed("hello", defaultConfig); err == nil || !strings.Contains(err.Error(), "not prepared") {
+		t.Fatalf("missing prepared set error = %v", err)
 	}
 }

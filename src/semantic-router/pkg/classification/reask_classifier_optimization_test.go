@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestReaskClassifier_ClassifyStopsEmbeddingAfterAllRulesFail(t *testing.T) {
 	embeddingCalls := 0
-	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		embeddingCalls++
 		if text == "current" {
-			return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1, 0)}, nil
+			return &tasks.EmbeddingResult{Embedding: makeEmbedding(1, 0)}, nil
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0, 1)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(0, 1)}, nil
 	})
 	t.Cleanup(restore)
 
@@ -59,9 +59,9 @@ func TestReaskClassifier_ClassifyContinuesUntilLowestThresholdFails(t *testing.T
 		"older all-rules failure":       makeEmbedding(0, 1),
 		"oldest should not be embedded": makeEmbedding(1, 0),
 	}
-	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		embeddingCalls[text]++
-		return &candle_binding.EmbeddingOutput{Embedding: embeddings[text]}, nil
+		return &tasks.EmbeddingResult{Embedding: embeddings[text]}, nil
 	})
 	t.Cleanup(restore)
 

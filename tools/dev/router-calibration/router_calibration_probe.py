@@ -18,6 +18,16 @@ from router_calibration_image import (
 PADDING_PLACEMENTS = frozenset({"before", "after", "around"})
 PROBE_SCHEMA_VERSION = "v1"
 MATCH_MODES = frozenset({"contains", "exact"})
+SELECTION_STATUSES = frozenset(
+    {
+        "selected",
+        "planned_final",
+        "fallback",
+        "execution_required",
+        "unavailable",
+        "failed",
+    }
+)
 MAX_PROBE_REPEAT = 10_000
 MAX_GENERATED_TEXT_BYTES = 10 << 20
 MAX_IMAGE_FIXTURE_BYTES = 4 << 20
@@ -49,6 +59,7 @@ DECISION_FIELDS = frozenset(
         "model",
         "expected_recipe",
         "expected_algorithm",
+        "expected_selection_status",
         "expected_plugins",
         "forbidden_plugins",
         "plugin_match",
@@ -76,6 +87,7 @@ VARIANT_FIELDS = frozenset(
         "generated_text",
         "tags",
         "notes",
+        "expected_selection_status",
         "expected_signals",
     }
 )
@@ -131,6 +143,7 @@ class Probe:
     model: str | None = None
     expected_recipe: str | None = None
     expected_algorithm: str | None = None
+    expected_selection_status: str | None = None
     expected_plugins: tuple[str, ...] = ()
     forbidden_plugins: tuple[str, ...] = ()
     plugin_match: str = "contains"
@@ -161,6 +174,7 @@ class DecisionDefaults:
     model: str | None
     expected_recipe: str | None
     expected_algorithm: str | None
+    expected_selection_status: str | None
     expected_plugins: tuple[str, ...]
     forbidden_plugins: tuple[str, ...]
     plugin_match: str
@@ -242,6 +256,9 @@ def _load_decision_defaults(
             model=_optional_string(raw_decision.get("model")),
             expected_recipe=_optional_string(raw_decision.get("expected_recipe")),
             expected_algorithm=_optional_string(raw_decision.get("expected_algorithm")),
+            expected_selection_status=_normalize_selection_status(
+                raw_decision.get("expected_selection_status"), label
+            ),
             expected_plugins=_normalize_string_list(
                 raw_decision.get("expected_plugins"), "expected_plugins"
             ),
@@ -315,6 +332,12 @@ def _load_variant(
         model=defaults.model,
         expected_recipe=defaults.expected_recipe,
         expected_algorithm=defaults.expected_algorithm,
+        expected_selection_status=_normalize_selection_status(
+            raw_variant.get(
+                "expected_selection_status", defaults.expected_selection_status
+            ),
+            label,
+        ),
         expected_plugins=defaults.expected_plugins,
         forbidden_plugins=defaults.forbidden_plugins,
         plugin_match=defaults.plugin_match,
@@ -467,6 +490,17 @@ def reject_unknown_fields(
 
 def _optional_string(value: Any) -> str | None:
     return str(value or "").strip() or None
+
+
+def _normalize_selection_status(value: Any, label: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in SELECTION_STATUSES:
+        raise ValueError(
+            f"{label}.expected_selection_status must be one of: "
+            + ", ".join(sorted(SELECTION_STATUSES))
+        )
+    return value
 
 
 def _normalize_tags(raw_tags: Any) -> tuple[str, ...]:

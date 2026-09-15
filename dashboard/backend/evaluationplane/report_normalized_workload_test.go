@@ -201,15 +201,22 @@ func normalizedWorkloadTestCase(
 
 func normalizedReplayRows(revision, answer string) (map[string]any, map[string]any) {
 	caseID := normalizedOpaqueID("case", revision, "case", "case-1")
-	return map[string]any{
-			"schema_version": SchemaVersion,
-			"id":             caseID, "track_ids": []TrackID{"routing"},
-			"messages": []map[string]any{{"role": "user", "content": "private"}},
-			"modality": "text", "tags": []string{},
-		}, map[string]any{
-			"schema_version": SchemaVersion, "case_id": caseID,
-			"expected_answer": answer, "expected_tools": []string{}, "weight": 1.0,
-		}
+	visible := map[string]any{
+		"schema_version": SchemaVersion,
+		"id":             caseID,
+		"track_ids":      []TrackID{"routing"},
+		"messages":       []map[string]any{{"role": "user", "content": "private"}},
+		"modality":       "text",
+		"tags":           []string{},
+	}
+	grading := map[string]any{
+		"schema_version":  SchemaVersion,
+		"case_id":         caseID,
+		"expected_answer": answer,
+		"expected_tools":  []string{},
+		"weight":          1.0,
+	}
+	return visible, grading
 }
 
 func writeNormalizedWorkloadLineageForTest(

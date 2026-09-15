@@ -71,6 +71,9 @@ func (r *SemanticRouter) ValidateDelete(_ context.Context, _ runtime.Object) (ad
 
 // validateSemanticRouter validates the SemanticRouter resource
 func (r *SemanticRouter) validateSemanticRouter() error {
+	if guard := r.Spec.Config.PromptGuard; guard != nil && guard.Protocol != "" {
+		return fmt.Errorf("config.prompt_guard.protocol is retired; configure a named backend instead")
+	}
 	// Validate autoscaling configuration
 	if r.Spec.Autoscaling.Enabled != nil && *r.Spec.Autoscaling.Enabled {
 		if err := r.validateAutoscaling(); err != nil {

@@ -1,50 +1,60 @@
-# Deployment and model-pool loop
+# Deployment and model-pool details
 
-## Install and inspect
+Follow the [operations skill](../SKILL.md) for installation and capability
+preflight. A version described as dev can still be stale; missing required
+commands are a compatibility failure before any runtime mutation.
 
-Install a released CLI or build the repository's CLI through its documented
-development target. Confirm the runtime platform, container engine, available
-accelerators, ports, storage, and credential environment before serving. Check
-accelerator inventory vendor-neutrally; a missing NVIDIA or AMD utility alone
-does not prove that the host has no GPU.
+## Isolate the intended deployment
 
-Read an active config before editing it; use `vllm-sr config init` only for a
-fresh workspace. Discover exact fields from the running schema rather than
-from memory. Define each provider, model, backend reference, Model Card,
-Entrypoint, Recipe, and listener explicitly. A model joins a route only when a
-decision references it through `modelRefs`. Custom physical models and virtual
-models use the same evaluation-record and routing-index contracts.
+Inspect existing processes, containers, state directories, ports, and runtime
+images before selecting a stack. Discover host acceleration vendor-neutrally.
+Use installed `serve --help` for platform, image, Dashboard, and mode options;
+record the exact package version and image identity actually launched.
 
-## Serve
+Local Docker uses `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET`. The offset
+changes inference publication as well as management ports. A separate config
+directory keeps its `.vllm-sr` state separate only when `VLLM_SR_STATE_ROOT_DIR`
+is unset. Inspect that override and explicitly select a separate state root when
+needed; an inherited root can otherwise load another stack's active config.
+Check every effective port for collisions, keep the same environment for
+lifecycle commands, and supply explicit management/inference origins for remote
+checks. Management commands do not infer a custom management port from YAML.
 
-Use the supported platform flag for the host, for example:
+For a trial, prefer loopback publication and the minimal supported mode. Inspect
+both canonical listener addresses and actual container port bindings. Split
+containers may need an internal Router address of `0.0.0.0` even when its host
+management port is restricted to loopback. Do not expose a private management
+API just to make a remote browser convenient; use a tunnel when appropriate.
 
-```bash
-vllm-sr serve --platform amd --config config.yaml
-```
+For an initial launch, validate locally and serve before asking for live plans.
+Once the Router responds to `GET /api/v1`, follow its advertised readiness,
+startup, and inventory operations. Process startup alone is not readiness.
+Confirm backend reachability from the deployment network before routed probes.
 
-Do not declare the deployment ready merely because the process started. Wait
-for `/ready`, inspect `/startup-status`, list `/api/v1/inventory/models`, and
-send a direct request to every physical backend before testing routing.
+## Add or replace physical models
 
-## Add or replace models
+1. Verify the backend's protocol, credential reference, and supported request
+   types. Query its model list and make a minimal direct request. Record both
+   requested and returned model identity; aliases need not match.
+2. Add or update the provider, matching Model Card, and decision model reference.
+   A provider or card alone does not make a model routable. Preserve the chosen
+   Recipe's lane structure and minimum candidate counts.
+3. Validate and, for an existing Router, plan against its exact management origin.
+   Changes to backend topology can require an Envoy restart. Activate through the
+   deployment workflow within the user's existing authorization; obtain only
+   missing authorization for disruption beyond that scope.
+4. Confirm readiness and active config, preview affected branches, and probe
+   actual delivery through each affected entrypoint. Assert selected-model and
+   upstream response identity separately where the backend supports it.
+5. Measure latency, cost, throughput, or task quality when those are part of the
+   requested objective. A full benchmark is not an installation prerequisite.
 
-1. Establish backend health and protocol compatibility.
-2. Measure serving latency, throughput, token usage, failure rate, and cost.
-3. Add the physical model and Model Card to candidate YAML.
-4. Run config validation. Planning against a running Router will report
-   `RESTART_REQUIRED` because provider backends are rendered into Envoy.
-5. Ask before disruption, then activate the candidate through the deployment
-   workflow and wait for Router and Envoy readiness. For local Docker, use
-   `vllm-sr serve --config <candidate> --replace-active-config`; ordinary
-   `serve` deliberately preserves Dashboard-edited runtime state. An active
-   Recipe package must be changed through its Recipe workflow instead.
-6. Route-preview representative cases, then probe each direct model alias and
-   every affected virtual model. Assert selected-model and response-model
-   identity separately where the backend exposes a stable response model.
-7. Run the required full benchmarks.
-8. Optimize the Recipe only from comparable evidence.
+Document capability adaptations explicitly. A text-only derivative must report
+its unsupported image path and excluded decision; it is not a successful run of
+the full multimodal baseline. Do not reduce candidate minimums or invent a model
+to hide unavailable capability.
 
-Never estimate a virtual model's quality from member scores. Evaluate the
-virtual model endpoint over the same suite so routing failures, retries, model
-mix, latency, and cost remain observable.
+If Dashboard or Playground verification is requested, follow the optional UI
+path in the main skill and verify a real streamed completion. Server-backed
+preview and inference delivery are separate evidence. Keep credentials and raw
+private workload outputs out of source control and public receipts.

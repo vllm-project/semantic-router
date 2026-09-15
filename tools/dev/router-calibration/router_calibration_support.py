@@ -381,6 +381,8 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "actual_model": "",
         "selected_model": "",
         "selection_status": "",
+        "expected_selection_status": probe.expected_selection_status,
+        "selection_reason": "",
         "selection_method": "",
         "signal_errors": {},
         "expected_recipe": probe.expected_recipe or "default",

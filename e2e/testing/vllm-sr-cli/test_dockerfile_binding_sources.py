@@ -25,10 +25,12 @@ def assert_binding_capability_sources(dockerfile: str) -> None:
         args = [arg for arg in shlex.split(line)[1:] if not arg.startswith("--")]
         sources, destination = args[:-1], args[-1]
         patterns = [Path(source).name for source in sources]
-        if "semantic-router.go" not in patterns:
+        if not any(
+            fnmatch.fnmatchcase("semantic-router.go", pattern) for pattern in patterns
+        ):
             continue
         for binding in BINDINGS:
-            if not any(binding in path.split("/") for path in args):
+            if Path(destination).name != binding:
                 continue
             required = {
                 path.name
@@ -42,7 +44,8 @@ def assert_binding_capability_sources(dockerfile: str) -> None:
             }
             assert not missing, f"{dockerfile}: {destination} misses {sorted(missing)}"
             checked.add(binding)
-    expected = {"candle-binding"} if dockerfile == DOCKERFILES[0] else set(BINDINGS)
+    # ONNX instance sources do not depend on the legacy root Go wrapper.
+    expected = {"candle-binding"}
     assert checked == expected, f"{dockerfile}: binding copy stages not checked"
 
 

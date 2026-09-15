@@ -22,6 +22,7 @@ const (
 // error rather than a silent fallback.
 const (
 	RemoteClassifierContractLabelDistribution = "label_distribution.v1"
+	RemoteClassifierContractLabelDecision     = "label_decision.v1"
 	// RemoteClassifierContractScore carries a single continuous score for a
 	// regression-style model, such as a query-difficulty scorer. It has no
 	// label of its own; the consumer turns the score into a verdict.
@@ -109,7 +110,7 @@ func (b *RemoteClassifierBackend) Validate() error {
 	}
 	if b.Contract != "" {
 		switch b.Contract {
-		case RemoteClassifierContractLabelDistribution, RemoteClassifierContractScore, RemoteClassifierContractTokenSpans:
+		case RemoteClassifierContractLabelDistribution, RemoteClassifierContractLabelDecision, RemoteClassifierContractScore, RemoteClassifierContractTokenSpans:
 		default:
 			return fmt.Errorf("backend.contract: unsupported value %q", b.Contract)
 		}

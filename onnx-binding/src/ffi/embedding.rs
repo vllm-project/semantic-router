@@ -35,7 +35,7 @@ pub(super) static GLOBAL_MMBERT_MODEL: OnceLock<Mutex<MmBertEmbeddingModel>> = O
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn init_mmbert_embedding_model(
     model_path: *const c_char,
     use_cpu: bool,
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn init_mmbert_embedding_model(
 
 /// Check if mmBERT model is initialized
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn is_mmbert_model_initialized() -> bool {
     GLOBAL_MMBERT_MODEL.get().is_some()
 }
@@ -124,7 +124,7 @@ fn create_error_result() -> EmbeddingResult {
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn get_embedding_2d_matryoshka(
     text: *const c_char,
     target_layer: i32,
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn get_embedding_2d_matryoshka(
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResult) -> i32 {
     unsafe { get_embedding_2d_matryoshka(text, 0, 0, result) }
 }
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn get_embedding(text: *const c_char, result: *mut Embeddi
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn get_embedding_with_dim(
     text: *const c_char,
     target_dim: i32,
@@ -266,7 +266,7 @@ pub unsafe extern "C" fn get_embedding_with_dim(
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn get_embeddings_batch(
     texts: *const *const c_char,
     num_texts: i32,
@@ -383,7 +383,7 @@ pub unsafe extern "C" fn get_embeddings_batch(
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn calculate_embedding_similarity(
     text1: *const c_char,
     text2: *const c_char,
@@ -538,7 +538,7 @@ fn rank_similarities(embeddings: &Array2<f32>, top_k: i32) -> Vec<SimilarityMatc
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn calculate_similarity_batch(
     query: *const c_char,
     candidates: *const *const c_char,
@@ -653,7 +653,7 @@ pub unsafe extern "C" fn calculate_similarity_batch(
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResult) -> i32 {
     if result.is_null() {
         eprintln!("Error: null pointer passed to get_embedding_models_info");
@@ -733,7 +733,7 @@ pub unsafe extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsI
 /// # Returns
 /// 0 on success, -1 on error
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
     if result.is_null() {
         return -1;
@@ -774,7 +774,7 @@ pub unsafe extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32
 /// # Safety
 /// Non-null `info` must reference a writable result from `get_matryoshka_info`.
 /// Its owned strings must not have been modified or previously freed.
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
     if info.is_null() {
         return;
@@ -818,7 +818,7 @@ fn tokens_exceed_window(
 /// 1 when the text exceeds the window, 0 when it fits, -1 when the model is not
 /// loaded or the input is invalid
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn embedding_text_exceeds_window(
     text: *const c_char,
     model_type: *const c_char,
@@ -866,7 +866,7 @@ pub extern "C" fn embedding_text_exceeds_window(
 /// - `text` must point to a valid null-terminated string.
 /// - The returned result must be released with [`free_text_windows`].
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn get_text_windows(text: *const c_char, max_length: i32) -> TextWindowsResult {
     if text.is_null() {
         return TextWindowsResult::default();
@@ -933,7 +933,7 @@ pub extern "C" fn get_text_windows(text: *const c_char, max_length: i32) -> Text
 ///
 /// # Safety
 /// - `result` must come from [`get_text_windows`] and must not be freed twice.
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub unsafe extern "C" fn free_text_windows(result: TextWindowsResult) {
     if result.offsets.is_null() || result.window_count <= 0 {
         return;

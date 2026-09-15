@@ -33,6 +33,7 @@ const (
 type (
 	Signal                        = store.Signal
 	HallucinationSpan             = store.HallucinationSpan
+	HallucinationScore            = store.HallucinationScore
 	LearningDiagnostics           = store.LearningDiagnostics
 	LearningAdaptationDiagnostics = store.LearningAdaptationDiagnostics
 	LearningCandidateScore        = store.LearningCandidateScore
@@ -352,10 +353,10 @@ func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
+func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error {
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
-	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails)
+	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails, score...)
 }
 
 func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
@@ -492,12 +493,22 @@ func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
 	if r.JailbreakDetected {
 		fields["jailbreak_detected"] = r.JailbreakDetected
 		fields["jailbreak_type"] = r.JailbreakType
-		fields["jailbreak_confidence"] = r.JailbreakConfidence
+		fields["jailbreak_score_available"] = r.JailbreakScoreAvailable
+		if r.JailbreakDecision != nil {
+			fields["jailbreak_decision"] = r.JailbreakDecision
+		} else if r.JailbreakScoreAvailable {
+			fields["jailbreak_confidence"] = r.JailbreakConfidence
+		}
 	}
 	if r.ResponseJailbreakDetected {
 		fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
 		fields["response_jailbreak_type"] = r.ResponseJailbreakType
-		fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
+		fields["response_jailbreak_score_available"] = r.ResponseJailbreakScoreAvailable
+		if r.ResponseJailbreakDecision != nil {
+			fields["response_jailbreak_decision"] = r.ResponseJailbreakDecision
+		} else if r.ResponseJailbreakScoreAvailable {
+			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
+		}
 	}
 	if r.PIIDetected {
 		fields["pii_detected"] = r.PIIDetected
@@ -524,7 +535,11 @@ func appendHallucinationLogFields(fields map[string]interface{}, r RoutingRecord
 
 	fields["hallucination_enabled"] = r.HallucinationEnabled
 	fields["hallucination_detected"] = r.HallucinationDetected
-	fields["hallucination_confidence"] = r.HallucinationConfidence
+	fields["hallucination_score_available"] = r.HallucinationScoreAvailable
+	if r.HallucinationScoreAvailable {
+		fields["hallucination_confidence"] = r.HallucinationConfidence
+		fields["hallucination_score_kind"] = r.HallucinationScoreKind
+	}
 	if len(r.HallucinationSpans) > 0 {
 		fields["hallucination_spans"] = r.HallucinationSpans
 	}
@@ -565,26 +580,32 @@ func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 
 func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	fields := map[string]interface{}{
-		"event":             event,
-		"replay_id":         r.ID,
-		"decision":          r.Decision,
-		"decision_tier":     r.DecisionTier,
-		"decision_priority": r.DecisionPriority,
-		"category":          r.Category,
-		"original_model":    r.OriginalModel,
-		"selected_model":    r.SelectedModel,
-		"reasoning_mode":    r.ReasoningMode,
-		"confidence_score":  r.ConfidenceScore,
-		"selection_method":  r.SelectionMethod,
-		"session_policy":    r.SessionPolicy,
-		"request_id":        r.RequestID,
-		"timestamp":         r.Timestamp,
-		"turn_index":        r.TurnIndex,
-		"from_cache":        r.FromCache,
-		"streaming":         r.Streaming,
-		"response_status":   r.ResponseStatus,
-		"lifecycle_state":   r.LifecycleState,
-		"signals":           logSignalFields(r.Signals),
+		"event":                      event,
+		"replay_id":                  r.ID,
+		"decision":                   r.Decision,
+		"decision_tier":              r.DecisionTier,
+		"decision_priority":          r.DecisionPriority,
+		"category":                   r.Category,
+		"original_model":             r.OriginalModel,
+		"selected_model":             r.SelectedModel,
+		"reasoning_mode":             r.ReasoningMode,
+		"confidence_score_available": r.ConfidenceScoreAvailable,
+		"selection_method":           r.SelectionMethod,
+		"session_policy":             r.SessionPolicy,
+		"request_id":                 r.RequestID,
+		"timestamp":                  r.Timestamp,
+		"turn_index":                 r.TurnIndex,
+		"from_cache":                 r.FromCache,
+		"streaming":                  r.Streaming,
+		"response_status":            r.ResponseStatus,
+		"lifecycle_state":            r.LifecycleState,
+		"signals":                    logSignalFields(r.Signals),
+	}
+	if r.ConfidenceScoreAvailable {
+		fields["confidence_score"] = r.ConfidenceScore
+	}
+	if len(r.SignalErrorMatches) > 0 {
+		fields["signal_error_matches"] = r.SignalErrorMatches
 	}
 	if r.EndedAt != nil {
 		fields["ended_at"] = *r.EndedAt

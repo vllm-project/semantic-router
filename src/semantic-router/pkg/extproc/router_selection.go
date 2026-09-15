@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -17,25 +17,31 @@ import (
 )
 
 // createModelSelectorRegistries leaves publication to publishRouterState.
-func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader, classifiers ...*classification.RecipeClassifiers) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
+	var defaultSet *embedding.Set
+	if len(classifiers) > 0 && classifiers[0] != nil {
+		defaultSet = classifiers[0].Default().PreparedEmbeddings()
+	}
+	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg, defaultSet)
 	registries := make(map[config.RecipeName]*selection.Registry)
 
 	if len(cfg.Recipes) == 0 {
-		embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg)
 		registry := createModelSelectorRegistry(cfg, lt, embed, defaultEmbeddingConfig)
 		registries[config.DefaultRecipeName] = registry
 		return registries, registry, lt, cancel
 	}
 
-	scopedConfigs := make([]*config.RouterConfig, 0, len(cfg.Recipes))
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
-		scopedConfigs = append(scopedConfigs, cfg.ConfigForRecipe(recipe))
-	}
-	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFuncForConfigs(cfg, scopedConfigs)
-	for i, recipe := range cfg.Recipes {
-		scopedConfig := scopedConfigs[i]
+		scopedConfig := cfg.ConfigForRecipe(recipe)
+		var scoped *embedding.Set
+		if len(classifiers) > 0 && classifiers[0] != nil {
+			if classifier, ok := classifiers[0].ForRecipe(recipe.Name); ok {
+				scoped = classifier.PreparedEmbeddings()
+			}
+		}
+		embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(scopedConfig, scoped)
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed, defaultEmbeddingConfig)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
@@ -78,137 +84,50 @@ func createModelSelectorRegistry(
 	return registry
 }
 
-func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
-	return resolveSelectionEmbeddingFuncForConfigs(cfg, []*config.RouterConfig{cfg})
-}
-
-type nativeSelectionEmbeddingPlan struct {
-	modelType        string
-	supportsBatching bool
-	err              error
-}
-
-type embeddingCapabilitiesQuery func(string) (candle_binding.EmbeddingCapabilities, error)
-
-func resolveSelectionEmbeddingFuncForConfigs(
-	cfg *config.RouterConfig,
-	selectionConfigs []*config.RouterConfig,
-) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
-	return resolveSelectionEmbeddingFuncWithCapabilities(
-		cfg,
-		selectionConfigs,
-		candle_binding.EmbeddingCapabilitiesFor,
-	)
-}
-
-func resolveSelectionEmbeddingFuncWithCapabilities(
-	cfg *config.RouterConfig,
-	selectionConfigs []*config.RouterConfig,
-	query embeddingCapabilitiesQuery,
-) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
+func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
 	models := cfg.EmbeddingModels
 	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
 		backend = models.EmbeddingBackend()
 	}
 	modelType := selectionEmbeddingModelType(models, backend)
-	nativePlans := make(map[string]nativeSelectionEmbeddingPlan)
-	if backend != config.EmbeddingBackendOpenAICompatible && backend != config.EmbeddingBackendOpenVINO {
-		for _, candidate := range selectionEmbeddingModelTypes(modelType, selectionConfigs) {
-			plan := resolveNativeSelectionEmbeddingPlan(candidate, query)
-			nativePlans[normalizeSelectionEmbeddingModelType(candidate)] = plan
-			if plan.err == nil {
-				nativePlans[plan.modelType] = plan
-			}
-		}
-		if plan, ok := nativePlans[normalizeSelectionEmbeddingModelType(modelType)]; ok && plan.err == nil {
-			modelType = plan.modelType
-		}
-	}
 	defaultConfig := selection.EmbeddingConfig{
 		ModelType:       modelType,
 		TargetDimension: selectionEmbeddingDimension(models, modelType),
 	}
-	var remoteProvider embedding.Provider
-	var remoteError error
-	if backend == config.EmbeddingBackendOpenAICompatible {
-		remoteProvider, remoteError = embedding.NewProvider(models, embedding.ProviderOptions{})
+
+	var prepared *embedding.Set
+	if len(sets) > 0 {
+		prepared = sets[0]
 	}
 	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
-		switch backend {
-		case config.EmbeddingBackendOpenAICompatible:
-			if remoteError != nil {
-				return nil, remoteError
-			}
-			return remoteProvider.Embed(context.Background(), text)
-		case config.EmbeddingBackendOpenVINO:
+		if backend == config.EmbeddingBackendOpenVINO {
 			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
-		default:
-			plan, ok := nativePlans[normalizeSelectionEmbeddingModelType(embeddingConfig.ModelType)]
-			if !ok {
-				return nil, fmt.Errorf("%w: %q", candle_binding.ErrUnsupportedModelType, embeddingConfig.ModelType)
-			}
-			if plan.err != nil {
-				return nil, plan.err
-			}
-			if plan.supportsBatching {
-				output, err := candle_binding.GetEmbeddingBatched(text, plan.modelType, embeddingConfig.TargetDimension)
-				if err != nil {
-					return nil, err
-				}
-				return output.Embedding, nil
-			}
-			output, err := candle_binding.GetEmbeddingWithModelType(text, plan.modelType, embeddingConfig.TargetDimension)
-			if err != nil {
-				return nil, err
-			}
-			return output.Embedding, nil
 		}
+		provider, err := prepared.Get(embeddingConfig.ModelType, embeddingConfig.TargetDimension, 0)
+		if err != nil {
+			return nil, err
+		}
+		return provider.Embed(context.Background(), text)
 	}, defaultConfig
 }
 
-func selectionEmbeddingModelTypes(defaultModelType string, cfgs []*config.RouterConfig) []string {
-	modelTypes := []string{defaultModelType}
-	seen := map[string]bool{normalizeSelectionEmbeddingModelType(defaultModelType): true}
-	for _, cfg := range cfgs {
-		if cfg == nil {
-			continue
-		}
-		modelType := cfg.ModelSelection.ML.ModelType
-		key := normalizeSelectionEmbeddingModelType(modelType)
-		if key == "" || seen[key] {
-			continue
-		}
-		seen[key] = true
-		modelTypes = append(modelTypes, modelType)
-	}
-	return modelTypes
-}
-
-func resolveNativeSelectionEmbeddingPlan(modelType string, query embeddingCapabilitiesQuery) nativeSelectionEmbeddingPlan {
-	capabilities, err := query(modelType)
-	if err != nil {
-		return nativeSelectionEmbeddingPlan{err: err}
-	}
-	return nativeSelectionEmbeddingPlan{
-		modelType:        string(capabilities.ModelType),
-		supportsBatching: capabilities.SupportsBatching,
-	}
-}
-
-func normalizeSelectionEmbeddingModelType(modelType string) string {
-	return strings.ToLower(strings.TrimSpace(modelType))
-}
-
 func selectionEmbeddingModelType(models config.EmbeddingModels, backend string) string {
-	modelType := models.EmbeddingConfig.ModelType
+	// Normalized once here so every downstream consumer -- the batched-FFI
+	// capability check, GetEmbeddingBatched, and GetEmbeddingWithModelType's
+	// own exact-match validation -- sees the same casing. Config validation
+	// already accepts "Qwen3" case-insensitively without rewriting the
+	// configured value, so an unnormalized modelType would otherwise pass
+	// SupportsBatchedEmbedding's tolerant check and then fail the FFI's
+	// strict one, or fail GetEmbeddingWithModelType's exact match either way.
+	modelType := strings.ToLower(strings.TrimSpace(models.EmbeddingConfig.ModelType))
 	if modelType != "" {
 		return modelType
 	}
 	if backend == config.EmbeddingBackendOpenAICompatible {
 		return config.EmbeddingModelTypeRemote
 	}
-	return string(candle_binding.DefaultEmbeddingModelType)
+	return config.EmbeddingModelTypeQwen3
 }
 
 func selectionEmbeddingDimension(models config.EmbeddingModels, modelType string) int {
@@ -414,6 +333,11 @@ func buildHybridSelectionConfig(
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {
 	intelligentRouting := cfg.IntelligentRouting
 	mlCfg := intelligentRouting.ModelSelection.ML
+	// Same normalization as selectionEmbeddingModelType, and for the same
+	// reason: nothing validates or rewrites ml.model_type, so an unnormalized
+	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and hit
+	// the identical SupportsBatchedEmbedding/FFI casing mismatch.
+	mlCfg.ModelType = strings.ToLower(strings.TrimSpace(mlCfg.ModelType))
 	if mlCfg.ModelsPath == "" &&
 		mlCfg.KNN.PretrainedPath == "" &&
 		mlCfg.KMeans.PretrainedPath == "" &&

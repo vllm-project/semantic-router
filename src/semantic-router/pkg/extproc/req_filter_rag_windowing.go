@@ -1,9 +1,11 @@
 package extproc
 
 import (
+	"context"
+	"fmt"
 	"sort"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // ragQueryWindowLimit caps how many windows of one query are searched. Each
@@ -18,13 +20,20 @@ const ragQueryWindowLimit = 8
 // documents. Every window is embedded instead, and the caller searches with each
 // and keeps a document's best score, which is the aggregation that ranks best
 // over passages of a long input.
-func ragQueryEmbeddings(query string) ([][]float32, error) {
-	windows, err := candle_binding.TextWindows(query, 0)
+func ragQueryEmbeddings(ctx context.Context, provider embedding.Provider, query string) ([][]float32, error) {
+	if provider == nil {
+		return nil, fmt.Errorf("RAG embedding provider was not prepared")
+	}
+	tokenizer, ok := provider.(embedding.WindowProvider)
+	if !ok {
+		return nil, fmt.Errorf("RAG embedding provider has no token windows")
+	}
+	windows, err := tokenizer.Windows(ctx, query, 0)
 	if err != nil {
 		return nil, err
 	}
 	if len(windows) <= 1 {
-		embedding, embedErr := candle_binding.GetEmbedding(query, 0)
+		embedding, embedErr := provider.Embed(ctx, query)
 		if embedErr != nil {
 			return nil, embedErr
 		}
@@ -34,7 +43,7 @@ func ragQueryEmbeddings(query string) ([][]float32, error) {
 	sampled := sampleQueryWindows(windows, ragQueryWindowLimit)
 	embeddings := make([][]float32, 0, len(sampled))
 	for _, window := range sampled {
-		embedding, embedErr := candle_binding.GetEmbedding(query[window.Start:window.End], 0)
+		embedding, embedErr := provider.Embed(ctx, query[window.Start:window.End])
 		if embedErr != nil {
 			return nil, embedErr
 		}
@@ -46,14 +55,14 @@ func ragQueryEmbeddings(query string) ([][]float32, error) {
 // sampleQueryWindows keeps at most limit windows, evenly spaced and always
 // including the first and the last, because the question a long query asks sits
 // at either end of it about as often.
-func sampleQueryWindows(windows []candle_binding.TextWindow, limit int) []candle_binding.TextWindow {
+func sampleQueryWindows(windows []embedding.Window, limit int) []embedding.Window {
 	if limit <= 0 || len(windows) <= limit {
 		return windows
 	}
 	if limit == 1 {
 		return windows[:1]
 	}
-	kept := make([]candle_binding.TextWindow, limit)
+	kept := make([]embedding.Window, limit)
 	for i := range kept {
 		kept[i] = windows[i*(len(windows)-1)/(limit-1)]
 	}
@@ -101,4 +110,28 @@ func (h *ragHits) top(topK int) ([]string, []float32) {
 		scores[i] = h.best[content]
 	}
 	return contents, scores
+}
+
+func (r *OpenAIRouter) ragQueryEmbeddings(ctx context.Context, query string, request *RequestContext) ([][]float32, error) {
+	provider, err := r.embeddingsForRequest(request).Get("bert", 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	return ragQueryEmbeddings(ctx, provider, query)
+}
+
+// Requests already hold the enclosing router generation lease. Named recipes
+// resolve only their prepared snapshot, never the default recipe's binding.
+func (r *OpenAIRouter) embeddingsForRequest(request *RequestContext) *embedding.Set {
+	if r == nil {
+		return nil
+	}
+	if request == nil || request.Routing.SelectedRecipe() == nil {
+		return r.Embeddings
+	}
+	classifier := r.classifierForRequest(request)
+	if classifier == nil {
+		return nil
+	}
+	return classifier.PreparedEmbeddings()
 }

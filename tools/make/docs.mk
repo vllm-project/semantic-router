@@ -132,14 +132,21 @@ APISERVER_REFERENCE_MD := website/docs/api/apiserver.md
 APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
 
+.PHONY: generated-contract-check generated-contract-generate
+generated-contract-check: config-schema-check api-docs-check agent-skill-check ## Check OpenAPI, config contracts, and the public skill package without rewriting
+
+# OpenAPI embeds the config schema: regenerate it before exporting API docs.
+generated-contract-generate: config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
+	@$(MAKE) api-docs-generate
+	@$(MAKE) agent-skill-sync
+
 .PHONY: api-docs-openapi
 api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI JSON artifact from the route catalog
 	@$(LOG_TARGET)
 	@mkdir -p $(dir $(APISERVER_OPENAPI_JSON))
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o ../../$(APISERVER_OPENAPI_JSON)
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
@@ -148,8 +155,7 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 	@$(LOG_TARGET)
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
 	@python3 tools/agent/scripts/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
@@ -165,12 +171,10 @@ api-docs-check: $(if $(CI),rust-ci,rust) ## Fail if committed api docs artifacts
 	cp "$(APISERVER_REFERENCE_MD)" "$$TMPDIR_CHECK/apiserver.md" && \
 	cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
 		CGO_ENABLED=1 \
-		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
 	cd ../.. && \
 	python3 tools/agent/scripts/embed_generated_index.py \

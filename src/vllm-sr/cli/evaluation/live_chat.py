@@ -51,12 +51,29 @@ def token_usage(payload: dict[str, Any] | None) -> tuple[int | None, int | None]
 
 
 def grade_response(result: HTTPResult, labels: CaseGrading) -> float | None:
-    content = response_content(result.payload)
-    if labels.expected_answer is None or content is None:
+    content = _complete_final_answer(result.payload)
+    if not result.success or labels.expected_answer is None or content is None:
         return None
     actual = " ".join(content.split())
     expected = " ".join(labels.expected_answer.split())
     return float(actual == expected)
+
+
+def _complete_final_answer(payload: dict[str, Any] | None) -> str | None:
+    """Grade final answers separately from broker-observed reasoning evidence."""
+    choices = payload.get("choices") if payload else None
+    if not isinstance(choices, list) or not choices:
+        return None
+    for choice in choices:
+        if not isinstance(choice, dict) or choice.get("finish_reason") != "stop":
+            return None
+        message = choice.get("message")
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            return None
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            return None
+    return choices[0]["message"]["content"]
 
 
 def chat_request(
