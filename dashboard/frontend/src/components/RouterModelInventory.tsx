@@ -21,7 +21,7 @@ import {
 
 interface RouterModelInventoryProps {
   modelsInfo?: RouterModelsInfo | null
-  mode?: 'preview' | 'full'
+  mode?: 'preview' | 'full' | 'detail'
   previewLimit?: number
   showSummary?: boolean
   emptyMessage?: string
