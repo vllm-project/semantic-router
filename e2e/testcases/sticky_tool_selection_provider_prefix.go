@@ -183,32 +183,42 @@ func runStickyProviderPrefixTurn(
 }
 
 func assertStickyProviderPrefixCycle(trusted, stateless stickyPrefixCycle) error {
-	if trusted.FirstUsage.CacheCreationInputTokens <= 0 || trusted.FirstUsage.CacheReadInputTokens != 0 {
-		return fmt.Errorf("trusted first turn did not create a provider prefix: %+v", trusted.FirstUsage)
+	if err := assertStickyTrustedProviderPrefix(trusted); err != nil {
+		return err
 	}
-	if trusted.SecondUsage.CacheReadInputTokens <= 0 || trusted.SecondUsage.CacheCreationInputTokens != 0 {
-		return fmt.Errorf("trusted growth turn did not reuse the provider prefix: %+v", trusted.SecondUsage)
+	return assertStickyStatelessProviderPrefix(stateless)
+}
+
+func assertStickyTrustedProviderPrefix(cycle stickyPrefixCycle) error {
+	if cycle.FirstUsage.CacheCreationInputTokens <= 0 || cycle.FirstUsage.CacheReadInputTokens != 0 {
+		return fmt.Errorf("trusted first turn did not create a provider prefix: %+v", cycle.FirstUsage)
 	}
-	if len(trusted.FirstTools.Tools) != 1 || trusted.FirstTools.Names[0] != "get_weather" {
-		return fmt.Errorf("trusted first provider tools = %v, want [get_weather]", trusted.FirstTools.Names)
+	if cycle.SecondUsage.CacheReadInputTokens <= 0 || cycle.SecondUsage.CacheCreationInputTokens != 0 {
+		return fmt.Errorf("trusted growth turn did not reuse the provider prefix: %+v", cycle.SecondUsage)
 	}
-	if len(trusted.SecondTools.Tools) != 2 ||
-		trusted.SecondTools.Names[0] != "get_weather" || trusted.SecondTools.Names[1] != "calculate" {
-		return fmt.Errorf("trusted growth reordered the provider prefix: %v", trusted.SecondTools.Names)
+	if len(cycle.FirstTools.Tools) != 1 || cycle.FirstTools.Names[0] != "get_weather" {
+		return fmt.Errorf("trusted first provider tools = %v, want [get_weather]", cycle.FirstTools.Names)
 	}
-	if !bytes.Equal(trusted.FirstTools.Tools[0], trusted.SecondTools.Tools[0]) {
+	if len(cycle.SecondTools.Tools) != 2 ||
+		cycle.SecondTools.Names[0] != "get_weather" || cycle.SecondTools.Names[1] != "calculate" {
+		return fmt.Errorf("trusted growth reordered the provider prefix: %v", cycle.SecondTools.Names)
+	}
+	if !bytes.Equal(cycle.FirstTools.Tools[0], cycle.SecondTools.Tools[0]) {
 		return fmt.Errorf("retained provider definition changed bytes for %q", "get_weather")
 	}
+	return nil
+}
 
-	if stateless.FirstUsage.CacheCreationInputTokens <= 0 || stateless.FirstUsage.CacheReadInputTokens != 0 {
-		return fmt.Errorf("stateless first turn did not create its provider prefix: %+v", stateless.FirstUsage)
+func assertStickyStatelessProviderPrefix(cycle stickyPrefixCycle) error {
+	if cycle.FirstUsage.CacheCreationInputTokens <= 0 || cycle.FirstUsage.CacheReadInputTokens != 0 {
+		return fmt.Errorf("stateless first turn did not create its provider prefix: %+v", cycle.FirstUsage)
 	}
-	if stateless.SecondUsage.CacheCreationInputTokens <= 0 || stateless.SecondUsage.CacheReadInputTokens != 0 {
-		return fmt.Errorf("stateless baseline unexpectedly reused the old provider prefix: %+v", stateless.SecondUsage)
+	if cycle.SecondUsage.CacheCreationInputTokens <= 0 || cycle.SecondUsage.CacheReadInputTokens != 0 {
+		return fmt.Errorf("stateless baseline unexpectedly reused the old provider prefix: %+v", cycle.SecondUsage)
 	}
-	if len(stateless.SecondTools.Tools) != 2 ||
-		stateless.SecondTools.Names[0] != "calculate" || stateless.SecondTools.Names[1] != "get_weather" {
-		return fmt.Errorf("stateless provider tools = %v, want [calculate get_weather]", stateless.SecondTools.Names)
+	if len(cycle.SecondTools.Tools) != 2 ||
+		cycle.SecondTools.Names[0] != "calculate" || cycle.SecondTools.Names[1] != "get_weather" {
+		return fmt.Errorf("stateless provider tools = %v, want [calculate get_weather]", cycle.SecondTools.Names)
 	}
 	return nil
 }
