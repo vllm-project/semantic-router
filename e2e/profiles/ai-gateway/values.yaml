@@ -286,7 +286,7 @@ config:
             configuration:
               enabled: true
               mode: filter
-              relevance_threshold: 0.22
+              relevance_threshold: 0.95
               preserve_count: 2
       - name: tool_selection_filter_threshold_decision
         description: Contract route for tool_selection filter mode with strict relevance threshold

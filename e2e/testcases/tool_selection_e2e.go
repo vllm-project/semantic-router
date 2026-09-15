@@ -46,6 +46,16 @@ func defaultContractTools(minObjectParams json.RawMessage) []fixtures.ChatTool {
 	}
 }
 
+func contractToolsExcept(tools []fixtures.ChatTool, omittedName string) []fixtures.ChatTool {
+	filtered := make([]fixtures.ChatTool, 0, len(tools)-1)
+	for _, tool := range tools {
+		if tool.Function.Name != omittedName {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
 func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelectionE2ECase {
 	contractTools := defaultContractTools(minObjectParams)
 	cases := []toolSelectionE2ECase{
@@ -74,18 +84,20 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		{
 			Name:                "add_mode_weather_query",
 			Prompt:              "__TOOL_SELECTION_ADD_WEATHER__ What is the weather forecast for Boston tomorrow?",
-			Tools:               contractTools,
+			Tools:               contractToolsExcept(contractTools, "get_weather"),
 			ExpectDecision:      "tool_selection_add_weather_decision",
 			ExpectToolsStrategy: "default",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"calculate", "get_weather", "search_web"},
 		},
 		{
 			Name:                "add_mode_math_query",
 			Prompt:              "__TOOL_SELECTION_ADD_CALC__ Compute 17 * 23 using the calculator tool.",
-			Tools:               contractTools,
+			Tools:               contractToolsExcept(contractTools, "calculate"),
 			ExpectDecision:      "tool_selection_add_calc_decision",
 			ExpectToolsStrategy: "default",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"calculate", "get_weather", "search_web"},
 		},
 		{
 			Name:                "filter_mode_drops_irrelevant_tools",
@@ -93,10 +105,11 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 			ExpectDecision:      "tool_selection_filter_decision",
 			ExpectToolsStrategy: "filter",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"get_forecast", "get_weather"},
 			Tools: []fixtures.ChatTool{
 				{Type: "function", Function: fixtures.ChatToolFunc{Name: "get_weather", Description: "Get current weather information for a location", Parameters: minObjectParams}},
+				{Type: "function", Function: fixtures.ChatToolFunc{Name: "get_forecast", Description: "Get a weather forecast for a location", Parameters: minObjectParams}},
 				{Type: "function", Function: fixtures.ChatToolFunc{Name: "contract_noise_alpha", Description: "Unrelated tool for cataloguing antique spoons", Parameters: minObjectParams}},
-				{Type: "function", Function: fixtures.ChatToolFunc{Name: "contract_noise_beta", Description: "Metadata about underground subway tile patterns", Parameters: minObjectParams}},
 			},
 		},
 		{
@@ -115,19 +128,21 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		{
 			Name:                "add_mode_alternate_top_k",
 			Prompt:              "__TOOL_SELECTION_ADD_TOPK_ONE__ Summarize how search_web could help research climate papers.",
-			Tools:               contractTools,
+			Tools:               contractToolsExcept(contractTools, "search_web"),
 			ExpectDecision:      "tool_selection_add_topk_one_decision",
 			ExpectToolsStrategy: "default",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"search_web"},
 		},
 		{
 			Name:                    "stacked_system_prompt_and_tool_selection",
 			Prompt:                  "__TOOL_SELECTION_WITH_SYSTEM_PROMPT__ Plan a short hiking trip; check weather for Mount Rainier.",
-			Tools:                   contractTools,
+			Tools:                   contractToolsExcept(contractTools, "get_weather"),
 			ExpectDecision:          "tool_selection_with_system_prompt_decision",
 			ExpectToolsStrategy:     "default",
 			ExpectConfidenceGT:      0.01,
 			ExpectInjectedSysPrompt: boolPtr(true),
+			ExpectProviderTools:     []string{"get_weather", "search_web"},
 		},
 	}
 	frTrue := true
@@ -268,7 +283,7 @@ func assertProviderToolContract(
 		return nil
 	}
 	if tc.ExpectProviderTools == nil && !tc.ExpectNoProviderTools && !tc.ExpectToolChoiceAbsent {
-		return nil
+		return fmt.Errorf("case has no provider-boundary tool expectation")
 	}
 
 	observed, err := lastProviderSimulatorRequest(ctx, backend, sessionID)
