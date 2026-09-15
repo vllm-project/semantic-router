@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   HELM_VERSION: v3.14.0
 

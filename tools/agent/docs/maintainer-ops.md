@@ -218,11 +218,15 @@ or merge-ready. A merged or closed pull request holds no `pr/*` state label,
 because no review action remains for it; ownership and milestone inheritance
 are retained.
 
-### Relationship to `stale.yml`
+### Relationship to `stale.yml` and `unassign-inactive-assignees.yml`
 
 - `.github/workflows/stale.yml` is a reusable job invoked by
   `.github/workflows/maintenance.yml`; it mutates GitHub directly by marking inactive
   issues and pull requests as stale and closes them after the grace period.
+- `.github/workflows/unassign-inactive-assignees.yml` mutates GitHub directly:
+  it posts a reminder at 15 days of inactivity on assigned issues and unassigns
+  at 30 days if no linked PR activity is detected. Labels used:
+  `assignment-inactive-warning` and `assignment-inactive-unassigned`.
 - `.github/workflows/maintainer-board.yml` is visibility-only: it classifies
   the current queue using `tools/agent/maintainer-policy.yaml` and gives
   maintainers a daily brief without changing GitHub state.
@@ -231,8 +235,75 @@ are retained.
   also exempt; author-owned blocked/rebase work may still age normally.
 
 Use the maintainer board to decide what needs review, rebase, unblock, or
-close-candidate follow-up. Use `stale.yml` only for the automated stale/close
-lifecycle.
+close-candidate follow-up. Use `stale.yml` and `unassign-inactive-assignees.yml`
+for automated lifecycle management.
+
+### Assignee inactivity policy
+
+Open `accepted` issues with at least one assignee are subject to a daily
+two-stage inactivity sweep run by `maintenance.yml` →
+`unassign-inactive-assignees.yml`. Each assignee moves through the stages
+independently:
+
+- **15 days** without activity from that assignee: they receive a warning
+  comment naming them. No label is applied — the comment is the record.
+- **30 days** without activity **and** at least the 15-day grace window since
+  their own warning: the assignee is removed and a notice is posted. The issue
+  stays open and `accepted` for anyone to pick up.
+
+An assignee is never removed without a warning on record. An assignee first
+seen well past 30 days is warned on that run and only becomes removable a full
+grace window later.
+
+#### What counts as activity
+
+Activity is attributed to one assignee at a time, from Timeline API events:
+
+- their own comments and reviews on the issue;
+- their own comments, reviews, and force-pushes on a pull request
+  cross-referenced from the issue, plus opening such a pull request;
+- commits on those pull requests whose GitHub author or committer is that
+  assignee, read from the commit list rather than the timeline;
+- being assigned to the issue, which starts or restarts their clock.
+
+Bot writes, label and milestone churn, mentions, and activity by another
+person do not count. A linked pull request's `updated_at` is not used, and an
+active co-assignee never shields an inactive one.
+
+#### Recovering and overriding
+
+- **Activity resumes.** A qualifying event supersedes a pending warning.
+- **Extending an assignment.** Reassign the contributor; the `assigned` event
+  restarts their clock.
+- **Pausing an issue.** Add the `hold` label, or another label listed in the
+  workflow's `exempt_labels` input. Locked issues are skipped.
+- **Undoing a removal.** Re-assign the contributor.
+
+Every read that could prove recent activity fails closed. Every write is
+guarded by a per-assignee marker comment, and the removal notice is posted
+before the assignment is removed. Failed evaluations make the workflow fail
+without changing the affected assignment; re-running retries only incomplete
+transitions. Each run writes a job summary of transitions and failures.
+
+The workflow logic lives in `.github/scripts/unassign-inactive.js` and is
+covered by `.github/scripts/__tests__/`, run by the
+`github-scripts-tests` pre-commit hook. Run it locally with:
+
+```bash
+npm --prefix .github/scripts ci
+npm --prefix .github/scripts test
+```
+
+To run the standard policy manually:
+
+```bash
+gh workflow run maintenance.yml -f task=unassign
+```
+
+Direct dispatch of `unassign-inactive-assignees.yml` defaults to `dry_run=true`
+and accepts `dry_run`, `warn_after_days`, `unassign_after_days`, and
+`exempt_labels` overrides. Sweeps are serialized repository-wide to avoid
+racing warning or removal transitions.
 
 Manual trigger example:
 
