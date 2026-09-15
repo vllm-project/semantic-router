@@ -89,25 +89,24 @@ func testStickyToolSelection(
 	if err != nil {
 		return err
 	}
-	untrustedTools, baselineTools, err := runStickyUntrustedComparison(ctx, sessions, sessionID, contractTools)
+	trustedControl, untrustedTools, baselineTools, err := runStickyUntrustedComparison(ctx, sessions, contractTools)
 	if err != nil {
 		return err
 	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"trusted_turns":              4,
-			"concurrent_turns":           3,
-			"untrusted_turns":            1,
-			"max_tools_observed":         maxStickyTools(firstTools, secondTools, calledTools, invalidationSnapshot, concurrentTools, untrustedTools, baselineTools),
-			"bounded_tool_set":           true,
-			"bounded_growth_observed":    len(secondTools.Tools) <= len(firstTools.Tools)+1,
-			"bounded_replacement_observed": true,
-			"concurrent_updates_observed":  true,
-			"provider_prefix_stable":     true,
-			"schema_invalidation_seen":   true,
-			"called_tool_pin_seen":       true,
-			"untrusted_state_not_reused": true,
+			"first_turn_tools":          firstTools.Names,
+			"second_turn_tools":         secondTools.Names,
+			"replacement_tools":         calledTools.Names,
+			"invalidation_tools":        invalidationSnapshot.Names,
+			"concurrent_tools":          concurrentTools.Names,
+			"trusted_control_tools":     trustedControl.Names,
+			"untrusted_tools":           untrustedTools.Names,
+			"stateless_baseline_tools":  baselineTools.Names,
+			"max_tools_observed":        maxStickyTools(firstTools, secondTools, calledTools, invalidationSnapshot, concurrentTools, trustedControl, untrustedTools, baselineTools),
+			"trusted_growth":            len(secondTools.Tools) - len(firstTools.Tools),
+			"schema_invalidation_count": len(invalidationSnapshot.Tools),
 		})
 	}
 	return nil
@@ -266,6 +265,20 @@ func runStickyConcurrentTurns(
 	if err := assertStickySnapshotsEqual(final, repeated); err != nil {
 		return stickyToolSnapshot{}, fmt.Errorf("concurrent state was not deterministic: %w", err)
 	}
+	if len(final.Tools) != stickyToolSelectionMaxTools {
+		return stickyToolSnapshot{}, fmt.Errorf("concurrent state retained %d tools, want %d", len(final.Tools), stickyToolSelectionMaxTools)
+	}
+
+	baselineID := fmt.Sprintf("%s-baseline", sessionID)
+	baseline, err := runStickyTurn(ctx, sessions, baselineID, stickyNormalRequest(
+		"__STICKY_TOOL_SELECTION__ Calculate 29 times 31.", tools),
+		stickyRequestHeaders(baselineID, false), "post-concurrency stateless baseline")
+	if err != nil {
+		return stickyToolSnapshot{}, err
+	}
+	if err := assertStickySnapshotsDifferent(final, baseline); err != nil {
+		return stickyToolSnapshot{}, fmt.Errorf("concurrent turns did not produce retained state: %w", err)
+	}
 	return final, nil
 }
 
@@ -286,6 +299,13 @@ func runStickyInvalidation(
 	if err != nil {
 		return stickyToolSnapshot{}, err
 	}
+	if len(updated.Tools) != 1 || updated.Names[0] != changedName {
+		return stickyToolSnapshot{}, fmt.Errorf(
+			"schema invalidation forwarded unauthorized tools: got %v, want only %q",
+			updated.Names,
+			changedName,
+		)
+	}
 	oldDefinition := toolDefinitionByName(first, changedName)
 	newDefinition := toolDefinitionByName(updated, changedName)
 	if oldDefinition == nil || newDefinition == nil || bytes.Equal(oldDefinition, newDefinition) {
@@ -297,28 +317,48 @@ func runStickyInvalidation(
 func runStickyUntrustedComparison(
 	ctx context.Context,
 	sessions *stickySessionPair,
-	sessionID string,
 	tools []fixtures.ChatTool,
-) (stickyToolSnapshot, stickyToolSnapshot, error) {
-	request := stickyNormalRequest("__STICKY_TOOL_SELECTION__ Calculate 19 times 29.", tools)
+) (stickyToolSnapshot, stickyToolSnapshot, stickyToolSnapshot, error) {
+	sessionID := fmt.Sprintf("sticky-e2e-untrusted-%d", time.Now().UnixNano())
+	trustedHeaders := stickyRequestHeaders(sessionID, true)
+	_, grown, err := runStickyTrustedTurns(ctx, sessions, sessionID, trustedHeaders, tools)
+	if err != nil {
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, err
+	}
+	if len(grown.Tools) != stickyToolSelectionMaxTools {
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, fmt.Errorf(
+			"untrusted comparison precondition retained %d tools, want %d",
+			len(grown.Tools),
+			stickyToolSelectionMaxTools,
+		)
+	}
+
+	request := stickyNormalRequest("__STICKY_TOOL_SELECTION__ Search recent weather reports.", tools)
+	trusted, err := runStickyTurn(ctx, sessions, sessionID, request, trustedHeaders, "trusted control turn")
+	if err != nil {
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, err
+	}
 	// Reuse the trusted session declaration but remove the principal. A
 	// correctly scoped identity resolver must fail closed instead of reusing
 	// the state written by the authenticated turns above.
 	untrusted, err := runStickyTurn(ctx, sessions, sessionID, request,
 		stickyRequestHeaders(sessionID, false), "untrusted turn")
 	if err != nil {
-		return stickyToolSnapshot{}, stickyToolSnapshot{}, err
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, err
 	}
 	baselineID := fmt.Sprintf("%s-baseline", sessionID)
 	baseline, err := runStickyTurn(ctx, sessions, baselineID, request,
 		stickyRequestHeaders(baselineID, false), "stateless baseline turn")
 	if err != nil {
-		return stickyToolSnapshot{}, stickyToolSnapshot{}, err
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, err
 	}
 	if err := assertStickySnapshotsEqual(untrusted, baseline); err != nil {
-		return stickyToolSnapshot{}, stickyToolSnapshot{}, fmt.Errorf("untrusted turn reused trusted sticky state: %w", err)
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, fmt.Errorf("untrusted turn reused trusted sticky state: %w", err)
 	}
-	return untrusted, baseline, nil
+	if err := assertStickySnapshotsDifferent(untrusted, trusted); err != nil {
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, fmt.Errorf("trusted control did not reuse session state: %w", err)
+	}
+	return trusted, untrusted, baseline, nil
 }
 
 func stickyNormalRequest(prompt string, tools []fixtures.ChatTool) fixtures.ChatCompletionsRequest {
@@ -526,6 +566,9 @@ func assertStickyReuse(first, second stickyToolSnapshot) error {
 	if len(second.Tools) > len(first.Tools)+1 {
 		return fmt.Errorf("trusted turn exceeded one-tool growth allowance: first=%d second=%d", len(first.Tools), len(second.Tools))
 	}
+	if len(second.Tools) != len(first.Tools)+1 {
+		return fmt.Errorf("trusted turn did not append one newly relevant tool: first=%d second=%d", len(first.Tools), len(second.Tools))
+	}
 	for i := range first.Tools {
 		if first.Names[i] != second.Names[i] {
 			return fmt.Errorf("retained provider prefix changed order at index %d: first=%q second=%q", i, first.Names[i], second.Names[i])
@@ -563,6 +606,13 @@ func assertStickySnapshotsEqual(left, right stickyToolSnapshot) error {
 		if !bytes.Equal(left.Tools[i], right.Tools[i]) {
 			return fmt.Errorf("tool definition at index %d differs", i)
 		}
+	}
+	return nil
+}
+
+func assertStickySnapshotsDifferent(left, right stickyToolSnapshot) error {
+	if err := assertStickySnapshotsEqual(left, right); err == nil {
+		return fmt.Errorf("tool snapshots are identical: %v", left.Names)
 	}
 	return nil
 }
