@@ -88,6 +88,8 @@ config:
           description: Request contains user-provided text.
           modality: text
     modelCards:
+      # Explicit for the image-rejection test: a name alone does not opt into
+      # the catalog or declare text-only capabilities.
       - name: openai/gpt-oss-20b
         capabilities: [chat]
       - name: mock/native-responses
