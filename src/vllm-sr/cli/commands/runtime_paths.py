@@ -287,6 +287,31 @@ def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
     return path
 
 
+def write_runtime_config_projection(path: Path, data: bytes) -> Path:
+    """Publish a runtime-only projection without adopting unrelated active edits.
+
+    The caller holds the runtime config lock. Advance the materialization receipt
+    only if the previous document was still CLI-owned; otherwise keep its drift
+    visible so the next serve continues preserving Dashboard/package edits.
+    """
+    provenance_path = _runtime_config_provenance_path(path)
+    try:
+        provenance = _load_provenance(provenance_path)
+    except ValueError:
+        provenance = None
+    owned = provenance and provenance["last_materialized_active_digest"] == (
+        _digest_bytes(path.read_bytes())
+    )
+    write_runtime_config_bytes(path, data)
+    if owned:
+        provenance["last_materialized_active_digest"] = _digest_bytes(data)
+        write_private_state_bytes(
+            provenance_path,
+            (json.dumps(provenance, sort_keys=True) + "\n").encode(),
+        )
+    return path
+
+
 def write_private_state_bytes(
     path: Path, data: bytes, *, mode: int = PRIVATE_STATE_FILE_MODE
 ) -> Path:
