@@ -41,24 +41,24 @@ type routerComponents struct {
 	semanticCacheIdentity string
 	toolsDatabase         *tools.ToolsDatabase
 	toolEmbedder          *cachedToolEmbedder
-	responseAPIFilter    *ResponseAPIFilter
-	replayRecorder       *routerreplay.Recorder
-	replayStoreShared    bool
-	replayRecorders      map[string]*routerreplay.Recorder
-	shadowDispatcher     *shadowDispatcher
-	modelSelector        *selection.Registry
-	recipeModelSelectors map[config.RecipeName]*selection.Registry
-	lookupTable          lookuptable.LookupTable
-	memoryStore          memory.Store
-	memoryExtractor      *memory.MemoryExtractor
-	protocolCodecs       *protocolcodec.Registry
-	looperClient         *looper.Client
-	credentialResolver   *authz.CredentialResolver
-	rateLimiter          *ratelimit.RateLimitResolver
-	lookupTableCancel    func()
-	routerSessionStore   *sessiontelemetry.RouterSessionStateStoreSlot
-	workflowStateService *looper.WorkflowStateService
-	resources            *resourceScope
+	responseAPIFilter     *ResponseAPIFilter
+	replayRecorder        *routerreplay.Recorder
+	replayStoreShared     bool
+	replayRecorders       map[string]*routerreplay.Recorder
+	shadowDispatcher      *shadowDispatcher
+	modelSelector         *selection.Registry
+	recipeModelSelectors  map[config.RecipeName]*selection.Registry
+	lookupTable           lookuptable.LookupTable
+	memoryStore           memory.Store
+	memoryExtractor       *memory.MemoryExtractor
+	protocolCodecs        *protocolcodec.Registry
+	looperClient          *looper.Client
+	credentialResolver    *authz.CredentialResolver
+	rateLimiter           *ratelimit.RateLimitResolver
+	lookupTableCancel     func()
+	routerSessionStore    *sessiontelemetry.RouterSessionStateStoreSlot
+	workflowStateService  *looper.WorkflowStateService
+	resources             *resourceScope
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
