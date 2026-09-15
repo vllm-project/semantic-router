@@ -162,6 +162,11 @@ create a backup, and trigger reload; an active config still does not prove that
 upstream model backends are healthy. Check `/ready` and send a representative
 request after a change.
 
+Tracing settings are initialized at process startup. Config plans, updates,
+and rollbacks that change `global.services.observability.tracing` return
+`409 RESTART_REQUIRED` without persisting the candidate. Apply those changes
+through the deployment workflow and restart the Router.
+
 ## Manage knowledge bases and stored data
 
 Knowledge-base configuration:
