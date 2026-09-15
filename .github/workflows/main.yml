@@ -133,3 +133,16 @@ jobs:
     with:
       mode: main
     secrets: inherit
+
+  pypi:
+    name: Publish development CLI
+    needs: gate
+    # Domain jobs may be skipped even when the aggregate validation gate passes.
+    if: >-
+      !cancelled()
+      && needs.gate.result == 'success'
+      && github.repository == 'vllm-project/semantic-router'
+    uses: ./.github/workflows/pypi-publish.yml
+    with:
+      channel: dev
+    secrets: inherit

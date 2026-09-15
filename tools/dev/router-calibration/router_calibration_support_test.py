@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 import tempfile
 import unittest
@@ -746,6 +747,149 @@ decisions:
         )
         self.assertEqual(
             report["results"][0]["trace_decisions"], ["direct", "workflow"]
+        )
+
+
+class SelectionExpectationTest(unittest.TestCase):
+    def load_probes(self, default=None, override=None):
+        decision = {
+            "id": "long-context",
+            "expected_decision": "long-context",
+            "expected_algorithm": "static",
+            "expected_recipe": "balance",
+            "model": "vllm-sr/balance",
+            "expected_signals": {"context": ["long"]},
+            "variants": [
+                {"id": "normal", "query": "Summarize this context."},
+                {"id": "over-capacity", "query": "Summarize an oversized context."},
+            ],
+        }
+        if default is not None:
+            decision["expected_selection_status"] = default
+        if override is not None:
+            decision["variants"][1]["expected_selection_status"] = override
+        document = {
+            "schema_version": "v1",
+            "name": "selection-contract",
+            "routing_assets": {"yaml": "config.yaml", "dsl": "recipe.dsl"},
+            "coverage": {
+                "min_signal_assertion_percent": 0,
+                "min_projection_assertion_percent": 0,
+                "min_algorithm_assertion_percent": 0,
+                "min_plugin_assertion_percent": 0,
+                "required_request_shapes": [],
+                "min_tag_counts": {},
+                "min_tag_pass_rate": {},
+            },
+            "decisions": [decision],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "probes.yaml"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            return router_calibration_manifest.load_probe_manifest(path)[1]
+
+    def response(self):
+        return {
+            "requested_model": "vllm-sr/balance",
+            "recipe": "balance",
+            "routing_decision": "long-context",
+            "decision_result": {
+                "decision_name": "long-context",
+                "algorithm": "static",
+                "matched_signals": {"context": ["long"]},
+            },
+            "eval_trace": [{"decision_name": "long-context", "matched": True}],
+            "recommended_models": ["backend/context-model"],
+            "selection_status": "unavailable",
+            "selection_reason": "input exceeds all backend context capacities",
+        }
+
+    def evaluate(self, probe, response):
+        with mock.patch.object(
+            router_calibration_support, "http_json", return_value=(200, response)
+        ):
+            return router_calibration_support.evaluate_probe(
+                "http://router.example:8080",
+                probe,
+                allowed_decisions=frozenset({"long-context"}),
+            )
+
+    def test_manifest_inherits_status_and_allows_one_variant_override(self):
+        probes = self.load_probes("selected", "unavailable")
+        self.assertEqual(
+            [probe.expected_selection_status for probe in probes],
+            ["selected", "unavailable"],
+        )
+        self.assertIsNone(self.load_probes()[0].expected_selection_status)
+
+    def test_selection_status_enum_is_strict_at_both_manifest_levels(self):
+        for invalid in ["", "anything", "unavailable ", 1, ["unavailable"]]:
+            for field in ["decision", "variant"]:
+                with (
+                    self.subTest(invalid=invalid, field=field),
+                    self.assertRaisesRegex(ValueError, "expected_selection_status"),
+                ):
+                    if field == "decision":
+                        self.load_probes(invalid)
+                    else:
+                        self.load_probes(None, invalid)
+
+    def test_explicit_capacity_negative_preserves_reason_and_other_assertions(self):
+        probe = self.load_probes("selected", "unavailable")[1]
+        response = self.response()
+        result = self.evaluate(probe, response)
+        self.assertTrue(result["matched"], result)
+        self.assertEqual(result["expected_selection_status"], "unavailable")
+        self.assertEqual(result["selection_status"], "unavailable")
+        self.assertEqual(result["selected_model"], "")
+        self.assertEqual(result["selection_reason"], response["selection_reason"])
+
+        response["decision_result"]["matched_signals"] = {}
+        result = self.evaluate(probe, response)
+        self.assertTrue(result["selection_matched"])
+        self.assertFalse(result["signals_matched"])
+        self.assertFalse(result["matched"])
+
+    def test_negative_requires_exact_status_empty_selection_and_explanation(self):
+        probe = self.load_probes(None, "unavailable")[1]
+        for change in [
+            {
+                "selection_status": "selected",
+                "selected_model": "backend/context-model",
+                "selection_method": "static",
+            },
+            {"selected_model": "backend/context-model"},
+            {"selection_reason": ""},
+        ]:
+            with self.subTest(change=change):
+                result = self.evaluate(probe, {**self.response(), **change})
+                self.assertFalse(result["matched"])
+                self.assertFalse(result["selection_matched"])
+                self.assertTrue(result["selection_errors"])
+
+    def test_default_positive_assertion_still_rejects_unavailable(self):
+        probe = self.load_probes()[0]
+        self.assertFalse(self.evaluate(probe, self.response())["selection_matched"])
+        response = {
+            **self.response(),
+            "selection_status": "selected",
+            "selection_method": "static",
+            "selected_model": "backend/context-model",
+        }
+        self.assertTrue(self.evaluate(probe, response)["matched"])
+
+    def test_negative_expectation_cannot_turn_an_http_failure_into_a_pass(self):
+        probe = self.load_probes(None, "unavailable")[1]
+        with mock.patch.object(
+            router_calibration_support, "http_json", return_value=(503, self.response())
+        ):
+            report = router_calibration_support.evaluate_probes(
+                "http://router.example:8080", [probe]
+            )
+        self.assertFalse(report["passed"])
+        self.assertFalse(report["results"][0]["matched"])
+        self.assertEqual(
+            report["results"][0]["expected_selection_status"], "unavailable"
         )
 
 

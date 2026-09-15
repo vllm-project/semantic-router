@@ -175,7 +175,13 @@ func TestUpdateResponseCache_WritesExactEntryWithRequestIdentity(t *testing.T) {
 	assert.True(t, mockCache.addEntryCalled)
 	assert.False(t, mockCache.updateCalled)
 	assert.True(t, mockCache.exactAdded)
-	assert.Contains(t, mockCache.addEntryModel, "exact-cache-decision")
+	assert.Equal(
+		t,
+		router.responseCacheService().
+			ResolveIdentity(responseCacheIdentity(ctx, ctx.CacheRequestModel)).
+			SemanticPartitionKey(),
+		mockCache.addEntryModel,
+	)
 	assert.Equal(t, "hello", mockCache.addEntryQuery)
 }
 
