@@ -288,6 +288,19 @@ func TestManagerSelect_CorruptAndUnavailableStateFailSafely(t *testing.T) {
 		}
 	})
 
+	t.Run("CAS corruption returns ordinary selection with a corruption receipt", func(t *testing.T) {
+		store := &managerTestStore{casErr: ErrStateCorrupted}
+		manager := newManagerForTest(t, store, func() time.Time { return time.Unix(100, 0) })
+		input := managerTestInput()
+		got := manager.Select(context.Background(), input)
+		if !reflect.DeepEqual(got.Selected, input.Selected) {
+			t.Fatalf("fallback selection = %+v, want %+v", got.Selected, input.Selected)
+		}
+		if !got.Receipt.Fallback || !got.Receipt.Invalidated || got.Receipt.Reason != SelectionReasonStateCorrupted {
+			t.Fatalf("CAS corruption receipt = %+v, want invalidated state-corrupted fallback", got.Receipt)
+		}
+	})
+
 	t.Run("delete error returns ordinary selection", func(t *testing.T) {
 		store := &managerTestStore{
 			found:     true,

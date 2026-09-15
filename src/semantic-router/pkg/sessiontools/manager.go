@@ -312,6 +312,12 @@ func (m *Manager) selectWithStore(
 			result.Receipt.Reason = SelectionReasonCASConflict
 			return result
 		}
+		if errors.Is(casErr, ErrStateCorrupted) {
+			result.Receipt.Fallback = true
+			result.Receipt.Invalidated = true
+			result.Receipt.Reason = SelectionReasonStateCorrupted
+			return result
+		}
 		result.Receipt.Fallback = true
 		result.Receipt.Reason = SelectionReasonStoreUnavailable
 		return result
