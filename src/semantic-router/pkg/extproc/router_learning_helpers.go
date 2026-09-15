@@ -71,12 +71,17 @@ func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef, ctx *Re
 	if len(refs) == 0 {
 		return nil
 	}
+	request, err := r.selectionCapabilityRequest(ctx)
+	if err != nil {
+		return nil
+	}
 	eligible := make([]config.ModelRef, 0, len(refs))
 	for _, ref := range refs {
 		if strings.TrimSpace(ref.Model) == "" ||
 			!r.configuredBackendModel(ref.Model) ||
 			(ctx != nil && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
-			(ctx != nil && ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) {
+			(ctx != nil && ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) ||
+			(ctx != nil && r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision) != nil) {
 			continue
 		}
 		eligible = append(eligible, ref)

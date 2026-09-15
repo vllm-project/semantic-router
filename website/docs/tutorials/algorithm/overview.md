@@ -63,7 +63,23 @@ declares.
 
 ### Selection Algorithms
 
-Selection algorithms return one candidate model.
+Selection algorithms return one candidate model. For a full inference request,
+the Router filters exact candidate references by context, backend wire support,
+and declared model task capabilities **before** scoring. The configured
+algorithm compares the surviving pool; it does not choose an incapable winner
+and then replace it with the first compatible sibling.
+
+Capability checks include Router-retained conversation content and preview the
+decision's request-parameter and no-tools policies without executing those
+plugins twice. Unannotated models retain wire-only compatibility checks. Hard
+quality/SLO constraints still apply, and Router Learning checks the same
+capabilities when considering additional candidates.
+
+An empty pool or a violated `minimum_candidates` requirement fails closed.
+Dispatch validates the final request again after mutations: a late capability
+mismatch returns an error rather than restarting decision evaluation, rescoring,
+or silently changing the selected candidate. Explicitly pinned models use the
+same final validation but are not replaced by another model.
 
 | Type | Status | Goal | Main dependency | Guide |
 |---|---|---|---|---|
