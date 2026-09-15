@@ -1109,9 +1109,10 @@ class ToolSessionStoreConfig(BaseModel):
     def validate_backend_contract(self):
         if self.backend == "local" and self.redis is not None:
             raise ValueError("redis config is not allowed when backend is local")
-        if self.backend == "redis":
-            if self.redis is None or not self.redis.address.strip():
-                raise ValueError("redis.address is required when backend is redis")
+        if self.backend == "redis" and (
+            self.redis is None or not self.redis.address.strip()
+        ):
+            raise ValueError("redis.address is required when backend is redis")
 
         max_sessions = self.max_sessions if self.max_sessions is not None else 10000
         if (
