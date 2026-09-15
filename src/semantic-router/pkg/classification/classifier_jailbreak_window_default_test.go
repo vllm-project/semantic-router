@@ -2,6 +2,7 @@ package classification
 
 import (
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -71,6 +72,54 @@ func TestDefaultJailbreakWindowPreservesExplicitPolicies(t *testing.T) {
 			}
 			if !reflect.DeepEqual(cfg.PromptGuard, original) {
 				t.Fatalf("explicit policy changed: got=%+v want=%+v", cfg.PromptGuard, original)
+			}
+		})
+	}
+}
+
+func TestDefaultJailbreakWindowRespectsArtifactSelection(t *testing.T) {
+	registered := config.GetModelByPath(config.DefaultSystemModels().PromptGuard)
+	absolute, err := filepath.Abs(registered.LocalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, artifact string
+		windowed       bool
+	}{
+		{"custom", "models/custom-modernbert-guard-8k", false},
+		{"legacy", "models/mmbert32k-jailbreak-detector-merged", false},
+		{"same basename elsewhere", filepath.Join(t.TempDir(), filepath.Base(registered.LocalPath)), false},
+		{"registered alias", registered.Aliases[0], true},
+		{"relative path", "./" + registered.LocalPath, true},
+		{"absolute path", absolute, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := config.DefaultGlobalConfig()
+			cfg.PromptGuard.ModelID = test.artifact
+			original := cfg.PromptGuard
+			models, err := newClassifierModelRuntime(&cfg, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolved := models.cfg.PromptGuard
+			if !reflect.DeepEqual(cfg.PromptGuard, original) {
+				t.Fatal("runtime preparation changed the source policy")
+			}
+			if test.windowed {
+				if resolved.MaxSequenceLength != registered.MaxContextLength || resolved.Window == nil {
+					t.Fatalf("default artifact lost its window policy: %+v", resolved)
+				}
+			} else if !reflect.DeepEqual(resolved, original) {
+				t.Fatalf("custom artifact inherited the default model's policy: %+v", resolved)
+			}
+			_, inference, err := buildJailbreakDependencies(models.cfg, newRiskTestClassifier(nil).JailbreakMapping, models)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, windowed := inference.(*windowedJailbreakBackend)
+			if windowed != test.windowed {
+				t.Fatalf("unexpected preparation backend: %T", inference)
 			}
 		})
 	}
