@@ -166,6 +166,26 @@ fn test_classify_null_pointer_safety() {
     println!("Null pointer safety test passed");
 }
 
+/// Keep the Go declarations synchronized with both probability-returning FFI
+/// functions, including their distinct result structures.
+#[test]
+fn test_probability_ffi_results_without_initialized_models() {
+    let text = CString::new("abi regression").expect("valid test text");
+
+    let generic = classify_text_with_probabilities(text.as_ptr());
+    assert_eq!(generic.predicted_class, -1);
+    assert_eq!(generic.confidence, 0.0);
+    assert!(generic.label.is_null());
+    assert!(generic.probabilities.is_null());
+    assert_eq!(generic.num_classes, 0);
+
+    let jailbreak = classify_jailbreak_text_with_probabilities(text.as_ptr());
+    assert_eq!(jailbreak.class, -1);
+    assert_eq!(jailbreak.confidence, 0.0);
+    assert!(jailbreak.probabilities.is_null());
+    assert_eq!(jailbreak.num_classes, 0);
+}
+
 /// Test FFI classification workflow with real model integration
 #[rstest]
 fn test_classify_integration_workflow() {
