@@ -90,7 +90,7 @@ func getIPAddressType(address string) string {
 }
 
 func validateModelSelectionConfig(cfg *RouterConfig) error {
-	if err := validatePromptGuardBackend(cfg); err != nil {
+	if err := validatePromptGuardStaticContracts(cfg); err != nil {
 		return err
 	}
 	if isSessionAwareSelectionConfigConfigured(cfg.ModelSelection.SessionAware) {

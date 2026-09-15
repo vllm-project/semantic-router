@@ -10,6 +10,31 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestConfigContractValidatorsRejectNil(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		validate configContractValidator
+		want     string
+	}{
+		{"kubernetes", ValidateKubernetesConfigContracts, "router configuration is nil"},
+		{"structure", validateConfigStructure, "router configuration is nil"},
+		{"static", func(cfg *RouterConfig) error {
+			return validateConfigContractsAtStage(cfg, staticConfigValidation)
+		}, "router configuration is nil"},
+		{"deployments", validateModelDeploymentContracts, "model bindings require router configuration"},
+		{"complexity", validateComplexityModelBackendContracts, "complexity model configuration is nil"},
+		{"complexity_public", ValidateComplexityModelBackend, "complexity model configuration is nil"},
+		{"pii", validatePIIModelBackendContracts, "PII model configuration is nil"},
+		{"pii_public", ValidatePIIModelBackend, "PII model configuration is nil"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.validate(nil); err == nil || err.Error() != tc.want {
+				t.Fatalf("nil config error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 // Exercise the public loaders, including normalization and defaults, rather
 // than only invoking a family validator or the post-CRD entry point directly.
 func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
@@ -18,6 +43,8 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		global string
 		want   string
 	}{
+		{"preview_timeout", `services: {api: {routing_preview: {request_timeout_seconds: 0}}}`, "routing_preview.request_timeout_seconds"},
+		{"preview_concurrency", `services: {api: {routing_preview: {max_concurrency: 0}}}`, "routing_preview.max_concurrency"},
 		{"cache_similarity", `stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}`, "similarity_threshold"},
 		{"cache_guard", `stores: {response_cache: {enabled: true, polarity_guard: {mode: nli_typo}}}`, "polarity_guard mode"},
 		{"memory_similarity", `stores: {memory: {default_similarity_threshold: 1.5}}`, "default_similarity_threshold"},
@@ -41,7 +68,12 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"category_backend", `model_catalog: {modules: {classifier: {domain: {backend: {protocol: unknown, model: classifier}}}}}`, "classifier.domain.backend.protocol"},
 		{"complexity_backend", `model_catalog: {modules: {complexity: {backend: {protocol: unknown, model: classifier}}}}`, "complexity.backend.protocol"},
 		{"pii_error_policy", `model_catalog: {modules: {classifier: {pii: {on_error: unknown}}}}`, "classifier.pii.on_error"},
+		{"pii_window_size", `model_catalog: {modules: {classifier: {pii: {window: {size: 0}}}}}`, "classifier.pii.window.size"},
+		{"pii_window_overlap", `model_catalog: {modules: {classifier: {pii: {window: {size: 128, overlap: 128}}}}}`, "classifier.pii.window.overlap"},
 		{"prompt_guard_variant", `model_catalog: {modules: {prompt_guard: {variant: unknown}}}`, "prompt_guard.variant"},
+		{"prompt_guard_window_size", `model_catalog: {modules: {prompt_guard: {window: {size: 0}}}}`, "prompt_guard.window.size"},
+		{"prompt_guard_window_overlap", `model_catalog: {modules: {prompt_guard: {window: {size: 128, overlap: -1}}}}`, "prompt_guard.window.overlap"},
+		{"prompt_guard_window_labels", `model_catalog: {modules: {prompt_guard: {window: {size: 128}, positive_labels: [unsafe, unsafe]}}}`, "prompt_guard.positive_labels"},
 		{"prompt_guard_wiring", `model_catalog: {external: [], modules: {prompt_guard: {enabled: true, backend: {protocol: http_chat, model: guard, contract: label_decision.v1}}}}`, "not declared"},
 	}
 	for _, tc := range cases {
@@ -181,6 +213,76 @@ func TestKubernetesValidationDefersRoutingUntilCRDsAreMerged(t *testing.T) {
 			cfg.ConfigSource = ConfigSourceFile
 			if err := validateConfigStructure(cfg); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("file validation error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestConfigValidationDefersWindowBindingBudgets(t *testing.T) {
+	for _, tc := range []struct {
+		consumer, contract string
+		configure          func(*RouterConfig)
+	}{
+		{"prompt_guard", RemoteClassifierContractLabelDistribution, func(cfg *RouterConfig) {
+			cfg.PromptGuard = PromptGuardConfig{
+				Variant: PromptGuardVariantMmBERT32K, MaxSequenceLength: 64,
+				Window: &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
+			}
+		}},
+		{"pii_classifier", RemoteClassifierContractTokenSpans, func(cfg *RouterConfig) {
+			cfg.PIIModel = PIIModel{
+				UseMmBERT32K: true, MaxSequenceLength: 64,
+				Window: &SequenceHeadWindowConfig{Size: 128, Overlap: 63},
+			}
+		}},
+	} {
+		t.Run(tc.consumer, func(t *testing.T) {
+			cfg := &RouterConfig{ConfigSource: ConfigSourceKubernetes}
+			tc.configure(cfg)
+			cfg.ModelDeployments = map[string]ModelDeployment{
+				"large": {Provider: "candle", Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 256, Overflow: "window"}},
+				"small": {Provider: "candle", Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 64, Overflow: "window"}},
+			}
+			for _, name := range []RecipeName{DefaultRecipeName, "private"} {
+				cfg.Recipes = append(cfg.Recipes, RoutingRecipe{Name: name, Profile: RoutingProfile{
+					ModelBindings: map[string]ModelBinding{tc.consumer: {
+						Deployment: "large", Contract: tc.contract, Adapter: "mmbert32k",
+					}},
+				}})
+			}
+			// Explicit bindings supply the window budget instead of the smaller
+			// module budget, so static validation cannot check that compatibility.
+			if err := validateConfigStructure(cfg); err != nil {
+				t.Fatalf("static validation inspected window binding compatibility: %v", err)
+			}
+			if err := ValidateKubernetesConfigContracts(cfg); err != nil {
+				t.Fatalf("valid explicit window bindings rejected: %v", err)
+			}
+			cfg.ConfigSource = ConfigSourceFile
+			if err := validateConfigStructure(cfg); err != nil {
+				t.Fatalf("file source rejected valid window bindings: %v", err)
+			}
+
+			binding := cfg.Recipes[1].Profile.ModelBindings[tc.consumer]
+			binding.Deployment = "small"
+			cfg.Recipes[1].Profile.ModelBindings[tc.consumer] = binding
+			cfg.ConfigSource = ConfigSourceKubernetes
+			if err := validateConfigStructure(cfg); err != nil {
+				t.Fatalf("static validation inspected recipe window budget: %v", err)
+			}
+			for _, validate := range []struct {
+				name string
+				run  func(*RouterConfig) error
+			}{
+				{"complete", ValidateKubernetesConfigContracts},
+				{"file", func(cfg *RouterConfig) error {
+					cfg.ConfigSource = ConfigSourceFile
+					return validateConfigStructure(cfg)
+				}},
+			} {
+				if err := validate.run(cfg); err == nil || !strings.Contains(err.Error(), `recipe "private"`) || !strings.Contains(err.Error(), "window.size") {
+					t.Fatalf("%s validation must reject the private recipe budget, got %v", validate.name, err)
+				}
 			}
 		})
 	}
