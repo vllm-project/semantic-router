@@ -193,21 +193,24 @@ func (c *EmbeddingClassifier) inferenceBackend() string {
 	return c.getBackend()
 }
 
-func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, phases ...string) ([]float32, error) {
+func (c *EmbeddingClassifier) computeEmbedding(ctx context.Context, text string, modelType string, phases ...string) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	backend := c.inferenceBackend()
 	start := time.Now()
 	var embedding []float32
 	var err error
 
 	if c.provider != nil {
-		embedding, err = embeddingprovider.Embed(context.Background(), c.provider, text, embeddingprovider.Options{Dimension: c.optimizationConfig.TargetDimension, Layer: c.optimizationConfig.TargetLayer})
+		embedding, err = embeddingprovider.Embed(ctx, c.provider, text, embeddingprovider.Options{Dimension: c.optimizationConfig.TargetDimension, Layer: c.optimizationConfig.TargetLayer})
 	} else {
 		switch backend {
 		case config.EmbeddingBackendOpenAICompatible:
 			if c.provider == nil {
 				return nil, fmt.Errorf("embedding provider is required for backend %q", backend)
 			}
-			embedding, err = c.provider.Embed(context.Background(), text)
+			embedding, err = c.provider.Embed(ctx, text)
 		case "openvino":
 			embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
 		case "candle":
@@ -232,5 +235,8 @@ func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, ph
 	logging.Infof("[Perf] embedding inference (phase=%s, backend=%s, model=%s, dim=%d): %.3fms",
 		phase, backend, modelType, dim, float64(elapsed.Microseconds())/1000.0)
 
+	if err == nil {
+		err = ctx.Err()
+	}
 	return embedding, err
 }

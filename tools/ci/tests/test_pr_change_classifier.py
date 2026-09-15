@@ -113,7 +113,58 @@ class PRChangeClassifierTests(unittest.TestCase):
         )
         result = classify(["src/semantic-router/pkg/extproc/processor.go"])
         self.assertEqual(result.pr_images, ())
-        self.assertEqual(result.publish_images, ("extproc", "vllm-sr"))
+        self.assertEqual(
+            result.publish_images,
+            ("extproc", "extproc-rocm", "vllm-sr", "vllm-sr-rocm"),
+        )
+
+    def test_rocm_images_publish_when_shared_build_inputs_change(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/extproc/processor.go",
+            "config/knowledge_bases/example.json",
+            "candle-binding/src/lib.rs",
+            "ml-binding/src/lib.rs",
+            "nlp-binding/nlp_binding.go",
+            "onnx-binding/instance/instance.go",
+            "openvino-binding/semantic-router.go",
+            "tools/docker/check-native-abi.sh",
+            ".dockerignore",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertTrue(
+                    {"extproc-rocm", "vllm-sr-rocm"}.issubset(result.publish_images)
+                )
+                self.assertEqual(result.pr_images, ())
+
+    def test_rocm_publication_policy_changes_refresh_both_images(self) -> None:
+        result = classify(["tools/agent/domains.yaml"])
+
+        self.assertEqual(result.publish_images, ("extproc-rocm", "vllm-sr-rocm"))
+        self.assertEqual(result.pr_images, ())
+
+    def test_rocm_publication_distinguishes_runtime_specific_inputs(self) -> None:
+        fixtures = {
+            "src/vllm-sr/cli/builtin_recipes.py": {"vllm-sr-rocm"},
+            "src/vllm-sr/start-router.sh": {"vllm-sr-rocm"},
+            "tools/docker/entrypoint.sh": {"extproc-rocm"},
+            "tools/make/rust.mk": {"extproc-rocm"},
+            "Makefile": {"extproc-rocm"},
+            "dashboard/frontend/src/App.tsx": set(),
+        }
+        for path, expected in fixtures.items():
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertEqual(
+                    set(result.publish_images) & {"extproc-rocm", "vllm-sr-rocm"},
+                    expected,
+                )
+
+    def test_builtin_recipe_changes_publish_the_rocm_cli_runtime(self) -> None:
+        result = classify(["config/recipes/built-in/mom-v1/manifest.yaml"])
+
+        self.assertIn("vllm-sr-rocm", result.publish_images)
+        self.assertEqual(result.pr_images, ())
 
     def test_generated_api_contracts_keep_their_drift_check(self) -> None:
         for path in (

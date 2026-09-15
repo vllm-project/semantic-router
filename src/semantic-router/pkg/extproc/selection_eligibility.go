@@ -35,6 +35,9 @@ func applySelectionEligibility(selCtx *selection.SelectionContext, result *selec
 		return nil, fmt.Errorf("%w: selected model %q is outside selector eligibility", selection.ErrNoEligibleCandidates, result.SelectedModel)
 	}
 	if ctx != nil {
+		if err := validateMinimumEligibleDecisionModels(ctx.VSRSelectedDecision, eligible, selCtx.InputTokens); err != nil {
+			return nil, fmt.Errorf("%w: %w", selection.ErrNoEligibleCandidates, err)
+		}
 		ctx.VSRPolicyEligibleModelRefs = cloneModelRefs(eligible)
 		ctx.VSREligibleModelRefs = cloneModelRefs(eligible)
 	}

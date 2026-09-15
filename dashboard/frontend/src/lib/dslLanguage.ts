@@ -11,6 +11,7 @@
 
 import type * as monacoNs from 'monaco-editor'
 import type { Diagnostic, SymbolTable } from '@/types/dsl'
+import { ROUTER_CONFIG_EXTENSION, SIGNAL_TYPES } from '../generated/routerConfigContract'
 
 export const DSL_LANGUAGE_ID = 'signal-dsl'
 
@@ -75,26 +76,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   operators: ['AND', 'OR', 'NOT'],
 
-  signalTypes: [
-    'keyword',
-    'embedding',
-    'domain',
-    'fact_check',
-    'user_feedback',
-    'reask',
-    'preference',
-    'language',
-    'context',
-    'structure',
-    'complexity',
-    'modality',
-    'authz',
-    'jailbreak',
-    'pii',
-    'kb',
-    'conversation',
-    'event',
-  ],
+  signalTypes: [...SIGNAL_TYPES],
 
   pluginTypes: [
     'response_cache',
@@ -156,10 +138,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
       [/\b(AND|OR|NOT)\b/, 'keyword.operator'],
 
       // Signal types (after SIGNAL keyword)
-      [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
-        'type',
-      ],
+      [new RegExp(`\\b(${SIGNAL_TYPES.join('|')})\\b`), 'type'],
 
       // Plugin types
       [
@@ -308,26 +287,10 @@ const KEYWORD_SUGGESTIONS = [
   { label: 'NOT', insertText: 'NOT', detail: 'Boolean NOT' },
 ]
 
-const SIGNAL_TYPE_SUGGESTIONS = [
-  { label: 'keyword', detail: 'Keyword matching signal' },
-  { label: 'embedding', detail: 'Embedding similarity signal' },
-  { label: 'domain', detail: 'Domain classification signal' },
-  { label: 'fact_check', detail: 'Fact-checking signal' },
-  { label: 'user_feedback', detail: 'User feedback signal' },
-  { label: 'reask', detail: 'Repeated-question dissatisfaction signal' },
-  { label: 'preference', detail: 'User preference signal' },
-  { label: 'language', detail: 'Language detection signal' },
-  { label: 'context', detail: 'Context length signal' },
-  { label: 'structure', detail: 'Request-shape and structural heuristic signal' },
-  { label: 'complexity', detail: 'Query complexity signal' },
-  { label: 'modality', detail: 'Input modality signal' },
-  { label: 'authz', detail: 'Authorization signal' },
-  { label: 'jailbreak', detail: 'Jailbreak detection signal' },
-  { label: 'pii', detail: 'PII detection signal' },
-  { label: 'kb', detail: 'Knowledge base signal' },
-  { label: 'conversation', detail: 'Conversation-shape signal' },
-  { label: 'event', detail: 'Structured event metadata signal' },
-]
+const SIGNAL_TYPE_SUGGESTIONS = ROUTER_CONFIG_EXTENSION.signals.map((surface) => ({
+  label: surface.type,
+  detail: `${surface.display_name} signal`,
+}))
 
 const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'response_cache', detail: 'Response caching plugin' },

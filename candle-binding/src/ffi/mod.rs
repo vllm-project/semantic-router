@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 // FFI modules
+mod classifier_slot; // Configuration-aware initialization of legacy classifiers
 pub mod classify; //  classification functions
 pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier

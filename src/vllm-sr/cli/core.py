@@ -3,7 +3,7 @@
 import os
 
 from cli.commands.runtime_paths import resolve_state_root_dir
-from cli.consts import IMAGE_PULL_POLICY_NEVER
+from cli.consts import HEALTH_CHECK_TIMEOUT, IMAGE_PULL_POLICY_NEVER
 from cli.container_cli import (
     container_logs,
     container_logs_output,
@@ -36,6 +36,7 @@ from cli.runtime_lifecycle import (
     recover_openclaw_containers,
     resolve_openclaw_data_dir,
     start_observability_stack,
+    validate_startup_timeout,
 )
 from cli.runtime_lifecycle import (
     wait_and_verify_runtime as _wait_and_verify_runtime,
@@ -138,8 +139,10 @@ def start_vllm_sr(
     source_config_file=None,
     runtime_config_file=None,
     runtime_config_lock: RuntimeConfigLock | None = None,
+    startup_timeout: int = HEALTH_CHECK_TIMEOUT,
 ):
     """Start vLLM Semantic Router."""
+    validate_startup_timeout(startup_timeout)
     env_vars = env_vars if env_vars is not None else {}
     stack_layout = resolve_runtime_stack()
     runtime_topology = resolve_runtime_topology(topology)
@@ -165,6 +168,7 @@ def start_vllm_sr(
             dashboard_image=dashboard_image,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
+            startup_timeout=startup_timeout,
         )
 
 
@@ -206,6 +210,7 @@ def _start_vllm_sr_locked(
     dashboard_image,
     pull_policy,
     enable_observability,
+    startup_timeout=HEALTH_CHECK_TIMEOUT,
 ):
     user_config, listeners = _preflight_runtime_config(
         source_config_file,
@@ -214,6 +219,12 @@ def _start_vllm_sr_locked(
         stack_layout,
     )
     management_port = _configured_management_port(user_config)
+    stack_layout.host_port(management_port, name="management API host port")
+    for listener in listeners:
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
     readiness_token_env = _configured_management_readiness_token_env(
         user_config, env_vars
     )
@@ -269,11 +280,17 @@ def _start_vllm_sr_locked(
 
     log.info("vLLM Semantic Router container started successfully")
     connect_runtime_container(shared_network_name, stack_layout)
-    if maybe_finish_setup_mode(setup_mode, dashboard_disabled, stack_layout):
+    if maybe_finish_setup_mode(
+        setup_mode, dashboard_disabled, stack_layout, startup_timeout=startup_timeout
+    ):
         return
 
     _wait_and_verify_runtime(
-        stack_layout, dashboard_disabled, management_port, readiness_token_env
+        stack_layout,
+        dashboard_disabled,
+        management_port,
+        readiness_token_env,
+        startup_timeout=startup_timeout,
     )
     recover_openclaw_containers(state_root_dir, env_vars, shared_network_name)
     log_runtime_summary(

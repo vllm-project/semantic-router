@@ -486,3 +486,71 @@ fn test_chunked_sdpa_rejects_a_block_with_no_keys() {
     };
     assert!(chunked_sdpa(&q, &k, &k, None, &cfg).is_err());
 }
+
+#[test]
+fn test_cpu_softmax_matches_original_boundaries() -> candle_core::Result<()> {
+    let device = Device::Cpu;
+    for seq in [1usize, 63, 64, 65, 127, 129, 512, 513, 2048] {
+        let values: Vec<f32> = (0..2 * seq * 8)
+            .map(|i| ((i % 37) as f32 - 18.0) / 41.0)
+            .collect();
+        let q = Tensor::from_vec(values, (1, 2, seq, 8), &device)?;
+        let k = (&q * 0.7)?;
+        let v = (&q * -0.4)?;
+        for window in [None, Some(64)] {
+            let cfg = ChunkedSdpaConfig {
+                block_size: 128,
+                window,
+                causal: false,
+                scale: 8f64.powf(-0.5),
+                q_offset: 0,
+            };
+            let original = chunked_sdpa(&q, &k, &v, None, &cfg)?;
+            let candidate = chunked_sdpa_cpu_softmax(&q, &k, &v, None, &cfg)?;
+            assert!(
+                max_abs_diff(&original, &candidate) <= 2e-4,
+                "CPU softmax differs for seq={seq}, window={window:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_cpu_softmax_preserves_partial_and_all_padding() -> candle_core::Result<()> {
+    let device = Device::Cpu;
+    let seq = 129;
+    let values: Vec<f32> = (0..2 * 2 * seq * 8)
+        .map(|i| ((i % 29) as f32 - 14.0) / 31.0)
+        .collect();
+    let q = Tensor::from_vec(values, (2, 2, seq, 8), &device)?;
+    let raw: Vec<u32> = (0..2 * seq).map(|i| u32::from(i < seq - 17)).collect();
+    let pad = prepare_padding_mask(&Tensor::from_vec(raw, (2, seq), &device)?, DType::F32)?;
+    for window in [None, Some(64)] {
+        let cfg = ChunkedSdpaConfig {
+            block_size: 64,
+            window,
+            causal: false,
+            scale: 8f64.powf(-0.5),
+            q_offset: 0,
+        };
+        let original = chunked_sdpa(&q, &q, &q, Some(&pad), &cfg)?;
+        let candidate = chunked_sdpa_cpu_softmax(&q, &q, &q, Some(&pad), &cfg)?;
+        assert!(max_abs_diff(&original, &candidate) <= 2e-4);
+    }
+    Ok(())
+}
+
+#[test]
+fn test_cpu_softmax_preserves_all_negative_infinity() -> candle_core::Result<()> {
+    let scores = Tensor::from_vec(vec![f32::NEG_INFINITY; 65], (1, 65), &Device::Cpu)?;
+    let old = candle_nn::ops::softmax(&scores, D::Minus1)?
+        .flatten_all()?
+        .to_vec1::<f32>()?;
+    let new = candle_nn::ops::softmax_last_dim(&scores)?
+        .flatten_all()?
+        .to_vec1::<f32>()?;
+    assert!(old.iter().all(|x| x.is_nan()));
+    assert!(new.iter().all(|x| x.is_nan()));
+    Ok(())
+}

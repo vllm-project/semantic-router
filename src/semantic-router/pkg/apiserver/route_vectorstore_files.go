@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -42,6 +43,10 @@ func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *htt
 
 	vsf, err := pipeline.AttachFile(id, req.FileID, req.ChunkingStrategy)
 	if err != nil {
+		if errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+			s.writeErrorResponse(w, http.StatusConflict, "EMBEDDING_REINDEX_REQUIRED", err.Error())
+			return
+		}
 		s.writeErrorResponse(w, http.StatusBadRequest, "ATTACH_ERROR", "failed to attach file")
 		return
 	}

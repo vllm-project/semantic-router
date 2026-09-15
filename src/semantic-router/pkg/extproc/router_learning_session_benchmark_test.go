@@ -80,8 +80,8 @@ func TestRouterLearningSessionCorpusRejectsInvalidInput(t *testing.T) {
 				t.Fatal(err)
 			}
 			var changed protectionCorpus
-			if err := json.Unmarshal(raw, &changed); err != nil {
-				t.Fatal(err)
+			if decodeErr := json.Unmarshal(raw, &changed); decodeErr != nil {
+				t.Fatal(decodeErr)
 			}
 			mutate.apply(&changed)
 			raw, err = json.Marshal(changed)

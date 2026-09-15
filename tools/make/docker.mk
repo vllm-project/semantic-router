@@ -337,7 +337,8 @@ ifneq ($(shell git status --porcelain -- dashboard/backend dashboard/frontend sr
 VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
-VLLM_SR_DASHBOARD_BUILD_ARGS := $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
+# Hash the source only when a build consumes these arguments.
+VLLM_SR_DASHBOARD_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:
@@ -510,6 +511,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_evaluation_live.py \
 		src/vllm-sr/tests/test_evaluation_worker_task_limit.py \
 		src/vllm-sr/tests/test_evaluation_worker_sandbox.py \
+		src/vllm-sr/tests/test_install_package_resolution.py \
 		src/vllm-sr/tests/test_install_script_surface.py \
 		src/vllm-sr/tests/test_recipe_builtin.py \
 		src/vllm-sr/tests/test_reasoning_controls.py \

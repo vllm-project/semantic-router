@@ -361,6 +361,9 @@ func (s *SessionAwareSelector) newPolicyTrace(
 		IdleExpired:   idleExpired,
 		DecisionDrift: decisionDrift,
 	}
+	if selCtx != nil {
+		trace.CandidateModels = getModelNames(selCtx.CandidateModels)
+	}
 	if base != nil {
 		trace.BaseMethod = string(base.Method)
 		trace.BaseSelectedModel = base.SelectedModel

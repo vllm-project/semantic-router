@@ -37,7 +37,7 @@ The Skill directs the agent to:
 4. For a new stack, validate locally, launch, and wait for readiness. For an
    existing stack, validate and plan before applying; listener or provider
    topology changes require an authorized deployment restart.
-5. Preview the routing decision without calling a model, then send a real
+5. Preview the routing decision without backend generation, then send a real
    end-to-end request through the routed inference endpoint.
 6. Leave the config path, active revision, validation result, and routing
    evidence for review.
@@ -61,7 +61,7 @@ Playground output when requested.
 | Discover packaged Recipes | `vllm-sr recipe builtin list` |
 | First launch | `vllm-sr config validate`, then `vllm-sr serve` and readiness |
 | Plan an existing-stack change | `vllm-sr config validate`, then `vllm-sr config plan` |
-| Apply a hot-reloadable change | `vllm-sr config apply` with the planned ETag |
+| Apply a hot-reloadable change | `vllm-sr config apply`, which plans again before applying |
 | Test routing logic | `vllm-sr route preview` |
 | Test the complete data path | `vllm-sr route probe` |
 
@@ -76,7 +76,7 @@ agent must discover both rather than infer one from the other.
 - Keep changes within the requested deployment and existing authorization;
   obtain missing authorization before destructive changes, public exposure, or
   disruption of an unrelated service.
-- A routing preview proves the decision path but does not call a model. A route
+- A routing preview runs routing signals without backend generation. A route
   probe is the end-to-end check that reaches the selected backend.
 - Use the running Router's discovery, schema, and OpenAPI responses as the
   authority for its installed version.
@@ -91,7 +91,7 @@ Mixture-of-Models evaluation, use the
 
 The single authored source is
 [`tools/agent/skills/vllm-sr-agent-operations/`](https://github.com/vllm-project/semantic-router/tree/main/tools/agent/skills/vllm-sr-agent-operations),
-including its three optional references. Edit those files and run
+including its optional references. Edit those files and run
 `make agent-skill-sync`; do not edit the public copies directly. The generator
 changes only the public skill name and relative reference links to absolute URLs
 on the same site. Commit the generated files alongside their source; the website

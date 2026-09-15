@@ -94,10 +94,15 @@ def container_start_vllm_sr(
     runtime_config_file: str | None = None,
 ):
     """Start the runtime containers and return code, stdout, and stderr."""
-    runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
     envoy_log_level = _resolve_envoy_log_level(env_vars)
     stack_layout = stack_layout or resolve_runtime_stack()
+    for listener in listeners:
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
+    runtime = get_container_runtime()
     resolve_runtime_topology(topology)
 
     normalized_platform = _resolve_platform(env_vars)
@@ -279,7 +284,10 @@ def _runtime_container_specs(
         runtime_paths["effective_config_path"], stack_layout
     )
     listener_host_ports = {
-        listener["port"] + stack_layout.port_offset
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
         for listener in listeners
         if listener.get("port")
     }
@@ -452,7 +460,10 @@ def _build_envoy_runtime_command(
         port_mappings=[
             (
                 _listener_host_address(listener),
-                listener["port"] + stack_layout.port_offset,
+                stack_layout.host_port(
+                    listener["port"],
+                    name=f"listener {listener.get('name', 'unknown')} host port",
+                ),
                 listener["port"],
             )
             for listener in listeners

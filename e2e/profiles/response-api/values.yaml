@@ -89,11 +89,9 @@ config:
           modality: text
     modelCards:
       - name: openai/gpt-oss-20b
-        # Named-model dispatch only enforces operator-declared capabilities.
-        capabilities:
-          - chat
+        capabilities: [chat]
       - name: mock/native-responses
-      # The simulator accepts images; gpt-oss-20b is declared text-only.
+      # Explicit task declarations distinguish these custom simulator models.
       - name: mock/vision
         capabilities:
           - chat

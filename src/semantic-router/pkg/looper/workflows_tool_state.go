@@ -721,6 +721,10 @@ func (l *WorkflowsLooper) resumeWorkflowToolCallWithState(
 		return nil, false, false, fmt.Errorf("workflow tool state missing")
 	}
 	state := claim.State
+	cfg, err := resolvedWorkflowPlannerForResume(cfg, state, workerModels)
+	if err != nil {
+		return nil, false, false, err
+	}
 	state.Streaming = req.IsStreaming
 	resumeCtx := newWorkflowResumeRequestContext(req, state)
 	if validateErr := validateWorkflowResumeState(state, workerModels, cfg, req.DecisionName, req.RecipeName); validateErr != nil {

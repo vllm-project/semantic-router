@@ -2,7 +2,9 @@
 
 This tree is the canonical source for producing, evaluating, and packaging the
 models maintained with Semantic Router. Public artifacts map to their local
-owners in [`model_artifacts.json`](model_artifacts.json).
+owners in [`model_artifacts.json`](model_artifacts.json). The Vela collection
+includes the shared Base, Embedding, Reranker, and eight classifiers. Historical
+MOM artifacts retain their original training owners.
 
 ## Top-level ownership
 

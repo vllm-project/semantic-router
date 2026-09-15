@@ -485,7 +485,7 @@ type momFixtureReceipt struct {
 	textDigest      string
 }
 
-func TestMoMGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
+func TestMoMGeneratedTextPreservesPortableTextReceipt(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "recipes", "built-in", "latest", "mom-v1", "probes.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -496,11 +496,16 @@ func TestMoMGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
 		t.Fatalf("decodeProbes(%s): %v", path, err)
 	}
 	receipt := materializeMoMFixtureReceipt(t, manifest)
-	if receipt.probeCount != 235 || receipt.messageProbes != 89 || receipt.generatedProbes != 50 ||
-		receipt.imageParts != 57 || receipt.textBytes != 26_230_077 {
-		t.Fatalf("receipt counts = %#v", receipt)
+	// The original 269 probes retain their portable message/image payloads;
+	// the 11 earlier, five authorization, two intent, 10 responsible-assistance and
+	// 10 personal-attribute controls use plain text requests.
+	if receipt.probeCount != 269+11+5+2+10+10 || receipt.messageProbes != 90 || receipt.generatedProbes != 45 ||
+		receipt.imageParts != 53 || receipt.textBytes != 20_730_898 {
+		t.Fatalf("receipt counts: probes=%d messages=%d generated=%d image_parts=%d text_bytes=%d",
+			receipt.probeCount, receipt.messageProbes, receipt.generatedProbes, receipt.imageParts, receipt.textBytes)
 	}
-	if receipt.textDigest != "3f01766dddb0f84699c0e450381874b6cd22428fb3ed41a5928e2fb79c00723b" {
+	// The digest also includes current group/variant IDs, including the visual-description group.
+	if receipt.textDigest != "71bafa6752760592bbcaf15e37adb99eaaae2ee6c894317e94d3cd23b45a3837" {
 		t.Fatalf("materialized text digest = %s", receipt.textDigest)
 	}
 	assertMoMImageFixtureReceipt(t, manifest, receipt.imageURLs)
