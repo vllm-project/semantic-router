@@ -103,7 +103,7 @@ plugins:
         request_format: custom
         request_template: '{"query":"${user_content}","top_k":${top_k},"threshold":${threshold}}'
         timeout_seconds: 15
-        max_response_body_bytes: 16777216
+        max_response_bytes: 4194304
 ```
 
 Retrieved documents become provider-bound context. Apply collection-level

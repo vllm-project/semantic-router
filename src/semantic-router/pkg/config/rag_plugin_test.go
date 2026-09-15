@@ -10,7 +10,16 @@ var _ = Describe("RAGPluginConfig", func() {
 	Describe("structured helper accessors", registerRAGAccessorSpecs)
 })
 
+// registerRAGValidationSpecs is split along the seam between backend-specific
+// contracts and plugin-wide fields, keeping each registration under the
+// repository's function-length limit. The Describe tree is unchanged: both
+// halves register under "Validate".
 func registerRAGValidationSpecs() {
+	registerRAGBackendValidationSpecs()
+	registerRAGFieldValidationSpecs()
+}
+
+func registerRAGBackendValidationSpecs() {
 	It("accepts a valid milvus configuration", func() {
 		threshold := float32(0.5)
 		topK := 3
@@ -83,6 +92,9 @@ func registerRAGValidationSpecs() {
 		Expect(cfg.Validate()).To(MatchError(ContainSubstring("max_response_bytes must be non-negative")))
 	})
 
+}
+
+func registerRAGFieldValidationSpecs() {
 	It("rejects invalid similarity thresholds", func() {
 		threshold := float32(1.1)
 		cfg := &RAGPluginConfig{

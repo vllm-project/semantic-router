@@ -72,11 +72,11 @@ deployments and may rely on model or service definitions from a base config.
   `${user_content}`, `${top_k}`, and `${threshold}` names are reserved for
   runtime substitution; other braced lowercase names are rejected before
   environment expansion, while intentional environment references use
-  uppercase names such as `${RAG_TENANT}`. Fragments must set
-  `backend_config.max_response_body_bytes` when the default 16 MiB
-  successful-response limit is not appropriate, up to the supported 64 MiB
-  maximum. The limit is exact: a response at the configured byte count is
-  accepted and a response one byte larger is rejected before JSON decoding.
+  uppercase names such as `${RAG_TENANT}`. `backend_config.max_response_bytes`
+  caps each successful response body; omitted or `0` uses 4 MiB, and negative
+  values are rejected. The limit is exact: a response at the configured byte
+  count is accepted and a response one byte larger is rejected before JSON
+  decoding.
 
 The corresponding website sections are
 [`tutorials/signal/`](../website/docs/tutorials/signal/),
