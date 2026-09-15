@@ -33,9 +33,55 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/ban-ts-comment": "warn",
       "no-useless-escape": "warn",
-      // Keep interactive controls reachable from the keyboard. Introduced with
-      // the fix for the collapsible headers in #3515; kept at "warn" until the
-      // remaining context-menu violations are resolved, then promoted to "error".
+      // Keep interactive controls reachable from the keyboard (#3515). These are
+      // errors: a new static-element click handler fails lint rather than
+      // relying on review to catch it. The files that still carry violations
+      // from before the rules existed are listed in the override below.
+      "jsx-a11y/click-events-have-key-events": "error",
+      "jsx-a11y/no-static-element-interactions": "error",
+    },
+  },
+  {
+    // Keyboard-accessibility backlog from #3515. These files carried violations
+    // before the two rules above existed; they stay at "warn" so CI is not
+    // blocked on work this PR does not do, while every other file — and every
+    // new file — is held to "error".
+    //
+    // This list only shrinks. Delete a path once its violations are fixed; do
+    // not add one to quiet a new violation.
+    //
+    // 28 files, 82 reported violations when this list was written.
+    files: [
+      "src/components/ChatComposerAddMenu.tsx",
+      "src/components/ChatTaskQueue.tsx",
+      "src/components/ClawRoomTeamDetailsModal.tsx",
+      "src/components/ExpressionBuilderCanvasEmptyState.tsx",
+      "src/components/ExpressionBuilderInner.tsx",
+      "src/components/ExpressionBuilderNodes.tsx",
+      "src/components/ExpressionBuilderToolbox.tsx",
+      "src/components/ViewModal.tsx",
+      "src/pages/ConfigPageConnectModelsDialogView.tsx",
+      "src/pages/ConfigPageMixtureDialog.tsx",
+      "src/pages/ConfigPageModelUsageDialog.tsx",
+      "src/pages/DslEditorPage.tsx",
+      "src/pages/DslImportModal.tsx",
+      "src/pages/MLSetupBenchmarkStep.tsx",
+      "src/pages/MLSetupPage.tsx",
+      "src/pages/UsersPageUserDialog.tsx",
+      "src/pages/builderPageDashboardViews.tsx",
+      "src/pages/builderPageFieldControls.tsx",
+      "src/pages/builderPageGlobalSettingsObservabilitySections.tsx",
+      "src/pages/builderPageGlobalSettingsRoutingSection.tsx",
+      "src/pages/builderPageGuideDrawer.tsx",
+      "src/pages/builderPageOutputPanel.tsx",
+      "src/pages/builderPageRouteSharedControls.tsx",
+      "src/pages/builderPageVisualShell.tsx",
+      "src/pages/topology/components/CustomNodes/DecisionNode.tsx",
+      "src/pages/topology/components/CustomNodes/PluginChainNode.tsx",
+      "src/pages/topology/components/CustomNodes/SignalGroupNode.tsx",
+      "src/pages/topology/components/ResultCard/ResultCard.tsx",
+    ],
+    rules: {
       "jsx-a11y/click-events-have-key-events": "warn",
       "jsx-a11y/no-static-element-interactions": "warn",
     },

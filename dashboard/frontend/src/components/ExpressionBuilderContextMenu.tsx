@@ -1,3 +1,5 @@
+import { useEffect, useRef, type KeyboardEvent } from 'react'
+
 import styles from './ExpressionBuilder.module.css'
 import {
   getNodeAtPath,
@@ -16,6 +18,7 @@ interface ExpressionBuilderContextMenuProps {
   onDeleteNode: (path: NodePath) => void
   onEditSignal: (path: NodePath, signalType: string, signalName: string) => void
   onInsertSibling: (target: { parentPath: NodePath; index: number }) => void
+  onClose: () => void
   onUnwrap: (path: NodePath) => void
   onWrap: (path: NodePath, operator: OperatorKind) => void
 }
@@ -28,52 +31,130 @@ export default function ExpressionBuilderContextMenu({
   onDeleteNode,
   onEditSignal,
   onInsertSibling,
+  onClose,
   onUnwrap,
   onWrap,
 }: ExpressionBuilderContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
   const node = getNodeAtPath(tree, contextMenu.path)
+
+  useEffect(() => {
+    restoreFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()
+  }, [])
+
   if (!node) return null
+
+  const closeAndRestoreFocus = () => {
+    onClose()
+    restoreFocusRef.current?.focus()
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      closeAndRestoreFocus()
+      return
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+
+    const menuItems = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+    )
+    if (menuItems.length === 0) return
+
+    event.preventDefault()
+    const currentIndex = menuItems.indexOf(document.activeElement as HTMLButtonElement)
+    if (event.key === 'Home') {
+      menuItems[0]?.focus()
+      return
+    }
+    if (event.key === 'End') {
+      menuItems[menuItems.length - 1]?.focus()
+      return
+    }
+
+    const direction = event.key === 'ArrowDown' ? 1 : -1
+    const fallbackIndex = direction === 1 ? -1 : 0
+    const nextIndex = (currentIndex === -1 ? fallbackIndex : currentIndex) + direction
+    menuItems[(nextIndex + menuItems.length) % menuItems.length]?.focus()
+  }
 
   return (
     <div
+      ref={menuRef}
       className={styles.ctxMenu}
       style={{ left: contextMenu.x, top: contextMenu.y }}
-      onClick={event => event.stopPropagation()}
+      role="menu"
+      aria-label="Expression actions"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={handleKeyDown}
     >
       {isLeaf(node) ? (
-        <div
+        <button
+          type="button"
+          role="menuitem"
           className={styles.ctxMenuItem}
           onClick={() => onEditSignal(contextMenu.path, node.signalType, node.signalName)}
         >
           Edit Signal
-        </div>
+        </button>
       ) : null}
       {isOperator(node) && node.operator !== 'NOT' ? (
-        <div
+        <button
+          type="button"
+          role="menuitem"
           className={styles.ctxMenuItem}
           onClick={() => onChangeOp(contextMenu.path, node.operator === 'AND' ? 'OR' : 'AND')}
         >
           Toggle to {node.operator === 'AND' ? 'OR' : 'AND'}
-        </div>
+        </button>
       ) : null}
-      {isOperator(node) && (node.operator !== 'NOT' || (node.conditions as RuleNode[]).length === 0) ? (
-        <div className={styles.ctxMenuItem} onClick={() => onAddChild(contextMenu.path)}>
+      {isOperator(node) &&
+      (node.operator !== 'NOT' || (node.conditions as RuleNode[]).length === 0) ? (
+        <button
+          type="button"
+          role="menuitem"
+          className={styles.ctxMenuItem}
+          onClick={() => onAddChild(contextMenu.path)}
+        >
           Add child...
-        </div>
+        </button>
       ) : null}
-      <div className={styles.ctxMenuItem} onClick={() => onWrap(contextMenu.path, 'AND')}>
+      <button
+        type="button"
+        role="menuitem"
+        className={styles.ctxMenuItem}
+        onClick={() => onWrap(contextMenu.path, 'AND')}
+      >
         Wrap with AND
-      </div>
-      <div className={styles.ctxMenuItem} onClick={() => onWrap(contextMenu.path, 'OR')}>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className={styles.ctxMenuItem}
+        onClick={() => onWrap(contextMenu.path, 'OR')}
+      >
         Wrap with OR
-      </div>
-      <div className={styles.ctxMenuItem} onClick={() => onWrap(contextMenu.path, 'NOT')}>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className={styles.ctxMenuItem}
+        onClick={() => onWrap(contextMenu.path, 'NOT')}
+      >
         Wrap with NOT
-      </div>
+      </button>
       {contextMenu.path.length > 0 ? (
         <>
-          <div className={styles.ctxMenuDivider} />
-          <div
+          <div className={styles.ctxMenuDivider} role="separator" />
+          <button
+            type="button"
+            role="menuitem"
             className={styles.ctxMenuItem}
             onClick={() =>
               onInsertSibling({
@@ -83,8 +164,10 @@ export default function ExpressionBuilderContextMenu({
             }
           >
             Insert before...
-          </div>
-          <div
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             className={styles.ctxMenuItem}
             onClick={() =>
               onInsertSibling({
@@ -94,35 +177,52 @@ export default function ExpressionBuilderContextMenu({
             }
           >
             Insert after...
-          </div>
+          </button>
         </>
       ) : null}
       {isOperator(node) && node.conditions.length > 0 ? (
-        <div className={styles.ctxMenuItem} onClick={() => onUnwrap(contextMenu.path)}>
+        <button
+          type="button"
+          role="menuitem"
+          className={styles.ctxMenuItem}
+          onClick={() => onUnwrap(contextMenu.path)}
+        >
           Unwrap (replace with first child)
-        </div>
+        </button>
       ) : null}
       {isOperator(node) && node.operator !== 'NOT' ? (
         <>
           {node.operator !== 'AND' ? (
-            <div className={styles.ctxMenuItem} onClick={() => onChangeOp(contextMenu.path, 'AND')}>
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.ctxMenuItem}
+              onClick={() => onChangeOp(contextMenu.path, 'AND')}
+            >
               Change to AND
-            </div>
+            </button>
           ) : null}
           {node.operator !== 'OR' ? (
-            <div className={styles.ctxMenuItem} onClick={() => onChangeOp(contextMenu.path, 'OR')}>
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.ctxMenuItem}
+              onClick={() => onChangeOp(contextMenu.path, 'OR')}
+            >
               Change to OR
-            </div>
+            </button>
           ) : null}
         </>
       ) : null}
-      <div className={styles.ctxMenuDivider} />
-      <div
+      <div className={styles.ctxMenuDivider} role="separator" />
+      <button
+        type="button"
+        role="menuitem"
         className={`${styles.ctxMenuItem} ${styles.ctxMenuDanger}`}
         onClick={() => onDeleteNode(contextMenu.path)}
       >
         Delete
-      </div>
+      </button>
     </div>
   )
 }
