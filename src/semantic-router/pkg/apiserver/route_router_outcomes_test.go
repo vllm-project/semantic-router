@@ -26,6 +26,10 @@ func (r *routerOutcomeLearningRuntime) UpdateOutcome(
 	return routerruntime.RouterOutcomeResult{Updated: 1, Recorded: true}
 }
 
+func (r *routerOutcomeLearningRuntime) ExperienceSnapshots() []routerruntime.RouterExperienceSnapshot {
+	return nil
+}
+
 func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {
 	outcome, validationErr := normalizeRouterOutcomeRequest(RouterOutcomeRequest{
 		ReplayID:  " replay-1 ",
