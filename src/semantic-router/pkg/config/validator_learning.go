@@ -82,6 +82,30 @@ func validateRouterLearningAdaptationConfig(cfg RouterLearningAdaptationConfig) 
 			cfg.Strategy,
 		)
 	}
+	return validateRouterLearningSuccessConfig(
+		"global.router.learning.adaptation.success",
+		cfg.Success,
+	)
+}
+
+func validateRouterLearningSuccessConfig(prefix string, cfg RouterLearningSuccessConfig) error {
+	if err := validateOptionalNonNegativeIntFields([]optionalNonNegativeIntField{
+		{prefix + ".stale_after_seconds", cfg.StaleAfterSeconds},
+	}); err != nil {
+		return err
+	}
+	outcome := strings.TrimSpace(cfg.Outcome)
+	if outcome == "" {
+		return nil
+	}
+	if outcome != RouterLearningSuccessOutcomeRequestCompletion {
+		return fmt.Errorf(
+			"%s.outcome must be %q, got %q",
+			prefix,
+			RouterLearningSuccessOutcomeRequestCompletion,
+			cfg.Outcome,
+		)
+	}
 	return nil
 }
 
@@ -158,6 +182,14 @@ func validateDecisionAdaptationsConfig(decisionName string, cfg DecisionAdaptati
 			cfg.Adaptation.CandidateSet,
 		); err != nil {
 			return err
+		}
+		if cfg.Adaptation.Success != nil {
+			if err := validateRouterLearningSuccessConfig(
+				fmt.Sprintf("decision '%s': adaptations.adaptation.success", decisionName),
+				*cfg.Adaptation.Success,
+			); err != nil {
+				return err
+			}
 		}
 	}
 	if cfg.Protection != nil {

@@ -43,7 +43,15 @@ global:
         enabled: true
         strategy: routing_sampling
         candidate_set: decision
+        success:
+          outcome: request_completion
+          stale_after_seconds: 86400
 ```
+
+Observe 模式会为每个候选模型记录类型化的成功估计。省略 `success` 字段时继承
+`outcome: request_completion` 和 `stale_after_seconds: 86400`。将
+`stale_after_seconds` 设为 `0` 可禁用过期判定。超过该时间窗口的证据会报告为
+`stale`，而不是校准后的概率。这不会改变所选模型。
 
 ## 候选集
 
