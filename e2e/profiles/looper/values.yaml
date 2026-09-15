@@ -277,6 +277,8 @@ config:
           model_id: ""
           use_mmbert_32k: false
     integrations:
+      tools:
+        enabled: false
       looper:
         endpoint: http://looper-fake-backend.default.svc.cluster.local:8000/v1/chat/completions
 

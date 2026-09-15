@@ -583,6 +583,26 @@ def test_vllm_sr_rocm_dockerfile_uses_fully_qualified_base_images() -> None:
     assert "FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0" in content
 
 
+def test_rocm_runtime_images_pin_only_the_attention_compiler_exclusion() -> None:
+    compiler_policy = "ENV MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention"
+    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
+        content = dockerfile.read_text(encoding="utf-8")
+        runtime_stage = content.rsplit("\nFROM ", maxsplit=1)[-1]
+        assert compiler_policy in runtime_stage.splitlines(), dockerfile
+        assert content.count("MIGRAPHX_MLIR_USE_SPECIFIC_OPS=") == 1, dockerfile
+        assert "MIGRAPHX_DISABLE_MLIR=" not in content, dockerfile
+        assert "ORT_MIGRAPHX_FP16_ENABLE=" not in content, dockerfile
+
+    for dockerfile in (
+        VLLM_SR_DOCKERFILE,
+        VLLM_SR_CUDA_DOCKERFILE,
+        EXTPROC_DOCKERFILE,
+    ):
+        assert "MIGRAPHX_MLIR_USE_SPECIFIC_OPS=" not in dockerfile.read_text(
+            encoding="utf-8"
+        ), dockerfile
+
+
 def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_CUDA_DOCKERFILE.read_text(encoding="utf-8")
 

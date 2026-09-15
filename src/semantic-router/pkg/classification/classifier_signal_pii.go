@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -20,7 +20,7 @@ const PIIClassificationErrorType = "classification_error"
 
 // cachedPIIResult stores a cached PII token classification result.
 type cachedPIIResult struct {
-	result candle_binding.TokenClassificationResult
+	result tasks.TokenClassificationResult
 	err    error
 }
 
@@ -56,7 +56,7 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 		chunks := piiSignalChunks(content)
 		cached := make([]cachedPIIResult, 0, len(chunks))
 		for _, chunk := range chunks {
-			tokenResult, err := c.piiInference.ClassifyTokens(ctx, chunk)
+			tokenResult, err := c.classifyPIITokens(ctx, chunk)
 			cached = append(cached, cachedPIIResult{tokenResult, err})
 		}
 		piiCache[content] = cached

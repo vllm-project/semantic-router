@@ -73,6 +73,8 @@ func compareEvalResponse(raw json.RawMessage, probe ProbeDetail, allProbes []Pro
 		response.SelectionStatus,
 		response.SelectionMethod,
 		actualModels,
+		probe.Expected.SelectionStatus,
+		response.SelectionReason,
 	)
 	checks := ValidationChecks{
 		Decision:  actualDecision == probe.Expected.Decision,
@@ -132,20 +134,29 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func compareEvalSelection(algorithm, selectedModel, status, method string, recommendedModels []string) (bool, []string) {
+func compareEvalSelection(algorithm, selectedModel, status, method string, recommendedModels []string, expectedStatus, reason string) (bool, []string) {
 	algorithm = strings.TrimSpace(algorithm)
-	if algorithm == "" {
+	if algorithm == "" && expectedStatus == "" {
 		return true, nil
 	}
 
 	expectedStatuses := expectedSelectionStatuses(algorithm)
+	if expectedStatus != "" {
+		expectedStatuses = []string{expectedStatus}
+	}
 	selectedModel = strings.TrimSpace(selectedModel)
 	status = strings.TrimSpace(status)
 	method = strings.TrimSpace(method)
 
 	failures := []string{}
 	failures = append(failures, selectionStatusFailures(algorithm, expectedStatuses, status)...)
-	failures = append(failures, selectionMethodFailures(algorithm, method)...)
+	negative := status == "unavailable" || status == "failed"
+	if algorithm != "" && (!negative || (expectedStatus != "unavailable" && expectedStatus != "failed") || method != "") {
+		failures = append(failures, selectionMethodFailures(algorithm, method)...)
+	}
+	if negative && strings.TrimSpace(reason) == "" {
+		failures = append(failures, fmt.Sprintf("selection_reason is required for %s", status))
+	}
 	failures = append(failures, selectedModelFailures(status, selectedModel, recommendedModels)...)
 	return len(failures) == 0, failures
 }
@@ -193,14 +204,14 @@ func selectionMethodFailures(algorithm, method string) []string {
 
 func selectedModelFailures(status, selectedModel string, recommendedModels []string) []string {
 	failures := []string{}
-	if (status == "selected" || status == "planned_final") && selectedModel == "" {
+	if (status == "selected" || status == "planned_final" || status == "fallback") && selectedModel == "" {
 		failures = append(failures, fmt.Sprintf("selected_model is required for %s", status))
 	}
-	if status == "selected" && selectedModel != "" && !contains(recommendedModels, selectedModel) {
+	if (status == "selected" || status == "fallback") && selectedModel != "" && !contains(recommendedModels, selectedModel) {
 		failures = append(failures, "selected_model is not a recommended decision candidate")
 	}
-	if status == "execution_required" && selectedModel != "" {
-		failures = append(failures, "execution_required must not fabricate selected_model")
+	if (status == "execution_required" || status == "unavailable" || status == "failed") && selectedModel != "" {
+		failures = append(failures, fmt.Sprintf("%s must not fabricate selected_model", status))
 	}
 	return failures
 }

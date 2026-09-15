@@ -74,11 +74,12 @@ type CanonicalEvaluationRecord struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
-	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
-	Projections CanonicalProjections `yaml:"projections,omitempty"`
-	Decisions   []Decision           `yaml:"decisions,omitempty"`
-	Strategy    RoutingStrategy      `yaml:"strategy,omitempty"`
+	ModelBindings map[string]ModelBinding `yaml:"model_bindings,omitempty"`
+	ModelCards    []RoutingModel          `yaml:"modelCards,omitempty"`
+	Signals       CanonicalSignals        `yaml:"signals,omitempty"`
+	Projections   CanonicalProjections    `yaml:"projections,omitempty"`
+	Decisions     []Decision              `yaml:"decisions,omitempty"`
+	Strategy      RoutingStrategy         `yaml:"strategy,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -189,6 +190,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 }
 
 func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
+	cfg.ModelBindings = cloneModelMap(canonical.Routing.ModelBindings)
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)

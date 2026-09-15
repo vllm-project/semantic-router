@@ -268,6 +268,20 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
 
+	// ModelDeployments contains canonical global.model_catalog.deployments.
+	// The router validates provider, device, precision and task compatibility.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelDeployments *apiextensionsv1.JSON `json:"model_deployments,omitempty" yaml:"model_deployments,omitempty"`
+
+	// ModelAdmission contains canonical global.model_catalog.admission budgets.
+	// Keys name deployments or the router's existing admission consumers.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelAdmission *apiextensionsv1.JSON `json:"model_admission,omitempty" yaml:"model_admission,omitempty"`
+
 	// Embedding models configuration (qwen3, gemma, mmbert)
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
@@ -1268,15 +1282,16 @@ type ExternalModelEndpoint struct {
 // backend block field for field so the operator passes it through unchanged.
 type RemoteClassifierBackendConfig struct {
 	// Protocol is how the remote is called.
-	// +kubebuilder:validation:Enum=http_classify
+	// +kubebuilder:validation:Enum=http_classify;http_chat
 	Protocol string `json:"protocol"`
 
 	// Contract is the response shape the signal reads. Complexity reads two -
 	// score.v1, one regression number interpreted through each rule's
 	// boundaries, and label_distribution.v1, hard/easy/medium probabilities -
 	// so the router requires it there rather than guessing per request. PII
-	// reads token_spans.v1, entity spans with code-point offsets.
-	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1;token_spans.v1
+	// reads token_spans.v1, entity spans with code-point offsets. Prompt guard
+	// http_chat reads label_decision.v1, a verdict without invented probability.
+	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1;token_spans.v1;label_decision.v1
 	// +optional
 	Contract string `json:"contract,omitempty"`
 
@@ -1419,18 +1434,19 @@ type ToolsConfig struct {
 
 // PromptGuardConfig defines prompt guard configuration
 type PromptGuardConfig struct {
+	// Backend selects a named external classifier and its typed result contract.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 	// Variant selects a local Candle-backed model variant. It is mutually
-	// exclusive with Protocol. When both fields are omitted, the operator uses
-	// mmbert32k.
+	// exclusive with Backend. When both are omitted, the operator uses mmbert32k.
 	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
 	Variant string `json:"variant,omitempty"`
-	// Protocol selects a remote HTTP backend's wire contract. Mutually
-	// exclusive with Variant. Requires an external model configured via a
-	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// Protocol is retired and rejected at admission. Configure Backend with
+	// the protocol, contract and explicit external model name instead.
 	// +kubebuilder:validation:Enum=http_chat;http_classify
 	// +optional
 	Protocol string `json:"protocol,omitempty"`
