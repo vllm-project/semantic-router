@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -552,6 +553,11 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	if rule.Name != "code" || rule.Threshold < 0.549 || rule.Threshold > 0.551 {
 		t.Fatalf("unexpected complexity rule: %#v", rule)
 	}
+	// The operator decodes through yaml.v3, so presence has to be recorded
+	// there as it is on the Router's own yaml.v2 loader.
+	if !rule.ThresholdSet {
+		t.Fatalf("a threshold written on the CRD must be recorded as present: %#v", rule)
+	}
 	if rule.Composer == nil || rule.Composer.Operator != "AND" || len(rule.Composer.Conditions) != 1 {
 		t.Fatalf("unexpected complexity composer: %#v", rule.Composer)
 	}
@@ -563,6 +569,21 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	remote := rules[1]
 	if remote.Name != "remote" || remote.Threshold != 0 {
 		t.Fatalf("unexpected remote rule: %#v", remote)
+	}
+	// A pair rule with no threshold on the CRD must not arrive at the Router
+	// with one recorded as written, or the Router would refuse it for stating
+	// both. The Router's own marshal test guards the ConfigMap document.
+	if remote.ThresholdSet {
+		t.Fatalf("threshold must stay unwritten for a pair rule: %#v", remote)
+	}
+	// The same rule is marshalled into the ConfigMap through yaml.v3, and
+	// must not grow a threshold: 0 there that the Router would then refuse.
+	out, err := yaml.Marshal(remote)
+	if err != nil {
+		t.Fatalf("marshal remote rule: %v", err)
+	}
+	if strings.Contains(string(out), "threshold") {
+		t.Fatalf("a pair rule must not be written back with a threshold:\n%s", out)
 	}
 	if remote.HardAbove == nil || *remote.HardAbove != 0.85 {
 		t.Fatalf("hard_above did not survive conversion: %#v", remote.HardAbove)

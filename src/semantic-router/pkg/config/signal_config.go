@@ -461,7 +461,12 @@ type ComplexityRule struct {
 	// Threshold is the symmetric shorthand, kept because the local margin is
 	// signed and centred on zero: hard above +threshold, easy below
 	// -threshold. Mutually exclusive with the explicit pair below.
-	Threshold float32              `yaml:"threshold"`
+	//
+	// Zero and omitted mean the same thing to the local path, so a zero is
+	// not written back out: a rule that states a pair must not grow a
+	// `threshold: 0` on its way through the operator or the DSL emitter and
+	// then be refused for stating both.
+	Threshold float32              `yaml:"threshold,omitempty"`
 	Hard      ComplexityCandidates `yaml:"hard"`
 	Easy      ComplexityCandidates `yaml:"easy"`
 	// The explicit boundary pair, for a score whose scale is the model's own
@@ -475,6 +480,43 @@ type ComplexityRule struct {
 	EasyAbove   *float64         `yaml:"easy_above,omitempty"`
 	Description string           `yaml:"description,omitempty"`
 	Composer    *RuleCombination `yaml:"composer,omitempty"`
+
+	// ThresholdSet records that the threshold key was written, so that a
+	// written `threshold: 0` alongside an explicit pair can be refused the
+	// way the CRD refuses it, instead of passing as an absent key. Threshold
+	// is a float32 with no presence of its own, and widening it to a pointer
+	// would ripple through the DSL compiler, the operator and every literal
+	// that builds a rule. Never serialised: presence is a property of the
+	// document the rule came from, not of the rule.
+	ThresholdSet bool `yaml:"-" json:"-"`
+}
+
+// UnmarshalYAML decodes a rule and records whether `threshold` was written.
+// The value is decoded exactly as before; only the presence is added.
+func (r *ComplexityRule) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain ComplexityRule
+	var decoded plain
+	if err := unmarshal(&decoded); err != nil {
+		return err
+	}
+	// A second pass into a map is the presence probe. A map rather than a
+	// one-field struct, because the strict loader refuses fields a struct
+	// does not name. A null value counts as absent, as it does for the CRD.
+	var raw map[interface{}]interface{}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	*r = ComplexityRule(decoded)
+	value, written := raw["threshold"]
+	r.ThresholdSet = written && value != nil
+	return nil
+}
+
+// thresholdDeclared reports whether the rule states a threshold at all: a
+// written key, whatever its value, or a non-zero value from a caller that
+// assigned the field directly.
+func (r ComplexityRule) thresholdDeclared() bool {
+	return r.ThresholdSet || r.Threshold != 0
 }
 
 type Category struct {
