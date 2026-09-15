@@ -16,6 +16,7 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -87,9 +88,21 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	ctx.SemanticRequest = request
 	// Per-model accounting (token tracking, TTFB, usage attribution) keys off
 	// the model that actually serves the request. A capability reroute may
-	// redirect this request to a sibling modelRef, so RequestModel must be the
-	// final dispatch model, not the decision-selected one.
+	// redirect this request to a sibling modelRef, so RequestModel and the
+	// client-visible selected-model header must be the final dispatch model,
+	// not the decision-selected one.
+	//
+	// The in-flight token was opened under the model this dispatch was
+	// prepared for, and End keys by (model, token): hand it over here, where
+	// the final model becomes known, so that the success, stream and error
+	// paths end the entry they actually own. A zero token means no entry was
+	// opened and there is nothing to move.
+	if ctx.InflightToken != 0 && logicalModel != dispatch.logicalModel {
+		inflight.End(logicalModel, ctx.InflightToken)
+		ctx.InflightToken = inflight.Begin(dispatch.logicalModel)
+	}
 	ctx.RequestModel = dispatch.logicalModel
+	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -192,6 +205,7 @@ func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
 		"to":          model,
 		"wire_format": candidate.targetFormat,
 	})
+	metrics.RecordModelRouting(selected.logicalModel, model)
 	return candidate, true
 }
 
@@ -224,8 +238,11 @@ func (r *OpenAIRouter) findQualifiedRerouteModel(
 
 // qualifiedRerouteCandidate reports the model's wire format when the model can
 // express every required capability, or "" when it cannot serve the request.
-// Expressibility is judged on the wire format's codec capability set first,
-// then narrowed by the model's own declared capabilities when annotated.
+// Eligibility is decided by providerCapabilityMismatch — the same qualification
+// the primary dispatch and the fallback candidates share: the wire format must
+// encode the request, and an annotated model must declare the required task
+// bits. Catalog aliases are projected onto the protocol vocabulary before that
+// filter, so descriptive labels never void recognized declarations.
 func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmprotocol.CapabilitySet) llmprotocol.WireFormat {
 	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
 	if err != nil {

@@ -238,8 +238,9 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		r.setClearRouteCache(response)
 	}
 
-	// Capture router replay information if enabled
-	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+	// Capture router replay information if enabled; the record attributes the
+	// request to the model that served it, matching the response header.
+	r.startRouterReplay(ctx, originalModel, dispatch.logicalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
