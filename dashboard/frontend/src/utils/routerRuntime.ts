@@ -69,6 +69,7 @@ export interface RouterModelRegistryInfo {
 
 export interface RouterModelInfo {
   name: string
+  recipe?: string
   type: string
   loaded: boolean
   state?: string
@@ -245,7 +246,13 @@ export function getPreviewRouterModels(
   return sorted.slice(0, limit)
 }
 
-export function getRouterModelAnchor(model: Pick<RouterModelInfo, 'name'>): string {
+export function getRouterModelAnchor(model: Pick<RouterModelInfo, 'name' | 'recipe'>): string {
+  if (model.recipe && model.recipe !== 'default') {
+    // Recipe names can contain Unicode and punctuation. Encode the complete
+    // identity so distinct scopes never collapse into the same slug or DOM key.
+    const identity = new TextEncoder().encode(JSON.stringify([model.recipe, model.name]))
+    return `model-${Array.from(identity, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+  }
   const slug = model.name
     .trim()
     .toLowerCase()

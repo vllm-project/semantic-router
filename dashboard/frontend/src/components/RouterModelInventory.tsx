@@ -203,6 +203,10 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     { label: 'Model ID', value: getDisplayModelID(model) },
   ]
 
+  if (model.recipe) {
+    identityRows.push({ label: 'Recipe', value: model.recipe })
+  }
+
   if (model.registry?.repo_id) {
     identityRows.push({ label: 'Repository', value: model.registry.repo_id })
   }
@@ -532,7 +536,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
               if (onSelectModel && mode === 'preview') {
                 return (
                   <button
-                    key={model.name}
+                    key={getRouterModelAnchor(model)}
                     type="button"
                     className={className}
                     data-testid={`router-model-${mode}-${model.name}`}
@@ -545,7 +549,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
 
               return (
                 <article
-                  key={model.name}
+                  key={getRouterModelAnchor(model)}
                   id={mode === 'full' ? getRouterModelAnchor(model) : undefined}
                   className={className}
                   data-testid={`router-model-${mode}-${model.name}`}
