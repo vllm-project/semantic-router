@@ -10,6 +10,8 @@ use std::sync::{Arc, OnceLock};
 use crate::core::similarity::BertSimilarity;
 use crate::BertClassifier;
 
+use super::classifier_slot::ClassifierSlot;
+
 // Global state using OnceLock for zero-cost reads after initialization
 // OnceLock<Arc<T>> pattern provides:
 // - Zero lock overhead on reads (atomic load only)
@@ -448,24 +450,24 @@ pub static MMBERT_TOKEN_CLASSIFIER: OnceLock<
 > = OnceLock::new();
 
 // Global statics for mmBERT-32K classifiers (32K context with YaRN RoPE scaling)
-pub static MMBERT_32K_INTENT_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_FACTCHECK_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_JAILBREAK_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_FEEDBACK_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_PII_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
-> = OnceLock::new();
-pub static MMBERT_32K_MODALITY_CLASSIFIER: OnceLock<
-    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
-> = OnceLock::new();
+pub static MMBERT_32K_INTENT_CLASSIFIER: ClassifierSlot<
+    crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier,
+> = ClassifierSlot::new();
+pub static MMBERT_32K_FACTCHECK_CLASSIFIER: ClassifierSlot<
+    crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier,
+> = ClassifierSlot::new();
+pub static MMBERT_32K_JAILBREAK_CLASSIFIER: ClassifierSlot<
+    crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier,
+> = ClassifierSlot::new();
+pub static MMBERT_32K_FEEDBACK_CLASSIFIER: ClassifierSlot<
+    crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier,
+> = ClassifierSlot::new();
+pub static MMBERT_32K_PII_CLASSIFIER: ClassifierSlot<
+    crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier,
+> = ClassifierSlot::new();
+pub static MMBERT_32K_MODALITY_CLASSIFIER: ClassifierSlot<
+    crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier,
+> = ClassifierSlot::new();
 
 /// Initialize mmBERT classifier (multilingual ModernBERT)
 ///
@@ -648,6 +650,21 @@ pub unsafe extern "C" fn init_mmbert_32k_intent_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_intent_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_intent_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -662,14 +679,22 @@ pub unsafe extern "C" fn init_mmbert_32k_intent_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match MMBERT_32K_INTENT_CLASSIFIER.initialize(
         model_id,
         use_cpu,
-        ModernBertVariant::Multilingual32K,
+        max_sequence_length,
+        |path, limit| {
+            crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
+                path,
+                use_cpu,
+                ModernBertVariant::Multilingual32K,
+                limit,
+            )
+        },
     ) {
-        Ok(model) => {
-            eprintln!("   mmBERT-32K intent classifier loaded (32K context, YaRN RoPE)");
-            MMBERT_32K_INTENT_CLASSIFIER.set(Arc::new(model)).is_ok()
+        Ok(()) => {
+            eprintln!("   mmBERT-32K intent classifier loaded");
+            true
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K intent classifier: {}", e);
@@ -690,6 +715,21 @@ pub unsafe extern "C" fn init_mmbert_32k_factcheck_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_factcheck_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_factcheck_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -704,14 +744,22 @@ pub unsafe extern "C" fn init_mmbert_32k_factcheck_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match MMBERT_32K_FACTCHECK_CLASSIFIER.initialize(
         model_id,
         use_cpu,
-        ModernBertVariant::Multilingual32K,
+        max_sequence_length,
+        |path, limit| {
+            crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
+                path,
+                use_cpu,
+                ModernBertVariant::Multilingual32K,
+                limit,
+            )
+        },
     ) {
-        Ok(model) => {
+        Ok(()) => {
             eprintln!("   mmBERT-32K fact-check classifier loaded");
-            MMBERT_32K_FACTCHECK_CLASSIFIER.set(Arc::new(model)).is_ok()
+            true
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K fact-check classifier: {}", e);
@@ -732,6 +780,21 @@ pub unsafe extern "C" fn init_mmbert_32k_jailbreak_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_jailbreak_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_jailbreak_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -746,14 +809,22 @@ pub unsafe extern "C" fn init_mmbert_32k_jailbreak_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match MMBERT_32K_JAILBREAK_CLASSIFIER.initialize(
         model_id,
         use_cpu,
-        ModernBertVariant::Multilingual32K,
+        max_sequence_length,
+        |path, limit| {
+            crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
+                path,
+                use_cpu,
+                ModernBertVariant::Multilingual32K,
+                limit,
+            )
+        },
     ) {
-        Ok(model) => {
+        Ok(()) => {
             eprintln!("   mmBERT-32K jailbreak detector loaded");
-            MMBERT_32K_JAILBREAK_CLASSIFIER.set(Arc::new(model)).is_ok()
+            true
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K jailbreak detector: {}", e);
@@ -774,6 +845,21 @@ pub unsafe extern "C" fn init_mmbert_32k_feedback_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_feedback_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_feedback_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -788,14 +874,22 @@ pub unsafe extern "C" fn init_mmbert_32k_feedback_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match MMBERT_32K_FEEDBACK_CLASSIFIER.initialize(
         model_id,
         use_cpu,
-        ModernBertVariant::Multilingual32K,
+        max_sequence_length,
+        |path, limit| {
+            crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
+                path,
+                use_cpu,
+                ModernBertVariant::Multilingual32K,
+                limit,
+            )
+        },
     ) {
-        Ok(model) => {
+        Ok(()) => {
             eprintln!("   mmBERT-32K feedback detector loaded");
-            MMBERT_32K_FEEDBACK_CLASSIFIER.set(Arc::new(model)).is_ok()
+            true
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K feedback detector: {}", e);
@@ -815,6 +909,21 @@ pub unsafe extern "C" fn init_mmbert_32k_pii_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_pii_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_pii_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -826,14 +935,22 @@ pub unsafe extern "C" fn init_mmbert_32k_pii_classifier(
 
     eprintln!("Initializing mmBERT-32K PII detector from: {}", model_id);
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new_with_variant(
+    match MMBERT_32K_PII_CLASSIFIER.initialize(
         model_id,
         use_cpu,
-        ModernBertVariant::Multilingual32K,
+        max_sequence_length,
+        |path, limit| {
+            crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new_with_variant_and_max_sequence_length(
+                path,
+                use_cpu,
+                ModernBertVariant::Multilingual32K,
+                limit,
+            )
+        },
     ) {
-        Ok(classifier) => {
+        Ok(()) => {
             eprintln!("   mmBERT-32K PII detector loaded");
-            MMBERT_32K_PII_CLASSIFIER.set(Arc::new(classifier)).is_ok()
+            true
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K PII detector: {}", e);
@@ -858,6 +975,21 @@ pub unsafe extern "C" fn init_mmbert_32k_modality_classifier(
     model_id: *const c_char,
     use_cpu: bool,
 ) -> bool {
+    unsafe { init_mmbert_32k_modality_classifier_with_context(model_id, use_cpu, 0) }
+}
+
+/// Initialize a head with an explicit tokenizer budget (0 preserves 512).
+/// # Safety
+/// model_id must point to a valid NUL-terminated path.
+#[no_mangle]
+pub unsafe extern "C" fn init_mmbert_32k_modality_classifier_with_context(
+    model_id: *const c_char,
+    use_cpu: bool,
+    max_sequence_length: usize,
+) -> bool {
+    if model_id.is_null() {
+        return false;
+    }
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -872,14 +1004,22 @@ pub unsafe extern "C" fn init_mmbert_32k_modality_classifier(
         model_id
     );
 
-    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+    match MMBERT_32K_MODALITY_CLASSIFIER.initialize(
         model_id,
         use_cpu,
-        ModernBertVariant::Multilingual32K,
+        max_sequence_length,
+        |path, limit| {
+            crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant_and_max_sequence_length(
+                path,
+                use_cpu,
+                ModernBertVariant::Multilingual32K,
+                limit,
+            )
+        },
     ) {
-        Ok(model) => {
-            eprintln!("   mmBERT-32K modality router loaded (AR/DIFFUSION/BOTH, 32K context)");
-            MMBERT_32K_MODALITY_CLASSIFIER.set(Arc::new(model)).is_ok()
+        Ok(()) => {
+            eprintln!("   mmBERT-32K modality router loaded (AR/DIFFUSION/BOTH)");
+            true
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K modality router: {}", e);

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -9,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
+func (c *Classifier) evaluateEmbeddingSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
 	start := time.Now()
 
 	// Text-modality evaluation: scores rules whose query_modality is unset
@@ -24,7 +25,7 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 	)
 	if strings.TrimSpace(text) != "" {
 		textStart := time.Now()
-		textResult, textErr = c.keywordEmbeddingClassifier.ClassifyDetailed(text)
+		textResult, textErr = c.keywordEmbeddingClassifier.ClassifyDetailedWithContext(ctx, text)
 		textElapsed = time.Since(textStart)
 	}
 
@@ -42,7 +43,7 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 	)
 	if strings.TrimSpace(imageURL) != "" {
 		imageStart := time.Now()
-		imageResult, imageErr = c.keywordEmbeddingClassifier.classifyDetailedMultimodalWithCache(config.QueryModalityImage, imageURL, imgCache)
+		imageResult, imageErr = c.keywordEmbeddingClassifier.classifyDetailedMultimodalWithCache(ctx, config.QueryModalityImage, imageURL, imgCache)
 		imageElapsed = time.Since(imageStart)
 	}
 
@@ -59,12 +60,27 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 	// whenever text classification hit a transient failure.
 	if textErr != nil {
 		logging.Errorf("text-modality embedding rule evaluation failed: %v", textErr)
+		c.recordEmbeddingSignalError(results, mu, config.QueryModalityText)
 	}
 	if imageErr != nil {
 		logging.Errorf("image-modality embedding rule evaluation failed: %v", imageErr)
+		c.recordEmbeddingSignalError(results, mu, config.QueryModalityImage)
 	}
 
 	mu.Lock()
+	// Cancellation invalidates the whole embedding evaluation, including a
+	// modality that finished before another one observed the canceled context.
+	// Check at publication time; ordinary modality errors still permit fallback.
+	if ctx.Err() != nil {
+		mu.Unlock()
+		if strings.TrimSpace(text) != "" {
+			c.recordEmbeddingSignalError(results, mu, config.QueryModalityText)
+		}
+		if strings.TrimSpace(imageURL) != "" {
+			c.recordEmbeddingSignalError(results, mu, config.QueryModalityImage)
+		}
+		return
+	}
 	defer mu.Unlock()
 
 	// Track the best confidence across both modalities for the metric.
@@ -79,6 +95,15 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 		bestConfidence = c.recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
 	}
 	results.Metrics.Embedding.Confidence = bestConfidence
+}
+
+func (c *Classifier) recordEmbeddingSignalError(results *SignalResults, mu *sync.Mutex, modality config.QueryModality) {
+	rules := c.keywordEmbeddingClassifier.rulesByModality[modality]
+	names := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		names = append(names, rule.Name)
+	}
+	recordSignalRuleErrors(results, mu, config.SignalTypeEmbedding, names, embeddingEvaluationFailedCode)
 }
 
 // recordEmbeddingResult merges scores and matches from a single classification

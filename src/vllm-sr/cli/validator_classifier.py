@@ -7,6 +7,7 @@ from cli.config_contract import (
     iter_condition_leaves,
     iter_routing_profiles,
 )
+from cli.model_runtime_defaults import effective_model_deployments
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_model_runtime import project_classifier_rule
@@ -20,9 +21,7 @@ def validate_classifier_contracts(
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     external_models = _external_models(config)
-    deployments = ((config.global_ or {}).get("model_catalog") or {}).get(
-        "deployments"
-    ) or {}
+    deployments = effective_model_deployments(config)
     for profile_name, routing in iter_routing_profiles(config):
         profile_field = (
             "routing"
@@ -47,6 +46,7 @@ def validate_classifier_contracts(
                 routing.decisions,
                 rules,
                 profile_field,
+                routing.model_bindings,
             )
         )
     return errors
@@ -97,6 +97,7 @@ def _validate_profile_classifier_decisions(
     decisions,
     rules: dict,
     profile_field: str,
+    bindings=None,
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for decision in decisions:
@@ -114,6 +115,21 @@ def _validate_profile_classifier_decisions(
                         field=field,
                     )
                 )
+            bound = (bindings or {}).get(f"classifier.{rule.name}")
+            if (
+                bound
+                and bound.operating_point is not None
+                and bound.contract == "label_scores.v1"
+            ):
+                continue
+            if condition.predicate is None:
+                errors.append(
+                    ValidationError(
+                        "Classifier condition requires a score predicate or a bound operating_point",
+                        field=field,
+                    )
+                )
+                continue
             if rule.type == CLASSIFIER_TYPE_LOCAL and not _valid_local_predicate(
                 condition.predicate
             ):

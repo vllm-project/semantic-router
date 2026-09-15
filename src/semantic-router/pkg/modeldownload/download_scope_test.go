@@ -2,7 +2,6 @@ package modeldownload
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -135,12 +134,8 @@ func TestOnnxWeightExcludePatternsNeverMatchCandleRequiredFiles(t *testing.T) {
 	}
 
 	for _, pattern := range onnxWeightExcludePatterns {
-		suffix := strings.TrimPrefix(pattern, "*")
-		if suffix == pattern {
-			t.Fatalf("exclude pattern %q must be a suffix glob so it cannot shadow required files", pattern)
-		}
 		for _, file := range protected {
-			if strings.HasSuffix(file, suffix) {
+			if revisionArtifactExcluded(file, []string{pattern}) {
 				t.Fatalf("exclude pattern %q matches required file %q", pattern, file)
 			}
 		}

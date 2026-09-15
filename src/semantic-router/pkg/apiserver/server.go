@@ -148,6 +148,7 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 	}
 
 	// Create HTTP server with routes
+	apiServer.initRoutingPreviewAdmission(cfg)
 	mux := apiServer.setupRoutes()
 	httpServer := &http.Server{
 		Addr:         managementCfg.ListenAddress(),

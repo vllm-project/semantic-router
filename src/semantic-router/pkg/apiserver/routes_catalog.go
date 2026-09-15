@@ -142,7 +142,7 @@ func apiRoutingRoutes() []apiRoute {
 			EndpointMetadata{
 				Path:        apiRoutingPreviewPath,
 				Method:      "POST",
-				Description: "Preview all configured signals and the resulting route without invoking a generation backend",
+				Description: "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
 				Parameters: []OpenAPIParameter{
 					queryParameter("trace", "Include per-decision routing trace trees.", "boolean"),
 				},

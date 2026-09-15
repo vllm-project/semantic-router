@@ -23,6 +23,10 @@ if [[ -z "${ROUTER_IMAGE}" ]]; then
   exit 2
 fi
 
+# Validate the complete selection before installing cleanup traps or touching a stack.
+python3 "${ROOT_DIR}/tools/dev/router-calibration/recipe_conformance.py" \
+  check-cpu --recipes "${RECIPES}"
+
 cleanup() {
   VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" vllm-sr stop >/dev/null 2>&1 || true
   for directory in "${GENERATED_RECIPE_DIRS[@]}"; do

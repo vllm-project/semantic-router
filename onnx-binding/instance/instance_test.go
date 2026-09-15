@@ -126,7 +126,7 @@ func TestIndependentSequencesAndSharedOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.CompletedInferences != 2 || info.TaskLimit != 512 || info.ModelLimit != 4096 || info.Sessions[0].Provider != "CPUExecutionProvider" {
+	if info.CompletedInferences != 2 || info.TaskLimit != 4096 || info.EffectiveLimit != 512 || info.ModelLimit != 4096 || info.Sessions[0].Provider != "CPUExecutionProvider" {
 		t.Fatalf("incorrect task or execution evidence: %+v", info)
 	}
 }
@@ -288,9 +288,9 @@ func TestPreparationFailurePreservesExistingInstance(t *testing.T) {
 		t.Fatal(inferErr)
 	}
 	bad = fixture("sequence")
-	bad.MaxInputTokens = 513
+	bad.MaxInputTokens = 4097
 	if _, err := LoadSequenceClassifier(bad); err == nil {
-		t.Fatal("classification budget exceeded task's 512-token limit")
+		t.Fatal("classification budget exceeded checkpoint capacity of 4096")
 	}
 }
 

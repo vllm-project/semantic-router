@@ -227,6 +227,26 @@ func (m *EmbeddingModel) Encode(text string, layer, dimension int) (EmbeddingRes
 	return m.encodeText(text, layer, dimension)
 }
 
+// RuntimeDescriptor returns this loaded instance's captured content and selected
+// representation identity as JSON. Zero selects the actual default exit/dimension.
+// It never loads a model or consults a process-global embedding instance.
+func (m *EmbeddingModel) RuntimeDescriptor(layer, dimension int) (string, error) {
+	if m == nil {
+		return "", &Error{Kind: "closed", Message: "nil instance"}
+	}
+	if layer < 0 || dimension < 0 {
+		return "", &Error{Kind: "invalid_input", Message: "layer and dimension must be nonnegative"}
+	}
+	var raw json.RawMessage
+	err := m.withHandle(func(handle C.uint64_t) error {
+		return decode(C.ort_instance_embedding_descriptor(handle, C.size_t(layer), C.size_t(dimension)), &raw)
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
 func (m *MultiModalModel) EncodeText(text string, dimension int) (EmbeddingResult, error) {
 	return m.encodeText(text, 0, dimension)
 }

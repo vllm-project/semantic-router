@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "fc7bd06c6251bd2df160efd6e007fc69f3f86e72"
+  source_commit: "0f2ba0de7c435366ed68bcf03f5a1bb49b9cb90c"
   source_file: "docs/tutorials/plugin/response-cache.md"
   outdated: false
 ---
@@ -67,6 +67,8 @@ plugins:
 ## 迁移 {#migration}
 
 `semantic-cache`、`semantic_cache` 和 `response-cache` 作为已弃用别名被接受，并规范化为 `response_cache`。同样，`global.stores.semantic_cache` 会被读取为 `global.stores.response_cache` 的已弃用别名。不要在同一文档中同时配置两种拼写。导出、控制面板保存和 DSL 反编译始终发出规范名称。
+
+本地 `mmbert` 嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。这项绑定不会自动识别可变远程嵌入端点的模型身份。
 
 ## 运维 {#operations}
 

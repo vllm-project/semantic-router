@@ -28,6 +28,7 @@ def _resource_directory(
 def validate_model_resource_layout(
     manifest: dict[str, Any], source_root: Path, repo_root: Path
 ) -> None:
+    repo_root = repo_root.resolve()
     model_root = _resource_directory(manifest, source_root, "models")
     if not model_root.is_dir():
         raise CatalogBuildError(
@@ -102,6 +103,7 @@ def validate_evaluation_resource_layout(
 ) -> None:
     """Keep physical and virtual measurements beside the matching model group."""
 
+    repo_root = repo_root.resolve()
     evaluation_root = _resource_directory(manifest, source_root, "evaluations")
     if not evaluation_root.is_dir():
         raise CatalogBuildError(
