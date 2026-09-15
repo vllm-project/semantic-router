@@ -43,6 +43,15 @@ explicit when a model cannot or should not handle a request.
 | [PRISM](./Prism-153key) | 2026-03-20 | Proposal | Model qualification and legitimacy checks. |
 | [TruthLens](./hallucination-mitigation-milestone) | 2025-12-02 | Proposal | Gateway-level hallucination detection and mitigation. |
 
+## Evaluation & Quality
+
+Versioned contracts for evaluating published model identities and publishing
+reproducible scorecards.
+
+| Proposal | Created | Status | Scope |
+| --- | --- | --- | --- |
+| [MoM First-Class Evaluation](./mom-first-class-evaluation) | 2026-08-28 | Proposal | End-to-end MoM evaluation design, artifact placement, and delivery plan ([#3038](https://github.com/vllm-project/semantic-router/issues/3038)). |
+
 ## Configuration & Protocols
 
 Shared contracts for authoring router behavior and reaching the routing engine from
