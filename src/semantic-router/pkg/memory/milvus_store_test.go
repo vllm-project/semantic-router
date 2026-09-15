@@ -352,7 +352,8 @@ func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
 	// Use bert embedding config for tests since that's initialized in TestMain
 	testEmbeddingConfig := EmbeddingConfig{
-		Model: EmbeddingModelBERT,
+		Provider: memoryTestEmbeddingProvider(),
+		Model:    EmbeddingModelBERT,
 	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
@@ -703,7 +704,7 @@ func TestMilvusStore_RetryLogic_ContextCancellation(t *testing.T) {
 
 	_, err := store.Retrieve(cancelCtx, RetrieveOptions{Query: "test", UserID: "u1"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context cancelled")
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestIsTransientError(t *testing.T) {
@@ -985,7 +986,8 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	}
 
 	testEmbeddingConfig := EmbeddingConfig{
-		Model: EmbeddingModelBERT,
+		Provider: memoryTestEmbeddingProvider(),
+		Model:    EmbeddingModelBERT,
 	}
 
 	config := DefaultMemoryConfig()

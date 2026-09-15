@@ -227,25 +227,59 @@ func validateIndexComponentReference(
 	summary *indexValidationSummary,
 ) error {
 	if component.Metric != "" {
-		if component.Benchmark == "" || component.BenchmarkProfile == "" {
-			return fmt.Errorf("%s benchmark, metric, and benchmark_profile are required", path)
+		if component.Benchmark == "" {
+			return fmt.Errorf("%s benchmark is required", path)
+		}
+		profiles, err := indexComponentProfiles(component, path)
+		if err != nil {
+			return err
 		}
 		metricID := component.Benchmark + "#" + component.Metric
 		metric, exists := metrics[metricID]
 		if !exists {
 			return fmt.Errorf("%s metric %q is unknown", path, metricID)
 		}
-		if _, ok := metric.profiles[component.BenchmarkProfile]; !ok {
-			return fmt.Errorf("%s.benchmark_profile %q is unknown", path, component.BenchmarkProfile)
+		for _, profile := range profiles {
+			if _, ok := metric.profiles[profile]; !ok {
+				return fmt.Errorf("%s benchmark profile %q is unknown", path, profile)
+			}
 		}
 		summary.directDomainWeights[metric.domain] += component.Weight
 		return nil
+	}
+	if component.Benchmark != "" || component.BenchmarkProfile != "" || len(component.BenchmarkProfiles) != 0 {
+		return fmt.Errorf("%s cannot declare benchmark fields for a nested index", path)
 	}
 	summary.hasNestedComponent = true
 	if _, exists := indices[component.Index]; !exists {
 		return fmt.Errorf("%s.index %q is unknown", path, component.Index)
 	}
 	return nil
+}
+
+func indexComponentProfiles(component IndexComponent, path string) ([]string, error) {
+	if (component.BenchmarkProfile == "") == (len(component.BenchmarkProfiles) == 0) {
+		return nil, fmt.Errorf(
+			"%s must declare exactly one of benchmark_profile or benchmark_profiles",
+			path,
+		)
+	}
+	if component.BenchmarkProfile != "" {
+		return []string{component.BenchmarkProfile}, nil
+	}
+	profiles := make([]string, 0, len(component.BenchmarkProfiles))
+	seen := make(map[string]struct{}, len(component.BenchmarkProfiles))
+	for index, profile := range component.BenchmarkProfiles {
+		if strings.TrimSpace(profile) == "" {
+			return nil, fmt.Errorf("%s.benchmark_profiles[%d] cannot be empty", path, index)
+		}
+		if _, duplicate := seen[profile]; duplicate {
+			return nil, fmt.Errorf("%s.benchmark_profiles contains duplicate %q", path, profile)
+		}
+		seen[profile] = struct{}{}
+		profiles = append(profiles, profile)
+	}
+	return profiles, nil
 }
 
 func validateDeclaredDomainWeights(domains map[string]float64, summary indexValidationSummary, path string) error {

@@ -4,49 +4,95 @@ package benchmarks
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
-const embeddingModelPathEnv = "QWEN3_MODEL_PATH"
+const (
+	embeddingModelPathEnv    = "QWEN3_MODEL_PATH"
+	defaultEmbeddingModelDir = "models/mom-embedding-pro"
+	cacheEmbeddingModelType  = "qwen3"
+	cacheEmbeddingDeployment = "perf-cache-embedding"
+)
 
-var embeddingModelPathOnce sync.Once
+var (
+	cacheEmbeddingOnce     sync.Once
+	cacheEmbeddingErr      error
+	cacheEmbeddingProvider embedding.Provider
+)
 
-// initCacheEmbeddingModels initializes the cache embedding models for benchmarks.
-// The fallback paths inside cache.InitEmbeddingModels are relative to the process
-// working directory, which for `go test` is this package directory
-// (perf/benchmarks), so none of them reach the repo-root models/ directory.
-// Point QWEN3_MODEL_PATH at the repo root explicitly (same repo-root resolution
-// as initIntentClassifier in classification_accuracy_bench_test.go) unless the
-// caller already set it.
-func initCacheEmbeddingModels(b *testing.B) {
-	b.Helper()
-	embeddingModelPathOnce.Do(func() {
-		if os.Getenv(embeddingModelPathEnv) != "" {
-			return
-		}
-		wd, err := os.Getwd()
-		if err != nil {
-			return
-		}
-		modelDir := filepath.Join(wd, "..", "..", "models", "mom-embedding-pro")
-		if _, err := os.Stat(modelDir); err == nil {
-			os.Setenv(embeddingModelPathEnv, modelDir)
-		}
-	})
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
+// resolveCacheEmbeddingModelDir points at the repo-root models/ directory unless
+// QWEN3_MODEL_PATH overrides it; `go test` runs with perf/benchmarks as the
+// working directory (same resolution as initIntentClassifier).
+func resolveCacheEmbeddingModelDir() string {
+	if path := os.Getenv(embeddingModelPathEnv); path != "" {
+		return path
 	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return defaultEmbeddingModelDir
+	}
+	return filepath.Join(wd, "..", "..", defaultEmbeddingModelDir)
+}
+
+func cacheEmbeddingDevice() string {
+	if useGPU := os.Getenv("USE_GPU"); useGPU == "true" || useGPU == "1" {
+		return "cuda"
+	}
+	return "cpu"
+}
+
+// initCacheEmbeddingModels prepares the owned Qwen3 embedding provider once per
+// process and returns it for cache.BenchmarkConfig.EmbeddingProvider.
+func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
+	b.Helper()
+	cacheEmbeddingOnce.Do(func() {
+		modelDir := resolveCacheEmbeddingModelDir()
+		if _, statErr := os.Stat(modelDir); statErr != nil {
+			cacheEmbeddingErr = fmt.Errorf("embedding model dir not found at %s: %w", modelDir, statErr)
+			return
+		}
+		cfg := &config.RouterConfig{}
+		cfg.EmbeddingConfig.ModelType = cacheEmbeddingModelType
+		cfg.SemanticCache.Enabled = true
+		cfg.SemanticCache.EmbeddingModel = cacheEmbeddingModelType
+		cfg.ModelBindings = map[string]config.ModelBinding{
+			"embedding": {Deployment: cacheEmbeddingDeployment, Contract: "embedding.v1", Adapter: cacheEmbeddingModelType},
+		}
+		cfg.ModelDeployments = map[string]config.ModelDeployment{
+			cacheEmbeddingDeployment: {Provider: "candle", Device: cacheEmbeddingDevice(), Precision: "native", Artifact: modelDir},
+		}
+		set, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+		if err != nil {
+			cacheEmbeddingErr = fmt.Errorf("failed to prepare embedding model from %s: %w", modelDir, err)
+			return
+		}
+		provider, err := set.Default()
+		if err != nil {
+			cacheEmbeddingErr = err
+			return
+		}
+		cacheEmbeddingProvider = provider
+	})
+	if cacheEmbeddingErr != nil {
+		b.Fatalf("Failed to initialize embedding models: %v", cacheEmbeddingErr)
+	}
+	return cacheEmbeddingProvider
 }
 
 // BenchmarkCacheSearch_1000Entries benchmarks cache search with 1000 entries
 func BenchmarkCacheSearch_1000Entries(b *testing.B) {
 	// Initialize embedding models once
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         1000,
@@ -54,7 +100,8 @@ func BenchmarkCacheSearch_1000Entries(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.7,
 	}
 
@@ -74,7 +121,7 @@ func BenchmarkCacheSearch_1000Entries(b *testing.B) {
 
 // BenchmarkCacheSearch_10000Entries benchmarks cache search with 10,000 entries
 func BenchmarkCacheSearch_10000Entries(b *testing.B) {
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         10000,
@@ -82,7 +129,8 @@ func BenchmarkCacheSearch_10000Entries(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.7,
 	}
 
@@ -102,7 +150,7 @@ func BenchmarkCacheSearch_10000Entries(b *testing.B) {
 
 // BenchmarkCacheSearch_HNSW benchmarks HNSW index search
 func BenchmarkCacheSearch_HNSW(b *testing.B) {
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -110,7 +158,8 @@ func BenchmarkCacheSearch_HNSW(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.7,
 	}
 
@@ -128,7 +177,7 @@ func BenchmarkCacheSearch_HNSW(b *testing.B) {
 
 // BenchmarkCacheSearch_Linear benchmarks linear search (no HNSW)
 func BenchmarkCacheSearch_Linear(b *testing.B) {
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         1000, // Smaller for linear search
@@ -136,7 +185,8 @@ func BenchmarkCacheSearch_Linear(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           false,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.7,
 	}
 
@@ -154,7 +204,7 @@ func BenchmarkCacheSearch_Linear(b *testing.B) {
 
 // BenchmarkCacheConcurrency_1 benchmarks cache with concurrency level 1
 func BenchmarkCacheConcurrency_1(b *testing.B) {
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -162,7 +212,8 @@ func BenchmarkCacheConcurrency_1(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.7,
 	}
 
@@ -179,7 +230,7 @@ func BenchmarkCacheConcurrency_1(b *testing.B) {
 
 // BenchmarkCacheConcurrency_10 benchmarks cache with concurrency level 10
 func BenchmarkCacheConcurrency_10(b *testing.B) {
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -187,7 +238,8 @@ func BenchmarkCacheConcurrency_10(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.7,
 	}
 
@@ -204,7 +256,7 @@ func BenchmarkCacheConcurrency_10(b *testing.B) {
 
 // BenchmarkCacheConcurrency_50 benchmarks cache with concurrency level 50
 func BenchmarkCacheConcurrency_50(b *testing.B) {
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -212,7 +264,8 @@ func BenchmarkCacheConcurrency_50(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.7,
 	}
 
@@ -230,7 +283,7 @@ func BenchmarkCacheConcurrency_50(b *testing.B) {
 
 // BenchmarkCacheHitRate benchmarks cache hit rate effectiveness
 func BenchmarkCacheHitRate(b *testing.B) {
-	initCacheEmbeddingModels(b)
+	provider := initCacheEmbeddingModels(b)
 
 	// High hit ratio scenario
 	config := cache.BenchmarkConfig{
@@ -239,7 +292,8 @@ func BenchmarkCacheHitRate(b *testing.B) {
 		RequestsPerLevel:  b.N,
 		SimilarityThresh:  0.85,
 		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
+		EmbeddingModel:    cacheEmbeddingModelType,
+		EmbeddingProvider: provider,
 		HitRatio:          0.9, // 90% expected hit rate
 	}
 

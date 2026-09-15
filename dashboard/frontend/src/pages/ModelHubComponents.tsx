@@ -48,7 +48,7 @@ export const HubHero: React.FC<{ stats: ModelHubStats }> = ({ stats }) => (
     <dl className={styles.stats}>
       <Stat label="models" value={stats.models} />
       <Stat label="creators" value={stats.creators} />
-      <Stat label="mapped providers" value={stats.mappedProviders} />
+      <Stat label="providers" value={stats.providerContracts} />
       <Stat label="evaluations" value={stats.evaluations} />
     </dl>
     <Link className={styles.primaryAction} to="/config/models">

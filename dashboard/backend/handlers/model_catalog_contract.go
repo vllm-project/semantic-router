@@ -607,15 +607,14 @@ func validateCatalogIndices(
 			}
 			if component.Metric != "" {
 				metric, ok := metrics[component.Benchmark+"#"+component.Metric]
-				profileOK := false
-				if ok {
-					_, profileOK = metric.profiles[component.BenchmarkProfile]
-				}
-				if component.Benchmark == "" || component.BenchmarkProfile == "" || !ok || !profileOK {
+				if component.Benchmark == "" || !ok || !validCatalogIndexComponentProfiles(component, metric.profiles) {
 					return nil, fmt.Errorf("index metric is unknown")
 				}
 			}
 			if component.Index != "" {
+				if component.Benchmark != "" || component.BenchmarkProfile != "" || len(component.BenchmarkProfiles) != 0 {
+					return nil, fmt.Errorf("nested index contains benchmark fields")
+				}
 				if _, ok := ids[component.Index]; !ok {
 					return nil, fmt.Errorf("nested index is unknown")
 				}
@@ -627,6 +626,35 @@ func validateCatalogIndices(
 		}
 	}
 	return ids, nil
+}
+
+func validCatalogIndexComponentProfiles(
+	component modelcatalog.IndexComponent,
+	declared map[string]struct{},
+) bool {
+	hasSingular := component.BenchmarkProfile != ""
+	hasPlural := len(component.BenchmarkProfiles) != 0
+	if hasSingular == hasPlural {
+		return false
+	}
+	profiles := component.BenchmarkProfiles
+	if hasSingular {
+		profiles = []string{component.BenchmarkProfile}
+	}
+	seen := make(map[string]struct{}, len(profiles))
+	for _, profile := range profiles {
+		if profile == "" {
+			return false
+		}
+		if _, duplicate := seen[profile]; duplicate {
+			return false
+		}
+		if _, ok := declared[profile]; !ok {
+			return false
+		}
+		seen[profile] = struct{}{}
+	}
+	return true
 }
 
 func validateCatalogIndexResults(
@@ -642,13 +670,26 @@ func validateCatalogIndexResults(
 		seen[key] = struct{}{}
 		_, modelOK := models[result.Model]
 		_, indexOK := indices[result.Index]
-		if !modelOK || result.ReasoningEffort == "" || !indexOK || result.Status != "available" ||
+		if !modelOK || result.ReasoningEffort == "" || !indexOK ||
 			!finite(result.Coverage) || result.Coverage < 0 || result.Coverage > 1 ||
-			result.Score == nil || !finite(*result.Score) {
+			!validCatalogIndexResultStatus(result) {
 			return fmt.Errorf("malformed index result")
 		}
 	}
 	return nil
+}
+
+func validCatalogIndexResultStatus(result modelcatalog.IndexResult) bool {
+	switch result.Status {
+	case "available":
+		return result.Score != nil && finite(*result.Score) && result.Coverage > 0
+	case "partial":
+		return result.Score == nil && result.Coverage > 0 && result.Coverage < 1
+	case "missing":
+		return result.Score == nil && result.Coverage == 0
+	default:
+		return false
+	}
 }
 
 func validModelCatalogDigest(value string) bool {

@@ -230,7 +230,7 @@ func TestPromptAlgorithmRejectsEffectiveLoRAIdentityCollision(t *testing.T) {
 	}
 }
 
-func TestValidateLocalClassifierReloadRequiresRestartForChanges(t *testing.T) {
+func TestValidateLocalClassifierReloadAllowsPreparedGenerationChanges(t *testing.T) {
 	current := &RouterConfig{IntelligentRouting: IntelligentRouting{
 		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
 			Name:      "risk",
@@ -259,18 +259,18 @@ func TestValidateLocalClassifierReloadRequiresRestartForChanges(t *testing.T) {
 	if err := ValidateLocalClassifierReload(current, same); err != nil {
 		t.Fatalf("same runtime contract rejected: %v", err)
 	}
-	if err := ValidateLocalClassifierReload(current, changed); err == nil {
-		t.Fatal("expected restart-required error for local classifier change")
+	if err := ValidateLocalClassifierReload(current, changed); err != nil {
+		t.Fatalf("candidate model change rejected: %v", err)
 	}
-	if err := ValidateLocalClassifierReload(&RouterConfig{}, current); err == nil {
-		t.Fatal("expected restart-required error when adding a local classifier")
+	if err := ValidateLocalClassifierReload(&RouterConfig{}, current); err != nil {
+		t.Fatalf("candidate classifier addition rejected: %v", err)
 	}
-	if err := ValidateLocalClassifierReload(current, &RouterConfig{}); err == nil {
-		t.Fatal("expected restart-required error when removing a local classifier")
+	if err := ValidateLocalClassifierReload(current, &RouterConfig{}); err != nil {
+		t.Fatalf("candidate classifier removal rejected: %v", err)
 	}
 }
 
-func TestRecipeLocalClassifiersShareOneRuntimeSignature(t *testing.T) {
+func TestRecipeLocalClassifiersHaveIndependentRuntimeSignatures(t *testing.T) {
 	rule := func(path string) ClassifierSignalRule {
 		return ClassifierSignalRule{
 			Name:      "risk",
@@ -298,8 +298,8 @@ func TestRecipeLocalClassifiersShareOneRuntimeSignature(t *testing.T) {
 	}
 
 	cfg.Recipes[1].Profile.Signals.ClassifierRules[0].ModelPath = "models/other-risk"
-	if err := validateGlobalClassifierRuntimeContracts(cfg); err == nil {
-		t.Fatal("expected incompatible recipe-local classifier error")
+	if err := validateGlobalClassifierRuntimeContracts(cfg); err != nil {
+		t.Fatalf("independent recipe models rejected: %v", err)
 	}
 }
 

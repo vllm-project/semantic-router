@@ -81,6 +81,7 @@ export default function BrowseLayout({
                         [styles.navLinkActive]: isActive,
                       })}
                       to={item.to}
+                      data-noBrokenLinkCheck={isHashItem || undefined}
                       aria-current={isActive ? 'page' : undefined}
                     >
                       {item.label}

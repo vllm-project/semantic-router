@@ -169,6 +169,7 @@ func (registry *Registry) findCatalogBinding(providerID, modelID, nativeModelID,
 		}
 		copy := catalogBinding
 		copy.Protocols = append([]string(nil), catalogBinding.Protocols...)
+		copy.ReasoningEffortsByProtocol = cloneStringSliceMap(catalogBinding.ReasoningEffortsByProtocol)
 		copy.Restrictions = cloneMap(catalogBinding.Restrictions)
 		return &copy
 	}

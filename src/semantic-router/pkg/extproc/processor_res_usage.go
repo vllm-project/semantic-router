@@ -216,6 +216,9 @@ func (r *OpenAIRouter) recordResponseCost(
 			costAmount := costForResponseUsage(usage, pricing)
 			currency := pricing.Currency
 			metrics.RecordModelCost(ctx.RequestModel, currency, costAmount)
+			ctx.RequestCost = costAmount
+			ctx.RequestCostCurrency = currency
+			ctx.RequestCostPriced = true
 			eventFields["cost"] = costAmount
 			eventFields["currency"] = currency
 			eventFields["pricing_prompt_per_1m"] = pricing.PromptPer1M

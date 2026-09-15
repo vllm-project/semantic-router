@@ -1,10 +1,6 @@
 import React, { useMemo, useState } from 'react'
 
-import type {
-  CatalogProtocol,
-  CatalogProvider,
-  ProviderScope,
-} from '../../data/modelHubCatalogTypes'
+import type { CatalogProtocol, CatalogProvider } from '../../data/modelHubCatalogTypes'
 import { providerProtocolOperations } from '../../data/modelHubProviderOperations'
 import { CatalogMark } from './ModelHubMark'
 import { EmptyState, Pagination, readable, srOnlyClass } from './ModelHubPrimitives'
@@ -28,7 +24,7 @@ function ProviderCard({
         }))
       : []
   })
-  const mapped = Boolean(provider.models?.length)
+  const builtInModelCount = provider.models?.length ?? 0
 
   return (
     <article className={styles.providerCard}>
@@ -47,7 +43,6 @@ function ProviderCard({
             {provider.conformance.verified_at ? ` · ${provider.conformance.verified_at}` : ''}
           </span>
           <span>{readable(provider.support_tier)}</span>
-          <span>{mapped ? 'Mapped' : 'Contract only'}</span>
         </div>
       </div>
       <div className={styles.summary}>
@@ -56,7 +51,11 @@ function ProviderCard({
         <dl className={styles.providerFacts}>
           <div>
             <dt>Models</dt>
-            <dd>{provider.models?.length || 'Custom'}</dd>
+            <dd>
+              {builtInModelCount
+                ? `${builtInModelCount} built-in ${builtInModelCount === 1 ? 'choice' : 'choices'}`
+                : 'Enter a model ID'}
+            </dd>
           </div>
           <div>
             <dt>Protocols</dt>
@@ -118,29 +117,24 @@ export function ModelHubProviders({
   protocols: CatalogProtocol[]
 }) {
   const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<ProviderScope>('mapped')
   const [page, setPage] = useState(1)
   const protocolMap = useMemo(() => new Map(protocols.map(item => [item.id, item])), [protocols])
-  const mappedCount = providers.filter(provider => provider.models?.length).length
-  const contractOnlyCount = providers.length - mappedCount
   const filtered = providers.filter((provider) => {
-    const mapped = Boolean(provider.models?.length)
-    const scopeMatches = scope === 'all' || (scope === 'mapped' ? mapped : !mapped)
     const haystack = `${provider.display_name} ${provider.id} ${provider.description} ${provider.protocols.join(' ')}`.toLocaleLowerCase()
-    return scopeMatches && (!query.trim() || haystack.includes(query.trim().toLocaleLowerCase()))
+    return !query.trim() || haystack.includes(query.trim().toLocaleLowerCase())
   })
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageProviders = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const updateScope = (next: ProviderScope) => {
-    setScope(next)
-    setPage(1)
-  }
 
   return (
     <div className={styles.providers}>
+      <p className={styles.providerGuide}>
+        Every provider below can be connected to Semantic Router. Choose a built-in model when one
+        is listed, or enter any model ID that the provider serves.
+      </p>
       <div className={styles.toolbar}>
         <label>
-          <span className={srOnlyClass}>Search provider contracts</span>
+          <span className={srOnlyClass}>Search providers</span>
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <circle cx="8.5" cy="8.5" r="5.5" />
             <path d="m12.5 12.5 4 4" />
@@ -155,15 +149,6 @@ export function ModelHubProviders({
             placeholder="Search providers"
           />
         </label>
-        <div role="group" aria-label="Provider scope">
-          {([
-            ['mapped', `Mapped ${mappedCount}`],
-            ['contract_only', `Contract only ${contractOnlyCount}`],
-            ['all', `All ${providers.length}`],
-          ] as Array<[ProviderScope, string]>).map(([value, label]) => (
-            <button key={value} type="button" aria-pressed={scope === value} onClick={() => updateScope(value)}>{label}</button>
-          ))}
-        </div>
       </div>
       <div className={styles.resultCount}>
         {filtered.length}

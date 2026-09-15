@@ -44,28 +44,55 @@ func (e *StageContextWindowError) Error() string {
 	)
 }
 
-func (l *BaseLooper) callModelWithContextGate(
+func (l *BaseLooper) dispatchModel(
 	ctx context.Context,
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,
-	modelName string,
+	target ModelTarget,
+	options CallOptions,
+) (*ModelResponse, error) {
+	if err := validateLooperStageContext(baseReq, stageReq, target.Name); err != nil {
+		return nil, err
+	}
+	return l.client.CallModelWithOptions(ctx, *stageReq, target, options)
+}
+
+// startConfidenceModelAttempt validates and dispatches one traced Confidence model call.
+func (l *BaseLooper) startConfidenceModelAttempt(
+	ctx context.Context,
+	baseReq *Request,
+	stageReq *openai.ChatCompletionNewParams,
+	modelName, stage, role string,
 	streaming bool,
 	iteration int,
 	logprobsConfig *LogprobsConfig,
 	accessKey string,
-) (*ModelResponse, error) {
+) (*ModelResponse, *attemptHandle, error) {
 	if err := validateLooperStageContext(baseReq, stageReq, modelName); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return l.client.CallModel(
-		ctx,
-		stageReq,
-		modelName,
-		streaming,
-		iteration,
-		logprobsConfig,
-		accessKey,
+	attemptCtx, attempt := startAttempt(ctx, modelAttemptSpec(
+		baseReq, stageReq, stage, role, modelName,
+	))
+	decisionName := ""
+	if baseReq != nil {
+		decisionName = baseReq.DecisionName
+	}
+	response, err := l.client.CallModelWithOptions(
+		attemptCtx,
+		*stageReq,
+		ModelTarget{Name: modelName, AccessKey: accessKey},
+		CallOptions{
+			DecisionName: decisionName,
+			Iteration:    iteration,
+			Mode:         responseMode(streaming),
+			Logprobs:     logprobsConfig,
+		},
 	)
+	if err != nil && attempt != nil {
+		attempt.finish(attemptResult{err: err, reason: attemptReasonFromError(err)})
+	}
+	return response, attempt, err
 }
 
 func validateLooperStageContext(

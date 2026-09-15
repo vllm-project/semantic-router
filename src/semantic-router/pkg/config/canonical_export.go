@@ -12,12 +12,13 @@ import (
 // from the internal runtime config.
 func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	if cfg == nil {
-		return CanonicalConfig{Version: "v0.3"}
+		return CanonicalConfig{Version: CanonicalConfigVersion}
 	}
 
 	return CanonicalConfig{
-		Version:   "v0.3",
-		Listeners: append([]Listener(nil), cfg.Listeners...),
+		Version:    CanonicalConfigVersion,
+		Listeners:  append([]Listener(nil), cfg.Listeners...),
+		Evaluation: cloneCanonicalEvaluation(cfg.Evaluation),
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{
 				DefaultModel:           cfg.DefaultModel,
@@ -52,11 +53,12 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
-		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
-		Decisions:   copyDecisions(cfg.Decisions),
-		Strategy:    cfg.Strategy,
+		ModelBindings: cloneModelMap(cfg.ModelBindings),
+		ModelCards:    routingModelsFromRouterConfig(cfg),
+		Signals:       canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
+		Projections:   canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
+		Decisions:     copyDecisions(cfg.Decisions),
+		Strategy:      cfg.Strategy,
 	}
 }
 
@@ -76,6 +78,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
 		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
+		Hallucination: append([]HallucinationRule(nil), signals.HallucinationRules...),
 		PII:           append([]PIIRule(nil), signals.PIIRules...),
 		KB:            append([]KBSignalRule(nil), signals.KBRules...),
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
@@ -121,7 +124,7 @@ func routingModelOverridesFromEffectiveRegistry(cfg *RouterConfig) []RoutingMode
 }
 
 func hasOperatorModelCardData(card modelcatalog.EffectiveModelCard) bool {
-	if len(card.LoRAs) > 0 || len(card.Evaluations) > 0 {
+	if len(card.LoRAs) > 0 {
 		return true
 	}
 	for _, source := range card.Provenance {
@@ -136,9 +139,8 @@ func routingModelFromEffectiveModel(effective modelcatalog.EffectiveModel) Routi
 	card := effective.Card.Card
 	provenance := effective.Card.Provenance
 	model := RoutingModel{
-		Name:        effective.Catalog,
-		Evaluations: cloneUserEvaluations(effective.Card.Evaluations),
-		LoRAs:       routingLoRAsFromEffectiveCard(effective.Card),
+		Name:  effective.Catalog,
+		LoRAs: routingLoRAsFromEffectiveCard(effective.Card),
 	}
 	if provenance["display_name"] == "operator" {
 		model.DisplayName = card.DisplayName
@@ -274,7 +276,6 @@ func routingModelsFromRuntimeConfig(cfg *RouterConfig) []RoutingModel {
 			Capabilities:      append([]string(nil), params.Capabilities...),
 			LoRAs:             copyLoRAAdapters(params.LoRAs),
 			Tags:              append([]string(nil), params.Tags...),
-			Evaluations:       cloneUserEvaluations(params.Evaluations),
 			Modality:          params.Modality,
 		})
 	}
@@ -348,6 +349,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 	}
 
 	return CanonicalModelCatalog{
+		Deployments: cloneModelMap(cfg.ModelDeployments),
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},

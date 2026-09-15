@@ -19,7 +19,6 @@ func (c *Classifier) evaluateInputModalitySignal(
 	usedSignals map[string]bool,
 ) {
 	start := time.Now()
-	bestConfidence := 0.0
 	var matched []string
 	values := make(map[string]float64, len(c.Config.InputModalityRules))
 	for _, rule := range c.Config.InputModalityRules {
@@ -30,24 +29,20 @@ func (c *Classifier) evaluateInputModalitySignal(
 		values[signalConfidenceKey(config.SignalTypeInputModality, rule.Name)] = value
 		if value > 0 {
 			matched = append(matched, rule.Name)
-			bestConfidence = 1.0
 			c.recordSignalMatch(config.SignalTypeInputModality, rule.Name)
 		}
 	}
 	mu.Lock()
 	for key, value := range values {
 		results.SignalValues[key] = value
-		if value > 0 {
-			results.SignalConfidences[key] = 1.0
-		} else {
-			results.SignalConfidences[key] = 0
-		}
 	}
 	results.MatchedInputModalityRules = append(results.MatchedInputModalityRules, matched...)
 	mu.Unlock()
 	elapsed := time.Since(start)
 	results.Metrics.InputModality.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	results.Metrics.InputModality.Confidence = bestConfidence
+	available := false
+	results.Metrics.InputModality.ConfidenceAvailable = &available
+	results.Metrics.InputModality.Method = "structural_presence"
 }
 
 func inputModalityCount(modality string, facts InputModalityFacts) int {

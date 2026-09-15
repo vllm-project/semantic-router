@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestEmbeddingClassifier_SoftMatchingDisabledWithoutHardMatch(t *testing.T) {
@@ -369,7 +369,7 @@ func newTestEmbeddingClassifier(
 func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 	calls := 0
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		calls++
 		return nil, errors.New("constructor must not call embedding backend")
 	}
@@ -392,11 +392,11 @@ func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 func TestEmbeddingClassifierWarmupFailureDoesNotPublishPartialEmbeddings(t *testing.T) {
 	failBadCandidate := true
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		if text == "bad" && failBadCandidate {
 			return nil, errors.New("synthetic embedding failure")
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
 		getEmbedding2DMatryoshka = originalFunc
@@ -433,16 +433,16 @@ func stubEmbeddingLookup(t *testing.T, mockEmbeddings map[string][]float32) {
 
 	originalLegacyFunc := getEmbeddingWithModelType
 	originalMatryoshkaFunc := getEmbedding2DMatryoshka
-	lookup := func(text string) *candle_binding.EmbeddingOutput {
+	lookup := func(text string) *tasks.EmbeddingResult {
 		if emb, ok := mockEmbeddings[text]; ok {
-			return &candle_binding.EmbeddingOutput{Embedding: emb}
+			return &tasks.EmbeddingResult{Embedding: emb}
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0.0)}
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(0.0)}
 	}
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		return lookup(text), nil
 	}
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		return lookup(text), nil
 	}
 	t.Cleanup(func() {

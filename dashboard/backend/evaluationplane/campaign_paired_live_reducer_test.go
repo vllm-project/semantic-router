@@ -379,7 +379,7 @@ func TestCampaignPairedLiveOperationOwnershipIncludesMoMCore(t *testing.T) {
 		trackID   TrackID
 		want      bool
 	}{
-		{operation: workerBrokerRouterEvaluate, trackID: "routing", want: true},
+		{operation: workerBrokerRoutingPreview, trackID: "routing", want: true},
 		{operation: workerBrokerArmChatCompletion, trackID: "model_pool", want: true},
 		{operation: workerBrokerRoutedChatCompletion, trackID: "joint", want: true},
 		{operation: workerBrokerRoutedChatCompletion, trackID: "model_pool", want: false},

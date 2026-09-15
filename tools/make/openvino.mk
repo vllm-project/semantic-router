@@ -21,7 +21,8 @@ test-openvino-binding: build-openvino-binding convert-openvino-test-models ## Ru
 	@echo "================================================================"
 	@OV_LIB_DIR=$$(python3 -c "import openvino; print(openvino.__path__[0])" 2>/dev/null)/libs; \
 		OV_TOK_DIR=$$(python3 -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])" 2>/dev/null)/lib; \
-		export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH && \
+		export $(NATIVE_ENV) && \
+		export LD_LIBRARY_PATH="$(CURDIR)/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH" && \
 		cd openvino-binding && CGO_ENABLED=1 go test -v -timeout 10m
 	@echo "================================================================"
 	@echo "✅ OpenVINO binding tests passed"
@@ -44,7 +45,8 @@ test-openvino-specific: build-openvino-binding convert-openvino-test-models ## R
 	@echo "Running OpenVINO test: $(TEST_NAME)"
 	@OV_LIB_DIR=$$(python3 -c "import openvino; print(openvino.__path__[0])" 2>/dev/null)/libs; \
 		OV_TOK_DIR=$$(python3 -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])" 2>/dev/null)/lib; \
-		export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH && \
+		export $(NATIVE_ENV) && \
+		export LD_LIBRARY_PATH="$(CURDIR)/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH" && \
 		cd openvino-binding && CGO_ENABLED=1 go test -v -timeout 10m -run "^$(TEST_NAME)$$"
 
 # Verify OpenVINO binding with real model inference
@@ -54,7 +56,8 @@ verify-openvino-binding: build-openvino-binding convert-openvino-test-models ## 
 	@echo "================================================================"
 	@OV_LIB_DIR=$$(python3 -c "import openvino; print(openvino.__path__[0])" 2>/dev/null)/libs; \
 		OV_TOK_DIR=$$(python3 -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])" 2>/dev/null)/lib; \
-		export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH && \
+		export $(NATIVE_ENV) && \
+		export LD_LIBRARY_PATH="$(CURDIR)/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH" && \
 		cd openvino-binding && go run verify_tests_are_real.go
 	@echo "================================================================"
 	@echo "✅ OpenVINO binding verification passed"
@@ -63,7 +66,8 @@ verify-openvino-binding: build-openvino-binding convert-openvino-test-models ## 
 benchmark-openvino-vs-candle: build-openvino-binding rust convert-openvino-test-models ## Benchmark OpenVINO vs Candle
 	@$(LOG_TARGET)
 	@echo "Running OpenVINO vs Candle benchmark..."
-	@export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$${PWD}/candle-binding/target/release:$$LD_LIBRARY_PATH && \
+	@export $(NATIVE_ENV) && \
+		export LD_LIBRARY_PATH="$(CURDIR)/openvino-binding/build:$$LD_LIBRARY_PATH" && \
 		cd openvino-binding/bench && go run mmbert_classifier_bench.go
 
 

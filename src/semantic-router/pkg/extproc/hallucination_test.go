@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -540,7 +541,7 @@ var _ = Describe("FactCheckClassifier Integration", func() {
 		}
 
 		for _, q := range factualQuestions {
-			result, err := classifier.Classify(q)
+			result, err := classifier.Classify(context.Background(), q)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			// Just verify it returns valid result
@@ -560,7 +561,7 @@ var _ = Describe("FactCheckClassifier Integration", func() {
 		}
 
 		for _, q := range codeQuestions {
-			result, err := classifier.Classify(q)
+			result, err := classifier.Classify(context.Background(), q)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			// Just verify it returns valid result
@@ -617,36 +618,36 @@ var _ = Describe("HallucinationDetector Integration", func() {
 	})
 
 	It("should detect grounded answers", func() {
-		context := "The Eiffel Tower is located in Paris, France. It was built in 1889."
+		contextText := "The Eiffel Tower is located in Paris, France. It was built in 1889."
 		question := "Where is the Eiffel Tower?"
 		answer := "The Eiffel Tower is located in Paris, France."
 
-		result, err := detector.Detect(context, question, answer)
+		result, err := detector.Detect(context.Background(), contextText, question, answer)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).NotTo(BeNil())
 		Expect(result.HallucinationDetected).To(BeFalse())
 	})
 
 	It("should require context", func() {
-		_, err := detector.Detect("", "question", "some answer")
+		_, err := detector.Detect(context.Background(), "", "question", "some answer")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("context is required"))
 	})
 
 	It("should handle empty answer", func() {
-		result, err := detector.Detect("context", "question", "")
+		result, err := detector.Detect(context.Background(), "context", "question", "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).NotTo(BeNil())
 		Expect(result.HallucinationDetected).To(BeFalse())
 	})
 
 	It("should detect hallucinated answers", func() {
-		context := "The Eiffel Tower was constructed from 1887 to 1889. It is 330 metres tall."
+		contextText := "The Eiffel Tower was constructed from 1887 to 1889. It is 330 metres tall."
 		question := "When was the Eiffel Tower built?"
 		// HALLUCINATED: wrong year and wrong height
 		answer := "The Eiffel Tower was built in 1950 and is 500 meters tall."
 
-		result, err := detector.Detect(context, question, answer)
+		result, err := detector.Detect(context.Background(), contextText, question, answer)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).NotTo(BeNil())
 		Expect(result.HallucinationDetected).To(BeTrue())

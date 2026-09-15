@@ -11,6 +11,24 @@
       }
     },
     {
+      "name": "chat_template_kwargs",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
       "name": "frequency_penalty",
       "outcome": {
         "status": "ok",

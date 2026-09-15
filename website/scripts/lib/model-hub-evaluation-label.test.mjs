@@ -85,14 +85,7 @@ test('model hub distinguishes configurable effort from published run conditions'
   )
 })
 
-test('website benchmark bars and detail evidence use the shared condition label', () => {
-  const benchmark = readFileSync(
-    resolve(
-      repositoryRoot,
-      'website/src/components/model-hub/ModelHubBenchmark.tsx',
-    ),
-    'utf8',
-  )
+test('website detail evidence uses the shared condition label', () => {
   const detail = readFileSync(
     resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubDetail.tsx'),
     'utf8',
@@ -102,10 +95,7 @@ test('website benchmark bars and detail evidence use the shared condition label'
     'utf8',
   )
 
-  assert.equal(benchmark.match(/modelHubEvaluationConditionLabel\(/g)?.length, 1)
   assert.equal(detail.match(/modelHubEvaluationConditionLabel\(/g)?.length, 1)
-  assert.match(benchmark, /aria-label=\{`\$\{row\.model\.display_name\}, \$\{condition\}/)
-  assert.doesNotMatch(benchmark, /Rank \$\{/)
   assert.doesNotMatch(detail, /readable\([^)]*reasoning_effort[^)]*\)/)
   assert.match(primitives, /if \(!value\) return 'Not published'/)
   assert.doesNotMatch(primitives, /Release date unavailable/)

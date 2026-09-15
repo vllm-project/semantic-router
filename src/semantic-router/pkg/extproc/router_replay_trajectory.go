@@ -40,7 +40,7 @@ type routerReplayTrajectoryResponse struct {
 	Messages    []trajectoryMessage `json:"messages"`
 }
 
-// handleRouterReplayTrajectoryAPI serves GET /v1/router_replay/trajectory?session_id={id}.
+// handleRouterReplayTrajectoryAPI serves GET /api/v1/observability/replays/trajectory?session_id={id}.
 // It converts stored ToolTrace steps into a flat OpenAI Chat Completions message list.
 // Multiple HTTP requests made by one agent turn are cumulative snapshots; the most
 // complete snapshot is selected before messages are emitted.
