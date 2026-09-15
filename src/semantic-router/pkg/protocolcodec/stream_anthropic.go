@@ -50,8 +50,8 @@ type anthropicEventWire struct {
 }
 
 type anthropicMessageDeltaUsageWire struct {
-	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens *int64                          `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     *int64                          `json:"cache_read_input_tokens"`
 	InputTokens              int64                           `json:"input_tokens"`
 	OutputTokens             int64                           `json:"output_tokens"`
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
@@ -353,27 +353,6 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unknown_stream_delta", "Anthropic stream delta is unsupported", nil)
 	}
 	return event, nil
-}
-
-func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool) llmprotocol.Usage {
-	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
-	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 {
-		usage.InputUncached = authoritative(wire.InputTokens)
-		usage.InputCacheRead = authoritative(wire.CacheReadInputTokens)
-		usage.InputCacheWrite = authoritative(wire.CacheCreationInputTokens)
-		usage.InputTotal = authoritative(wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens)
-	}
-	if wire.OutputTokens > 0 || !initial {
-		reasoning := wire.OutputTokensDetails.ThinkingTokens
-		other := wire.OutputTokens - reasoning
-		if other < 0 {
-			other = 0
-		}
-		usage.OutputReasoning = authoritative(reasoning)
-		usage.OutputOther = authoritative(other)
-		usage.OutputTotal = authoritative(wire.OutputTokens)
-	}
-	return usage
 }
 
 func decodeAnthropicMessageDeltaUsage(wire anthropicMessageDeltaUsageWire) llmprotocol.Usage {
