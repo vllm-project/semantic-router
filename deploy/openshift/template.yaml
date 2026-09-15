@@ -27,6 +27,43 @@ objects:
       openshift.io/description: Namespace for vLLM Semantic Router deployment on OpenShift
       openshift.io/display-name: vLLM Semantic Router System
 - apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: semantic-router
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: semantic-router-config-writer
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+  # Scoped to the one ConfigMap that backs the mounted config file, so the
+  # config write API can patch it through the Kubernetes API instead of the
+  # read-only mount (issue #3688).
+  rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["semantic-router-config"]
+    verbs: ["get", "update", "patch"]
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: semantic-router-config-writer
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: semantic-router-config-writer
+  subjects:
+  - kind: ServiceAccount
+    name: semantic-router
+    namespace: ${NAMESPACE}
+- apiVersion: v1
   kind: PersistentVolumeClaim
   metadata:
     name: semantic-router-models
@@ -56,6 +93,7 @@ objects:
         labels:
           app: semantic-router
       spec:
+        serviceAccountName: semantic-router
         containers:
         - name: semantic-router
           image: ${CONTAINER_IMAGE}:${CONTAINER_TAG}
@@ -81,6 +119,14 @@ objects:
           env:
           - name: LD_LIBRARY_PATH
             value: /app/lib
+          # Lets the config write API patch this ConfigMap through the
+          # Kubernetes API instead of the read-only mounted file (#3688).
+          - name: VLLM_SR_K8S_CONFIGMAP_NAME
+            value: semantic-router-config
+          - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           volumeMounts:
           - name: config-volume
             mountPath: /app/config/config.yaml
