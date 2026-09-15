@@ -13,6 +13,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
@@ -37,9 +38,12 @@ func (e *imageEncodeError) Error() string {
 func (e *imageEncodeError) Unwrap() error { return e.err }
 
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
-// error code, and client message. Input-caused image-encode failures are 400
-// INVALID_IMAGE; every other failure is a genuine 500.
+// error code, and client message. Model input limits and input-caused image
+// failures are client errors; other inference failures remain internal errors.
 func classifyEmbeddingError(err error) (int, string, string) {
+	if errors.Is(err, binding.ErrInputLimit) {
+		return http.StatusBadRequest, "INVALID_INPUT", err.Error()
+	}
 	var imgErr *imageEncodeError
 	if errors.As(err, &imgErr) {
 		return http.StatusBadRequest, "INVALID_IMAGE",
@@ -279,6 +283,10 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 	result := SimilarityResponse{Similarity: score, ModelUsed: first.ModelUsed, ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000}
 
 	if err != nil {
+		if errors.Is(err, binding.ErrInputLimit) {
+			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
 			fmt.Sprintf("failed to calculate similarity: %v", err))
 		return
@@ -336,6 +344,10 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 	defer release()
 	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
 	if err != nil {
+		if errors.Is(err, binding.ErrInputLimit) {
+			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED", err.Error())
 		return
 	}
