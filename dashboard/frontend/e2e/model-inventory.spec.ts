@@ -270,6 +270,7 @@ test.describe('Router model inventory surfaces', () => {
     await expect(details).toBeVisible()
     await expect(page).toHaveURL(/\/dashboard$/)
     await expect(details).toContainText('models/mmbert-embed-32k-2d-matryoshka')
+    await expect(details.getByText(routerModels[4].registry.description, { exact: true })).toBeVisible()
     await expect(details).toContainText('Recipe')
     await expect(details).toContainText('default')
     await expect(details).toContainText('Provider')
@@ -295,6 +296,39 @@ test.describe('Router model inventory surfaces', () => {
     await expect(closeButtons.first()).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(details.getByRole('link', { name: /model card/i })).toBeFocused()
+  })
+
+  test('keeps model-card HTML out of runtime descriptions', async ({ page }) => {
+    const embedding = routerModels[4]
+    const description = [
+      '<div align="center">',
+      '<img src="https://vllm-sr.ai/img/vllm-sr-logo.social.png" alt="vLLM Semantic Router" width="560" />',
+      '<p> <a href="https://vllm-sr.ai/"><strong>Docs</strong></a> |',
+      '<a href="https://vllm-sr.ai/blog/"><strong>Blog</strong></a> |',
+      '<a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN"><strong>Slack</strong></a> |',
+      '<a href="https://github.com/vllm-project/semantic-router"><strong>GitHub</strong></a> </p> </div>',
+    ].join(' ')
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: {
+        ...statusPayload.models,
+        models: [{ ...embedding, registry: { ...embedding.registry, description } }],
+        summary: { ...statusPayload.models.summary, loaded_models: 1, total_models: 1 },
+      },
+    })
+    await page.goto('/dashboard')
+    await page.getByTestId('router-model-preview-mmbert_embedding_model').click()
+
+    const details = page.getByRole('dialog', { name: 'Runtime model details' })
+    await expect(details).toBeVisible()
+    await expect(details.getByText('Embedding', { exact: true }).first()).toBeVisible()
+    await expect(details).not.toContainText('<div')
+    await expect(details).not.toContainText('Docs')
+    await expect(details).not.toContainText('Blog')
+    await expect(details.getByRole('link')).toHaveCount(1)
+    await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
+      'href', embedding.registry.model_card_url,
+    )
   })
 
   test('keeps same-name runtimes scoped to the clicked recipe', async ({ page }) => {
