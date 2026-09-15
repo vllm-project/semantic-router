@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "0f2ba0de7c435366ed68bcf03f5a1bb49b9cb90c"
   source_file: "docs/tutorials/plugin/memory.md"
   outdated: false
 ---
@@ -51,3 +51,9 @@ plugins:
 
 记忆可以持久化从请求派生的内容，并将检索到的记忆发送给所选模型。请为这些数据选择合适的用户/租户隔离、保留策略、认证和传输安全。阈值取决于嵌入模型。完整示例见：
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml)。
+
+## 升级嵌入模型
+
+修改嵌入权重后，重启模型运行时。对于本地 `mmbert` 模型（包括 Vela Embedding），Router 将记忆与实际加载的模型、分词器、推理设置及向量维度绑定。变更这些设置会创建独立的物理集合或索引，以及独立的 Redis 热缓存；使用相同向量表示重启则复用已有存储。配置中的逻辑名称保持不变。
+
+此前没有身份标记的集合会保留，但不会自动接管：相同向量维度不代表两个模型的嵌入兼容。需要检索历史记忆时，请导出原内容并用新模型重新导入。启动或迁移不会删除旧集合。这项自动身份绑定目前覆盖本地 `mmbert`，其他嵌入提供方保留已有行为。

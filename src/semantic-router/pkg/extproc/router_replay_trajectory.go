@@ -24,20 +24,23 @@ type trajectoryToolCall struct {
 }
 
 type trajectoryMessage struct {
-	Role       string               `json:"role"`
-	Content    string               `json:"content,omitempty"`
-	ToolCalls  []trajectoryToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string               `json:"tool_call_id,omitempty"`
-	ToolName   string               `json:"tool_name,omitempty"`
-	TurnIndex  int                  `json:"turn_index"`
+	ConversationID string               `json:"conversation_id,omitempty"`
+	Role           string               `json:"role"`
+	Content        string               `json:"content,omitempty"`
+	ToolCalls      []trajectoryToolCall `json:"tool_calls,omitempty"`
+	ToolCallID     string               `json:"tool_call_id,omitempty"`
+	ToolName       string               `json:"tool_name,omitempty"`
+	TurnIndex      int                  `json:"turn_index"`
 }
 
 type routerReplayTrajectoryResponse struct {
 	Object      string              `json:"object"`
 	SessionID   string              `json:"session_id"`
+	Recipe      string              `json:"recipe"`
 	RecordCount int                 `json:"record_count"`
 	TurnCount   int                 `json:"turn_count"`
 	Messages    []trajectoryMessage `json:"messages"`
+	Routes      []trajectoryRoute   `json:"routes"`
 }
 
 // handleRouterReplayTrajectoryAPI serves GET /api/v1/observability/replays/trajectory?session_id={id}.
@@ -63,6 +66,16 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 	}
 
 	records := filterTrajectoryRecordsBySession(r.collectRouterReplayRecords(), sessionID)
+	recipe, scoped := values.Get("recipe"), values.Has("recipe")
+	if !scoped {
+		for index, record := range records {
+			if index > 0 && record.Recipe != recipe {
+				return r.createErrorResponse(400, "recipe is required when a session spans multiple recipes")
+			}
+			recipe = record.Recipe
+		}
+	}
+	records = filterTrajectoryRecordsByRecipe(records, recipe)
 	// collectRouterReplayRecords returns newest-first; trajectory needs chronological order.
 	reverseRoutingRecords(records)
 	turns := buildTrajectoryTurns(records)
@@ -70,9 +83,11 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 	payload := routerReplayTrajectoryResponse{
 		Object:      "router_replay.trajectory",
 		SessionID:   sessionID,
+		Recipe:      recipe,
 		RecordCount: len(records),
 		TurnCount:   len(turns),
 		Messages:    buildTrajectoryMessages(turns),
+		Routes:      buildTrajectoryRoutes(records),
 	}
 	return r.createRouterReplayJSONResponse(200, payload)
 }
@@ -96,28 +111,35 @@ func reverseRoutingRecords(records []routerreplay.RoutingRecord) {
 }
 
 type trajectoryTurn struct {
-	Index int
-	Steps []routerreplay.ToolTraceStep
+	ConversationID string
+	Index          int
+	Steps          []routerreplay.ToolTraceStep
 }
 
 // buildTrajectoryTurns collapses the cumulative HTTP requests made by an agent
-// loop into one complete trace per user turn. Later tool-loop requests include
-// the prior call and its result, so the richest snapshot is authoritative.
+// loop into one complete trace per conversation and user turn. Later tool-loop
+// requests include prior calls and results, so the richest snapshot is authoritative.
 func buildTrajectoryTurns(records []routerreplay.RoutingRecord) []trajectoryTurn {
 	turns := make([]trajectoryTurn, 0)
-	turnByIndex := make(map[int]int)
+	type turnKey struct {
+		conversationID string
+		index          int
+	}
+	turnByIndex := make(map[turnKey]int)
 	for _, record := range records {
 		steps := trajectoryStepsForRecord(record)
 		if len(steps) == 0 {
 			continue
 		}
 
-		turnPosition, exists := turnByIndex[record.TurnIndex]
+		key := turnKey{conversationID: record.ConversationID, index: record.TurnIndex}
+		turnPosition, exists := turnByIndex[key]
 		if !exists {
-			turnByIndex[record.TurnIndex] = len(turns)
+			turnByIndex[key] = len(turns)
 			turns = append(turns, trajectoryTurn{
-				Index: record.TurnIndex,
-				Steps: append([]routerreplay.ToolTraceStep(nil), steps...),
+				ConversationID: record.ConversationID,
+				Index:          record.TurnIndex,
+				Steps:          append([]routerreplay.ToolTraceStep(nil), steps...),
 			})
 			continue
 		}
@@ -151,15 +173,17 @@ func buildTrajectoryMessages(turns []trajectoryTurn) []trajectoryMessage {
 	messages := make([]trajectoryMessage, 0)
 	var pendingToolCalls []trajectoryToolCall
 	pendingTurnIndex := 0
+	pendingConversationID := ""
 
 	flushToolCalls := func() {
 		if len(pendingToolCalls) == 0 {
 			return
 		}
 		messages = append(messages, trajectoryMessage{
-			Role:      "assistant",
-			ToolCalls: pendingToolCalls,
-			TurnIndex: pendingTurnIndex,
+			Role:           "assistant",
+			ToolCalls:      pendingToolCalls,
+			TurnIndex:      pendingTurnIndex,
+			ConversationID: pendingConversationID,
 		})
 		pendingToolCalls = nil
 	}
@@ -167,10 +191,11 @@ func buildTrajectoryMessages(turns []trajectoryTurn) []trajectoryMessage {
 	for _, turn := range turns {
 		for _, step := range turn.Steps {
 			if step.Type == replayToolStepAssistantToolCall {
-				if len(pendingToolCalls) > 0 && pendingTurnIndex != turn.Index {
+				if len(pendingToolCalls) > 0 && (pendingTurnIndex != turn.Index || pendingConversationID != turn.ConversationID) {
 					flushToolCalls()
 				}
 				pendingTurnIndex = turn.Index
+				pendingConversationID = turn.ConversationID
 				pendingToolCalls = append(pendingToolCalls, trajectoryToolCall{
 					ID:   step.ToolCallID,
 					Type: "function",
@@ -183,6 +208,7 @@ func buildTrajectoryMessages(turns []trajectoryTurn) []trajectoryMessage {
 			}
 			flushToolCalls()
 			if msg := trajectoryMessageFromStep(step, turn.Index); msg != nil {
+				msg.ConversationID = turn.ConversationID
 				messages = append(messages, *msg)
 			}
 		}
@@ -191,12 +217,20 @@ func buildTrajectoryMessages(turns []trajectoryTurn) []trajectoryMessage {
 	return messages
 }
 
-// trajectoryStepsForRecord returns the semantic tool trace captured while the
-// request was live. Stored public wire bodies are presentation artifacts and
-// are never reparsed as an implicit canonical protocol.
+// trajectoryStepsForRecord projects the current user turn from the semantic
+// trace. Individual records retain their full input history, but earlier user
+// turns must not be emitted again under the current turn's index. With no
+// visible user boundary, preserve the available trace without inferring one.
+// Stored public wire bodies are never reparsed as an implicit canonical protocol.
 func trajectoryStepsForRecord(record routerreplay.RoutingRecord) []routerreplay.ToolTraceStep {
 	if record.ToolTrace != nil && len(record.ToolTrace.Steps) > 0 {
-		return record.ToolTrace.Steps
+		steps := record.ToolTrace.Steps
+		for index := len(steps) - 1; index >= 0; index-- {
+			if steps[index].Type == replayToolStepUserInput {
+				return steps[index:]
+			}
+		}
+		return steps
 	}
 	return nil
 }

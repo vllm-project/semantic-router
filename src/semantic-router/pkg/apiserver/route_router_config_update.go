@@ -175,6 +175,9 @@ func validateParsedHotReloadCompatibility(
 	currentCfg *config.RouterConfig,
 	nextCfg *config.RouterConfig,
 ) error {
+	if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
+		return err
+	}
 	if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
 		return err
 	}
@@ -369,6 +372,8 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(
 	previousData []byte,
 	yamlBytes []byte,
 ) bool {
+	release := s.runtimeRegistry.LockConfigPublication()
+	defer release()
 	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write source config: %v", err))
 		return false

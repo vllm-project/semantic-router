@@ -2502,7 +2502,8 @@ pub extern "C" fn classify_mmbert_32k_jailbreak_with_probabilities(
 ///
 /// # Returns
 /// `ModernBertClassificationResult` with:
-/// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
+/// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT;
+///   Vela adds 4=NO_FEEDBACK. A value of -1 indicates an error.
 /// - `confidence`: confidence score (0.0-1.0)
 #[no_mangle]
 pub extern "C" fn classify_mmbert_32k_feedback(
@@ -2550,7 +2551,8 @@ pub extern "C" fn classify_mmbert_32k_feedback(
 ///
 /// # Returns
 /// `ModernBertClassificationResultWithProbs` with:
-/// - `class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
+/// - `class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT;
+///   Vela adds 4=NO_FEEDBACK. A value of -1 indicates an error.
 /// - `confidence`: confidence score of the predicted class (0.0-1.0)
 /// - `probabilities`: caller frees with `free_modernbert_probabilities`
 #[no_mangle]
@@ -2610,22 +2612,27 @@ pub extern "C" fn classify_mmbert_32k_feedback_with_probabilities(
 /// - `model_config_path` must be a valid null-terminated C string or null
 ///
 /// # Returns
-/// `ModernBertTokenClassificationResult` with detected PII entities
+/// Detected PII entities, or `num_entities = -1` on inference/input failure.
+/// A successful scan with no detected PII returns `num_entities = 0`.
 #[no_mangle]
 pub extern "C" fn classify_mmbert_32k_pii_tokens(
     text: *const c_char,
 ) -> ModernBertTokenClassificationResult {
-    let default_result = ModernBertTokenClassificationResult {
+    let error_result = ModernBertTokenClassificationResult {
         entities: std::ptr::null_mut(),
-        num_entities: 0,
+        num_entities: -1,
     };
+
+    if text.is_null() {
+        return error_result;
+    }
 
     let text = unsafe {
         match CStr::from_ptr(text).to_str() {
             Ok(s) => s,
             Err(_) => {
                 eprintln!("Failed to convert text from C string");
-                return default_result;
+                return error_result;
             }
         }
     };
@@ -2635,7 +2642,10 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
             Ok(entities) => {
                 let num_entities = entities.len() as i32;
                 if num_entities == 0 {
-                    return default_result;
+                    return ModernBertTokenClassificationResult {
+                        entities: std::ptr::null_mut(),
+                        num_entities: 0,
+                    };
                 }
 
                 // Allocate memory for entities
@@ -2677,12 +2687,12 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
             }
             Err(e) => {
                 eprintln!("mmBERT-32K PII classification failed: {}", e);
-                default_result
+                error_result
             }
         }
     } else {
         eprintln!("mmBERT-32K PII classifier not initialized");
-        default_result
+        error_result
     }
 }
 

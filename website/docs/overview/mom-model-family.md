@@ -92,46 +92,61 @@ recipes:
             type: static
 ```
 
-In a production recipe, signals and decisions would guard modality, context,
-tools, locality, and other requirements before selection. The public model name
-does not reach the backend; it resolves to the selected provider model.
+Signals and decisions identify the task. Candidate requirements then check the
+capabilities and context capacity of the assigned models. Deployment placement
+and data handling remain operator responsibilities. The public model name
+resolves to the selected provider model before backend dispatch.
 
 See [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the full schema and isolation rules.
 
 ## MoM V1
 
-MoM V1 is the built-in MoM example. It exposes five public models over one
-shared pool of seven logical provider aliases:
+MoM V1 offers five built-in recipes. Connect your own backends and choose the
+policy that fits your application:
 
-| Virtual model | Objective |
-| --- | --- |
-| `vllm-sr/mom-v1-blend` | Balance quality, latency, cost, and answer recovery. |
-| `vllm-sr/mom-v1-lite` | Prefer economical direct answers. |
-| `vllm-sr/mom-v1-flash` | Prefer interactive latency while preserving capabilities. |
-| `vllm-sr/mom-v1-ultra` | Prefer accuracy and allow bounded orchestration. |
-| `vllm-sr/mom-v1-vault` | Keep traffic on the configured local pool with stricter containment. |
+| Public model | Recipe | Decisions |
+| --- | --- | --- |
+| `vllm-sr/mom-v1-blend` | **Balance**: everyday quality, latency, and cost | `simple`, `medium`, `reasoning` |
+| `vllm-sr/mom-v1-lite` | **Cost**: economical serving with targeted escalation | `economy`, `tools`, `reasoning` |
+| `vllm-sr/mom-v1-flash` | **Speed**: responsive conversation and streaming | `fast`, `tools`, `reasoning` |
+| `vllm-sr/mom-v1-ultra` | **Accuracy**: strong answers and explicit orchestration | `simple`, `reasoning`, `review`, `agent` |
+| `vllm-sr/mom-v1-vault` | **Vault**: processing within your private deployment | `private`, `sensitive`, `guard` |
 
-MoM is a routing policy, not a checkpoint or model installer. Its reference
-backends must already be running and available under the configured aliases.
-Tool execution remains the client's responsibility, and “local” privacy still
-depends on the deployment's network, backends, logs, caches, and stores.
+Balance combines task difficulty, consequential advice, and answer-recovery
+signals. Speed and Cost use lighter routing signals. Accuracy normally selects
+one strong model; independent review and workflows require explicit intent.
+Long input or a subject label alone does not cause multi-model execution.
 
-Open **Models** in the Dashboard to connect and verify physical inference
-endpoints. Then choose a maintained **Recipe**, assign one or more connected
-models to each decision, and publish a **Mixture-of-Model** entrypoint. The
-Dashboard keeps backend credentials out of the Recipe while showing the
-resulting topology before it goes live.
+Vault disables client tools and Router content storage on every path. Its
+`guard` decision contains prompt attacks immediately. Safety and Hazard select
+`sensitive` for content risks, where an approved model can provide responsible
+help, explain risky material, or refuse harmful assistance. Hazard uses the
+model's published category thresholds.
+Assign Vault's other decisions to backends that meet your privacy requirements;
+the recipe cannot establish their physical location or provider retention.
 
-Start or resume the stack with one command:
+Start or resume the stack:
 
 ```bash
 vllm-sr serve
 ```
 
-Read the full
+Open **Models** in the Dashboard to connect and verify inference endpoints.
+Choose a **Recipe**, assign models to its backend decisions, and publish a
+**Mixture-of-Model** entrypoint. Single-model decisions need at least one
+qualified model; Accuracy's `review` and `agent` need two distinct workers.
+Vault's `guard` needs no backend assignment.
+
+Declare capabilities and input/output limits, and supply the relevant quality
+index at the assigned reasoning effort. **Preview** shows the signals, decision,
+and candidate-selection result. Send a real request to verify execution and
+latency before rollout.
+
+Policy version 3.0 keeps the decision names above and sends content risks to the sensitive pool. Validate new assignments before
+publishing an upgrade; existing published versions remain unchanged. See the
 [MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)
-for intended use, backend roles, data handling, evaluation, and limitations.
+for the complete requirements and data-handling policy.
 
 ## When MoM is the wrong abstraction
 

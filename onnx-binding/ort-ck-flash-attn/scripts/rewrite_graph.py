@@ -20,11 +20,14 @@ import sys
 import numpy as np
 import onnx
 from onnx import TensorProto, helper, numpy_helper
+from reshape_dimensions import copy_reshape_dimensions
 from stable_pooling import stabilize_mean_pooling
 
 WHERE_INPUT_COUNT = 3
 MASKED_ATTENTION_MAX = -10000.0
 ROPE_FREQUENCY_RANK = 3  # [1, rotary_dimension / 2, 1]
+POSITION_INPUT_RANK = 2  # [1, sequence]
+BINARY_INPUT_COUNT = 2
 
 
 def build_maps(graph):
@@ -54,23 +57,42 @@ def scalar_value(graph, out2node, name):
     return None
 
 
+def nan_guard_nodes(out2node, condition, probability):
+    """Prove a NaN predicate, including its exact self-equality lowering."""
+    guard = out2node.get(condition)
+    if guard is None or guard.domain or guard.attribute:
+        return []
+    if guard.op_type == "IsNaN" and list(guard.input) == [probability]:
+        return [guard]
+    if guard.op_type != "Not" or len(guard.input) != 1:
+        return []
+    equal = out2node.get(guard.input[0])
+    if (
+        equal is not None
+        and not equal.domain
+        and not equal.attribute
+        and equal.op_type == "Equal"
+        and list(equal.input) == [probability, probability]
+    ):
+        return [equal, guard]
+    return []
+
+
 def attention_probability_path(graph, out2node, softmax):
-    """Accept only direct probabilities or Where(IsNaN(p), scalar_zero, p)."""
+    """Accept direct probabilities or a proven NaN-to-zero guard."""
     probability = softmax.output[0]
     extra = []
     for node in graph.node:
         if node.op_type != "Where" or len(node.input) != WHERE_INPUT_COUNT:
             continue
-        guard = out2node.get(node.input[0])
+        guards = nan_guard_nodes(out2node, node.input[0], probability)
         if (
             node.input[2] == probability
-            and guard is not None
-            and guard.op_type == "IsNaN"
-            and list(guard.input) == [probability]
+            and guards
             and scalar_value(graph, out2node, node.input[1]) == 0
         ):
             probability = node.output[0]
-            extra = [guard, node]
+            extra = [*guards, node]
             break
     consumers = [
         n for n in graph.node if n.op_type == "MatMul" and n.input[0] == probability
@@ -472,12 +494,64 @@ def create_1d_padding_bias_nodes(graph):
     return nodes, unsqueeze_out
 
 
+def declared_position_input(graph, name):
+    """Recognize the standard singleton-batch position input, not activations."""
+    if name != "position_ids" or any(value.name == name for value in graph.output):
+        return False
+    value = next((value for value in graph.input if value.name == name), None)
+    if value is None or value.type.tensor_type.elem_type != TensorProto.INT64:
+        return False
+    dims = value.type.tensor_type.shape.dim
+    return (
+        len(dims) == POSITION_INPUT_RANK
+        and dims[0].HasField("dim_value")
+        and dims[0].dim_value == 1
+        and (bool(dims[1].dim_param) or dims[1].dim_value > 0)
+    )
+
+
+def rotary_scale_constant(graph, trig, consumers, only_consumer, attr):
+    """Prove direct FP16 casts or one shared, exclusively used YaRN scale."""
+    casts = [only_consumer(node.output[0], "Cast") for node in trig]
+    if all(
+        node is not None and attr(node, "to") == TensorProto.FLOAT16 for node in casts
+    ):
+        return set()
+    multiplies = [only_consumer(node.output[0], "Mul") for node in trig]
+    scales = []
+    for node, multiply in zip(trig, multiplies, strict=True):
+        if multiply is None or len(multiply.input) != BINARY_INPUT_COUNT:
+            return None
+        other = [name for name in multiply.input if name != node.output[0]]
+        if len(other) != 1:
+            return None
+        scales.append(other[0])
+        cast = only_consumer(multiply.output[0], "Cast")
+        if cast is None or attr(cast, "to") != TensorProto.FLOAT16:
+            return None
+    if scales[0] != scales[1]:
+        return None
+    tensor = next((t for t in graph.initializer if t.name == scales[0]), None)
+    if (
+        tensor is None
+        or tensor.data_type != TensorProto.FLOAT
+        or math.prod(tensor.dims) != 1
+        or any(value.name == tensor.name for value in (*graph.input, *graph.output))
+        or len(consumers.get(tensor.name, [])) != len(multiplies)
+        or any(node not in consumers[tensor.name] for node in multiplies)
+    ):
+        return None
+    scale = float(numpy_helper.to_array(tensor).item())
+    return {tensor.name} if math.isfinite(scale) and scale > 0 else None
+
+
 def rotary_fp32_initializers(graph, out2node):
     """Identify FP32 RoPE frequencies used only with positions, then cast to FP16.
 
     Torch exports this intentional FP32 numerical island as an initializer.
     It is not an encoder/head weight, and must not be narrowed to satisfy the
-    weight-name guard. Require the complete observed position-to-sin/cos path.
+    weight-name guard. Require the complete observed position-to-sin/cos path,
+    including an optional shared positive YaRN attention scale before casting.
     """
     consumers = {}
     for node in graph.node:
@@ -512,14 +586,19 @@ def rotary_fp32_initializers(graph, out2node):
         position = out2node.get(multiply.input[1])
         if position is None or position.op_type != "Cast" or attr(position, "to") != 1:
             continue
-        position = out2node.get(position.input[0])
+        position_name = position.input[0]
+        position = out2node.get(position_name)
         while position is not None and position.op_type == "Unsqueeze":
-            position = out2node.get(position.input[0])
-        if (
-            position is None
-            or position.op_type != "Range"
-            or scalar_value(graph, out2node, position.input[0]) != 0
-            or scalar_value(graph, out2node, position.input[2]) != 1
+            position_name = position.input[0]
+            position = out2node.get(position_name)
+        is_range = (
+            position is not None
+            and position.op_type == "Range"
+            and scalar_value(graph, out2node, position.input[0]) == 0
+            and scalar_value(graph, out2node, position.input[2]) == 1
+        )
+        if not is_range and not (
+            position is None and declared_position_input(graph, position_name)
         ):
             continue
         transpose = only_consumer(multiply.output[0], "Transpose")
@@ -540,13 +619,52 @@ def rotary_fp32_initializers(graph, out2node):
             or {n.op_type for n in trig} != expected_trig
         ):
             continue
-        casts = [only_consumer(n.output[0], "Cast") for n in trig]
-        if all(n is not None and attr(n, "to") == TensorProto.FLOAT16 for n in casts):
+        scale = rotary_scale_constant(graph, trig, consumers, only_consumer, attr)
+        if scale is not None:
             exempt.add(tensor.name)
+            exempt.update(scale)
     return exempt
 
 
-def weight_precision(initializers, *, position_constants=frozenset()):
+def fp32_head_initializers(graph, out2node, blocks):
+    """Find FP32 constants confined to the post-attention output computation.
+
+    No exempt tensor may contribute to any layer's Q, K or V. Unused weights
+    and graph outputs unrelated to attention are not a task head. This check
+    depends on dataflow, not initializer names or optional value_info.
+    """
+
+    def ancestors(names):
+        seen, pending = set(), list(names)
+        while pending:
+            name = pending.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            node = out2node.get(name)
+            if node is not None:
+                pending.extend(node.input)
+        return seen
+
+    attention_outputs = {block["output_tensor"] for block in blocks}
+    attention_inputs = ancestors(attention_outputs)
+    head_paths = set()
+    for output in graph.output:
+        path = ancestors([output.name])
+        if path & attention_outputs:
+            head_paths.update(path)
+    return {
+        tensor.name
+        for tensor in graph.initializer
+        if tensor.data_type == TensorProto.FLOAT
+        and tensor.name in head_paths
+        and tensor.name not in attention_inputs
+    }
+
+
+def weight_precision(
+    initializers, *, position_constants=frozenset(), head_constants=frozenset()
+):
     """Return the one floating-point elem_type every weight tensor shares.
 
     Integer initializers (shapes, gather indices) carry no precision and are
@@ -557,7 +675,9 @@ def weight_precision(initializers, *, position_constants=frozenset()):
     """
     counts = {}
     for tensor in initializers:
-        if tensor.data_type in _FLOAT_TYPES and tensor.name not in position_constants:
+        if tensor.data_type in _FLOAT_TYPES and tensor.name not in (
+            position_constants | head_constants
+        ):
             counts[tensor.data_type] = counts.get(tensor.data_type, 0) + 1
     if not counts:
         raise ValueError("the graph holds no floating-point weight tensors")
@@ -617,7 +737,9 @@ def enforce_output_precision(output_path, model_is_fp16):
         )
 
 
-def rewrite(model_path, output_path, hdim=64, local_attention=128):
+def rewrite(
+    model_path, output_path, hdim=64, local_attention=128, fp32_task_head=False
+):
     model = onnx.load(model_path)
     graph = model.graph
 
@@ -660,8 +782,15 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
     # none would read as FP32, and one activation cannot vouch for every weight.
     try:
         position_constants = rotary_fp32_initializers(graph, out2node)
+        head_constants = (
+            fp32_head_initializers(graph, out2node, blocks) if fp32_task_head else set()
+        )
         model_is_fp16 = (
-            weight_precision(graph.initializer, position_constants=position_constants)
+            weight_precision(
+                graph.initializer,
+                position_constants=position_constants,
+                head_constants=head_constants,
+            )
             == TensorProto.FLOAT16
         )
     except ValueError as exc:
@@ -673,6 +802,8 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
         print("  Model precision: FP32 (adding fp32↔fp16 Cast nodes)")
     if position_constants:
         print(f"  Preserved {len(position_constants)} FP32 RoPE frequency constants")
+    if head_constants:
+        print(f"  Preserved {len(head_constants)} FP32 post-attention head constants")
 
     enforce_output_precision(output_path, model_is_fp16)
 
@@ -871,6 +1002,8 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
 
     del graph.node[:]
     graph.node.extend(kept)
+    shape_copies = copy_reshape_dimensions(graph)
+    print(f"  Replaced {shape_copies} proved dimension-copy shape concatenations")
     pooling_repairs = stabilize_mean_pooling(graph)
     print(f"  Stabilized {pooling_repairs} FP16 masked mean-pooling paths")
 
@@ -962,8 +1095,15 @@ def main():
         default=128,
         help="Local attention window size (default: 128)",
     )
+    parser.add_argument(
+        "--fp32-task-head",
+        action="store_true",
+        help="Preserve FP32 head constants that cannot feed any attention Q/K/V",
+    )
     args = parser.parse_args()
-    rewrite(args.input, args.output, args.hdim, args.local_attention)
+    rewrite(
+        args.input, args.output, args.hdim, args.local_attention, args.fp32_task_head
+    )
 
 
 if __name__ == "__main__":

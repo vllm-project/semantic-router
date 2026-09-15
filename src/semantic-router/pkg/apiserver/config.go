@@ -5,6 +5,7 @@ package apiserver
 import (
 	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
@@ -18,6 +19,8 @@ import (
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
 	classificationSvc     classificationService
+	previewAdmissionOnce  sync.Once
+	previewAdmission      admission.Admissioner
 	configMu              sync.RWMutex
 	config                *config.RouterConfig
 	runtimeConfig         *liveRuntimeConfig

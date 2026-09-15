@@ -53,9 +53,24 @@
       "type": "object",
       "additionalProperties": {"$ref": "#/$defs/stringSet"}
     },
+    "signalValueBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "gte": {"type": "number"},
+        "lte": {"type": "number"}
+      },
+      "description": "Inclusive finite bounds in the signal's own units; gte must not exceed lte. Scores are not necessarily probabilities."
+    },
+    "signalValues": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*:\\S(?:.*\\S)?$"},
+      "additionalProperties": {"$ref": "#/$defs/signalValueBounds"}
+    },
     "matchMode": {"enum": ["contains", "exact"]},
     "selectionStatus": {
-      "enum": ["selected", "planned_final", "fallback", "execution_required", "unavailable", "failed"]
+      "enum": ["selected", "planned_final", "fallback", "execution_required", "unavailable", "failed", "not_required"]
     },
     "coveragePercent": {"type": "number", "minimum": 0, "maximum": 100},
     "tagCategoryCounts": {
@@ -266,7 +281,8 @@
         "generated_text": {"$ref": "#/$defs/generatedText"},
         "tags": {"$ref": "#/$defs/stringSet"},
         "notes": {"type": "string"},
-        "expected_signals": {"$ref": "#/$defs/signals"}
+        "expected_signals": {"$ref": "#/$defs/signals"},
+        "expected_signal_values": {"$ref": "#/$defs/signalValues"}
       },
       "oneOf": [
         {"required": ["query"], "not": {"required": ["messages"]}},
@@ -307,6 +323,7 @@
         "plugin_match": {"$ref": "#/$defs/matchMode"},
         "expected_alias": {"type": "string", "minLength": 1},
         "expected_signals": {"$ref": "#/$defs/signals"},
+        "expected_signal_values": {"$ref": "#/$defs/signalValues"},
         "forbidden_signals": {"$ref": "#/$defs/signals"},
         "signal_match": {"$ref": "#/$defs/matchMode"},
         "robustness": {

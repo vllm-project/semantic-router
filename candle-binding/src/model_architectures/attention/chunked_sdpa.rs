@@ -65,6 +65,31 @@ pub fn chunked_sdpa(
     pad_mask: Option<&Tensor>,
     cfg: &ChunkedSdpaConfig,
 ) -> candle_core::Result<Tensor> {
+    chunked_sdpa_impl(q, k, v, pad_mask, cfg, false)
+}
+
+/// Use Candle's fused row-wise softmax on CPU; preserve the other device paths.
+/// Kept explicit so individual inference readers can qualify this optimization.
+/// The fused CPU operation has no backward implementation; the original entry
+/// point keeps its existing autograd behavior.
+pub fn chunked_sdpa_cpu_softmax(
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    pad_mask: Option<&Tensor>,
+    cfg: &ChunkedSdpaConfig,
+) -> candle_core::Result<Tensor> {
+    chunked_sdpa_impl(q, k, v, pad_mask, cfg, q.device().is_cpu())
+}
+
+fn chunked_sdpa_impl(
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    pad_mask: Option<&Tensor>,
+    cfg: &ChunkedSdpaConfig,
+    cpu_softmax: bool,
+) -> candle_core::Result<Tensor> {
     let (_b, _heads, q_len, _head_dim) = q.dims4()?;
     let k_len = k.dim(2)?;
     let device = q.device();
@@ -141,7 +166,11 @@ pub fn chunked_sdpa(
             scores = scores.broadcast_add(&causal)?;
         }
 
-        let probs = candle_nn::ops::softmax(&scores, D::Minus1)?;
+        let probs = if cpu_softmax {
+            candle_nn::ops::softmax_last_dim(&scores.contiguous()?)?
+        } else {
+            candle_nn::ops::softmax(&scores, D::Minus1)?
+        };
         out_blocks.push(probs.matmul(&v_win)?); // (b, heads, blk, hd)
 
         qs = qe;

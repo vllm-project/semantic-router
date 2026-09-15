@@ -86,6 +86,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		Catalog:              model.Catalog,
 		ParamSize:            card.ParameterSize,
 		ContextWindowSize:    card.Limits.ContextWindowSize,
+		MaxOutputTokens:      card.Limits.MaxOutputTokens,
 		Description:          card.Description,
 		Capabilities:         declaredCardCapabilities(model.Card),
 		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "371e7010ff1b89b4d2a3f4d9ffc020e6574f0452"
+  source_commit: "157545ff8b5e3ba36d613035b10e31d0dc1bdf2f"
   source_file: "docs/tutorials/signal/learned/user-feedback.md"
   outdated: false
 ---
@@ -53,5 +53,11 @@ routing:
 
 反馈检测器处理对话文本，可能把引用或假设中的抱怨误判为真实反馈。请在后续流量上评估它，并保留正常回退路径。
 
-检测器不够确信、低于已配置 `threshold` 的预测，会报告为 `satisfied`，并附带模型对该类的自身概率。该数字常常远低于阈值，因为模型把概率质量放在了阈值拒绝的类上。把这一对读作不确定，而不是用户满意的证据。完整示例见：
+Router 仅在助手已回答、且当前用户轮次包含非空文本时评估反馈。首轮、工具结果续接、助手预填充和无文本用户轮次都不会触发反馈推理。独立分类 API 要求调用方提供真实的后续反馈，并拒绝空输入。四分类模型不能判断任意新问题是否属于反馈，高置信度也不代表该信号适用。对话中的新话题仍可能误匹配，使用反馈切换模型前应覆盖这类情况。
+
+对于已有的四分类模型，不够确信、低于已配置 `threshold` 的预测，会报告为 `satisfied`，并附带模型对该类的自身概率。该数字常常远低于阈值，因为模型把概率质量放在了阈值拒绝的类上。把这一对读作不确定，而不是用户满意的证据。完整示例见：
 [`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml)。
+
+标签映射声明了 `NO_FEEDBACK` 的模型可以区分普通后续任务与反馈；该结果不会匹配四种反馈规则。此类模型低于检测器 `threshold` 的预测会保留为不确定，并遵循决策的 `on_unknown`，不会激活 `satisfied`。独立分类 API 保留预测标签及概率，并返回 `abstained: true`。已有四分类模型保留原来的阈值行为。
+
+可达路由决策依赖此信号时，配置的模型必须初始化成功，否则 Router 启动失败。仅供独立诊断 API 使用的模型仍尽力初始化，不会因不可用而阻止无关路由。
