@@ -60,7 +60,7 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
 
 # Copy real source and rebuild (dependencies are cached from above)
 COPY candle-binding/src/ ./src/
-COPY candle-binding/go.mod candle-binding/semantic-router.go ./
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/embedding_contract.go candle-binding/errors.go ./
 
 # Delete stale library from dummy build so cargo relinks with real FFI symbols
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
@@ -241,7 +241,7 @@ ENV LD_LIBRARY_PATH=/usr/local/lib
 COPY candle-binding/go.mod candle-binding/*.go /build/../candle-binding/
 COPY --from=rust-builder /build/out/ /build/../candle-binding/target/release/
 
-COPY onnx-binding/go.mod /build/../onnx-binding/
+COPY onnx-binding/go.mod onnx-binding/*.go /build/../onnx-binding/
 COPY onnx-binding/instance/ /build/../onnx-binding/instance/
 COPY --from=onnx-builder /build/onnx-out/ /build/../onnx-binding/target/release/
 

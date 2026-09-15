@@ -18,26 +18,30 @@ func ValidateBackendEmbedding(ctx context.Context, backend LegacyCacheBackend) e
 	}
 	var provider embedding.Provider
 	var dimension int
+	var err error
 	switch c := backend.(type) {
 	case *InMemoryCache:
 		provider = c.embeddingProvider
 		dimension = inMemoryEmbeddingOptions(c.embeddingModel).Dimension
 	case *RedisCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, c.config.Index.VectorField.Dimension, c.embeddingModel)
 	case *ValkeyCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, c.config.Index.VectorField.Dimension, c.embeddingModel)
 	case *MilvusCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, c.config.Collection.VectorField.Dimension, c.embeddingModel)
 	case *QdrantCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(0, c.embeddingModel)
+		dimension, err = semanticCacheEmbeddingDimension(provider, 0, c.embeddingModel)
 	case *HybridCache:
 		return ValidateBackendEmbedding(ctx, c.milvusCache)
 	default:
 		return fmt.Errorf("cache backend %T does not expose prepared embedding semantics", backend)
+	}
+	if err != nil {
+		return fmt.Errorf("resolve cache embedding dimension: %w", err)
 	}
 	vector, err := computeCacheEmbedding(ctx, provider, "semantic router cache preparation")
 	if err != nil {

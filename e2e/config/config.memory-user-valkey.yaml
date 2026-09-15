@@ -116,7 +116,7 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384
+        dimension: 256
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 256
@@ -138,4 +138,4 @@ global:
         use_cpu: true
         embedding_config:
           model_type: mmbert
-          target_dimension: 384
+          target_dimension: 256

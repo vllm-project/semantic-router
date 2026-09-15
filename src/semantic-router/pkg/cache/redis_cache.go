@@ -74,6 +74,15 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	} else {
 		redisConfig = options.Config
 	}
+	effectiveDimension, err := semanticCacheEmbeddingDimension(
+		options.EmbeddingProvider,
+		redisConfig.Index.VectorField.Dimension,
+		options.EmbeddingModel,
+	)
+	if err != nil {
+		return nil, err
+	}
+	redisConfig.Index.VectorField.Dimension = effectiveDimension
 	// Normalize the metric type to uppercase, matching the Valkey cache, the
 	// Valkey vector store and the agentic memory store. initializeIndex matches
 	// on the uppercase spellings, so without this a config using e.g. "l2"
@@ -82,7 +91,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	redisConfig.Index.VectorField.MetricType = strings.ToUpper(redisConfig.Index.VectorField.MetricType)
 	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=%d",
 		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name,
-		semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingModel))
+		effectiveDimension)
 
 	// Establish connection to Redis server
 	resolvedHost := normalizeLocalHostForContainerRuntimes(redisConfig.Connection.Host)
@@ -106,7 +115,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, embeddingModel), 0)),
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, effectiveDimension, 0)),
 	}
 
 	releaseClient := func() { _ = redisClient.Close() }
@@ -239,18 +248,21 @@ func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, 
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
-func (c *RedisCache) embeddingDimension() int {
+func (c *RedisCache) embeddingDimension() (int, error) {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return semanticCacheEmbeddingDimension(nil, 0, "")
 	}
-	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.embeddingProvider, c.config.Index.VectorField.Dimension, c.embeddingModel)
 }
 
 // createIndex builds the Redis index with the appropriate schema
 func (c *RedisCache) createIndex() error {
 	ctx := context.Background()
 
-	actualDimension := c.embeddingDimension()
+	actualDimension, err := c.embeddingDimension()
+	if err != nil {
+		return err
+	}
 	c.config.Index.VectorField.Dimension = actualDimension
 
 	logging.Debugf("RedisCache.createIndex: using embedding dimension: %d", actualDimension)
@@ -292,7 +304,7 @@ func (c *RedisCache) createIndex() error {
 	}
 
 	// Create the index with proper schema
-	_, err := c.client.FTCreate(ctx,
+	_, err = c.client.FTCreate(ctx,
 		c.indexName,
 		&redis.FTCreateOptions{
 			OnHash: true,

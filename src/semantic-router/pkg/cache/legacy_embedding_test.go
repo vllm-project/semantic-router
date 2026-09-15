@@ -28,6 +28,13 @@ func (p legacyBERTTestProvider) EmbedBatch(ctx context.Context, texts []string) 
 }
 func (legacyBERTTestProvider) Dimension() int  { return 384 }
 func (legacyBERTTestProvider) Backend() string { return "test-candle-bert" }
+func (legacyBERTTestProvider) EmbeddingDimensionContract() (embedding.DimensionContract, error) {
+	return embedding.DimensionContract{
+		NativeDimension:     384,
+		SupportedDimensions: []int{384},
+	}, nil
+}
+
 func (legacyBERTTestProvider) Windows(_ context.Context, text string, limit int) ([]embedding.Window, error) {
 	if limit == 0 {
 		limit = 512

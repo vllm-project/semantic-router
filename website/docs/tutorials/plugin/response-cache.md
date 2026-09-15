@@ -78,6 +78,34 @@ deprecated aliases and normalize to `response_cache`. Likewise,
 document. Export, Dashboard saves, and DSL decompilation always emit the
 canonical names.
 
+### Milvus dimension migration
+
+Milvus response-cache configurations may omit
+`collection.vector_field.dimension` to use the loaded embedding model's native
+dimension. An explicit positive dimension is authoritative and must appear in
+the model-declared Matryoshka dimensions. The router validates an existing
+collection against that effective dimension before loading it.
+
+The previous Milvus sample specified `dimension: 384` while describing the
+value as ignored. That collection cannot be reused with an mmBERT contract
+that does not declare 384 as a supported dimension. Milvus cannot change a
+vector field's dimension in place, and cached vectors cannot be converted
+without generating their embeddings again.
+
+For an existing 384-dimensional response-cache collection:
+
+1. Choose either an omitted dimension for the model-native width or an
+   explicitly declared Matryoshka width.
+2. Stop writers to the old collection.
+3. Point the router at a new collection name, manually drop the old cache
+   collection, or set `drop_collection_on_startup: true` for one restart.
+4. Set `drop_collection_on_startup` back to `false` and allow the response
+   cache to warm again.
+
+Dropping the collection deletes cached responses. Do not apply this cache
+migration to an agentic-memory collection; preserve its source records and
+re-embed them into a new collection instead.
+
 ## Operations
 
 The management API exposes redacted health, capabilities, statistics, candidate

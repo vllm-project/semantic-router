@@ -59,6 +59,10 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		collectionName = "semantic_cache"
 	}
 	embeddingModel := normalizeEmbeddingModel(opts.EmbeddingModel)
+	effectiveDimension, err := semanticCacheEmbeddingDimension(opts.EmbeddingProvider, 0, embeddingModel)
+	if err != nil {
+		return nil, err
+	}
 
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   opts.Config.Host,
@@ -78,7 +82,7 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		ttlSeconds:          opts.TTLSeconds,
 		enabled:             true,
 		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(0, embeddingModel), 0)),
+		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, effectiveDimension, 0)),
 	}
 
 	if err := c.CheckConnection(context.Background()); err != nil {
@@ -113,7 +117,10 @@ func (c *QdrantCache) ensureCollection() error {
 		return nil
 	}
 
-	dim := semanticCacheEmbeddingDimension(0, c.embeddingModel)
+	dim, err := semanticCacheEmbeddingDimension(c.embeddingProvider, 0, c.embeddingModel)
+	if err != nil {
+		return err
+	}
 
 	if err := c.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: c.collectionName,
@@ -147,11 +154,11 @@ func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32,
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
-func (c *QdrantCache) embeddingDimension() int {
+func (c *QdrantCache) embeddingDimension() (int, error) {
 	if c == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return semanticCacheEmbeddingDimension(nil, 0, "")
 	}
-	return semanticCacheEmbeddingDimension(0, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.embeddingProvider, 0, c.embeddingModel)
 }
 
 // Qdrant only allows UUIDs and +ve integers.

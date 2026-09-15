@@ -27,6 +27,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
+type classifierMappings struct {
+	categoryMapping  *classification.CategoryMapping
+	piiMapping       *classification.PIIMapping
+	jailbreakMapping *classification.JailbreakMapping
+}
+
 type routerComponents struct {
 	embeddings           *embedding.Set
 	modelRuntime         *native.Runtime
@@ -242,9 +248,10 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg, components.embeddings)
-	if components.memoryStore != nil {
-		components.resources.add(components.memoryStore.Close)
+	if err := components.buildMemoryRuntime(func(memoryCfg *config.RouterConfig) (memory.Store, error) {
+		return createMemoryStore(memoryCfg, components.embeddings)
+	}); err != nil {
+		return nil, err
 	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
@@ -266,26 +273,53 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 }
 
 func (components *routerComponents) buildEarlyResources() error {
+	mappings, err := loadClassifierMappings(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+
+	return components.buildEarlyResourcesWith(
+		mappings,
+		func(cfg *config.RouterConfig, mappings *classifierMappings) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error) {
+			return createRouterClassifierWithMappings(cfg, mappings, classification.RecipeRuntimeOptions{
+				Runtime:    components.modelRuntime,
+				Embeddings: components.embeddings,
+			})
+		},
+		func(cfg *config.RouterConfig) (cache.CacheBackend, error) {
+			return createSemanticCache(cfg, components.embeddings)
+		},
+	)
+}
+
+func (components *routerComponents) buildEarlyResourcesWith(
+	mappings *classifierMappings,
+	buildClassifier func(
+		*config.RouterConfig,
+		*classifierMappings,
+	) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error),
+	buildCache func(*config.RouterConfig) (cache.CacheBackend, error),
+) error {
 	var err error
-	components.semanticCache, err = createSemanticCache(components.cfg, components.embeddings)
+	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.embeddings)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = buildClassifier(components.cfg, mappings)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+	components.resources.add(components.recipeClassifiers.Close)
+	components.resources.add(components.classificationSvc.Close)
+
+	components.semanticCache, err = buildCache(components.cfg)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 	if components.semanticCache != nil {
 		components.resources.add(components.semanticCache.Close)
 	}
-
-	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.embeddings)
-	if err != nil {
-		return rollbackResources(components.resources, err)
-	}
-
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.modelRuntime, Embeddings: components.embeddings})
-	if err != nil {
-		return rollbackResources(components.resources, err)
-	}
-	components.resources.add(components.recipeClassifiers.Close)
-	components.resources.add(components.classificationSvc.Close)
 	if target, ok := components.semanticCache.(interface {
 		SetPolarityVerifier(cache.PolarityVerifyFunc)
 	}); ok {
