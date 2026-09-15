@@ -70,7 +70,7 @@ def export(bundle: str, output_dir: Path, catalog_version: str):
     "bindings_path",
     required=True,
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
-    help="YAML mapping every decision name to a list of modelRefs.",
+    help="YAML mapping each decision that calls a backend to modelRefs; omit immediate responses.",
 )
 @click.option("--model-name", required=True, help="Explicit public entrypoint name.")
 @click.option(

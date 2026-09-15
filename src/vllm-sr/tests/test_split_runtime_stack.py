@@ -698,7 +698,12 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
     monkeypatch.setattr(
         runtime_lifecycle,
         "container_status",
-        lambda _name: "running",
+        lambda _name, **_kwargs: "running",
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "container_status_strict",
+        lambda _name, **_kwargs: "running",
     )
     monkeypatch.setattr(
         runtime_lifecycle,

@@ -603,6 +603,17 @@ def test_rocm_runtime_images_pin_only_the_attention_compiler_exclusion() -> None
         ), dockerfile
 
 
+def test_rocm_runtime_images_ship_miopen_jit_headers() -> None:
+    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
+        runtime_stage = dockerfile.read_text(encoding="utf-8").rsplit(
+            "\nFROM ", maxsplit=1
+        )[-1]
+        assert "rocrand-dev" in runtime_stage, dockerfile
+        assert (
+            "test -r /opt/rocm/include/rocrand/rocrand_xorwow.h" in runtime_stage
+        ), dockerfile
+
+
 def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_CUDA_DOCKERFILE.read_text(encoding="utf-8")
 

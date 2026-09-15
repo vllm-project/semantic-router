@@ -99,6 +99,17 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 Names, scores, and matched rules depend on the active recipe. Use the live
 schema for each endpoint's supported input forms.
 
+When the matched decision uses `fast_response`, Preview reports
+`selection_status: not_required` and `selection_method: fast_response`, with no
+`selected_model`. This immediate response needs no model assignment or candidate
+capability/context admission. The client-facing response model identifier does
+not imply that a generation backend was selected or called.
+
+Guard and PII report `input_limit` in `signal_errors` when input exceeds their
+configured inference budget. Check the effective model and deployment limits
+before retrying. Other inference failures retain their bounded signal error
+codes; the configured unknown-signal policy determines the route outcome.
+
 ## Inspect models and metrics
 
 | Method | Path | Use |
@@ -307,7 +318,7 @@ Preview routing behavior without invoking a generation backend.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/routing/preview` | Preview all configured signals and the resulting route without invoking a generation backend |
+| `POST` | `/api/v1/routing/preview` | Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound. |
 
 ### inventory
 
@@ -330,7 +341,7 @@ Inspect routing replays and metrics, and submit outcome evidence.
 | `POST` | `/api/v1/observability/outcomes` | Submit Router Learning outcome feedback linked to a replay record |
 | `GET` | `/api/v1/observability/replays` | List Router Replay records |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
-| `GET` | `/api/v1/observability/replays/trajectory` | Build a Router Replay session trajectory |
+| `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
 
 ### storage

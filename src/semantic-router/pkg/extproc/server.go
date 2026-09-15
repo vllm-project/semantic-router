@@ -570,12 +570,14 @@ func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
 }
 
 func (s *Server) reloadRouterFromFile(configPath string) error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
 	candidateCfg, err := parseReloadConfig(configPath)
 	if err != nil {
 		return err
 	}
 
-	return s.reloadRouterFromConfig("file", configPath, candidateCfg)
+	return s.reloadRouterFromConfigLocked("file", configPath, candidateCfg)
 }
 
 func (s *Server) reloadRouterFromConfig(
@@ -585,13 +587,27 @@ func (s *Server) reloadRouterFromConfig(
 ) error {
 	s.reloadMu.Lock()
 	defer s.reloadMu.Unlock()
+	return s.reloadRouterFromConfigLocked(source, configPath, candidateCfg)
+}
+
+func (s *Server) reloadRouterFromConfigLocked(
+	source string,
+	configPath string,
+	candidateCfg *config.RouterConfig,
+) error {
 	if s.lifecycle.isStopping() {
 		return errors.New("router server is shutting down")
+	}
+	if err := config.ValidateRoutingPreviewReload(resolveServerConfig(s), candidateCfg); err != nil {
+		return err
 	}
 	if err := modeldownload.ValidateReloadArtifacts(resolveServerConfig(s), candidateCfg); err != nil {
 		return fmt.Errorf("model artifact reload preflight failed: %w", err)
 	}
 	if source == "file" {
+		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
+			return err
+		}
 		if err := ensureReloadConfigModels(candidateCfg); err != nil {
 			return fmt.Errorf("model download preflight failed: %w", err)
 		}
@@ -610,6 +626,17 @@ func (s *Server) reloadRouterFromConfig(
 	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
 		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
+	}
+	if source == "file" {
+		release := s.runtime.LockConfigPublication()
+		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
+			release()
+			if closeErr := newRouter.Close(); closeErr != nil {
+				return fmt.Errorf("close discarded config generation: %w", closeErr)
+			}
+			return err
+		}
+		defer release()
 	}
 	inheritRouterLearningState(s.service.GetRouter(), newRouter)
 

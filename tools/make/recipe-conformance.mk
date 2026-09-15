@@ -17,6 +17,7 @@ recipe-conformance-static: ## Validate all maintained recipe assets and probe co
 	@$(RECIPE_CONFORMANCE_PYTHON) -m unittest \
 		tools/dev/router-calibration/router_calibration_fixture_test.py \
 		tools/dev/router-calibration/router_calibration_support_test.py \
+		tools/dev/router-calibration/router_calibration_signal_values_test.py \
 		tools/dev/router-calibration/recipe_conformance_test.py
 	@$(RECIPE_CONFORMANCE_PYTHON) tools/dev/router-calibration/recipe_conformance.py \
 		--output-dir "$(RECIPE_CONFORMANCE_REPORT_DIR)" \
@@ -67,9 +68,9 @@ recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_C
 		REPORT_ROOT="$(RECIPE_CONFORMANCE_REPORT_DIR)" \
 		bash e2e/testing/run_recipe_conformance.sh
 
-recipe-conformance-live-cpu-all: ## Build once and run all maintained recipes
+recipe-conformance-live-cpu-all: ## Build once and run all CPU-compatible maintained recipes
 	@$(MAKE) recipe-conformance-live-cpu \
-		RECIPE_CONFORMANCE_RECIPES="$$($(RECIPE_CONFORMANCE_PYTHON) tools/dev/router-calibration/recipe_conformance.py list --format csv)"
+		RECIPE_CONFORMANCE_RECIPES="$$($(RECIPE_CONFORMANCE_PYTHON) tools/dev/router-calibration/recipe_conformance.py list --platform cpu --format csv)"
 
 .PHONY: recipe-conformance-static recipe-conformance-plan \
 	recipe-conformance-report \

@@ -78,6 +78,14 @@ deprecated aliases and normalize to `response_cache`. Likewise,
 document. Export, Dashboard saves, and DSL decompilation always emit the
 canonical names.
 
+For local `mmbert` embeddings, including Vela Embedding, changing the model,
+tokenizer, representation size, or inference settings starts a separate cache
+space. The router retains your tenant namespace and explicit cache revision;
+historical entries remain stored until their normal expiry or explicit cleanup.
+The first requests after a model upgrade are cache misses. Restarting with the
+same representation reuses its compatible cache. This binding does not infer
+the identity of a mutable remote embedding endpoint.
+
 ## Operations
 
 The management API exposes redacted health, capabilities, statistics, candidate

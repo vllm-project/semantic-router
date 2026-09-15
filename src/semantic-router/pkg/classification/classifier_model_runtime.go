@@ -18,6 +18,8 @@ type classifierModelRuntime struct {
 	plan    *config.ModelBindingPlan
 	cfg     *config.RouterConfig
 	recipe  config.RecipeName
+	// Contrastive input policy is captured before native-only defaults.
+	jailbreakContrastiveFullContext *bool
 }
 
 func newClassifierModelRuntime(cfg *config.RouterConfig, runtime *native.Runtime) (*classifierModelRuntime, error) {
@@ -36,13 +38,21 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, runtime *native.Runtime
 	if err := models.projectBindings(); err != nil {
 		return nil, err
 	}
+	fullContext := (&Classifier{Config: models.cfg}).hasLongContextClassifier(config.SignalTypeJailbreak)
+	models.jailbreakContrastiveFullContext = &fullContext
+	if err := models.resolveDefaultJailbreakWindow(); err != nil {
+		return nil, err
+	}
+	if err := models.resolveDefaultPIIWindow(); err != nil {
+		return nil, err
+	}
 	return models, nil
 }
 
 // localSpec materializes the existing canonical module default when no recipe
 // override is declared. A module's name is its default binding, not its physical
 // identity: native preparation fingerprints the artifact and execution options.
-func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract string, useCPU bool) config.ResolvedModelBinding {
+func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract string, useCPU bool, maxTokens ...int) config.ResolvedModelBinding {
 	if spec, ok := m.plan.Lookup(m.recipe, name); ok {
 		spec.Deployment.Artifact = config.ResolveModelPath(spec.Deployment.Artifact)
 		if spec.Binding.Head != "" {
@@ -50,11 +60,15 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 		}
 		return spec
 	}
+	limit := 0
+	if len(maxTokens) > 0 {
+		limit = maxTokens[0]
+	}
 	provider, device := config.DefaultModelExecution(useCPU)
 	return config.ResolvedModelBinding{
 		Recipe: m.recipe, Name: name,
 		Binding:    config.ModelBinding{Deployment: name, Adapter: adapter, Contract: contract},
-		Deployment: config.ModelDeployment{Artifact: config.ResolveModelPath(artifact), Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: "truncate"}},
+		Deployment: config.ModelDeployment{Artifact: config.ResolveModelPath(artifact), Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{MaxTokens: limit, Overflow: "truncate"}},
 		Admission:  m.cfg.ModelAdmission[name],
 	}
 }

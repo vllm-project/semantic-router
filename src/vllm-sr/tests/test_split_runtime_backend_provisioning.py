@@ -1,5 +1,6 @@
 """Storage provisioning coverage for split runtime startup."""
 
+import pytest
 from cli import core, runtime_lifecycle
 
 
@@ -15,9 +16,13 @@ def _backend_provisioning_config():
     }
 
 
+@pytest.mark.parametrize("startup_timeout", [None, 7200])
 def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, startup_timeout
 ):
+    tmp_path = tmp_path.resolve()
+    source_config = str(tmp_path / "source-config.yaml")
+    runtime_config = str(tmp_path / "runtime-config.yaml")
     load_paths = []
     provisioned = {}
 
@@ -79,7 +84,7 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(
     monkeypatch.setattr(
         runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
     )
-    monkeypatch.setattr(core, "_wait_and_verify_runtime", lambda *args, **kwargs: None)
+    monkeypatch.setattr(core, "_wait_and_verify_runtime", record("wait_ready"))
     monkeypatch.setattr(
         core, "recover_openclaw_containers", lambda *args, **kwargs: None
     )
@@ -90,15 +95,18 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(
         str(tmp_path / "effective-config.yaml"),
         env_vars={},
         enable_observability=False,
-        source_config_file=str(tmp_path / "source-config.yaml"),
-        runtime_config_file=str(tmp_path / "runtime-config.yaml"),
+        source_config_file=source_config,
+        runtime_config_file=runtime_config,
+        **({"startup_timeout": startup_timeout} if startup_timeout is not None else {}),
     )
 
-    assert load_paths == [str(tmp_path / "runtime-config.yaml")]
+    assert load_paths == [runtime_config]
     summary = next(
         call for call in provisioned["calls"] if call[0] == "log_runtime_summary"
     )
     assert summary[2]["config"] == _backend_provisioning_config()
+    readiness = next(call for call in provisioned["calls"] if call[0] == "wait_ready")
+    assert readiness[2]["startup_timeout"] == (startup_timeout or 1800)
     assert provisioned["config"]["global"]["services"]["response_api"][
         "store_backend"
     ] == ("redis")

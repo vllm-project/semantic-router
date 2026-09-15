@@ -41,6 +41,7 @@ type MultiFactorConfig struct {
 	QualityMinCoverage float64
 	QualityMinScore    *float64
 	LatencyPercentile  int
+	LatencyMetric      string
 	OnNoCandidates     string
 }
 
@@ -184,7 +185,7 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		return s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
 	}
 	mins, maxs := signalExtrema(signals)
-	bestIdx, allScores, bestScore, secondBest := s.chooseCandidate(signals, mins, maxs)
+	bestIdx, allScores, bestScore, secondBest, survivors := s.chooseCandidate(signals, mins, maxs)
 
 	chosen := kept[bestIdx]
 	confidence := 0.5
@@ -199,19 +200,19 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 	}
 
 	reasoning := fmt.Sprintf(
-		"multi_factor: objective=%s weights{q=%.2f l=%.2f c=%.2f L=%.2f} quality_index=%q quality_missing=%s quality_min_coverage=%.2f quality_disabled=%t latency_p%d, kept=%d, dropped=%d, quality_floor_excluded=%d, quality_excluded=%d",
+		"multi_factor: objective=%s weights{q=%.2f l=%.2f c=%.2f L=%.2f} quality_index=%q quality_missing=%s quality_min_coverage=%.2f quality_disabled=%t latency_metric=%q latency_p%d, kept=%d, dropped=%d, quality_floor_excluded=%d, quality_excluded=%d",
 		multiFactorObjectiveDescription(s.config.Objective),
 		s.config.Weights.Quality, s.config.Weights.Latency,
 		s.config.Weights.Cost, s.config.Weights.Load,
 		s.config.QualityIndex, s.config.QualityOnMissing, s.config.QualityMinCoverage, qualityDisabled,
-		s.config.LatencyPercentile, len(kept), len(dropped), qualityFloorExcluded, qualityExcluded,
+		s.config.LatencyMetric, s.config.LatencyPercentile, len(kept), len(dropped), qualityFloorExcluded, qualityExcluded,
 	)
 
 	logging.Infof("[MultiFactor] candidates=%d -> %s (score=%.4f confidence=%.2f, dropped_by_slo=%d)",
 		len(selCtx.CandidateModels), chosen.Model, bestScore, confidence, len(dropped))
 
 	return &SelectionResult{
-		EligibleModels: s.eligibleModels(kept),
+		EligibleModels: s.eligibleModels(kept, survivors),
 		SelectedModel:  chosen.Model,
 		LoRAName:       chosen.LoRAName,
 		Score:          bestScore,
@@ -223,10 +224,17 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 	}, nil
 }
 
-// Soft ranking alone does not restrict configured tier/global learning. When
-// a hard policy is active, even candidates outside the original inventory have
-// not passed that policy and must not be introduced downstream.
-func (s *MultiFactorSelector) eligibleModels(kept []config.ModelRef) []config.ModelRef {
+// Weighted soft ranking does not restrict configured tier/global learning.
+// Hard filters and lexicographic priority bands do: downstream choices must
+// remain within the exact survivors, including when all factors are unavailable.
+func (s *MultiFactorSelector) eligibleModels(kept []config.ModelRef, survivors []int) []config.ModelRef {
+	if survivors != nil {
+		eligible := make([]config.ModelRef, 0, len(survivors))
+		for _, index := range survivors {
+			eligible = append(eligible, kept[index])
+		}
+		return eligible
+	}
 	if s.config.SLO == (MultiFactorSLO{}) && s.config.QualityMinScore == nil &&
 		(!s.qualityRelevant() || s.config.QualityOnMissing != config.QualityEvidenceOnMissingExclude) {
 		return nil
@@ -337,9 +345,16 @@ func (s *MultiFactorSelector) qualityRelevant() bool {
 	return false
 }
 
-// latencySignal returns a single representative latency (TPOT-prioritized) at
-// the configured percentile. Returns ok=false when no observations exist.
+// latencySignal keeps explicitly selected metrics comparable across candidates.
+// Missing measurements stay unavailable; another metric cannot fill the gap.
+// Omission retains the legacy TPOT-prioritized behavior.
 func (s *MultiFactorSelector) latencySignal(model string) (float64, bool) {
+	switch s.config.LatencyMetric {
+	case "ttft":
+		return s.getTTFT(model, s.config.LatencyPercentile)
+	case "tpot":
+		return s.getTPOT(model, s.config.LatencyPercentile)
+	}
 	if v, ok := s.getTPOT(model, s.config.LatencyPercentile); ok {
 		return v, true
 	}

@@ -9,6 +9,7 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
@@ -430,6 +431,7 @@ def materialize_runtime_config(
     state_root_dir: str | Path | None = None,
     stack_name: str | None = None,
     replace_active: bool = False,
+    before_replace: Callable[[], None] | None = None,
 ) -> Path:
     """Reconcile one runtime-owned active config without overwriting edits.
 
@@ -438,6 +440,8 @@ def materialize_runtime_config(
     later ``serve`` preserves the active file and reports the divergence.
     ``replace_active`` is the explicit deployment boundary for replacing that
     drifted active document from the selected source config.
+    ``before_replace`` lets restart orchestration stop old file consumers before
+    an existing active document changes. It is not called for a preserved file.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
@@ -466,6 +470,8 @@ def materialize_runtime_config(
                 runtime_config_path,
                 source_config_path,
             )
+            if before_replace is not None:
+                before_replace()
             _atomic_write_private_bytes(runtime_config_path, effective_data)
             _write_provenance(provenance_path, source_data, effective_data)
             return runtime_config_path
@@ -497,6 +503,8 @@ def materialize_runtime_config(
             )
             return runtime_config_path
 
+    if runtime_config_path.exists() and before_replace is not None:
+        before_replace()
     _atomic_write_private_bytes(runtime_config_path, effective_data)
     _write_provenance(provenance_path, source_data, effective_data)
     return runtime_config_path
