@@ -61,6 +61,7 @@ var (
 		validateRoutingModalityContracts,
 		validateComplexityContracts,
 		validateJailbreakContracts,
+		validatePIIContracts,
 		validateSignalStageContracts,
 		validateHallucinationSignalContracts,
 		validateDecisionRouterLearningConfig,

@@ -39,11 +39,6 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: "1.90"
-
       - name: Install system dependencies
         run: |
           # The Kubernetes E2E job does not need Chrome. GitHub runners can

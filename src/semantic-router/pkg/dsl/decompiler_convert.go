@@ -260,6 +260,9 @@ func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
 	if pii.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
 	}
+	if pii.Source != "" {
+		fields["source"] = StringValue{V: pii.Source}
+	}
 	if pii.Description != "" {
 		fields["description"] = StringValue{V: pii.Description}
 	}

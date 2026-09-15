@@ -39,6 +39,7 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 
 func (r *OpenAIRouter) runRequestPreRoutingStages(
 	originalModel string,
+	request *llmprotocol.Request,
 	snapshot *requestSignalSnapshot,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
@@ -46,7 +47,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		r.resolveEntrypointForRequest(originalModel, ctx)
 	}
 	populatePinnedSessionFromHeaders(ctx)
-	history := signalConversationHistoryFromSnapshot(snapshot)
+	// Keep the general snapshot payload-free, but attach tool-result text at the
+	// signal-history boundary so opt-in PII rules can inspect it. This is the
+	// only pre-routing path for normal request-body processing.
+	history := signalConversationHistoryFromRequest(request, snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,

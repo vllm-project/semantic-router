@@ -10,7 +10,16 @@ from cli.config_contract import (
     build_signal_reference_index,
     signal_reference_exists,
 )
-from cli.models import Decision, Projections, Signals
+from cli.models import Decision, PIIRule, Projections, Signals
+
+
+def test_pii_source_survives_cli_round_trip_and_rejects_unknown_values():
+    rule = PIIRule(name="tool-data", threshold=0.8, source="tool_result")
+
+    assert rule.model_dump(exclude_none=True)["source"] == "tool_result"
+    assert PIIRule(name="legacy", threshold=0.8, source="").source is None
+    with pytest.raises(ValueError):
+        PIIRule(name="invalid", threshold=0.8, source="prompt")
 
 
 def test_unknown_policy_literal_matches_allowed_values():

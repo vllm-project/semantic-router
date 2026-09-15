@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -324,27 +325,61 @@ func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHis
 	return contents
 }
 
+// collectPIIRuleContentsForSource selects the request-scoped content that a
+// PII rule is allowed to inspect. A tool-result rule is intentionally isolated
+// from the normal request-text and history inputs; source is a selector, not an
+// additional content bucket. Empty items are ignored while ordering and
+// duplicates are preserved for the shared detector cache to handle later.
+func collectPIIRuleContentsForSource(
+	rule config.PIIRule,
+	piiText string,
+	nonUserMessages []string,
+	toolResultTexts []string,
+) []string {
+	if rule.Source == config.PIISourceToolResult {
+		var contents []string
+		for _, text := range toolResultTexts {
+			if text != "" {
+				contents = append(contents, text)
+			}
+		}
+		return contents
+	}
+
+	return collectPIIRuleContents(piiText, nonUserMessages, rule.IncludeHistory)
+}
+
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.
-func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) (map[string]bool, bool) {
+func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName, source string, threshold float32, piiCache map[piiCacheKey]cachedPIIContent) (map[string]bool, piiScanStatus) {
 	entityTypes := make(map[string]bool)
-	failed := false
+	successCount := 0
+	failureCount := 0
+	incompleteCount := 0
 	for _, content := range ruleContents {
-		cachedResults, ok := piiCache[content]
+		cachedContent, ok := piiCache[piiCacheKey{source: piiCacheSource(source), content: content}]
 		if !ok {
+			logging.Errorf("[Signal Computation] PII rule %q: content missing from inference cache", ruleName)
+			failureCount++
 			continue
 		}
-		for _, cached := range cachedResults {
+		if cachedContent.incomplete {
+			incompleteCount++
+		}
+		for _, cached := range cachedContent.results {
 			if cached.err != nil {
-				failed = true
-				if !errors.Is(cached.err, ErrTokenSpansTruncated) {
+				if errors.Is(cached.err, ErrTokenSpansTruncated) {
+					// A declared truncation still carries valid spans for the
+					// portion inspected by the provider. Preserve those spans and
+					// mark the scan incomplete so on_error handles the remainder.
+					logging.Warnf("[Signal Computation] PII rule %q: provider truncated its input, spans are partial", ruleName)
+					incompleteCount++
+				} else {
 					logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
+					failureCount++
 					continue
 				}
-				// A declared truncation still carries valid spans for the part
-				// the provider saw; they count, and the rule is marked as not
-				// fully evaluated so on_error decides what the unseen part means.
-				logging.Warnf("[Signal Computation] PII rule %q: provider truncated its input, spans are partial", ruleName)
 			}
+			successCount++
 			for _, entity := range cached.result.Entities {
 				if entity.Confidence >= threshold {
 					entityTypes[c.PIIMapping.TranslatePIIType(entity.EntityType)] = true
@@ -352,7 +387,15 @@ func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName strin
 			}
 		}
 	}
-	return entityTypes, failed
+
+	switch {
+	case failureCount == 0 && incompleteCount == 0:
+		return entityTypes, piiScanClean
+	case failureCount > 0 && successCount == 0 && incompleteCount == 0:
+		return entityTypes, piiScanFailed
+	default:
+		return entityTypes, piiScanIncomplete
+	}
 }
 
 // findDeniedEntities returns entity types not covered by the allow-list.

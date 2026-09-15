@@ -40,6 +40,58 @@ func extractSemanticPromptAndTools(request *llmprotocol.Request) (prompt string,
 	return prompt, toolDefs
 }
 
+// replaySafeSemanticRequest clones the request's message content while
+// removing tool-result payloads. Replay keeps the request shape and bounded
+// tool identifiers, but raw tool output can contain PII and must not be
+// persisted in either RequestBody or Prompt.
+func replaySafeSemanticRequest(request llmprotocol.Request) llmprotocol.Request {
+	sanitized := request
+	sanitized.Messages = replaySafeMessages(request.Messages)
+	sanitized.Instructions = replaySafeInstructionBlocks(request.Instructions)
+	return sanitized
+}
+
+func replaySafeMessages(messages []llmprotocol.Message) []llmprotocol.Message {
+	if messages == nil {
+		return nil
+	}
+	sanitized := make([]llmprotocol.Message, len(messages))
+	for i, message := range messages {
+		sanitized[i] = message
+		sanitized[i].Content = replaySafeContents(message.Content)
+	}
+	return sanitized
+}
+
+func replaySafeInstructionBlocks(blocks []llmprotocol.InstructionBlock) []llmprotocol.InstructionBlock {
+	if blocks == nil {
+		return nil
+	}
+	sanitized := make([]llmprotocol.InstructionBlock, len(blocks))
+	for i, block := range blocks {
+		sanitized[i] = block
+		sanitized[i].Content = replaySafeContents(block.Content)
+	}
+	return sanitized
+}
+
+func replaySafeContents(contents []llmprotocol.Content) []llmprotocol.Content {
+	if contents == nil {
+		return nil
+	}
+	sanitized := make([]llmprotocol.Content, len(contents))
+	for i, content := range contents {
+		sanitized[i] = content
+		if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
+			continue
+		}
+		result := *content.ToolResult
+		result.Content = nil
+		sanitized[i].ToolResult = &result
+	}
+	return sanitized
+}
+
 //nolint:gocognit // Trace construction exhaustively preserves ordered neutral tool lifecycle events.
 func buildReplayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 	if ctx == nil || ctx.SemanticRequest == nil {
@@ -158,13 +210,18 @@ func replayToolCallStep(source, role, apiType string, call llmprotocol.ToolCall)
 }
 
 func replayToolResultStep(source, role, apiType string, result llmprotocol.ToolResult) routerreplay.ToolTraceStep {
-	encoded, _ := json.Marshal(result.Content)
-	text := semanticText(result.Content)
 	return routerreplay.ToolTraceStep{
 		Type: replayToolStepClientToolResult, Source: source, Role: role,
-		Text: text, ToolCallID: result.CallID,
-		RawOutput: string(encoded), Output: text, APIType: apiType,
+		ToolCallID: result.CallID, APIType: apiType,
+		Status: replayToolResultStatus(result), ContentRedacted: true,
 	}
+}
+
+func replayToolResultStatus(result llmprotocol.ToolResult) string {
+	if result.IsError != nil && *result.IsError {
+		return "failed"
+	}
+	return "succeeded"
 }
 
 func mergeReplayToolTraces(
@@ -234,6 +291,7 @@ func replayToolTraceStepsEqual(left, right routerreplay.ToolTraceStep) bool {
 	return left.Type == right.Type && left.Source == right.Source &&
 		left.Role == right.Role && left.Text == right.Text &&
 		left.ToolName == right.ToolName && left.ToolCallID == right.ToolCallID &&
+		left.Status == right.Status && left.ContentRedacted == right.ContentRedacted &&
 		left.Arguments == right.Arguments && left.RawArguments == right.RawArguments &&
 		left.RawOutput == right.RawOutput && left.Output == right.Output &&
 		left.APIType == right.APIType && left.Truncated == right.Truncated

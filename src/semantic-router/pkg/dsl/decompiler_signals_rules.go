@@ -362,6 +362,9 @@ func (d *decompiler) decompilePIISignals() {
 		if pii.IncludeHistory {
 			d.write("  include_history: true\n")
 		}
+		if pii.Source != "" {
+			d.write("  source: %q\n", pii.Source)
+		}
 		if pii.Description != "" {
 			d.write("  description: %q\n", pii.Description)
 		}
