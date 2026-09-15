@@ -35,6 +35,13 @@ type chatResponseWire struct {
 	RemotePort          *int64                    `json:"remote_port,omitempty"`
 	// Groq attaches its request id here; it is provider metadata, not output.
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
+	// Groq reports per-model usage for compound requests and null otherwise.
+	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+}
+
+// hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
+func (wire chatResponseWire) hasUsageBreakdown() bool {
+	return len(wire.UsageBreakdown) > 0 && !bytes.Equal(bytes.TrimSpace(wire.UsageBreakdown), []byte("null"))
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response
@@ -64,7 +71,8 @@ func (tier *chatServiceTierWire) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	switch value {
-	case "auto", "default", "flex", "priority", "scale":
+	// on_demand and performance are Groq's tiers on its OpenAI-compatible API.
+	case "auto", "default", "flex", "priority", "scale", "on_demand", "performance":
 		*tier = chatServiceTierWire(value)
 		return nil
 	default:

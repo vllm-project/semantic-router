@@ -33,6 +33,7 @@
     {"name": "service_tier", "patch": {"service_tier": "default"}},
     {"name": "system_fingerprint", "patch": {"system_fingerprint": "fp_1"}},
     {"name": "usage", "patch": {"usage": {"prompt_tokens": 8, "completion_tokens": 5, "total_tokens": 13, "prompt_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 1}, "completion_tokens_details": {"reasoning_tokens": 3}}}},
+    {"name": "usage_breakdown", "patch": {"usage_breakdown": null}},
     {"name": "x_groq", "patch": {"x_groq": {"id": "req_1"}}}
   ]
 }

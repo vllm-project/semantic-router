@@ -26,7 +26,8 @@ const groqChatResponseFixture = `{
     "message":{"role":"assistant","content":"ok","reasoning":"short"}}],
   "usage":{"queue_time":0.037,"prompt_tokens":18,"prompt_time":0.0007,
     "completion_tokens":5,"completion_time":0.46,"total_tokens":23,"total_time":0.46},
-  "system_fingerprint":"fp_179b0f92c9","x_groq":{"id":"req_01jbd6g2qdfw2adyrt2az8hz4w"}
+  "system_fingerprint":"fp_179b0f92c9","x_groq":{"id":"req_01jbd6g2qdfw2adyrt2az8hz4w"},
+  "service_tier":"on_demand","usage_breakdown":null
 }`
 
 func TestOpenAIChatResponseAcceptsXAIUsageExtensions(t *testing.T) {
@@ -51,6 +52,18 @@ func TestOpenAIChatResponseAcceptsGroqExecutionMetadata(t *testing.T) {
 	assertDiagnosticFields(
 		t, diagnostics,
 		"x_groq", "usage.queue_time", "usage.prompt_time", "usage.completion_time", "usage.total_time",
+	)
+}
+
+func TestOpenAIChatResponseReportsGroqUsageBreakdown(t *testing.T) {
+	body := strings.Replace(groqChatResponseFixture, `"usage_breakdown":null`, `"usage_breakdown":{"models":[]}`, 1)
+	_, _, diagnostics, err := NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, []byte(body))
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	assertDiagnosticFields(
+		t, diagnostics,
+		"usage_breakdown", "x_groq", "usage.queue_time", "usage.prompt_time", "usage.completion_time", "usage.total_time",
 	)
 }
 

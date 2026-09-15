@@ -22,10 +22,11 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	var diagnostics llmprotocol.Diagnostics
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
-		"kv_transfer": wire.hasLegacyKVTransferMetadata(),
-		"metadata":    len(wire.Metadata) > 0,
-		"moderation":  len(wire.Moderation) > 0,
-		"x_groq":      len(wire.XGroq) > 0,
+		"kv_transfer":     wire.hasLegacyKVTransferMetadata(),
+		"metadata":        len(wire.Metadata) > 0,
+		"moderation":      len(wire.Moderation) > 0,
+		"x_groq":          len(wire.XGroq) > 0,
+		"usage_breakdown": wire.hasUsageBreakdown(),
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err

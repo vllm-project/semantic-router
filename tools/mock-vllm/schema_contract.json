@@ -117,6 +117,7 @@
         "remote_engine_id",
         "remote_host",
         "remote_port",
+        "usage_breakdown",
         "x_groq"
       ],
       "official_usage_fields": [
