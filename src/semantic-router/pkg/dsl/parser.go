@@ -460,6 +460,7 @@ var knownInlinePluginAliases = map[string]string{
 	"semantic-cache":      "response_cache",
 	"response-cache":      "response_cache",
 	"context-compression": "context_compression",
+	"history-reset":       "history_reset",
 	"system-prompt":       "system_prompt",
 	"header-mutation":     "header_mutation",
 	"router-replay":       "router_replay",

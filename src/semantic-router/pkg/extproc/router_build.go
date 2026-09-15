@@ -138,14 +138,44 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 }
 
 func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Pool) (*OpenAIRouter, error) {
+	return buildOpenAIRouterFromConfigWithCloser(cfg, (*OpenAIRouter).Close, pools...)
+}
+
+// buildOpenAIRouterFromConfigWithCloser is the construction body.
+// closeCandidate releases a router rejected after it was built: production
+// passes Close, and a test passes an observing wrapper so the release step
+// stays covered without mutable package-level state.
+func buildOpenAIRouterFromConfigWithCloser(
+	cfg *config.RouterConfig,
+	closeCandidate func(*OpenAIRouter) error,
+	pools ...*binding.Pool,
+) (*OpenAIRouter, error) {
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
+		return nil, err
+	}
+	// Configuration-only contracts are checked before anything is allocated,
+	// so an invalid candidate never builds components it would have to release.
+	if err := verifyContextRecoveryAgreement(cfg); err != nil {
 		return nil, err
 	}
 	components, err := buildRouterComponents(cfg, pools...)
 	if err != nil {
 		return nil, err
 	}
-	return components.buildRouter(), nil
+	router := components.buildRouter()
+	// Runtime wiring can only be verified once the router exists. A rejected
+	// candidate releases everything it built: startup exits, but a rejected
+	// reload would otherwise leak clients and goroutines on every attempt
+	// while the previous router keeps serving.
+	if err = router.verifyHistoryResetTriggerWiring(cfg); err != nil {
+		if closeErr := closeCandidate(router); closeErr != nil {
+			logging.ComponentWarnEvent("extproc", "rejected_router_close_failed", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
+		}
+		return nil, err
+	}
+	return router, nil
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {

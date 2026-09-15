@@ -36,6 +36,7 @@ const (
 	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
 	DecisionPluginShadowDispatch     = "shadow_dispatch"
+	DecisionPluginHistoryReset       = "history_reset"
 )
 
 // SignalReferenceQualifier describes how a signal can add a third component
@@ -115,6 +116,7 @@ var decisionPluginRegistry = []decisionPluginRegistryEntry{
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginResponseJailbreak, DisplayName: "Response Jailbreak", Description: "Screen generated responses for jailbreak-like output."}, NewPayload: func() interface{} { return &ResponseJailbreakPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, NewPayload: func() interface{} { return &ContextCompressionPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginShadowDispatch, DisplayName: "Shadow Dispatch", Description: "Send a bounded asynchronous copy to a secondary model."}, NewPayload: func() interface{} { return &ShadowDispatchPluginConfig{} }},
+	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginHistoryReset, DisplayName: "History Reset", Description: "Remove eligible prior turns after an accepted topic change."}, NewPayload: func() interface{} { return &HistoryResetPluginConfig{} }},
 }
 
 // AlgorithmExecution identifies the runtime path for a decision algorithm.

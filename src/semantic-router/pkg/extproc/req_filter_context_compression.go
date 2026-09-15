@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -94,12 +93,9 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		recordContextCompressionStatus(ctx, status, time.Since(start).Seconds())
 		return nil
 	}
-	if len(result.RecoveryKeys) > 0 {
-		if err := injectSemanticContextRecoveryTool(request, result.RecoveryKeys); err != nil {
-			return semanticCompressionFailure(pluginConfig, err)
-		}
+	if err := registerContextRecoveryKeys(ctx, request, result.RecoveryKeys...); err != nil {
+		return semanticCompressionFailure(pluginConfig, err)
 	}
-	ctx.ContextCompressionRecoveryKeys = append(ctx.ContextCompressionRecoveryKeys[:0], result.RecoveryKeys...)
 	recordContextCompressionApplied(ctx, contextCompressionStats{
 		appliedMessages: result.MessagesCompressed,
 		appliedBlocks:   result.BlocksCompressed,
@@ -139,30 +135,6 @@ func semanticContextCompressionCapabilities(
 		capabilities.RequestedOutput = int(*request.Sampling.MaxOutputTokens)
 	}
 	return capabilities
-}
-
-func injectSemanticContextRecoveryTool(request *llmprotocol.Request, keys []string) error {
-	for _, tool := range request.Tools {
-		if tool.Name == contextcompression.RetrieveToolName {
-			return fmt.Errorf("request defines reserved tool %q", contextcompression.RetrieveToolName)
-		}
-	}
-	schema, err := json.Marshal(map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"key": map[string]interface{}{"type": "string", "enum": keys},
-		},
-		"required": []string{"key"},
-	})
-	if err != nil {
-		return err
-	}
-	request.Tools = append(request.Tools, llmprotocol.Tool{
-		Name:        contextcompression.RetrieveToolName,
-		Description: "Retrieve original context omitted by vLLM Semantic Router compression.",
-		InputSchema: schema,
-	})
-	return nil
 }
 
 func (stats contextCompressionStats) format() string {

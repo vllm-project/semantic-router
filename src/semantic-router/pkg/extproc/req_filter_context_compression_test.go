@@ -155,9 +155,9 @@ func TestSemanticContextCompressionFailClosedReturnsError(t *testing.T) {
 	}
 }
 
-func TestInjectSemanticContextRecoveryToolRejectsReservedNameConflict(t *testing.T) {
+func TestContextRecoveryKeyRegistrationRejectsReservedNameConflict(t *testing.T) {
 	request := &llmprotocol.Request{Tools: []llmprotocol.Tool{{Name: contextcompression.RetrieveToolName}}}
-	if err := injectSemanticContextRecoveryTool(request, []string{"issued-key"}); err == nil {
+	if err := registerContextRecoveryKeys(&RequestContext{}, request, "issued-key"); err == nil {
 		t.Fatal("reserved recovery tool conflict was accepted")
 	}
 }

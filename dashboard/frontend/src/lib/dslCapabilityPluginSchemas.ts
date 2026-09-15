@@ -232,6 +232,59 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
           options: ['fail_open', 'fail_closed'],
         },
       ]
+    case 'history_reset':
+      return [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        {
+          key: 'trigger',
+          label: 'Topic Trigger',
+          type: 'object',
+          fields: [
+            { key: 'signal', label: 'Signal', type: 'string', placeholder: 'topic_boundary' },
+            { key: 'min_confidence', label: 'Minimum Confidence', type: 'number' },
+          ],
+        },
+        {
+          key: 'scope',
+          label: 'Scope',
+          type: 'select',
+          options: ['eligible_history'],
+        },
+        {
+          key: 'failure_mode',
+          label: 'Failure Mode',
+          type: 'select',
+          options: ['fail_open', 'fail_closed'],
+        },
+        {
+          key: 'limits',
+          label: 'Planning Limits',
+          type: 'object',
+          fields: [
+            { key: 'max_history_turns', label: 'Maximum History Turns', type: 'number' },
+            { key: 'max_history_bytes', label: 'Maximum History Bytes', type: 'number' },
+            { key: 'timeout_ms', label: 'Timeout (ms)', type: 'number' },
+          ],
+        },
+        {
+          key: 'recovery',
+          label: 'Recovery',
+          type: 'object',
+          fields: [
+            { key: 'enabled', label: 'Enabled', type: 'boolean' },
+            {
+              key: 'store',
+              label: 'Store',
+              type: 'select',
+              options: ['redis', 'valkey', 'response_cache'],
+            },
+            { key: 'ttl_seconds', label: 'TTL (seconds)', type: 'number' },
+            { key: 'max_bytes_per_request', label: 'Maximum Bytes Per Request', type: 'number' },
+            { key: 'max_total_bytes', label: 'Maximum Total Bytes', type: 'number' },
+            { key: 'max_retrievals', label: 'Maximum Retrievals', type: 'number' },
+          ],
+        },
+      ]
     default:
       return null
   }
