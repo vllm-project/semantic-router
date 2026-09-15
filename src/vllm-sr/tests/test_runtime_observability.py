@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import pytest
 import yaml
+from cli import core, runtime_lifecycle
 from cli.commands import runtime_paths
 from cli.commands.runtime_observability import apply_local_tracing_endpoint
 from cli.commands.runtime_paths import (
@@ -425,3 +426,112 @@ def test_new_source_disable_takes_ownership_from_minimal_projection(
     source.write_text(yaml.safe_dump(config))
     prepare_serve(source, minimal=False)
     assert tracing_block(yaml.safe_load(active.read_text()))["enabled"] is False
+
+
+@pytest.fixture
+def support_services(tmp_path, monkeypatch):
+    """Exercise real mode orchestration against a stateful container boundary."""
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "mode-switch")
+    stack = resolve_runtime_stack()
+    states = {"external-collector": "running", "other-vllm-sr-jaeger": "running"}
+    stopped = []
+    storage_starts = []
+
+    def stop(name):
+        stopped.append(name)
+        states[name] = "exited"
+        return True
+
+    def start(name):
+        states[name] = "running"
+        return 0, "", ""
+
+    def provision(*args, **kwargs):
+        storage_starts.append(True)
+        return {"redis"}
+
+    def unexpected_remove(*args, **kwargs):
+        pytest.fail("Minimal mode must preserve containers and data")
+
+    monkeypatch.setattr(
+        core, "container_status_strict", lambda name: states.get(name, "not found")
+    )
+    monkeypatch.setattr(core, "container_stop_container", stop)
+    monkeypatch.setattr(core, "container_remove_container", unexpected_remove)
+    monkeypatch.setattr(core, "container_remove_network", unexpected_remove)
+    monkeypatch.setattr(core, "provision_storage_backends", provision)
+    for service in ("jaeger", "prometheus", "grafana"):
+        name = getattr(stack, f"{service}_container_name")
+        monkeypatch.setattr(
+            runtime_lifecycle,
+            f"container_start_{service}",
+            lambda *args, name=name, **kwargs: start(name),
+        )
+
+    def serve(*, minimal):
+        env = {}
+        result = core._start_support_services(
+            {}, stack.network_name, str(tmp_path), env, stack, not minimal
+        )
+        assert result == ({"redis"}, stack.network_name)
+        assert env[core.MANAGED_STORAGE_BACKENDS_ENV] == "redis"
+
+    return stack, states, stopped, storage_starts, serve
+
+
+def test_full_minimal_full_stops_only_selected_collectors_and_preserves_data(
+    support_services,
+):
+    stack, states, stopped, _, serve = support_services
+    owned = {
+        stack.jaeger_container_name,
+        stack.prometheus_container_name,
+        stack.grafana_container_name,
+    }
+    serve(minimal=True)
+    assert not stopped
+    serve(minimal=False)
+    assert all(states[name] == "running" for name in owned)
+    serve(minimal=True)
+    assert set(stopped) == owned
+    assert all(states[name] == "exited" for name in owned)
+    serve(minimal=True)
+    assert len(stopped) == 3
+    serve(minimal=False)
+    assert all(states[name] == "running" for name in owned)
+    assert states["external-collector"] == "running"
+    assert states["other-vllm-sr-jaeger"] == "running"
+
+
+@pytest.mark.parametrize("state", ["paused", "restarting"])
+def test_minimal_stops_collectors_in_transient_active_states(support_services, state):
+    stack, states, stopped, _, serve = support_services
+    states[stack.jaeger_container_name] = state
+    serve(minimal=True)
+    assert stopped == [stack.jaeger_container_name]
+    assert states[stack.jaeger_container_name] == "exited"
+
+
+@pytest.mark.parametrize(
+    "failure", ["stop_failed", "still_running", "inspect_failed", "removing"]
+)
+def test_minimal_surfaces_unconfirmed_collector_shutdown(
+    support_services, monkeypatch, failure
+):
+    stack, states, _, storage_starts, serve = support_services
+    states[stack.jaeger_container_name] = "running"
+    if failure == "inspect_failed":
+
+        def inspect_failed(name):
+            raise RuntimeError("managed container status inspection failed")
+
+        monkeypatch.setattr(core, "container_status_strict", inspect_failed)
+    elif failure == "removing":
+        states[stack.jaeger_container_name] = "removing"
+    else:
+        monkeypatch.setattr(
+            core, "container_stop_container", lambda name: failure == "still_running"
+        )
+    with pytest.raises(RuntimeError, match="container"):
+        serve(minimal=True)
+    assert not storage_starts

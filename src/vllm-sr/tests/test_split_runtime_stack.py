@@ -685,6 +685,7 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
 
     monkeypatch.setattr(core, "print_vllm_logo", lambda: None)
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",
