@@ -20,11 +20,17 @@ def _ensure_hidden_config_dir(config_dir):
 
 
 def _render_template_copy(
-    source_path: str, destination_path: str, stack_layout: RuntimeStackLayout
+    source_path: str,
+    destination_path: str,
+    stack_layout: RuntimeStackLayout,
+    *,
+    replacements: tuple[tuple[str, str], ...] = (),
 ) -> None:
     source = Path(source_path)
     destination = Path(destination_path)
     rendered = render_observability_template(source.read_text(), stack_layout)
+    for placeholder, value in replacements:
+        rendered = rendered.replace(placeholder, value)
     destination.write_text(rendered, encoding="utf-8")
 
 
