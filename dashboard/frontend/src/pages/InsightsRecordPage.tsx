@@ -11,6 +11,7 @@ import {
   buildInsightsRecordSections,
   buildInsightsRecordTitle,
   getInsightsLifecyclePresentation,
+  getInsightsLifecycleStatusClass,
   getInsightsRecordPath,
 } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
@@ -155,13 +156,7 @@ export default function InsightsRecordPage() {
             </div>
             {lifecycle ? (
               <span
-                className={`${styles.recordStatus} ${
-                  lifecycle.successful
-                    ? styles.recordStatusSuccess
-                    : lifecycle.errored
-                      ? styles.recordStatusError
-                      : styles.recordStatusNeutral
-                }`}
+                className={`${styles.recordStatus} ${getInsightsLifecycleStatusClass(lifecycle)}`}
               >
                 {lifecycle.label}
               </span>
