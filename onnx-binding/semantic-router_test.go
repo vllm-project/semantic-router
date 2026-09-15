@@ -1,6 +1,9 @@
+//go:build !windows && cgo && (amd64 || arm64)
+
 package onnx_binding
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -41,8 +44,8 @@ func TestInitMmBertEmbeddingModel(t *testing.T) {
 			t.Fatalf("Failed to initialize model: %v", err)
 		}
 
-		goInitialized, rustInitialized := IsModelInitialized()
-		if !goInitialized || !rustInitialized {
+		rustState, goState := IsModelInitialized()
+		if !rustState || !goState {
 			t.Fatal("Model should be initialized")
 		}
 	})
@@ -67,8 +70,8 @@ func TestInitMmBertEmbeddingModel(t *testing.T) {
 			t.Fatalf("Second init should not fail: %v", err)
 		}
 
-		goInitialized, rustInitialized := IsModelInitialized()
-		if !goInitialized || !rustInitialized {
+		rustState, goState := IsModelInitialized()
+		if !rustState || !goState {
 			t.Fatal("Model should still be initialized")
 		}
 	})
@@ -96,6 +99,8 @@ func TestTextWindows(t *testing.T) {
 }
 
 // TestGetEmbedding2DMatryoshka tests the 2D Matryoshka embedding generation
+//
+//nolint:gocognit,cyclop,funlen // This legacy integration test keeps related model-backed cases together.
 func TestGetEmbedding2DMatryoshka(t *testing.T) {
 	modelPath := getModelPath(t)
 	err := InitMmBertEmbeddingModel(modelPath, true)
@@ -104,7 +109,7 @@ func TestGetEmbedding2DMatryoshka(t *testing.T) {
 	}
 
 	t.Run("FullModelFullDimension", func(t *testing.T) {
-		output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+		output, err := GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 0, 0)
 		if err != nil {
 			t.Fatalf("Failed to generate embedding: %v", err)
 		}
@@ -135,7 +140,7 @@ func TestGetEmbedding2DMatryoshka(t *testing.T) {
 		dimensions := []int{512, 256, 128, 64}
 
 		for _, dim := range dimensions {
-			output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, dim)
+			output, err := GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 0, dim)
 			if err != nil {
 				t.Fatalf("Failed to generate %d-dim embedding: %v", dim, err)
 			}
@@ -154,7 +159,7 @@ func TestGetEmbedding2DMatryoshka(t *testing.T) {
 		layers := []int{22, 11, 6, 3}
 
 		for _, layer := range layers {
-			output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", layer, 0)
+			output, err := GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), layer, 0)
 			if err != nil {
 				t.Fatalf("Failed to generate embedding with layer %d: %v", layer, err)
 			}
@@ -184,7 +189,7 @@ func TestGetEmbedding2DMatryoshka(t *testing.T) {
 		}
 
 		for _, combo := range combinations {
-			output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", combo.layer, combo.dim)
+			output, err := GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), combo.layer, combo.dim)
 			if err != nil {
 				t.Fatalf("Failed with layer=%d, dim=%d: %v", combo.layer, combo.dim, err)
 			}
@@ -200,12 +205,12 @@ func TestGetEmbedding2DMatryoshka(t *testing.T) {
 
 	t.Run("EmbeddingConsistency", func(t *testing.T) {
 		// Same input should produce same output
-		output1, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+		output1, err := GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 0, 0)
 		if err != nil {
 			t.Fatalf("First embedding failed: %v", err)
 		}
 
-		output2, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+		output2, err := GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 0, 0)
 		if err != nil {
 			t.Fatalf("Second embedding failed: %v", err)
 		}
@@ -226,7 +231,7 @@ func TestGetEmbedding2DMatryoshka(t *testing.T) {
 	})
 
 	t.Run("EmbeddingNormalization", func(t *testing.T) {
-		output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+		output, err := GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 0, 0)
 		if err != nil {
 			t.Fatalf("Failed to generate embedding: %v", err)
 		}
@@ -282,6 +287,48 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 	}
 }
 
+// TestGetEmbeddingBatchedAcrossInputs tests the batching-compatible embedding entrypoint.
+func TestGetEmbeddingBatchedAcrossInputs(t *testing.T) {
+	modelPath := getModelPath(t)
+	err := InitMmBertEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Fatalf("Failed to initialize model: %v", err)
+	}
+
+	texts := []string{TestText1, TestText2, TestText3}
+
+	t.Run("BatchEmbedding", func(t *testing.T) {
+		for i, text := range texts {
+			output, err := GetEmbeddingBatched(text, string(DefaultEmbeddingModelType), 0)
+			if err != nil {
+				t.Fatalf("Text %d: failed to generate embedding: %v", i, err)
+			}
+			if len(output.Embedding) != 768 {
+				t.Errorf("Text %d: expected 768 dimensions, got %d", i, len(output.Embedding))
+			}
+		}
+	})
+
+	t.Run("BatchWithTargetDimension", func(t *testing.T) {
+		for i, text := range texts {
+			output, err := GetEmbeddingBatched(text, string(DefaultEmbeddingModelType), 256)
+			if err != nil {
+				t.Fatalf("Text %d: failed to generate embedding: %v", i, err)
+			}
+			if len(output.Embedding) != 256 {
+				t.Errorf("Text %d: expected 256 dimensions, got %d", i, len(output.Embedding))
+			}
+		}
+	})
+
+	t.Run("EmptyText", func(t *testing.T) {
+		_, err := GetEmbeddingBatched("", string(DefaultEmbeddingModelType), 0)
+		if err == nil {
+			t.Fatal("Expected error for empty text")
+		}
+	})
+}
+
 // TestCalculateEmbeddingSimilarity tests similarity calculation
 func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	modelPath := getModelPath(t)
@@ -291,7 +338,7 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	}
 
 	t.Run("SimilarTexts", func(t *testing.T) {
-		result, err := CalculateEmbeddingSimilarity(TestText1, TestText2, "mmbert", 0)
+		result, err := CalculateEmbeddingSimilarity(TestText1, TestText2, string(DefaultEmbeddingModelType), 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate similarity: %v", err)
 		}
@@ -305,7 +352,7 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	})
 
 	t.Run("IdenticalTexts", func(t *testing.T) {
-		result, err := CalculateEmbeddingSimilarity(TestText1, TestText1, "mmbert", 0)
+		result, err := CalculateEmbeddingSimilarity(TestText1, TestText1, string(DefaultEmbeddingModelType), 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate similarity: %v", err)
 		}
@@ -318,7 +365,7 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	})
 
 	t.Run("DifferentTexts", func(t *testing.T) {
-		result, err := CalculateEmbeddingSimilarity(TestText1, TestText3, "mmbert", 0)
+		result, err := CalculateEmbeddingSimilarity(TestText1, TestText3, string(DefaultEmbeddingModelType), 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate similarity: %v", err)
 		}
@@ -330,12 +377,12 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 
 	t.Run("SimilarityWith2DMatryoshka", func(t *testing.T) {
 		// Compare similarity calculations at different layer/dim settings
-		result1, err := CalculateEmbeddingSimilarity(TestText1, TestText2, "mmbert", 0)
+		result1, err := CalculateEmbeddingSimilarity(TestText1, TestText2, string(DefaultEmbeddingModelType), 0)
 		if err != nil {
 			t.Fatalf("Full model failed: %v", err)
 		}
 
-		result2, err := CalculateEmbeddingSimilarity(TestText1, TestText2, "mmbert", 256)
+		result2, err := CalculateEmbeddingSimilarity(TestText1, TestText2, string(DefaultEmbeddingModelType), 256)
 		if err != nil {
 			t.Fatalf("L6/D256 failed: %v", err)
 		}
@@ -351,6 +398,8 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 }
 
 // TestCalculateSimilarityBatch tests batch similarity calculation
+//
+//nolint:gocognit // This legacy integration test keeps related ranking cases together.
 func TestCalculateSimilarityBatch(t *testing.T) {
 	modelPath := getModelPath(t)
 	err := InitMmBertEmbeddingModel(modelPath, true)
@@ -368,7 +417,7 @@ func TestCalculateSimilarityBatch(t *testing.T) {
 	}
 
 	t.Run("TopKMatches", func(t *testing.T) {
-		result, err := CalculateSimilarityBatch(query, candidates, 3, "mmbert", 0)
+		result, err := CalculateSimilarityBatch(query, candidates, 3, string(DefaultEmbeddingModelType), 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate batch similarity: %v", err)
 		}
@@ -391,7 +440,7 @@ func TestCalculateSimilarityBatch(t *testing.T) {
 	})
 
 	t.Run("AllMatches", func(t *testing.T) {
-		result, err := CalculateSimilarityBatch(query, candidates, 0, "mmbert", 0)
+		result, err := CalculateSimilarityBatch(query, candidates, 0, string(DefaultEmbeddingModelType), 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate batch similarity: %v", err)
 		}
@@ -402,7 +451,7 @@ func TestCalculateSimilarityBatch(t *testing.T) {
 	})
 
 	t.Run("BatchWith2DMatryoshka", func(t *testing.T) {
-		result, err := CalculateSimilarityBatch(query, candidates, 3, "mmbert", 256)
+		result, err := CalculateSimilarityBatch(query, candidates, 3, string(DefaultEmbeddingModelType), 256)
 		if err != nil {
 			t.Fatalf("Failed with 2D Matryoshka: %v", err)
 		}
@@ -414,7 +463,7 @@ func TestCalculateSimilarityBatch(t *testing.T) {
 	})
 
 	t.Run("EmptyCandidates", func(t *testing.T) {
-		_, err := CalculateSimilarityBatch(query, []string{}, 3, "mmbert", 0)
+		_, err := CalculateSimilarityBatch(query, []string{}, 3, string(DefaultEmbeddingModelType), 0)
 		if err == nil {
 			t.Fatal("Expected error for empty candidates")
 		}
@@ -484,7 +533,7 @@ func TestConcurrentEmbeddings(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iterationsPerGoroutine; i++ {
 				text := texts[(id+i)%len(texts)]
-				output, err := GetEmbedding2DMatryoshka(text, "mmbert", 0, 0)
+				output, err := GetEmbedding2DMatryoshka(text, string(DefaultEmbeddingModelType), 0, 0)
 				if err != nil {
 					errCh <- fmt.Errorf("goroutine %d, iter %d: %v", id, i, err)
 					return
@@ -521,19 +570,47 @@ func BenchmarkGetEmbedding2DMatryoshka(b *testing.B) {
 
 	b.Run("FullModel", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, _ = GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+			_, _ = GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 0, 0)
 		}
 	})
 
 	b.Run("Layer6_Dim256", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, _ = GetEmbedding2DMatryoshka(TestText1, "mmbert", 6, 256)
+			_, _ = GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 6, 256)
 		}
 	})
 
 	b.Run("Layer3_Dim64", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, _ = GetEmbedding2DMatryoshka(TestText1, "mmbert", 3, 64)
+			_, _ = GetEmbedding2DMatryoshka(TestText1, string(DefaultEmbeddingModelType), 3, 64)
+		}
+	})
+}
+
+func BenchmarkBatchEmbeddings(b *testing.B) {
+	modelPath := os.Getenv(TestModelPathEnv)
+	if modelPath == "" {
+		b.Skipf("Skipping benchmark: %s not set", TestModelPathEnv)
+	}
+
+	err := InitMmBertEmbeddingModel(modelPath, true)
+	if err != nil {
+		b.Fatalf("Failed to initialize model: %v", err)
+	}
+
+	texts := []string{
+		"First test sentence",
+		"Second test sentence",
+		"Third test sentence",
+		"Fourth test sentence",
+		"Fifth test sentence",
+	}
+
+	b.Run("Batch5", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, text := range texts {
+				_, _ = GetEmbeddingBatched(text, string(DefaultEmbeddingModelType), 0)
+			}
 		}
 	})
 }
@@ -592,7 +669,7 @@ func TestGetEmbeddingBatched(t *testing.T) {
 	}
 
 	t.Run("BatchedEmbedding", func(t *testing.T) {
-		output, err := GetEmbeddingBatched(TestText1, "mmbert", 0)
+		output, err := GetEmbeddingBatched(TestText1, string(DefaultEmbeddingModelType), 0)
 		if err != nil {
 			t.Fatalf("GetEmbeddingBatched failed: %v", err)
 		}
@@ -607,13 +684,50 @@ func TestGetEmbeddingBatched(t *testing.T) {
 	})
 }
 
-// TestSupportsBatchedEmbedding verifies onnx-binding always reports no batched
-// support, since every model type routes through GetEmbeddingWithModelType.
-func TestSupportsBatchedEmbedding(t *testing.T) {
-	for _, modelType := range []string{"qwen3", "mmbert", "gemma", ""} {
-		if SupportsBatchedEmbedding(modelType) {
-			t.Errorf("SupportsBatchedEmbedding(%q) = true, want false", modelType)
+// TestEmbeddingCapabilitiesConformance verifies the same versioned contract as
+// Candle while retaining ONNX-specific model and batching facts.
+func TestEmbeddingCapabilitiesConformance(t *testing.T) {
+	cases := []struct {
+		modelType      string
+		wantModelType  ModelType
+		wantModalities []Modality
+	}{
+		{"mmbert", ModelTypeMmBert, []Modality{ModalityText}},
+		{"  MMBERT  ", ModelTypeMmBert, []Modality{ModalityText}},
+		{"multimodal", ModelTypeMultimodal, []Modality{ModalityText, ModalityImage, ModalityAudio}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.modelType, func(t *testing.T) {
+			assertEmbeddingCapabilities(t, tc.modelType, tc.wantModelType, tc.wantModalities)
+		})
+	}
+
+	for _, modelType := range []string{"", "qwen3", "gemma", "unknown", "mmbert\x00ignored"} {
+		_, err := EmbeddingCapabilitiesFor(modelType)
+		if !errors.Is(err, ErrUnsupportedModelType) {
+			t.Errorf("EmbeddingCapabilitiesFor(%q) error = %v, want ErrUnsupportedModelType", modelType, err)
 		}
+	}
+}
+
+func assertEmbeddingCapabilities(t *testing.T, input string, wantModelType ModelType, wantModalities []Modality) {
+	t.Helper()
+	got, err := EmbeddingCapabilitiesFor(input)
+	if err != nil {
+		t.Fatalf("EmbeddingCapabilitiesFor(%q) error = %v", input, err)
+	}
+	if got.Version != EmbeddingCapabilitiesVersionV1 || got.Backend != BackendONNX {
+		t.Fatalf("EmbeddingCapabilitiesFor(%q) identity = v%d/%q, want v1/onnx", input, got.Version, got.Backend)
+	}
+	if got.ModelType != wantModelType || got.SupportsBatching {
+		t.Errorf("EmbeddingCapabilitiesFor(%q) model/batching = %q/%v, want %q/false", input, got.ModelType, got.SupportsBatching, wantModelType)
+	}
+	if fmt.Sprint(got.Modalities) != fmt.Sprint(wantModalities) {
+		t.Errorf("EmbeddingCapabilitiesFor(%q) modalities = %v, want %v", input, got.Modalities, wantModalities)
+	}
+	assertCapabilityDimensions(t, got)
+	if len(got.SupportedDevices) == 0 || got.SupportedDevices[0] != DeviceCPU {
+		t.Errorf("EmbeddingCapabilitiesFor(%q) devices = %v, want CPU first", input, got.SupportedDevices)
 	}
 }
 
@@ -624,12 +738,10 @@ func TestGetEmbeddingWithModelType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
+	assertLoadedMmBertCapabilities(t)
 
-	modelTypes := []string{"mmbert", "qwen3", "gemma", "unknown"}
-
-	for _, modelType := range modelTypes {
+	for _, modelType := range []string{string(DefaultEmbeddingModelType), "  MMBERT  "} {
 		t.Run(fmt.Sprintf("ModelType_%s", modelType), func(t *testing.T) {
-			// All model types should work (they all use mmbert internally)
 			output, err := GetEmbeddingWithModelType(TestText1, modelType, 0)
 			if err != nil {
 				t.Fatalf("GetEmbeddingWithModelType(%s) failed: %v", modelType, err)
@@ -863,6 +975,8 @@ func TestLegacyClassifierStubs(t *testing.T) {
 // ============================================================================
 
 // TestTypeDefinitions tests that all types are properly defined
+//
+//nolint:funlen // This legacy integration test exercises the public FFI data shapes together.
 func TestTypeDefinitions(t *testing.T) {
 	t.Run("ClassResult", func(t *testing.T) {
 		result := ClassResult{

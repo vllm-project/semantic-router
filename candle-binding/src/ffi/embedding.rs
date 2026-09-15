@@ -78,7 +78,8 @@ pub(crate) fn truncate_embedding_to_dimension(
 
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
-fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
+pub(super) fn get_multimodal_refs(
+) -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
     if let Some((model, tokenizer, _)) = STANDALONE_MULTIMODAL.get() {
         return Some((model, tokenizer));
     }
@@ -1899,6 +1900,7 @@ pub extern "C" fn free_embedding_models_info(
 use crate::model_architectures::embedding::continuous_batch_scheduler::ContinuousBatchConfig;
 use crate::model_architectures::embedding::qwen3_batched::Qwen3EmbeddingModelBatched;
 use crate::model_architectures::embedding::qwen3_embedding::Qwen3EmbeddingModel;
+use crate::model_architectures::traits::LongContextEmbeddingCapable;
 use std::sync::{Arc, Mutex};
 use tokenizers::Tokenizer;
 
@@ -1907,10 +1909,17 @@ struct BatchedModelContext {
     model: Arc<Qwen3EmbeddingModelBatched>,
     tokenizer: Arc<Mutex<Tokenizer>>, // Tokenizer needs mutex (not thread-safe)
     device: candle_core::Device,
+    dimensions: (usize, Vec<usize>),
 }
 
 /// Global singleton for batched model
 static GLOBAL_BATCHED_MODEL: OnceLock<BatchedModelContext> = OnceLock::new();
+
+pub(super) fn get_batched_qwen3_dimensions() -> Option<(usize, Vec<usize>)> {
+    GLOBAL_BATCHED_MODEL
+        .get()
+        .map(|context| context.dimensions.clone())
+}
 
 /// Initialize Qwen3 embedding model with continuous batching
 ///
@@ -2001,6 +2010,11 @@ pub extern "C" fn init_embedding_models_batched(
         "Initializing continuous batching (max_batch={}, max_wait={}ms)",
         max_batch_size, max_wait_ms
     );
+    // Retain model-owned metadata before the scheduler takes ownership.
+    let dimensions = (
+        base_model.get_embedding_dimension(),
+        base_model.get_matryoshka_dimensions(),
+    );
     let batched_model = Qwen3EmbeddingModelBatched::from_model(base_model, batch_config);
 
     // Create context with tokenizer (wrap in Arc for concurrent access)
@@ -2008,6 +2022,7 @@ pub extern "C" fn init_embedding_models_batched(
         model: Arc::new(batched_model),
         tokenizer: Arc::new(Mutex::new(tokenizer)),
         device: device.clone(),
+        dimensions,
     };
 
     // Store in global singleton (no outer Mutex needed - Arc handles concurrency)

@@ -390,6 +390,9 @@ pub struct GemmaEmbeddingModel {
     device: Device,
 }
 
+/// Declared widths shared by inference validation and capability discovery.
+pub const SUPPORTED_EMBEDDING_DIMENSIONS: &[usize] = &[768, 512, 256, 128];
+
 impl GemmaEmbeddingModel {
     /// Load GemmaEmbedding model from pretrained weights
     ///
@@ -570,8 +573,7 @@ impl GemmaEmbeddingModel {
         embedding_dim: usize,
     ) -> UnifiedResult<Tensor> {
         // Validate embedding dimension
-        const SUPPORTED_DIMS: &[usize] = &[768, 512, 256, 128];
-        if !SUPPORTED_DIMS.contains(&embedding_dim) {
+        if !SUPPORTED_EMBEDDING_DIMENSIONS.contains(&embedding_dim) {
             return Err(UnifiedError::Validation {
                 field: "embedding_dim".to_string(),
                 expected: "768, 512, 256, or 128".to_string(),

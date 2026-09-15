@@ -19,6 +19,13 @@ RUST_CI_LIB_TESTS ?= \
 	core::tokenization_window::tests::test_window_ranges_edges \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
+	ffi::capabilities::tests::normalizes_known_model_types \
+	ffi::capabilities::tests::reports_multimodal_modalities \
+	ffi::capabilities::tests::distinguishes_unsupported_and_invalid_input \
+	ffi::capabilities::tests::observed_dimension_buffer_roundtrip \
+	ffi::capability_dimensions::tests::preserves_declared_dimensions_and_native_width \
+	ffi::capability_dimensions::tests::rejects_invalid_model_metadata \
+	model_architectures::embedding::multimodal_embedding::tests::test_loaded_dimensions_follow_model_configuration \
 	model_architectures::embedding::mmbert_embedding::tests::test_early_exit_preserves_residual_and_full_depth_applies_final_norm \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head \
@@ -126,7 +133,7 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 	@echo "Running candle-binding tests with minimal models (BERT, ModernBERT classifiers)..."
 	@export $(NATIVE_ENV) && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
-		-run "^Test(OwnedNative.*|InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
+		-run "^Test(OwnedNative.*|InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation|EmbeddingCapabilitiesConformance|EmbeddingDimensionStateValidation)$$"
 
 # Tiny checked-in/generated tensors exercise the actual native libraries without
 # downloading checkpoints. CI uses the same API22 CPU runtime as the CPU image;
