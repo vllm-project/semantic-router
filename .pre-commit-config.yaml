@@ -34,6 +34,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: public-agent-skill
+        name: public agent skill generated mirror
+        entry: .venv-agent/bin/python tools/agent/scripts/sync_public_skill.py --check
+        language: system
+        pass_filenames: false
+        files: ^(tools/agent/skills/vllm-sr-agent-operations/|website/static/install/agent/vllm-sr/|tools/agent/scripts/sync_public_skill\.py$|tools/make/agent\.mk$|\.pre-commit-config\.yaml$)
+
       - id: deployment-support-matrix
         name: deployment support matrix coverage
         entry: python3 tools/ci/check_deployment_support_matrix.py
@@ -82,11 +89,11 @@ repos:
     hooks:
       - id: js-ts-lint
         name: js/ts lint
-        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py website
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py javascript
         language: system
-        files: \.(js|ts|tsx)$
-        exclude: ^(\node_modules/)
-        pass_filenames: false
+        files: \.(cjs|mjs|js|jsx|ts|tsx)$
+        exclude: (^|/)node_modules/
+        require_serial: true
 
   # Rust specific hooks
   - repo: local

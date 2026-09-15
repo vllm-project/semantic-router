@@ -259,6 +259,11 @@ func validateStoredExecutionAttestationFields(entry executionAttestationEntry, e
 	if entry.ResponseContentDigest != nil && !digestPattern.MatchString(*entry.ResponseContentDigest) {
 		return fmt.Errorf("%w: evaluation execution attestation response content digest is invalid", ErrInvalid)
 	}
+	if entry.FinalAnswerComplete != nil &&
+		((entry.Operation != workerBrokerRoutedChatCompletion && entry.Operation != workerBrokerArmChatCompletion) ||
+			(*entry.FinalAnswerComplete && (!entry.Success || entry.ResponseContentDigest == nil))) {
+		return fmt.Errorf("%w: final answer completion observation is invalid", ErrInvalid)
+	}
 	for _, value := range []*int64{entry.InputTokens, entry.OutputTokens} {
 		if value != nil && *value < 0 {
 			return fmt.Errorf("%w: evaluation execution attestation token count is invalid", ErrInvalid)
