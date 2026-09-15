@@ -115,8 +115,13 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
-	if c.Enabled && strings.TrimSpace(c.Model) == "" {
+	if c.Enabled && strings.TrimSpace(c.Model) == "" && len(c.Arms) == 0 {
 		return fmt.Errorf("model is required when enabled")
+	}
+	for _, arm := range c.Arms {
+		if strings.TrimSpace(arm) == "" {
+			return fmt.Errorf("arms cannot contain empty model names")
+		}
 	}
 	if c.SampleRate != nil && (*c.SampleRate < 0 || *c.SampleRate > 1) {
 		return fmt.Errorf("sample_rate must be between 0 and 1")
@@ -139,7 +144,36 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 	if c.MaxRetries > maxShadowDispatchRetries {
 		return fmt.Errorf("max_retries cannot exceed %d", maxShadowDispatchRetries)
 	}
+	if c.Budget.MaxCallsPerRequest < 0 || c.Budget.MaxTokensPerRequest < 0 ||
+		c.Budget.MaxCostPerRequest < 0 || c.Budget.PricePerMillionTokens < 0 ||
+		c.Budget.ReserveTokensPerArm < 0 {
+		return fmt.Errorf("budget values cannot be negative")
+	}
 	return validateShadowForwardHeaders(c.ForwardHeaders)
+}
+
+// ShadowModels returns the deduplicated, non-empty list of shadow models a
+// decision dispatches to: Model first, then every configured Arm not already
+// listed. The Budget field holds the aggregate limits every returned model
+// shares (issue #3376 multi-arm).
+func (c *ShadowDispatchPluginConfig) ShadowModels() []string {
+	if c == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	models := make([]string, 0, 1+len(c.Arms))
+	for _, name := range append([]string{c.Model}, c.Arms...) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		models = append(models, trimmed)
+	}
+	return models
 }
 
 // validateShadowForwardHeaders rejects allowlist entries that could never be
@@ -193,13 +227,14 @@ func validateDecisionShadowDispatchPlugin(cfg *RouterConfig, decision *Decision)
 			decision.Algorithm.Type,
 		)
 	}
-	model := strings.TrimSpace(shadow.Model)
-	if len(cfg.GetEndpointsForModel(model)) == 0 {
-		return fmt.Errorf(
-			"decision %q: shadow_dispatch model %q has no configured backend",
-			decision.Name,
-			model,
-		)
+	for _, model := range shadow.ShadowModels() {
+		if len(cfg.GetEndpointsForModel(model)) == 0 {
+			return fmt.Errorf(
+				"decision %q: shadow_dispatch model %q has no configured backend",
+				decision.Name,
+				model,
+			)
+		}
 	}
 	return nil
 }

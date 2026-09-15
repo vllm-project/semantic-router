@@ -232,6 +232,28 @@ func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) co
 	if v, ok := getBoolField(fields, "tls_skip_verify"); ok {
 		cfg.TLSSkipVerify = v
 	}
+	if v, ok := getStringArrayField(fields, "arms"); ok {
+		cfg.Arms = v
+	}
+	if raw, ok := fields["budget"]; ok {
+		if ov, ok := raw.(ObjectValue); ok {
+			if iv, ok := getIntField(ov.Fields, "max_calls_per_request"); ok {
+				cfg.Budget.MaxCallsPerRequest = int64(iv)
+			}
+			if iv, ok := getIntField(ov.Fields, "max_tokens_per_request"); ok {
+				cfg.Budget.MaxTokensPerRequest = int64(iv)
+			}
+			if fv, ok := getFloat64Field(ov.Fields, "max_cost_per_request"); ok {
+				cfg.Budget.MaxCostPerRequest = fv
+			}
+			if fv, ok := getFloat64Field(ov.Fields, "price_per_million_tokens"); ok {
+				cfg.Budget.PricePerMillionTokens = fv
+			}
+			if iv, ok := getIntField(ov.Fields, "reserve_tokens_per_arm"); ok {
+				cfg.Budget.ReserveTokensPerArm = int64(iv)
+			}
+		}
+	}
 	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
 	return cfg
 }

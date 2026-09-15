@@ -98,7 +98,7 @@ func (d *shadowDispatcher) failShadow(result shadowResult, reason string, err er
 // prepareShadowCall resolves the shadow backend, its connector, and the
 // encoded body once; the connector then owns every transport attempt.
 func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCall, string, error) {
-	target, err := resolveShadowTarget(job.routerConfig, job.cfg.Model)
+	target, err := resolveShadowTarget(job.routerConfig, job.model)
 	if err != nil {
 		return nil, shadowReasonBackendUnresolved, err
 	}

@@ -1,7 +1,12 @@
 """Tests for the shadow_dispatch plugin configuration model."""
 
 import pytest
-from cli.models import PluginConfig, PluginType, ShadowDispatchPluginConfig
+from cli.models import (
+    PluginConfig,
+    PluginType,
+    ShadowDispatchBudgetConfig,
+    ShadowDispatchPluginConfig,
+)
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -20,7 +25,7 @@ class TestShadowDispatchPluginConfig:
         assert cfg.max_capture_bytes == 4096
 
     def test_model_required_when_enabled(self):
-        with pytest.raises(PydanticValidationError, match="model is required"):
+        with pytest.raises(PydanticValidationError, match="model or arms"):
             ShadowDispatchPluginConfig(enabled=True)
         ShadowDispatchPluginConfig(enabled=False)
 
@@ -86,3 +91,32 @@ class TestShadowDispatchPluginConfig:
         )
         assert plugin.type is PluginType.SHADOW_DISPATCH
         assert plugin.model_dump()["type"] == "shadow_dispatch"
+
+    def test_arms_only_config_accepted(self):
+        cfg = ShadowDispatchPluginConfig(enabled=True, arms=["arm-a", "arm-b"])
+        assert cfg.model is None
+        assert cfg.arms == ["arm-a", "arm-b"]
+
+    def test_budget_field_parses(self):
+        cfg = ShadowDispatchPluginConfig(
+            enabled=True,
+            model="candidate",
+            arms=["arm-a"],
+            budget=ShadowDispatchBudgetConfig(
+                max_calls_per_request=2,
+                max_tokens_per_request=512,
+                reserve_tokens_per_arm=256,
+            ),
+        )
+        assert cfg.budget is not None
+        assert cfg.budget.max_calls_per_request == 2
+        assert cfg.budget.max_tokens_per_request == 512
+        assert cfg.budget.reserve_tokens_per_arm == 256
+
+    def test_budget_rejects_negative(self):
+        with pytest.raises(PydanticValidationError):
+            ShadowDispatchBudgetConfig(max_tokens_per_request=-1)
+
+    def test_no_model_and_no_arms_rejected_when_enabled(self):
+        with pytest.raises(PydanticValidationError, match="model or arms"):
+            ShadowDispatchPluginConfig(enabled=True)
