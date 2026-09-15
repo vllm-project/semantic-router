@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestShouldUseLooper(t *testing.T) {
@@ -104,4 +106,28 @@ func TestShouldUseLooper(t *testing.T) {
 			assert.True(t, router.shouldUseLooper(decision), "algorithm %s should use looper routing", algorithmType)
 		}
 	})
+}
+
+func TestLooperProviderDispatchReevaluatesOntoSelectedRoute(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	router.Config.ClearRouteCache = true
+	request := testNeutralRequest(model, "compare these answers")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.LooperRequest = true
+
+	response, err := router.buildLooperBackendDispatchResponse(model, ctx)
+	if err != nil {
+		t.Fatalf("buildLooperBackendDispatchResponse: %v", err)
+	}
+	common := response.GetRequestBody().GetResponse()
+	if !common.GetClearRouteCache() {
+		t.Fatal("Looper provider dispatch did not clear the fallback route cache")
+	}
+	setHeaders := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+	if got := setHeaders[headers.SelectedModel]; got != model {
+		t.Fatalf("selected model header = %q, want %q", got, model)
+	}
+	if got := setHeaders[":path"]; got != "/v1/chat/completions" {
+		t.Fatalf("provider path = %q, want /v1/chat/completions", got)
+	}
 }
