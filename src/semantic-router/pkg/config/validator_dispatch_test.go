@@ -10,6 +10,29 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestConfigContractValidatorsRejectNil(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		validate configContractValidator
+		want     string
+	}{
+		{"kubernetes", ValidateKubernetesConfigContracts, "router configuration is nil"},
+		{"structure", validateConfigStructure, "router configuration is nil"},
+		{"static", func(cfg *RouterConfig) error {
+			return validateConfigContractsAtStage(cfg, staticConfigValidation)
+		}, "router configuration is nil"},
+		{"deployments", validateModelDeploymentContracts, "model bindings require router configuration"},
+		{"complexity", validateComplexityModelBackendContracts, "complexity model configuration is nil"},
+		{"complexity_public", ValidateComplexityModelBackend, "complexity model configuration is nil"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.validate(nil); err == nil || err.Error() != tc.want {
+				t.Fatalf("nil config error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 // Exercise the public loaders, including normalization and defaults, rather
 // than only invoking a family validator or the post-CRD entry point directly.
 func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {

@@ -131,14 +131,15 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("model bindings require router configuration")
 	}
-	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
-			return nil, fmt.Errorf("model deployment name must be non-empty and trimmed")
-		}
-		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
-			return nil, fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
-		}
+	if err := validateModelDeploymentContracts(cfg); err != nil {
+		return nil, err
 	}
+	return compileModelBindings(cfg)
+}
+
+// compileModelBindings assumes global deployment contracts were already
+// validated by the caller and resolves only recipe-local binding contracts.
+func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding)}
 	profiles := cfg.Recipes
 	if len(profiles) == 0 {
@@ -256,6 +257,21 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 }
 
 func validateModelDeploymentContracts(cfg *RouterConfig) error {
-	_, err := CompileModelBindings(cfg)
+	if cfg == nil {
+		return fmt.Errorf("model bindings require router configuration")
+	}
+	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
+			return fmt.Errorf("model deployment name must be non-empty and trimmed")
+		}
+		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
+			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateModelBindingContracts(cfg *RouterConfig) error {
+	_, err := compileModelBindings(cfg)
 	return err
 }

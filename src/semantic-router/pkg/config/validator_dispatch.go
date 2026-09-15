@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 type configContractValidator func(*RouterConfig) error
 
 type configValidationStage uint8
@@ -37,6 +39,7 @@ var (
 
 	// These contracts need the complete routing graph, including all recipes.
 	routingConfigContractValidators = []configContractValidator{
+		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
 	}
@@ -71,7 +74,7 @@ var (
 // routing state later, but all static global settings are already available.
 func validateConfigStructure(cfg *RouterConfig) error {
 	stage := completeConfigValidation
-	if cfg.ConfigSource == ConfigSourceKubernetes {
+	if cfg != nil && cfg.ConfigSource == ConfigSourceKubernetes {
 		stage = staticConfigValidation
 	}
 	return validateConfigContractsAtStage(cfg, stage)
@@ -88,6 +91,9 @@ func validateConfigContracts(cfg *RouterConfig) error {
 }
 
 func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationStage) error {
+	if cfg == nil {
+		return fmt.Errorf("router configuration is nil")
+	}
 	if err := runConfigContractValidators(cfg, globalConfigContractValidators); err != nil {
 		return err
 	}

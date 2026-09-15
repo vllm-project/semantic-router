@@ -40,6 +40,9 @@ func ValidateComplexityModelBackend(cfg *RouterConfig) error {
 // validateComplexityModelBackendContracts checks the static attachment before
 // startup. Rule boundaries are checked separately once routing state is ready.
 func validateComplexityModelBackendContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("complexity model configuration is nil")
+	}
 	backend := cfg.ComplexityModel.Backend
 	if backend == nil {
 		return nil
