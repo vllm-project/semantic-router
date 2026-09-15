@@ -77,6 +77,9 @@ func validateRequestIdentity(request Request, limits Limits) error {
 	if exceeds(request.EndUserID, limits.IdentifierBytes) {
 		return NewError(ErrorInvalidRequest, "end_user_id_limit", "end-user ID exceeds the configured limit", nil)
 	}
+	if exceeds(request.ConversationID, limits.IdentifierBytes) {
+		return NewError(ErrorInvalidRequest, "conversation_id_limit", "conversation ID exceeds the configured limit", nil)
+	}
 	if request.PreviousResponseID != "" && request.ConversationID != "" {
 		return NewError(
 			ErrorInvalidRequest,

@@ -4,18 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
-	"errors"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"sigs.k8s.io/yaml"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
 // RedisStore implements the CombinedStore interface using Redis as the backend.
@@ -26,6 +25,27 @@ type RedisStore struct {
 	keyPrefix string
 	ttl       time.Duration
 	enabled   bool
+
+	// scanInvocations counts calls to scanResponsePayloads. Unexported
+	// test-only seam proving the O(N) legacy scan runs at most once per
+	// conversation per empty-marker/index lifetime, not on every read of an
+	// empty or unknown conversation. Not read anywhere outside _test.go.
+	//
+	// Atomic: scanResponsePayloads is a production code path reachable
+	// concurrently from multiple simultaneous requests missing the same or
+	// different conversations' indexes, so a plain int would race under
+	// -race (and, more to the point, under real concurrent traffic) even
+	// though only tests ever read the value back.
+	scanInvocations atomic.Int64
+
+	// conversationIndexFinalizedCache mirrors the persistent completion key
+	// (ConversationIndexCompletionKeySuffix) once this process has observed
+	// or just set it, so every read/cascade-delete after the first doesn't
+	// re-GET a key that, by construction, can only ever go from absent to
+	// permanently present. May only transition false -> true, matching the
+	// key's own irreversible-by-design semantics: nothing in this package
+	// ever unsets it, in Redis or in this cache.
+	conversationIndexFinalizedCache atomic.Bool
 }
 
 const (
@@ -36,6 +56,194 @@ const (
 	// ConversationKeyPrefix for conversation keys
 	// Combined with key_prefix (default "sr:"): sr:conversation:conv_xxxxx
 	ConversationKeyPrefix = "conversation:"
+
+	// ConversationIndexKeyPrefix for the sorted set of a conversation's response
+	// IDs, scored by created_at: sr:conversation-index:{escaped_conversation_id}
+	//
+	// Must not start with ConversationKeyPrefix, or the sr:conversation:* scan in
+	// ListConversations would read these sorted sets as conversation JSON.
+	ConversationIndexKeyPrefix = "conversation-index:"
+
+	// ConversationIndexGenerationKeyPrefix is the HASH sidecar containing
+	// response ID -> payload generation witnesses for a conversation index.
+	// conversationIndexKey and conversationIndexGenerationKey use the same
+	// escaped Redis hash tag so scripts may update the ZSET and HASH atomically
+	// in Cluster mode.
+	ConversationIndexGenerationKeyPrefix = "conversation-index-gen:"
+
+	// ConversationIndexMigratedKeyPrefix marks a conversation ID for which a
+	// legacy-scan backfill has completed — found responses to index, or
+	// confirmed none exist: sr:conversation-index-migrated:conv_xxxxx. Values
+	// distinguish "v1:empty" from "v1:populated".
+	//
+	// This is deliberately a *different* signal from "the index key exists":
+	// a conversation can accumulate real indexed members from ordinary
+	// post-upgrade StoreResponse writes long before any backfill scan ever
+	// runs for it (e.g. a pre-existing legacy conversation's first
+	// post-upgrade turn). Treating index-existence alone as "fully migrated"
+	// would let that write's indexResponse call create the index with only
+	// the new member, after which every future read would trust that index
+	// as complete and never discover the older, still-unindexed responses —
+	// silently and permanently. This marker is the only thing
+	// ListResponsesByConversation and cascade delete trust to mean "the
+	// index (or its absence) is exhaustive as of now"; see
+	// ensureConversationIndex and conversationIndexProof.
+	//
+	// Also prevents a caller from forcing repeated full keyspace scans by
+	// repeatedly listing the same empty or unknown conversation. Must not
+	// start with ConversationKeyPrefix or ResponseKeyPrefix, for the same
+	// scan-isolation reason as ConversationIndexKeyPrefix.
+	ConversationIndexMigratedKeyPrefix = "conversation-index-migrated:"
+
+	// conversationIndexScanLeaseKeySuffix guards every legacy-scan backfill
+	// — for any conversation, and Phase 6's whole-keyspace finalization
+	// sweep — behind a single global renewable lease:
+	// sr:conversation-index-scan-lease:v1. Every full-keyspace scan this
+	// store can run costs the same regardless of which conversation (if
+	// any) triggered it, so serializing per-conversation (the superseded
+	// ConversationIndexLockKeyPrefix design) did not bound how many
+	// concurrent full scans could run at once for different conversation
+	// IDs — only this global lease does. An optimization against
+	// duplicate/concurrent scan work, not a correctness dependency: see
+	// withConversationIndexScanLease. Same scan-isolation constraint as the
+	// marker and index key prefixes.
+	conversationIndexScanLeaseKeySuffix = "conversation-index-scan-lease:v1"
+
+	// conversationIndexScanLeaseTTL bounds how long a single scan lease
+	// holder is trusted before another waiter may treat it as abandoned.
+	// Held leases are renewed well before this elapses (see
+	// conversationIndexScanRenewInterval), so under normal operation this
+	// TTL is a safety margin against a holder that stops renewing (crash,
+	// deadline), not an expected scan duration.
+	conversationIndexScanLeaseTTL = 30 * time.Second
+
+	// conversationIndexScanRenewInterval is how often a scan lease holder
+	// renews its lease while still working — well inside
+	// conversationIndexScanLeaseTTL, so an occasional slow renewal round
+	// trip does not cost the lease.
+	conversationIndexScanRenewInterval = 10 * time.Second
+
+	// conversationIndexScanLeaseMinBackoff and
+	// conversationIndexScanLeaseMaxBackoff bound the jittered exponential
+	// backoff a waiter uses between lease-acquisition attempts.
+	conversationIndexScanLeaseMinBackoff = 50 * time.Millisecond
+	conversationIndexScanLeaseMaxBackoff = 1 * time.Second
+
+	// conversationIndexProofMaxTTL caps how long any per-conversation
+	// migrated proof survives — empty and populated alike — independent of
+	// the store's data-retention TTL (s.ttl, which can be a day or 30
+	// days), and nothing refreshes a proof once written.
+	//
+	// This is what bounds the rolling-upgrade blind spot. Until
+	// FinalizeConversationIndex has swept the whole keyspace, an
+	// index-unaware writer (see ConversationIndexMigratedKeyPrefix) can land
+	// an unindexed response into any conversation — empty or already
+	// populated — at any moment, including just after the scan that produced
+	// the current proof passed that shard. Only the proof expiring forces
+	// the re-scan that finds it, so no proof may be trusted for longer than
+	// this, and no ordinary write may extend one (see indexResponse).
+	//
+	// The cost is one re-scan per conversation per cap while a rolling
+	// upgrade is in progress, serialized store-wide by the scan lease. That
+	// cost is the reason FinalizeConversationIndex exists: once the
+	// completion record is set, proofs are not consulted at all and no read
+	// ever scans again.
+	conversationIndexProofMaxTTL = 5 * time.Minute
+
+	// redisScanCount is the SCAN COUNT hint used when walking the response
+	// keyspace for lazy legacy backfill. A hint, not a hard limit — Redis may
+	// return more or fewer keys per cursor step.
+	redisScanCount = 1000
+
+	// redisBackfillBatchSize bounds how many keys are GET-pipelined, and how
+	// many discovered members are ZADD-ed, per round trip during lazy legacy
+	// backfill — keeps a single conversation's backfill from building one
+	// unbounded pipeline or command.
+	redisBackfillBatchSize = 256
+
+	// redisDeleteBatchSize bounds how many responses are deleted per round
+	// trip when cascading a conversation delete, so deleting a very large
+	// conversation never needs one ZRANGE 0 -1 or one pipeline sized to the
+	// whole conversation.
+	redisDeleteBatchSize = 256
+
+	// conversationIndexCascadeMaxRaceRounds bounds how many non-draining
+	// rounds a cascade will tolerate: either a response changed while its
+	// candidate was being resolved, or a write landed after the index was
+	// observed empty. Ordinary batch drainage does not consume this budget,
+	// so it does not limit how large a conversation may be — only how long
+	// the cascade will chase a conversation that is still being actively
+	// rewritten before reporting that it could not finish.
+	conversationIndexCascadeMaxRaceRounds = 8
+
+	// listIndexScanMaxStride bounds one list cleanup window independently of
+	// the caller's return Limit. A tombstone-only window may grow up to this
+	// size after successful removals, reducing round trips through a long dead
+	// run without ever issuing an unbounded ZRANGE or payload pipeline. The
+	// whole call may still process multiple windows until it can return a full
+	// page or prove the clearable run exhausted.
+	listIndexScanMaxStride = redisBackfillBatchSize
+
+	// listIndexMaxContentionRounds bounds consecutive list cleanup rounds that
+	// identify stale candidates but remove none. A conditional no-op normally
+	// means another caller removed or recreated a member, so re-reading the
+	// original logical window observes the new state. A continuously changing
+	// index eventually returns an explicit retryable error instead of spinning
+	// or returning an underfilled page that looks terminal.
+	listIndexMaxContentionRounds = 8
+
+	// listIndexScanMaxStride doubles as the bound on how far one list call may
+	// see past members it is not allowed to remove. Before finalization a
+	// blank-witness membership whose payload is gone stays deliberately
+	// non-prunable, and only a wider window reaches the live responses behind
+	// it, so the widest window is also the furthest reach. A run longer than
+	// that reports ErrIndexTraversalBlocked instead of an empty page.
+	//
+	// Bounded where a prunable run is not, because the two costs differ in
+	// kind. Removing a stale membership is permanent, so clearing a long
+	// prunable run is paid once for the life of the conversation. A blocked
+	// member survives every read, so its cost returns until an operator
+	// finalizes.
+
+	// responseCompensationTimeout bounds the compensating writes that repair a
+	// response whose update or store only partly landed: a payload rollback and,
+	// for updates, reindexing the freshly generated restored record.
+	//
+	// These run on a context detached from the caller's, so they need a deadline
+	// of their own rather than inheriting one.
+	responseCompensationTimeout = 5 * time.Second
+
+	// ConversationIndexCompletionKeySuffix is a single global (not per-
+	// conversation) key: sr:conversation-index-complete:v1, value
+	// conversationIndexCompletionValue once set. Its presence with that
+	// exact value means FinalizeConversationIndex has completed a strict,
+	// cluster-wide sweep of every response payload — from that point on,
+	// every read and cascade delete trusts the secondary index
+	// unconditionally, including a missing index meaning "empty" rather
+	// than "not yet migrated," and never falls back to a per-conversation
+	// scan again, not even for a conversation ID nothing has ZADDed since.
+	//
+	// This is a stronger, and irreversible-by-design, claim than the
+	// per-conversation ConversationIndexMigratedKeyPrefix marker: setting
+	// it before every index-unaware writer has stopped can permanently hide
+	// a response no future read will ever rescan for. It is intentionally
+	// not set by any request path — only an explicit, operator-triggered
+	// call to FinalizeConversationIndex sets it, once the rolling
+	// deployment that introduced this index is known to be complete. See
+	// FinalizeConversationIndex's doc comment for the full operational
+	// prerequisite list.
+	//
+	// Does not start with ConversationKeyPrefix, ResponseKeyPrefix, or
+	// ConversationIndexKeyPrefix, for the same scan-isolation reason as the
+	// per-conversation key families.
+	ConversationIndexCompletionKeySuffix = "conversation-index-complete:v1"
+
+	// conversationIndexCompletionValue is the only value of the completion
+	// key that FinalizeConversationIndex/conversationIndexFinalized treat
+	// as "complete" — an unrecognized value is treated the same as absent,
+	// so a future incompatible format cannot be silently mistaken for this
+	// one's completion.
+	conversationIndexCompletionValue = "v1"
 )
 
 // The function validates configuration, establishes connection, and tests connectivity.
@@ -276,9 +484,56 @@ func createRedisClient(cfg RedisStoreConfig) (redis.UniversalClient, error) {
 	}), nil
 }
 
+// ttlMillis is the store's configured data-retention TTL in milliseconds,
+// under the convention every lifetime argument in this package shares: a
+// non-positive value means "never expires". The floor at 1 matters for a
+// sub-millisecond TTL, which would otherwise round to 0 and be read as
+// "persistent" — the exact opposite of what was configured.
+func (s *RedisStore) ttlMillis() int64 {
+	millis := s.ttl.Milliseconds()
+	if s.ttl > 0 && millis == 0 {
+		return 1
+	}
+	return millis
+}
+
 // buildKey constructs a Redis key with the proper prefix.
 func (s *RedisStore) buildKey(suffix string) string {
 	return s.keyPrefix + suffix
+}
+
+// conversationIndexTag escapes arbitrary conversation IDs into a brace-free
+// Redis Cluster hash tag. Raw URL base64 contains neither '{' nor '}', so the
+// ZSET and generation HASH keys below are guaranteed to select the same slot.
+func conversationIndexTag(conversationID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(conversationID))
+}
+
+// conversationIndexKey returns the sorted set indexing a conversation's responses.
+func (s *RedisStore) conversationIndexKey(conversationID string) string {
+	return s.buildKey(ConversationIndexKeyPrefix + "{" + conversationIndexTag(conversationID) + "}")
+}
+
+// conversationIndexGenerationKey returns the HASH containing the generation
+// witness for each response ID in a conversation's ZSET.
+func (s *RedisStore) conversationIndexGenerationKey(conversationID string) string {
+	return s.buildKey(ConversationIndexGenerationKeyPrefix + "{" + conversationIndexTag(conversationID) + "}")
+}
+
+// conversationIndexMigratedKey returns the marker set once a legacy-scan
+// backfill has completed for a conversation, whether or not it found
+// anything to index. Its presence — not the index key's — is what makes the
+// index's current state (populated or absent) trustworthy as exhaustive;
+// see ConversationIndexMigratedKeyPrefix and conversationIndexProof.
+func (s *RedisStore) conversationIndexMigratedKey(conversationID string) string {
+	return s.buildKey(ConversationIndexMigratedKeyPrefix + conversationID)
+}
+
+// conversationIndexScanLeaseKey returns the single global lease key
+// guarding every legacy-scan backfill and the Phase 6 finalization sweep
+// against concurrent full-keyspace scans.
+func (s *RedisStore) conversationIndexScanLeaseKey() string {
+	return s.buildKey(conversationIndexScanLeaseKeySuffix)
 }
 
 func (s *RedisStore) CheckConnection(ctx context.Context) error {
@@ -305,443 +560,4 @@ func (s *RedisStore) Close() error {
 
 func (s *RedisStore) IsEnabled() bool {
 	return s.enabled
-}
-
-// Response Store Methods
-
-func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.StoredResponse) error {
-	if !s.enabled {
-		return ErrStoreDisabled
-	}
-	if response == nil || response.ID == "" {
-		return ErrInvalidInput
-	}
-
-	key := s.buildKey(ResponseKeyPrefix + response.ID)
-
-	exists, err := s.client.Exists(ctx, key).Result()
-	if err != nil {
-		return fmt.Errorf("failed to check response existence: %w", err)
-	}
-	if exists > 0 {
-		return ErrAlreadyExists
-	}
-
-	data, err := json.Marshal(response)
-	if err != nil {
-		return fmt.Errorf("failed to serialize response: %w", err)
-	}
-
-	if err := s.client.Set(ctx, key, data, s.ttl).Err(); err != nil {
-		return fmt.Errorf("failed to store response in Redis: %w", err)
-	}
-
-	return nil
-}
-
-func (s *RedisStore) GetResponse(ctx context.Context, responseID string) (*responseapi.StoredResponse, error) {
-	if !s.enabled {
-		return nil, ErrStoreDisabled
-	}
-	if responseID == "" {
-		return nil, ErrInvalidInput
-	}
-
-	key := s.buildKey(ResponseKeyPrefix + responseID)
-
-	data, err := s.client.Get(ctx, key).Bytes()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("failed to get response from Redis: %w", err)
-	}
-
-	var response responseapi.StoredResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to deserialize response: %w", err)
-	}
-
-	return &response, nil
-}
-
-func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.StoredResponse) error {
-	if !s.enabled {
-		return ErrStoreDisabled
-	}
-	if response == nil || response.ID == "" {
-		return ErrInvalidInput
-	}
-
-	key := s.buildKey(ResponseKeyPrefix + response.ID)
-
-	exists, err := s.client.Exists(ctx, key).Result()
-	if err != nil {
-		return fmt.Errorf("failed to check response existence: %w", err)
-	}
-	if exists == 0 {
-		return ErrNotFound
-	}
-
-	data, err := json.Marshal(response)
-	if err != nil {
-		return fmt.Errorf("failed to serialize response: %w", err)
-	}
-
-	if err := s.client.Set(ctx, key, data, s.ttl).Err(); err != nil {
-		return fmt.Errorf("failed to update response in Redis: %w", err)
-	}
-
-	return nil
-}
-
-func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) error {
-	if !s.enabled {
-		return ErrStoreDisabled
-	}
-	if responseID == "" {
-		return ErrInvalidInput
-	}
-
-	key := s.buildKey(ResponseKeyPrefix + responseID)
-
-	deleted, err := s.client.Del(ctx, key).Result()
-	if err != nil {
-		return fmt.Errorf("failed to delete response from Redis: %w", err)
-	}
-	if deleted == 0 {
-		return ErrNotFound
-	}
-
-	return nil
-}
-
-// GetConversationChain retrieves the full conversation chain for a response.
-// It follows the previous_response_id links backwards to build the complete history.
-func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string) ([]*responseapi.StoredResponse, error) {
-	if !s.enabled {
-		return nil, ErrStoreDisabled
-	}
-	if responseID == "" {
-		return nil, ErrInvalidInput
-	}
-
-	// Phase 1: Collect response IDs by following the chain
-	responseIDs, err := s.collectChainIDs(ctx, responseID)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(responseIDs) == 0 {
-		return []*responseapi.StoredResponse{}, nil
-	}
-
-	// Phase 2: Fetch all responses using pipelining
-	chain, err := s.fetchResponsesPipelined(ctx, responseIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	// Phase 3: Reverse chain to get chronological order (oldest first)
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
-	}
-
-	return chain, nil
-}
-
-func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
-	if !s.enabled {
-		return nil, ErrStoreDisabled
-	}
-	if conversationID == "" {
-		return nil, ErrInvalidInput
-	}
-
-	// Use SCAN to find all response keys
-	pattern := s.buildKey(ResponseKeyPrefix + "*")
-	var responses []*responseapi.StoredResponse
-
-	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
-	for iter.Next(ctx) {
-		key := iter.Val()
-
-		// Get response
-		data, err := s.client.Get(ctx, key).Bytes()
-		if err != nil {
-			continue // Skip errors (key might have expired)
-		}
-
-		var response responseapi.StoredResponse
-		if err := json.Unmarshal(data, &response); err != nil {
-			continue
-		}
-
-		if response.ConversationID == conversationID {
-			responses = append(responses, &response)
-		}
-	}
-
-	if err := iter.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan responses: %w", err)
-	}
-
-	responses = ApplyListOptions(responses, opts)
-
-	return responses, nil
-}
-
-// Conversation Store Methods
-
-func (s *RedisStore) CreateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error {
-	if !s.enabled {
-		return ErrStoreDisabled
-	}
-	if conversation == nil || conversation.ID == "" {
-		return ErrInvalidInput
-	}
-
-	key := s.buildKey(ConversationKeyPrefix + conversation.ID)
-
-	exists, err := s.client.Exists(ctx, key).Result()
-	if err != nil {
-		return fmt.Errorf("failed to check conversation existence: %w", err)
-	}
-	if exists > 0 {
-		return ErrAlreadyExists
-	}
-
-	data, err := json.Marshal(conversation)
-	if err != nil {
-		return fmt.Errorf("failed to serialize conversation: %w", err)
-	}
-
-	if err := s.client.Set(ctx, key, data, s.ttl).Err(); err != nil {
-		return fmt.Errorf("failed to store conversation in Redis: %w", err)
-	}
-
-	return nil
-}
-
-func (s *RedisStore) GetConversation(ctx context.Context, conversationID string) (*responseapi.StoredConversation, error) {
-	if !s.enabled {
-		return nil, ErrStoreDisabled
-	}
-	if conversationID == "" {
-		return nil, ErrInvalidInput
-	}
-
-	key := s.buildKey(ConversationKeyPrefix + conversationID)
-
-	data, err := s.client.Get(ctx, key).Bytes()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("failed to get conversation from Redis: %w", err)
-	}
-
-	var conversation responseapi.StoredConversation
-	if err := json.Unmarshal(data, &conversation); err != nil {
-		return nil, fmt.Errorf("failed to deserialize conversation: %w", err)
-	}
-
-	return &conversation, nil
-}
-
-func (s *RedisStore) UpdateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error {
-	if !s.enabled {
-		return ErrStoreDisabled
-	}
-	if conversation == nil || conversation.ID == "" {
-		return ErrInvalidInput
-	}
-
-	key := s.buildKey(ConversationKeyPrefix + conversation.ID)
-
-	exists, err := s.client.Exists(ctx, key).Result()
-	if err != nil {
-		return fmt.Errorf("failed to check conversation existence: %w", err)
-	}
-	if exists == 0 {
-		return ErrNotFound
-	}
-
-	data, err := json.Marshal(conversation)
-	if err != nil {
-		return fmt.Errorf("failed to serialize conversation: %w", err)
-	}
-
-	if err := s.client.Set(ctx, key, data, s.ttl).Err(); err != nil {
-		return fmt.Errorf("failed to update conversation in Redis: %w", err)
-	}
-
-	return nil
-}
-
-func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID string, deleteResponses bool) error {
-	if !s.enabled {
-		return ErrStoreDisabled
-	}
-	if conversationID == "" {
-		return ErrInvalidInput
-	}
-
-	convKey := s.buildKey(ConversationKeyPrefix + conversationID)
-	deleted, err := s.client.Del(ctx, convKey).Result()
-	if err != nil {
-		return fmt.Errorf("failed to delete conversation from Redis: %w", err)
-	}
-	if deleted == 0 {
-		return ErrNotFound
-	}
-
-	// Optionally delete all responses in the conversation
-	if deleteResponses {
-		responses, err := s.ListResponsesByConversation(ctx, conversationID, ListOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to list responses for deletion: %w", err)
-		}
-
-		for _, resp := range responses {
-			if err := s.DeleteResponse(ctx, resp.ID); err != nil && !errors.Is(err, ErrNotFound) {
-				logging.Warnf("RedisStore: failed to delete response %s: %v", resp.ID, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (s *RedisStore) ListConversations(ctx context.Context, opts ListOptions) ([]*responseapi.StoredConversation, error) {
-	if !s.enabled {
-		return nil, ErrStoreDisabled
-	}
-
-	pattern := s.buildKey(ConversationKeyPrefix + "*")
-	var conversations []*responseapi.StoredConversation
-
-	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
-	for iter.Next(ctx) {
-		key := iter.Val()
-
-		data, err := s.client.Get(ctx, key).Bytes()
-		if err != nil {
-			continue
-		}
-
-		var conversation responseapi.StoredConversation
-		if err := json.Unmarshal(data, &conversation); err != nil {
-			continue
-		}
-
-		conversations = append(conversations, &conversation)
-	}
-
-	if err := iter.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan conversations: %w", err)
-	}
-
-	// Apply list options (limit, pagination)
-	conversations = ApplyConvListOptions(conversations, opts)
-
-	return conversations, nil
-}
-
-// AddResponseToConversation adds a response ID to a conversation.
-func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversationID, responseID string) error {
-	if !s.enabled {
-		return ErrStoreDisabled
-	}
-	if conversationID == "" || responseID == "" {
-		return ErrInvalidInput
-	}
-
-	// This is automatically handled by the conversation chain via previous_response_id
-	// This method can be used to update conversation metadata if needed
-	return nil
-}
-
-// Helper methods
-
-func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]string, error) {
-	var responseIDs []string
-	currentID := startID
-	visited := make(map[string]bool)
-
-	// Maximum chain length to prevent infinite loops
-	const maxChainLength = 1000
-
-	for currentID != "" && len(responseIDs) < maxChainLength {
-		// Prevent circular references
-		if visited[currentID] {
-			logging.Warnf("RedisStore: circular reference detected at %s", currentID)
-			break
-		}
-		visited[currentID] = true
-
-		responseIDs = append(responseIDs, currentID)
-
-		response, err := s.GetResponse(ctx, currentID)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				// If this is the first response (start of chain), return error
-				if len(responseIDs) == 1 {
-					return nil, ErrNotFound
-				}
-				// Otherwise, just break - the chain ended early
-				logging.Warnf("RedisStore: response %s not found in chain", currentID)
-				break
-			}
-			return nil, fmt.Errorf("failed to fetch response %s: %w", currentID, err)
-		}
-
-		currentID = response.PreviousResponseID
-	}
-
-	return responseIDs, nil
-}
-
-func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []string) ([]*responseapi.StoredResponse, error) {
-	if len(responseIDs) == 0 {
-		return []*responseapi.StoredResponse{}, nil
-	}
-
-	pipe := s.client.Pipeline()
-
-	cmds := make([]*redis.StringCmd, len(responseIDs))
-	for i, id := range responseIDs {
-		key := s.buildKey(ResponseKeyPrefix + id)
-		cmds[i] = pipe.Get(ctx, key)
-	}
-
-	_, err := pipe.Exec(ctx)
-	if err != nil && !errors.Is(err, redis.Nil) {
-		// Some commands might fail, but we continue to process successful ones
-		logging.Debugf("RedisStore: pipeline execution completed with some errors: %v", err)
-	}
-
-	// Process results
-	var chain []*responseapi.StoredResponse
-	for i, cmd := range cmds {
-		data, err := cmd.Bytes()
-		if err != nil {
-			if errors.Is(err, redis.Nil) {
-				logging.Warnf("RedisStore: response %s not found (may have expired)", responseIDs[i])
-				continue
-			}
-			logging.Warnf("RedisStore: failed to get response %s: %v", responseIDs[i], err)
-			continue
-		}
-
-		var response responseapi.StoredResponse
-		if err := json.Unmarshal(data, &response); err != nil {
-			logging.Warnf("RedisStore: failed to parse response %s: %v", responseIDs[i], err)
-			continue
-		}
-
-		chain = append(chain, &response)
-	}
-
-	return chain, nil
 }
