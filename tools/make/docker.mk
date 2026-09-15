@@ -70,11 +70,11 @@ docker-build-vllm-sr-envoy:
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
 
 # Build router runtime image using the existing vllm-sr Dockerfile
-docker-build-vllm-sr-router: ## Build vllm-sr-router Docker image
+docker-build-vllm-sr-router: ## Build the router runtime image with the canonical router image name
 docker-build-vllm-sr-router:
 	@$(LOG_TARGET)
-	@echo "Building vllm-sr-router Docker image..."
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG) .
+	@echo "Building router runtime image $(VLLM_SR_ROUTER_IMAGE)..."
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(VLLM_SR_ROUTER_IMAGE) .
 
 # Build vllm-sr-sim Docker image
 docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
@@ -90,13 +90,49 @@ docker-build-precommit:
 	@echo "Building precommit Docker image..."
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.precommit -t $(DOCKER_REGISTRY)/precommit:$(DOCKER_TAG) .
 
-# Test llm-katan Docker image locally
+# Test llm-katan Docker image locally with a self-contained lifecycle:
+# detached container -> /health readiness -> /v1/models assertion -> cleanup.
+# The image CMD is overridden with the echo backend so the check never pulls a
+# real Hugging Face model. LLM_KATAN_HOST_PORT is overridable so this can step
+# around a port already held by `make docker-run-llm-katan` or the memory stack.
+# Only the EXIT trap carries the cleanup; the signal traps just exit, so an
+# interrupted run cannot re-enter the readiness loop and cleanup is defined once.
+LLM_KATAN_HOST_PORT ?= 8000
+LLM_KATAN_TEST_CONTAINER ?= llm-katan-docker-test
+
 docker-test-llm-katan: ## Test llm-katan Docker image locally
-docker-test-llm-katan:
+docker-test-llm-katan: docker-build-llm-katan
 	@$(LOG_TARGET)
-	@echo "Testing llm-katan Docker image..."
-	@curl -f http://localhost:8000/v1/models || (echo "Models endpoint failed" && exit 1)
-	@echo "\nllm-katan Docker image test passed"
+	@echo "Testing llm-katan Docker image on port $(LLM_KATAN_HOST_PORT)..."
+	@set -e; \
+	trap '$(CONTAINER_RUNTIME) stop $(LLM_KATAN_TEST_CONTAINER) >/dev/null 2>&1 || true; $(CONTAINER_RUNTIME) rm $(LLM_KATAN_TEST_CONTAINER) >/dev/null 2>&1 || true' EXIT; \
+	trap 'exit 130' INT; \
+	trap 'exit 143' TERM; \
+	$(CONTAINER_RUNTIME) rm -f $(LLM_KATAN_TEST_CONTAINER) >/dev/null 2>&1 || true; \
+	$(CONTAINER_RUNTIME) run -d --name $(LLM_KATAN_TEST_CONTAINER) -p $(LLM_KATAN_HOST_PORT):8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) \
+		llm-katan --model dummy --host 0.0.0.0 --port 8000 --backend echo >/dev/null; \
+	echo "Waiting for llm-katan to be ready (up to 60 attempts)..."; \
+	ready=0; elapsed=0; \
+	while [ $$elapsed -lt 60 ]; do \
+		if curl -sf --max-time 5 "http://localhost:$(LLM_KATAN_HOST_PORT)/health" >/dev/null 2>&1; then \
+			echo "llm-katan ready (waited $${elapsed} attempt(s))"; \
+			ready=1; \
+			break; \
+		fi; \
+		if ! $(CONTAINER_RUNTIME) ps --filter "name=$(LLM_KATAN_TEST_CONTAINER)" --format '{{.Names}}' | grep -qxF "$(LLM_KATAN_TEST_CONTAINER)"; then \
+			echo "ERROR: llm-katan container exited unexpectedly"; \
+			$(CONTAINER_RUNTIME) logs $(LLM_KATAN_TEST_CONTAINER) 2>&1 | tail -30 || true; \
+			exit 1; \
+		fi; \
+		sleep 1; elapsed=$$((elapsed + 1)); \
+	done; \
+	if [ $$ready -ne 1 ]; then \
+		echo "ERROR: llm-katan did not become healthy after 60 attempts"; \
+		$(CONTAINER_RUNTIME) logs $(LLM_KATAN_TEST_CONTAINER) 2>&1 | tail -30 || true; \
+		exit 1; \
+	fi; \
+	curl -sf --max-time 5 "http://localhost:$(LLM_KATAN_HOST_PORT)/v1/models" >/dev/null || (echo "Models endpoint failed" && exit 1); \
+	echo "\nllm-katan Docker image test passed"
 
 # Run llm-katan Docker image locally
 docker-run-llm-katan: ## Run llm-katan Docker image locally
@@ -174,11 +210,11 @@ docker-push-dashboard:
 	@echo "Pushing dashboard Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG)
 
-docker-push-vllm-sr-router: ## Push vllm-sr-router Docker image
+docker-push-vllm-sr-router: ## Push the router runtime image with the canonical router image name
 docker-push-vllm-sr-router:
 	@$(LOG_TARGET)
-	@echo "Pushing vllm-sr-router Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG)
+	@echo "Pushing router runtime image $(VLLM_SR_ROUTER_IMAGE)..."
+	@$(CONTAINER_RUNTIME) push $(VLLM_SR_ROUTER_IMAGE)
 
 docker-push-vllm-sr-envoy: ## Push vllm-sr-envoy Docker image
 docker-push-vllm-sr-envoy:
@@ -200,6 +236,8 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
+	@echo "  LLM_KATAN_HOST_PORT  - host port for the llm-katan Docker image test (default: 8000)"
+	@echo "  LLM_KATAN_TEST_CONTAINER  - container name used by docker-test-llm-katan (default: llm-katan-docker-test)"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd for ROCm defaults, nvidia for CUDA defaults)"
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
 	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
@@ -213,10 +251,13 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 ##@ vLLM-SR (Semantic Router CLI)
 
 # vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
-# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
-VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
-VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
-VLLM_SR_IMAGE_CUDA ?= ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:$(DOCKER_TAG)
+# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once, and
+# the repository prefix derives from DOCKER_REGISTRY so the documented registry
+# override reaches the runtime images too. All platform variants must stay here;
+# a hard-coded prefix in any one of them would resurface on VLLM_SR_PLATFORM runs.
+VLLM_SR_IMAGE ?= $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
+VLLM_SR_IMAGE_ROCM ?= $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG)
+VLLM_SR_IMAGE_CUDA ?= $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
 VLLM_SR_ROUTER_IMAGE_CUDA ?= $(VLLM_SR_IMAGE_CUDA)
