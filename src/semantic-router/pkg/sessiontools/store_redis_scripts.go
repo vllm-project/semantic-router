@@ -22,6 +22,11 @@ local state_key = KEYS[1]
 local global_lru = KEYS[2]
 local global_expiry = KEYS[3]
 local ttl_ms = tonumber(ARGV[1])
+local key_prefix = ARGV[2]
+
+local function owns_key(key)
+  return type(key) == "string" and string.sub(key, 1, string.len(key_prefix)) == key_prefix
+end
 
 local function server_time_ms()
   local value = redis.call("TIME")
@@ -36,6 +41,9 @@ local function extend_ttl(key, duration_ms)
 end
 
 local function ensure_zset(key, protected_key)
+  if not owns_key(key) then
+    return false
+  end
   local key_type = redis.call("TYPE", key).ok
   if key_type == "none" or key_type == "zset" then
     return true
@@ -51,6 +59,9 @@ local function ensure_zset(key, protected_key)
 end
 
 local function remove_index_member(index_key, member, protected_key)
+  if not owns_key(index_key) then
+    return
+  end
   if not ensure_zset(index_key, protected_key) then
     return
   end
@@ -115,6 +126,7 @@ if not generation or generation == "" or
    not payload or payload == "" or
    not quota_lru or quota_lru == "" or
    not quota_expiry or quota_expiry == "" or
+   not owns_key(quota_lru) or not owns_key(quota_expiry) or
    quota_lru == state_key or quota_expiry == state_key or
    quota_lru == quota_expiry or
    not expires_at then
@@ -163,6 +175,11 @@ local payload = ARGV[3]
 local ttl_ms = tonumber(ARGV[4])
 local max_sessions = tonumber(ARGV[5])
 local max_identity_sessions = tonumber(ARGV[6])
+local key_prefix = ARGV[7]
+
+local function owns_key(key)
+  return type(key) == "string" and string.sub(key, 1, string.len(key_prefix)) == key_prefix
+end
 
 local function server_time_ms()
   local value = redis.call("TIME")
@@ -177,6 +194,9 @@ local function extend_ttl(key, duration_ms)
 end
 
 local function ensure_zset(key, protected_key)
+  if not owns_key(key) then
+    return false
+  end
   local key_type = redis.call("TYPE", key).ok
   if key_type == "none" or key_type == "zset" then
     return true
@@ -189,6 +209,9 @@ local function ensure_zset(key, protected_key)
 end
 
 local function remove_index_member(index_key, member, protected_key)
+  if not owns_key(index_key) then
+    return
+  end
   if not ensure_zset(index_key, protected_key) then
     return
   end
@@ -352,6 +375,7 @@ else
   if not generation or generation == "" or
      not quota_lru or quota_lru == "" or
      not quota_expiry or quota_expiry == "" or
+     not owns_key(quota_lru) or not owns_key(quota_expiry) or
      quota_lru == state_key or quota_expiry == state_key or
      quota_lru == quota_expiry then
     remove_state(state_key)
@@ -389,8 +413,16 @@ const redisDeleteScript = `
 local state_key = KEYS[1]
 local global_lru = KEYS[2]
 local global_expiry = KEYS[3]
+local key_prefix = ARGV[1]
+
+local function owns_key(key)
+  return type(key) == "string" and string.sub(key, 1, string.len(key_prefix)) == key_prefix
+end
 
 local function ensure_zset(key, protected_key)
+  if not owns_key(key) then
+    return false
+  end
   local key_type = redis.call("TYPE", key).ok
   if key_type == "none" or key_type == "zset" then
     return true
@@ -403,6 +435,9 @@ local function ensure_zset(key, protected_key)
 end
 
 local function remove_index_member(index_key, member, protected_key)
+  if not owns_key(index_key) then
+    return
+  end
   if not ensure_zset(index_key, protected_key) then
     return
   end
@@ -435,8 +470,16 @@ return 1
 
 const redisDeleteIfTokenScript = `
 local state_key = KEYS[1]
+local key_prefix = ARGV[3]
+
+local function owns_key(key)
+  return type(key) == "string" and string.sub(key, 1, string.len(key_prefix)) == key_prefix
+end
 
 local function ensure_zset(key, protected_key)
+  if not owns_key(key) then
+    return false
+  end
   local key_type = redis.call("TYPE", key).ok
   if key_type == "none" or key_type == "zset" then
     return true
@@ -449,6 +492,9 @@ local function ensure_zset(key, protected_key)
 end
 
 local function remove_index_member(index_key, member, protected_key)
+  if not owns_key(index_key) then
+    return
+  end
   if not ensure_zset(index_key, protected_key) then
     return
   end
@@ -487,8 +533,16 @@ return 1
 
 const redisDeleteRawIfCurrentScript = `
 local state_key = KEYS[1]
+local key_prefix = ARGV[4]
+
+local function owns_key(key)
+  return type(key) == "string" and string.sub(key, 1, string.len(key_prefix)) == key_prefix
+end
 
 local function ensure_zset(key, protected_key)
+  if not owns_key(key) then
+    return false
+  end
   local key_type = redis.call("TYPE", key).ok
   if key_type == "none" or key_type == "zset" then
     return true
@@ -501,6 +555,9 @@ local function ensure_zset(key, protected_key)
 end
 
 local function remove_index_member(index_key, member, protected_key)
+  if not owns_key(index_key) then
+    return
+  end
   if not ensure_zset(index_key, protected_key) then
     return
   end

@@ -140,6 +140,7 @@ func (s *RedisStore) LoadWithMetadata(ctx context.Context, key string) (Versione
 		redisLoadScript,
 		[]string{stateKey, s.globalLRUKey(), s.globalExpiryKey()},
 		durationMilliseconds(s.ttl),
+		s.keyPrefix,
 	).Slice()
 	if err != nil {
 		return VersionedState{}, LoadMetadata{}, fmt.Errorf("sessiontools: Redis load failed: %w", err)
@@ -321,6 +322,7 @@ func (s *RedisStore) CompareAndSwap(
 		durationMilliseconds(ttl),
 		s.maxSessions,
 		s.maxSessionsByIdentity,
+		s.keyPrefix,
 	).Slice()
 	if err != nil {
 		return false, fmt.Errorf("sessiontools: Redis compare-and-swap failed: %w", err)
@@ -355,6 +357,7 @@ func (s *RedisStore) Delete(ctx context.Context, key string) error {
 		ctx,
 		redisDeleteScript,
 		[]string{s.stateKey(key), s.globalLRUKey(), s.globalExpiryKey()},
+		s.keyPrefix,
 	).Err(); err != nil {
 		return fmt.Errorf("sessiontools: Redis delete failed: %w", err)
 	}
@@ -376,6 +379,7 @@ func (s *RedisStore) DeleteIfToken(ctx context.Context, key string, token StateT
 		[]string{s.stateKey(key), s.globalLRUKey(), s.globalExpiryKey()},
 		strconv.FormatUint(token.Revision, 10),
 		strconv.FormatUint(token.Generation, 10),
+		s.keyPrefix,
 	).Int64()
 	if err != nil {
 		return false, fmt.Errorf("sessiontools: Redis conditional delete failed: %w", err)
@@ -397,6 +401,7 @@ func (s *RedisStore) deleteRawIfCurrent(
 		payload,
 		revision,
 		generation,
+		s.keyPrefix,
 	).Err()
 }
 

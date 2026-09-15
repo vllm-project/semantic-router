@@ -372,6 +372,39 @@ func TestRedisStoreIntegrationRejectsSelfReferentialQuotaIndexes(t *testing.T) {
 	}
 }
 
+func TestRedisStoreIntegrationRejectsExternalQuotaIndexesWithoutTouchingThem(t *testing.T) {
+	ctx := context.Background()
+	store, _ := newRedisIntegrationStore(t, 10, 10, 60)
+	const session = "external-quota-index"
+	const externalIndex = "other-store:identity:lru"
+	quota := QuotaKey{Principal: "external-index-principal", Namespace: "recipe"}
+	applied, err := store.CompareAndSwap(ctx, session, 0, redisIntegrationState("policy"), time.Minute, quota)
+	if err != nil || !applied {
+		t.Fatalf("create: applied=%v err=%v", applied, err)
+	}
+	if err := store.client.ZAdd(ctx, externalIndex, redis.Z{Score: 1, Member: "sentinel"}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = store.client.Del(context.Background(), externalIndex, externalIndex+":expiry").Err()
+	})
+	if err := store.client.HSet(ctx, store.stateKey(session),
+		redisStateQuotaLRUField, externalIndex,
+		redisStateQuotaExpiryField, externalIndex+":expiry",
+	).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(ctx, session); !errors.Is(err, ErrStateCorrupted) {
+		t.Fatalf("external quota fields: err=%v, want ErrStateCorrupted", err)
+	}
+	if exists := store.client.Exists(ctx, externalIndex).Val(); exists != 1 {
+		t.Fatal("an external quota index must not be deleted")
+	}
+	if members := store.client.ZCard(ctx, externalIndex).Val(); members != 1 {
+		t.Fatalf("external quota index members = %d, want 1", members)
+	}
+}
+
 func TestRedisStoreIntegrationPersistsOnlyIdentityState(t *testing.T) {
 	ctx := context.Background()
 	store, _ := newRedisIntegrationStore(t, 10, 5, 60)

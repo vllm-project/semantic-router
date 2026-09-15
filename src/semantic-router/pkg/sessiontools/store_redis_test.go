@@ -117,6 +117,8 @@ func TestRedisStoreLuaContractsKeepCASAndInvalidationAtomic(t *testing.T) {
 		`quota_lru == state_key`,
 		`quota_expiry == state_key`,
 		`quota_lru == quota_expiry`,
+		`not owns_key(quota_lru)`,
+		`not owns_key(quota_expiry)`,
 	} {
 		if !strings.Contains(redisLoadScript, fragment) ||
 			!strings.Contains(redisCompareAndSwapScript, fragment) {
