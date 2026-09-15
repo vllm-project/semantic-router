@@ -69,10 +69,12 @@ type ToolSessionStoreConfig struct {
 	Redis                 *ToolSessionRedisConfig `json:"redis,omitempty" yaml:"redis,omitempty"`
 }
 
-// ToolSessionRedisConfig configures the Redis backend for
-// global.stores.tool_sessions. Forbidden (must be nil) when
-// ToolSessionStoreConfig.Backend is "local"; required with a non-empty
-// Address when Backend is "redis".
+// ToolSessionRedisConfig configures the standalone Redis backend for
+// global.stores.tool_sessions. The current session-store scripts execute
+// admission and cleanup across state, global-index, quota-index, and
+// generation keys in one EVAL, so Redis Cluster endpoints are not supported
+// by this contract. Forbidden (must be nil) when ToolSessionStoreConfig.Backend
+// is "local"; required with a non-empty Address when Backend is "redis".
 type ToolSessionRedisConfig struct {
 	Address   string `json:"address,omitempty" yaml:"address,omitempty"`
 	Password  string `json:"password,omitempty" yaml:"password,omitempty"`

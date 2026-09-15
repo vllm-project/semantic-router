@@ -1068,6 +1068,49 @@ class StickyToolSelectionConfig(BaseModel):
     pin_called_tools: Optional[bool] = None
 
 
+class ToolSessionRedisConfig(BaseModel):
+    """Redis connectivity for shared sticky tool-session state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: StrictStr
+    password: Optional[StrictStr] = None
+    database: int = Field(default=0, ge=0)
+    key_prefix: Optional[StrictStr] = None
+
+
+class ToolSessionStoreConfig(BaseModel):
+    """Global bounded storage for session-scoped sticky tool selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["local", "redis"] = "local"
+    ttl_seconds: Optional[int] = Field(default=None, ge=1, le=604800)
+    max_sessions: Optional[int] = Field(default=None, ge=1, le=100000)
+    max_sessions_per_identity: Optional[int] = Field(default=None, ge=1)
+    max_state_bytes: Optional[int] = Field(default=None, ge=1024, le=65536)
+    timeout_ms: Optional[int] = Field(default=None, ge=1, le=1000)
+    redis: Optional[ToolSessionRedisConfig] = None
+
+    @model_validator(mode="after")
+    def validate_backend_contract(self):
+        if self.backend == "local" and self.redis is not None:
+            raise ValueError("redis config is not allowed when backend is local")
+        if self.backend == "redis":
+            if self.redis is None or not self.redis.address.strip():
+                raise ValueError("redis.address is required when backend is redis")
+
+        max_sessions = self.max_sessions if self.max_sessions is not None else 10000
+        if (
+            self.max_sessions_per_identity is not None
+            and self.max_sessions_per_identity > max_sessions
+        ):
+            raise ValueError(
+                "max_sessions_per_identity must be less than or equal to max_sessions"
+            )
+        return self
+
+
 class ToolSelectionPluginConfig(BaseModel):
     """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
 

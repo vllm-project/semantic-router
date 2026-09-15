@@ -276,6 +276,96 @@ def test_parse_user_config_accepts_decision_learning_controls(
     assert state_store["redis"]["address"] == "redis:6379"
 
 
+@pytest.mark.parametrize(
+    "tool_sessions",
+    [
+        {"backend": "local"},
+        {
+            "backend": "redis",
+            "ttl_seconds": 1800,
+            "max_sessions": 10000,
+            "max_sessions_per_identity": 128,
+            "max_state_bytes": 16384,
+            "timeout_ms": 50,
+            "redis": {
+                "address": "redis:6379",
+                "password": "secret",
+                "database": 2,
+                "key_prefix": "vsr:session-tools:v1:",
+            },
+        },
+    ],
+)
+def test_parse_user_config_accepts_tool_session_store(
+    tmp_path: Path, tool_sessions: dict[str, object]
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["global"] = {"stores": {"tool_sessions": tool_sessions}}
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    parsed = parse_user_config(str(config_path))
+
+    assert parsed.global_ is not None
+    assert parsed.global_["stores"]["tool_sessions"] == tool_sessions
+
+
+@pytest.mark.parametrize(
+    "tool_sessions, expected",
+    [
+        ({"backend": "postgres"}, "backend must be 'local' or 'redis'"),
+        (
+            {"backend": "redis"},
+            "redis.address is required when backend is redis",
+        ),
+        (
+            {"backend": "local", "redis": {"address": "redis:6379"}},
+            "redis config is not allowed when backend is local",
+        ),
+        (
+            {"backend": "local", "ttl_seconds": 0},
+            "ttl_seconds: Input should be greater than or equal to 1",
+        ),
+        (
+            {"backend": "local", "max_sessions": 100001},
+            "max_sessions: Input should be less than or equal to 100000",
+        ),
+        (
+            {
+                "backend": "local",
+                "max_sessions": 4,
+                "max_sessions_per_identity": 5,
+            },
+            "max_sessions_per_identity must be less than or equal to max_sessions",
+        ),
+        (
+            {"backend": "local", "max_state_bytes": 1023},
+            "max_state_bytes: Input should be greater than or equal to 1024",
+        ),
+        (
+            {"backend": "local", "timeout_ms": 1001},
+            "timeout_ms: Input should be less than or equal to 1000",
+        ),
+        (
+            {"backend": "local", "unknown": True},
+            "unknown: Extra inputs are not permitted",
+        ),
+    ],
+)
+def test_parse_user_config_rejects_invalid_tool_session_store(
+    tmp_path: Path, tool_sessions: dict[str, object], expected: str
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["global"] = {"stores": {"tool_sessions": tool_sessions}}
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match=expected):
+        parse_user_config(str(config_path))
+
+
 def test_parse_user_config_rejects_unknown_decision_adaptation(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)

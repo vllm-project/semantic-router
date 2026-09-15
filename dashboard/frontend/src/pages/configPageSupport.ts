@@ -738,6 +738,24 @@ export interface CanonicalStoreGlobalConfig {
   semantic_cache?: SemanticCacheConfig
   memory?: MemoryConfig
   vector_store?: VectorStoreConfig
+  tool_sessions?: ToolSessionStoreConfig
+}
+
+export interface ToolSessionRedisConfig {
+  address?: string
+  password?: string
+  database?: number
+  key_prefix?: string
+}
+
+export interface ToolSessionStoreConfig {
+  backend?: 'local' | 'redis'
+  ttl_seconds?: number
+  max_sessions?: number
+  max_sessions_per_identity?: number
+  max_state_bytes?: number
+  timeout_ms?: number
+  redis?: ToolSessionRedisConfig
 }
 
 export interface ToolIntegrationConfig {

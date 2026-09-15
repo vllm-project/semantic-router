@@ -11,7 +11,7 @@ from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
     iter_routing_profiles,
 )
-from cli.models import RouterLearningConfig, UserConfig
+from cli.models import RouterLearningConfig, ToolSessionStoreConfig, UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -371,6 +371,30 @@ def _router_learning_schema_errors(data: Dict[str, Any]) -> list[str]:
     return []
 
 
+def _tool_session_store_schema_errors(data: Dict[str, Any]) -> list[str]:
+    global_config = data.get("global")
+    if not isinstance(global_config, dict):
+        return []
+    stores = global_config.get("stores")
+    if not isinstance(stores, dict) or "tool_sessions" not in stores:
+        return []
+    tool_sessions = stores.get("tool_sessions")
+    if not isinstance(tool_sessions, dict):
+        return ["global.stores.tool_sessions must be an object"]
+    try:
+        ToolSessionStoreConfig.model_validate(tool_sessions)
+    except ValidationError as exc:
+        errors: list[str] = []
+        for error in exc.errors():
+            loc = ".".join(str(part) for part in error["loc"])
+            path = "global.stores.tool_sessions"
+            if loc:
+                path = f"{path}.{loc}"
+            errors.append(f"{path}: {error['msg']}")
+        return errors
+    return []
+
+
 def _validate_non_negative_number(
     errors: list[str],
     value: Any,
@@ -432,6 +456,13 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
         joined_errors = "; ".join(router_learning_schema_errors)
         raise ConfigParseError(
             f"Invalid Router Learning config values: {joined_errors}."
+        )
+
+    tool_session_store_schema_errors = _tool_session_store_schema_errors(data)
+    if tool_session_store_schema_errors:
+        joined_errors = "; ".join(tool_session_store_schema_errors)
+        raise ConfigParseError(
+            f"Invalid Tool Session Store config values: {joined_errors}."
         )
 
 
