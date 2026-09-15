@@ -132,6 +132,14 @@ APISERVER_REFERENCE_MD := website/docs/api/apiserver.md
 APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
 
+.PHONY: generated-contract-check generated-contract-generate
+generated-contract-check: config-schema-check api-docs-check agent-skill-check ## Check OpenAPI, config contracts, and the public skill package without rewriting
+
+# OpenAPI embeds the config schema: regenerate it before exporting API docs.
+generated-contract-generate: config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
+	@$(MAKE) api-docs-generate
+	@$(MAKE) agent-skill-sync
+
 .PHONY: api-docs-openapi
 api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI JSON artifact from the route catalog
 	@$(LOG_TARGET)

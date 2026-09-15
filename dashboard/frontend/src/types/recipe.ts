@@ -178,6 +178,7 @@ export type RecipeProbeRequestShape = 'text' | 'messages' | 'tools'
 export interface RecipeProbeExpectedRoute {
   decision: string
   recipe?: string
+  selection_status?: 'selected' | 'planned_final' | 'fallback' | 'execution_required' | 'unavailable' | 'failed'
   algorithm?: string
   alias?: string
   plugins: string[]
