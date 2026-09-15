@@ -638,13 +638,13 @@ fixtures:
                 "contract-personal-support",
             },
         )
-        # Preserve the original packet's complete materialization receipt.
-        # New contract probes have their own inventory and comparison group.
+        # Pin the original packet, including the bounded Vault context fixtures.
+        # Added contract probes keep their own inventory and comparison group.
         receipt = _mom_materialization_receipt(original_probes)
         self.assertEqual(receipt["message_probes"], 90)
-        self.assertEqual(receipt["generated_probes"], 45)
+        self.assertEqual(receipt["generated_probes"], 42)
         self.assertEqual(receipt["image_parts"], 53)
-        self.assertEqual(receipt["text_bytes"], 20_730_898)
+        self.assertEqual(receipt["text_bytes"], 18_741_471)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -664,14 +664,33 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "71bafa6752760592bbcaf15e37adb99eaaae2ee6c894317e94d3cd23b45a3837",
+            "9a7d3c6b91e2441b6f3148b74e128cb37830ea43330b9aa6e1a71258b04c351d",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "3d2d607ab120a7984cf5c99553852c5b6cd68cea62be5140d5a62c27ce1b29f3",
+            "2382f3ff030d465233f1f7bdccb26e855ceaf0f34a924bd66ad046f131459fcc",
         )
         by_id = {probe.probe_id: probe for probe in probes}
         self.assertEqual(len(by_id), len(probes))
+        vault_context_probes = [
+            probe
+            for probe in probes
+            if probe.expected_recipe == "vault" and "stress:long-input" in probe.tags
+        ]
+        self.assertEqual(len(vault_context_probes), 6)
+        for probe in vault_context_probes:
+            with self.subTest(probe_id=probe.probe_id):
+                self.assertTrue(probe.variant_id.startswith("vault_long_"))
+                self.assertIsNone(probe.generated_text)
+                payload = router_calibration_evaluation._build_request_payload(probe)
+                text_bytes = len(payload.get("text", "").encode("utf-8")) + sum(
+                    router_calibration_evaluation.message_text_bytes(message)
+                    for message in payload.get("messages", [])
+                )
+                # Keep substantive context with ample room below the default
+                # 32K-token triage cap; this is a byte bound, not token counting.
+                self.assertGreaterEqual(text_bytes, 1_000)
+                self.assertLessEqual(text_bytes, 12_000)
         # Preserve protocol and intent regressions independently of the old
         # capability-based lanes: recursion is reasoning, Flow resumes the
         # agent, and a programming visibility term is not confidential data.
