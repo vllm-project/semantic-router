@@ -34,6 +34,7 @@ func (legacyBERTTestProvider) EmbeddingDimensionContract() (embedding.DimensionC
 		SupportedDimensions: []int{384},
 	}, nil
 }
+
 func (legacyBERTTestProvider) Windows(_ context.Context, text string, limit int) ([]embedding.Window, error) {
 	if limit == 0 {
 		limit = 512

@@ -300,6 +300,7 @@ func (p *EmbeddingProvider) EmbeddingDimensionContract() (embedding.DimensionCon
 	contract.SupportedDimensions = append([]int(nil), p.contract.SupportedDimensions...)
 	return contract, nil
 }
+
 func (p *EmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return p.EmbedWithOptions(ctx, text, p.options)
 }
