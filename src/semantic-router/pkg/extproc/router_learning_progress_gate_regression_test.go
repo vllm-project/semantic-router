@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"testing"
 	"time"
 
@@ -311,5 +312,137 @@ func TestProgressEvidenceKeyUsesResponseTrackingIdentity(t *testing.T) {
 	ctx := &RequestContext{SessionID: "request-id", ResponseObjectState: &ResponseObjectState{SessionTrackingID: "stable-session"}}
 	if key := progressEvidenceStateKey(ctx); key != config.RoutingNamespaceKey("", "stable-session") {
 		t.Fatalf("unstable Responses evidence key: %s", key)
+	}
+}
+
+// sessionDecisionState is the part of a session snapshot a recorded decision
+// owns. Preflight still installs the evidence window on a rejected request, so
+// only these fields are required to stay untouched.
+type sessionDecisionState struct {
+	CurrentModel     string
+	SwitchCount      int
+	LastSwitchAt     time.Time
+	SwitchTimestamps []int64
+	TurnCount        int
+	ModelTurns       map[string]int
+	LastDecisionName string
+}
+
+func captureSessionDecisionState(t *testing.T, sessionID string) (sessionDecisionState, bool) {
+	t.Helper()
+	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(sessionID, time.Now())
+	if !ok {
+		return sessionDecisionState{}, false
+	}
+	return sessionDecisionState{
+		CurrentModel:     snapshot.CurrentModel,
+		SwitchCount:      snapshot.SwitchCount,
+		LastSwitchAt:     snapshot.LastSwitchAt,
+		SwitchTimestamps: snapshot.SwitchTimestamps,
+		TurnCount:        snapshot.TurnCount,
+		ModelTurns:       snapshot.ModelTurns,
+		LastDecisionName: snapshot.LastDecisionName,
+	}, true
+}
+
+// seedSessionDecision records a known decision so a rejected request can be
+// shown to leave it alone.
+func seedSessionDecision(t *testing.T, sessionID string) sessionDecisionState {
+	t.Helper()
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:     sessionID,
+		SelectedModel: "frontier",
+		DecisionName:  "seeded",
+		TurnIndex:     2,
+	})
+	before, ok := captureSessionDecisionState(t, sessionID)
+	if !ok || before.CurrentModel != "frontier" {
+		t.Fatalf("seed did not take for %q: %+v (ok=%t)", sessionID, before, ok)
+	}
+	return before
+}
+
+func requireSessionDecisionUnchanged(t *testing.T, sessionID string, before sessionDecisionState) {
+	t.Helper()
+	after, ok := captureSessionDecisionState(t, sessionID)
+	if !ok {
+		t.Fatalf("the rejected request dropped session %q", sessionID)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("a rejected request rewrote the session decision:\nbefore %+v\nafter  %+v", before, after)
+	}
+}
+
+// TestRejectedSelectionLeavesSessionDecisionUnchanged covers all three selector
+// paths. A gate-rejected request returns no model, so it must not become the
+// session's recorded decision: that write would move the current model, append
+// a switch timestamp and restart the cooldown later turns route on.
+func TestRejectedSelectionLeavesSessionDecisionUnchanged(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// candidates picks the path: a sole candidate skips the selector, and
+		// two keep the selector in play.
+		candidates []config.ModelRef
+		session    string
+		// prepare registers the selector the path needs; without a registry the
+		// lookup fails into the diagnostic fallback.
+		prepare func(*testing.T, *OpenAIRouter)
+	}{
+		{
+			name:       "single candidate",
+			candidates: []config.ModelRef{{Model: "cheap"}},
+			session:    "reject-state-single",
+		},
+		{
+			name:       "selector fallback",
+			candidates: []config.ModelRef{{Model: "cheap"}, {Model: "frontier"}},
+			session:    "reject-state-fallback",
+			prepare: func(_ *testing.T, router *OpenAIRouter) {
+				registry := selection.NewRegistry()
+				registry.Register(
+					selection.MethodStatic,
+					selectionResultSelector{err: errors.New("selector unavailable")},
+				)
+				router.ModelSelector = registry
+			},
+		},
+		{
+			name:       "selector result",
+			candidates: []config.ModelRef{{Model: "cheap"}, {Model: "frontier"}},
+			session:    "reject-state-selector",
+			prepare: func(_ *testing.T, router *OpenAIRouter) {
+				registry := selection.NewRegistry()
+				registry.Register(selection.MethodStatic, selectionResultSelector{
+					result: &selection.SelectionResult{
+						SelectedModel: "frontier",
+						Method:        selection.MethodStatic,
+					},
+				})
+				router.ModelSelector = registry
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router, ctx := gateRejectedRouter(t, tc.session)
+			if tc.prepare != nil {
+				tc.prepare(t, router)
+			}
+			before := seedSessionDecision(t, tc.session)
+			selCtx := &selection.SelectionContext{
+				SessionID:       tc.session,
+				DecisionName:    "gate-rejected",
+				CandidateModels: tc.candidates,
+			}
+
+			selected, _, err := router.selectModelFromCandidates(selCtx, nil, ctx)
+
+			if !errors.Is(err, selection.ErrNoEligibleCandidates) {
+				t.Fatalf("error = %v, want ErrNoEligibleCandidates", err)
+			}
+			if selected != nil {
+				t.Fatalf("a gate-rejected selection was dispatched: %#v", selected)
+			}
+			requireSessionDecisionUnchanged(t, tc.session, before)
+		})
 	}
 }
