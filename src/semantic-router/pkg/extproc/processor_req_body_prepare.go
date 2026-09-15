@@ -101,6 +101,19 @@ func (r *OpenAIRouter) runPostDecisionImmediateStages(
 	if targetModel == "" {
 		targetModel = originalModel
 	}
+	if r.shouldUseLooper(ctx.VSRSelectedDecision) && hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope) {
+		protocolError := llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_dynamo_nvext_looper",
+			"Dynamo target-bound request state cannot be safely fanned out by Looper",
+			nil,
+		)
+		ctx.ImmediateProtocolError = protocolError
+		metrics.RecordRequestError(targetModel, "unsupported_dynamo_nvext_looper")
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return r.createErrorResponse(http.StatusBadRequest, protocolError.Error())
+	}
 	if err := validateDynamoBackendPool(r.Config, targetModel, ctx, ctx.ProtocolEnvelope); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) {

@@ -150,6 +150,84 @@ func TestDynamoBackendBoundaryPrecedesCacheHit(t *testing.T) {
 	}
 }
 
+func TestDynamoExtensionRequestsRejectLooperBeforeFanout(t *testing.T) {
+	salt := "tenant-a"
+	for _, test := range []struct {
+		name          string
+		envelope      llmprotocol.Envelope
+		headers       map[string]string
+		backendModels config.BackendModels
+	}{
+		{
+			name: "token data",
+			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{TokenData: []uint32{10, 11}},
+			}},
+		},
+		{
+			name:    "header only",
+			headers: map[string]string{headers.DynamoDPRank: "1"},
+		},
+		{
+			name: "top-level cache salt",
+			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
+				RequestTopLevelCacheSalt: &salt,
+			}},
+		},
+		{
+			name: "mixed backend decision",
+			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{GreedSampling: llmprotocol.Bool(true)},
+			}},
+			backendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"model-a": {PreferredEndpoints: []string{"dynamo-a"}},
+					"model-b": {PreferredEndpoints: []string{"vllm-b"}},
+				},
+				VLLMEndpoints: []config.VLLMEndpoint{{Name: "dynamo-a", Type: "dynamo"}, {Name: "vllm-b", Type: "vllm"}},
+			},
+		},
+		{
+			name: "cross-format decision",
+			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{GreedSampling: llmprotocol.Bool(true)},
+			}},
+			backendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+				"model-a": {APIFormat: config.APIFormatOpenAI},
+				"model-b": {APIFormat: config.APIFormatResponses},
+			}},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			decision := config.Decision{
+				Name:      "dynamo-looper-route",
+				ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+				Algorithm: &config.AlgorithmConfig{Type: "confidence"},
+			}
+			router := &OpenAIRouter{Config: &config.RouterConfig{
+				Looper:        config.LooperConfig{Endpoint: "http://looper"},
+				BackendModels: test.backendModels,
+				IntelligentRouting: config.IntelligentRouting{
+					Decisions: []config.Decision{decision},
+				},
+			}}
+			ctx := &RequestContext{
+				Headers:             test.headers,
+				ProtocolEnvelope:    test.envelope,
+				VSRSelectedDecision: &router.Config.IntelligentRouting.Decisions[0],
+			}
+
+			response := router.runPostDecisionImmediateStages("entrypoint", "model-a", decision.Name, ctx)
+			if response.GetImmediateResponse().GetStatus().GetCode() != typev3.StatusCode_BadRequest {
+				t.Fatalf("response = %+v, want HTTP 400", response)
+			}
+			if ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "unsupported_dynamo_nvext_looper" {
+				t.Fatalf("protocol error = %+v, want unsupported_dynamo_nvext_looper", ctx.ImmediateProtocolError)
+			}
+		})
+	}
+}
+
 func TestDynamoRequestExtensionsBypassResponseCacheReadsAndWrites(t *testing.T) {
 	decision := config.Decision{
 		Name:      "dynamo-cache-route",
