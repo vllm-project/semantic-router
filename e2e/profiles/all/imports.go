@@ -23,6 +23,7 @@ import (
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	ragexternalapi "github.com/vllm-project/semantic-router/e2e/profiles/rag-external-api"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
@@ -107,6 +108,7 @@ func init() {
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
+	register("rag-external-api", func() framework.Profile { return ragexternalapi.NewProfile() }, framework.ProfileCapabilities{})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"response-api",

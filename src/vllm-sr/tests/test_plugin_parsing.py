@@ -526,7 +526,7 @@ class TestRAGPluginConfig:
             injection_mode="tool_role",
             backend_config={
                 "endpoint": "http://rag-service:8000/v1/search",
-                "request_format": "openai",
+                "request_format": "pinecone",
                 "timeout_seconds": 10,
                 "max_response_bytes": 4194304,
             },
@@ -542,7 +542,7 @@ class TestRAGPluginConfig:
         assert config.max_context_length == 4096
         assert config.injection_mode == "tool_role"
         assert config.backend_config["endpoint"] == "http://rag-service:8000/v1/search"
-        assert config.backend_config["request_format"] == "openai"
+        assert config.backend_config["request_format"] == "pinecone"
         assert config.backend_config["max_response_bytes"] == 4194304
         assert config.on_failure == "skip"
         assert config.cache_results is True
@@ -649,7 +649,7 @@ decisions:
           cache_ttl_seconds: 300
           backend_config:
             endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
+            request_format: "pinecone"
             timeout_seconds: 10
 providers:
   models:
@@ -682,7 +682,9 @@ providers:
                 plugin.configuration["backend_config"]["endpoint"]
                 == "http://rag-service:8000/v1/search"
             )
-            assert plugin.configuration["backend_config"]["request_format"] == "openai"
+            assert (
+                plugin.configuration["backend_config"]["request_format"] == "pinecone"
+            )
 
             errors = validate_user_config(config)
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
