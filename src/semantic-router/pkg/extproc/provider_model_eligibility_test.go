@@ -8,6 +8,40 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+func TestPrepareProviderDispatchRejectsImageInputOnChatOnlyModel(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	params := router.Config.ModelConfig[primary]
+	params.Capabilities = []string{"chat"}
+	router.Config.ModelConfig[primary] = params
+	request := testNeutralRequest(primary, "Describe the attached test image.")
+	request.Messages[0].Content = append(request.Messages[0].Content, llmprotocol.Content{
+		Kind: llmprotocol.ContentImage, URL: "https://example.com/a.png",
+	})
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+
+	dispatch, err := router.prepareProviderDispatch(request, primary, "", false, ctx)
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != "unsupported_capability" || dispatch != nil {
+		t.Fatalf("dispatch=%+v error=%v, want capability rejection", dispatch, err)
+	}
+	if ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "unsupported_capability" {
+		t.Fatalf("ImmediateProtocolError = %+v", ctx.ImmediateProtocolError)
+	}
+}
+
+func TestPrepareProviderDispatchAllowsImageInputOnUnannotatedModel(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	request := testNeutralRequest(primary, "Describe the attached test image.")
+	request.Messages[0].Content = append(request.Messages[0].Content, llmprotocol.Content{
+		Kind: llmprotocol.ContentImage, URL: "https://example.com/a.png",
+	})
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+
+	if _, err := router.prepareProviderDispatch(request, primary, "", false, ctx); err != nil {
+		t.Fatalf("unannotated model must not reject image_input: %v", err)
+	}
+}
+
 func TestPrepareProviderDispatchChecksPrimaryModelTaskCapabilities(t *testing.T) {
 	for _, capabilities := range [][]string{
 		{"image_input"},

@@ -42,8 +42,8 @@ func (c *KnowledgeBaseClassifier) embedOneExemplar(backend, modelType string, ta
 		return embeddingResult{ref: ref, embedding: embedding}
 	}
 	if backend == "openvino" {
-		embedding, err := getOpenVINOEmbedding(modelType, ref.text, targetDim)
-		if err != nil {
+		embedding, err := getOpenVINOEmbedding(modelType, ref.text, targetDim) //nolint:staticcheck
+		if err != nil {                                                        //nolint:staticcheck
 			return embeddingResult{ref: ref, err: err}
 		}
 		return embeddingResult{ref: ref, embedding: embedding}

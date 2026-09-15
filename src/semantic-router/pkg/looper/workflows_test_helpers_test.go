@@ -165,6 +165,7 @@ func workflowToolLooperRequest(req *openai.ChatCompletionNewParams) *Request {
 			},
 		},
 		DecisionName: "tool-flow-test",
+		RecipeName:   config.DefaultRecipeName,
 	}
 }
 
@@ -376,6 +377,12 @@ func workflowStoredPendingState(t *testing.T, stateDir string, toolCallID string
 		t.Fatalf("tool_call_id %q does not contain workflow state id", toolCallID)
 	}
 	data, err := os.ReadFile(filepath.Join(stateDir, stateID+".json"))
+	if err != nil {
+		namespaced, nsErr := workflowNamespacedStateID(config.DefaultRecipeName, stateID)
+		if nsErr == nil {
+			data, err = os.ReadFile(filepath.Join(stateDir, namespaced+".json"))
+		}
+	}
 	if err != nil {
 		t.Fatalf("read workflow state for %q: %v", stateID, err)
 	}
