@@ -182,6 +182,15 @@ func TestPlaygroundOutcomeProxyForcesRecordOnlyForReadRole(t *testing.T) {
 	}
 }
 
+func TestRemoveConnectionNominatedHeaders(t *testing.T) {
+	header := http.Header{}
+	header.Set("Connection", "keep-alive, X-VSR-Outcome-Source, x-vsr-outcome-principal")
+	removeConnectionNominatedHeaders(header, headers.VSROutcomeSource, headers.VSROutcomePrincipal)
+	if got := header.Get("Connection"); got != "keep-alive" {
+		t.Fatalf("Connection = %q", got)
+	}
+}
+
 func TestPlaygroundOutcomeProxyPreservesWriterLearningBehavior(t *testing.T) {
 	var posted playgroundOutcomeRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

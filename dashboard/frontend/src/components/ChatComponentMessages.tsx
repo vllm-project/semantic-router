@@ -149,6 +149,7 @@ function AssistantRatingsMessage({
             !message.isStreaming &&
             !message.incomplete &&
             choice.model &&
+            choice.model === message.headers?.['x-vsr-selected-model'] &&
             message.headers?.['x-vsr-replay-id'] ? (
               <div className={styles.choiceActions}>
                 <FeedbackButtons

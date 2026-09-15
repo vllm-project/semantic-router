@@ -229,7 +229,9 @@ export const parseChatCompletionObject = (value: unknown): ParsedChatCompletion 
         asString(delta?.refusal) ||
         asString(message?.refusal),
       reasoningContent: extractReasoningContent(delta, choice, message),
-      model: asString(choice.model) || topLevelModel || undefined,
+      // Ratings Looper responses may put a comma-joined list of candidates in
+      // the top-level model field. That value cannot safely identify a choice.
+      model: asString(choice.model) || (rawChoices.length === 1 ? topLevelModel : undefined),
       finishReason: asString(choice.finish_reason) || undefined,
       toolCalls,
     }]

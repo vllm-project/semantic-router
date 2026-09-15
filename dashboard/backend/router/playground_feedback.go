@@ -171,6 +171,7 @@ func servePlaygroundOutcome(
 		payload.RecordOnly = true
 		rawBody, _ = json.Marshal(payload)
 	}
+	removeConnectionNominatedHeaders(r.Header, headers.VSROutcomeSource, headers.VSROutcomePrincipal)
 	r.Body = io.NopCloser(bytes.NewReader(rawBody))
 	r.ContentLength = int64(len(rawBody))
 	r.Header.Set("Idempotency-Key", idempotencyKey)
@@ -191,6 +192,33 @@ func servePlaygroundOutcome(
 	submitted := statusWriter.status >= http.StatusOK && statusWriter.status < http.StatusMultipleChoices
 	if err := store.FinishPlaygroundReplay(context.Background(), principal.SessionID, payload.ReplayID, submitted); err != nil {
 		log.Printf("playground replay submission finalization failed: %v", err)
+	}
+}
+
+func removeConnectionNominatedHeaders(header http.Header, names ...string) {
+	if header == nil {
+		return
+	}
+	blocked := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		blocked[strings.ToLower(name)] = struct{}{}
+	}
+	values := header.Values("Connection")
+	kept := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, token := range strings.Split(value, ",") {
+			token = strings.TrimSpace(token)
+			if token == "" {
+				continue
+			}
+			if _, remove := blocked[strings.ToLower(token)]; !remove {
+				kept = append(kept, token)
+			}
+		}
+	}
+	header.Del("Connection")
+	if len(kept) > 0 {
+		header.Set("Connection", strings.Join(kept, ", "))
 	}
 }
 
