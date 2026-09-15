@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "max_tokens": 32,
+    "messages": [{"role": "user", "content": "Sample from the top choices."}],
+    "top_k": 8
+  }
+}

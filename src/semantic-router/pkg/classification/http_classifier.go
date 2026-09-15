@@ -1,16 +1,18 @@
 package classification
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
 // probabilitySumTolerance bounds how far an http_classify response's scores
@@ -19,61 +21,127 @@ import (
 // unaccounted-for probability mass.
 const probabilitySumTolerance = 0.02
 
-// HTTPClassifierJailbreakInference implements SequenceClassifierBackend by
-// calling an external sequence-classifier endpoint over HTTP. The wire
-// contract mirrors the widely-used HuggingFace text-classification pipeline
-// shape: a request carrying the input text, and a response listing every
-// label's score (not just the top prediction), so a server wrapping an
-// existing `transformers` pipeline or a Text Embeddings Inference (TEI)
-// classify endpoint can be plugged in with minimal glue:
+// sequenceLabelMapping is the minimal label<->index contract
+// alignScoresToMapping/assignScoreToMapping need to validate an http_classify
+// response against a classifier's configured label mapping. JailbreakMapping
+// and CategoryMapping (mapping.go) both satisfy it via thin wrapper methods,
+// so category's http_classify backend (#2760) can reuse the same validator
+// jailbreak uses instead of duplicating it.
+type sequenceLabelMapping interface {
+	// IndexForLabel returns the configured class index for a label name.
+	IndexForLabel(label string) (int, bool)
+	// LabelFromIndex returns the label name for a configured class index.
+	LabelFromIndex(classIndex int) (string, bool)
+	// LabelCount returns the number of configured labels.
+	LabelCount() int
+}
+
+// HTTPClassifierInference implements SequenceClassifierBackend by calling an
+// external sequence-classifier endpoint over HTTP. The wire contract mirrors
+// the widely-used HuggingFace text-classification pipeline shape: a request
+// carrying the input text, and a response listing every label's score (not
+// just the top prediction), so a server wrapping an existing `transformers`
+// pipeline or a Text Embeddings Inference (TEI) classify endpoint can be
+// plugged in with minimal glue:
 //
 //	POST {endpoint}/classify
 //	  {"inputs": "<text>"}
 //	  -> [{"label": "safe", "score": 0.99}, {"label": "jailbreak", "score": 0.01}]
 //
-// Response labels are matched against the configured jailbreak_mapping by
-// name (not by array position, which the server is free to order however it
+// Response labels are matched against the configured label mapping by name
+// (not by array position, which the server is free to order however it
 // likes - e.g. sorted by score) so the resulting class index always lines up
-// with the same mapping every other backend uses.
-type HTTPClassifierJailbreakInference struct {
-	httpClient *http.Client
-	baseURL    string
-	accessKey  string
-	timeout    time.Duration
-	mapping    *JailbreakMapping
+// with the same mapping every other backend uses. This type is not
+// jailbreak-specific: any SequenceClassifierBackend consumer whose mapping
+// satisfies sequenceLabelMapping (JailbreakMapping, CategoryMapping, ...)
+// can construct one - validated against a real, independently-trained
+// external model (a 14-label category classifier) during #2918, not just a
+// synthetic mock.
+type HTTPClassifierInference struct {
+	connector *connector.Client
+	timeout   time.Duration
+	mapping   sequenceLabelMapping
 }
 
-// NewHTTPClassifierJailbreakInference creates a new http_classify-backed
-// jailbreak inference instance from an external model config.
-func NewHTTPClassifierJailbreakInference(cfg *config.ExternalModelConfig, mapping *JailbreakMapping) (*HTTPClassifierJailbreakInference, error) {
-	if cfg.ModelEndpoint.Address == "" {
-		return nil, fmt.Errorf("http_classify endpoint address is required for guardrail")
+// NewHTTPClassifierInference creates a new http_classify-backed inference
+// instance from an external model config and label mapping.
+func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping) (*HTTPClassifierInference, error) {
+	return newHTTPClassifierInference(cfg, mapping, 0)
+}
+
+// newHTTPClassifierInference is shared by the existing prompt_guard connector
+// and category's backend adapter. A non-zero deadline comes from the shared
+// backend block; zero preserves the external-model legacy timeout behavior.
+func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping, deadline time.Duration) (*HTTPClassifierInference, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("http_classify external model config is required")
 	}
-	if mapping == nil {
-		return nil, fmt.Errorf("jailbreak mapping is required for http_classify")
+	if cfg.ModelEndpoint.Address == "" {
+		return nil, fmt.Errorf("http_classify endpoint address is required")
+	}
+	if isNilMapping(mapping) {
+		return nil, fmt.Errorf("label mapping is required for http_classify")
+	}
+	// http_classify was the only backend without an arity check (candle
+	// requires numClasses >= 2, http_chat exactly 2). Without one, a mapping
+	// with fewer than 2 labels - an empty file, or one built in-process rather
+	// than through LoadJailbreakMapping's normalization - makes
+	// alignScoresToMapping allocate an undersized distribution, so
+	// assignScoreToMapping's bounds check rejects every label and a perfectly
+	// valid server response fails with an error blaming the server, on every
+	// request. Fail here instead of returning a partial response.
+	if n := mapping.LabelCount(); n < 2 {
+		return nil, fmt.Errorf("http_classify label mapping must define at least 2 labels, got %d", n)
 	}
 
-	scheme := cfg.ModelEndpoint.Protocol
+	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
 	if scheme == "" {
 		scheme = "http"
 	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, cfg.ModelEndpoint.Address, cfg.ModelEndpoint.Port)
+	baseURL := fmt.Sprintf("%s://%s:%d", scheme, strings.TrimSpace(cfg.ModelEndpoint.Address), cfg.ModelEndpoint.Port)
 
 	// http_classify is a single lightweight forward pass, not a generative
 	// call - it should fail fast rather than share http_chat's more
 	// generous default.
 	timeout := 5 * time.Second
-	if cfg.TimeoutSeconds > 0 {
+	if deadline > 0 {
+		timeout = deadline
+	} else if cfg.TimeoutSeconds > 0 {
 		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 	}
 
-	return &HTTPClassifierJailbreakInference{
-		httpClient: &http.Client{Timeout: timeout},
-		baseURL:    baseURL,
-		accessKey:  cfg.AccessKey,
-		timeout:    timeout,
-		mapping:    mapping,
+	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
+		AttemptTimeout:   timeout,
+		MaxRetries:       1,
+		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
+		MaxResponseBytes: cfg.GetMaxResponseBytes(),
+		MaxErrorBytes:    maxClassifyErrorBodyBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create http_classify connector: %w", err)
+	}
+
+	return &HTTPClassifierInference{
+		connector: remote,
+		timeout:   timeout,
+		mapping:   mapping,
 	}, nil
+}
+
+// isNilMapping reports whether mapping is nil - either a literal nil
+// interface, or an interface holding a nil concrete pointer (e.g. a
+// (*JailbreakMapping)(nil) passed by a caller that forgot to check). A plain
+// `mapping == nil` comparison misses the second case: an interface value
+// carrying type information is never == nil even when the pointer it wraps
+// is, so a caller's nil *JailbreakMapping would otherwise slip past this
+// check and panic later inside LabelCount/IndexForLabel instead of failing
+// fast here.
+func isNilMapping(mapping sequenceLabelMapping) bool {
+	if mapping == nil {
+		return true
+	}
+	v := reflect.ValueOf(mapping)
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
 type httpClassifyRequest struct {
@@ -85,66 +153,40 @@ type httpClassifyLabelScore struct {
 	Score float32 `json:"score"`
 }
 
+var httpClassifyOperation = connector.Operation{
+	Name:      "http_classify",
+	Method:    http.MethodPost,
+	Path:      "/classify",
+	RetrySafe: true,
+}
+
 // Classify implements the SequenceClassifierBackend interface. It derives its
 // deadline from the caller's ctx (so the request can be cancelled if the
 // caller gives up first) bounded by h.timeout, rather than always running to
 // its own internal timeout regardless of the caller's lifecycle.
-func (h *HTTPClassifierJailbreakInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, h.timeout)
-	defer cancel()
-
-	httpReq, err := h.buildClassifyRequest(ctx, text)
+func (h *HTTPClassifierInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
+	scores, err := h.fetchLabelScores(ctx, text)
 	if err != nil {
 		return SequenceClassificationResult{}, err
 	}
-
-	scores, err := h.doClassifyRequest(httpReq)
-	if err != nil {
-		return SequenceClassificationResult{}, err
-	}
-
 	return alignScoresToMapping(h.mapping, scores)
 }
 
-// buildClassifyRequest builds the outgoing http_classify HTTP request.
-func (h *HTTPClassifierJailbreakInference) buildClassifyRequest(ctx context.Context, text string) (*http.Request, error) {
+func (h *HTTPClassifierInference) fetchLabelScores(ctx context.Context, text string) ([]httpClassifyLabelScore, error) {
+	ctx, cancel := context.WithTimeout(ctx, h.timeout)
+	defer cancel()
+
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal http_classify request: %w", err)
 	}
-
-	url := fmt.Sprintf("%s/classify", h.baseURL)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
+	responseBody, err := h.connector.Do(ctx, httpClassifyOperation, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create http_classify request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-	if h.accessKey != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.accessKey))
-	}
-	return httpReq, nil
-}
-
-// doClassifyRequest sends the request and parses the label/score list from a
-// successful response.
-func (h *HTTPClassifierJailbreakInference) doClassifyRequest(httpReq *http.Request) ([]httpClassifyLabelScore, error) {
-	resp, err := h.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("http_classify request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read http_classify response: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("http_classify endpoint returned status %d: %s", resp.StatusCode, string(body))
+		return nil, formatHTTPClassifyConnectorError(err)
 	}
 
 	var scores []httpClassifyLabelScore
-	if err := json.Unmarshal(body, &scores); err != nil {
+	if err := json.Unmarshal(responseBody, &scores); err != nil {
 		return nil, fmt.Errorf("failed to parse http_classify response: %w", err)
 	}
 	if len(scores) == 0 {
@@ -153,56 +195,99 @@ func (h *HTTPClassifierJailbreakInference) doClassifyRequest(httpReq *http.Reque
 	return scores, nil
 }
 
-// alignScoresToMapping matches response labels against the jailbreak_mapping
-// by name (not by array position) and builds the full-distribution result.
-// It requires the response to be a complete, valid distribution over exactly
-// the configured labels - not just "at least one label matched" - because an
-// incomplete response (e.g. a top-k response that omits the positive label)
-// would otherwise default the missing entries to 0.0 and silently under-report
-// risk instead of surfacing the mismatch.
-func alignScoresToMapping(mapping *JailbreakMapping, scores []httpClassifyLabelScore) (SequenceClassificationResult, error) {
-	numClasses := mapping.GetJailbreakTypeCount()
-	probabilities := make([]float32, numClasses)
-	seenIdx := make([]bool, numClasses)
-	seenLabels := make([]string, 0, len(scores))
+const maxClassifyErrorBodyBytes int64 = 8 * 1024
+
+func formatHTTPClassifyConnectorError(err error) error {
+	var connectorErr *connector.Error
+	if !errors.As(err, &connectorErr) {
+		return fmt.Errorf("http_classify request failed: %w", err)
+	}
+	switch connectorErr.Kind {
+	case connector.KindStatus:
+		// The remote body is deliberately not interpolated. This error reaches
+		// operational logs, and a classifier's error body routinely echoes the
+		// text it was asked to classify - a user prompt - along with whatever
+		// internal detail the endpoint chose to report. Its size is still
+		// worth reporting, because "the endpoint said nothing" and "the
+		// endpoint said more than we would read" are different faults.
+		// connector.Error.ResponseBody stays available for a caller that
+		// needs the body for something other than a log line.
+		body, truncated := connectorErr.ResponseBody()
+		return fmt.Errorf(
+			"http_classify endpoint returned status %d (response body %d bytes, truncated=%t, not logged): %w",
+			connectorErr.StatusCode, len(body), truncated, connectorErr,
+		)
+	case connector.KindResponse:
+		return fmt.Errorf("failed to read http_classify response: %w", connectorErr)
+	default:
+		return fmt.Errorf("http_classify request failed: %w", connectorErr)
+	}
+}
+
+// Close releases idle connections owned by the remote connector.
+func (h *HTTPClassifierInference) Close() error {
+	if h == nil || h.connector == nil {
+		return nil
+	}
+	return h.connector.Close()
+}
+
+// alignScoresToMapping matches response labels against the configured label
+// mapping by name (not by array position) and builds the full-distribution
+// result. It requires the response to be a complete, valid distribution over
+// exactly the configured labels - not just "at least one label matched" -
+// because an incomplete response (e.g. a top-k response that omits the
+// positive label) would otherwise default the missing entries to 0.0 and
+// silently under-report risk instead of surfacing the mismatch. mapping may
+// be any classifier's label mapping (JailbreakMapping, CategoryMapping, ...)
+// that satisfies sequenceLabelMapping.
+func alignScoresToMapping(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) (SequenceClassificationResult, error) {
+	probabilities, err := alignIndependentLabelScores(mapping, scores)
+	if err != nil {
+		return SequenceClassificationResult{}, err
+	}
 	var sum float32
-
-	for _, s := range scores {
-		seenLabels = append(seenLabels, s.Label)
-		idx, err := assignScoreToMapping(mapping, seenIdx, s)
-		if err != nil {
-			return SequenceClassificationResult{}, err
-		}
-		probabilities[idx] = s.Score
-		sum += s.Score
+	for _, probability := range probabilities {
+		sum += probability
 	}
-
-	for idx, present := range seenIdx {
-		if present {
-			continue
-		}
-		missingLabel, _ := mapping.GetJailbreakTypeFromIndex(idx)
-		return SequenceClassificationResult{}, fmt.Errorf(
-			"http_classify response is missing label %q from the configured jailbreak_mapping (got %v)", missingLabel, seenLabels)
+	if math.Abs(float64(sum)-1) > probabilitySumTolerance {
+		return SequenceClassificationResult{}, fmt.Errorf("http_classify response scores sum to %v, want ~1.0", sum)
 	}
-
-	if math.Abs(float64(sum)-1.0) > probabilitySumTolerance {
-		return SequenceClassificationResult{}, fmt.Errorf(
-			"http_classify response scores sum to %v, want ~1.0 (labels: %v)", sum, seenLabels)
-	}
-
 	return SequenceClassificationResult{Probabilities: probabilities}, nil
 }
 
+// Independent probabilities use the same exhaustive label validation, without
+// creating a categorical result or changing the supplied values.
+func alignIndependentLabelScores(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) ([]float32, error) {
+	probabilities := make([]float32, mapping.LabelCount())
+	seenIdx := make([]bool, len(probabilities))
+	seenLabels := make([]string, 0, len(scores))
+	for _, score := range scores {
+		seenLabels = append(seenLabels, score.Label)
+		idx, err := assignScoreToMapping(mapping, seenIdx, score)
+		if err != nil {
+			return nil, err
+		}
+		probabilities[idx] = score.Score
+	}
+	for idx, present := range seenIdx {
+		if !present {
+			missing, _ := mapping.LabelFromIndex(idx)
+			return nil, fmt.Errorf("http_classify response is missing label %q from the configured label mapping (got %v)", missing, seenLabels)
+		}
+	}
+	return probabilities, nil
+}
+
 // assignScoreToMapping validates a single response label/score pair against
-// the jailbreak_mapping and marks its index as seen, returning the resolved
-// index. Split out of alignScoresToMapping to keep its cyclomatic complexity
-// within the repo's lint gate.
-func assignScoreToMapping(mapping *JailbreakMapping, seenIdx []bool, s httpClassifyLabelScore) (int, error) {
-	idx, ok := mapping.GetIndexForJailbreakType(s.Label)
+// the configured label mapping and marks its index as seen, returning the
+// resolved index. Split out of alignScoresToMapping to keep its cyclomatic
+// complexity within the repo's lint gate.
+func assignScoreToMapping(mapping sequenceLabelMapping, seenIdx []bool, s httpClassifyLabelScore) (int, error) {
+	idx, ok := mapping.IndexForLabel(s.Label)
 	if !ok || idx < 0 || idx >= len(seenIdx) {
 		return 0, fmt.Errorf(
-			"http_classify response label %q is not in the configured jailbreak_mapping", s.Label)
+			"http_classify response label %q is not in the configured label mapping", s.Label)
 	}
 	if seenIdx[idx] {
 		return 0, fmt.Errorf("http_classify response contains duplicate label %q", s.Label)

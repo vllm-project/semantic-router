@@ -108,8 +108,13 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	var bestModel *config.ModelRef
 	var bestScore float64
 
+	// model_scores are configured on domains, so prefer the matched domain and
+	// fall back to the decision name for callers that only set DecisionName.
 	s.scoresMu.RLock()
-	categoryScores := s.categoryScores[selCtx.DecisionName]
+	categoryScores := s.categoryScores[selCtx.CategoryName]
+	if len(categoryScores) == 0 {
+		categoryScores = s.categoryScores[selCtx.DecisionName]
+	}
 	s.scoresMu.RUnlock()
 
 	for i := range selCtx.CandidateModels {

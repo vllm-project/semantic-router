@@ -98,6 +98,43 @@ func parsePendingSearchResult(results interface{}, requestID string, prefix stri
 type searchMatch struct {
 	distance     float64
 	responseBody interface{}
+	timestamp    int64
+	ttlSeconds   int64
+}
+
+func extractSearchMatch(fieldsMap map[string]interface{}) (*searchMatch, bool) {
+	distanceVal, exists := fieldsMap["vector_distance"]
+	if !exists {
+		return nil, false
+	}
+
+	var distance float64
+	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
+		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
+		return nil, false
+	}
+
+	var timestamp int64
+	if tsVal, exists := fieldsMap["timestamp"]; exists {
+		var ts int64
+		if _, err := fmt.Sscanf(fmt.Sprint(tsVal), "%d", &ts); err == nil && ts > 0 {
+			timestamp = ts
+		}
+	}
+	var ttlSeconds int64
+	if ttlVal, exists := fieldsMap["ttl_seconds"]; exists {
+		var ttl int64
+		if _, err := fmt.Sscanf(fmt.Sprint(ttlVal), "%d", &ttl); err == nil && ttl > 0 {
+			ttlSeconds = ttl
+		}
+	}
+
+	return &searchMatch{
+		distance:     distance,
+		responseBody: fieldsMap["response_body"],
+		timestamp:    timestamp,
+		ttlSeconds:   ttlSeconds,
+	}, true
 }
 
 // parseBestMatch extracts the best-match distance and response body from a Valkey FT.SEARCH vector result.
@@ -130,22 +167,9 @@ func parseBestMatch(searchResult interface{}) *searchMatch {
 			continue
 		}
 
-		distanceVal, exists := fieldsMap["vector_distance"]
-		if !exists {
-			continue
-		}
-
-		var distance float64
-		if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
-			logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
-			continue
-		}
-
-		if best == nil || distance < best.distance {
-			best = &searchMatch{
-				distance:     distance,
-				responseBody: fieldsMap["response_body"],
-			}
+		candidate, matchOk := extractSearchMatch(fieldsMap)
+		if matchOk && (best == nil || candidate.distance < best.distance) {
+			best = candidate
 		}
 	}
 

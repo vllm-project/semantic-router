@@ -27,7 +27,45 @@ func validateGlobalSemanticCacheContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	return validateCacheThreshold(cfg.SemanticCache.SimilarityThreshold, "global semantic_cache")
+	if err := validateCacheThreshold(cfg.SemanticCache.SimilarityThreshold, "global semantic_cache"); err != nil {
+		return err
+	}
+	return validatePolarityGuard(cfg)
+}
+
+// validatePolarityGuard enforces the polarity guard contract at config load: a
+// known mode, an NLI contradiction threshold in [0.0, 1.0], and — when an NLI
+// mode is selected on an enabled cache — a configured hallucination explainer,
+// because the NLI tier binds that shared model. Failing here is deliberate:
+// the issue contract is "validate early", not "discover at the first lookup".
+func validatePolarityGuard(cfg *RouterConfig) error {
+	guard := cfg.SemanticCache.PolarityGuard
+	if guard == nil {
+		return nil
+	}
+	const scope = "global semantic_cache polarity_guard"
+	mode := guard.NormalizedMode()
+	if !polarityGuardModeSupported(mode) {
+		return fmt.Errorf(
+			"%s mode must be one of %q, %q, or %q, got %q",
+			scope,
+			PolarityGuardModeLexical,
+			PolarityGuardModeNLI,
+			PolarityGuardModeLexicalNLI,
+			guard.Mode,
+		)
+	}
+	if t := guard.NLI.ContradictionThreshold; t != nil && (*t < 0.0 || *t > 1.0) {
+		return fmt.Errorf("%s nli.contradiction_threshold must be between 0.0 and 1.0, got %.2f", scope, *t)
+	}
+	if cfg.SemanticCache.Enabled && guard.UsesNLI() &&
+		strings.TrimSpace(cfg.HallucinationMitigation.NLIModel.ModelID) == "" {
+		return fmt.Errorf(
+			"%s mode %q requires an NLI model: configure global.model_catalog.modules.hallucination_mitigation.explainer (model_ref or model_id)",
+			scope, mode,
+		)
+	}
+	return nil
 }
 
 func validateDecisionSemanticCacheContracts(cfg *RouterConfig) error {

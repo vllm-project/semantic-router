@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SR_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+SR_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "${SR_ROOT}"
 
 # This script builds and runs a local router instance along with an Envoy
@@ -264,6 +264,7 @@ function read-array {
 
 # Cleans up background processes on exit.
 function cleanup {
+  local rc=$?
   echo "Cleaning up..."
 
   [[ -n "${ROUTER_PID-}" ]] && read-array ROUTER_PIDS < <(pgrep -P "${ROUTER_PID}" ; ps -o pid= -p "${ROUTER_PID}")
@@ -272,7 +273,7 @@ function cleanup {
   [[ -n "${ENVOY_PID-}" ]] && read-array ENVOY_PIDS < <(pgrep -P "${ENVOY_PID}" ; ps -o pid= -p "${ENVOY_PID}")
   [[ -n "${ENVOY_PIDS-}" ]] && kill "${ENVOY_PIDS[@]}" 2>/dev/null
 
-  exit 0
+  exit "${rc}"
 }
 
 trap cleanup EXIT

@@ -1,0 +1,17 @@
+{
+  "max_tokens": 48,
+  "messages": [{"role": "user", "content": "Return the weather as JSON."}],
+  "model": "client-model",
+  "output_config": {
+    "effort": "high",
+    "format": {
+      "type": "json_schema",
+      "schema": {
+        "type": "object",
+        "properties": {"temperature_c": {"type": "number"}},
+        "required": ["temperature_c"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

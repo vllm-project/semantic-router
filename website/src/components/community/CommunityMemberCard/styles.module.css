@@ -63,7 +63,7 @@
   border: 1px solid var(--site-border-strong);
   color: var(--site-muted-bright);
   font-size: 0.55rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.1em;

@@ -1,31 +1,31 @@
-import React from "react";
+import React from 'react'
 
-import type { EditorMode } from "@/types/dsl";
+import type { EditorMode } from '@/types/dsl'
 
-import styles from "./BuilderPage.module.css";
+import styles from './BuilderPage.module.css'
 
 interface BuilderToolbarProps {
-  dirty: boolean;
-  mode: EditorMode;
-  wasmReady: boolean;
-  wasmError: string | null;
-  dslSource: string;
-  loading: boolean;
-  deploying: boolean;
-  deployDisabled: boolean;
-  deployDisabledReason?: string;
-  showBuilderSecondaryActions?: boolean;
-  guideOpen: boolean;
-  outputPanelOpen: boolean;
-  onModeSwitch: (mode: EditorMode) => void;
-  onImport: () => void;
-  onCompile: () => void;
-  onRequestDeploy: () => void;
-  onFormat: () => void;
-  onValidate: () => void;
-  onToggleGuide: () => void;
-  onToggleOutput: () => void;
-  onReset: () => void;
+  dirty: boolean
+  mode: EditorMode
+  wasmReady: boolean
+  wasmError: string | null
+  dslSource: string
+  loading: boolean
+  deploying: boolean
+  deployDisabled: boolean
+  deployDisabledReason?: string
+  showBuilderSecondaryActions?: boolean
+  guideOpen: boolean
+  outputPanelOpen: boolean
+  onModeSwitch: (mode: EditorMode) => void
+  onImport: () => void
+  onCompile: () => void
+  onRequestDeploy: () => void
+  onFormat: () => void
+  onValidate: () => void
+  onToggleGuide: () => void
+  onToggleOutput: () => void
+  onReset: () => void
 }
 
 const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
@@ -69,9 +69,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
         </svg>
         Config Builder
         {dirty && (
-          <span style={{ color: "var(--color-text-muted)", fontWeight: 400 }}>
-            (unsaved)
-          </span>
+          <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(unsaved)</span>
         )}
       </div>
 
@@ -79,8 +77,8 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
 
       <div className={styles.modeSwitcher}>
         <button
-          className={mode === "visual" ? styles.modeBtnActive : styles.modeBtn}
-          onClick={() => onModeSwitch("visual")}
+          className={mode === 'visual' ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => onModeSwitch('visual')}
         >
           <svg
             width="12"
@@ -98,8 +96,8 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
           Visual
         </button>
         <button
-          className={mode === "dsl" ? styles.modeBtnActive : styles.modeBtn}
-          onClick={() => onModeSwitch("dsl")}
+          className={mode === 'dsl' ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => onModeSwitch('dsl')}
         >
           <svg
             width="12"
@@ -112,24 +110,6 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
             <path d="M2 3h12M2 8h8M2 13h10" strokeLinecap="round" />
           </svg>
           DSL
-        </button>
-        <button
-          className={mode === "nl" ? styles.modeBtnActive : styles.modeBtn}
-          onClick={() => onModeSwitch("nl")}
-          title="Natural language mode"
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M2 4h12M2 8h9M2 12h6" strokeLinecap="round" />
-            <circle cx="13" cy="11" r="2" />
-          </svg>
-          NL
         </button>
       </div>
 
@@ -164,15 +144,8 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
             stroke="currentColor"
             strokeWidth="1.5"
           >
-            <path
-              d="M8 2v8M5 7l3 3 3-3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2"
-              strokeLinecap="round"
-            />
+            <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" strokeLinecap="round" />
           </svg>
           Import
         </button>
@@ -192,13 +165,13 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
           >
             <path d="M4 2l8 6-8 6V2z" fill="currentColor" />
           </svg>
-          {loading ? "Compiling…" : "Compile"}
+          {loading ? 'Compiling…' : 'Compile'}
         </button>
         <button
           className={styles.toolbarBtnDeploy}
           onClick={onRequestDeploy}
           disabled={!wasmReady || !dslSource.trim() || loading || deploying || deployDisabled}
-          title={deployDisabledReason || "Deploy config to router"}
+          title={deployDisabledReason || 'Deploy config to router'}
         >
           <svg
             width="12"
@@ -208,17 +181,10 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
             stroke="currentColor"
             strokeWidth="1.5"
           >
-            <path
-              d="M8 2v8M5 7l3 3 3-3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"
-              strokeLinecap="round"
-            />
+            <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" strokeLinecap="round" />
           </svg>
-          {deploying ? "Deploying…" : "Deploy"}
+          {deploying ? 'Deploying…' : 'Deploy'}
         </button>
         {showBuilderSecondaryActions ? (
           <>
@@ -242,7 +208,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
             <button
               className={guideOpen ? styles.toolbarBtnActive : styles.toolbarBtn}
               onClick={onToggleGuide}
-              title={guideOpen ? "Close DSL Guide" : "Open DSL Guide"}
+              title={guideOpen ? 'Close DSL Guide' : 'Open DSL Guide'}
             >
               <svg
                 width="12"
@@ -252,20 +218,15 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
                 stroke="currentColor"
                 strokeWidth="1.5"
               >
-                <path
-                  d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z"
-                  strokeLinejoin="round"
-                />
+                <path d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z" strokeLinejoin="round" />
                 <path d="M5 6h5M5 9h3" strokeLinecap="round" />
               </svg>
               Guide
             </button>
             <button
-              className={
-                outputPanelOpen ? styles.toolbarBtnActive : styles.toolbarBtn
-              }
+              className={outputPanelOpen ? styles.toolbarBtnActive : styles.toolbarBtn}
               onClick={onToggleOutput}
-              title={outputPanelOpen ? "Hide Output Panel" : "Show Output Panel"}
+              title={outputPanelOpen ? 'Hide Output Panel' : 'Show Output Panel'}
             >
               <svg
                 width="12"
@@ -288,7 +249,7 @@ const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
         ) : null}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export { BuilderToolbar };
+export { BuilderToolbar }

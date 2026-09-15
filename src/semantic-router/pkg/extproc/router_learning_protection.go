@@ -2,13 +2,13 @@ package extproc
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 type routerLearningProtectionPreflight struct {
@@ -135,7 +135,6 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		return decision
 	}
 	learningCtx := r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
-	r.addCurrentLearningCandidate(learningCtx, input.ctx)
 	if rescue, ok := r.protectionRescueDecision(input, learningCtx, preflight, proposal); ok {
 		return rescue
 	}
@@ -161,6 +160,11 @@ func (r *OpenAIRouter) protectionRescueDecision(
 	proposal routerLearningDecision,
 ) (routerLearningDecision, bool) {
 	if preflight.mode != config.DecisionAdaptationModeApply || learningCtx == nil {
+		return routerLearningDecision{}, false
+	}
+	// Experience can justify a rescue at a portable turn boundary, but cannot
+	// transfer an in-flight tool loop or opaque provider state to another model.
+	if session := learningCtx.AgenticSession; session != nil && (session.ActiveToolLoop || session.HasNonPortableContext) {
 		return routerLearningDecision{}, false
 	}
 	current := currentLearningModel(learningCtx)
@@ -331,18 +335,6 @@ func protectionMode(ctx *RequestContext) string {
 	return config.DecisionAdaptationModeApply
 }
 
-func (r *OpenAIRouter) addCurrentLearningCandidate(learningCtx *selection.SelectionContext, ctx *RequestContext) {
-	current := currentLearningModel(learningCtx)
-	if current == "" || selectionContextContainsModel(learningCtx, current) || !r.configuredBackendModel(current) {
-		return
-	}
-	learningCtx.CandidateModels = append(learningCtx.CandidateModels, config.ModelRef{Model: current})
-	learningCtx.CacheAffinityCtx = r.buildCacheAffinityContext(ctx, learningCtx.CandidateModels)
-	if learningCtx.AgenticSession != nil {
-		learningCtx.AgenticSession.ModelContextWindows = r.modelContextWindows(learningCtx.CandidateModels)
-	}
-}
-
 func (r *OpenAIRouter) selectProtectionResult(
 	cfg config.RouterLearningProtectionConfig,
 	baseResult *selection.SelectionResult,
@@ -381,17 +373,17 @@ func (r *OpenAIRouter) protectionIdentity(
 	if sessionID == "" {
 		return routerLearningIdentity{}, false
 	}
-	memoryKey := sessionID
+	components := []string{sessionID}
 	if scope == config.RouterLearningScopeConversation {
 		if conversationID == "" {
 			return routerLearningIdentity{}, false
 		}
-		memoryKey = fmt.Sprintf("%s/%s", sessionID, conversationID)
+		components = append(components, conversationID)
 	}
 	return routerLearningIdentity{
 		sessionID:          sessionID,
 		conversationID:     conversationID,
-		memoryKey:          memoryKey,
+		memoryKey:          sessiontelemetry.RoutingSessionKey(config.DefaultRecipeName, components...),
 		scope:              scope,
 		sessionHeader:      sessionHeader,
 		conversationHeader: conversationHeader,
@@ -404,18 +396,20 @@ func (r *OpenAIRouter) protectionSelectionContext(
 	identity routerLearningIdentity,
 ) *selection.SelectionContext {
 	learningReqCtx := *ctx
-	learningReqCtx.SessionID = identity.memoryKey
+	learningReqCtx.SessionID = identity.sessionID
 	learningReqCtx.PreviousModel = ""
 	learningReqCtx.SessionIdleKnown = false
 	learningReqCtx.SessionIdleSeconds = 0
 
 	learningCtx := *selCtx
-	learningCtx.SessionID = identity.memoryKey
-	learningCtx.AgenticSession = r.buildAgenticSessionContext(
+	learningCtx.SessionID = identity.sessionID
+	learningCtx.SessionStateKey = config.RoutingNamespaceKey(ctx.Routing.RecipeName(), identity.memoryKey)
+	learningCtx.AgenticSession = r.buildAgenticSessionContextForKey(
 		&learningReqCtx,
 		learningCtx.CandidateModels,
-		identity.memoryKey,
+		identity.sessionID,
 		learningCtx.UserID,
+		learningCtx.SessionStateKey,
 	)
 	learningCtx.CacheAffinityCtx = r.buildCacheAffinityContext(&learningReqCtx, learningCtx.CandidateModels)
 	return &learningCtx
@@ -423,7 +417,6 @@ func (r *OpenAIRouter) protectionSelectionContext(
 
 func protectionSelectionConfig(cfg config.RouterLearningProtectionConfig) *selection.SessionAwareConfig {
 	result := selection.DefaultSessionAwareConfig()
-	result.DecisionDriftReset = false
 	tuning := cfg.Tuning
 	if tuning.IdleTimeoutSeconds != nil {
 		result.IdleTimeoutSeconds = *tuning.IdleTimeoutSeconds
@@ -494,6 +487,17 @@ func sessionScopeProtectedResult(
 	}, true
 }
 
+func protectionCandidateModels(learningCtx *selection.SelectionContext) []string {
+	if learningCtx == nil {
+		return nil
+	}
+	models := make([]string, len(learningCtx.CandidateModels))
+	for index, candidate := range learningCtx.CandidateModels {
+		models[index] = candidate.Model
+	}
+	return models
+}
+
 func sessionScopeProtectionTrace(
 	cfg config.RouterLearningProtectionConfig,
 	baseResult *selection.SelectionResult,
@@ -532,6 +536,7 @@ func sessionScopeProtectionTrace(
 		CacheWarmth:                 session.CacheWarmth,
 		CacheWarmthOK:               session.CacheWarmthOK,
 		SwitchMargin:                learningSwitchMargin(cfg),
+		CandidateModels:             protectionCandidateModels(learningCtx),
 		BaseScores:                  cloneSelectionScores(baseResult.AllScores),
 		FinalScores:                 cloneSelectionScores(baseResult.AllScores),
 		CandidateTraces:             map[string]selection.SessionCandidateTrace{},
@@ -587,6 +592,7 @@ func rescueProtectionTrace(
 		SelectedModel:     proposal,
 		DecisionReason:    "rescue_underpowered_model",
 		SwitchMargin:      learningSwitchMargin(cfg),
+		CandidateModels:   protectionCandidateModels(learningCtx),
 		BaseScores:        baseScores,
 		FinalScores:       finalScores,
 		CandidateTraces: map[string]selection.SessionCandidateTrace{

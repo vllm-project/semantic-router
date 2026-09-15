@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -44,8 +45,60 @@ func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 	if err := json.Unmarshal(data, &mapping); err != nil {
 		return nil, fmt.Errorf("failed to parse mapping JSON: %w", err)
 	}
+	if err := validateCategoryMapping(path, &mapping); err != nil {
+		return nil, err
+	}
 
 	return &mapping, nil
+}
+
+// validateCategoryMapping requires both directions to describe the same
+// zero-based contiguous bijection. Remote scores are aligned through the
+// category->index direction, while routing resolves the winning index through
+// index->category; accepting disagreement between them can silently route a
+// correct score to the wrong category.
+func validateCategoryMapping(path string, mapping *CategoryMapping) error {
+	if len(mapping.CategoryToIdx) != len(mapping.IdxToCategory) {
+		return fmt.Errorf("category mapping %s: category_to_idx and idx_to_category must have the same size", path)
+	}
+	if err := validateCategoryMappingIndexes(path, mapping); err != nil {
+		return err
+	}
+	if err := validateCategoryMappingLabels(path, mapping); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateCategoryMappingIndexes(path string, mapping *CategoryMapping) error {
+	for idx := 0; idx < len(mapping.CategoryToIdx); idx++ {
+		if _, ok := mapping.IdxToCategory[strconv.Itoa(idx)]; !ok {
+			return fmt.Errorf("missing label for index %d in category mapping %s", idx, path)
+		}
+	}
+	for label, idx := range mapping.CategoryToIdx {
+		if idx < 0 || idx >= len(mapping.CategoryToIdx) {
+			return fmt.Errorf("category mapping %s: index for %q must be contiguous from 0, got %d", path, label, idx)
+		}
+		reverse, ok := mapping.IdxToCategory[strconv.Itoa(idx)]
+		if !ok || reverse != label {
+			return fmt.Errorf("category mapping %s: category_to_idx and idx_to_category disagree for %q", path, label)
+		}
+	}
+	return nil
+}
+
+func validateCategoryMappingLabels(path string, mapping *CategoryMapping) error {
+	for index, label := range mapping.IdxToCategory {
+		idx, err := strconv.Atoi(index)
+		if err != nil || idx < 0 || idx >= len(mapping.CategoryToIdx) {
+			return fmt.Errorf("category mapping %s: index->category key %q is not contiguous from 0", path, index)
+		}
+		if mapped, ok := mapping.CategoryToIdx[label]; !ok || mapped != idx {
+			return fmt.Errorf("category mapping %s: idx_to_category and category_to_idx disagree for index %q", path, index)
+		}
+	}
+	return nil
 }
 
 // LoadPIIMapping loads the PII mapping from a JSON file
@@ -62,7 +115,49 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 		return nil, fmt.Errorf("failed to parse PII mapping JSON: %w", err)
 	}
 
+	// Reserve the sentinel after the same BIO normalization used by native
+	// translation and the remote label set, so a prefixed configured label
+	// cannot make a genuine detection indistinguishable from a failure.
+	if mapping.hasReservedLabel() {
+		return nil, fmt.Errorf(
+			"PII mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
+			path, PIIClassificationErrorType)
+	}
+
 	return &mapping, nil
+}
+
+// hasReservedLabel reports whether either direction contains a sentinel alias.
+// Both are probed because TranslatePIIType
+// reads IdxToLabel while the token_spans decoder reads LabelToIdx as well.
+func (pm *PIIMapping) hasReservedLabel() bool {
+	if pm == nil {
+		return false
+	}
+	for known := range pm.LabelToIdx {
+		if isReservedPIILabel(known) {
+			return true
+		}
+	}
+	for _, known := range pm.IdxToLabel {
+		if isReservedPIILabel(known) {
+			return true
+		}
+	}
+	return false
+}
+
+// isReservedPIILabel also rejects stacked prefixes: the remote decoder and
+// detection API each normalize labels, so checking only one pass is unsafe.
+// Ordinary entity translation still strips exactly one prefix per call.
+func isReservedPIILabel(label string) bool {
+	for {
+		normalized := stripBIOPrefix(label)
+		if normalized == label {
+			return label == PIIClassificationErrorType
+		}
+		label = normalized
+	}
 }
 
 // LoadJailbreakMapping loads the jailbreak mapping from a JSON file
@@ -80,16 +175,133 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf("failed to parse jailbreak mapping JSON: %w", err)
 	}
 
-	// If standard fields are empty but alternative fields are populated,
-	// copy from alternative fields to standard fields for internal use
-	if len(mapping.LabelToIdx) == 0 && len(mapping.LabelToID) > 0 {
-		mapping.LabelToIdx = mapping.LabelToID
+	// Collapse whichever of the four accepted label maps the file declared into
+	// one agreed label<->index set, so every consumer reads the same thing.
+	if err := canonicalizeJailbreakMapping(path, &mapping); err != nil {
+		return nil, err
 	}
-	if len(mapping.IdxToLabel) == 0 && len(mapping.IDToLabel) > 0 {
-		mapping.IdxToLabel = mapping.IDToLabel
+
+	// A configured label equal to the on_error: block sentinel
+	// (JailbreakClassificationErrorType) would make a genuine detection of
+	// that label indistinguishable from a classify failure - see @adaamko's
+	// review on #2918/#2930. Reject it here, once, rather than at every
+	// place that compares against the sentinel.
+	//
+	// This deliberately probes via GetIndexForJailbreakType rather than
+	// indexing LabelToIdx directly: it is the same lookup the runtime uses to
+	// resolve a label, so the guard cannot cover fewer shapes than the code it
+	// guards. Canonicalization above already unified the shapes, but that is
+	// what makes the probe safe rather than a reason to drop it.
+	if _, collides := mapping.GetIndexForJailbreakType(JailbreakClassificationErrorType); collides {
+		return nil, fmt.Errorf(
+			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
+			path, JailbreakClassificationErrorType)
 	}
 
 	return &mapping, nil
+}
+
+// canonicalizeJailbreakMapping collapses the four accepted label maps into one
+// agreed label<->index set on LabelToIdx/IdxToLabel, or fails.
+//
+// The formats let a file declare any subset of label_to_idx, label_to_id,
+// idx_to_label and id_to_label. Consumers disagree about which they read:
+// LabelCount() reads the label->index map, GetJailbreakTypeFromIndex reads the
+// index->label maps, and GetIndexForJailbreakType falls back to scanning them.
+// alignScoresToMapping sizes the http_classify probability distribution from
+// LabelCount() and indexes it by resolved label index, so any disagreement
+// silently truncates that distribution: a class that resolves but has no slot
+// makes a response omitting it pass the completeness guard, and the missing
+// class - possibly the positive one - reads as probability 0.0. Deriving one
+// canonical set at load makes the count authoritative for every consumer, and
+// keeps the reverse scan off the request path.
+//
+// Indices must be contiguous from 0 for the same reason: the distribution has
+// exactly LabelCount() slots, so a 1-based or sparse mapping would reject every
+// response at request time instead of at load.
+func canonicalizeJailbreakMapping(path string, mapping *JailbreakMapping) error {
+	labelToIdx, err := collectJailbreakLabelIndices(path, mapping)
+	if err != nil {
+		return err
+	}
+	idxToLabel, err := invertJailbreakLabelIndices(path, labelToIdx)
+	if err != nil {
+		return err
+	}
+	if err := checkJailbreakIndicesContiguous(path, idxToLabel); err != nil {
+		return err
+	}
+
+	mapping.LabelToIdx = labelToIdx
+	mapping.IdxToLabel = idxToLabel
+	return nil
+}
+
+// collectJailbreakLabelIndices unions every label->index pair the file declared,
+// in either naming convention and either direction.
+func collectJailbreakLabelIndices(path string, mapping *JailbreakMapping) (map[string]int, error) {
+	labelToIdx := make(map[string]int)
+	for _, src := range []map[string]int{mapping.LabelToIdx, mapping.LabelToID} {
+		for label, idx := range src {
+			if err := addJailbreakLabel(path, labelToIdx, label, idx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, src := range []map[string]string{mapping.IdxToLabel, mapping.IDToLabel} {
+		for indexStr, label := range src {
+			idx, err := strconv.Atoi(indexStr)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"jailbreak mapping %s: index->label key %q is not a number", path, indexStr)
+			}
+			if err := addJailbreakLabel(path, labelToIdx, label, idx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return labelToIdx, nil
+}
+
+// addJailbreakLabel records one label->index pair, rejecting a label that two
+// of the source maps disagree about.
+func addJailbreakLabel(path string, labelToIdx map[string]int, label string, idx int) error {
+	if existing, seen := labelToIdx[label]; seen && existing != idx {
+		return fmt.Errorf(
+			"jailbreak mapping %s: inconsistent label maps - label %q is index %d in one map and %d in another",
+			path, label, existing, idx)
+	}
+	labelToIdx[label] = idx
+	return nil
+}
+
+// invertJailbreakLabelIndices builds the index->label direction, rejecting an
+// index two labels both claim.
+func invertJailbreakLabelIndices(path string, labelToIdx map[string]int) (map[string]string, error) {
+	idxToLabel := make(map[string]string, len(labelToIdx))
+	for label, idx := range labelToIdx {
+		key := strconv.Itoa(idx)
+		if existing, taken := idxToLabel[key]; taken {
+			return nil, fmt.Errorf(
+				"jailbreak mapping %s: inconsistent label maps - index %d is claimed by both %q and %q",
+				path, idx, existing, label)
+		}
+		idxToLabel[key] = label
+	}
+	return idxToLabel, nil
+}
+
+// checkJailbreakIndicesContiguous requires indices 0..n-1, the slots
+// alignScoresToMapping allocates.
+func checkJailbreakIndicesContiguous(path string, idxToLabel map[string]string) error {
+	for idx := 0; idx < len(idxToLabel); idx++ {
+		if _, ok := idxToLabel[strconv.Itoa(idx)]; !ok {
+			return fmt.Errorf(
+				"jailbreak mapping %s: label indices must be contiguous from 0, but %d of %d is missing",
+				path, idx, len(idxToLabel))
+		}
+	}
+	return nil
 }
 
 // GetCategoryFromIndex converts a class index to category name using the mapping
@@ -102,18 +314,6 @@ func (cm *CategoryMapping) GetCategoryFromIndex(classIndex int) (string, bool) {
 func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 	piiType, ok := pm.IdxToLabel[fmt.Sprintf("%d", classIndex)]
 	return piiType, ok
-}
-
-// stripBIOPrefix removes the BIO sequence labeling prefix from a PII type string.
-// For example: "B-PERSON" → "PERSON", "I-DATE_TIME" → "DATE_TIME", "PERSON" → "PERSON".
-func stripBIOPrefix(s string) string {
-	if len(s) > 2 && s[1] == '-' {
-		switch s[0] {
-		case 'B', 'I', 'E':
-			return s[2:]
-		}
-	}
-	return s
 }
 
 // TranslatePIIType translates a PII type from Rust binding format to named type.
@@ -210,6 +410,24 @@ func (cm *CategoryMapping) GetCategoryCount() int {
 	return len(cm.CategoryToIdx)
 }
 
+// IndexForLabel satisfies sequenceLabelMapping (http_classifier.go) for
+// CategoryMapping, letting a category http_classify backend reuse the same
+// label-alignment validator jailbreak already uses.
+func (cm *CategoryMapping) IndexForLabel(label string) (int, bool) {
+	idx, ok := cm.CategoryToIdx[label]
+	return idx, ok
+}
+
+// LabelFromIndex satisfies sequenceLabelMapping for CategoryMapping.
+func (cm *CategoryMapping) LabelFromIndex(classIndex int) (string, bool) {
+	return cm.GetCategoryFromIndex(classIndex)
+}
+
+// LabelCount satisfies sequenceLabelMapping for CategoryMapping.
+func (cm *CategoryMapping) LabelCount() int {
+	return cm.GetCategoryCount()
+}
+
 // GetCategorySystemPrompt returns the system prompt for a specific category if available
 func (cm *CategoryMapping) GetCategorySystemPrompt(category string) (string, bool) {
 	if cm.CategorySystemPrompts == nil {
@@ -242,6 +460,22 @@ func (jm *JailbreakMapping) GetJailbreakTypeCount() int {
 	}
 	// Fall back to alternative field
 	return len(jm.LabelToID)
+}
+
+// IndexForLabel satisfies sequenceLabelMapping (http_classifier.go) for
+// JailbreakMapping by delegating to the existing jailbreak-named lookup.
+func (jm *JailbreakMapping) IndexForLabel(label string) (int, bool) {
+	return jm.GetIndexForJailbreakType(label)
+}
+
+// LabelFromIndex satisfies sequenceLabelMapping for JailbreakMapping.
+func (jm *JailbreakMapping) LabelFromIndex(classIndex int) (string, bool) {
+	return jm.GetJailbreakTypeFromIndex(classIndex)
+}
+
+// LabelCount satisfies sequenceLabelMapping for JailbreakMapping.
+func (jm *JailbreakMapping) LabelCount() int {
+	return jm.GetJailbreakTypeCount()
 }
 
 // resolveSinglePositiveIndex resolves the configured positive_labels against
@@ -277,4 +511,53 @@ func resolveSinglePositiveIndex(mapping *JailbreakMapping, positiveLabels []stri
 		return 0, fmt.Errorf("none of the configured positive_labels %v were found in jailbreak_mapping", positiveLabels)
 	}
 	return resolvedIdx, nil
+}
+
+// ValidateLabelMappingAgainstModelConfig rejects a configured label mapping that
+// disagrees with the model's own config.json. An artifact can ship both a
+// sidecar mapping and config.json, and when the two disagree the one that is
+// loaded decides what class every index means, so picking the wrong file
+// relabels every prediction with no error.
+//
+// The check is skipped when mappingPath already is the model's config.json,
+// when the model directory is unknown, when the model ships no config.json, and
+// when that config declares no id2label: none of those is a disagreement.
+func ValidateLabelMappingAgainstModelConfig(mappingPath, modelDir string, idxToLabel map[string]string) error {
+	if modelDir == "" {
+		return nil
+	}
+	modelConfigPath := filepath.Join(modelDir, "config.json")
+	if filepath.Clean(mappingPath) == filepath.Clean(modelConfigPath) {
+		return nil
+	}
+	data, err := os.ReadFile(modelConfigPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read %s to cross-check %s: %w", modelConfigPath, mappingPath, err)
+	}
+	var modelConfig struct {
+		ID2Label map[string]string `json:"id2label"`
+	}
+	if err := json.Unmarshal(data, &modelConfig); err != nil {
+		return fmt.Errorf("failed to parse %s to cross-check %s: %w", modelConfigPath, mappingPath, err)
+	}
+	if len(modelConfig.ID2Label) == 0 {
+		return nil
+	}
+	for idx, modelLabel := range modelConfig.ID2Label {
+		mappedLabel, ok := idxToLabel[idx]
+		if !ok {
+			return fmt.Errorf("label mapping %s has no entry for index %s, which %s labels %q",
+				mappingPath, idx, modelConfigPath, modelLabel)
+		}
+		// Canonical labels, because the detector resolves supported aliases
+		// such as SAT and SATISFIED to one label before it uses the mapping.
+		if normalizeFeedbackLabel(mappedLabel) != normalizeFeedbackLabel(modelLabel) {
+			return fmt.Errorf("label mapping %s disagrees with %s at index %s: %q against %q",
+				mappingPath, modelConfigPath, idx, mappedLabel, modelLabel)
+		}
+	}
+	return nil
 }

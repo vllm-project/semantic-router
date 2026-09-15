@@ -1,4 +1,4 @@
-import type { RouterSystemKey } from './configPageRouterDefaultsSupport'
+import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import type {
   APIConfig,
   AuthzConfig,
@@ -14,40 +14,13 @@ import type {
   PromptCompressionConfig,
   RateLimitConfig,
   ResponseAPIConfig,
+  RouterLearningConfig,
   RouterCoreConfig,
   RouterReplayConfig,
   SemanticCacheConfig,
   ToolIntegrationConfig,
   VectorStoreConfig,
 } from './configPageSupport'
-
-export const PYTHON_ROUTER_KEYS: RouterSystemKey[] = [
-  'router_core',
-  'response_api',
-  'router_replay',
-  'authz',
-  'ratelimit',
-  'memory',
-  'response_cache',
-  'vector_store',
-  'tools',
-  'prompt_guard',
-  'classifier',
-  'hallucination_mitigation',
-  'feedback_detector',
-  'external_models',
-  'system_models',
-  'embedding_models',
-  'prompt_compression',
-  'modality_detector',
-  'observability',
-  'looper',
-  'clear_route_cache',
-  'model_selection',
-  'api',
-]
-
-export const OPTIONAL_ROUTER_KEYS: RouterSystemKey[] = []
 
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
@@ -61,6 +34,28 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       method: 'knn',
     },
   } satisfies RouterCoreConfig,
+  learning: {
+    enabled: false,
+    adaptation: {
+      enabled: true,
+      candidate_set: 'decision',
+      strategy: 'routing_sampling',
+    },
+    protection: {
+      enabled: true,
+      scope: 'conversation',
+      identity: {
+        headers: {
+          session: 'x-session-id',
+          conversation: 'x-conversation-id',
+        },
+      },
+      tuning: {},
+    },
+    state_store: {
+      backend: 'local',
+    },
+  } satisfies RouterLearningConfig,
   response_api: {
     enabled: true,
     store_backend: 'memory',
@@ -68,7 +63,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     max_responses: 1000,
   } satisfies ResponseAPIConfig,
   router_replay: {
-    enabled: true,
+    enabled: false,
     store_backend: 'memory',
     ttl_seconds: 2592000,
     async_writes: false,
@@ -85,6 +80,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     fail_open: false,
     providers: [],
   } satisfies RateLimitConfig,
+  management_api: {},
+  startup_status: {},
   memory: {
     enabled: false,
     auto_store: false,
@@ -94,7 +91,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     },
     default_retrieval_limit: 5,
     default_similarity_threshold: 0.7,
-    extraction_batch_size: 10,
   } satisfies MemoryConfig,
   response_cache: {
     enabled: true,
@@ -111,6 +107,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     embedding_model: 'mmbert',
     embedding_dimension: 384,
     ingestion_workers: 2,
+    ingestion_drain_timeout_seconds: 25,
     supported_formats: ['.txt', '.md', '.json', '.csv', '.html'],
     memory: {
       max_entries_per_store: 100000,
@@ -128,7 +125,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     threshold: 0.7,
     use_cpu: true,
     use_mmbert_32k: true,
-    jailbreak_mapping_path: 'models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json',
+    jailbreak_mapping_path:
+      'models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json',
   },
   classifier: {
     domain: {
@@ -136,14 +134,14 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       threshold: 0.5,
       use_cpu: true,
       use_mmbert_32k: true,
-      category_mapping_path: 'models/mmbert32k-intent-classifier-merged/category_mapping.json',
+      category_mapping_path: 'models/Vela-1.0-Encoder-307M-Domain/category_mapping.json',
     },
     pii: {
       model_ref: 'pii_classifier',
       threshold: 0.9,
       use_cpu: true,
       use_mmbert_32k: true,
-      pii_mapping_path: 'models/mmbert32k-pii-detector-merged/pii_type_mapping.json',
+      pii_mapping_path: 'models/Vela-1.0-Encoder-307M-PII/pii_mapping.json',
     },
     preference: {
       use_contrastive: false,
@@ -153,7 +151,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: false,
     fact_check: {
       model_ref: 'fact_check_classifier',
-      threshold: 0.6,
+      threshold: 0.85,
       use_cpu: true,
       use_mmbert_32k: true,
     },
@@ -180,20 +178,23 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     use_cpu: true,
     use_mmbert_32k: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
+  complexity: {},
   external_models: [],
+  knowledge_bases: [],
+  admission: {},
   system_models: {
     prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
-    domain_classifier: 'models/mmbert32k-intent-classifier-merged',
-    pii_classifier: 'models/mmbert32k-pii-detector-merged',
-    fact_check_classifier: 'models/mmbert32k-factcheck-classifier-merged',
+    domain_classifier: 'models/Vela-1.0-Encoder-307M-Domain',
+    pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
+    fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
     hallucination_detector: 'models/mom-halugate-detector',
     hallucination_explainer: 'models/mom-halugate-explainer',
-    feedback_detector: 'models/mmbert32k-feedback-detector-merged',
+    feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',
     gemma_model_path: '',
-    mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
+    mmbert_model_path: 'models/Vela-1.0-Encoder-307M-Embedding',
     multimodal_model_path: '',
     bert_model_path: '',
     use_cpu: true,
@@ -255,21 +256,33 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies APIConfig,
 }
 
-export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: string; description: string }> = {
+export const SECTION_META: Record<
+  RouterSystemKey,
+  { title: string; eyebrow: string; description: string }
+> = {
   router_core: {
     title: 'Router Core',
     eyebrow: 'Router',
-    description: 'Core router behavior, config source, startup cache handling, and model selection strategy.',
+    description:
+      'Core router behavior, config source, startup cache handling, and model selection strategy.',
+  },
+  learning: {
+    title: 'Router Learning',
+    eyebrow: 'Router',
+    description:
+      'Online model-choice adaptation, conversation stability protection, and shared learning state.',
   },
   response_api: {
     title: 'Response API',
     eyebrow: 'Services',
-    description: 'Conversation chaining and persistence defaults for the OpenAI Responses API surface.',
+    description:
+      'Conversation chaining and persistence defaults for the OpenAI Responses API surface.',
   },
   router_replay: {
     title: 'Router Replay',
     eyebrow: 'Services',
-    description: 'Persistence policy for replay records written by replay-enabled decision plugins.',
+    description:
+      'Persistence policy for replay records written by replay-enabled decision plugins.',
   },
   authz: {
     title: 'Authorization',
@@ -281,10 +294,21 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
     eyebrow: 'Services',
     description: 'Per-user, group, and model request throttling rules enforced by the router.',
   },
+  management_api: {
+    title: 'Management API',
+    eyebrow: 'Services',
+    description: 'Management endpoint access, transport, and runtime controls.',
+  },
+  startup_status: {
+    title: 'Startup Status',
+    eyebrow: 'Services',
+    description: 'Startup readiness and status-reporting behavior exposed by the router.',
+  },
   memory: {
     title: 'Agentic Memory',
     eyebrow: 'Stores',
-    description: 'Cross-session memory extraction, storage, retrieval thresholds, and reflection policy.',
+    description:
+      'Cross-session memory extraction, storage, retrieval thresholds, and reflection policy.',
   },
   response_cache: {
     title: 'Response Cache',
@@ -294,12 +318,14 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   vector_store: {
     title: 'Vector Store',
     eyebrow: 'Stores',
-    description: 'Document ingestion, vector backend selection, and file-backed knowledge-store defaults.',
+    description:
+      'Document ingestion, vector backend selection, and file-backed knowledge-store defaults.',
   },
   tools: {
     title: 'Tool Selection',
     eyebrow: 'Integrations',
-    description: 'Automatic tool ranking, similarity thresholds, and tool database lookup settings.',
+    description:
+      'Automatic tool ranking, similarity thresholds, and tool database lookup settings.',
   },
   prompt_guard: {
     title: 'Prompt Guard',
@@ -321,10 +347,25 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
     eyebrow: 'Model Catalog',
     description: 'Feedback classification defaults for routing-aware user correction flows.',
   },
+  complexity: {
+    title: 'Complexity Model',
+    eyebrow: 'Model Catalog',
+    description: 'Model-backed request-complexity classification used by routing signals.',
+  },
   external_models: {
     title: 'External Models',
     eyebrow: 'Model Catalog',
     description: 'Optional external LLM integrations used by router-owned auxiliary workflows.',
+  },
+  knowledge_bases: {
+    title: 'Knowledge Bases',
+    eyebrow: 'Model Catalog',
+    description: 'Canonical knowledge-base definitions available to KB-aware routing signals.',
+  },
+  admission: {
+    title: 'Model Admission',
+    eyebrow: 'Model Catalog',
+    description: 'Named admission policies used to qualify models before routing.',
   },
   system_models: {
     title: 'System Model Bindings',
@@ -334,7 +375,8 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   embedding_models: {
     title: 'Embedding Models',
     eyebrow: 'Model Catalog',
-    description: 'Local or remote semantic embedding provider settings shared by router-owned consumers.',
+    description:
+      'Local or remote semantic embedding provider settings shared by router-owned consumers.',
   },
   prompt_compression: {
     title: 'Prompt Compression',
@@ -344,7 +386,8 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   modality_detector: {
     title: 'Modality Detector',
     eyebrow: 'Model Catalog',
-    description: 'Prompt modality detection strategy, classifier settings, and keyword fallback behavior.',
+    description:
+      'Prompt modality detection strategy, classifier settings, and keyword fallback behavior.',
   },
   observability: {
     title: 'Observability',

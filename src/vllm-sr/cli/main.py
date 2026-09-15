@@ -5,11 +5,16 @@ from __future__ import annotations
 import click
 
 from cli import __version__
-from cli.commands.chat import chat
+from cli.commands.benchmark import benchmark
 from cli.commands.completion import completion
-from cli.commands.eval import eval
-from cli.commands.general import config, model, rag, validate
+from cli.commands.general import config
+from cli.commands.optimize import optimize
+from cli.commands.recipe import recipe
+from cli.commands.request import request
+from cli.commands.route import route
 from cli.commands.runtime import dashboard, logs, serve, status, stop
+from cli.commands.storage import storage
+from cli.terminal import brand
 
 logo = r"""
        _ _     __  __       ____  ____
@@ -24,16 +29,17 @@ vLLM Semantic Router - Intelligent routing for vLLM
 REGISTERED_COMMANDS = (
     serve,
     config,
-    validate,
-    model,
-    rag,
-    eval,
+    route,
+    request,
+    benchmark,
+    optimize,
     status,
     logs,
     stop,
     dashboard,
-    chat,
     completion,
+    recipe,
+    storage,
 )
 
 
@@ -47,7 +53,7 @@ def main(ctx: click.Context, version: bool) -> None:
         ctx.exit()
 
     if ctx.invoked_subcommand is None:
-        click.echo(logo)
+        brand(logo)
         click.echo(ctx.get_help())
 
 

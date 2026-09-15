@@ -6,7 +6,7 @@ import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
-import type { ViewSection } from '../components/ViewModal'
+import type { ViewField, ViewSection } from '../components/ViewModal'
 import type {
   ConfigData,
   ConfigProjections,
@@ -35,6 +35,8 @@ import {
 } from './configPageProjectionStructuredEditors'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import { FieldEditor } from './builderPageFormPrimitives'
+import { projectionFieldsFromRouterSchema } from '../lib/routerConfigSchema'
 import {
   cloneProjections,
   EMPTY_MAPPINGS,
@@ -56,6 +58,50 @@ interface ConfigPageProjectionsSectionProps {
   openViewModal: OpenViewModal
 }
 
+function withGeneratedProjectionFields<TForm extends object>(
+  collection: string,
+  fields: FieldConfig<TForm>[],
+): FieldConfig<TForm>[] {
+  const known = new Set(fields.map((field) => field.name))
+  const generated = projectionFieldsFromRouterSchema(collection)
+    .filter((field) => !known.has(field.key))
+    .map<FieldConfig<TForm>>((field) => ({
+      name: field.key,
+      label: field.label,
+      section: 'Advanced',
+      fullWidth: true,
+      required: field.required,
+      description: field.description,
+      type: 'custom',
+      customRender: (value, onChange) => (
+        <FieldEditor schema={field} value={value} onChange={onChange} />
+      ),
+    }))
+  return [...fields, ...generated]
+}
+
+function generatedProjectionViewFields(
+  collection: string,
+  value: Record<string, unknown>,
+  knownFields: readonly string[],
+): ViewField[] {
+  const known = new Set(knownFields)
+  return projectionFieldsFromRouterSchema(collection)
+    .filter((field) => !known.has(field.key) && value[field.key] !== undefined)
+    .map((field) => {
+      const fieldValue = value[field.key]
+      const scalar =
+        typeof fieldValue === 'string' ||
+        typeof fieldValue === 'number' ||
+        typeof fieldValue === 'boolean'
+      return {
+        label: field.label,
+        value: scalar ? String(fieldValue) : <pre>{JSON.stringify(fieldValue, null, 2)}</pre>,
+        fullWidth: !scalar,
+      }
+    })
+}
+
 export default function ConfigPageProjectionsSection({
   config,
   isReadonly,
@@ -64,24 +110,19 @@ export default function ConfigPageProjectionsSection({
   openViewModal,
 }: ConfigPageProjectionsSectionProps) {
   const [search, setSearch] = useState('')
-  const [projectionPendingDelete, setProjectionPendingDelete] = useState<ProjectionDeleteTarget | null>(null)
+  const [projectionPendingDelete, setProjectionPendingDelete] =
+    useState<ProjectionDeleteTarget | null>(null)
   const [projectionDeletePending, setProjectionDeletePending] = useState(false)
   const [projectionDeleteError, setProjectionDeleteError] = useState<string | null>(null)
-  const {
-    applyScopedConfig,
-    routingScopes,
-    scopedConfig,
-    selectedScope,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
+    useRoutingScopeManager(config)
   useEffect(() => {
     setProjectionPendingDelete(null)
     setProjectionDeleteError(null)
   }, [selectedScopeId])
   const projections = useMemo<ConfigProjections>(
     () => scopedConfig?.projections || EMPTY_PROJECTIONS,
-    [scopedConfig?.projections]
+    [scopedConfig?.projections],
   )
   const partitions = projections.partitions || EMPTY_PARTITIONS
   const scores = projections.scores || EMPTY_SCORES
@@ -94,9 +135,9 @@ export default function ConfigPageProjectionsSection({
         [partition.name, partition.semantics, partition.default || '', ...(partition.members || [])]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [partitions, search]
+    [partitions, search],
   )
 
   const filteredScores = useMemo(
@@ -105,13 +146,17 @@ export default function ConfigPageProjectionsSection({
         [
           score.name,
           score.method,
-          ...(score.inputs || []).flatMap((input) => [input.type, input.name, input.value_source || '']),
+          ...(score.inputs || []).flatMap((input) => [
+            input.type,
+            input.name,
+            input.value_source || '',
+          ]),
         ]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [scores, search]
+    [scores, search],
   )
 
   const filteredMappings = useMemo(
@@ -126,50 +171,58 @@ export default function ConfigPageProjectionsSection({
         ]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [mappings, search]
+    [mappings, search],
   )
 
-  const partitionFields: FieldConfig<ProjectionPartitionFormState>[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
-    {
-      name: 'semantics',
-      label: 'Semantics',
-      type: 'select',
-      required: true,
-      options: ['exclusive', 'softmax_exclusive'],
-    },
-    {
-      name: 'members',
-      label: 'Members',
-      type: 'custom',
-      required: true,
-      description: 'Declared domain or embedding signals coordinated by this partition.',
-      customRender: (value, onChange) => (
-        <ProjectionMembersEditor value={value} onChange={onChange} />
-      ),
-    },
-    {
-      name: 'temperature',
-      label: 'Temperature',
-      type: 'number',
-      step: 0.01,
-      shouldHide: (data) => data.semantics !== 'softmax_exclusive',
-    },
-    {
-      name: 'default',
-      label: 'Default',
-      type: 'text',
-      description: 'Fallback member name used when no member wins.',
-    },
-  ]
+  const partitionFields = withGeneratedProjectionFields<ProjectionPartitionFormState>(
+    'partitions',
+    [
+      { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
+      {
+        name: 'semantics',
+        label: 'Semantics',
+        section: 'Identity',
+        type: 'select',
+        required: true,
+        options: ['exclusive', 'softmax_exclusive'],
+      },
+      {
+        name: 'members',
+        label: 'Members',
+        section: 'Definition',
+        type: 'custom',
+        required: true,
+        description: 'Declared domain or embedding signals coordinated by this partition.',
+        customRender: (value, onChange) => (
+          <ProjectionMembersEditor value={value} onChange={onChange} />
+        ),
+      },
+      {
+        name: 'temperature',
+        label: 'Temperature',
+        section: 'Identity',
+        type: 'number',
+        step: 0.01,
+        shouldHide: (data) => data.semantics !== 'softmax_exclusive',
+      },
+      {
+        name: 'default',
+        label: 'Default',
+        section: 'Identity',
+        type: 'text',
+        description: 'Fallback member name used when no member wins.',
+      },
+    ],
+  )
 
-  const scoreFields: FieldConfig<ProjectionScoreFormState>[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
+  const scoreFields = withGeneratedProjectionFields<ProjectionScoreFormState>('scores', [
+    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
     {
       name: 'method',
       label: 'Method',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: ['weighted_sum'],
@@ -177,21 +230,22 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'inputs',
       label: 'Inputs',
+      section: 'Definition',
       type: 'custom',
       required: true,
-      description:
-        'Weighted signal, knowledge-base metric, or earlier projection contributions.',
+      description: 'Weighted signal, knowledge-base metric, or earlier projection contributions.',
       customRender: (value, onChange) => (
         <ProjectionInputsEditor value={value} onChange={onChange} />
       ),
     },
-  ]
+  ])
 
-  const mappingFields: FieldConfig<ProjectionMappingFormState>[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
+  const mappingFields = withGeneratedProjectionFields<ProjectionMappingFormState>('mappings', [
+    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
     {
       name: 'source',
       label: 'Source Score',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: scoreOptions.length > 0 ? scoreOptions : [''],
@@ -200,6 +254,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'method',
       label: 'Method',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: ['threshold_bands', 'multi_emit'],
@@ -207,6 +262,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'calibration',
       label: 'Calibration',
+      section: 'Definition',
       type: 'custom',
       description: 'Optional confidence calibration applied to output bands.',
       customRender: (value, onChange) => (
@@ -216,6 +272,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'outputs',
       label: 'Outputs',
+      section: 'Definition',
       type: 'custom',
       required: true,
       description: 'Named routing bands and their lower or upper threshold bounds.',
@@ -223,7 +280,7 @@ export default function ConfigPageProjectionsSection({
         <ProjectionOutputsEditor value={value} onChange={onChange} />
       ),
     },
-  ]
+  ])
 
   const withClonedConfig = async (mutate: (next: ConfigData) => void) => {
     if (!scopedConfig) return
@@ -249,6 +306,7 @@ export default function ConfigPageProjectionsSection({
         assertProjectionMembers(members, defaultMember)
         assertProjectionPartitionSettings(data.semantics, data.temperature)
         const nextPartition: ProjectionPartition = {
+          ...data,
           name: data.name.trim(),
           semantics: data.semantics,
           members,
@@ -260,7 +318,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.partitions = [...projectionConfig.partitions!, nextPartition]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -268,6 +326,7 @@ export default function ConfigPageProjectionsSection({
     openEditModal<ProjectionPartitionFormState>(
       `Edit Partition: ${partition.name}`,
       {
+        ...partition,
         name: partition.name,
         semantics: partition.semantics,
         members: partition.members || [],
@@ -281,6 +340,8 @@ export default function ConfigPageProjectionsSection({
         assertProjectionMembers(members, defaultMember)
         assertProjectionPartitionSettings(data.semantics, data.temperature)
         const nextPartition: ProjectionPartition = {
+          ...partition,
+          ...data,
           name: data.name.trim(),
           semantics: data.semantics,
           members,
@@ -290,10 +351,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.partitions = cloneProjections(next).partitions?.map((entry) =>
-            entry.name === partition.name ? nextPartition : entry
+            entry.name === partition.name ? nextPartition : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -305,21 +366,33 @@ export default function ConfigPageProjectionsSection({
   const handleViewPartition = (partition: ProjectionPartition) => {
     const sections: ViewSection[] = [
       {
-        title: 'Partition',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: partition.name },
           { label: 'Semantics', value: partition.semantics },
           { label: 'Temperature', value: partition.temperature ?? 'N/A' },
           { label: 'Default', value: partition.default || 'N/A' },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Members',
             value: <ProjectionMembersEditor value={partition.members || []} readOnly />,
             fullWidth: true,
           },
+          ...generatedProjectionViewFields(
+            'partitions',
+            partition as unknown as Record<string, unknown>,
+            ['name', 'semantics', 'temperature', 'members', 'default'],
+          ),
         ],
       },
     ]
-    openViewModal(`Projection Partition: ${partition.name}`, sections, () => handleEditPartition(partition))
+    openViewModal(`Projection Partition: ${partition.name}`, sections, () =>
+      handleEditPartition(partition),
+    )
   }
 
   const handleAddScore = () => {
@@ -335,6 +408,7 @@ export default function ConfigPageProjectionsSection({
         const inputs = normalizeProjectionInputs(data.inputs)
         assertProjectionInputs(inputs)
         const nextScore: ProjectionScore = {
+          ...data,
           name: data.name.trim(),
           method: data.method,
           inputs,
@@ -344,7 +418,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.scores = [...projectionConfig.scores!, nextScore]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -352,6 +426,7 @@ export default function ConfigPageProjectionsSection({
     openEditModal<ProjectionScoreFormState>(
       `Edit Score: ${score.name}`,
       {
+        ...score,
         name: score.name,
         method: score.method,
         inputs: score.inputs || [],
@@ -361,6 +436,8 @@ export default function ConfigPageProjectionsSection({
         const inputs = normalizeProjectionInputs(data.inputs)
         assertProjectionInputs(inputs)
         const nextScore: ProjectionScore = {
+          ...score,
+          ...data,
           name: data.name.trim(),
           method: data.method,
           inputs,
@@ -368,10 +445,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.scores = cloneProjections(next).scores?.map((entry) =>
-            entry.name === score.name ? nextScore : entry
+            entry.name === score.name ? nextScore : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -383,15 +460,25 @@ export default function ConfigPageProjectionsSection({
   const handleViewScore = (score: ProjectionScore) => {
     const sections: ViewSection[] = [
       {
-        title: 'Projection Score',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: score.name },
           { label: 'Method', value: score.method },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Inputs',
             value: <ProjectionInputsEditor value={score.inputs || []} readOnly />,
             fullWidth: true,
           },
+          ...generatedProjectionViewFields('scores', score as unknown as Record<string, unknown>, [
+            'name',
+            'method',
+            'inputs',
+          ]),
         ],
       },
     ]
@@ -416,6 +503,7 @@ export default function ConfigPageProjectionsSection({
         assertProjectionOutputs(outputs)
         assertProjectionMappingOutputCount(data.method, outputs)
         const nextMapping: ProjectionMapping = {
+          ...data,
           name: data.name.trim(),
           source: data.source,
           method: data.method,
@@ -427,7 +515,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.mappings = [...projectionConfig.mappings!, nextMapping]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -435,6 +523,7 @@ export default function ConfigPageProjectionsSection({
     openEditModal<ProjectionMappingFormState>(
       `Edit Mapping: ${mapping.name}`,
       {
+        ...mapping,
         name: mapping.name,
         source: mapping.source,
         method: mapping.method,
@@ -449,6 +538,8 @@ export default function ConfigPageProjectionsSection({
         assertProjectionOutputs(outputs)
         assertProjectionMappingOutputCount(data.method, outputs)
         const nextMapping: ProjectionMapping = {
+          ...mapping,
+          ...data,
           name: data.name.trim(),
           source: data.source,
           method: data.method,
@@ -458,10 +549,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.mappings = cloneProjections(next).mappings?.map((entry) =>
-            entry.name === mapping.name ? nextMapping : entry
+            entry.name === mapping.name ? nextMapping : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -485,7 +576,9 @@ export default function ConfigPageProjectionsSection({
         const projectionConfig = ensureProjectionConfig(next)
         const cloned = cloneProjections(next)
         if (target.kind === 'partition') {
-          projectionConfig.partitions = cloned.partitions?.filter((entry) => entry.name !== target.name)
+          projectionConfig.partitions = cloned.partitions?.filter(
+            (entry) => entry.name !== target.name,
+          )
         } else if (target.kind === 'score') {
           projectionConfig.scores = cloned.scores?.filter((entry) => entry.name !== target.name)
         } else {
@@ -494,7 +587,9 @@ export default function ConfigPageProjectionsSection({
       })
       setProjectionPendingDelete(null)
     } catch (error) {
-      setProjectionDeleteError(error instanceof Error ? error.message : 'Failed to delete projection.')
+      setProjectionDeleteError(
+        error instanceof Error ? error.message : 'Failed to delete projection.',
+      )
     } finally {
       setProjectionDeletePending(false)
     }
@@ -503,16 +598,23 @@ export default function ConfigPageProjectionsSection({
   const handleViewMapping = (mapping: ProjectionMapping) => {
     const sections: ViewSection[] = [
       {
-        title: 'Projection Mapping',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: mapping.name },
           { label: 'Source', value: mapping.source },
           { label: 'Method', value: mapping.method },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Calibration',
-            value: mapping.calibration
-              ? <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
-              : 'N/A',
+            value: mapping.calibration ? (
+              <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
+            ) : (
+              'N/A'
+            ),
             fullWidth: true,
           },
           {
@@ -520,6 +622,11 @@ export default function ConfigPageProjectionsSection({
             value: <ProjectionOutputsEditor value={mapping.outputs || []} readOnly />,
             fullWidth: true,
           },
+          ...generatedProjectionViewFields(
+            'mappings',
+            mapping as unknown as Record<string, unknown>,
+            ['name', 'source', 'method', 'calibration', 'outputs'],
+          ),
         ],
       },
     ]
@@ -577,7 +684,11 @@ export default function ConfigPageProjectionsSection({
     {
       key: 'sources',
       header: 'Sources',
-      render: (row) => row.inputs?.map((input) => `${input.type}:${input.name}`).slice(0, 3).join(', ') || 'N/A',
+      render: (row) =>
+        row.inputs
+          ?.map((input) => `${input.type}:${input.name}`)
+          .slice(0, 3)
+          .join(', ') || 'N/A',
     },
   ]
 
@@ -613,13 +724,6 @@ export default function ConfigPageProjectionsSection({
     <ConfigPageManagerLayout
       title="Projections"
       description="Coordinate mutually exclusive signal partitions, derive weighted scores, and map them into named routing bands that decisions can reference."
-      scope={selectedScope?.label ?? 'Routing profile'}
-      pills={[
-        { label: 'Models', active: false },
-        { label: 'Signals', active: false },
-        { label: 'Projections', active: true },
-        { label: 'Decisions', active: false },
-      ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <RoutingScopeSelector
@@ -627,31 +731,6 @@ export default function ConfigPageProjectionsSection({
           value={selectedScopeId}
           onChange={setSelectedScopeId}
         />
-        <p
-          style={{
-            margin: 0,
-            padding: '0.75rem 1rem',
-            borderRadius: 8,
-            background: 'var(--color-surface-elevated, rgba(255, 255, 255, 0.04))',
-            border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
-            fontSize: '0.875rem',
-            lineHeight: 1.5,
-            color: 'var(--color-text-secondary)',
-          }}
-        >
-          <strong style={{ color: 'var(--color-text)' }}>Debugging projections:</strong> when router replay is on,
-          each Insights record can include a structured{' '}
-          <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and winners, score
-          contributions, mapping confidence and boundary distance, per-output threshold steps). See{' '}
-          <a
-            href="https://vllm-sr.ai/docs/tutorials/projection/traces"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Projection traces
-          </a>{' '}
-          in the docs.
-        </p>
         <TableHeader
           title="Projection Surfaces"
           count={filteredPartitions.length + filteredScores.length + filteredMappings.length}
@@ -750,7 +829,9 @@ export default function ConfigPageProjectionsSection({
         eyebrow="Destructive configuration change"
         confirmLabel={`Delete ${projectionPendingDelete?.kind || 'projection'}`}
         pending={projectionDeletePending}
-        details={projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined}
+        details={
+          projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined
+        }
         onCancel={() => {
           if (projectionDeletePending) return
           setProjectionPendingDelete(null)

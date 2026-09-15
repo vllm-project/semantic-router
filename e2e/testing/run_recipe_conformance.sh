@@ -3,7 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RECIPES="${RECIPES:-}"
-ROUTER_URL="${ROUTER_URL:-http://127.0.0.1:8080}"
+ROUTER_IMAGE="${ROUTER_IMAGE:-}"
+VLLM_SR_PORT_OFFSET="${VLLM_SR_PORT_OFFSET:-0}"
+if ! [[ "${VLLM_SR_PORT_OFFSET}" =~ ^[0-9]+$ ]]; then
+  echo "VLLM_SR_PORT_OFFSET must be a non-negative integer" >&2
+  exit 2
+fi
+ROUTER_URL="${ROUTER_URL:-http://127.0.0.1:$((8080 + VLLM_SR_PORT_OFFSET))}"
 REPORT_ROOT="${REPORT_ROOT:-${ROOT_DIR}/.agent-harness/recipe-conformance}"
 READY_TIMEOUT_SECONDS="${READY_TIMEOUT_SECONDS:-300}"
 GENERATED_RECIPE_DIRS=()
@@ -12,6 +18,14 @@ if [[ -z "${RECIPES}" ]]; then
   echo "RECIPES is required (comma-separated recipe names)" >&2
   exit 2
 fi
+if [[ -z "${ROUTER_IMAGE}" ]]; then
+  echo "ROUTER_IMAGE is required (the immutable image built for this source tree)" >&2
+  exit 2
+fi
+
+# Validate the complete selection before installing cleanup traps or touching a stack.
+python3 "${ROOT_DIR}/tools/dev/router-calibration/recipe_conformance.py" \
+  check-cpu --recipes "${RECIPES}"
 
 cleanup() {
   VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" vllm-sr stop >/dev/null 2>&1 || true
@@ -62,9 +76,11 @@ for recipe in "${recipe_names[@]}"; do
 
   echo "=== recipe conformance: ${recipe} ==="
   cleanup
-  if ! VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" \
+  if ! POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-router-secret}" \
+    VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" \
     vllm-sr serve \
       --image-pull-policy ifnotpresent \
+      --router-image "${ROUTER_IMAGE}" \
       --minimal \
       --config "${config}"; then
     collect_logs "${recipe}"
@@ -74,7 +90,7 @@ for recipe in "${recipe_names[@]}"; do
     collect_logs "${recipe}"
     exit 1
   fi
-  if ! python3 "${ROOT_DIR}/tools/agent/scripts/recipe_conformance.py" \
+  if ! python3 "${ROOT_DIR}/tools/dev/router-calibration/recipe_conformance.py" \
     --output-dir "${REPORT_ROOT}" \
     eval \
     --recipe "${recipe}" \

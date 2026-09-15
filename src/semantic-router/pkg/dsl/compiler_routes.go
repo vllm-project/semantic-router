@@ -20,6 +20,13 @@ func (c *Compiler) compileRoute(r *RouteDecl) config.Decision {
 		Tier:        r.Tier,
 		Rules:       c.compileRouteRules(r),
 	}
+	decision.Rules.OnUnknown = config.UnknownPolicy(r.OnUnknown)
+	if r.Action != nil {
+		decision.Action = &config.DecisionAction{
+			Type:        r.Action.Type,
+			Destination: r.Action.Destination,
+		}
+	}
 
 	for _, m := range r.Models {
 		c.appendModelRef(&decision, m)
@@ -96,6 +103,9 @@ func (c *Compiler) appendModelRef(decision *config.Decision, m *ModelRef) {
 	if m.Effort != "" {
 		ref.ReasoningEffort = m.Effort
 	}
+	if m.Mode != "" {
+		ref.ReasoningMode = m.Mode
+	}
 	decision.ModelRefs = append(decision.ModelRefs, ref)
 
 	// Populate model_config for route-local model metadata fields.
@@ -140,6 +150,9 @@ func (c *Compiler) compileCandidateIteration(iter *CandidateIterationDecl) confi
 		}
 		if model.Effort != "" {
 			ref.ReasoningEffort = model.Effort
+		}
+		if model.Mode != "" {
+			ref.ReasoningMode = model.Mode
 		}
 		compiled.Models = append(compiled.Models, ref)
 	}

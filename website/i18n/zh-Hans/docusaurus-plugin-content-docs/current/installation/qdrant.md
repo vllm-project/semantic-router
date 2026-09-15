@@ -1,57 +1,74 @@
 ---
 sidebar_position: 7
 translation:
-  source_commit: "39d7fa4b"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/installation/qdrant.md"
   outdated: false
 ---
 
-# Qdrant
+# Qdrant 向量库
 
-本指南介绍如何将 [Qdrant](https://qdrant.tech/) 部署为 Semantic Router 的后端。Qdrant 可用作语义缓存（semantic cache）、智能体记忆存储（agentic memory store）、向量存储（vector store）和路由器回放存储（router replay store）。
+本指南介绍将 [Qdrant](https://qdrant.tech/) 部署为 Semantic Router 后端。Qdrant 可以用作语义缓存、智能体记忆存储、向量存储和路由回放存储。
 
 ## 前置条件
 
-- Docker，或者已配置 `kubectl` 的 Kubernetes 集群
-- Kubernetes 场景：已安装 Helm 3.x
+- Docker，或已配置 `kubectl` 的 Kubernetes 集群
+- 对于 Kubernetes：已安装 Helm 3.x
 
 ## 使用 Docker 部署
 
 ### 快速开始
 
 ```bash
+docker network inspect vllm-sr-network >/dev/null 2>&1 || \
+  docker network create vllm-sr-network
+
 docker run -d --name qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
+  --network vllm-sr-network \
+  -p 127.0.0.1:6333:6333 \
   qdrant/qdrant:latest
 ```
 
-验证 Qdrant 是否正在运行：
+验证 Qdrant 正在运行：
 
 ```bash
 curl http://localhost:6333/healthz
 ```
 
-### 启用持久化
+### 带持久化
 
 ```bash
 docker run -d --name qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
+  --network vllm-sr-network \
+  -p 127.0.0.1:6333:6333 \
   -v qdrant-data:/qdrant/storage \
   qdrant/qdrant:latest
 ```
 
-### 启用 API Key 身份验证
+### 带 API 密钥认证
 
 ```bash
+export QDRANT_API_KEY="$(openssl rand -hex 32)"
+
 docker run -d --name qdrant \
-  -p 6333:6333 \
-  -p 6334:6334 \
+  --network vllm-sr-network \
+  -p 127.0.0.1:6333:6333 \
   -v qdrant-data:/qdrant/storage \
-  -e QDRANT__SERVICE__API_KEY=your-secret-key \
+  -e QDRANT__SERVICE__API_KEY="$QDRANT_API_KEY" \
   qdrant/qdrant:latest
 ```
+
+启用身份验证后，将相同的环境引用添加到 Router 使用的每个 Qdrant 块：
+
+```yaml
+api_key: ${QDRANT_API_KEY}
+```
+
+将值保留在进程环境或 Kubernetes Secret 中；不要把字面 API 密钥放入 Router 配置。当 Qdrant 服务器不需要身份验证时，省略 `api_key`。
+
+主机映射仅在回环上暴露 HTTP 健康/API 端口。Router 通过共享 Docker 网络直接使用 Qdrant 的 gRPC 端口，因此不需要在主机上发布。下面配置中的主机名 `qdrant` 是 `vllm-sr-network` 上的 Docker DNS。如果用自定义栈名称启动 Router，例如 `VLLM_SR_STACK_NAME=team-a vllm-sr serve`，请将 Qdrant 附加到 `team-a-vllm-sr-network`，并使用匹配的可到达主机名。
+
+Docker 示例对短期评估使用 `latest`。对于共享或生产部署，固定已发布的 Qdrant 版本或镜像 digest。
 
 ## 在 Kubernetes 中部署
 
@@ -128,29 +145,30 @@ spec:
   clusterIP: None
 ```
 
-## 配置路由器
+该 StatefulSet 是未认证的评估示例。对于共享或生产集群，固定 chart 或镜像版本，通过 Kubernetes Secret 配置 API 密钥，在 Qdrant 和 Router 的 `api_key` / `use_tls` 绑定中启用 TLS，用 NetworkPolicy 限制访问，并为持久卷定义备份和恢复流程。
 
-### 语义缓存（Semantic Cache）
+## 配置 Router
+
+### 语义缓存
 
 ```yaml
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: qdrant
       similarity_threshold: 0.90
       ttl_seconds: 7200
       embedding_model: bert
       qdrant:
-        host: qdrant                   # 服务名称或主机名
+        host: qdrant                   # 服务名或主机名
         port: 6334
-        api_key: ""
         use_tls: false
         collection_name: semantic_cache
         connect_timeout: 10
 ```
 
-### 智能体记忆（Agentic Memory）
+### 智能体记忆
 
 ```yaml
 global:
@@ -161,35 +179,60 @@ global:
       qdrant:
         host: qdrant
         port: 6334
-        api_key: ""
         collection: agentic_memory
-        dimension: 384               # 必须与你的嵌入模型匹配
+        dimension: 384               # 必须与嵌入模型匹配
       embedding_model: bert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.70
 ```
 
-### 路由器回放存储（Router Replay Store）
+### 已上传文档的向量存储
+
+```yaml
+global:
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: qdrant
+      file_storage_dir: /var/lib/vsr/data
+      embedding_model: multimodal
+      embedding_dimension: 384
+      qdrant:
+        host: qdrant
+        port: 6334
+        use_tls: false
+        connect_timeout: 10
+        collection_prefix: "vsr_vs_"
+      metadata_store: memory
+```
+
+当多个 Router 副本必须看到同一份已上传文件注册表时，使用持久共享元数据，而不是 `memory`。嵌入维度必须与配置的嵌入模型匹配。
+
+### 路由回放存储
 
 ```yaml
 global:
   services:
     router_replay:
+      enabled: true
       store_backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
-        api_key: ""
         collection_name: router_replay
 ```
 
+这会启用 Router 范围的回放策略。仅当决策需要覆盖捕获或保留行为时，才添加路由局部 `router_replay` 插件；参见 [路由回放插件](../tutorials/plugin/router-replay)。
+
 ### 配置参考
 
-| 参数 | 默认值 | 说明 |
+全部四个 Qdrant 绑定都接受 `host`、`port`、可选的 `api_key` 和 `use_tls`。它们的 collection 字段有意不同：
+
+| 能力 | Collection 字段 | 其他 Qdrant 专用字段 |
 | --- | --- | --- |
-| `host` | `localhost` | Qdrant 服务器主机名 |
-| `port` | `6334` | Qdrant gRPC 端口 |
-| `api_key` | _（空）_ | 用于身份验证的 API 密钥 |
-| `use_tls` | `false` | 为 gRPC 连接启用 TLS |
-| `collection_name` | 视情况而定 | 要使用的 collection（若不存在则自动创建） |
-| `connect_timeout` | `10` | 连接超时时间，以秒为单位 |
+| 响应缓存 | `collection_name` | `connect_timeout` |
+| Agentic memory | `collection` | `dimension`、`connect_timeout` |
+| 已上传文档的向量存储 | `collection_prefix` | `connect_timeout` |
+| 路由回放 | `collection_name` | 回放 schema 中没有连接超时字段 |
+
+启用身份验证时，对 `api_key` 使用 `${QDRANT_API_KEY}` 这样的环境引用。校验完整配置，而不是将一个能力的字段复制到另一个。

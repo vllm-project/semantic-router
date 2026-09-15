@@ -1,0 +1,13 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hello"
+      }
+    ],
+    "future_field": true
+  }
+}

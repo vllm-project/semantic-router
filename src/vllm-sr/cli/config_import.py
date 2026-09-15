@@ -11,17 +11,20 @@ from typing import Any
 import yaml
 from pydantic import ValidationError as PydanticValidationError
 
+from cli.catalog_provider_projection import (
+    CatalogProviderProjectionError,
+    resolve_builtin_provider_id,
+)
 from cli.config_migration import migrate_config_data
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, load_config_file
-from cli.utils import get_logger
+from cli.terminal import fields, heading, success
 from cli.validator import validate_user_config
-
-log = get_logger(__name__)
 
 OPENCLAW_CONFIG_ENV = "OPENCLAW_CONFIG_PATH"
 SUPPORTED_OPENCLAW_API_PREFIXES = ("openai",)
+OPENAI_CHAT_COMPLETIONS_PROTOCOL = "openai/chat-completions@1"
 
 
 class ConfigImportError(RuntimeError):
@@ -105,17 +108,25 @@ def import_config_command(
         encoding="utf-8",
     )
 
-    log.info("Imported OpenClaw configuration written successfully")
-    log.info(f"  Source: {resolved_source}")
-    log.info(f"  Source backup: {source_backup_path}")
-    log.info(f"  Target: {resolved_target}")
+    success("Configuration imported")
+    heading("Files")
+    output_fields: list[tuple[str, object]] = [
+        ("Source", resolved_source),
+        ("Source backup", source_backup_path),
+        ("Target", resolved_target),
+    ]
     if target_backup_path is not None:
-        log.info(f"  Target backup: {target_backup_path}")
-    log.info(f"  Rewritten OpenClaw base URL: {rewritten_base_url}")
-    log.info(
-        "  Imported models: %s",
-        ", ".join(model.logical_name for model in imported_models),
+        output_fields.append(("Target backup", target_backup_path))
+    output_fields.extend(
+        (
+            ("Base URL", rewritten_base_url),
+            (
+                "Models",
+                ", ".join(model.logical_name for model in imported_models),
+            ),
+        )
     )
+    fields(output_fields)
 
     return ImportResult(
         source_path=resolved_source,
@@ -324,6 +335,7 @@ def merge_openclaw_models_into_target(
     }
 
     for imported_model in imported_models:
+        provider_id = resolve_openclaw_provider_id(imported_model.provider_key)
         provider_model = provider_models_by_name.get(imported_model.logical_name)
         if provider_model is None:
             provider_model = {"name": imported_model.logical_name}
@@ -337,9 +349,11 @@ def merge_openclaw_models_into_target(
         if not isinstance(external_model_ids, dict):
             external_model_ids = {}
             provider_model["external_model_ids"] = external_model_ids
-        external_model_ids["openai"] = imported_model.source_model_id
+        external_model_ids[provider_id] = imported_model.source_model_id
 
-        provider_model["backend_refs"] = [build_backend_ref(imported_model)]
+        provider_model["backend_refs"] = [
+            build_backend_ref(imported_model, provider_id=provider_id)
+        ]
 
         routing_card = routing_cards_by_name.get(imported_model.logical_name)
         if routing_card is None:
@@ -364,24 +378,31 @@ def merge_openclaw_models_into_target(
         for model in provider_models
         if isinstance(model, dict) and str(model.get("name", "")).strip()
     ]
-    default_model = str(defaults.get("default_model", "") or "").strip()
+    default_model = str(defaults.get("model", "") or "").strip()
     if not default_model or default_model not in provider_names:
-        defaults["default_model"] = imported_models[0].logical_name
+        defaults["model"] = imported_models[0].logical_name
 
     decisions = routing["decisions"]
     if not decisions:
-        routing["decisions"] = [build_default_decision(defaults["default_model"])]
+        routing["decisions"] = [build_default_decision(defaults["model"])]
 
 
-def build_backend_ref(imported_model: ImportedModel) -> dict[str, Any]:
+def build_backend_ref(
+    imported_model: ImportedModel,
+    *,
+    provider_id: str | None = None,
+) -> dict[str, Any]:
     """Build one canonical backend ref from an OpenClaw provider definition."""
+
+    if provider_id is None:
+        provider_id = resolve_openclaw_provider_id(imported_model.provider_key)
 
     backend_ref: dict[str, Any] = {
         "name": imported_model.provider_key,
         "base_url": str(
             imported_model.provider_config.get("baseUrl", "") or ""
         ).strip(),
-        "provider": "openai",
+        "provider": provider_id,
         "weight": 1,
     }
 
@@ -402,6 +423,21 @@ def build_backend_ref(imported_model: ImportedModel) -> dict[str, Any]:
             backend_ref["extra_headers"] = extra_headers
 
     return backend_ref
+
+
+def resolve_openclaw_provider_id(provider_key: str) -> str:
+    """Bind an OpenClaw OpenAI-compatible source to a compatible Provider ID."""
+
+    try:
+        return resolve_builtin_provider_id(
+            provider_key,
+            required_protocol=OPENAI_CHAT_COMPLETIONS_PROTOCOL,
+        )
+    except CatalogProviderProjectionError as error:
+        raise ConfigImportError(
+            f"OpenClaw provider {provider_key!r} cannot use its configured "
+            f"OpenAI-compatible API: {error}"
+        ) from error
 
 
 def build_capabilities(model_config: dict[str, Any]) -> list[str]:

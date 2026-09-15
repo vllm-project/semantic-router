@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 func selectionDecisionStateKey(selCtx *selection.SelectionContext) string {
@@ -31,7 +32,25 @@ func routingSessionStateKey(ctx *RequestContext) string {
 	if ctx.Routing.IsPassthrough() {
 		return ""
 	}
-	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.SessionID)
+	return sessiontelemetry.RoutingSessionKey(ctx.Routing.RecipeName(), ctx.SessionID)
+}
+
+func selectionSessionStateKey(selCtx *selection.SelectionContext) string {
+	if selCtx == nil {
+		return ""
+	}
+	if selCtx.SessionStateKey != "" {
+		return selCtx.SessionStateKey
+	}
+	return sessiontelemetry.RoutingSessionKey(selCtx.RecipeName, selCtx.SessionID)
+}
+
+func protectionSessionStateKey(ctx *RequestContext) string {
+	if ctx == nil || requestBypassesRouting(ctx) {
+		return ""
+	}
+	// VSRLearningSessionID is already the encoded, unscoped protection tuple.
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.VSRLearningSessionID)
 }
 
 func requestBypassesRouting(ctx *RequestContext) bool {
@@ -67,13 +86,16 @@ func (r *OpenAIRouter) configuredBackendModel(model string) bool {
 	return model == r.Config.DefaultModel
 }
 
-func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef) []config.ModelRef {
+func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef, ctx *RequestContext) []config.ModelRef {
 	if len(refs) == 0 {
 		return nil
 	}
 	eligible := make([]config.ModelRef, 0, len(refs))
 	for _, ref := range refs {
-		if strings.TrimSpace(ref.Model) == "" || !r.configuredBackendModel(ref.Model) {
+		if strings.TrimSpace(ref.Model) == "" ||
+			!r.configuredBackendModel(ref.Model) ||
+			(ctx != nil && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
+			(ctx != nil && ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) {
 			continue
 		}
 		eligible = append(eligible, ref)

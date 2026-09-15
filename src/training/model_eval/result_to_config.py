@@ -8,11 +8,22 @@ from collections import defaultdict
 
 import yaml
 
+try:
+    from .constants import MODEL_REGISTRY
+except ImportError:
+    from constants import MODEL_REGISTRY
+
 DEFAULT_OUTPUT_FILE = "config/config.eval.yaml"
+
+
+def served_model_path(role):
+    """Use the same native classifier identity as the served evaluator."""
+    return "models/" + MODEL_REGISTRY[role]["id"].split("/")[-1]
+
 
 DEFAULT_EMBEDDINGS = {
     "semantic": {
-        "mmbert_model_path": "models/mom-embedding-ultra",
+        "mmbert_model_path": "models/Vela-1.0-Encoder-307M-Embedding",
         "use_cpu": True,
         "embedding_config": {
             "model_type": "mmbert",
@@ -24,7 +35,7 @@ DEFAULT_EMBEDDINGS = {
     }
 }
 
-DEFAULT_SEMANTIC_CACHE = {
+DEFAULT_RESPONSE_CACHE = {
     "enabled": True,
     "embedding_model": "mmbert",
     "max_entries": 1000,
@@ -41,30 +52,30 @@ DEFAULT_TOOLS = {
 
 DEFAULT_PROMPT_GUARD = {
     "enabled": True,
-    "model_id": "models/mmbert32k-jailbreak-detector-merged",
-    "threshold": 0.7,
+    "model_id": served_model_path("jailbreak"),
+    "threshold": 0.5,
     "use_cpu": True,
-    "use_mmbert_32k": True,
-    "jailbreak_mapping_path": (
-        "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
-    ),
+    "variant": "mmbert32k",
+    "jailbreak_mapping_path": served_model_path("jailbreak")
+    + "/jailbreak_type_mapping.json",
+    "positive_labels": ["jailbreak"],
 }
 
 DEFAULT_DOMAIN_CLASSIFIER = {
-    "model_id": "models/mmbert32k-intent-classifier-merged",
+    "model_id": served_model_path("intent"),
     "threshold": 0.5,
     "use_cpu": True,
-    "use_mmbert_32k": True,
-    "category_mapping_path": "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+    "variant": "mmbert32k",
+    "category_mapping_path": served_model_path("intent") + "/category_mapping.json",
     "fallback_category": "other",
 }
 
 DEFAULT_PII_CLASSIFIER = {
-    "model_id": "models/mmbert32k-pii-detector-merged",
+    "model_id": served_model_path("pii"),
     "threshold": 0.9,
     "use_cpu": True,
     "use_mmbert_32k": True,
-    "pii_mapping_path": "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+    "pii_mapping_path": served_model_path("pii") + "/pii_mapping.json",
 }
 
 CATEGORY_REASONING = {
@@ -120,10 +131,10 @@ def parse_args():
         help="Protocol for generated backend_refs entries",
     )
     parser.add_argument(
-        "--backend-type",
+        "--provider-id",
         type=str,
-        default="chat",
-        help="Backend type for generated backend_refs entries",
+        default="vllm",
+        help="Catalog Provider ID for generated backend_refs entries",
     )
     parser.add_argument(
         "--api-format",
@@ -190,7 +201,7 @@ def build_provider_models(
     ranked_models,
     backend_endpoint,
     backend_protocol,
-    backend_type,
+    provider_id,
     api_format,
     provider_name,
 ):
@@ -207,7 +218,7 @@ def build_provider_models(
                         "name": f"{model_name}-backend",
                         "endpoint": backend_endpoint,
                         "protocol": backend_protocol,
-                        "type": backend_type,
+                        "provider": provider_id,
                         "weight": 1,
                     }
                 ],
@@ -218,14 +229,13 @@ def build_provider_models(
 
 def build_routing_model_cards(ranked_models):
     model_cards = []
-    for model_name, average_accuracy in ranked_models:
+    for model_name, _average_accuracy in ranked_models:
         model_cards.append(
             {
                 "name": model_name,
                 "description": (
                     "Generated from MMLU-Pro evaluation results for category-aware routing."
                 ),
-                "quality_score": round(float(average_accuracy), 6),
                 "capabilities": ["chat"],
                 "tags": ["generated", "mmlu-pro"],
                 "modality": "ar",
@@ -272,7 +282,7 @@ def generate_config_yaml(
     similarity_threshold,
     backend_endpoint,
     backend_protocol,
-    backend_type,
+    provider_id,
     api_format,
     provider_name,
 ):
@@ -292,14 +302,14 @@ def generate_config_yaml(
         "listeners": [],
         "providers": {
             "defaults": {
-                "default_model": default_model,
-                "default_reasoning_effort": "medium",
+                "model": default_model,
+                "reasoning_effort": "medium",
             },
             "models": build_provider_models(
                 ranked_models,
                 backend_endpoint,
                 backend_protocol,
-                backend_type,
+                provider_id,
                 api_format,
                 provider_name,
             ),
@@ -313,8 +323,8 @@ def generate_config_yaml(
         },
         "global": {
             "stores": {
-                "semantic_cache": {
-                    **DEFAULT_SEMANTIC_CACHE,
+                "response_cache": {
+                    **DEFAULT_RESPONSE_CACHE,
                     "similarity_threshold": similarity_threshold,
                 }
             },
@@ -359,7 +369,7 @@ def main():
         args.similarity_threshold,
         args.backend_endpoint,
         args.backend_protocol,
-        args.backend_type,
+        args.provider_id,
         args.api_format,
         args.provider_name,
     )

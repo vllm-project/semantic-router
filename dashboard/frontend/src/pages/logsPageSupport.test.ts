@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { filterLogs, getLogLevel, type LogEntry } from './logsPageSupport'
+import { describeLogsAvailability, filterLogs, getLogLevel, type LogEntry } from './logsPageSupport'
 
 const logs: LogEntry[] = [
   { service: 'router', line: '{"level":"info","message":"ready"}' },
@@ -19,5 +19,11 @@ describe('logs page support', () => {
     expect(filterLogs(logs, '', 'error')).toEqual([logs[1]])
     expect(filterLogs(logs, 'dashboard', 'all')).toEqual([logs[2]])
     expect(filterLogs(logs, 'ready', 'info')).toEqual([logs[0]])
+  })
+
+  it('describes the explicit bounded-spool support contract', () => {
+    expect(describeLogsAvailability(null)).toBe('Detecting')
+    expect(describeLogsAvailability(true)).toBe('Available')
+    expect(describeLogsAvailability(false)).toBe('Unavailable')
   })
 })

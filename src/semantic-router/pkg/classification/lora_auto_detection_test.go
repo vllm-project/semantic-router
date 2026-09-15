@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestIntentClassificationLoRAAutoDetection(t *testing.T) {
 
 		// Verify inference works
 		inference := createCategoryInference()
-		result, err := inference.Classify("What is the best business strategy?")
+		result, err := inference.Classify(context.Background(), "What is the best business strategy?")
 		if err != nil {
 			t.Errorf("Classification failed: %v", err)
 			return

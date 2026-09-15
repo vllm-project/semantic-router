@@ -43,7 +43,7 @@ func (s *Service) Capabilities(recoveryAvailable bool) Capabilities {
 	}
 }
 
-func (s *Service) Apply(ctx context.Context, request Request) ServiceResult {
+func (s *Service) apply(ctx context.Context, request Request) ServiceResult {
 	s.requests.Add(1)
 	if request.Request == nil {
 		s.failures.Add(1)
@@ -69,7 +69,7 @@ func (s *Service) Apply(ctx context.Context, request Request) ServiceResult {
 		s.failures.Add(1)
 		return s.failureResult(request, plan, err)
 	}
-	return s.finalizeResult(request, counter, result, appliedCandidates)
+	return s.commitCompression(ctx, request, counter, result, appliedCandidates)
 }
 
 func tokenCounterForRequest(request Request) TokenCounter {
@@ -125,6 +125,7 @@ func (s *Service) executePlan(
 		}
 		result.Applied = true
 		result.BlocksCompressed++
+		candidate.replacementText = blockResult.Content
 		appliedCandidates = append(appliedCandidates, candidate)
 		appliedMessages[candidate.plan.MessageIndex] = struct{}{}
 		result.OmittedChunks += blockResult.OmittedChunks
@@ -144,26 +145,14 @@ func (s *Service) finalizeResult(
 	request Request,
 	counter TokenCounter,
 	result ServiceResult,
-	appliedCandidates []plannedCandidate,
 ) ServiceResult {
-	result.TokensAfter, _ = counter.CountRequest(request.Model, request.Request)
+	if result.TokensAfter <= 0 {
+		result.TokensAfter, _ = counter.CountRequest(request.Model, request.Request)
+	}
 	if result.TokensAfter <= 0 {
 		result.TokensAfter = result.Plan.OriginalTokens
 	}
-	if result.Applied && result.TokensAfter >= result.TokensBefore {
-		for _, candidate := range appliedCandidates {
-			candidate.block.SetText(candidate.originalText)
-		}
-		result.Applied = false
-		result.BlocksCompressed = 0
-		result.MessagesCompressed = 0
-		result.OmittedChunks = 0
-		result.JSONBlocks = 0
-		result.RecoveryKeys = nil
-		result.TokensAfter = result.TokensBefore
-		result.Plan.SkipReason = SkipBudgetNotReduced
-		result.Plan.Quality = "rejected_non_reducing"
-	}
+
 	if !result.Applied {
 		s.skipped.Add(1)
 		result.Plan.SkipReason = SkipBudgetNotReduced
@@ -231,9 +220,9 @@ func (s *Service) RecordEstimatedCostSavings(amount float64) {
 }
 
 type plannedCandidate struct {
-	plan         TargetPlan
-	block        *TextBlockIR
-	originalText string
+	plan            TargetPlan
+	block           *TextBlockIR
+	replacementText string
 }
 
 func (s *Service) plan(
@@ -320,8 +309,7 @@ func candidateForBlock(
 	block *TextBlockIR,
 ) (plannedCandidate, bool) {
 	kind := block.Source
-	if kind == TargetHistory &&
-		(message.Protected || message.Role == "tool" || message.Role == "function") {
+	if !request.Request.compressionBlockAllowed(message, block) {
 		return plannedCandidate{}, false
 	}
 	policy := policyForTarget(request.Policy.Targets, kind)
@@ -342,8 +330,7 @@ func candidateForBlock(
 	}
 	query := request.Request.QueryFor(block)
 	return plannedCandidate{
-		block:        block,
-		originalText: block.Text,
+		block: block,
 		plan: TargetPlan{
 			MessageIndex:   block.MessageIndex,
 			BlockIndex:     block.BlockIndex,
@@ -415,7 +402,6 @@ func (s *Service) applyCandidate(
 		if !compressed.Applied {
 			return false, compressed, "", nil
 		}
-		block.SetText(compressed.Content)
 		return true, compressed, "", nil
 	}
 	if candidate.plan.Mode != TargetRecoverable {
@@ -487,7 +473,6 @@ func applyRecoverableCandidate(
 			RetrieveToolName,
 		)
 	}
-	block.SetText(body)
 	compressed.Content = body
 	compressed.CompressedTokens, _ = counter.CountText(request.Model, body)
 	return true, compressed, key, nil

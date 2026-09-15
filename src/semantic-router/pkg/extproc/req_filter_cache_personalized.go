@@ -49,12 +49,12 @@ func canUsePersonalizedExactCache(ctx *RequestContext) bool {
 		strings.TrimSpace(responseCacheScopeIdentity(ctx)) == "" {
 		return false
 	}
-	return len(ctx.workingRequestBody()) > 0
+	return ctx.SemanticRequest != nil
 }
 
 func preparePersonalizedCacheIdentity(ctx *RequestContext, selectedModel string) bool {
-	workingBody := ctx.workingRequestBody()
-	identity, err := cache.BuildRequestIdentity(workingBody)
+	workingBody := cacheRequestBodyForContext(ctx)
+	identity, err := cacheIdentityForContext(ctx)
 	if err != nil {
 		return false
 	}

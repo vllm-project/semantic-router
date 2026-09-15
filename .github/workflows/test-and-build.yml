@@ -47,10 +47,14 @@ jobs:
       - name: Validate Helm chart
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 
+      - name: Resolve golangci-lint version
+        id: golangci_lint
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           args: --help
 
@@ -129,6 +133,40 @@ jobs:
 
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
+
+      - name: Set up Python for selector parity
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify trained selector parity with the native runtime
+        run: |
+          python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt
+          make test-model-selection-parity
+
+      # Reuse the CPU bindings above and gate protection before external services
+      # or model downloads. The report includes per-turn failures on regression.
+      - name: Gate agent routing protection benchmark
+        run: make bench-agent-routing-protection
+
+      - name: Upload agent routing protection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-routing-protection
+          path: .agent-harness/agent-routing-protection/report.json
+          include-hidden-files: true
+          if-no-files-found: warn
+
+      # Recompute all public contracts from their authored sources and reject
+      # drift in config JSON/TypeScript, OpenAPI/index, and skill/references.
+      # Runs before the model/service setup so drift fails fast.
+      - name: Check generated public contracts are up to date
+        run: make generated-contract-check
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
 
       - name: Install HuggingFace CLI
         run: |
@@ -216,6 +254,15 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
 
+      - name: Local dev smoke test (no Authorino)
+        run: tools/smoke/test-local-up-router.sh
+        timeout-minutes: 20
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
+
       - name: Clean Redis service
         if: always()
         run: |
@@ -256,4 +303,4 @@ jobs:
         run: |
           echo "::error::Test and build failed. Check the workflow run for details."
           echo "To reproduce this job locally: make test-and-build-local"
-          echo "To run the baseline PR parity gate locally: make agent-pr-gate"
+          echo "To run the baseline PR checks locally: make ci-full"

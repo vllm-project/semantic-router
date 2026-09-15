@@ -17,6 +17,7 @@ limitations under the License.
 package extproc
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -182,7 +183,7 @@ func TestRouterLearningUnknownAdaptationStrategyKeepsBaseModel(t *testing.T) {
 	}
 }
 
-func TestRouterLearningProtectionOnlyCanGuardWhenAdaptationDisabled(t *testing.T) {
+func TestRouterLearningProtectionOnlyCannotEscapeDecisionCandidates(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
@@ -200,21 +201,20 @@ func TestRouterLearningProtectionOnlyCanGuardWhenAdaptationDisabled(t *testing.T
 	ctx.VSRSelectedDecision = &config.Decision{Name: "simple-followup"}
 	ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
 
-	selected, _, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+	selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{
 		SessionID:       "session-a",
 		DecisionName:    "simple-followup",
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},
 	}, nil, ctx)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected protection-only guard to keep frontier, got %#v", selected)
+	if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("protection-only ownership conflict must reject: selected=%+v err=%v", selected, err)
 	}
 	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation); ok {
 		t.Fatalf("expected no adaptation policy when adaptation is disabled, got %#v", ctx.VSRLearningPolicies)
 	}
-	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection)
-	if !ok || policy.Action != routerLearningActionHoldCurrent {
-		t.Fatalf("expected protection hold_current policy, got %#v", ctx.VSRLearningPolicies)
+	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection); ok {
+		t.Fatalf("rejected selection must not claim a protection switch: %#v", ctx.VSRLearningPolicies)
 	}
 }
 

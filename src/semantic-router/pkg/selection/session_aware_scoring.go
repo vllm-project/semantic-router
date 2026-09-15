@@ -181,9 +181,8 @@ func (s *SessionAwareSelector) modelCostPressure(model string) float64 {
 	if maxCost > 0 && modelCost > 0 {
 		return clamp01(modelCost / maxCost)
 	}
-	if params, ok := s.modelParams[model]; ok && params.QualityScore > 0 {
-		return clamp01(params.QualityScore)
-	}
+	// Unknown price is not inferred from model quality. Cost pressure remains
+	// neutral until an explicit price is available.
 	return 0.5
 }
 

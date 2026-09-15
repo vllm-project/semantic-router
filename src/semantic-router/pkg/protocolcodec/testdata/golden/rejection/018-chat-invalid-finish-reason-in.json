@@ -1,0 +1,15 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chat_invalid_finish",
+    "object": "chat.completion",
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {"role": "assistant", "content": "done"},
+        "finish_reason": "future_reason"
+      }
+    ]
+  }
+}

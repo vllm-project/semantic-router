@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { FieldConfig } from '../components/EditModal'
 import { DataTable } from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { StringListEditor } from '../components/StringListEditor'
 import TableHeader from '../components/TableHeader'
 import pageStyles from './ConfigPage.module.css'
@@ -10,6 +11,7 @@ import ConfigPageTaxonomyClassifierEditor from './ConfigPageTaxonomyClassifierEd
 import ConfigPageTaxonomyClassifierDetail from './ConfigPageTaxonomyClassifierDetail'
 import ConfigPageKnowledgeBasePicker from './ConfigPageKnowledgeBasePicker'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
+import { waitForKnowledgeBaseActivation } from './knowledgeBaseActivation'
 import styles from './ConfigPageTaxonomyClassifiers.module.css'
 import {
   classifierDraftFromRecord,
@@ -26,7 +28,6 @@ import {
   buildGroupColumns,
   buildGroupRows,
   buildKnowledgeBaseColumns,
-  buildKnowledgeBaseCounts,
   buildKnowledgeBaseRows,
   buildLabelColumns,
   buildLabelRows,
@@ -39,7 +40,6 @@ import {
   renameGroupInDraft,
   renameLabelInDraft,
 } from './configPageKnowledgeBaseManagerSupport'
-import { buildTaxonomySummaryCards } from './configPageTaxonomySummarySupport'
 
 interface ConfigPageTaxonomyClassifiersProps {
   isReadonly: boolean
@@ -73,7 +73,7 @@ export default function ConfigPageTaxonomyClassifiers({
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/router/config/kbs')
+      const response = await fetch('/api/router/api/v1/storage/knowledge-bases')
       if (!response.ok) {
         const message = await response.text()
         throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
@@ -121,8 +121,6 @@ export default function ConfigPageTaxonomyClassifiers({
     [labelSearch, selectedKnowledgeBase],
   )
 
-  const counts = useMemo(() => buildKnowledgeBaseCounts(knowledgeBases), [knowledgeBases])
-
   const knowledgeBaseEditorField = useCallback(
     (disableName: boolean): FieldConfig[] => [
       {
@@ -159,6 +157,7 @@ export default function ConfigPageTaxonomyClassifiers({
         const message = await response.text()
         throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
       }
+      await waitForKnowledgeBaseActivation(await response.json())
       if (nextSelection) {
         setSelectedKnowledgeBaseName(nextSelection)
       }
@@ -175,7 +174,7 @@ export default function ConfigPageTaxonomyClassifiers({
       const currentDraft = classifierDraftFromRecord(selectedKnowledgeBase)
       const nextDraft = mutate(currentDraft)
       await persistKnowledgeBase(
-        `/api/router/config/kbs/${selectedKnowledgeBase.name}`,
+        `/api/router/api/v1/storage/knowledge-bases/${selectedKnowledgeBase.name}`,
         'PUT',
         nextDraft,
         selectedKnowledgeBase.name,
@@ -191,7 +190,7 @@ export default function ConfigPageTaxonomyClassifiers({
       knowledgeBaseEditorField(false),
       async (data) => {
         const nextName = data.draft.name.trim()
-        await persistKnowledgeBase('/api/router/config/kbs', 'POST', data.draft, nextName)
+        await persistKnowledgeBase('/api/router/api/v1/storage/knowledge-bases', 'POST', data.draft, nextName)
       },
       'add',
     )
@@ -205,7 +204,7 @@ export default function ConfigPageTaxonomyClassifiers({
         knowledgeBaseEditorField(true),
         async (data) => {
           await persistKnowledgeBase(
-            `/api/router/config/kbs/${knowledgeBase.name}`,
+            `/api/router/api/v1/storage/knowledge-bases/${knowledgeBase.name}`,
             'PUT',
             data.draft,
             knowledgeBase.name,
@@ -471,13 +470,14 @@ export default function ConfigPageTaxonomyClassifiers({
     try {
       if (deleteTarget.kind === 'knowledge-base') {
         const { knowledgeBase } = deleteTarget
-        const response = await fetch(`/api/router/config/kbs/${knowledgeBase.name}`, {
+        const response = await fetch(`/api/router/api/v1/storage/knowledge-bases/${knowledgeBase.name}`, {
           method: 'DELETE',
         })
         if (!response.ok) {
           const message = await response.text()
           throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
         }
+        await waitForKnowledgeBaseActivation(await response.json())
         if (selectedKnowledgeBaseName === knowledgeBase.name) {
           setSelectedKnowledgeBaseName('')
         }
@@ -546,35 +546,6 @@ export default function ConfigPageTaxonomyClassifiers({
     [handleDeleteLabel, isReadonly, openEditLabelModal, selectedKnowledgeBase?.editable],
   )
 
-  const groupOverview = useMemo(
-    () => ({
-      total: groupRows.length,
-      referenced: groupRows.filter((group) => group.signal_count > 0).length,
-      metricBacked: groupRows.filter((group) => group.metric_count > 0).length,
-    }),
-    [groupRows],
-  )
-
-  const labelOverview = useMemo(
-    () => ({
-      total: labelRows.length,
-      referenced: labelRows.filter((label) => label.signal_count > 0).length,
-      overrides: labelRows.filter((label) => typeof label.threshold_value === 'number').length,
-    }),
-    [labelRows],
-  )
-
-  const activeSummaryCards = useMemo(
-    () =>
-      buildTaxonomySummaryCards({
-        activeView,
-        counts: { total: counts.total, builtin: counts.builtin, custom: counts.custom },
-        groupOverview,
-        labelOverview,
-      }),
-    [activeView, counts.builtin, counts.custom, counts.total, groupOverview, labelOverview],
-  )
-
   const deleteTargetName =
     deleteTarget?.kind === 'knowledge-base'
       ? deleteTarget.knowledgeBase.name
@@ -588,17 +559,7 @@ export default function ConfigPageTaxonomyClassifiers({
 
   return (
     <section id="knowledge-bases" className={styles.section}>
-      <div className={styles.summaryGrid}>
-        {activeSummaryCards.map((card) => (
-          <article key={card.label} className={styles.summaryCard}>
-            <span className={styles.summaryLabel}>{card.label}</span>
-            <strong className={styles.summaryValue}>{card.value}</strong>
-            <span className={styles.summaryHint}>{card.hint}</span>
-          </article>
-        ))}
-      </div>
-
-      {loading ? <div className={styles.notice}>Loading knowledge base catalog...</div> : null}
+      {loading ? <ProductLoadingState compact label="Loading knowledge bases" /> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
 
       {activeView === 'bases' ? (

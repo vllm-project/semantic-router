@@ -72,6 +72,11 @@ const (
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
+	// VSRAppliedUnknownPolicy lists decisions whose terminal unknown result was
+	// resolved by rules.on_unknown, as comma-separated decision=policy pairs.
+	// Example value: "guarded=no_match,strict=fail_request"
+	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
+
 	// VSRSelectedConfidence indicates the confidence score of the selected decision.
 	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
 	VSRSelectedConfidence = "x-vsr-selected-confidence"
@@ -92,6 +97,17 @@ const (
 	// the routing decision matched. Example values: "static", "elo", "knn",
 	// "router_dc", "fusion", "remom", "workflows".
 	VSRSelectedAlgorithm = "x-vsr-selected-algorithm"
+
+	// VSRRoutingLatencyMs is the time the router spent choosing the model for
+	// this request, in milliseconds with microsecond precision. Example: "0.412"
+	VSRRoutingLatencyMs = "x-vsr-routing-latency-ms"
+
+	// VSRCost is the response's usage priced with the served model's configured
+	// pricing. Buffered responses only; omitted when the model has no pricing.
+	VSRCost = "x-vsr-cost"
+
+	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
+	VSRCostCurrency = "x-vsr-cost-currency"
 
 	// VSRSessionPhase indicates the Router Learning protection phase.
 	// Example values: "user_turn", "tool_loop", "provider_state"
@@ -160,6 +176,18 @@ const (
 	VSRRetentionTTLTurns         = "x-vsr-retention-ttl-turns"
 	VSRRetentionKeepCurrentModel = "x-vsr-retention-keep-current-model"
 	VSRRetentionPreferPrefix     = "x-vsr-retention-prefer-prefix"
+
+	// VSRKVTransferStatus reports whether the upstream backend applied cross-model
+	// KV reuse for this response. Emitted by the vLLM KVConnector plugin on the
+	// target pod; consumed by extproc for metrics and registry updates (issue #2976).
+	// Values: KVTransferStatusApplied, KVTransferStatusFallbackReprefill, or
+	// KVTransferStatusUnsupported. Absent ⇒ treat as unsupported (safe default).
+	VSRKVTransferStatus = "x-vsr-kv-transfer-status"
+
+	// KVTransferStatus* are valid values for VSRKVTransferStatus.
+	KVTransferStatusApplied           = "applied"
+	KVTransferStatusFallbackReprefill = "fallback_reprefill"
+	KVTransferStatusUnsupported       = "unsupported"
 
 	// RouterReplayID carries the identifier for a captured replay record.
 	// Value: opaque replay token
@@ -243,6 +271,14 @@ const (
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
 
+	// VSRMatchedSafety contains matched content safety rule names.
+	VSRMatchedSafety = "x-vsr-matched-safety"
+
+	// VSRMatchedHallucination contains comma-separated list of matched
+	// hallucination rule names. Written in the response body phase, once the
+	// model's answer has been checked against its grounding context.
+	VSRMatchedHallucination = "x-vsr-matched-hallucination"
+
 	// VSRMatchedPII contains comma-separated list of matched PII rule names.
 	// Example: "pii_strict,pii_moderate"
 	VSRMatchedPII = "x-vsr-matched-pii"
@@ -257,6 +293,11 @@ const (
 	// VSRMatchedEvent contains comma-separated list of matched event signal names.
 	// Example: "critical_payment_event,payment_failed"
 	VSRMatchedEvent = "x-vsr-matched-event"
+
+	// VSRMatchedInputModality contains comma-separated list of matched
+	// structural input-modality signal names.
+	// Example: "image_input,audio_input"
+	VSRMatchedInputModality = "x-vsr-matched-input-modality"
 
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
@@ -385,6 +426,24 @@ const (
 
 	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
 	VSRFusionDepth = "x-vsr-fusion-depth"
+)
+
+// VSR Cross-Model KV Transfer Request Headers (issue #2976)
+// Injected by the KVTransfer Coordinator on upstream dispatch when a model switch
+// is eligible for cross-model KV reuse. Consumed by the vLLM KVConnector plugin
+// on the target pod.
+const (
+	// VSRKVSourcePod is the gRPC address of the pod holding the source model's KV cache.
+	// Example: "10.0.1.5:8000"
+	VSRKVSourcePod = "x-vsr-kv-source-pod"
+
+	// VSRKVCacheID is the opaque session/cache identifier for the source KV block.
+	// Example: "sess-abc123"
+	VSRKVCacheID = "x-vsr-kv-cache-id"
+
+	// VSRKVMapperID names the published ridge-mapper artifact for the source→target pair.
+	// Example: "qwen3-14b-32b-v1"
+	VSRKVMapperID = "x-vsr-kv-mapper-id"
 )
 
 // Looper Response Headers

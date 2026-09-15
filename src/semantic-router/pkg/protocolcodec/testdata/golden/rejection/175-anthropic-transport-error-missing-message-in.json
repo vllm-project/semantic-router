@@ -1,0 +1,9 @@
+{
+  "operation": "error",
+  "body": {
+    "type": "error",
+    "error": {
+      "type": "api_error"
+    }
+  }
+}

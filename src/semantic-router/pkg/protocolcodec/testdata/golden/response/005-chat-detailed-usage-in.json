@@ -1,0 +1,32 @@
+{
+  "id": "response_usage_1",
+  "object": "chat.completion",
+  "created": 100,
+  "model": "provider-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"id": "item_1", "role": "assistant", "content": "answer"},
+      "finish_reason": "length"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "prompt_tokens_details": {
+      "cached_tokens": 3,
+      "cache_write_tokens": 2,
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "text_tokens": 10
+    },
+    "completion_tokens": 7,
+    "completion_tokens_details": {
+      "reasoning_tokens": 4,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "text_tokens": 3
+    },
+    "total_tokens": 17
+  }
+}

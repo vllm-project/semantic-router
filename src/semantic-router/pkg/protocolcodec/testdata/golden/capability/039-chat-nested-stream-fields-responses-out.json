@@ -1,0 +1,208 @@
+{
+  "cases": [
+    {
+      "name": "execution_metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "chatcmpl_1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": true,
+                  "status": "in_progress",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null
+                },
+                "sequence_number": 0,
+                "type": "response.created"
+              },
+              "event": "response.created"
+            },
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "chatcmpl_1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": true,
+                  "status": "in_progress",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null
+                },
+                "sequence_number": 1,
+                "type": "response.in_progress"
+              },
+              "event": "response.in_progress"
+            },
+            {
+              "data": {
+                "item": {
+                  "content": [],
+                  "id": "item_4d94af3ee49557647cd32b30",
+                  "role": "assistant",
+                  "status": "in_progress",
+                  "type": "message"
+                },
+                "output_index": 0,
+                "sequence_number": 2,
+                "type": "response.output_item.added"
+              },
+              "event": "response.output_item.added"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "item_id": "item_4d94af3ee49557647cd32b30",
+                "output_index": 0,
+                "part": {
+                  "annotations": [],
+                  "text": "",
+                  "type": "output_text"
+                },
+                "sequence_number": 3,
+                "type": "response.content_part.added"
+              },
+              "event": "response.content_part.added"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "delta": "done",
+                "item_id": "item_4d94af3ee49557647cd32b30",
+                "output_index": 0,
+                "sequence_number": 4,
+                "type": "response.output_text.delta"
+              },
+              "event": "response.output_text.delta"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "item_id": "item_4d94af3ee49557647cd32b30",
+                "output_index": 0,
+                "sequence_number": 5,
+                "text": "done",
+                "type": "response.output_text.done"
+              },
+              "event": "response.output_text.done"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "item_id": "item_4d94af3ee49557647cd32b30",
+                "output_index": 0,
+                "part": {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                },
+                "sequence_number": 6,
+                "type": "response.content_part.done"
+              },
+              "event": "response.content_part.done"
+            },
+            {
+              "data": {
+                "item": {
+                  "content": [
+                    {
+                      "annotations": [],
+                      "text": "done",
+                      "type": "output_text"
+                    }
+                  ],
+                  "id": "item_4d94af3ee49557647cd32b30",
+                  "role": "assistant",
+                  "status": "completed",
+                  "type": "message"
+                },
+                "output_index": 0,
+                "sequence_number": 7,
+                "type": "response.output_item.done"
+              },
+              "event": "response.output_item.done"
+            },
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "chatcmpl_1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [
+                    {
+                      "content": [
+                        {
+                          "annotations": [],
+                          "text": "done",
+                          "type": "output_text"
+                        }
+                      ],
+                      "id": "item_4d94af3ee49557647cd32b30",
+                      "role": "assistant",
+                      "status": "completed",
+                      "type": "message"
+                    }
+                  ],
+                  "parallel_tool_calls": true,
+                  "status": "completed",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null
+                },
+                "sequence_number": 8,
+                "type": "response.completed"
+              },
+              "event": "response.completed"
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "stream.kv_transfer",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.moderation",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "delta_extensions",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "unsupported_upstream_audio"
+        }
+      }
+    }
+  ]
+}

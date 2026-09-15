@@ -214,42 +214,16 @@ func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
 func TestUpdateResponseCacheWritesWhenRetentionDropFalse(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID:           "req-retention-keep",
-		RequestModel:        "test-model",
-		RequestQuery:        "hello",
-		OriginalRequestBody: []byte(`{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`),
-		EmittedRetention:    &config.RetentionDirective{Drop: retBool(false)},
+		RequestID:        "req-retention-keep",
+		RequestModel:     "test-model",
+		RequestQuery:     "hello",
+		SemanticRequest:  testNeutralRequest("test-model", "hello"),
+		EmittedRetention: &config.RetentionDirective{Drop: retBool(false)},
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
 	if !mockCache.addEntryCalled {
 		t.Fatalf("drop=false must preserve non-streaming cache write")
-	}
-}
-
-func TestCacheStreamingResponseSkipsRetentionDrop(t *testing.T) {
-	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
-	ctx := withSelectedDecision(retentionStreamingContext(), decision)
-	ctx.EmittedRetention = &config.RetentionDirective{Drop: retBool(true)}
-
-	if err := router.cacheStreamingResponse(ctx); err != nil {
-		t.Fatalf("cacheStreamingResponse() error = %v", err)
-	}
-	if mockCache.addEntryCalled || mockCache.updateCalled {
-		t.Fatalf("retention.drop must skip streaming cache writes, addEntry=%v update=%v", mockCache.addEntryCalled, mockCache.updateCalled)
-	}
-}
-
-func TestCacheStreamingResponseChecksScopeBeforeRetentionDrop(t *testing.T) {
-	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("no-cache-decision", false))
-	ctx := withSelectedDecision(retentionStreamingContext(), decision)
-	ctx.EmittedRetention = &config.RetentionDirective{Drop: retBool(true)}
-
-	if err := router.cacheStreamingResponse(ctx); err != nil {
-		t.Fatalf("cacheStreamingResponse() error = %v", err)
-	}
-	if mockCache.addEntryCalled || mockCache.updateCalled {
-		t.Fatalf("disabled semantic-cache scope must skip streaming cache writes before retention, addEntry=%v update=%v", mockCache.addEntryCalled, mockCache.updateCalled)
 	}
 }
 
@@ -302,11 +276,11 @@ func TestApplyRetentionTTLOverride(t *testing.T) {
 func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID:           "req-retention-ttl",
-		RequestModel:        "test-model",
-		RequestQuery:        "hello",
-		OriginalRequestBody: []byte(`{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`),
-		EmittedRetention:    &config.RetentionDirective{TTLTurns: intPtr(2)},
+		RequestID:        "req-retention-ttl",
+		RequestModel:     "test-model",
+		RequestQuery:     "hello",
+		SemanticRequest:  testNeutralRequest("test-model", "hello"),
+		EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(2)},
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
@@ -318,22 +292,6 @@ func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 	}
 }
 
-func TestCacheStreamingResponseAppliesRetentionTTL(t *testing.T) {
-	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
-	ctx := withSelectedDecision(retentionStreamingContext(), decision)
-	ctx.EmittedRetention = &config.RetentionDirective{TTLTurns: intPtr(4)}
-
-	if err := router.cacheStreamingResponse(ctx); err != nil {
-		t.Fatalf("cacheStreamingResponse() error = %v", err)
-	}
-	if !mockCache.addEntryCalled && !mockCache.updateCalled {
-		t.Fatalf("ttl_turns streaming must still write the cache entry")
-	}
-	if mockCache.lastTTLSeconds != 4*retentionDefaultSecondsPerTurn {
-		t.Fatalf("streaming ttl_turns override: got %d, want %d", mockCache.lastTTLSeconds, 4*retentionDefaultSecondsPerTurn)
-	}
-}
-
 func retentionCacheDecision(name string, cacheEnabled bool) config.Decision {
 	decision := config.Decision{
 		Name:      name,
@@ -341,26 +299,11 @@ func retentionCacheDecision(name string, cacheEnabled bool) config.Decision {
 	}
 	if cacheEnabled {
 		decision.Plugins = []config.DecisionPlugin{{
-			Type:          "semantic-cache",
+			Type:          config.DecisionPluginResponseCache,
 			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
 		}}
 	}
 	return decision
-}
-
-func retentionStreamingContext() *RequestContext {
-	return &RequestContext{
-		RequestID:         "req-stream-retention",
-		RequestModel:      "test-model",
-		RequestQuery:      "hello",
-		StreamingComplete: true,
-		StreamingContent:  "hello",
-		StreamingMetadata: map[string]interface{}{
-			"id":      "chatcmpl-retention",
-			"model":   "test-model",
-			"created": int64(1),
-		},
-	}
 }
 
 func assertLogField(t *testing.T, fields map[string]interface{}, key string, want interface{}) {

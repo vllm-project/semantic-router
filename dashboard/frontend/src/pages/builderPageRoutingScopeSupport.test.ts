@@ -110,7 +110,7 @@ describe('Builder routing scope navigation', () => {
     models: [{ name: 'shared-model', fields: {}, pos: { Line: 1, Column: 1 } }],
     entrypoints: [
       {
-        modelNames: ['vllm-sr/mom-balanced-v1'],
+        modelNames: ['vllm-sr/mom-v1-blend'],
         recipe: 'balanced',
         pos: { Line: 2, Column: 1 },
       },
@@ -146,7 +146,7 @@ describe('Builder routing scope navigation', () => {
         id: 'recipe:balanced',
         label: 'balanced',
         recipeName: 'balanced',
-        modelNames: ['vllm-sr/mom-balanced-v1'],
+        modelNames: ['vllm-sr/mom-v1-blend'],
       },
     ])
     expect(resolveBuilderRoutingScope(scopedAst, 'recipe:balanced')).toMatchObject({
@@ -176,5 +176,13 @@ RECIPE speed {
 
     expect(mutated).toContain('keywords: ["after"]')
     expect(mutated).toContain('keywords: ["unchanged"]')
+  })
+
+  it('keeps bindings-only default routing visible and isolates recipe bindings', () => {
+    const binding = { deployment: 'shared', contract: 'embedding.v1', adapter: 'mmbert' }
+    const ast: ASTProgram = { ...scopedAst, modelBindings: { embedding: binding } }
+    expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
+    expect(resolveBuilderRoutingScope(ast, 'global')?.modelBindings).toEqual({ embedding: binding })
+    expect(resolveBuilderRoutingScope(ast, 'recipe:balanced')?.modelBindings).toBeUndefined()
   })
 })

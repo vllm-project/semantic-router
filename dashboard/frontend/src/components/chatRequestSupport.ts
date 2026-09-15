@@ -1,11 +1,11 @@
 import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
-import { buildPromptWithAttachments, type PlaygroundAttachment } from './playgroundFileAttachments'
+import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
 import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
 
 export interface OutboundChatMessage {
   role: string
-  content: string | null
+  content: unknown
   tool_calls?: Array<{
     id: string
     type: 'function'
@@ -16,6 +16,21 @@ export interface OutboundChatMessage {
   }>
   tool_call_id?: string
 }
+
+export const PLAYGROUND_MAX_REQUEST_BYTES = 10 * 1024 * 1024
+
+export const assertPlaygroundRequestSize = (request: Record<string, unknown>): void => {
+  const bytes = new TextEncoder().encode(JSON.stringify(request)).byteLength
+  if (bytes > PLAYGROUND_MAX_REQUEST_BYTES) {
+    throw new Error('Playground request exceeds the 10 MB request limit.')
+  }
+}
+
+export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
+  'Content-Type': 'application/json',
+  'x-session-id': conversationId,
+  'x-vsr-debug': 'true',
+})
 
 const RESPONSE_HEADER_KEYS = [
   // v0.4 keystone headers (#2203)
@@ -49,10 +64,13 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-modality',
   'x-vsr-matched-authz',
   'x-vsr-matched-jailbreak',
+  'x-vsr-matched-safety',
+  'x-vsr-matched-hallucination',
   'x-vsr-matched-pii',
   'x-vsr-matched-kb',
   'x-vsr-matched-conversation',
   'x-vsr-matched-event',
+  'x-vsr-matched-input-modality',
   'x-vsr-matched-projections',
   'x-vsr-looper-model',
   'x-vsr-looper-models-used',
@@ -62,6 +80,9 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-looper-prompt-tokens',
   'x-vsr-looper-completion-tokens',
   'x-vsr-looper-total-tokens',
+  'x-vsr-latency-ms',
+  'x-vsr-ttft-ms',
+  'x-vsr-tpot-ms',
   'x-vsr-retention-drop',
   'x-vsr-retention-ttl-turns',
   'x-vsr-retention-keep-current-model',
@@ -80,7 +101,17 @@ export const buildChatMessages = (
     if (message.role === 'user') {
       chatMessages.push({
         role: 'user',
-        content: buildPromptWithAttachments(message.content, message.playgroundAttachments ?? []),
+        content:
+          message.requestContent ??
+          buildPlaygroundUserContent(message.content, message.playgroundAttachments ?? []),
+      })
+      continue
+    }
+
+    if (message.role === 'system') {
+      chatMessages.push({
+        role: 'system',
+        content: message.requestContent ?? message.content,
       })
       continue
     }
@@ -120,10 +151,15 @@ export const buildChatMessages = (
         })
       }
 
-      const assistantContent = /<tool_call/i.test(message.content)
-        ? extractTextToolCalls(message.content).content
-        : message.content
-      if (assistantContent) {
+      const assistantContent =
+        message.requestContent ??
+        (/<tool_call/i.test(message.content)
+          ? extractTextToolCalls(message.content).content
+          : message.content)
+      if (
+        (typeof assistantContent === 'string' && assistantContent.length > 0) ||
+        (Array.isArray(assistantContent) && assistantContent.length > 0)
+      ) {
         chatMessages.push({ role: 'assistant', content: assistantContent })
       }
     }
@@ -135,7 +171,7 @@ export const buildChatMessages = (
 
   chatMessages.push({
     role: 'user',
-    content: buildPromptWithAttachments(nextUserMessage, nextUserAttachments),
+    content: buildPlaygroundUserContent(nextUserMessage, nextUserAttachments),
   })
   return chatMessages
 }
@@ -156,7 +192,25 @@ export const buildChatRequestBody = (
     requestBody.tool_choice = 'auto'
   }
 
+  assertPlaygroundRequestSize(requestBody)
   return requestBody
+}
+
+export const buildExactChatRequestBody = (
+  request: Record<string, unknown>,
+  fallbackModel: string,
+): Record<string, unknown> => {
+  const messages = Array.isArray(request.messages) ? request.messages : []
+  const requestModel = typeof request.model === 'string' ? request.model.trim() : ''
+
+  const result = {
+    ...request,
+    model: requestModel || fallbackModel,
+    messages,
+    stream: true,
+  }
+  assertPlaygroundRequestSize(result)
+  return result
 }
 
 export const collectResponseHeaders = (response: Response): Record<string, string> => {

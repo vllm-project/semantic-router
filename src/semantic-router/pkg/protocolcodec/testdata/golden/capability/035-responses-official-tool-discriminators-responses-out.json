@@ -1,0 +1,221 @@
+{
+  "cases": [
+    {
+      "name": "function",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "Use the selected tool.",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "description": "Look up a value",
+              "name": "lookup",
+              "parameters": {
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "apply_patch",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "code_interpreter",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "computer",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "computer_use_preview",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "custom",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "file_search",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "image_generation",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "Use the selected tool.",
+                  "type": "input_text"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": {
+            "type": "image_generation"
+          },
+          "tools": [
+            {
+              "action": "edit",
+              "background": "transparent",
+              "input_fidelity": "high",
+              "input_image_mask": {
+                "file_id": "file_mask_1",
+                "image_url": "data:image/png;base64,bWFzaw=="
+              },
+              "model": "gpt-image-1",
+              "moderation": "low",
+              "output_compression": 80,
+              "output_format": "webp",
+              "partial_images": 3,
+              "quality": "high",
+              "size": "1024x1536",
+              "type": "image_generation"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "local_shell",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "mcp",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "namespace",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "programmatic_tool_calling",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "shell",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "tool_search",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_search",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    },
+    {
+      "name": "web_search_preview",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool"
+        }
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@ package apiserver
 import (
 	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
@@ -18,6 +19,8 @@ import (
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
 	classificationSvc     classificationService
+	previewAdmissionOnce  sync.Once
+	previewAdmission      admission.Admissioner
 	configMu              sync.RWMutex
 	config                *config.RouterConfig
 	runtimeConfig         *liveRuntimeConfig
@@ -37,7 +40,7 @@ type ClassificationAPIServer struct {
 	managementAuditEntries  []managementAuditEntry
 	managementAuditLastHash string
 	managementAuditSequence uint64
-	// learningOutcomePolicy gates POST /v1/router/outcomes (idempotency + rate limit).
+	// learningOutcomePolicy gates POST /api/v1/observability/outcomes (idempotency + rate limit).
 	learningOutcomePolicyOnce sync.Once
 	learningOutcomePolicy     *learningOutcomeIngestPolicy
 }
@@ -45,29 +48,35 @@ type ClassificationAPIServer struct {
 func (s *ClassificationAPIServer) currentContextCompression() (
 	*contextcompression.Service,
 	contextcompression.RecoveryStore,
+	func(),
 ) {
 	if s == nil {
-		return nil, nil
+		return nil, nil, func() {}
 	}
 	if s.runtimeRegistry != nil {
-		service, recovery := s.runtimeRegistry.ContextCompression()
+		service, recovery, release := s.runtimeRegistry.AcquireContextCompression()
 		if service != nil {
-			return service, recovery
+			return service, recovery, release
 		}
+		release()
+		return nil, nil, func() {}
 	}
-	return s.contextCompression, s.compressionRecovery
+	return s.contextCompression, s.compressionRecovery, func() {}
 }
 
-func (s *ClassificationAPIServer) currentResponseCache() *cache.ResponseCacheService {
+func (s *ClassificationAPIServer) currentResponseCache() (*cache.ResponseCacheService, func()) {
 	if s == nil {
-		return nil
+		return nil, func() {}
 	}
 	if s.runtimeRegistry != nil {
-		if service := s.runtimeRegistry.ResponseCache(); service != nil {
-			return service
+		if service, release := s.runtimeRegistry.AcquireResponseCache(); service != nil {
+			return service, release
+		} else {
+			release()
 		}
+		return nil, func() {}
 	}
-	return s.responseCache
+	return s.responseCache, func() {}
 }
 
 type (
@@ -119,7 +128,7 @@ type ClassificationOptions struct {
 
 // EmbeddingRequest represents a request for embedding generation
 type EmbeddingRequest struct {
-	Texts           []string `json:"texts"`
+	Texts           []string `json:"texts,omitempty"`
 	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
 	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
 	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
@@ -194,9 +203,12 @@ type BatchSimilarityResponse struct {
 
 // EndpointInfo represents information about an API endpoint
 type EndpointInfo struct {
-	Path        string `json:"path"`
-	Method      string `json:"method"`
-	Description string `json:"description"`
+	Path        string           `json:"path"`
+	Method      string           `json:"method"`
+	Description string           `json:"description"`
+	Permission  RoutePermission  `json:"permission"`
+	Sensitivity RouteSensitivity `json:"sensitivity"`
+	EndpointContract
 }
 
 // TaskTypeInfo represents information about a task type
@@ -210,4 +222,6 @@ type EndpointMetadata struct {
 	Path        string
 	Method      string
 	Description string
+	Parameters  []OpenAPIParameter
+	EndpointContract
 }

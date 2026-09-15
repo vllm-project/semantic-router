@@ -26,31 +26,19 @@
     radial-gradient(circle at 85% 75%, rgba(96, 165, 250, 0.1) 0%, transparent 45%);
 }
 
+/* Layout comes from the global .site-section-intro lockup. This used to be
+ * centred on its own 760px measure, which put it on a different axis to every
+ * other section on the page. */
 .paperHeader {
   position: relative;
   z-index: 1;
-  text-align: center;
-  max-width: 760px;
-  margin: 0 auto 3rem;
-}
-
-.paperLabel {
-  margin: 0 0 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6366F1;
-}
-
-[data-theme='dark'] .paperLabel {
-  color: #A5B4FC;
+  margin-bottom: 3rem;
 }
 
 .paperTitle {
-  margin: 0 0 1rem;
-  font-size: 2.75rem;
-  line-height: 1.15;
+  margin: 0;
+  font-size: var(--site-text-h2);
+  line-height: var(--site-leading-tight);
   letter-spacing: -0.03em;
   color: #0A0A0A;
 }
@@ -79,8 +67,6 @@
   grid-template-columns: minmax(240px, 280px) 1fr;
   gap: 1.25rem;
   align-items: stretch;
-  max-width: 1120px;
-  margin: 0 auto;
   min-width: 0;
   min-height: var(--paper-figure-rail-height);
 }
@@ -113,19 +99,11 @@
   background: rgba(22, 22, 22, 0.8);
 }
 
+/* Hover and active colours live in the consolidated blue block at the foot of
+ * this file, which covers every interactive figure element at once. Only the
+ * geometry belongs here. */
 .figureNavItem:hover {
   transform: translateY(-1px);
-  border-color: rgba(99, 102, 241, 0.4);
-}
-
-.figureNavItemActive {
-  border-color: rgba(99, 102, 241, 0.45);
-  background: rgba(99, 102, 241, 0.08);
-}
-
-[data-theme='dark'] .figureNavItemActive {
-  background: rgba(99, 102, 241, 0.18);
-  border-color: rgba(165, 180, 252, 0.55);
 }
 
 .figureIndex {
@@ -1698,7 +1676,11 @@
   transform: translateY(-2px);
 }
 
-.tokenTag:hover {
+/* The dark twin is required, not decorative: the `[data-theme='dark'] .tokenTag`
+ * rest rule below scores the same as a bare `.tokenTag:hover` and comes later,
+ * so without it the hover never paints in dark mode. */
+.tokenTag:hover,
+[data-theme='dark'] .tokenTag:hover {
   border-color: var(--site-hover-border);
   background: rgba(48, 162, 255, 0.14);
   color: var(--site-brand-blue);
@@ -1709,7 +1691,8 @@
 [data-theme='dark'] .agentFeedbackCard:hover,
 .transformerBlock:hover,
 [data-theme='dark'] .transformerBlock:hover {
-  border-color: var(--site-border-strong);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-surface-bg-soft);
   transform: translateY(-2px);
 }
 
@@ -1723,8 +1706,10 @@
 [data-theme='dark'] .layerCardActive,
 .taxonomyCardActive,
 [data-theme='dark'] .taxonomyCardActive,
-.tokenTagActive,
-[data-theme='dark'] .tokenTagActive,
+/* Doubled: the `.tokenTag` rest rule below sets the `border` shorthand at the
+ * same (0,1,0), so a bare `.tokenTagActive` loses its blue border. */
+.tokenTag.tokenTagActive,
+[data-theme='dark'] .tokenTag.tokenTagActive,
 .agentNodeActive,
 [data-theme='dark'] .agentNodeActive,
 .agentFeedbackCardActive,

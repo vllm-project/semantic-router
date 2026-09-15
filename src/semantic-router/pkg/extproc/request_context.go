@@ -1,18 +1,20 @@
 package extproc
 
 import (
-	"bytes"
 	"context"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -22,54 +24,48 @@ type EnhancedHallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
-	HallucinationConfidence float32 `json:"hallucination_confidence"`
+	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
+	ScoreAvailable          bool    `json:"score_available"`
 	NLILabel                string  `json:"nli_label"` // ENTAILMENT, NEUTRAL, or CONTRADICTION
-	NLIConfidence           float32 `json:"nli_confidence"`
+	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
+	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
 	Explanation             string  `json:"explanation"` // Human-readable explanation
 }
 
+// ResponseHallucinationEvidence is the detector output behind the
+// hallucination signal: the verdict, its confidence, and the spans it rests
+// on, with NLI explanations when the rule asked for them.
+type ResponseHallucinationEvidence struct {
+	Detected       bool
+	Confidence     float32
+	ScoreAvailable bool
+	ScoreKind      string
+	Spans          []string
+	Enhanced       *EnhancedHallucinationInfo
+}
+
 // EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations.
 type EnhancedHallucinationInfo struct {
-	Confidence float32                     `json:"confidence"`
-	Spans      []EnhancedHallucinationSpan `json:"spans"`
-}
-
-// ChatCompletionMessage is role plus plain-text content from a Chat Completions request.
-type ChatCompletionMessage struct {
-	Role    string
-	Content string
-}
-
-// StreamingToolCallState accumulates tool-call deltas across streaming chunks.
-type StreamingToolCallState struct {
-	ID        string
-	Name      string
-	Arguments string
-}
-
-type StreamingChoiceState struct {
-	Content      string
-	Reasoning    string
-	Refusal      string
-	FinishReason string
-	ToolCalls    map[int]*StreamingToolCallState
+	Confidence     float32                     `json:"confidence,omitempty"`
+	ScoreAvailable bool                        `json:"score_available"`
+	ScoreKind      string                      `json:"score_kind,omitempty"`
+	Spans          []EnhancedHallucinationSpan `json:"spans"`
 }
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
-	Headers   map[string]string
-	RequestID string
-	// OriginalRequestBody is the immutable canonical request used by routing,
-	// cache identity, replay, and diagnostics. Response API requests store their
-	// translated Chat Completions representation here.
-	OriginalRequestBody []byte
-	// WorkingRequestBody is the provider-bound request after RAG, memory, and
-	// route-local plugin mutation. Empty means the original body is unchanged.
-	WorkingRequestBody []byte
-	RequestModel       string
-	RequestQuery       string
-	CacheRequestModel  string
+	RAGRerankLatency    time.Duration
+	RAGRerankScores     []float32
+	RAGRerankerIdentity string
+	Headers             map[string]string
+	RequestID           string
+	// IngressBodyBytes records only transport size. Source bytes live in the
+	// bounded, ephemeral protocol envelope and are never general-purpose state.
+	IngressBodyBytes  int
+	RequestModel      string
+	RequestQuery      string
+	CacheRequestModel string
 	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
 	CacheQuery                    string
 	CacheExactFingerprint         string
@@ -90,54 +86,24 @@ type RequestContext struct {
 	ContextCompressionSkipReason  string
 	StartTime                     time.Time
 	ProcessingStartTime           time.Time
-
+	RoutingLatency                time.Duration
+	RequestCost                   float64
+	RequestCostCurrency           string
+	RequestCostPriced             bool
 	// Streaming detection
-	ExpectStreamingResponse bool                   // set from request Accept header or stream parameter
-	IsStreamingResponse     bool                   // set from response Content-Type
-	AnthropicStream         *anthropic.StreamState // Anthropic SSE → OpenAI translation state
-
-	// PendingSSEBytes holds a trailing partial SSE frame carried over from a
-	// prior streaming response chunk. Envoy STREAMED mode delivers the
-	// response body split at arbitrary byte offsets, so an SSE frame can
-	// straddle two chunks; the streaming handlers stash the incomplete tail
-	// here and prepend it to the next chunk before parsing (issue #2316).
-	PendingSSEBytes []byte
-
-	// AnthropicPassthrough carries Anthropic-only request fields captured from
-	// the raw inbound body and incoming headers, so the request-body writer
-	// and header builder can replay them on the outbound side.
-	AnthropicPassthrough *anthropic.AnthropicPassthrough
+	ExpectStreamingResponse bool // set from request Accept header or stream parameter
+	IsStreamingResponse     bool // set from response Content-Type
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
+	SkipProcessing        bool // true only when the configured opt-out header is valid
 
-	// Streaming accumulation for caching
-	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
-	StreamingContent   string                          // Accumulated content from delta.content
-	StreamingReasoning string                          // Accumulated reasoning from delta.reasoning_content
-	StreamingRefusal   string                          // Accumulated refusal text from delta.refusal
-	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
-	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
-	StreamingChoices   map[int]*StreamingChoiceState
-	StreamingComplete  bool // True when [DONE] marker received
-	StreamingAborted   bool // True if stream ended abnormally (EOF, cancel, timeout)
-
-	// Response API streaming translation state. When /v1/responses is backed by
-	// an upstream Chat Completions stream, these fields track the outbound
-	// Responses API event envelope emitted to the client.
-	ResponseAPIStreamStarted              bool
-	ResponseAPIStreamMessageStarted       bool
-	ResponseAPIStreamNextOutputIndex      int
-	ResponseAPIStreamMessageOutputIndex   int
-	ResponseAPIStreamItemID               string
-	ResponseAPIStreamToolCallItemIDs      map[int]string
-	ResponseAPIStreamToolCallOutputIndex  map[int]int
-	ResponseAPIStreamReasoningItemID      string
-	ResponseAPIStreamReasoningOutputIndex int
-	ResponseAPIStreamReasoningStarted     bool
-	ResponseAPIStreamRefusalStarted       bool
-	ResponseAPIStreamCreatedAt            int64
+	StreamingComplete      bool // True after neutral stream finalization runs once.
+	StreamingAborted       bool // True if the neutral stream ended abnormally.
+	ProtocolResponseStream *protocolcodec.StreamEngine
+	PublicChatUsageFilter  *protocolcodec.ChatUsageStreamFilter
+	SemanticStreamState    *semanticResponseStreamState
 
 	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
 	// the response-header phase. Zero means the status was never observed for
@@ -178,31 +144,41 @@ type RequestContext struct {
 	Routing RequestRoutingContext
 
 	// VSR decision tracking
-	VSRSelectedCategory             string                                      // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName         string                                      // The decision name from DecisionEngine evaluation
-	VSRSelectedDecisionConfidence   float64                                     // Confidence score from DecisionEngine evaluation
-	VSRReasoningMode                string                                      // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel                string                                      // The model selected by VSR
-	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
-	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
-	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
-	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
-	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper
-	VSRPromptHelperTotalTokens      int64                                       // Total helper tokens
-	VSRPromptHelperLatencyMs        int64                                       // Helper model round-trip latency
-	VSRLearningPolicy               *routerLearningPolicy                       // Primary Router Learning trace
-	VSRLearningPolicies             routerLearningPolicies                      // Router Learning traces by component
-	VSRLearningProtectionPreflight  *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
-	VSRLearningSessionID            string                                      // Router Learning memory key used for this request
-	VSRLearningConversationID       string                                      // Client-declared conversation identity used by Router Learning
-	VSRCacheHit                     bool                                        // Whether this request hit the cache
-	VSRCacheSimilarity              float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
-	VSRCacheHitKind                 string
-	VSRCacheSource                  string
-	VSRCacheEntryAgeSeconds         float64
-	VSRCacheTTLSeconds              int
-	VSRInjectedSystemPrompt         bool             // Whether a system prompt was injected into the request
-	VSRSelectedDecision             *config.Decision // The decision object selected by DecisionEngine (for plugins)
+	VSRSelectedCategory                 string                                      // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName             string                                      // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence       float64                                     // Confidence score from DecisionEngine evaluation
+	VSRSelectedDecisionConfidenceScored bool                                        // False for structural and error-policy matches without model scores
+	VSRReasoningMode                    string                                      // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel                    string                                      // The model selected by VSR
+	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
+	VSRFusionQuorum                     *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
+	VSRLooperDiagnostics                *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
+	VSRPromptHelperModel                string                                      // Concrete prompt-selector helper model
+	VSRPromptHelperPromptTokens         int64                                       // Prompt tokens consumed by the helper
+	VSRPromptHelperCompletionTokens     int64                                       // Completion tokens consumed by the helper
+	VSRPromptHelperTotalTokens          int64                                       // Total helper tokens
+	VSRPromptHelperLatencyMs            int64                                       // Helper model round-trip latency
+	VSRLearningPolicy                   *routerLearningPolicy                       // Primary Router Learning trace
+	VSRLearningPolicies                 routerLearningPolicies                      // Router Learning traces by component
+	VSRLearningProtectionPreflight      *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
+	VSRLearningSessionID                string                                      // Router Learning memory key used for this request
+	VSRLearningConversationID           string                                      // Client-declared conversation identity used by Router Learning
+	VSRCacheHit                         bool                                        // Whether this request hit the cache
+	VSRCacheSimilarity                  float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRCacheHitKind                     string
+	VSRCacheSource                      string
+	VSRCacheEntryAgeSeconds             float64
+	VSRCacheTTLSeconds                  int
+	VSRInjectedSystemPrompt             bool             // Whether a system prompt was injected into the request
+	VSRSelectedDecision                 *config.Decision // The decision object selected by DecisionEngine (for plugins)
+	// VSREligibleModelRefs is the selected decision's model set after applying
+	// request contracts. Loopers consume this exact set; broader Router Learning
+	// candidate sets must independently apply the same request contracts.
+	VSREligibleModelRefs []config.ModelRef
+	// VSRPolicyEligibleModelRefs is a selector's hard eligibility envelope.
+	// Unlike context-only filtering, it also constrains tier/global learning.
+	VSRPolicyEligibleModelRefs []config.ModelRef
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -214,59 +190,92 @@ type RequestContext struct {
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 
+	// RequestDemandSnapshots retains at most one content-free demand estimate for
+	// each stable request stage. It is observe-only until final admission lands.
+	RequestDemandSnapshots []routerreplay.RequestDemandSnapshot
+
 	// VSR signal tracking - stores all matched signals for response headers
-	VSRMatchedKeywords     []string // Matched keyword rule names
-	VSRMatchedEmbeddings   []string // Matched embedding rule names
-	VSRMatchedDomains      []string // Matched domain rule names
-	VSRMatchedFactCheck    []string // Matched fact-check signals
-	VSRMatchedUserFeedback []string // Matched user feedback signals
-	VSRMatchedReask        []string // Matched repeated-question dissatisfaction signals
-	VSRMatchedPreference   []string // Matched preference signals
-	VSRMatchedLanguage     []string // Matched language signals
-	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
-	VSRContextTokenCount   int      // Actual token count for the request
-	VSRContextTextBytes    int      // Byte length of text used for context token estimation
-	VSRMatchedStructure    []string // Matched structure rule names
-	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	VSRMatchedModality     []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
-	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
-	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
-	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
-	VSRMatchedKB           []string // Matched knowledge-base signal names
-	VSRMatchedConversation []string // Matched conversation-shape signal names
-	VSRMatchedEvent        []string // Matched event signal names
-	VSRMatchedMetadata     []string // Matched untrusted request metadata signal names
-	VSRMatchedClassifier   []string // Matched generic classifier signal names
-	VSRConversationFacts   classification.ConversationFacts
-	VSRMatchedProjection   []string // Matched projection mapping outputs
-	VSRProjectionScores    map[string]float64
-	VSRSignalConfidences   map[string]float64
-	VSRSignalValues        map[string]float64
-	VSRSignalErrors        map[string]string
-	VSRProjectionTrace     *projectiontrace.Trace
+	VSRMatchedKeywords        []string // Matched keyword rule names
+	VSRMatchedEmbeddings      []string // Matched embedding rule names
+	VSRMatchedDomains         []string // Matched domain rule names
+	VSRMatchedFactCheck       []string // Matched fact-check signals
+	VSRMatchedUserFeedback    []string // Matched user feedback signals
+	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
+	VSRMatchedPreference      []string // Matched preference signals
+	VSRMatchedLanguage        []string // Matched language signals
+	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
+	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
+	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
+	VSRContextEquivalentBytes int      // Content-free byte equivalent of the conservative routing floor
+	VSRContextHasNonText      bool     // Structured JSON or image reserves make text-only calibration unsafe
+	VSRMatchedStructure       []string // Matched structure rule names
+	VSRMatchedComplexity      []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
+	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
+	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
+	VSRMatchedSafety          []string // Matched safety rule names (confidence >= threshold)
+	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
+	VSRMatchedKB              []string // Matched knowledge-base signal names
+	VSRMatchedConversation    []string // Matched conversation-shape signal names
+	VSRMatchedEvent           []string // Matched event signal names
+	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
+	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRMatchedInputModality   []string // Matched structural input-modality signal names
+	VSRConversationFacts      classification.ConversationFacts
+	VSRMatchedProjection      []string // Matched projection mapping outputs
+	VSRProjectionScores       map[string]float64
+	VSRSignalConfidences      map[string]float64
+	VSRSignalValues           map[string]float64
+	VSRSignalErrors           map[string]string
+	VSRSignalErrorMatches     map[string]bool
+	// VSRMatchedResponseJailbreak holds response-direction jailbreak rules that
+	// matched. Populated after the model answers, unlike every VSRMatched*
+	// above it.
+	VSRMatchedResponseJailbreak []string
+	// VSRResponseJailbreakType and VSRResponseJailbreakRisk are the evidence the
+	// response-stage signal was computed from, kept so the plugin does not have
+	// to re-derive them from the per-rule confidences.
+	VSRResponseJailbreakType           string
+	VSRResponseJailbreakRisk           float32
+	VSRResponseJailbreakScoreAvailable bool
+	VSRResponseJailbreakDecision       *tasks.LabelDecision
+	// VSRMatchedHallucination holds hallucination rules that matched once the
+	// model answered. VSRHallucinationEvidence is what the observation was
+	// computed from, kept for the plugin that consumes it and for Router
+	// Replay; it is nil when the rule was not evaluated for this request.
+	VSRMatchedHallucination  []string
+	VSRHallucinationEvidence *ResponseHallucinationEvidence
+	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
+	VSRProjectionTrace       *projectiontrace.Trace
 
 	// Hallucination mitigation tracking
-	FactCheckNeeded           bool                       // Result of fact-check classification
-	FactCheckConfidence       float32                    // Confidence score of fact-check classification
-	HasToolsForFactCheck      bool                       // Request has tools that provide context for fact-checking
-	ToolResultsContext        string                     // Aggregated tool results for hallucination check
-	UserContent               string                     // Stored user content for hallucination detection
-	RequestImageURL           string                     // First image URL from user messages (for Tier 1 complexity classification)
-	HallucinationDetected     bool                       // Result of hallucination detection
-	HallucinationSpans        []string                   // Unsupported spans found in answer (basic mode)
-	HallucinationConfidence   float32                    // Confidence score of hallucination detection
-	EnhancedHallucinationInfo *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
-	UnverifiedFactualResponse bool                       // True if fact-check needed but no tools to verify against
+	FactCheckNeeded             bool     // Result of fact-check classification
+	FactCheckConfidence         float32  // Confidence score of fact-check classification
+	HasToolsForFactCheck        bool     // Request has tools that provide context for fact-checking
+	ToolResultsContext          string   // Aggregated tool results for hallucination check
+	UserContent                 string   // Stored user content for hallucination detection
+	RequestImageURL             string   // First image URL from user messages (for Tier 1 complexity classification)
+	HallucinationDetected       bool     // Result of hallucination detection
+	HallucinationSpans          []string // Unsupported spans found in answer (basic mode)
+	HallucinationScoreAvailable bool
+	HallucinationScoreKind      string
+	HallucinationConfidence     float32                    // Confidence score of hallucination detection
+	EnhancedHallucinationInfo   *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
+	UnverifiedFactualResponse   bool                       // True if fact-check needed but no tools to verify against
 
 	// Jailbreak Detection Results (request-level, from signal classification)
-	JailbreakDetected   bool    // True if jailbreak was detected in user input
-	JailbreakType       string  // Type of jailbreak detected
-	JailbreakConfidence float32 // Confidence score of jailbreak detection
+	JailbreakDetected       bool   // True if jailbreak was detected in user input
+	JailbreakType           string // Type of jailbreak detected
+	JailbreakDecision       *tasks.LabelDecision
+	JailbreakConfidence     float32 // Confidence score of jailbreak detection
+	JailbreakScoreAvailable bool
 
 	// Response-level Jailbreak Detection Results (from response body scanning)
-	ResponseJailbreakDetected   bool    // True if jailbreak content detected in LLM response
-	ResponseJailbreakType       string  // Type of jailbreak detected in response
-	ResponseJailbreakConfidence float32 // Confidence score of response jailbreak detection
+	ResponseJailbreakDetected       bool   // True if jailbreak content detected in LLM response
+	ResponseJailbreakType           string // Type of jailbreak detected in response
+	ResponseJailbreakDecision       *tasks.LabelDecision
+	ResponseJailbreakConfidence     float32 // Confidence score of response jailbreak detection
+	ResponseJailbreakScoreAvailable bool
 
 	// PII Detection Results
 	PIIDetected bool     // True if PII was detected
@@ -277,46 +286,39 @@ type RequestContext struct {
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
 
-	// Response API context
-	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
-
-	// Chat Completions messages (parsed for memory and related flows)
-	ChatCompletionMessages []ChatCompletionMessage
-	// ChatCompletionRequestBody is the raw chat-completions JSON (dev: extract user from body).
-	ChatCompletionRequestBody []byte
-	// ChatCompletionUserID is populated in dev builds when parsing the chat-completions body.
-	ChatCompletionUserID string
+	// ResponseObjectState is present only when optional Responses object
+	// persistence participates in this request. Generation never depends on it.
+	ResponseObjectState *ResponseObjectState
 
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
+	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
+	// configuration, or nil when the selected decision declares none.
+	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
+
 	// Looper context
-	LooperRequest   bool // True only for token-authenticated in-process looper requests
-	LooperIteration int  // The iteration number if this is a looper request
+	LooperRequest   bool                  // True only for token-authenticated in-process looper requests
+	LooperIteration int                   // The iteration number if this is a looper request
+	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
 
-	// SkipProcessing indicates the client (or an upstream filter such as Envoy AI
-	// Gateway) requested a full passthrough via the x-vsr-skip-processing header.
-	// When true the extproc still receives Envoy callbacks but acts as a no-op:
-	// it does not classify, route, mutate, cache, or inspect request/response
-	// bodies, and simply returns CONTINUE for every phase.
-	SkipProcessing bool
-
-	// External API routing context (for Envoy-routed external API requests)
-	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
-	// Empty string means standard OpenAI-compatible backend (no transformation needed)
-	APIFormat string
-
-	// ClientProtocol identifies the inbound wire format (e.g., "anthropic" for /v1/messages).
-	// Empty string means OpenAI-compatible (the default).
-	ClientProtocol string
-
-	// IRExtensions carries protocol-specific fields that have no home in
-	// the OpenAI-shape IR (*openai.ChatCompletionNewParams). Inbound
-	// parsers populate it for non-OpenAI clients; outbound emitters and
-	// plugins read from it. Nil for plain OpenAI requests.
-	IRExtensions *ir.IRExtensions
+	// SourceFormat and SemanticRequest are the authoritative public protocol
+	// contract and neutral request.
+	SourceFormat             llmprotocol.WireFormat
+	TargetFormat             llmprotocol.WireFormat
+	SemanticRequest          *llmprotocol.Request
+	OriginalContextHistory   *contextcompression.HistorySnapshot
+	ContextRequestIR         *contextcompression.RequestIR
+	ContextHistorySteps      []contextcompression.TransformationStep
+	ProtectedContextMessages map[int]contextcompression.Protection
+	SemanticResponse         *llmprotocol.Response
+	ProtocolEnvelope         llmprotocol.Envelope
+	ResponseEnvelope         llmprotocol.Envelope
+	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ImmediateProtocolError   *llmprotocol.ProtocolError
+	ImmediateResponseEncoded bool
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin
@@ -347,10 +349,8 @@ type RequestContext struct {
 	ContextCompressionFallback     string
 	ContextCompressionCostSaved    float64
 
-	// Note: Per-user API keys from ext_authz / Authorino are read directly from
-	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
-
-	// Rate limit context - stored after Check() for post-response Report()
+	// RateLimitCtx is retained for the existing optional data-plane limiter.
+	// Protocol codecs never read or mutate admission state.
 	RateLimitCtx *ratelimit.Context
 
 	// EmittedRetention is a deep-clone snapshot of the retention directive
@@ -360,31 +360,13 @@ type RequestContext struct {
 	EmittedRetention *config.RetentionDirective
 }
 
-func (ctx *RequestContext) setWorkingRequestBody(body []byte) {
-	if ctx == nil {
-		return
+// embeddingContext returns the request-scoped context for outbound embedding
+// calls, so a client disconnect cancels in-flight remote embedding RPCs.
+func (ctx *RequestContext) embeddingContext() context.Context {
+	if ctx == nil || ctx.TraceContext == nil {
+		return context.Background()
 	}
-	if bytes.Equal(body, ctx.OriginalRequestBody) {
-		ctx.WorkingRequestBody = nil
-		return
-	}
-	ctx.WorkingRequestBody = body
-}
-
-func (ctx *RequestContext) workingRequestBody() []byte {
-	if ctx == nil {
-		return nil
-	}
-	if len(ctx.WorkingRequestBody) > 0 {
-		return ctx.WorkingRequestBody
-	}
-	return ctx.OriginalRequestBody
-}
-
-func (ctx *RequestContext) requestBodyMutated() bool {
-	return ctx != nil &&
-		len(ctx.WorkingRequestBody) > 0 &&
-		!bytes.Equal(ctx.WorkingRequestBody, ctx.OriginalRequestBody)
+	return ctx.TraceContext
 }
 
 // HasPersonalizedContext returns true if the request/response is tainted with user-specific

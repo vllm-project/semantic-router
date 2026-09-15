@@ -14,9 +14,9 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"response_cache":      emitResponseCachePluginConfig,
 	"context_compression": emitStructuredPluginConfig,
 	"router_replay":       emitRouterReplayPluginConfig,
+	"shadow_dispatch":     emitStructuredPluginConfig,
 	"memory":              emitMemoryPluginConfig,
 	"hallucination":       emitHallucinationPluginConfig,
-	"image_gen":           emitImageGenPluginConfig,
 	"fast_response":       emitFastResponsePluginConfig,
 	"request_params":      emitRequestParamsPluginConfig,
 	"tool_selection":      emitToolSelectionPluginConfig,
@@ -141,19 +141,6 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 }
 
-func emitImageGenPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Backend != "" {
-		fmt.Fprintf(sb, "    backend: %q\n", cfg.Backend)
-	}
-}
-
 func emitFastResponsePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
 	if !ok {
@@ -171,6 +158,9 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if len(cfg.BlockedParams) > 0 {
 		fmt.Fprintf(sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
+	}
+	if cfg.DefaultMaxTokens != nil {
+		fmt.Fprintf(sb, "    default_max_tokens: %d\n", *cfg.DefaultMaxTokens)
 	}
 	if cfg.MaxTokensLimit != nil {
 		fmt.Fprintf(sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)
@@ -240,6 +230,9 @@ func emitToolsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	if len(cfg.BlockTools) > 0 {
 		fmt.Fprintf(sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
 	}
+	if cfg.StripToolHistory {
+		fmt.Fprintf(sb, "    strip_tool_history: true\n")
+	}
 	if cfg.DynamicRetrieval != nil {
 		fmt.Fprintf(sb, "    dynamic_retrieval: %s\n", formatPluginConfigValue(dynamicRetrievalConfigMap(cfg.DynamicRetrieval)))
 	}
@@ -277,6 +270,13 @@ func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
 }
 
 func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
+	if cfg.Rerank != nil {
+		if cfg.Rerank.TopK == nil {
+			fmt.Fprint(sb, "    rerank: {}\n")
+		} else {
+			fmt.Fprintf(sb, "    rerank: { top_k: %d }\n", *cfg.Rerank.TopK)
+		}
+	}
 	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
 		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
 	}

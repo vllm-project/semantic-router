@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,7 +108,7 @@ func setupMockRouterAPI(t *testing.T, response RouterEvalResponse) string {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/eval" {
+		if r.URL.Path != "/api/v1/routing/preview" {
 			http.NotFound(w, r)
 			return
 		}
@@ -187,7 +189,7 @@ func TestCallRouterAPIForwardsSelectedEntrypointModel(t *testing.T) {
 
 	var received RouterIntentRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/v1/eval", r.URL.Path)
+		require.Equal(t, "/api/v1/routing/preview", r.URL.Path)
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(RouterEvalResponse{
@@ -196,14 +198,98 @@ func TestCallRouterAPIForwardsSelectedEntrypointModel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := callRouterAPI(TestQueryRequest{
+	result := callRouterAPI(context.Background(), TestQueryRequest{
 		Query: "hello",
 		Mode:  TestQueryModeDryRun,
-		Model: "vllm-sr/mom-balanced-v1",
+		Model: "vllm-sr/mom-v1-blend",
 	}, server.URL, configPath)
 
-	require.Equal(t, "vllm-sr/mom-balanced-v1", received.Model)
+	require.Equal(t, "vllm-sr/mom-v1-blend", received.Model)
 	require.Equal(t, "balanced-route", result.MatchedDecision)
+}
+
+type topologyCredentialProvider struct {
+	token string
+}
+
+func (provider topologyCredentialProvider) ManagementCredential() (string, error) {
+	return provider.token, nil
+}
+
+func TestCallRouterAPIUsesServerCredential(t *testing.T) {
+	configPath := setupTestConfig(t)
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "Bearer topology-service-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(RouterEvalResponse{RoutingDecision: "balanced-route"}))
+	}))
+	defer server.Close()
+
+	result := callRouterAPI(context.Background(), TestQueryRequest{
+		Query: "hello",
+		Mode:  TestQueryModeDryRun,
+	}, server.URL, configPath, topologyCredentialProvider{token: "topology-service-token"})
+
+	require.Empty(t, result.Warning)
+	require.Equal(t, "balanced-route", result.MatchedDecision)
+}
+
+func TestTopologyPreviewUsesCanonicalTimeout(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("version: v0.3\nglobal:\n  services:\n    api:\n      routing_preview:\n        request_timeout_seconds: 600\n"), 0o600))
+	require.Equal(t, 605*time.Second, topologyPreviewTimeout(configPath))
+}
+
+func TestTopologyPreviewPreservesTimeoutAndOverloadStatus(t *testing.T) {
+	for _, status := range []int{http.StatusGatewayTimeout, http.StatusTooManyRequests} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			defer upstream.Close()
+			handler := TopologyTestQueryHandler("", upstream.URL)
+			recorder := httptest.NewRecorder()
+			handler(recorder, httptest.NewRequest(http.MethodPost, "/api/topology/test-query", strings.NewReader(`{"query":"hello"}`)))
+			require.Equal(t, status, recorder.Code)
+		})
+	}
+}
+
+func TestTopologyPreviewPropagatesClientCancellation(t *testing.T) {
+	started, canceled := make(chan struct{}), make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		var request RouterIntentRequest
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		close(started)
+		<-r.Context().Done()
+		close(canceled)
+	}))
+	defer upstream.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		callRouterAPI(ctx, TestQueryRequest{Query: "hello", Mode: TestQueryModeDryRun}, upstream.URL, "")
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("Topology did not invoke Preview")
+	}
+	cancel()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("Topology did not cancel upstream Preview")
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Topology caller did not return after cancellation")
+	}
 }
 
 func TestTopologyConfigForRequestModelSelectsRecipeDecisions(t *testing.T) {
@@ -218,12 +304,12 @@ func TestTopologyConfigForRequestModelSelectsRecipeDecisions(t *testing.T) {
 			},
 		}},
 		Entrypoints: []routerconfig.EntrypointMapping{{
-			ModelNames: []string{"vllm-sr/mom-balanced-v1"},
+			ModelNames: []string{"vllm-sr/mom-v1-blend"},
 			Recipe:     "balanced",
 		}},
 	}
 
-	scoped := topologyConfigForRequestModel(cfg, "vllm-sr/mom-balanced-v1")
+	scoped := topologyConfigForRequestModel(cfg, "vllm-sr/mom-v1-blend")
 
 	require.Len(t, scoped.IntelligentRouting.Decisions, 1)
 	require.Equal(t, "balanced-route", scoped.IntelligentRouting.Decisions[0].Name)
@@ -318,13 +404,14 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 	var result TestQueryResult
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
 
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", Confidence: 1.0, Reason: "Modality signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", Confidence: 1.0, Reason: "Authorization signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", Confidence: 1.0, Reason: "Jailbreak signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", Confidence: 1.0, Reason: "PII signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", Confidence: 1.0, Reason: "Knowledge base signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", Confidence: 1.0, Reason: "Event signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", Confidence: 1.0, Reason: "Projection mapping matched"})
+	confidenceUnavailable := false
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", ConfidenceAvailable: &confidenceUnavailable, Reason: "Modality signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", ConfidenceAvailable: &confidenceUnavailable, Reason: "Authorization signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", ConfidenceAvailable: &confidenceUnavailable, Reason: "Jailbreak signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", ConfidenceAvailable: &confidenceUnavailable, Reason: "PII signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", ConfidenceAvailable: &confidenceUnavailable, Reason: "Knowledge base signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", ConfidenceAvailable: &confidenceUnavailable, Reason: "Event signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", ConfidenceAvailable: &confidenceUnavailable, Reason: "Projection mapping matched"})
 	assert.Contains(t, result.HighlightedPath, "signal-group-kb")
 	assert.Contains(t, result.HighlightedPath, "signal-kb-privacy_policy")
 	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
@@ -375,7 +462,7 @@ func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testin
 	assert.Contains(t, result.HighlightedPath, "signal-structure-many_questions")
 }
 
-func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
+func TestTopologyTestQueryHandler_MissingRouterAPI(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
@@ -393,8 +480,8 @@ func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected status 503, got %d: %s", rr.Code, rr.Body.String())
 	}
 
 	var result TestQueryResult
@@ -482,41 +569,6 @@ func TestTopologyTestQueryHandler_EvaluatedRules(t *testing.T) {
 	// Basic validation - routing latency should be >= 0 (can be 0 for very fast execution)
 	if result.RoutingLatency < 0 {
 		t.Errorf("Expected non-negative routing latency, got %d", result.RoutingLatency)
-	}
-}
-
-func TestBuildEvaluatedRule_EmptyConditionsSerializeAsEmptyArray(t *testing.T) {
-	rule := buildEvaluatedRule(
-		routerconfig.Decision{
-			Name:     "casual_chat",
-			Priority: 10,
-		},
-		map[string]bool{},
-	)
-
-	if rule.Conditions == nil {
-		t.Fatal("expected empty Conditions slice, got nil")
-	}
-	if len(rule.Conditions) != 0 {
-		t.Fatalf("expected no conditions, got %v", rule.Conditions)
-	}
-
-	payload, err := json.Marshal(rule)
-	if err != nil {
-		t.Fatalf("failed to marshal rule: %v", err)
-	}
-
-	var parsed map[string]any
-	if err := json.Unmarshal(payload, &parsed); err != nil {
-		t.Fatalf("failed to unmarshal rule JSON: %v", err)
-	}
-
-	conditions, ok := parsed["conditions"].([]any)
-	if !ok {
-		t.Fatalf("expected conditions to serialize as JSON array, got %T (%v)", parsed["conditions"], parsed["conditions"])
-	}
-	if len(conditions) != 0 {
-		t.Fatalf("expected empty conditions array, got %v", conditions)
 	}
 }
 
@@ -681,92 +733,20 @@ func TestTestQueryResult_NonFallbackDecision(t *testing.T) {
 	}
 }
 
-// ============== Signal Normalization Tests ==============
-
-func TestNormalizeSignalName(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "space to underscore",
-			input:    "computer science",
-			expected: "computer_science",
-		},
-		{
-			name:     "multiple spaces",
-			input:    "user  feedback  test",
-			expected: "user__feedback__test",
-		},
-		{
-			name:     "already normalized",
-			input:    "code_keywords",
-			expected: "code_keywords",
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "no spaces",
-			input:    "nospaces",
-			expected: "nospaces",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := normalizeSignalName(tt.input)
-			if result != tt.expected {
-				t.Errorf("normalizeSignalName(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestNormalizeModelName(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "dots to dashes",
-			input:    "qwen2.5-7b",
-			expected: "qwen2-5-7b",
-		},
-		{
-			name:     "colons to dashes",
-			input:    "model:v1:latest",
-			expected: "model-v1-latest",
-		},
-		{
-			name:     "slashes to dashes",
-			input:    "org/model/version",
-			expected: "org-model-version",
-		},
-		{
-			name:     "mixed special chars",
-			input:    "gpt-4.0:turbo/v2",
-			expected: "gpt-4-0-turbo-v2",
-		},
-		{
-			name:     "already normalized",
-			input:    "gpt-4",
-			expected: "gpt-4",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := normalizeModelName(tt.input)
-			if result != tt.expected {
-				t.Errorf("normalizeModelName(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
 // Note: contains helper function is defined in config_test.go
+
+func TestTopologyPreservesUnavailableGuardAndDecisionScores(t *testing.T) {
+	unavailable := false
+	response := &RouterEvalResponse{DecisionResult: &RouterEvalDecisionResult{DecisionName: "block", ConfidenceAvailable: &unavailable, MatchedSignals: &RouterMatchedSignals{Jailbreak: []string{"guard"}}}, SignalErrorMatches: map[string]bool{"jailbreak:guard": true}}
+	result := convertRouterResponse(TestQueryRequest{}, response, "missing-config.yaml")
+	data, err := json.Marshal(result)
+	require.NoError(t, err)
+	var wire map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &wire))
+	signal := wire["matchedSignals"].([]interface{})[0].(map[string]interface{})
+	assert.Nil(t, signal["confidence"])
+	assert.Equal(t, false, signal["confidenceAvailable"])
+	assert.Nil(t, wire["decisionConfidence"])
+	assert.Equal(t, false, wire["decisionConfidenceAvailable"])
+	assert.Equal(t, map[string]interface{}{"jailbreak:guard": true}, wire["signalErrorMatches"])
+}

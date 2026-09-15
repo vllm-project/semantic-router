@@ -1,96 +1,110 @@
+---
+title: 开发指南
+translation:
+  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_file: "docs/community/development.md"
+  outdated: false
+---
+
 # 开发指南
 
-本指南介绍 vLLM Semantic Router 的环境要求、初始化设置和测试流程。
+影响 Router 或 CLI 行为的改动，请使用仓库的本地镜像流程。它构建的是贡献者在本地验证时使用的同一套服务拓扑。
 
-## 环境要求
+## 前置条件
 
-请确保已安装以下工具：
+- Git
+- GNU Make
+- Docker 或 Podman
+- Python 3.10 或更高版本，用于 CLI、测试、训练和模拟器工具
 
-- **Docker**（或 Podman）
-- **Make**（构建自动化）
-- **Python** 3.10+（推荐，用于训练和测试）
-
-## 快速开始
-
-1. **克隆仓库：**
-
-   ```bash
-   git clone https://github.com/vllm-project/semantic-router.git
-   cd semantic-router
-   ```
-
-2. **启动开发环境：**
-
-   ```bash
-   make vllm-sr-start
-   ```
-
-   这一个命令会完成所有操作：
-   - 构建包含所有依赖的 Docker 镜像
-   - 从 Hugging Face 下载所需模型
-   - 安装 `vllm-sr` CLI 工具
-   - 启动所有服务（semantic router、envoy、dashboard）
-
-3. **安装 Python 依赖（可选）：**
-
-   ```bash
-   # 用于训练和开发
-   pip install -r requirements.txt
-   
-   # 用于端到端测试
-   pip install -r e2e/testing/requirements.txt
-   ```
-
-## 调试技巧
-
-- **Rust：** 设置 `RUST_LOG=debug`
-- **Go：** 设置 `SR_LOG_LEVEL=debug`
-
-## 运行测试
-
-### 单元测试
-
-- **Rust bindings：**
-
-  ```bash
-  make test-binding
-  ```
-
-- **Go Router：**
-
-  ```bash
-  make test-semantic-router
-  ```
-
-- **分类器：**
-
-  ```bash
-  make test-category-classifier
-  make test-pii-classifier
-  make test-jailbreak-classifier
-  ```
-
-### 手动测试
-
-使用以下命令测试特定场景：
+仓库引导目标会创建 Python 环境，并安装校验工具链：
 
 ```bash
-# 模型自动选择
-make test-auto-prompt-no-reasoning
-make test-auto-prompt-reasoning
-make test-pii          # PII 检测
-make test-prompt-guard # jailbreak 检测
-make test-tools        # Tools 自动选择
+make harness-bootstrap
 ```
 
-### 端到端测试
+个别子项目可能还有额外要求。不要安装仓库根目录的 `requirements.txt`，它不存在。使用你正在改的组件旁边的依赖文件或包元数据。
 
-确保服务已启动，然后：
+## 本地构建和运行
 
 ```bash
-# 运行所有端到端测试
-python e2e/testing/run_all_tests.py
-
-# 运行特定测试
-python e2e/testing/00-client-request-test.py
+make vllm-sr-dev
+vllm-sr serve --image-pull-policy never
 ```
+
+该构建会安装可编辑的 `vllm-sr` CLI，并创建本地 Router、控制面板和 Envoy 镜像。`--image-pull-policy never` 确保运行使用这些本地镜像。
+
+常用生命周期命令：
+
+```bash
+vllm-sr status
+vllm-sr logs router
+vllm-sr logs envoy -f
+vllm-sr dashboard
+vllm-sr stop
+```
+
+ROCm 相关工作：
+
+```bash
+make vllm-sr-dev VLLM_SR_PLATFORM=amd
+vllm-sr serve --image-pull-policy never --platform amd
+```
+
+## 选择正确的测试
+
+先看仓库事实，再跑所属域的检查：
+
+```bash
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
+make check CHANGED_FILES="path/one path/two"
+```
+
+常见定向套件包括：
+
+```bash
+# Router 和原生绑定
+make test-semantic-router
+make test-binding
+
+# 分类器
+make test-category-classifier
+make test-pii-classifier
+make test-jailbreak-classifier
+
+# Python CLI
+make vllm-sr-test
+
+# 机队模拟器
+make vllm-sr-sim-test
+```
+
+当变更会通过启动、路由、API、部署配置或其他在线路经表现出来时，显式选择集成或 E2E：
+
+```bash
+make verify DOMAIN=<domain>
+make verify PROFILE=<profile>
+```
+
+## 校验本地栈
+
+已配置的 listener 是面向客户端的端点。空工作区生成的设置是 `http://localhost:8899`：
+
+```bash
+curl -sS http://localhost:8899/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+使用当前配置中的虚拟模型名。使用自定义 listener 或端口偏移时，`vllm-sr status` 会显示栈和已发布端口。
+
+## 调试
+
+- 先用 `vllm-sr logs <service>` 看组件日志，再依赖容器名。
+- 原生库诊断设 `RUST_LOG=debug`。
+- Router 诊断设 `SR_LOG_LEVEL=debug`。
+- 在运行时调试配置前，先跑 `vllm-sr config validate --config <file>`。
+- 启动和网络失败见[常见错误](/zh-Hans/docs/troubleshooting/common-errors)和[容器连通性](/zh-Hans/docs/troubleshooting/container-connectivity)。

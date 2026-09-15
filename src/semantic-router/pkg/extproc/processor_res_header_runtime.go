@@ -29,13 +29,16 @@ func (r *OpenAIRouter) handleLooperResponseHeaders(
 		return nil
 	}
 
-	statusCode := 200
-	if v != nil && v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
-		statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
+	outcome := evaluateResponseHeaderOutcome(v, ctx)
+	ctx.UpstreamStatusCode = outcome.statusCode
+	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx.IsStreamingResponse)
+	// Internal hops still own a provider transport boundary. Preserve status
+	// and streaming mode so their response can be translated back to Chat.
+	var mutation *ext_proc.HeaderMutation
+	if requiresClientResponseRewrite(ctx) || ctx.IsStreamingResponse {
+		mutation = &ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}}
 	}
-
-	r.updateRouterReplayStatus(ctx, statusCode, false)
-	return buildResponseHeadersContinueResponse(nil, false)
+	return buildResponseHeadersContinueResponse(mutation, ctx.IsStreamingResponse)
 }
 
 func evaluateResponseHeaderOutcome(
@@ -50,8 +53,8 @@ func evaluateResponseHeaderOutcome(
 	outcome.statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
 	outcome.isSuccessful = outcome.statusCode >= 200 && outcome.statusCode < 300
 	if ctx != nil {
-		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers) ||
-			(outcome.isSuccessful && isResponseAPIStreamRequest(ctx))
+		ctx.IsStreamingResponse = outcome.isSuccessful &&
+			(isStreamingContentType(v.ResponseHeaders.Headers) || isResponseAPIStreamRequest(ctx))
 	}
 	recordResponseHeaderErrorMetrics(ctx, outcome.statusCode)
 	return outcome
@@ -128,10 +131,30 @@ func buildResponseHeadersContinueResponse(
 	return response
 }
 
+func buildResponseStreamingMutation(
+	ctx *RequestContext,
+	outcome responseHeaderOutcome,
+) *ext_proc.HeaderMutation {
+	if !outcome.isSuccessful || ctx == nil || !ctx.IsStreamingResponse {
+		return nil
+	}
+	// Streaming headers reach the client before body translation or usage
+	// filtering can determine its final size, including same-wire Chat. A
+	// provider's length describes its own bytes and cannot frame that output.
+	mutation := &ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}}
+	if isResponseAPIStreamRequest(ctx) {
+		mutation.SetHeaders = []*core.HeaderValueOption{{
+			Header: &core.HeaderValue{
+				Key: "content-type", RawValue: []byte("text/event-stream; charset=utf-8"),
+			},
+			AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+		}}
+	}
+	return mutation
+}
+
 func isResponseAPIStreamRequest(ctx *RequestContext) bool {
-	return isResponseAPIRequest(ctx) &&
-		ctx.ResponseAPICtx.OriginalRequest != nil &&
-		ctx.ResponseAPICtx.OriginalRequest.Stream
+	return isResponseAPIRequest(ctx) && ctx.SemanticRequest != nil && ctx.SemanticRequest.Stream
 }
 
 func mergeHeaderMutations(mutations ...*ext_proc.HeaderMutation) *ext_proc.HeaderMutation {

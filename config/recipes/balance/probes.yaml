@@ -11,7 +11,14 @@ description: >
 routing_assets:
   yaml: config/recipes/balance/config.yaml
   dsl: config/recipes/balance/recipe.dsl
-router_eval_endpoint: /api/v1/eval
+fixtures:
+  images:
+    routing_pixel:
+      description: Minimal PNG fixture used to exercise image-bearing request routing.
+      media_type: image/png
+      sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
+      data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
+router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 4
@@ -39,6 +46,23 @@ coverage:
     stress: 100.0
     multi_turn: 100.0
 decisions:
+  - id: omni
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    variants:
+      - id: image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Read the attached image and explain its main point concisely.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [balance_has_images]
+        tags: [language:en, multimodal, image, shape:messages]
+
   - id: premium_legal
     expected_decision: premium_legal
     expected_algorithm: static
@@ -69,6 +93,12 @@ decisions:
       - id: infinite_primes
         query: Prove by contradiction that there are infinitely many prime numbers.
         tags: [robustness, proof]
+      - id: odd_integer_sum_proof
+        query: Prove that the sum of the first n odd positive integers is n squared.
+        tags: [language:en, proof, collision]
+      - id: consecutive_odds_answer_only_zh
+        query: 严格证明任意两个连续奇数之和能被4整除。只输出答案。
+        tags: [language:zh, proof, collision]
 
   - id: reasoning_deep
     expected_decision: reasoning_deep
@@ -86,6 +116,12 @@ decisions:
       - id: first_principles_tradeoffs
         query: From first principles, compare three ways to reason under uncertainty and justify which one is most robust.
         tags: [robustness, reasoning]
+      - id: scarce_resource_ethics
+        query: Compare virtue ethics and consequentialism for allocating a scarce public resource; defend your reasoning.
+        tags: [language:en, philosophy, reasoning]
+      - id: research_methods_without_sources
+        query: Compare inductive, deductive, and abductive methods as tools for generating research hypotheses.
+        tags: [language:en, reasoning, negative, collision]
 
   - id: complex_specialist
     expected_decision: complex_specialist
@@ -168,6 +204,9 @@ decisions:
       - id: urgent_bug_zh
         query: 这太离谱了！！！马上告诉我该怎么处理这个 bug。
         tags: [robustness, coding, urgent]
+      - id: python_deduplicate_answer_only_zh
+        query: 写一个 Python 函数，返回列表去重后的结果并保持原顺序。只输出答案。
+        tags: [language:zh, code, collision]
 
   - id: verified_health
     expected_decision: verified_health
@@ -202,6 +241,9 @@ decisions:
       - id: burnout_sources
         query: Explain burnout patterns in high-pressure knowledge work and support the answer with reputable sources.
         tags: [robustness, psychology]
+      - id: planning_fallacy_with_evidence
+        query: Explain the planning fallacy and compare recent peer-reviewed findings with citations.
+        tags: [language:en, psychology, verification, collision]
 
   - id: medium_explainer
     expected_decision: medium_explainer
@@ -224,6 +266,9 @@ decisions:
       - id: confirmation_bias
         query: Why do people fall into confirmation bias, and what strategies usually help reduce it?
         tags: [paraphrase, psychology]
+      - id: planning_fallacy_explanation
+        query: Explain why people misjudge how long a task will take and suggest two practical ways to plan better.
+        tags: [language:en, psychology, explanation]
 
   - id: medium_creative
     expected_decision: medium_creative
@@ -244,6 +289,12 @@ decisions:
       - id: dinner_reschedule
         query: This is ridiculous!! Help me write a calm message to reschedule tonight's dinner.
         tags: [emotion, drafting]
+      - id: fictional_bakery_names
+        query: Invent two playful names and a one-line slogan for a fictional cloud-shaped bakery.
+        tags: [language:en, creative, negative]
+      - id: poem_answer_only_zh
+        query: 写一首诗，描述秋雨，共四行。只输出答案。
+        tags: [language:zh, creative, collision]
 
   - id: feedback_need_clarification
     expected_decision: feedback_need_clarification
@@ -302,6 +353,15 @@ decisions:
       - id: months_in_year
         query: 一年有几个月？请简短回答。
         tags: [paraphrase, zh]
+      - id: seconds_per_minute_zh
+        query: 一分钟有多少秒？只写答案。
+        tags: [language:zh, negative, collision, short-qa]
+      - id: days_per_week_zh
+        query: 一周有几天？请用一句话回答。
+        tags: [language:zh, negative, collision, short-qa]
+      - id: quarters_answer_only_zh
+        query: 一年有几个季度？仅给答案。
+        tags: [language:zh, negative, collision, short-qa]
 
   - id: simple_general
     expected_decision: simple_general
@@ -332,6 +392,9 @@ decisions:
       - id: celebratory_reply_zh
         query: 太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
         tags: [zh, drafting]
+      - id: defense_celebration_zh
+        query: 我刚顺利通过答辩，帮我写两句开心但谦逊的回复。
+        tags: [language:zh, negative, collision, drafting]
 
   - id: casual_chat
     expected_decision: casual_chat

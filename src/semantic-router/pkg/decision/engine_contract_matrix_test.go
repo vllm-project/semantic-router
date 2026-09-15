@@ -36,7 +36,7 @@ func TestDecisionEngineContractMatrix(t *testing.T) {
 			if err != nil {
 				t.Fatalf("normal evaluation: %v", err)
 			}
-			traceResult, traces := engine.EvaluateDecisionsWithTrace(testCase.signals)
+			traceResult, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(testCase.signals)
 
 			assertContractOutcome(t, "normal", result, testCase)
 			assertContractOutcome(t, "trace", traceResult, testCase)

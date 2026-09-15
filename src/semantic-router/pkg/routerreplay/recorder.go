@@ -13,6 +13,7 @@ const (
 	DefaultMaxRecords        = 200
 	DefaultMaxBodyBytes      = 4096 // 4KB
 	DefaultMaxToolTraceBytes = 0    // No limit — structured fields are typically small
+	DefaultOperationTimeout  = 5 * time.Second
 	// DefaultMaxToolTraceSteps caps the number of ToolTraceStep entries kept
 	// per record. Long agent sessions can otherwise produce hundreds of
 	// steps and OOM the router process (see issue #1835). 0 means no limit;
@@ -21,11 +22,18 @@ const (
 	// default in pkg/config sets this to 100 so the router is safe out of
 	// the box.
 	DefaultMaxToolTraceSteps = 0
+
+	LifecycleUnknown    = store.LifecycleUnknown
+	LifecycleInProgress = store.LifecycleInProgress
+	LifecycleCompleted  = store.LifecycleCompleted
+	LifecycleAborted    = store.LifecycleAborted
+	LifecycleFailed     = store.LifecycleFailed
 )
 
 type (
 	Signal                        = store.Signal
 	HallucinationSpan             = store.HallucinationSpan
+	HallucinationScore            = store.HallucinationScore
 	LearningDiagnostics           = store.LearningDiagnostics
 	LearningAdaptationDiagnostics = store.LearningAdaptationDiagnostics
 	LearningCandidateScore        = store.LearningCandidateScore
@@ -38,6 +46,12 @@ type (
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
+	RequestDemandSnapshot         = store.RequestDemandSnapshot
+	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
+	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics
+	LooperUsage                   = store.LooperUsage
+	LooperAttempt                 = store.LooperAttempt
+	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace
@@ -47,6 +61,13 @@ type (
 
 type Recorder struct {
 	storage store.Storage
+	// operationTimeout bounds audit-store I/O independently from the client
+	// request. It is immutable after construction in production; tests may
+	// shorten it before issuing operations to exercise stalled backends.
+	operationTimeout time.Duration
+
+	lifecycleMu          sync.Mutex
+	lifecycleTransitions map[string]*lifecycleTransition
 
 	policyMu          sync.RWMutex
 	maxBodyBytes      int
@@ -57,13 +78,20 @@ type Recorder struct {
 	captureResponseBody bool
 }
 
+type lifecycleTransition struct {
+	done chan struct{}
+	err  error
+}
+
 // NewRecorder creates a new Recorder with the specified storage backend.
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
-		storage:           storage,
-		maxBodyBytes:      DefaultMaxBodyBytes,
-		maxToolTraceBytes: DefaultMaxToolTraceBytes,
-		maxToolTraceSteps: DefaultMaxToolTraceSteps,
+		storage:              storage,
+		operationTimeout:     DefaultOperationTimeout,
+		lifecycleTransitions: make(map[string]*lifecycleTransition),
+		maxBodyBytes:         DefaultMaxBodyBytes,
+		maxToolTraceBytes:    DefaultMaxToolTraceBytes,
+		maxToolTraceSteps:    DefaultMaxToolTraceSteps,
 	}
 }
 
@@ -142,6 +170,9 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	if rec.Timestamp.IsZero() {
 		rec.Timestamp = time.Now().UTC()
 	}
+	if rec.LifecycleState == "" {
+		rec.LifecycleState = store.LifecycleInProgress
+	}
 
 	// Enforce capture switches and apply body truncation limits.
 	rec.RequestBody, rec.RequestBodyTruncated = applyBodyCapturePolicy(
@@ -158,7 +189,8 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	// the slice and OOM the router (see issue #1835).
 	capToolTraceStepCount(rec.ToolTrace, policy.maxToolTraceSteps)
 
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.Add(ctx, rec)
 }
 
@@ -224,8 +256,70 @@ func truncateToolTraceStep(step *ToolTraceStep, max int) {
 }
 
 func (r *Recorder) UpdateStatus(id string, status int, fromCache bool, streaming bool) error {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.UpdateStatus(ctx, id, status, fromCache, streaming)
+}
+
+// FinalizeLifecycle marks a replay record terminal. It deliberately does not
+// infer completion from response headers: streaming clients can disconnect
+// after a 200 header but before the terminal frame arrives.
+func (r *Recorder) FinalizeLifecycle(id string, state string, reason string) error {
+	r.lifecycleMu.Lock()
+	if transition, exists := r.lifecycleTransitions[id]; exists {
+		r.lifecycleMu.Unlock()
+		<-transition.done
+		return transition.err
+	}
+	transition := &lifecycleTransition{done: make(chan struct{})}
+	r.lifecycleTransitions[id] = transition
+	r.lifecycleMu.Unlock()
+
+	err := r.finalizeLifecycle(id, state, reason)
+	r.lifecycleMu.Lock()
+	transition.err = err
+	close(transition.done)
+	delete(r.lifecycleTransitions, id)
+	r.lifecycleMu.Unlock()
+	return err
+}
+
+func (r *Recorder) finalizeLifecycle(id string, state string, reason string) error {
+	record, found, err := r.getRecord(id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	if record.LifecycleState != "" && record.LifecycleState != store.LifecycleInProgress {
+		return nil
+	}
+	endedAt := time.Now().UTC()
+	durationMS := endedAt.Sub(record.Timestamp).Milliseconds()
+	if durationMS < 0 {
+		durationMS = 0
+	}
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
+	return r.storage.UpdateLifecycle(
+		ctx,
+		id,
+		state,
+		endedAt,
+		durationMS,
+		boundedTerminalReason(reason),
+	)
+}
+
+func boundedTerminalReason(reason string) string {
+	const maxReasonRunes = 256
+	reason = strings.TrimSpace(reason)
+	runes := []rune(reason)
+	if len(runes) <= maxReasonRunes {
+		return reason
+	}
+	return string(runes[:maxReasonRunes])
 }
 
 func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
@@ -235,7 +329,8 @@ func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
 	}
 
 	body, truncated := truncateBody(requestBody, policy.maxBodyBytes)
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.AttachRequest(ctx, id, body, truncated)
 }
 
@@ -246,23 +341,27 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 	}
 
 	body, truncated := truncateBody(responseBody, policy.maxBodyBytes)
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.AttachResponse(ctx, id, body, truncated)
 }
 
 func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.AppendOutcome(ctx, id, outcome)
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
-	ctx := context.Background()
-	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails)
+func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error {
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
+	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails, score...)
 }
 
 func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.UpdateUsageCost(ctx, id, usage)
 }
 
@@ -276,7 +375,8 @@ func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
 	// from #1835 can still happen even when AddRecord truncates correctly.
 	truncateToolTraceSteps(&trace, policy.maxToolTraceBytes)
 	capToolTraceStepCount(&trace, policy.maxToolTraceSteps)
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.UpdateToolTrace(ctx, id, trace)
 }
 
@@ -288,16 +388,23 @@ func (r *Recorder) Reader() store.Reader {
 
 // GetRecord returns a copy of the record with the given ID.
 func (r *Recorder) GetRecord(id string) (RoutingRecord, bool) {
-	ctx := context.Background()
-	rec, found, err := r.storage.Get(ctx, id)
+	rec, found, err := r.getRecord(id)
 	if err != nil {
 		return RoutingRecord{}, false
 	}
 	return rec, found
 }
 
+func (r *Recorder) getRecord(id string) (RoutingRecord, bool, error) {
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
+	rec, found, err := r.storage.Get(ctx, id)
+	return rec, found, err
+}
+
 func (r *Recorder) ListAllRecords() []RoutingRecord {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	records, err := r.storage.List(ctx)
 	if err != nil {
 		return []RoutingRecord{}
@@ -308,6 +415,19 @@ func (r *Recorder) ListAllRecords() []RoutingRecord {
 // Releases resources held by the storage backend.
 func (r *Recorder) Close() error {
 	return r.storage.Close()
+}
+
+// replayOperationContext is intentionally independent from a client request:
+// a disconnected client must not cancel a terminal audit write. It is still
+// bounded so an unavailable replay backend cannot hang chat completion,
+// config reload, or shutdown indefinitely. Store mutations acknowledge queued
+// persistence before returning, so callers can release the timer immediately.
+func (r *Recorder) replayOperationContext() (context.Context, context.CancelFunc) {
+	timeout := r.operationTimeout
+	if timeout <= 0 {
+		timeout = DefaultOperationTimeout
+	}
+	return context.WithTimeout(context.Background(), timeout)
 }
 
 // applyBodyCapturePolicy enforces one capture switch on one body field. The
@@ -362,7 +482,7 @@ func logSignalFields(signals Signal) map[string]interface{} {
 }
 
 func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
-	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled {
+	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled && !r.JailbreakScoreAvailable {
 		return
 	}
 
@@ -370,15 +490,25 @@ func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
 	fields["jailbreak_enabled"] = r.JailbreakEnabled
 	fields["pii_enabled"] = r.PIIEnabled
 
-	if r.JailbreakDetected {
+	if r.JailbreakDetected || r.JailbreakScoreAvailable {
 		fields["jailbreak_detected"] = r.JailbreakDetected
 		fields["jailbreak_type"] = r.JailbreakType
-		fields["jailbreak_confidence"] = r.JailbreakConfidence
+		fields["jailbreak_score_available"] = r.JailbreakScoreAvailable
+		if r.JailbreakDecision != nil {
+			fields["jailbreak_decision"] = r.JailbreakDecision
+		} else if r.JailbreakScoreAvailable {
+			fields["jailbreak_confidence"] = r.JailbreakConfidence
+		}
 	}
 	if r.ResponseJailbreakDetected {
 		fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
 		fields["response_jailbreak_type"] = r.ResponseJailbreakType
-		fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
+		fields["response_jailbreak_score_available"] = r.ResponseJailbreakScoreAvailable
+		if r.ResponseJailbreakDecision != nil {
+			fields["response_jailbreak_decision"] = r.ResponseJailbreakDecision
+		} else if r.ResponseJailbreakScoreAvailable {
+			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
+		}
 	}
 	if r.PIIDetected {
 		fields["pii_detected"] = r.PIIDetected
@@ -405,7 +535,11 @@ func appendHallucinationLogFields(fields map[string]interface{}, r RoutingRecord
 
 	fields["hallucination_enabled"] = r.HallucinationEnabled
 	fields["hallucination_detected"] = r.HallucinationDetected
-	fields["hallucination_confidence"] = r.HallucinationConfidence
+	fields["hallucination_score_available"] = r.HallucinationScoreAvailable
+	if r.HallucinationScoreAvailable {
+		fields["hallucination_confidence"] = r.HallucinationConfidence
+		fields["hallucination_score_kind"] = r.HallucinationScoreKind
+	}
 	if len(r.HallucinationSpans) > 0 {
 		fields["hallucination_spans"] = r.HallucinationSpans
 	}
@@ -446,25 +580,39 @@ func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 
 func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	fields := map[string]interface{}{
-		"event":             event,
-		"replay_id":         r.ID,
-		"decision":          r.Decision,
-		"decision_tier":     r.DecisionTier,
-		"decision_priority": r.DecisionPriority,
-		"category":          r.Category,
-		"original_model":    r.OriginalModel,
-		"selected_model":    r.SelectedModel,
-		"reasoning_mode":    r.ReasoningMode,
-		"confidence_score":  r.ConfidenceScore,
-		"selection_method":  r.SelectionMethod,
-		"session_policy":    r.SessionPolicy,
-		"request_id":        r.RequestID,
-		"timestamp":         r.Timestamp,
-		"turn_index":        r.TurnIndex,
-		"from_cache":        r.FromCache,
-		"streaming":         r.Streaming,
-		"response_status":   r.ResponseStatus,
-		"signals":           logSignalFields(r.Signals),
+		"event":                      event,
+		"replay_id":                  r.ID,
+		"decision":                   r.Decision,
+		"decision_tier":              r.DecisionTier,
+		"decision_priority":          r.DecisionPriority,
+		"category":                   r.Category,
+		"original_model":             r.OriginalModel,
+		"selected_model":             r.SelectedModel,
+		"reasoning_mode":             r.ReasoningMode,
+		"confidence_score_available": r.ConfidenceScoreAvailable,
+		"selection_method":           r.SelectionMethod,
+		"session_policy":             r.SessionPolicy,
+		"request_id":                 r.RequestID,
+		"timestamp":                  r.Timestamp,
+		"turn_index":                 r.TurnIndex,
+		"from_cache":                 r.FromCache,
+		"streaming":                  r.Streaming,
+		"response_status":            r.ResponseStatus,
+		"lifecycle_state":            r.LifecycleState,
+		"signals":                    logSignalFields(r.Signals),
+	}
+	if r.ConfidenceScoreAvailable {
+		fields["confidence_score"] = r.ConfidenceScore
+	}
+	if len(r.SignalErrorMatches) > 0 {
+		fields["signal_error_matches"] = r.SignalErrorMatches
+	}
+	if r.EndedAt != nil {
+		fields["ended_at"] = *r.EndedAt
+		fields["duration_ms"] = r.DurationMS
+	}
+	if r.TerminalReason != "" {
+		fields["terminal_reason"] = r.TerminalReason
 	}
 	if r.SessionID != "" {
 		fields["session_id"] = r.SessionID

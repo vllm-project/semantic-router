@@ -1,100 +1,62 @@
 ---
 sidebar_position: 1
-description: vLLM Semantic Router 的研究导论，介绍这套基于 Envoy 的控制平面如何实现面向信号的 LLM 路由、策略执行与 token 效率优化。
+sidebar_label: 简介
+description: 在稳定的模型 API 背后，构建可编程的 Mixture-of-Models 系统。
 translation:
-  source_commit: "8fc3b86c"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/intro.md"
-  outdated: true
+  outdated: false
 ---
 
-# vLLM Semantic Router
+import ThemedImage from '@theme/ThemedImage';
 
-**我们相信，Mixture-of-Models 是面向异构 LLM 推理的下一代模型架构。**
+# 欢迎使用 vLLM Semantic Router
 
-**正因如此，我们构建了 vLLM Semantic Router**——将信号与偏好转化为面向每位用户、每个产品与每类工作负载的可执行模型路径。
+<div className="docs-intro-brand">
+ <ThemedImage
+ className="docs-intro-brand__logo"
+ alt="vLLM Semantic Router"
+ sources={{
+ light: '/img/vllm-sr-logo.light.png',
+ dark: '/img/vllm-sr-logo.white.png',
+ }}
+ />
+ <p className="docs-intro-brand__tagline">让你的 Mixture-of-Models 可编程。</p>
+</div>
 
-项目位于客户端与模型后端之间，以 Envoy External Processor（`ext_proc`）形式运行，将路由从零散的应用逻辑提升为**可观测、可配置**的多模型系统控制面。
+vLLM Semantic Router 是开源的路由与控制层，用于在异构 AI 基础设施上构建 Mixture-of-Models 系统。应用调用稳定的 OpenAI 或 Anthropic 兼容端点，由服务层为每次请求选择——或组合——能力路径。
 
-## 研究关注点
+## 问题：一次 AI 请求不只是流量
 
-我们借助本项目回答一组困难的系统问题：
+现代 AI 应用很少只依赖一个可互换的模型。一次请求可能需要快速的本地模型、专项或前沿模型、检索、记忆、工具、校验器，或若干模型协同。这些路径可能跨越云、数据中心或边缘。
 
-1. **如何从请求、响应、用户与运行时上下文中捕获缺失的信号？**
-2. **如何将这些信号组合成稳健的路由与策略决策？**
-3. **多个模型如何作为系统协作，而非彼此孤立的后端？**
-4. **如何在可落地的 token 经济中优化延迟、开销与工具使用？**
-5. **如何在服务栈不碎片化的情况下加入安全、反馈与可观测性？**
+每条路径在能力、延迟、成本和信任上各有取舍。正确选择还会随请求、用户、会话和可用基础设施而变化。
 
-## 核心系统
+如果每个应用都硬编码这些选择，产品代码就会和当前模型机群绑死。同样的路由逻辑在各客户端重复出现，系统扩大后就难以变更、解释或评估。
 
-### 信号与投影路由
+## 思路：让智能可编程
 
-捕获 **14 类维护中的信号族**，并在路由选择前通过可复用的 **投影（projections）** 进行协调：
+Semantic Router 把这项决策放到请求路径上的共享层。它可以观察眼前的工作——意图、难度、上下文、模态、身份、风险、偏好和系统状态——再把稳定的入口解析到隔离的配方。
 
-| 层级 | 组成部分 | 作用 |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| **Signals（信号）** | `authz`、`context`、`keyword`、`language`、`structure`、`complexity`、`domain`、`embedding`、`modality`、`fact-check`、`jailbreak`、`pii`、`preference`、`user-feedback` | 提取可复用的请求、安全与偏好事实 |
-| **Projections（投影）** | `partitions`、`scores`、`mappings` | 协调 competing 匹配并输出具名路由带 |
-| **Decisions（决策）** | 对信号与投影做 AND/OR 策略规则 | 选择激活路由与模型候选 |
+配方可以选择一个模型、沿级联升级、协调有界的多模型工作流，或挂接检索、记忆、工具过滤、缓存、安全检查和校验等行为。应用继续使用熟悉的单一 API，能力路径则可以在背后演进。
 
-**工作方式**：从请求中提取信号，投影协调匹配证据，决策规则对结果事实求值，所选路由驱动插件与模型下发。
+结果不只是一个模型名：
 
-### 插件链架构
+- **正确的模型路径：** 直达、专项、本地、级联或协作。
+- **正确的配套能力：** 在请求需要时提供检索、记忆、工具、提示词、缓存或校验。
+- **正确的执行边界：** 在异构硬件上使用已配置的云、数据中心或边缘后端。
+- **发生了什么的证据：** 路由元数据，以及已配置的反馈、回放和评估工作流。
 
-可扩展的请求/响应处理插件体系：
+vLLM Semantic Router 不替代网关或模型服务。Envoy 继续承载流量，推理运行时继续生成响应。Router 负责协调二者之间的语义工作。
 
-| 插件类型 | 说明 | 适用场景 |
-| ------------------- | --------------------------------------------- | --------------------------------------------- |
-| **response_cache** | 基于语义相似度的缓存 | 降低相似查询的延迟与成本 |
-| **jailbreak** | 对抗性提示检测 | 拦截提示注入与越狱尝试 |
-| **pii** | 个人可识别信息检测 | 保护敏感数据并满足合规 |
-| **system_prompt** | 动态系统提示注入 | 按路由添加上下文相关指令 |
-| **header_mutation** | HTTP 头修改 | 控制路由与后端行为 |
-| **hallucination** | Token 级幻觉检测 | 生成过程中实时事实校验 |
+## 从你想做的事开始
 
-**工作方式**：插件组成处理链，各插件可检查/修改请求与响应，且可按决策单独启用或关闭。
+- **在本地运行：** 按[快速开始](/zh-Hans/docs/installation)操作，并通过 Router 发送一次请求。
+- **找到适合工作负载的模式：** 浏览[使用场景](overview/use-cases)，覆盖云、数据中心、边缘和企业部署。
+- **理解系统：** 阅读[系统概览](overview/semantic-router-overview)和[路由流水线](overview/signal-driven-decisions)。
+- **打造稳定的模型体验：** 了解[入口与配方](tutorials/global/entrypoints-and-recipes)如何把共享模型池变成面向目标的虚拟模型。
+- **选择环境：** 比较 [Docker、Kubernetes 和硬件路径](installation/deployment-options)。
 
-## 主要优势
+## 项目
 
-### LLM 路由的控制面
-
-- **策略替代硬编码分支**：将路由逻辑从应用代码迁出，进入可复用的信号、决策与配置。
-- **按能力选择**：按任务形态、风险与质量要求路由，而不是把所有请求打到单一模型。
-
-### 可实践的 Token 经济层
-
-- **把预算花在刀刃上**：为真正需要的请求保留顶级模型、长上下文与工具调用。
-- **在尽量不牺牲质量的前提下降本**：通过语义缓存、上下文感知路由与显式策略控制延迟与 token 消耗。
-
-### 请求路径上的治理
-
-- **内置安全与合规**：在与路由决策同一层应用越狱、PII、幻觉、提示与头控制。
-- **决策可观测**：路由与策略结果可审计，团队能用数据调参而非凭感觉。
-
-### 既能做研究也能交付
-
-- **快速试验**：新增信号、算法与插件而无需重写服务路径。
-- **与生产对齐**：实验、可观测与部署在同一套维护体系中衔接。
-
-## 使用场景
-
-- **多模型推理网关**：按能力、上下文与策略路由到专门模型。
-- **成本敏感的 Copilot**：在内部助手与开发者工具中平衡质量、延迟与开销。
-- **高安全助手**：在实时请求路径上强制执行 PII、越狱与幻觉控制。
-- **研究平台**：评估路由策略、收集反馈信号并迭代模型协作策略。
-
-## 从这里开始
-
-- [**概览**](overview/goals)：项目目标、语义路由概念与集体智能。
-- [**安装**](installation)：部署方式与配置。
-- [**Fleet Simulator**](fleet-sim/overview)：GPU 机群规划、路由策略评估与指南 PDF。
-- [**能力（Capacities）**](tutorials/signal/overview)：信号、投影、决策、插件、算法与全局控制。
-- [**提案（Proposals）**](proposals/unified-config-contract-v0-3)：尚未并入稳定文档集的设计工作。
-
-## 贡献
-
-欢迎贡献！请参阅 [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md)。
-
-## 许可
-
-本项目采用 Apache 2.0 许可，详见 [LICENSE](https://github.com/vllm-project/semantic-router/blob/main/LICENSE)。
+vLLM Semantic Router 以 Apache 2.0 许可开源。要提出变更或加入社区，请参阅[贡献指南](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md)。

@@ -18,31 +18,13 @@
 }
 
 .brand {
-  display: flex;
-  align-items: center;
   justify-self: start;
-  gap: 0.7rem;
-  min-width: 10.4rem;
-  padding: 0.35rem 0;
-  color: #f5f5f7;
-  font-size: 0.8rem;
-  font-weight: 720;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  text-decoration: none;
-  transition: opacity var(--transition-fast);
+  min-width: 0;
 }
 
 .brand:hover {
   color: #f5f5f7;
   opacity: 0.85;
-}
-
-.logo {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
 }
 
 .nav {
@@ -103,10 +85,6 @@
 
   .brand {
     min-width: 0;
-  }
-
-  .brandText {
-    display: none;
   }
 
   .utilityLink,

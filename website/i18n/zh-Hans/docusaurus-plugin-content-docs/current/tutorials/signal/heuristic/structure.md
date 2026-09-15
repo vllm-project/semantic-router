@@ -1,32 +1,32 @@
 ---
 translation:
-  source_commit: "707b84d7"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/signal/heuristic/structure.md"
   outdated: false
 ---
 
-# Structure 信号
+# 结构信号 {#structure-signal}
 
-## 概览
+## 概览 {#overview}
 
-`structure` 检测请求形态相关事实，例如多个显式问题、有序工作流标记或密集的约束措辞。映射到 `config/fragments/signal/structure/`，在 `routing.signals.structure` 中声明。
+`structure` 检测请求形态相关事实，例如多个显式问题、有序工作流标记或密集的约束措辞。在 `routing.signals.structure` 下定义结构规则。
 
 该族为启发式：保持基于规则，但与 `keyword` 不同，可在发出命名信号前对类型化结构特征计数、归一化与比较。
 
-## 主要优势
+## 主要优势 {#key-advantages}
 
 - 请求形态路由显式，而非藏在临时关键词列表里。
 - 单个检测器可使用计数、密度或有序标记序列，而无需改决策 DSL。
 - 产生可复用命名信号，投影与决策可像其他族一样消费。
-- 保持仓库分层：检测阈值在信号中，路由策略在决策中。
+- 检测阈值留在信号中，路由策略留在决策中。
 
-## 解决什么问题？
+## 解决什么问题？ {#what-problem-does-it-solve}
 
-部分路由取决于提示**写法**，而非仅主题。含五个问题的提示，或含「先…再…」的提示，往往与单句短问需要不同路由，即使领域相同。
+部分路由取决于提示的写法，而非仅主题。含五个问题的提示，或写着「first ... then ...」的提示，往往与单句短问需要不同路由，即使领域相同。
 
 `structure` 将请求形态特征变成稳定命名信号。
 
-## 何时使用
+## 何时使用 {#when-to-use}
 
 在以下情况使用 `structure`：
 
@@ -35,9 +35,7 @@ translation:
 - 检测器仍为规则型，不需要学习模型
 - 希望投影用 `type: structure` 消费结构事实
 
-## 配置
-
-源片段族：`config/fragments/signal/structure/`
+## 配置 {#configuration}
 
 ```yaml
 routing:
@@ -130,23 +128,30 @@ routing:
 当前支持的约定：
 
 - `feature.type`：`exists`、`count`、`density`、`sequence`
-- `feature.source.type`：`regex`、`keyword_set`、`sequence`
+- `feature.source.type`：`regex`、`keyword_set`、`sequence`、`text_bytes`
 - `predicate`：`gt`、`gte`、`lt`、`lte`
 
 说明：
 
-- `exists` 不接受 predicate；源存在即发出匹配。
-- `density` 按多语言文本单位自动归一化。CJK 字符单独计数，连续非 CJK 字母数字算一个单位，标点忽略。
+- `exists` 不接受谓词；源存在即发出匹配。
+- `density` 按多语言文本单位自动归一化。CJK 字符单独计数，连续非 CJK 字母/数字算一个单位，标点忽略。
 - `sequence` 要求 `feature.source.type=sequence`。
 - `keyword_set` 使用脚本感知匹配，使连续 CJK 与混写提示仍能正确命中。
+- `text_bytes` 返回未压缩当前用户轮次的 UTF-8 字节长度，并要求 `feature.type: count`。
+- `text_bytes` 会计入空白字节。即使信号级谓词未匹配，classify/eval 响应仍发布原始数值，因此决策叶可以应用自己的 `lt`/`lte`/`gt`/`gte` 门控。
 - 本族中 `regex` 为真正的正则源。
 
 示例含义：
 
 - `many_questions`：统计 `?` 或 `？` 个数，至少四个则匹配。
-- `at_most_one_question`：零个或一个问号则匹配。
+- `at_most_one_question`：统计 `?` 或 `？` 个数，零个或一个则匹配。
 - `numbered_steps`：提示中已有如 `1. ...` 的编号列表项则匹配。
 - `first_then_flow`：出现有序工作流标记序列，如 `first ... then ...` 或 `先 ... 再 ...`。
-- `constraint_dense`：统计约束标记并按多语言单位归一，捕捉英中混写下约束异常密集的提示。
+- `constraint_dense`：统计约束标记并按多语言文本单位相除，捕捉英中混写下约束异常密集的提示。
 
-当路由依赖请求形态，但仍希望路由器约定保持类型化、声明式时，使用 `structure`。
+当路由依赖请求形态，但仍希望 Router 约定保持类型化、声明式时，使用 `structure`。
+
+## 依赖与限制 {#dependencies-and-limitations}
+
+结构规则在本地检查请求文本，不需要学习模型。它们衡量形态而非语义难度，因此请在真实提示上校准谓词，并在含义重要时与学习型信号组合。完整示例见：
+[`config/fragments/signal/structure/request-shape.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/structure/request-shape.yaml)。

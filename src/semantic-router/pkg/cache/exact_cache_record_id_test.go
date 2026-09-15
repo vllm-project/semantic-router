@@ -31,3 +31,30 @@ func TestMilvusSemanticFilterExcludesExactEntries(t *testing.T) {
 		t.Fatalf("semantic filter does not exclude exact entries: %s", filter)
 	}
 }
+
+func TestParseValkeyHashFields(t *testing.T) {
+	t.Run("map[string]interface{}", func(t *testing.T) {
+		raw := map[string]interface{}{
+			"response_body": `{"ok":true}`,
+			"timestamp":     1700000000,
+			"expires_at":    1700003600,
+			"ttl_seconds":   3600,
+		}
+		fields := parseValkeyHashFields(raw)
+		if fields["response_body"] != `{"ok":true}` || fields["timestamp"] != "1700000000" {
+			t.Fatalf("unexpected fields parsed: %#v", fields)
+		}
+	})
+
+	t.Run("[]interface{}", func(t *testing.T) {
+		raw := []interface{}{
+			"response_body", `{"ok":true}`,
+			"timestamp", int64(1700000000),
+			"expires_at", int64(1700003600),
+		}
+		fields := parseValkeyHashFields(raw)
+		if fields["response_body"] != `{"ok":true}` || fields["timestamp"] != "1700000000" {
+			t.Fatalf("unexpected fields parsed: %#v", fields)
+		}
+	})
+}

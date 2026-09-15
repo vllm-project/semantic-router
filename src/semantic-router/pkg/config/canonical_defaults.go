@@ -44,6 +44,10 @@ func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 
 func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 	return CanonicalServiceGlobal{
+		API: APIConfig{RoutingPreview: RoutingPreviewConfig{
+			RequestTimeoutSeconds: canonicalIntPtr(DefaultRoutingPreviewTimeoutSeconds),
+			MaxConcurrency:        canonicalIntPtr(DefaultRoutingPreviewMaxConcurrency),
+		}},
 		ResponseAPI: ResponseAPIConfig{
 			Enabled:      true,
 			StoreBackend: "redis",
@@ -51,8 +55,8 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			MaxResponses: 1000,
 		},
 		RouterReplay: RouterReplayConfig{
-			Enabled:      true,
-			StoreBackend: "postgres",
+			Enabled:      false,
+			StoreBackend: "memory",
 			TTLSeconds:   2592000,
 			AsyncWrites:  false,
 		},
@@ -63,6 +67,11 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 		Observability: ObservabilityConfig{
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
+			},
+			Profiling: ProfilingConfig{
+				Enabled: false,
+				Port:    DefaultProfilingPort,
+				Bind:    DefaultProfilingBind,
 			},
 			Tracing: TracingConfig{
 				Enabled:  true,
@@ -94,7 +103,6 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
 			DefaultRetrievalLimit:      5,
 			DefaultSimilarityThreshold: 0.70,
-			ExtractionBatchSize:        10,
 		},
 		ResponseCache: SemanticCache{
 			Enabled:        true,
@@ -135,7 +143,20 @@ func defaultCanonicalModelCatalog() CanonicalModelCatalog {
 		KBs:        defaultCanonicalKnowledgeBases(),
 		Modules:    defaultCanonicalModelModules(),
 	}
-	enabledSoftMatching := true
+	// Declaring a deployment does not activate it. Recipes opt in through an
+	// independent-score binding that names the artifact's operating point.
+	hazard := ModelDeployment{
+		Artifact:  catalog.System.Hazard,
+		Provider:  "candle",
+		Device:    "cpu",
+		Precision: "fp32",
+		Input:     ModelInputBudget{MaxTokens: 32768, Overflow: "reject"},
+	}
+	if model := GetModelByPath(hazard.Artifact); model != nil {
+		hazard.Revision = model.Revision
+	}
+	catalog.Deployments = map[string]ModelDeployment{"hazard": hazard}
+	enabledSoftMatching := false
 	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching
 	return catalog
 }
@@ -203,14 +224,16 @@ func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
 func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 	return CanonicalEmbeddingModels{
 		Semantic: EmbeddingModels{
-			MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
+			MmBertModelPath: "models/Vela-1.0-Encoder-307M-Embedding",
 			UseCPU:          true,
 			EmbeddingConfig: HNSWConfig{
+				// Keep representative routing samples; full 32K text is explicitly opt-in.
+				FullContext:       false,
 				ModelType:         "mmbert",
 				PreloadEmbeddings: true,
 				TargetDimension:   768,
 				TargetLayer:       22,
-				TopK:              canonicalIntPtr(1),
+				TopK:              canonicalIntPtr(0),
 				MinScoreThreshold: 0.5,
 			},
 		},
@@ -219,6 +242,7 @@ func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 
 func defaultCanonicalModelModules() CanonicalModelModules {
 	return CanonicalModelModules{
+		Safety:                  SafetyModelsConfig{Safety: SequenceHeadModelConfig{ModelRef: "safety", UseCPU: true}},
 		PromptGuard:             defaultPromptGuardModule(),
 		Classifier:              defaultClassifierModule(),
 		Complexity:              ComplexityModelConfig{}.WithDefaults(),
@@ -232,10 +256,10 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 		ModelRef: "prompt_guard",
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:              true,
-			Threshold:            0.7,
+			Threshold:            0.5,
 			UseCPU:               true,
 			Variant:              PromptGuardVariantMmBERT32K,
-			JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
+			JailbreakMappingPath: "models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json",
 		},
 	}
 }
@@ -247,8 +271,8 @@ func defaultClassifierModule() CanonicalClassifierModule {
 			CategoryModel: CategoryModel{
 				Threshold:           0.5,
 				UseCPU:              true,
-				UseMmBERT32K:        true,
-				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				Variant:             CategoryVariantMmBERT32K,
+				CategoryMappingPath: "models/Vela-1.0-Encoder-307M-Domain/category_mapping.json",
 			},
 		},
 		PII: CanonicalPIIModule{
@@ -257,7 +281,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 				Threshold:      0.9,
 				UseCPU:         true,
 				UseMmBERT32K:   true,
-				PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+				PIIMappingPath: "models/Vela-1.0-Encoder-307M-PII/pii_mapping.json",
 			},
 		},
 		Preference: PreferenceModelConfig{
@@ -272,7 +296,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 		FactCheck: CanonicalFactCheckModule{
 			ModelRef: "fact_check_classifier",
 			FactCheckModelConfig: FactCheckModelConfig{
-				Threshold:    0.6,
+				Threshold:    0.95,
 				UseCPU:       true,
 				UseMmBERT32K: true,
 			},
@@ -314,13 +338,15 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 // DefaultSystemModels returns stable capability bindings for built-in runtime models.
 func DefaultSystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
-		PromptGuard:            "models/mmbert32k-jailbreak-detector-merged",
-		DomainClassifier:       "models/mmbert32k-intent-classifier-merged",
-		PIIClassifier:          "models/mmbert32k-pii-detector-merged",
-		FactCheckClassifier:    "models/mmbert32k-factcheck-classifier-merged",
+		Safety:                 "models/Vela-1.0-Encoder-307M-Safety",
+		Hazard:                 "models/Vela-1.0-Encoder-307M-Hazard",
+		PromptGuard:            "models/Vela-1.0-Encoder-307M-Guard",
+		DomainClassifier:       "models/Vela-1.0-Encoder-307M-Domain",
+		PIIClassifier:          "models/Vela-1.0-Encoder-307M-PII",
+		FactCheckClassifier:    "models/Vela-1.0-Encoder-307M-FactCheck",
 		HallucinationDetector:  "models/mom-halugate-detector",
 		HallucinationExplainer: "models/mom-halugate-explainer",
-		FeedbackDetector:       "models/mmbert32k-feedback-detector-merged",
+		FeedbackDetector:       "models/Vela-1.0-Encoder-307M-Feedback",
 	}
 }
 

@@ -2,35 +2,20 @@
 
 import sys
 
-from cli.config_contract import iter_routing_profiles
-from cli.parser import ConfigParseError, parse_user_config
-from cli.utils import get_logger
-from cli.validator import print_validation_errors, validate_user_config
-
-log = get_logger(__name__)
-
-_SIGNAL_SUMMARY_FIELDS = (
-    ("Keyword signals", "keywords"),
-    ("Embedding signals", "embeddings"),
-    ("Domains", "domains"),
-    ("Fact check signals", "fact_check"),
-    ("User feedback signals", "user_feedbacks"),
-    ("Reask signals", "reasks"),
-    ("Preference signals", "preferences"),
-    ("Language signals", "language"),
-    ("Context signals", "context"),
-    ("Structure signals", "structure"),
-    ("Complexity signals", "complexity"),
-    ("Modality signals", "modality"),
-    ("Authz signals", "role_bindings"),
-    ("Jailbreak signals", "jailbreak"),
-    ("PII signals", "pii"),
-    ("Knowledge-base signals", "kb"),
-    ("Conversation signals", "conversation"),
-    ("Event signals", "events"),
-    ("Metadata signals", "metadata"),
-    ("Classifier signals", "classifiers"),
+from cli.catalog_provider_projection import (
+    CatalogProviderProjectionError,
+    validate_provider_model_configuration,
 )
+from cli.config_contract import (
+    PROJECTION_FAMILY_SPECS,
+    SIGNAL_FAMILY_SPECS,
+    iter_routing_profiles,
+)
+from cli.models import UserConfig
+from cli.parser import ConfigParseError, parse_user_config
+from cli.terminal import echo, error, fields, heading, success
+from cli.validation_error import ValidationError
+from cli.validator import print_validation_errors, validate_user_config
 
 
 def _count_items(value) -> int:
@@ -43,10 +28,10 @@ def _signal_summary_lines(signals) -> list[str]:
         return []
 
     lines = []
-    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
-        count = _count_items(getattr(signals, field_name, None))
+    for spec in SIGNAL_FAMILY_SPECS:
+        count = _count_items(getattr(signals, spec.signal_attr, None))
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  {spec.display_name}: {count}")
     return lines
 
 
@@ -55,44 +40,36 @@ def _projection_summary_lines(projections) -> list[str]:
         return []
 
     lines = []
-    for label, field_name in (
-        ("Projection partitions", "partitions"),
-        ("Projection scores", "scores"),
-        ("Projection mappings", "mappings"),
-    ):
-        count = _count_items(getattr(projections, field_name, None))
+    for spec in PROJECTION_FAMILY_SPECS:
+        count = _count_items(getattr(projections, spec.projection_attr, None))
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  Projection {spec.display_name.lower()}: {count}")
     return lines
 
 
 def _aggregate_signal_summary_lines(routing_profiles) -> list[str]:
     lines = []
     profiles = list(routing_profiles)
-    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
+    for spec in SIGNAL_FAMILY_SPECS:
         count = sum(
-            _count_items(getattr(profile.signals, field_name, None))
+            _count_items(getattr(profile.signals, spec.signal_attr, None))
             for _, profile in profiles
         )
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  {spec.display_name}: {count}")
     return lines
 
 
 def _aggregate_projection_summary_lines(routing_profiles) -> list[str]:
     lines = []
     profiles = list(routing_profiles)
-    for label, field_name in (
-        ("Projection partitions", "partitions"),
-        ("Projection scores", "scores"),
-        ("Projection mappings", "mappings"),
-    ):
+    for spec in PROJECTION_FAMILY_SPECS:
         count = sum(
-            _count_items(getattr(profile.projections, field_name, None))
+            _count_items(getattr(profile.projections, spec.projection_attr, None))
             for _, profile in profiles
         )
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  Projection {spec.display_name.lower()}: {count}")
     return lines
 
 
@@ -121,6 +98,26 @@ def _plugin_summary_lines(decisions) -> list[str]:
     ]
 
 
+def _provider_projection_errors(config: UserConfig) -> list[ValidationError]:
+    """Validate the same provider projection used by Envoy generation.
+
+    Projection works on deep copies and resolves only structural catalog
+    defaults. It neither reads provider credentials nor mutates the authored
+    configuration, so it is safe for the validation-only command path.
+    """
+
+    try:
+        validate_provider_model_configuration(
+            config,
+            allow_backendless_physical=(
+                "listeners" in config.model_fields_set and not config.listeners
+            ),
+        )
+    except CatalogProviderProjectionError as projection_error:
+        return [ValidationError(str(projection_error))]
+    return []
+
+
 def validate_command(config_path: str):
     """
     Validate user configuration.
@@ -128,46 +125,44 @@ def validate_command(config_path: str):
     Args:
         config_path: Path to user config.yaml
     """
-    log.info("=" * 60)
-    log.info("vLLM Semantic Router - Validate Configuration")
-    log.info("=" * 60)
-    log.info(f"Validating: {config_path}")
-    log.info("")
-
     # Parse config
     try:
-        user_config = parse_user_config(config_path)
+        user_config = parse_user_config(config_path, log_summary=False)
     except ConfigParseError as e:
-        log.error("\n❌ Configuration parsing failed:")
-        log.error(f"{e}")
+        error(f"Configuration parsing failed: {e}")
         sys.exit(1)
 
     # Validate config
-    errors = validate_user_config(user_config)
+    errors = validate_user_config(user_config, log_summary=False)
+    if not errors:
+        errors.extend(_provider_projection_errors(user_config))
 
     if errors:
         print_validation_errors(errors)
         sys.exit(1)
 
-    log.info("=" * 60)
-    log.info("Configuration is valid!")
-    log.info("=" * 60)
-    log.info("\nConfiguration summary:")
-    log.info(f"  Version: {user_config.version}")
-    log.info(f"  Listeners: {len(user_config.listeners)}")
+    success("Configuration is valid")
+    heading("Configuration summary")
+    fields(
+        (
+            ("Path", config_path),
+            ("Version", user_config.version),
+            ("Listeners", len(user_config.listeners)),
+        )
+    )
 
     routing_profiles = list(iter_routing_profiles(user_config))
     signal_lines = _aggregate_signal_summary_lines(routing_profiles)
     if signal_lines:
         for line in signal_lines:
-            log.info(line)
+            echo(line)
     else:
-        log.info(
+        echo(
             "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
         )
 
     for line in _aggregate_projection_summary_lines(routing_profiles):
-        log.info(line)
+        echo(line)
 
     default_decisions = len(user_config.decisions)
     recipe_decisions = sum(
@@ -178,16 +173,15 @@ def validate_command(config_path: str):
     all_decisions = [
         decision for _, profile in routing_profiles for decision in profile.decisions
     ]
-    log.info(f"  Entrypoints: {len(user_config.entrypoints)}")
-    log.info(f"  Recipes: {len(user_config.recipes)}")
-    log.info(
+    echo(f"  Entrypoints: {len(user_config.entrypoints)}")
+    echo(f"  Recipes: {len(user_config.recipes)}")
+    echo(
         f"  Decisions: {len(all_decisions)} total "
         f"({default_decisions} default, {recipe_decisions} recipe-owned)"
     )
 
     for line in _plugin_summary_lines(all_decisions):
-        log.info(line)
+        echo(line)
 
-    log.info(f"  Models: {len(user_config.providers.models)}")
-    log.info(f"  Default model: {user_config.providers.default_model}")
-    log.info("")
+    echo(f"  Models: {len(user_config.providers.models)}")
+    echo(f"  Default model: {user_config.providers.default_model}")

@@ -4,7 +4,7 @@
  * Manages:
  * - DSL source text, YAML/CRD output, diagnostics
  * - WASM lifecycle (init, ready state)
- * - Editor mode switching (DSL / Visual / NL)
+ * - Editor mode switching (DSL / Visual)
  * - Debounced validation on keystroke
  * - Full compile on demand
  * - Decompile router YAML → DSL-owned models, routing, entrypoints, and recipes
@@ -13,7 +13,6 @@
 
 import { create } from 'zustand'
 import { wasmBridge } from '@/lib/wasm'
-import { generateBuilderNLDraftStreaming } from '@/utils/builderNLApi'
 import {
   updateModel,
   addModel as addModelMut,
@@ -35,22 +34,9 @@ import {
   addRoute as addRouteMut,
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
-import type {
-  BuilderNLGenerateRequest,
-  BuilderNLStagedDraft,
-  EditorMode,
-  CompileResult,
-  ValidateResult,
-  DSLFieldObject,
-} from '@/types/dsl'
+import type { EditorMode, CompileResult, ValidateResult, DSLFieldObject } from '@/types/dsl'
 import type { DSLStore } from './dslStoreTypes'
-import {
-  appendBuilderNLProgress,
-  initialDSLState,
-  normalizeBuilderNLReview,
-  normalizeBuilderNLValidation,
-  type DeployStatusResponse,
-} from './dslStoreSupport'
+import { initialDSLState, type DeployStatusResponse } from './dslStoreSupport'
 import { renderCanonicalYaml } from './dslStoreYamlSupport'
 
 // ---------- Debounce helper ----------
@@ -114,9 +100,13 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       const result: CompileResult = wasmBridge.compile(dslSource)
 
       // Log compile result summary
-      console.log('[dslStore.compile] Compile result: yaml size=%d, crd size=%d, diagnostics=%d, error=%s',
-        result.yaml?.length ?? 0, result.crd?.length ?? 0,
-        result.diagnostics?.length ?? 0, result.error ?? 'none')
+      console.log(
+        '[dslStore.compile] Compile result: yaml size=%d, crd size=%d, diagnostics=%d, error=%s',
+        result.yaml?.length ?? 0,
+        result.crd?.length ?? 0,
+        result.diagnostics?.length ?? 0,
+        result.error ?? 'none',
+      )
       if (result.diagnostics?.length) {
         console.log('[dslStore.compile] Diagnostics:', result.diagnostics)
       }
@@ -461,7 +451,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
     // Check for compile errors
     const { diagnostics: diags, yamlOutput: yaml } = get()
-    const hasErrors = diags.some(d => d.level === 'error')
+    const hasErrors = diags.some((d) => d.level === 'error')
     if (hasErrors || !yaml) {
       set({
         deployResult: {
@@ -515,26 +505,35 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     const { yamlOutput, dslSource, baseConfigYaml } = get()
     if (!yamlOutput) return
 
-    console.log('[dslStore.executeDeploy] Sending deploy: YAML size=%d, DSL size=%d', yamlOutput.length, dslSource.length)
+    console.log(
+      '[dslStore.executeDeploy] Sending deploy: YAML size=%d, DSL size=%d',
+      yamlOutput.length,
+      dslSource.length,
+    )
 
     set({ deploying: true, deployStep: 'validating', showDeployConfirm: false, deployResult: null })
 
     try {
       // Step: validating → backing_up → writing → reloading → done
       set({ deployStep: 'backing_up' })
-      await new Promise(r => setTimeout(r, 200)) // Small delay for UX
+      await new Promise((r) => setTimeout(r, 200)) // Small delay for UX
 
       set({ deployStep: 'writing' })
       const resp = await fetch('/api/router/config/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource, baseYaml: baseConfigYaml, mode: 'replace' }),
+        body: JSON.stringify({
+          yaml: yamlOutput,
+          dsl: dslSource,
+          baseYaml: baseConfigYaml,
+          mode: 'replace',
+        }),
       })
 
       const responseText = await resp.text()
       let data: { version?: string; message?: string; error?: string } = {}
       try {
-        data = responseText ? JSON.parse(responseText) as typeof data : {}
+        data = responseText ? (JSON.parse(responseText) as typeof data) : {}
       } catch {
         data = responseText ? { message: responseText } : {}
       }
@@ -555,14 +554,15 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       set({ deployStep: 'reloading' })
       let healthy = false
       for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 500))
+        await new Promise((r) => setTimeout(r, 500))
         try {
           const statusResp = await fetch('/api/status')
           if (!statusResp.ok) continue
 
-          const statusData = await statusResp.json() as DeployStatusResponse
-          const routerHealthy = statusData.services?.find(service => service.name === 'Router')?.healthy === true
-          const envoyService = statusData.services?.find(service => service.name === 'Envoy')
+          const statusData = (await statusResp.json()) as DeployStatusResponse
+          const routerHealthy =
+            statusData.services?.find((service) => service.name === 'Router')?.healthy === true
+          const envoyService = statusData.services?.find((service) => service.name === 'Envoy')
           const envoyHealthy = envoyService ? envoyService.healthy === true : true
 
           if (statusData.overall === 'healthy' && routerHealthy && envoyHealthy) {
@@ -641,7 +641,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       }
 
       set({ deployStep: 'reloading' })
-      await new Promise(r => setTimeout(r, 2000))
+      await new Promise((r) => setTimeout(r, 2000))
 
       set({
         deploying: false,
@@ -676,97 +676,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     } catch {
       // silently fail
     }
-  },
-
-  async generateFromNaturalLanguage(input: BuilderNLGenerateRequest) {
-    const prompt = input.prompt.trim()
-    if (!prompt) {
-      set({ nlGenerateError: 'Describe the routing behavior you want to build.' })
-      return
-    }
-
-    set({
-      nlGenerating: true,
-      nlGenerateError: null,
-      nlStagedDraft: null,
-      nlProgressEvents: [{
-        phase: 'request',
-        level: 'info',
-        message: 'Sending Builder NL request to the streaming backend.',
-        timestamp: Date.now(),
-      }],
-    })
-
-    try {
-      const liveBaseYaml = get().baseConfigYaml
-      const data = await generateBuilderNLDraftStreaming({
-        ...input,
-        prompt,
-        currentDsl: input.currentDsl?.trim() || '',
-      }, (event) => appendBuilderNLProgress(set, event))
-      const stagedDraft: BuilderNLStagedDraft = {
-        prompt,
-        dsl: data.dsl,
-        baseYaml: liveBaseYaml.trim() ? liveBaseYaml : (data.baseYaml || ''),
-        summary: data.summary || '',
-        suggestedTestQuery: data.suggestedTestQuery || '',
-        review: normalizeBuilderNLReview(data.review),
-        validation: normalizeBuilderNLValidation(data.validation),
-      }
-      set({
-        nlGenerating: false,
-        nlGenerateError: null,
-        nlStagedDraft: stagedDraft,
-      })
-    } catch (err) {
-      appendBuilderNLProgress(set, {
-        phase: 'error',
-        level: 'error',
-        message: err instanceof Error ? err.message : String(err),
-        timestamp: Date.now(),
-      })
-      set({
-        nlGenerating: false,
-        nlGenerateError: err instanceof Error ? err.message : String(err),
-        nlStagedDraft: null,
-      })
-    }
-  },
-
-  applyNaturalLanguageDraft() {
-    const stagedDraft = get().nlStagedDraft
-    if (!stagedDraft) return
-    const liveBaseYaml = get().baseConfigYaml
-
-    set({
-      dslSource: stagedDraft.dsl,
-      // Keep the live deploy base intact so global/providers/listeners do not
-      // get replaced by the staged NL draft handoff payload.
-      baseConfigYaml: liveBaseYaml.trim() ? liveBaseYaml : stagedDraft.baseYaml,
-      dirty: false,
-      diagnostics: [],
-      compileError: null,
-      ast: null,
-      symbols: null,
-      renderedYamlOutput: '',
-      yamlOutput: '',
-      crdOutput: '',
-      mode: 'dsl',
-      nlGenerateError: null,
-      nlStagedDraft: null,
-    })
-
-    const state = get()
-    if (state.wasmReady && stagedDraft.dsl.trim()) {
-      state.compile()
-    }
-  },
-
-  discardNaturalLanguageDraft() {
-    set({
-      nlGenerateError: null,
-      nlStagedDraft: null,
-    })
   },
 }))
 

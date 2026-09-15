@@ -48,8 +48,10 @@ spec:
       {{- end }}
       containers:
       - name: dashboard
-        image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
+        image: "{{ .Values.dashboard.image.repository }}:{{ default .Chart.AppVersion .Values.dashboard.image.tag }}"
         imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.dashboard.securityContext | nindent 10 }}
         ports:
         - containerPort: {{ .Values.dashboard.service.targetPort }}
           name: http
@@ -79,6 +81,11 @@ spec:
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
         - name: DASHBOARD_WORKFLOW_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
+        - name: VLLM_SR_RECIPE_STORE_DIR
+          value: "{{ .Values.dashboard.persistence.mountPath }}/recipe-store"
+        {{- else }}
+        - name: VLLM_SR_RECIPE_STORE_DIR
+          value: "/app/data/recipe-store"
         {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
         - name: TARGET_PROMETHEUS_URL

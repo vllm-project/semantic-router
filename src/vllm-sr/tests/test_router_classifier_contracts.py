@@ -72,7 +72,7 @@ def test_prompt_candidates_reject_effective_lora_identity_collision():
         )
 
 
-def test_classifier_contract_rejects_multiple_local_rules():
+def test_classifier_contract_accepts_multiple_local_rules():
     config = UserConfig.model_validate(
         {
             "version": "v0.3",
@@ -96,7 +96,7 @@ def test_classifier_contract_rejects_multiple_local_rules():
             },
         }
     )
-    assert any(
+    assert not any(
         "only one local classifier" in error.message
         for error in validate_user_config(config)
     )
@@ -130,7 +130,7 @@ def test_classifier_contract_allows_one_local_rule_per_recipe():
     assert not any("only one local classifier" in error.message for error in errors)
 
 
-def test_classifier_contract_rejects_incompatible_recipe_local_models():
+def test_classifier_contract_allows_independent_recipe_local_models():
     def rule(path):
         return {
             "name": "risk",
@@ -161,7 +161,7 @@ def test_classifier_contract_rejects_incompatible_recipe_local_models():
 
     errors = validate_user_config(config)
 
-    assert any("identical model_path" in error.message for error in errors)
+    assert not any("identical model_path" in error.message for error in errors)
 
 
 @pytest.mark.parametrize(
@@ -194,6 +194,55 @@ def test_llm_classifier_requires_classification_external_model(
                             "model": "judge",
                             "labels": ["SAFE", "RISKY"],
                             "instructions": "Classify.",
+                        }
+                    ]
+                }
+            },
+            "global": {"model_catalog": {"external": external}},
+        }
+    )
+    assert any(expected in error.message for error in validate_user_config(config))
+
+
+@pytest.mark.parametrize(
+    ("external", "expected"),
+    [
+        ([], "unknown external model"),
+        (
+            [{"name": "judge", "model_role": "generation"}],
+            "model_role=classification",
+        ),
+        (
+            [
+                {
+                    "name": "judge",
+                    "model_role": "classification",
+                    "llm_endpoint": {
+                        "address": "classifier.example.com",
+                        "port": 8080,
+                        "protocol": "grpc",
+                    },
+                }
+            ],
+            "protocol must be http or https",
+        ),
+    ],
+)
+def test_sequence_classifier_requires_valid_classification_external_model(
+    external,
+    expected,
+):
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "routing": {
+                "signals": {
+                    "classifiers": [
+                        {
+                            "name": "risk",
+                            "type": "sequence_classifier",
+                            "model": "judge",
+                            "labels": ["SAFE", "RISKY"],
                         }
                     ]
                 }

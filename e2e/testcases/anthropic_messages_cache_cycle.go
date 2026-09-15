@@ -69,7 +69,7 @@ type anthropicCacheResponse struct {
 //     usage.cache_read_input_tokens > 0.
 //
 // Both requests share the same x-vsr-test-session-id header so the shim's
-// per-session tracker sees the prefix repeat. The router's outbound emitter
+// per-session tracker sees the prefix repeat. The Anthropic response codec
 // must propagate the synthesised usage fields onto the Anthropic-shaped
 // response unchanged; any loss or zero-overwrite fails the test.
 //

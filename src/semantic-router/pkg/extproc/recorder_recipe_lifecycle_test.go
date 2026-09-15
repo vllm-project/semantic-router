@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -28,7 +29,8 @@ func TestStartRouterReplayPersistsResolvedRecipe(t *testing.T) {
 	replayConfig.Enabled = true
 	ctx := &RequestContext{
 		RequestID:                "normal-recipe-request",
-		OriginalRequestBody:      []byte(`{"model":"named-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          testNeutralRequest("named-entrypoint", "hello"),
 		VSRSelectedDecision:      &recipe.Profile.Decisions[0],
 		RouterReplayPluginConfig: &replayConfig,
 	}

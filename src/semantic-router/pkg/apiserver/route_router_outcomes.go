@@ -14,7 +14,7 @@ import (
 
 type RouterOutcomeRequest struct {
 	ReplayID  string            `json:"replay_id"`
-	Source    string            `json:"source"`
+	Source    string            `json:"source,omitempty"`
 	Target    string            `json:"target"`
 	TargetRef string            `json:"target_ref,omitempty"`
 	Verdict   string            `json:"verdict"`
@@ -59,12 +59,13 @@ func (s *ClassificationAPIServer) handleRouterOutcome(w http.ResponseWriter, r *
 	outcome.Source = source
 	outcome.IdempotencyKey = idempotencyKey
 
-	runtime := s.currentLearningRuntime()
+	runtime, releaseRuntime := s.acquireLearningRuntime()
 	if runtime == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "NO_ROUTER_LEARNING_RUNTIME",
 			"Router Learning outcome ingestion requires an active router learning runtime.")
 		return
 	}
+	defer releaseRuntime()
 	ctx := r.Context()
 	if ctx == nil {
 		ctx = context.Background()

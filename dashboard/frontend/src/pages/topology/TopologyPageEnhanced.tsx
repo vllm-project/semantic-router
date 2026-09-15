@@ -18,6 +18,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import { useTopologyData, useCollapseState, useTestQuery } from './hooks'
 import { useTheme } from '../../hooks'
+import ProductLoadingState from '../../components/ProductLoadingState'
 import { customNodeTypes } from './components/CustomNodes'
 import { TestQueryInput } from './components/ControlPanel'
 import { ResultCard } from './components/ResultCard'
@@ -26,15 +27,8 @@ import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
-  const {
-    data,
-    loading,
-    error,
-    refresh,
-    routingScopes,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useTopologyData()
+  const { data, loading, error, refresh, routingScopes, selectedScopeId, setSelectedScopeId } =
+    useTopologyData()
   const [searchParams, setSearchParams] = useSearchParams()
   const { collapseState } = useCollapseState()
   const { isDark } = useTheme()
@@ -177,10 +171,7 @@ const TopologyFlow: React.FC = () => {
   if (loading) {
     return (
       <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Loading topology...</p>
-        </div>
+        <ProductLoadingState label="Building topology" />
       </div>
     )
   }

@@ -15,7 +15,7 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 
 	response := router.handleRouterReplayAPI(
 		"GET",
-		"/v1/router_replay?recipe=beta&decision=decision-b&cache_status=streamed&limit=10",
+		"/api/v1/observability/replays?recipe=beta&decision=decision-b&cache_status=streamed&limit=10",
 	)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
@@ -34,7 +34,7 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	router := newReplayAggregateTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay/aggregate")
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate aggregate response")
 	}
@@ -103,7 +103,7 @@ func TestHandleRouterReplayAggregateAPIAppliesFilters(t *testing.T) {
 
 	response := router.handleRouterReplayAPI(
 		"GET",
-		"/v1/router_replay/aggregate?cache_status=cached&search=alpha",
+		"/api/v1/observability/replays/aggregate?cache_status=cached&search=alpha",
 	)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate aggregate response")
@@ -119,6 +119,27 @@ func TestHandleRouterReplayAggregateAPIAppliesFilters(t *testing.T) {
 	summary := body["summary"].(map[string]interface{})
 	if got := summary["total_saved"].(float64); got != 0.003 {
 		t.Fatalf("expected filtered total_saved=0.003, got %#v", got)
+	}
+}
+
+func TestRouterReplayAggregateExcludesNonCompletedCostAndReportsLifecycle(t *testing.T) {
+	cost := 1.25
+	records := []routerreplay.RoutingRecord{
+		{LifecycleState: routerreplay.LifecycleCompleted, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleFailed, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleAborted, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleInProgress, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleUnknown, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+	}
+
+	payload := buildRouterReplayAggregatePayload(records, records)
+	if payload.Summary.CostRecordCount != 1 || payload.Summary.ExcludedRecordCount != 4 || payload.Summary.ActualSpend != cost {
+		t.Fatalf("cost summary = %+v", payload.Summary)
+	}
+	if payload.Lifecycle.Completed != 1 || payload.Lifecycle.Failed != 1 ||
+		payload.Lifecycle.Aborted != 1 || payload.Lifecycle.InProgress != 1 ||
+		payload.Lifecycle.Unknown != 1 {
+		t.Fatalf("lifecycle summary = %+v", payload.Lifecycle)
 	}
 }
 
@@ -146,6 +167,7 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 			Decision:         "decision-a",
 			OriginalModel:    "gpt-4",
 			SelectedModel:    "gpt-4o-mini",
+			LifecycleState:   routerreplay.LifecycleCompleted,
 			FromCache:        true,
 			PromptTokens:     &promptA,
 			CompletionTokens: &completionA,
@@ -168,6 +190,7 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 			Decision:         "decision-b",
 			OriginalModel:    "gpt-4",
 			SelectedModel:    "gpt-4o",
+			LifecycleState:   routerreplay.LifecycleCompleted,
 			Streaming:        true,
 			PromptTokens:     &promptB,
 			CompletionTokens: &completionB,

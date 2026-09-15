@@ -1,0 +1,16 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "max_tokens": 32,
+    "system": [
+      {"type": "text", "text": "Stable instructions", "cache_control": {"type": "ephemeral", "ttl": "1h"}}
+    ],
+    "messages": [
+      {"role": "user", "content": [{"type": "text", "text": "Hello", "cache_control": {"type": "ephemeral"}}]}
+    ],
+    "tools": [
+      {"name": "lookup", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral"}}
+    ]
+  }
+}

@@ -1,113 +1,166 @@
 ---
 translation:
-  source_commit: "bb72437b"
+  source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
   source_file: "docs/tutorials/algorithm/selection/multi-factor.md"
   outdated: false
 ---
 
-# 多因素
+# 多因子选择
 
 ## 概览
 
-`multi_factor` 是一种选择算法，它将四种原始运行时信号，即**质量**、**延迟**、**成本**和**负载**，合成为每个候选项的单一加权分数；还可选择设置 SLO 硬上限，在评分前剔除候选项。
+`multi_factor` 根据质量、延迟、成本和负载选择一个候选。硬资格规则先运行；幸存候选再用加权或字典序目标比较。
 
-配置归属于声明它的决策，并且各决策的配置相互隔离。如果多个决策使用 `multi_factor`，则每个匹配到的决策都会使用各自的权重、SLO、分位数和无候选项策略进行评估。
+| 因素 | 来源 | 方向 |
+| --- | --- | --- |
+| 质量 | 版本化 Overall、能力或运维人员索引 | 越高越好 |
+| 延迟 | 所选百分位的 TTFT 或 TPOT 观测值 | 越低越好 |
+| 成本 | 按本次请求 token 预算应用的输入/输出定价 | 越低越好 |
+| 负载 | 该 Router 进程中当前进行中的请求 | 越低越好 |
 
-它与 `config/fragments/algorithm/selection/multi-factor.yaml` 保持一致，并解决了议题 [#37](https://github.com/vllm-project/semantic-router/issues/37)。
+质量按候选的确切推理 effort 解析。绝不会借用不同 effort 的分数。
 
-## 主要优势
+设置 `latency_metric: ttft` 优先缩短首字等待时间，设置 `tpot` 优先提高开始生成后的输出速度。
+指定指标后，缺失的观测值保持未知，不会用另一种指标代替。如果所有候选都没有该指标的观测，
+字典序选择会继续比较下一个优先级。省略此设置时保留原有的 TPOT 优先、缺失时使用 TTFT 的行为。
 
-- 无需编排多个选择器，即可在单个决策中实现 SLO 感知路由。
-- 每种信号都有实时数据源：质量来自 `quality_score` 配置，延迟来自 `pkg/latency` 的分位数，成本来自定价，负载来自 `pkg/inflight`。
-- 在候选集内进行最小-最大归一化，因此无论信号的绝对尺度如何，权重都具有直观含义。
-- 没有需要训练的模型状态，也不需要外部服务。
-- 硬性 SLO 上限（TPOT、TTFT、成本、进行中请求数）会在评分前剔除不安全的候选项。
+## 解决什么问题？
 
-## 它解决什么问题？
-
-实际路由会同时关注多个维度：候选池中可能既有更快、更便宜的模型，也有更慢但更好的模型；哪一个才是“正确”选择，取决于当前负载和 SLO 目标，而不只是静态配置。现有的单信号选择器（`latency_aware`、仅按成本路由、仅按质量路由）迫使用户作出非此即彼的选择。`multi_factor` 让一条决策规则能够在全部四个维度间表达平滑的权衡，还可通过硬性 SLO 上限排除不安全的候选项。
+模型池里常常同时有更强、更便宜和更快的模型。该选择器让资格保持显式，并把这种权衡变成一条可审计的决策策略。
 
 ## 何时使用
 
-- 一条决策有 2+ 个候选模型，它们在多个维度上存在差异（例如，一个模型更快且更便宜，另一个更慢但更好），而你希望用一个旋钮平滑调节取舍。
-- 你希望强制执行 SLO（例如，“绝不路由到 p95 TPOT > 200ms 的模型”），但不想另写一条决策规则。
-- 质量、延迟、成本和负载都很重要，且没有任何一个维度占据绝对主导地位。
-
-## 同类算法
-
-- `latency_aware` 是它的一个特例，即仅按延迟评分。当其他维度确实无关紧要时，请使用该算法。
-- `hybrid` 将请求时选择器和只读学习证据合成为
-  一个分数。`multi_factor` 则直接合成原始运行时信号。两者
-  都有用且互为补充。
-
-## 算法原理
-
-对于候选集中的每个候选模型 $m$，在经过 SLO 筛选后：
-
-$$\text{score}(m) = w_Q \cdot \hat{Q}(m) + w_L \cdot (1 - \hat{T}(m)) + w_C \cdot (1 - \hat{C}(m)) + w_{\text{load}} \cdot (1 - \hat{N}(m))$$
-
-其中：
-
-- $\hat{Q}(m)$、$\hat{T}(m)$、$\hat{C}(m)$、$\hat{N}(m)$ 分别是质量、延迟、成本和负载值，**在经过筛选后保留的候选集内通过最小-最大归一化映射到 [0, 1]**。
-- 延迟、成本和负载经过反转（`1 - ...`），因为这些值越低越好。
-- 质量不反转，因为质量越高越好。
-- 权重会归一化，使其总和为 1（负权重会被截断为零）。恢复时默认采用等权重。
-
-## SLO 筛选
-
-评分前，任何超过非零上限的候选项都会被移除：
-
-- `max_tpot_ms` — 通过 `pkg/latency` 观测到的 p95（或配置的分位数）TPOT
-- `max_ttft_ms` — 通过 `pkg/latency` 观测到的 p95（或配置的分位数）TTFT
-- `max_cost_per_1m` — 配置的提示定价
-- `max_inflight` — 来自 `pkg/inflight` 的当前进行中请求数
-
-如果所有候选项都被筛除，则行为由 `on_no_candidates` 控制：
-
-| 值 | 行为 |
-| --- | --- |
-| `cheapest`（默认） | 返回配置的 `prompt_per_1m` 最低的候选项 |
-| `first` | 返回所列的第一个候选项 |
-| `fail` | 向调用方返回错误 |
+当决策至少有两个候选模型，并且必须优化质量/延迟/成本/负载权衡时，使用 `multi_factor`。当顺序本身就是策略时使用 `static`；当延迟是唯一选择信号时使用 `latency_aware`。
 
 ## 配置
+
+### 均衡
+
+默认的 `weighted` 策略对幸存池中每个可用因素做 min-max 归一化，并计算：
+
+$$
+S(m)=w_Q\hat Q(m)+w_T(1-\hat T(m))+w_C(1-\hat C(m))+w_L(1-\hat L(m))
+$$
 
 ```yaml
 algorithm:
   type: multi_factor
   multi_factor:
+    objective:
+      strategy: weighted
+    quality:
+      index: vllm-sr/coding@1.0.0
+      on_missing: exclude
+      min_coverage: 1.0
     weights:
       quality: 0.4
       latency: 0.2
       cost: 0.2
       load: 0.2
-    slo:
-      max_tpot_ms: 200       # 可选；省略则不设上限
-      max_ttft_ms: 800       # 可选
-      max_cost_per_1m: 5.0   # 可选；每 1M 个提示词元的成本（USD）
-      max_inflight: 50       # 可选
-    latency_percentile: 95   # 要读取的分位数（默认 95）
-    on_no_candidates: cheapest
 ```
 
-### 参数
+权重归一化后和为一。如果每个配置权重都是零，选择器会恢复为等权。
 
-| 参数 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `weights.quality` | float | `0.25` | 为每个模型配置的 `quality_score` 的权重 |
-| `weights.latency` | float | `0.25` | 分位延迟的权重（越低越好，经过反转） |
-| `weights.cost` | float | `0.25` | 提示定价的权重（越低越好，经过反转） |
-| `weights.load` | float | `0.25` | 进行中请求数的权重（越低越好，经过反转） |
-| `slo.max_tpot_ms` | float | `0`（关闭） | p95 TPOT 的硬上限，单位为毫秒 |
-| `slo.max_ttft_ms` | float | `0`（关闭） | p95 TTFT 的硬上限，单位为毫秒 |
-| `slo.max_cost_per_1m` | float | `0`（关闭） | 每 1M 个词元的提示成本硬上限 |
-| `slo.max_inflight` | int | `0`（关闭） | 并发进行中请求数的硬上限 |
-| `latency_percentile` | int | `95` | 从 `pkg/latency` 读取的分位数（1-100） |
-| `on_no_candidates` | string | `cheapest` | SLO 筛除所有候选项时的回退策略：`cheapest`、`first`、`fail` |
+### 准确率优先
 
-## 已知限制
+`lexicographic` 按顺序应用优先级。每个阶段保留落在最佳观测值所声明相对容差内的候选，再把该带传给下一阶段。
 
-- 质量评分依赖于为每个模型配置 `quality_score`。未配置该项的模型对质量信号的贡献为零。
-- 最小-最大归一化是**针对每次请求在候选集内进行的**，因此任何信号的绝对尺度都不重要；但如果所有候选项在某个维度上的值都相同，则该维度贡献 0.5（中性值）。
-- 负载使用进程内跟踪器（`pkg/inflight`），因此在多副本部署中，每个副本只能看到自身的负载，而非整个集群的负载。对于典型的边车部署，这是可以接受的；未来可以接入外部状态存储，以实现真正的集群级负载感知。
-- 进行中请求跟踪器通过 TTL 驱逐实现自愈（默认 10 分钟），以便从遗漏的 `End` 调用中恢复；但它无法识别运行时间超过该窗口且仍在执行的长请求，这些请求在选择器看来将是“空闲”的。如果你的工作负载经常出现单个请求超过 10 分钟的情况，请通过 `pkg/inflight.SetMaxAge` 调整。
+只有通过全部优先级筛选的候选才能参与后续自适应、会话防护和派发。这些步骤不能重新引入被先前质量或成本容差排除的模型。记录的分数仍可包含已排除模型，用于解释选择结果。
+
+```yaml
+algorithm:
+  type: multi_factor
+  multi_factor:
+    objective:
+      strategy: lexicographic
+      priorities:
+        - {factor: quality, tolerance: 0.03}
+        - {factor: cost, tolerance: 0.05}
+        - {factor: latency, tolerance: 0.05}
+    quality:
+      index: vllm-sr/intelligence@1.0.0
+      on_missing: exclude
+      min_coverage: 1.0
+```
+
+这会保留质量分数在最佳值 3% 以内的模型，然后在该带内选择更便宜、更快的候选。
+
+### 成本优先并设质量下限
+
+```yaml
+algorithm:
+  type: multi_factor
+  multi_factor:
+    quality:
+      index: vllm-sr/intelligence@1.0.0
+      on_missing: exclude
+      min_coverage: 1.0
+      min_score: 65
+    objective:
+      strategy: lexicographic
+      priorities:
+        - {factor: cost, tolerance: 0.05}
+        - {factor: quality, tolerance: 0.03}
+        - {factor: latency, tolerance: 0.05}
+```
+
+质量下限会在优化前排除低于 65 的模型。目标随后保留成本估计在最便宜值 5% 以内的模型，并在该成本带内选择最佳质量。
+
+`weights` 不能与字典序目标组合。一个优先级因素只能出现一次。
+
+## 质量资格与缺失数据
+
+```yaml
+quality:
+  index: acme/clinical-quality@1.0.0
+  on_missing: exclude
+  min_coverage: 0.5
+  min_score: 60
+```
+
+- `index` 选择版本化的内置或运维人员索引。
+- `min_coverage` 在索引自身的缺失数据策略之后应用。它可以让路由比索引定义更严格。
+- `min_score` 是索引声明量表上的硬下限，并要求 `on_missing: exclude`。
+- `exclude` 会移除没有合格的精确 effort 证据的候选。
+- `disable_quality` 保留池，但一个缺失候选会禁用整次比较的质量。它从不为单个模型改权重。
+
+内置层级见 [Open Intelligence Index](../../../benchmarking/open-intelligence-index)，运维人员定义的证据见 [Custom evaluations](../../../benchmarking/custom-evaluations)。
+
+## 成本与 SLO
+
+输入成本按请求的预路由 token 估计计算。输出成本在调用方提供时使用 `max_output_tokens`。如果两者都不知道，选择器回退到配置的每百万 token 费率。同一请求混合用于成本因素、`max_cost_per_1m` 和 `cheapest` 回退。
+
+```yaml
+multi_factor:
+  slo:
+    max_tpot_ms: 200
+    max_ttft_ms: 800
+    max_cost_per_1m: 5.0
+    max_inflight: 50
+  latency_percentile: 95
+  on_no_candidates: cheapest
+```
+
+仅当对应观测可用时，才强制 SLO 上限。
+如果每个候选都被排除，`on_no_candidates` 选择 `cheapest`、`first` 或 `fail`。`fail` 是严格策略：Router 返回 HTTP 503，绝不会替换成第一个配置候选。Eval 干跑会对同一请求把选择报告为不可用。
+
+## 参数
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `objective.strategy` | `weighted` | `weighted` 或 `lexicographic` |
+| `objective.priorities[].factor` | — | `quality`、`latency`、`cost` 或 `load` |
+| `objective.priorities[].tolerance` | `0` | 相对最佳值的带，范围 0 到 1 |
+| `quality.index` | 目录默认值 | 版本化质量索引 |
+| `quality.on_missing` | 显式时为 `exclude` | `exclude` 或池范围的 `disable_quality` |
+| `quality.min_coverage` | 索引策略 | 允许的最低证据覆盖率，范围 0 到 1 |
+| `quality.min_score` | 关闭 | 索引量表上的硬质量下限 |
+| `weights.*` | `0.25` | 均衡的质量、延迟、成本和负载权重 |
+| `latency_percentile` | `95` | 观测延迟百分位，范围 1 到 100 |
+| `latency_metric` | TPOT，其次 TTFT | 统一使用 `ttft` 或 `tpot` 比较候选 |
+| `on_no_candidates` | `cheapest` | `cheapest`、`first` 或 `fail` |
+
+延迟和负载观测是每个 Router 进程本地的。因此副本可能做出不同选择。需要集群级容量时，使用共享遥测或基础设施路由器。
+
+完整片段见：
+[`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml)。

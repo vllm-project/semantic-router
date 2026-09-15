@@ -71,6 +71,37 @@ def test_classifier_signal_local_shape():
     assert signal.model_path == "models/risk"
 
 
+def test_classifier_signal_sequence_shape():
+    signal = ClassifierSignal(
+        name="risk",
+        type="sequence_classifier",
+        model="risk-classifier",
+        labels=["SAFE", "RISKY"],
+    )
+    assert signal.model == "risk-classifier"
+
+
+@pytest.mark.parametrize(
+    "invalid_fields",
+    [
+        {"labels": ["RISKY"]},
+        {"instructions": "Choose a label."},
+        {"model_path": "models/risk"},
+        {"use_cpu": True},
+    ],
+)
+def test_classifier_signal_sequence_rejects_invalid_shape(invalid_fields):
+    values = {
+        "name": "risk",
+        "type": "sequence_classifier",
+        "model": "risk-classifier",
+        "labels": ["SAFE", "RISKY"],
+        **invalid_fields,
+    }
+    with pytest.raises(ValidationError):
+        ClassifierSignal(**values)
+
+
 def test_classifier_signal_rejects_backend_mixed_fields():
     with pytest.raises(ValidationError):
         ClassifierSignal(
@@ -204,6 +235,37 @@ def test_bare_classifier_leaf_preserves_predicate_fields():
     assert condition.label == "RISKY"
     assert condition.predicate.gte == 0.8
     assert condition.on_error == "match"
+
+
+def test_rules_accept_terminal_on_unknown():
+    rules = Rules.model_validate(
+        {
+            "type": "classifier",
+            "name": "risk",
+            "label": "RISKY",
+            "predicate": {"gte": 0.8},
+            "on_unknown": "fail_request",
+        }
+    )
+    assert rules.on_unknown == "fail_request"
+
+
+def test_nested_condition_rejects_on_unknown():
+    with pytest.raises(ValidationError):
+        Rules.model_validate(
+            {
+                "operator": "AND",
+                "conditions": [
+                    {
+                        "type": "classifier",
+                        "name": "risk",
+                        "label": "RISKY",
+                        "predicate": {"gte": 0.8},
+                        "on_unknown": "match",
+                    }
+                ],
+            }
+        )
 
 
 def test_prompt_decision_rejects_duplicate_base_models():

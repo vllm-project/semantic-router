@@ -5,9 +5,6 @@
 `response_cache` is the route-local plugin for reusing exact or semantically
 compatible prior responses.
 
-It aligns to `config/fragments/plugin/response-cache/high-recall.yaml` and
-`config/fragments/plugin/response-cache/memory.yaml`.
-
 ## Key Advantages
 
 - Reuses prior responses only on routes that benefit from cache hits.
@@ -27,25 +24,25 @@ every time. `response_cache` keeps the reuse policy local to the route.
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: response_cache
-  configuration:
-    enabled: true
-    mode: exact_then_semantic
-    scope: user
-    semantic:
-      similarity_threshold: 0.92
-    ttl_seconds: 86400
-    request_controls:
+plugins:
+  - type: response_cache
+    configuration:
       enabled: true
-      header: x-vsr-cache-control
-      allowed: [no-cache, no-store, bypass, max-age, ttl]
-      max_ttl_seconds: 86400
-    personalized:
-      mode: disabled
+      mode: exact_then_semantic
+      scope: user
+      semantic:
+        similarity_threshold: 0.92
+      ttl_seconds: 86400
+      request_controls:
+        enabled: true
+        header: x-vsr-cache-control
+        allowed: [no-cache, no-store, bypass, max-age, ttl]
+        max_ttl_seconds: 86400
+      personalized:
+        mode: disabled
 ```
 
 `mode` accepts:
@@ -81,6 +78,14 @@ deprecated aliases and normalize to `response_cache`. Likewise,
 document. Export, Dashboard saves, and DSL decompilation always emit the
 canonical names.
 
+For local `mmbert` embeddings, including Vela Embedding, changing the model,
+tokenizer, representation size, or inference settings starts a separate cache
+space. The router retains your tenant namespace and explicit cache revision;
+historical entries remain stored until their normal expiry or explicit cleanup.
+The first requests after a model upgrade are cache misses. Restarting with the
+same representation reuses its compatible cache. This binding does not infer
+the identity of a mutable remote embedding endpoint.
+
 ## Operations
 
 The management API exposes redacted health, capabilities, statistics, candidate
@@ -88,3 +93,23 @@ configuration testing, scoped invalidation, epoch-based flush, and a
 hash-chained audit view under `/api/v1/response-cache/*`. Invalidation defaults
 to dry-run. Flush requires the explicit confirmation phrase
 `flush response cache` and never calls backend-wide `FLUSHALL`.
+
+The in-memory backend can verify a semantic hit against opposite-meaning
+queries before serving it (`global.stores.response_cache.polarity_guard`; see
+[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With the
+optional NLI tier enabled, a rejected candidate is logged as
+`cache_negation_reject` with `tier: nli`, is reported as a miss, and its
+similarity still appears on `x-vsr-cache-similarity` so near-threshold
+rejections stay diagnosable.
+
+Cached responses can contain user or tenant data. Choose an appropriate scope,
+TTL, backend authentication, encryption, and invalidation process. Semantic
+thresholds must be calibrated for the configured embedding model. A query longer
+than the embedding model's context window (512 tokens for the default `bert`
+model) is not cached, because a truncated embedding would match every query
+sharing that prefix. Routes
+with personalized RAG or memory should not reuse pre-enrichment responses
+without an explicit policy. See complete examples:
+[`high-recall.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/high-recall.yaml)
+and
+[`memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/memory.yaml).

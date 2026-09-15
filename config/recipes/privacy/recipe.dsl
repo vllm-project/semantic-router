@@ -86,6 +86,11 @@ SIGNAL context long_context {
   max_tokens: "256K"
 }
 
+SIGNAL structure local_handling_required {
+  description: "An operative local-handling instruction or external-transfer prohibition independently restricts routing."
+  feature: { source: { pattern: "(?i)\\A(?:(?:[^\"“”'‘’`]|(?:\"[^\"]*\"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`)|[\\p{L}\\p{N}]['’][\\p{L}\\p{N}])*(?:[.!?;\\n。！？；，,]\\s*|\\b(?:and|but|then)\\s+|(?:并且|但是|但|然后)))?\\s*(?:(?:please|and|but|then)\\s+|(?:并且|但是|但|然后))*(?:(?:(?:process|handle|analy[sz]e|summari[sz]e|review|search|run|execute)\\b[^.!?;\\n。！？；\"“”'‘’`]*(?:locally|on[- ]prem(?:ises?)?|on[- ]device|(?:on|within|using)\\s+(?:the\\s+)?local\\s+(?:model|backend|system|machine|device|server))\\b|(?:keep|leave)\\b[^.!?;\\n。！？；\"“”'‘’`]*\\b(?:local|on[- ]prem(?:ises?)?|on[- ]device)\\b|use\\s+(?:only\\s+)?(?:the\\s+)?local\\s+(?:model|backend|system|machine|device|server)\\b|(?:do\\s+not|don't|never)\\s+(?:send|upload|share|transmit|forward)\\b[^.!?;\\n。！？；\"“”'‘’`]*\\b(?:outside|externally|to\\s+(?:(?:the|an?)\\s+)?(?:cloud|external\\s+(?:service|system|server)))\\b|(?:process|handle|analy[sz]e|summari[sz]e|review|search|run|execute)\\b[^.!?;\\n。！？；\"“”'‘’`]*\\bwithout\\s+(?:sending|uploading|sharing|transmitting|forwarding)\\b[^.!?;\\n。！？；\"“”'‘’`]*\\b(?:outside|externally|to\\s+(?:(?:the|an?)\\s+)?(?:cloud|external\\s+(?:service|system|server)))\\b|(?:(?:this|these|it)(?:\\s+(?:request|content|data|task))?|the\\s+(?:request|content|data))\\s+(?:must|shall)\\s+(?:stay|remain|be\\s+processed)\\b[^.!?;\\n。！？；\"“”'‘’`]*\\b(?:local|locally|on[- ]prem(?:ises?)?|on[- ]device)\\b|local[- ]only\\s+(?:processing|handling)\\b|local\\s+(?:processing|handling)\\s+only\\b)|(?:请)?(?:(?:仅|只)(?:允许)?(?:在|用|使用)?本地|仅限本地|在本地(?:处理|分析|总结|检索|运行|执行)|(?:处理|分析|总结|检索|运行|执行)[^.!?;\\n。！？；\"“”'‘’`]*(?:仅在本地|只在本地|在本地处理)|(?:不要|不得|禁止|请勿)[^.!?;\\n。！？；\"“”'‘’`]*(?:发送|传送|上传|分享|转发)[^.!?;\\n。！？；\"“”'‘’`]*(?:外部|云端|云服务)|(?:不要|不得|禁止|请勿)(?:向|往|到)(?:外部|云端|云服务)[^.!?;\\n。！？；\"“”'‘’`]*(?:发送|传送|上传|分享|转发)|(?:保持|保留)[^.!?;\\n。！？；\"“”'‘’`]*(?:本地|内网)))", type: "regex" }, type: "exists" }
+}
+
 SIGNAL structure many_questions {
   description: "Prompts with several explicit questions, usually indicating multi-part reasoning."
   feature: { source: { pattern: "[?？]", type: "regex" }, type: "count" }
@@ -106,6 +111,11 @@ SIGNAL structure override_directive_dense {
 SIGNAL structure fenced_instruction_blob {
   description: "Prompt contains fenced or tagged instruction wrappers often used in injection attempts."
   feature: { source: { pattern: "(?i)(<system>|<assistant>|begin system prompt|```system|###\\s*system)", type: "regex" }, type: "exists" }
+}
+
+SIGNAL conversation privacy_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
 }
 
 SIGNAL complexity frontier_reasoning {
@@ -151,7 +161,7 @@ PROJECTION score privacy_risk_score {
 
 PROJECTION score reasoning_pressure {
   method: "weighted_sum"
-  inputs: [{ type: "keyword", weight: 0.28, name: "reasoning_request_markers", value_source: "confidence" }, { type: "keyword", weight: 0.12, name: "research_request_markers", value_source: "confidence" }, { type: "keyword", weight: 0.28, name: "architecture_markers", value_source: "confidence" }, { type: "keyword", weight: 0.1, name: "multi_step_markers", value_source: "confidence" }, { type: "embedding", weight: 0.48, name: "frontier_reasoning_request", value_source: "confidence" }, { type: "context", weight: 0.04, name: "medium_context" }, { type: "context", weight: 0.16, name: "long_context" }, { type: "structure", weight: 0.08, name: "many_questions" }, { type: "structure", weight: 0.1, name: "ordered_workflow" }, { type: "complexity", weight: 0.08, name: "frontier_reasoning:medium" }, { type: "complexity", weight: 0.3, name: "frontier_reasoning:hard" }, { type: "complexity", weight: 0.02, name: "code_reasoning:medium" }, { type: "complexity", weight: 0.18, name: "code_reasoning:hard" }]
+  inputs: [{ type: "keyword", weight: 0.28, name: "reasoning_request_markers", value_source: "confidence" }, { type: "keyword", weight: 0.12, name: "research_request_markers", value_source: "confidence" }, { type: "keyword", weight: 0.28, name: "architecture_markers", value_source: "confidence" }, { type: "keyword", weight: 0.1, name: "multi_step_markers", value_source: "confidence" }, { type: "embedding", weight: 0.48, name: "frontier_reasoning_request", value_source: "raw" }, { type: "context", weight: 0.04, name: "medium_context" }, { type: "context", weight: 0.16, name: "long_context" }, { type: "structure", weight: 0.08, name: "many_questions" }, { type: "structure", weight: 0.1, name: "ordered_workflow" }, { type: "complexity", weight: 0.08, name: "frontier_reasoning:medium" }, { type: "complexity", weight: 0.3, name: "frontier_reasoning:hard" }, { type: "complexity", weight: 0.02, name: "code_reasoning:medium" }, { type: "complexity", weight: 0.18, name: "code_reasoning:hard" }]
 }
 
 PROJECTION score privacy_contrastive_score {
@@ -196,8 +206,12 @@ MODEL cloud/frontier-reasoning {
   description: "High-cost cloud frontier lane reserved for non-sensitive deep reasoning and synthesis."
   capabilities: ["frontier_reasoning", "deep_synthesis", "architecture_review", "long_context"]
   tags: ["deployment:cloud", "policy:non_sensitive_only", "tier:frontier", "cost:high"]
-  quality_score: 0.92
   modality: "text"
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL local/private-qwen {
@@ -205,7 +219,6 @@ MODEL local/private-qwen {
   description: "Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic."
   capabilities: ["self_hosted", "privacy_locality", "security_containment", "code", "internal_docs"]
   tags: ["deployment:self_hosted", "policy:local_first", "policy:privacy_first", "cost:free"]
-  quality_score: 0.74
   modality: "text"
 }
 
@@ -221,7 +234,7 @@ PLUGIN tools tools {}
 # ROUTES
 # =============================================================================
 
-ROUTE local_security_containment (description = "Keep suspicious or jailbreak-like prompts on the local safety lane with restricted capabilities.") {
+ROUTE local_security_containment (description = "Keep suspicious or jailbreak-like prompts on the local safety lane with restricted capabilities.", on_unknown = "fail_request") {
   PRIORITY 300
   TIER 1
   WHEN projection("policy_security_local_only")
@@ -237,11 +250,12 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
   }
 }
 
-ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model with local-only tool access.") {
-  PRIORITY 250
+ROUTE omni (description = "Understand private image-bearing requests on the local visual-language model.") {
+  PRIORITY 275
   TIER 2
-  WHEN (projection("policy_privacy_local_only") OR projection("privacy_override_active")) AND NOT projection("policy_security_local_only")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  WHEN conversation("privacy_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
   PLUGIN tools {
     enabled: true
     mode: "filtered"
@@ -254,10 +268,27 @@ ROUTE local_privacy_policy (description = "Route PII, private code, and internal
   }
 }
 
-ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with full tool access.") {
+ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model with local-only tool access.", on_unknown = "fail_request") {
+  PRIORITY 250
+  TIER 2
+  WHEN (projection("policy_privacy_local_only") OR projection("privacy_override_active") OR structure("local_handling_required")) AND NOT projection("policy_security_local_only")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
+  PLUGIN tools {
+    enabled: true
+    mode: "filtered"
+    allow_tools: ["local_search", "local_read"]
+  }
+  PLUGIN router_replay {
+    enabled: true
+    max_records: 50000
+    max_body_bytes: 2048
+  }
+}
+
+ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-suspicious high-reasoning traffic to the cloud frontier model with full tool access.", on_unknown = "fail_request") {
   PRIORITY 200
   TIER 3
-  WHEN projection("policy_frontier_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND NOT projection("privacy_override_active")
+  WHEN projection("policy_frontier_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND NOT projection("privacy_override_active") AND NOT structure("local_handling_required")
   MODEL "cloud/frontier-reasoning" (reasoning = true, effort = "high")
   PLUGIN tools {
     enabled: true
@@ -273,11 +304,12 @@ ROUTE cloud_frontier_reasoning (description = "Send only non-sensitive, non-susp
 ROUTE local_standard (description = "Default local route for non-sensitive tasks that do not justify cloud escalation.") {
   PRIORITY 100
   TIER 4
-  WHEN projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  WHEN projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND NOT structure("local_handling_required")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
-    mode: "passthrough"
+    mode: "filtered"
+    allow_tools: ["local_search", "local_read"]
   }
   PLUGIN router_replay {
     enabled: true

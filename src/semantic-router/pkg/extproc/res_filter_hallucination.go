@@ -1,29 +1,44 @@
 package extproc
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// performHallucinationDetection checks the response for hallucinations
-// Returns nil to allow the response to continue (warning handled in processor_res_body.go)
-func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, responseBody []byte) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) performSemanticHallucinationDetection(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) *ext_proc.ProcessingResponse {
+	return r.performHallucinationDetectionText(ctx, semanticAssistantContent(response))
+}
+
+func (r *OpenAIRouter) performHallucinationDetectionText(
+	ctx *RequestContext,
+	assistantContent string,
+) *ext_proc.ProcessingResponse {
+	// With hallucination rules declared, detection already ran as a
+	// response-stage signal and this plugin only consumes it. Without them it
+	// still owns detection, so an existing configuration keeps working
+	// unchanged.
+	if r.hallucinationSignalDeclared(ctx) {
+		r.consumeHallucinationSignal(ctx)
+		return nil
+	}
+
 	// Only run if conditions are met
 	if !r.shouldPerformHallucinationDetection(ctx) {
 		return nil
 	}
-
-	// Extract assistant content from response
-	assistantContent := extractAssistantContentFromResponse(responseBody)
 	if assistantContent == "" {
 		logging.Debugf("No assistant content to check for hallucination")
 		return nil
@@ -44,6 +59,7 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 	// Use basic hallucination detection
 	classifier := r.classifierForRequest(ctx)
 	result, err := classifier.DetectHallucination(
+		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,
@@ -67,16 +83,18 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 	ctx.HallucinationDetected = result.HallucinationDetected
 	ctx.HallucinationSpans = result.UnsupportedSpans
 	ctx.HallucinationConfidence = result.Confidence
+	ctx.HallucinationScoreAvailable = result.ScoreAvailable
+	ctx.HallucinationScoreKind = result.ScoreKind
 
 	decisionName := requestDecisionStateKey(ctx)
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected", latency)
-		logging.Warnf("Hallucination detected: confidence=%.3f, unsupported_spans=%d, action=%s",
-			result.Confidence, len(result.UnsupportedSpans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
+		logging.Warnf("Hallucination detected: score=%s, unsupported_spans=%d, action=%s",
+			hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence), len(result.UnsupportedSpans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 	} else {
 		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
-		logging.Debugf("No hallucination detected: confidence=%.3f", result.Confidence)
+		logging.Debugf("No hallucination detected: score=%s", hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence))
 	}
 
 	return nil
@@ -88,6 +106,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 
 	classifier := r.classifierForRequest(ctx)
 	result, err := classifier.DetectHallucinationWithNLI(
+		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,
@@ -107,43 +126,61 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 		return nil
 	}
 
-	// Record result to context
-	ctx.HallucinationDetected = result.HallucinationDetected
-	ctx.HallucinationConfidence = result.Confidence
-
-	// Convert enhanced spans to context format
-	if len(result.Spans) > 0 {
-		ctx.EnhancedHallucinationInfo = &EnhancedHallucinationInfo{
-			Confidence: result.Confidence,
-			Spans:      make([]EnhancedHallucinationSpan, 0, len(result.Spans)),
-		}
-		for _, span := range result.Spans {
-			ctx.HallucinationSpans = append(ctx.HallucinationSpans, span.Text)
-			ctx.EnhancedHallucinationInfo.Spans = append(ctx.EnhancedHallucinationInfo.Spans, EnhancedHallucinationSpan{
-				Text:                    span.Text,
-				Start:                   span.Start,
-				End:                     span.End,
-				HallucinationConfidence: span.HallucinationConfidence,
-				NLILabel:                span.NLILabelStr,
-				NLIConfidence:           span.NLIConfidence,
-				Severity:                span.Severity,
-				Explanation:             span.Explanation,
-			})
-		}
-	}
+	// Record result to context, shaped exactly as the signal path shapes it.
+	evidence := hallucinationEvidenceFromNLI(result)
+	ctx.HallucinationDetected = evidence.Detected
+	ctx.HallucinationConfidence = evidence.Confidence
+	ctx.HallucinationScoreAvailable = evidence.ScoreAvailable
+	ctx.HallucinationScoreKind = evidence.ScoreKind
+	ctx.HallucinationSpans = append(ctx.HallucinationSpans, evidence.Spans...)
+	ctx.EnhancedHallucinationInfo = evidence.Enhanced
 
 	decisionName := requestDecisionStateKey(ctx)
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected_nli", latency)
-		logging.Warnf("Hallucination detected (NLI): confidence=%.3f, spans=%d, action=%s",
-			result.Confidence, len(result.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
+		logging.Warnf("Hallucination detected (NLI): score=%s, spans=%d, action=%s",
+			hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence), len(result.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 	} else {
 		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
-		logging.Debugf("No hallucination detected (NLI): confidence=%.3f", result.Confidence)
+		logging.Debugf("No hallucination detected (NLI): score=%s", hallucinationScoreDescription(result.ScoreAvailable, result.ScoreKind, result.Confidence))
 	}
 
 	return nil
+}
+
+// consumeHallucinationSignal is the plugin's path once hallucination rules
+// are declared: it reads the published observation and carries it into the
+// fields its actions read, so a disabled plugin leaves the evidence on record
+// without acting on it. Nothing is classified here.
+func (r *OpenAIRouter) consumeHallucinationSignal(ctx *RequestContext) {
+	if !r.isHallucinationEnabledForDecision(ctx.VSRSelectedDecision) {
+		return
+	}
+	matched, failureCode, observed := r.hallucinationSignalOutcome(ctx)
+	decisionName := requestDecisionStateKey(ctx)
+	if failureCode != "" {
+		metrics.RecordPluginExecution("hallucination", decisionName, "unresolved", 0)
+		logging.Debugf("Hallucination signal unresolved for decision %s: %s", decisionName, failureCode)
+		return
+	}
+	evidence := ctx.VSRHallucinationEvidence
+	if !observed || evidence == nil {
+		return
+	}
+	ctx.HallucinationDetected = matched
+	ctx.HallucinationSpans = evidence.Spans
+	ctx.HallucinationConfidence = evidence.Confidence
+	ctx.HallucinationScoreAvailable = evidence.ScoreAvailable
+	ctx.HallucinationScoreKind = evidence.ScoreKind
+	ctx.EnhancedHallucinationInfo = evidence.Enhanced
+	if matched {
+		metrics.RecordPluginExecution("hallucination", decisionName, "detected", 0)
+		logging.Warnf("Hallucination detected: score=%s, unsupported_spans=%d, action=%s",
+			hallucinationScoreDescription(evidence.ScoreAvailable, evidence.ScoreKind, evidence.Confidence), len(evidence.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
+		return
+	}
+	metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", 0)
 }
 
 // isNLIEnabledForDecision checks if NLI is enabled for the given decision's hallucination plugin
@@ -164,24 +201,24 @@ func (r *OpenAIRouter) isNLIEnabledForDecision(decision *config.Decision) bool {
 	return halConfig.UseNLI
 }
 
-// applyHallucinationWarning applies the configured hallucination action: it
-// prepends a body warning ("body"), surfaces the "hallucination" response-warnings
-// code ("header"/default), or does nothing ("none"). Returns the (possibly
-// rewritten) body and the warning code to merge into x-vsr-response-warnings, if
-// any. The span detail stays in the replay record (#2204).
-func (r *OpenAIRouter) applyHallucinationWarning(ctx *RequestContext, responseBody []byte) ([]byte, string) {
+func (r *OpenAIRouter) applySemanticHallucinationWarning(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) (bool, string) {
 	if !ctx.HallucinationDetected {
-		return responseBody, ""
+		return false, ""
 	}
-
 	switch r.getHallucinationActionForDecision(ctx.VSRSelectedDecision) {
 	case "body":
-		includeDetails := r.shouldIncludeHallucinationDetails(ctx.VSRSelectedDecision)
-		return r.prependHallucinationWarningToBody(responseBody, ctx, includeDetails), ""
+		warning := r.buildHallucinationWarningText(
+			ctx,
+			r.shouldIncludeHallucinationDetails(ctx.VSRSelectedDecision),
+		)
+		return prependSemanticAssistantText(response, warning), ""
 	case "none":
-		return responseBody, ""
-	default: // "header"
-		return responseBody, headers.ResponseWarningHallucination
+		return false, ""
+	default:
+		return false, headers.ResponseWarningHallucination
 	}
 }
 
@@ -199,51 +236,6 @@ func (r *OpenAIRouter) shouldIncludeHallucinationDetails(decision *config.Decisi
 	return halConfig.IncludeHallucinationDetails
 }
 
-// prependHallucinationWarningToBody prepends warning text to the response content
-func (r *OpenAIRouter) prependHallucinationWarningToBody(responseBody []byte, ctx *RequestContext, includeDetails bool) []byte {
-	// Build warning text
-	warningText := r.buildHallucinationWarningText(ctx, includeDetails)
-
-	// Parse response
-	var completion map[string]interface{}
-	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Errorf("Failed to parse response for hallucination body warning: %v", err)
-		return responseBody
-	}
-
-	// Modify content in choices
-	choices, ok := completion["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return responseBody
-	}
-
-	for _, choice := range choices {
-		choiceMap, ok := choice.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		message, ok := choiceMap["message"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		content, ok := message["content"].(string)
-		if !ok {
-			continue
-		}
-		// Prepend warning to content
-		message["content"] = warningText + "\n\n" + content
-	}
-
-	// Marshal back
-	modifiedBody, err := json.Marshal(completion)
-	if err != nil {
-		logging.Errorf("Failed to marshal response with hallucination body warning: %v", err)
-		return responseBody
-	}
-
-	return modifiedBody
-}
-
 // buildHallucinationWarningText builds the warning text for body prepending
 func (r *OpenAIRouter) buildHallucinationWarningText(ctx *RequestContext, includeDetails bool) string {
 	if !includeDetails {
@@ -256,7 +248,7 @@ func (r *OpenAIRouter) buildHallucinationWarningText(ctx *RequestContext, includ
 	}
 
 	// Basic details without NLI
-	warning := fmt.Sprintf("[Hallucination Warning] This response may contain unsupported claims (confidence: %.0f%%).", ctx.HallucinationConfidence*100)
+	warning := hallucinationWarningPrefix(ctx.HallucinationScoreAvailable, ctx.HallucinationScoreKind, ctx.HallucinationConfidence)
 
 	if len(ctx.HallucinationSpans) > 0 {
 		spans := strings.Join(ctx.HallucinationSpans, "\", \"")
@@ -271,12 +263,16 @@ func (r *OpenAIRouter) buildHallucinationWarningText(ctx *RequestContext, includ
 func (r *OpenAIRouter) buildEnhancedHallucinationWarningText(ctx *RequestContext) string {
 	info := ctx.EnhancedHallucinationInfo
 
-	warning := fmt.Sprintf("[Hallucination Warning] This response may contain unsupported claims (confidence: %.0f%%).", info.Confidence*100)
+	warning := hallucinationWarningPrefix(info.ScoreAvailable, info.ScoreKind, info.Confidence)
 	warning += " Detailed analysis:"
 
 	for i, span := range info.Spans {
 		warning += fmt.Sprintf(" [%d] \"%s\"", i+1, span.Text)
-		warning += fmt.Sprintf(" (NLI: %s, confidence: %.0f%%, severity: %s)", span.NLILabel, span.NLIConfidence*100, severityToString(span.Severity))
+		if span.NLILabel != "" && !strings.EqualFold(span.NLILabel, "unknown") {
+			warning += fmt.Sprintf(" (NLI: %s, confidence: %.0f%%, severity: %s)", span.NLILabel, span.NLIConfidence*100, severityToString(span.Severity))
+		} else {
+			warning += fmt.Sprintf(" (severity: %s)", severityToString(span.Severity))
+		}
 		if span.Explanation != "" {
 			warning += fmt.Sprintf(" - %s", span.Explanation)
 		}
@@ -307,8 +303,14 @@ func severityToString(severity int) string {
 // checkUnverifiedFactualResponse checks if the response is a fact-check-needed prompt
 // without tool context, and marks it as unverified
 func (r *OpenAIRouter) checkUnverifiedFactualResponse(ctx *RequestContext) {
-	// Only applies when fact-check is needed but no tools are available
-	if !ctx.FactCheckNeeded || ctx.HasToolsForFactCheck {
+	if r.hallucinationSignalDeclared(ctx) {
+		// The signal already said whether the answer could be checked: an
+		// answer with no grounding context is the unverified-factual case.
+		if _, code, _ := r.hallucinationSignalOutcome(ctx); code != classification.HallucinationSignalContextUnavailable {
+			return
+		}
+	} else if !ctx.FactCheckNeeded || ctx.HasToolsForFactCheck {
+		// Only applies when fact-check is needed but no tools are available
 		return
 	}
 
@@ -319,66 +321,40 @@ func (r *OpenAIRouter) checkUnverifiedFactualResponse(ctx *RequestContext) {
 		ctx.FactCheckConfidence)
 }
 
-// applyUnverifiedFactualWarning applies the configured action for an unverified
-// factual response: prepends a body warning ("body"), surfaces the
-// "unverified_factual" response-warnings code ("header"/default), or does nothing
-// ("none"). Returns the (possibly rewritten) body and the warning code to merge,
-// if any. The fact-check verification context stays in the replay record (#2204).
-func (r *OpenAIRouter) applyUnverifiedFactualWarning(ctx *RequestContext, responseBody []byte) ([]byte, string) {
+func (r *OpenAIRouter) applySemanticUnverifiedFactualWarning(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) (bool, string) {
 	if !ctx.UnverifiedFactualResponse {
-		return responseBody, ""
+		return false, ""
 	}
-
 	switch r.getUnverifiedFactualActionForDecision(ctx.VSRSelectedDecision) {
 	case "body":
-		return r.prependUnverifiedFactualWarningToBody(responseBody), ""
+		return prependSemanticAssistantText(
+			response,
+			"[Unverified Response] This response contains factual claims that could not be verified due to missing context.",
+		), ""
 	case "none":
-		return responseBody, ""
-	default: // "header"
-		return responseBody, headers.ResponseWarningUnverifiedFactual
+		return false, ""
+	default:
+		return false, headers.ResponseWarningUnverifiedFactual
 	}
 }
 
-// prependUnverifiedFactualWarningToBody prepends unverified factual warning text to the response content
-func (r *OpenAIRouter) prependUnverifiedFactualWarningToBody(responseBody []byte) []byte {
-	warningText := "[Unverified Response] This response contains factual claims that could not be verified due to missing context."
-
-	// Parse response
-	var completion map[string]interface{}
-	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Errorf("Failed to parse response for unverified factual body warning: %v", err)
-		return responseBody
+func hallucinationWarningPrefix(available bool, kind string, score float32) string {
+	prefix := "[Hallucination Warning] This response may contain unsupported claims"
+	if !available {
+		return prefix + "."
 	}
-
-	// Modify content in choices
-	choices, ok := completion["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return responseBody
+	if kind == "probability" {
+		return fmt.Sprintf("%s (confidence: %.0f%%).", prefix, score*100)
 	}
+	return fmt.Sprintf("%s (score: %.3f, kind: %s).", prefix, score, kind)
+}
 
-	for _, choice := range choices {
-		choiceMap, ok := choice.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		message, ok := choiceMap["message"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		content, ok := message["content"].(string)
-		if !ok {
-			continue
-		}
-		// Prepend warning to content
-		message["content"] = warningText + "\n\n" + content
+func hallucinationScoreDescription(available bool, kind string, score float32) string {
+	if !available {
+		return "unavailable"
 	}
-
-	// Marshal back
-	modifiedBody, err := json.Marshal(completion)
-	if err != nil {
-		logging.Errorf("Failed to marshal response with unverified factual body warning: %v", err)
-		return responseBody
-	}
-
-	return modifiedBody
+	return fmt.Sprintf("%.3f (%s)", score, kind)
 }

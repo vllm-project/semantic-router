@@ -11,7 +11,7 @@
   color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.67rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.16em;
 }
@@ -50,7 +50,7 @@
 .trackNumber {
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
-  font-size: 2.2rem;
+  font-size: var(--text-2xl);
   line-height: 1;
 }
 
@@ -62,8 +62,8 @@
 .trackTitle h2 {
   margin: 0;
   color: var(--site-text);
-  font-size: clamp(2rem, 3.8vw, 3.25rem);
-  font-weight: 480;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-normal);
   line-height: 0.95;
   letter-spacing: -0.035em;
 }

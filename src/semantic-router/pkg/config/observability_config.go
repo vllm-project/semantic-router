@@ -2,11 +2,13 @@ package config
 
 type APIConfig struct {
 	BatchClassification BatchClassificationConfig `yaml:"batch_classification"`
+	RoutingPreview      RoutingPreviewConfig      `yaml:"routing_preview,omitempty"`
 }
 
 type ObservabilityConfig struct {
-	Tracing TracingConfig `yaml:"tracing"`
-	Metrics MetricsConfig `yaml:"metrics"`
+	Tracing   TracingConfig   `yaml:"tracing"`
+	Metrics   MetricsConfig   `yaml:"metrics"`
+	Profiling ProfilingConfig `yaml:"profiling"`
 }
 
 type MetricsConfig struct {
@@ -14,11 +16,27 @@ type MetricsConfig struct {
 	WindowedMetrics WindowedMetricsConfig `yaml:"windowed_metrics"`
 }
 
+const (
+	// DefaultProfilingPort is the port the pprof listener uses when profiling is
+	// enabled without an explicit port.
+	DefaultProfilingPort = 6060
+	// DefaultProfilingBind keeps pprof on loopback unless deliberately widened.
+	DefaultProfilingBind = "127.0.0.1"
+)
+
+// ProfilingConfig controls the optional in-process pprof HTTP listener. It is
+// disabled by default and binds to loopback so profiles are never exposed on a
+// routable interface without an explicit operator decision.
+type ProfilingConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Port    int    `yaml:"port,omitempty"`
+	Bind    string `yaml:"bind,omitempty"`
+}
+
 type WindowedMetricsConfig struct {
 	Enabled              bool     `yaml:"enabled"`
 	TimeWindows          []string `yaml:"time_windows,omitempty"`
 	UpdateInterval       string   `yaml:"update_interval,omitempty"`
-	ModelMetrics         bool     `yaml:"model_metrics"`
 	QueueDepthEstimation bool     `yaml:"queue_depth_estimation"`
 	MaxModels            int      `yaml:"max_models,omitempty"`
 }
@@ -34,12 +52,12 @@ type TracingConfig struct {
 type TracingExporterConfig struct {
 	Type     string `yaml:"type"`
 	Endpoint string `yaml:"endpoint,omitempty"`
-	Insecure bool   `yaml:"insecure,omitempty"`
+	Insecure bool   `yaml:"insecure"`
 }
 
 type TracingSamplingConfig struct {
 	Type string  `yaml:"type"`
-	Rate float64 `yaml:"rate,omitempty"`
+	Rate float64 `yaml:"rate"`
 }
 
 type TracingResourceConfig struct {

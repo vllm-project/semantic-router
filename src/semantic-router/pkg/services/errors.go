@@ -14,6 +14,10 @@ var ErrEmptyText = errors.New("text cannot be empty")
 // auto alias or configured entrypoint.
 var ErrUnknownRoutingModel = errors.New("unknown routing model")
 
+// ErrClassifierUnavailable is returned when the signal classifier has not
+// been prepared for evaluation yet.
+var ErrClassifierUnavailable = errors.New("signal classifier is unavailable")
+
 // ErrInvalidRequestFacts is returned when metadata or request-envelope facts
 // exceed the bounded classification API contract.
 var ErrInvalidRequestFacts = errors.New("invalid request facts")

@@ -23,6 +23,9 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRSelectedReasoning", VSRSelectedReasoning, "x-vsr-selected-reasoning"},
 		{"VSRSelectedModel", VSRSelectedModel, "x-vsr-selected-model"},
 		{"VSRSelectedAlgorithm", VSRSelectedAlgorithm, "x-vsr-selected-algorithm"},
+		{"VSRRoutingLatencyMs", VSRRoutingLatencyMs, "x-vsr-routing-latency-ms"},
+		{"VSRCost", VSRCost, "x-vsr-cost"},
+		{"VSRCostCurrency", VSRCostCurrency, "x-vsr-cost-currency"},
 		{"VSRSessionPhase", VSRSessionPhase, "x-vsr-session-phase"},
 		{"VSRLearningMethods", VSRLearningMethods, "x-vsr-learning-methods"},
 		{"VSRLearningActions", VSRLearningActions, "x-vsr-learning-actions"},
@@ -30,6 +33,10 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRLearningReasons", VSRLearningReasons, "x-vsr-learning-reasons"},
 		{"VSRInjectedSystemPrompt", VSRInjectedSystemPrompt, "x-vsr-injected-system-prompt"},
 		{"VSRCacheHit", VSRCacheHit, "x-vsr-cache-hit"},
+		{"VSRKVTransferStatus", VSRKVTransferStatus, "x-vsr-kv-transfer-status"},
+		{"VSRKVSourcePod", VSRKVSourcePod, "x-vsr-kv-source-pod"},
+		{"VSRKVCacheID", VSRKVCacheID, "x-vsr-kv-cache-id"},
+		{"VSRKVMapperID", VSRKVMapperID, "x-vsr-kv-mapper-id"},
 		{"VSRMatchedModality", VSRMatchedModality, "x-vsr-matched-modality"},
 		{"VSRMatchedAuthz", VSRMatchedAuthz, "x-vsr-matched-authz"},
 		{"VSRMatchedJailbreak", VSRMatchedJailbreak, "x-vsr-matched-jailbreak"},
@@ -47,6 +54,18 @@ func TestHeaderConstants(t *testing.T) {
 				t.Errorf("Expected %s to be %q, got %q", tt.name, tt.expected, tt.header)
 			}
 		})
+	}
+}
+
+func TestKVTransferStatusValues(t *testing.T) {
+	if KVTransferStatusApplied != "applied" {
+		t.Errorf("KVTransferStatusApplied = %q, want %q", KVTransferStatusApplied, "applied")
+	}
+	if KVTransferStatusFallbackReprefill != "fallback_reprefill" {
+		t.Errorf("KVTransferStatusFallbackReprefill = %q, want %q", KVTransferStatusFallbackReprefill, "fallback_reprefill")
+	}
+	if KVTransferStatusUnsupported != "unsupported" {
+		t.Errorf("KVTransferStatusUnsupported = %q, want %q", KVTransferStatusUnsupported, "unsupported")
 	}
 }
 
@@ -87,10 +106,14 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 		VSRSelectedRecipe,
 		VSRSelectedDecision,
 		VSRSelectedConfidence,
+		VSRAppliedUnknownPolicy,
 		VSRSelectedReasoning,
 		VSRSelectedModality,
 		VSRSelectedModel,
 		VSRSelectedAlgorithm,
+		VSRRoutingLatencyMs,
+		VSRCost,
+		VSRCostCurrency,
 		VSRSessionPhase,
 		VSRLearningMethods,
 		VSRLearningActions,
@@ -116,6 +139,7 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 		VSRMatchedKB,
 		VSRMatchedConversation,
 		VSRMatchedEvent,
+		VSRMatchedInputModality,
 		VSRMatchedProjection,
 		VSRCacheHit,
 		VSRFastResponse,

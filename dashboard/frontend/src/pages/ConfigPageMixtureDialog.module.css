@@ -1,0 +1,781 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(3, 3, 4, 0.66);
+  backdrop-filter: blur(18px);
+}
+
+.dialog {
+  width: min(var(--product-dialog-content-width), 100%);
+  height: min(900px, calc(100dvh - 3rem));
+  max-height: min(880px, calc(100dvh - 3rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  outline: 0;
+  background: var(--product-dialog-surface);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
+}
+
+.dialog option {
+  background: #151517;
+  color: #f4f4f5;
+}
+
+.header,
+.headerIdentity,
+.sectionHeader,
+.footer {
+  display: flex;
+  align-items: center;
+}
+
+.header {
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.4rem 1.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.headerIdentity {
+  min-width: 0;
+  gap: 0.85rem;
+}
+
+.headerLogo {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+}
+
+.headerLogo img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.header span,
+.sectionHeader span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 0.24rem 0 0;
+  color: #f7f7f8;
+  font-size: 1.45rem;
+  letter-spacing: -0.035em;
+}
+
+.header p {
+  margin: 0.3rem 0 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.8rem;
+}
+
+.header > button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 1.25rem;
+}
+.header > button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.error {
+  padding: 0.75rem 1.6rem;
+  border-bottom: 1px solid rgba(248, 113, 113, 0.2);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+  font-size: 0.8rem;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 1rem;
+  padding: 1.4rem 1.6rem 1.6rem;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.identityGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+  gap: 0.75rem;
+}
+
+.identityGrid label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.identityGrid label > span {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.identityGrid input,
+.identityGrid select,
+.aliasComposer input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  outline: 0;
+  background: #1a1a1d;
+  color: #f5f5f7;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.identityGrid input:focus,
+.identityGrid select:focus,
+.aliasComposer input:focus {
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.065);
+}
+
+.decisionSection {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px;
+  background: #0d0d0f;
+}
+
+.sectionHeader {
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.sectionHeader > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sectionHeader strong {
+  color: #f4f4f5;
+  font-size: 0.9rem;
+}
+
+.sectionHeader p {
+  max-width: 46ch;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.assignmentWorkspace {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(210px, 0.38fr) minmax(0, 1fr);
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+.decisionRail {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.55rem;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.decisionList {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.decisionList > button {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+
+.decisionList > button + button {
+  margin-top: 0.2rem;
+}
+
+.decisionList > button:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.decisionList > .activeDecision {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.assignmentPanel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.assignmentPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.assignmentPanelHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.22rem;
+}
+
+.assignmentPanelHeader strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.8rem;
+}
+
+.assignmentPanelHeader span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.assignmentPanelHeader > span {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.58);
+  white-space: nowrap;
+}
+
+.assignmentSearch {
+  min-width: 0;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.assignmentSearch:focus-within {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.assignmentSearch svg {
+  width: 14px;
+  height: 14px;
+}
+
+.assignmentSearch input {
+  width: 100%;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.84);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.assignmentSearch input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.modelPickerToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem 0;
+}
+
+.modelPickerToolbar > button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.modelPickerToolbar > button:hover,
+.modelPickerToolbar > .activeFilter {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.modelPickerToolbar > button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.modelPickerToolbar > button span {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0 0.25rem;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+.decisionIndex {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.44);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+}
+
+.decisionCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.decisionRail strong {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.78rem;
+}
+
+.noResults {
+  margin: 0;
+  padding: 1.15rem 0.5rem;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+.decisionRail small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectionCount,
+.missingCount {
+  min-width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0 0.35rem;
+  border-radius: 7px;
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+.selectionCount {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.missingCount {
+  background: rgba(248, 113, 113, 0.09);
+  color: #fca5a5;
+}
+
+.modelPicker {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  min-height: 0;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-block: 0.75rem;
+}
+
+.modelPicker label {
+  position: relative;
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 38px;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.modelPicker label:hover,
+.modelPicker .selectedModel {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.modelPicker input {
+  position: absolute;
+  opacity: 0;
+}
+
+.modelPicker label > span {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  color: transparent;
+  font-size: 0.65rem;
+}
+.modelPicker label > span svg {
+  width: 12px;
+  height: 12px;
+}
+
+.modelPicker input:checked + span {
+  border-color: #f1f1f2;
+  background: #f1f1f2;
+  color: #111113;
+}
+
+.modelPicker code {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelPicker p,
+.empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 1.3rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.aliasSection {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.aliasHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.aliasHeading > div {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.aliasHeading span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.aliasHeading strong {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.8rem;
+}
+
+.aliasHeading p {
+  max-width: 38ch;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.aliasComposer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  max-width: 720px;
+  gap: 0.55rem;
+}
+
+.aliasWorkspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.55rem;
+}
+
+.aliasComposer button,
+.aliasItem button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.aliasComposer button {
+  min-width: 74px;
+  padding: 0 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.aliasComposer button svg,
+.aliasItem button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.aliasComposer button:disabled {
+  opacity: 0.38;
+}
+
+.aliasList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.aliasItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.25rem 0.3rem 0.25rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.aliasItem code {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.68rem;
+}
+
+.aliasItem button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+}
+
+.footer {
+  justify-content: flex-end;
+  gap: 0.55rem;
+  padding: 0.95rem 1.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 8, 9, 0.72);
+}
+
+.cancel,
+.save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 41px;
+  padding: 0 1rem;
+  border-radius: 9px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.cancel svg,
+.save svg {
+  width: 15px;
+  height: 15px;
+}
+
+.cancel {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.save {
+  border: 1px solid #f3f3f4;
+  background: #f3f3f4;
+  color: #101012;
+}
+
+@media (max-width: 720px) {
+  .backdrop {
+    padding: 0.4rem;
+  }
+
+  .dialog {
+    height: auto;
+    max-height: calc(100dvh - 0.8rem);
+    border-width: 1px;
+  }
+
+  .header,
+  .body,
+  .footer {
+    padding-inline: 1rem;
+  }
+
+  .body {
+    overflow-y: auto;
+  }
+
+  .identityGrid,
+  .modelPicker {
+    grid-template-columns: 1fr;
+  }
+
+  .decisionSection {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .assignmentWorkspace {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .decisionRail {
+    padding: 0.55rem;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  }
+
+  .decisionList {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-gutter: auto;
+  }
+
+  .decisionList > button {
+    min-width: min(220px, 74vw);
+  }
+
+  .decisionList > button + button {
+    margin-top: 0;
+  }
+
+  .assignmentPanel {
+    overflow: visible;
+  }
+
+  .modelPicker {
+    max-height: 340px;
+    overflow-y: auto;
+  }
+
+  .modelPickerToolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sectionHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .aliasSection {
+    gap: 0.6rem;
+  }
+
+  .aliasHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .aliasHeading p {
+    text-align: left;
+  }
+}
+
+@media (max-height: 800px) and (min-width: 721px) {
+  .body {
+    overflow-y: auto;
+  }
+
+  .decisionSection {
+    flex: 0 0 auto;
+  }
+
+  .assignmentWorkspace {
+    height: 360px;
+  }
+}

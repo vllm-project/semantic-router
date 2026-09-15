@@ -10,7 +10,9 @@ import {
   type ReactNode,
 } from 'react'
 import styles from './ClawRoomChat.module.css'
+import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { canManageOpenClaw } from '../utils/accessControl'
 import {
   createLatestOpenClawRequest,
   fetchOpenClawJSON,
@@ -19,6 +21,7 @@ import {
 } from '../utils/openClawRequestSupport'
 import ClawRoomMentionMenu from './ClawRoomMentionMenu'
 import ClawRoomSidebar from './ClawRoomSidebar'
+import ProductLoadingState from './ProductLoadingState'
 import ClawRoomTranscript from './ClawRoomTranscript'
 import ClawRoomTransportStatus from './ClawRoomTransportStatus'
 import ConfirmDialog from './ConfirmDialog'
@@ -52,7 +55,8 @@ const ClawRoomChat = ({
   createRoomRequestToken = 0,
   inputModeControls,
 }: ClawRoomChatProps) => {
-  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const { user, isLoading: authLoading } = useAuth()
+  const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [workers, setWorkers] = useState<WorkerProfile[]>([])
   const [rooms, setRooms] = useState<RoomEntry[]>([])
@@ -89,7 +93,8 @@ const ClawRoomChat = ({
     () => rooms.find((room) => room.id === selectedRoomId) || null,
     [rooms, selectedRoomId],
   )
-  const managementDisabled = readonlyLoading || isReadonly
+  const managementDisabled =
+    authLoading || readonlyLoading || serverReadonly || !canManageOpenClaw(user)
 
   const { memberResumeProfiles, mentionOptions, teamBriefText, workerLookup } = useMemo(
     () => buildClawRoomTeamView(selectedTeam, workers, selectedTeamId),
@@ -565,7 +570,7 @@ const ClawRoomChat = ({
 
       if (message.senderType === 'system') {
         return {
-          displayName: message.senderName || 'ClawOS',
+          displayName: message.senderName || 'OpenClaw',
           roleLabel: 'SYSTEM',
         }
       }
@@ -589,43 +594,7 @@ const ClawRoomChat = ({
   if (loading) {
     return (
       <div className={containerClassName}>
-        <div className={styles.loadingShell} aria-live="polite">
-          <div className={styles.loadingTopRow}>
-            <div className={`${styles.loadingTitle} ${styles.loadingPulse}`} />
-            <div className={`${styles.loadingBadge} ${styles.loadingPulse}`} />
-          </div>
-          <div className={styles.loadingSubtitle}>Loading Claw room context...</div>
-
-          <div className={styles.loadingLayout}>
-            {isSidebarOpen && (
-              <aside className={styles.loadingSidebar}>
-                <div className={`${styles.loadingLine} ${styles.loadingPulse}`} />
-                <div className={`${styles.loadingLineWide} ${styles.loadingPulse}`} />
-                <div className={`${styles.loadingLine} ${styles.loadingPulse}`} />
-                <div className={`${styles.loadingRoomItem} ${styles.loadingPulse}`} />
-                <div className={`${styles.loadingRoomItem} ${styles.loadingPulse}`} />
-                <div className={`${styles.loadingRoomItem} ${styles.loadingPulse}`} />
-              </aside>
-            )}
-
-            <section className={styles.loadingChat}>
-              <div className={styles.loadingChatHeader}>
-                <div className={`${styles.loadingLineWide} ${styles.loadingPulse}`} />
-                <div className={styles.loadingChipRow}>
-                  <div className={`${styles.loadingChip} ${styles.loadingPulse}`} />
-                  <div className={`${styles.loadingChip} ${styles.loadingPulse}`} />
-                  <div className={`${styles.loadingChip} ${styles.loadingPulse}`} />
-                </div>
-              </div>
-              <div className={styles.loadingMessages}>
-                <div className={`${styles.loadingBubbleWide} ${styles.loadingPulse}`} />
-                <div className={`${styles.loadingBubble} ${styles.loadingPulse}`} />
-                <div className={`${styles.loadingBubbleWide} ${styles.loadingPulse}`} />
-              </div>
-              <div className={`${styles.loadingInput} ${styles.loadingPulse}`} />
-            </section>
-          </div>
-        </div>
+        <ProductLoadingState label="Opening OpenClaw" />
       </div>
     )
   }

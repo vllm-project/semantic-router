@@ -1,0 +1,22 @@
+{
+  "operation": "response",
+  "limits": {"json_depth": 4},
+  "body": {
+    "id": "resp_depth",
+    "object": "response",
+    "created_at": 1,
+    "model": "provider-model",
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "id": "msg_depth",
+        "role": "assistant",
+        "status": "completed",
+        "content": [
+          {"type": "output_text", "text": "done", "annotations": []}
+        ]
+      }
+    ]
+  }
+}

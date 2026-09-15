@@ -1,0 +1,316 @@
+{
+  "cases": [
+    {
+      "name": "cache_control",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_cache_control"
+        }
+      }
+    },
+    {
+      "name": "container",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_container"
+        }
+      }
+    },
+    {
+      "name": "inference_geo",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_inference_geo"
+        }
+      }
+    },
+    {
+      "name": "max_tokens",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 64,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "messages",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "user": "user-3"
+        }
+      }
+    },
+    {
+      "name": "model",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "output_config",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "reasoning_effort": "high",
+          "response_format": {
+            "json_schema": {
+              "name": "structured_output",
+              "schema": {
+                "type": "object"
+              },
+              "strict": true
+            },
+            "type": "json_schema"
+          }
+        }
+      }
+    },
+    {
+      "name": "service_tier",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_service_tier"
+        }
+      }
+    },
+    {
+      "name": "stop_sequences",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "stop": [
+            "END",
+            "STOP"
+          ]
+        }
+      }
+    },
+    {
+      "name": "stream",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "stream": true
+        }
+      }
+    },
+    {
+      "name": "system",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "Be concise.",
+              "role": "system"
+            },
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "temperature",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 0.2
+        }
+      }
+    },
+    {
+      "name": "thinking",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "reasoning_budget_tokens": 1024
+        }
+      }
+    },
+    {
+      "name": "tool_choice",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "parallel_tool_calls": false,
+          "tool_choice": {
+            "function": {
+              "name": "lookup"
+            },
+            "type": "function"
+          },
+          "tools": [
+            {
+              "function": {
+                "name": "lookup",
+                "parameters": {
+                  "type": "object"
+                }
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "tools",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "function": {
+                "name": "lookup",
+                "parameters": {
+                  "type": "object"
+                }
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "top_k",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "top_p",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 0.9
+        }
+      }
+    }
+  ]
+}

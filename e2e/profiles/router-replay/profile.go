@@ -43,7 +43,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests Router Replay restart recovery using the default Postgres backend"
+	return "Tests authenticated Router Replay management access, public denial, Postgres restart recovery, and shadow dispatch capture"
 }
 
 // Setup deploys Postgres, the router, and gateway resources.
@@ -59,10 +59,13 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the test cases for this profile.
 func (p *Profile) GetTestCases() []string {
 	return []string{
+		"router-replay-public-listener-denied",
 		"router-replay-restart-recovery",
 		"router-replay-recipe-list-filter",
 		"router-replay-session-list-filter",
 		"router-replay-session-turn-progression",
+		"shadow-dispatch-observes-candidate-model",
+		"shadow-dispatch-fail-open-unreachable-backend",
 	}
 }
 

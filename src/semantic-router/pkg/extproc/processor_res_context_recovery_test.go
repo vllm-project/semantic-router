@@ -11,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type recoveryStoreStub struct {
@@ -101,13 +102,9 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 		VSRSelectedDecisionName:        decision.Name,
 		VSRSelectedDecision:            decision,
 		ContextCompressionRecoveryKeys: []string{"key-1"},
-		Headers: map[string]string{
-			"x-authz-user-id": "user-1",
-		},
-		WorkingRequestBody: []byte(`{
-			"model":"model",
-			"messages":[{"role":"user","content":"question"}]
-		}`),
+		Headers:                        map[string]string{"x-authz-user-id": "user-1"},
+		SourceFormat:                   llmprotocol.OpenAIChatV1,
+		SemanticRequest:                testNeutralRequest("model", "question"),
 	}
 	scope := router.contextCompressionScope(ctx)
 	router.CompressionRecovery.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
@@ -118,8 +115,9 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 		},
 	}
 	response := []byte(`{
+		"id":"initial","object":"chat.completion","created":1,"model":"model",
 		"usage":{"prompt_tokens":10,"completion_tokens":3,"total_tokens":13},
-		"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{
+		"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
 			"id":"retrieve-1",
 			"type":"function",
 			"function":{"name":"vsr_context_retrieve","arguments":"{\"key\":\"key-1\"}"}
@@ -150,12 +148,12 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 }
 
 func TestParseContextRecoveryCallsRejectsMalformedArguments(t *testing.T) {
-	_, _, err := parseContextRecoveryCalls([]byte(`{
-		"choices":[{"message":{"tool_calls":[{
-			"id":"call",
-			"function":{"name":"vsr_context_retrieve","arguments":"not-json"}
-		}]}}]
-	}`))
+	_, _, err := parseContextRecoveryCalls(llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+			ID: "call", Name: contextcompression.RetrieveToolName, Arguments: "not-json",
+		}}},
+	}}})
 	if err == nil {
 		t.Fatal("parseContextRecoveryCalls() accepted malformed arguments")
 	}
@@ -184,12 +182,16 @@ func TestHandleContextRecoveryFollowupRejectsForgedKey(t *testing.T) {
 		VSRSelectedDecision:            decision,
 		ContextCompressionRecoveryKeys: []string{"issued-key"},
 		Headers:                        map[string]string{"x-authz-user-id": "user"},
+		SourceFormat:                   llmprotocol.OpenAIChatV1,
+		SemanticRequest:                testNeutralRequest("model", "question"),
 	}
 	response := []byte(`{
-		"choices":[{"message":{"tool_calls":[{
+		"id":"initial","object":"chat.completion","created":1,"model":"model",
+		"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
 			"id":"retrieve",
+			"type":"function",
 			"function":{"name":"vsr_context_retrieve","arguments":"{\"key\":\"forged-key\"}"}
-		}]}}]
+		}]}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
 	}`)
 	if _, err := router.handleContextRecoveryFollowup(
 		context.Background(),
@@ -202,18 +204,21 @@ func TestHandleContextRecoveryFollowupRejectsForgedKey(t *testing.T) {
 
 func TestRedactContextRecoveryToolCallsDoesNotExposeKey(t *testing.T) {
 	body := []byte(`{
+		"id":"initial","object":"chat.completion","created":1,"model":"model",
 		"choices":[{
+			"index":0,
 			"finish_reason":"tool_calls",
 			"message":{"role":"assistant","content":null,"tool_calls":[{
 				"id":"retrieve",
+				"type":"function",
 				"function":{
 					"name":"vsr_context_retrieve",
 					"arguments":"{\"key\":\"secret-key\"}"
 				}
 			}]}
-		}]
+		}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
 	}`)
-	redacted := redactContextRecoveryToolCalls(body)
+	redacted := (&OpenAIRouter{}).redactContextRecoveryToolCalls(body, &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1})
 	if strings.Contains(string(redacted), "secret-key") ||
 		strings.Contains(string(redacted), "vsr_context_retrieve") {
 		t.Fatalf("redacted response leaked recovery data: %s", redacted)

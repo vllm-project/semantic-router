@@ -36,7 +36,8 @@ func (s *ClassificationAPIServer) handleResponseCacheCapabilities(
 	w http.ResponseWriter,
 	_ *http.Request,
 ) {
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -48,7 +49,8 @@ func (s *ClassificationAPIServer) handleResponseCacheHealth(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -67,7 +69,8 @@ func (s *ClassificationAPIServer) handleResponseCacheStats(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -94,13 +97,31 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", "Invalid response cache configuration")
 		return
 	}
+	_, prepared, release, prepareErr := s.acquireEmbeddingRuntime()
+	defer release()
+	if candidate.Enabled {
+		if prepareErr != nil {
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", "Response cache embedding provider is unavailable")
+			return
+		}
+		provider, err := prepared.Get(candidate.EmbeddingModel, 0, 0)
+		if err != nil {
+			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", err.Error())
+			return
+		}
+		candidate.EmbeddingProvider = provider
+	}
 	backend, err := cache.NewCacheBackend(candidate)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", err.Error())
 		return
 	}
 	defer func() { _ = backend.Close() }()
-	healthErr := backend.CheckConnection()
+	if err = cache.ValidateBackendEmbedding(r.Context(), backend); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", err.Error())
+		return
+	}
+	healthErr := backend.CheckConnection(r.Context())
 	response := responseCacheTestResponse{
 		Valid:        true,
 		Healthy:      healthErr == nil,
@@ -122,7 +143,8 @@ func (s *ClassificationAPIServer) handleResponseCacheInvalidate(
 		s.writeJSONRequestError(w, err)
 		return
 	}
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return
@@ -152,7 +174,8 @@ func (s *ClassificationAPIServer) handleResponseCacheFlush(
 		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIRMATION_REQUIRED", "confirm must equal \"flush response cache\"")
 		return
 	}
-	service := s.currentResponseCache()
+	service, release := s.currentResponseCache()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNAVAILABLE", "Response cache is unavailable")
 		return

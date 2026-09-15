@@ -1,34 +1,34 @@
 ---
 translation:
-  source_commit: "ad233487"
+  source_commit: "ee350c76c2d43e884fe8db7af1ba1aba539588c3"
   source_file: "docs/tutorials/learning/protection.md"
   outdated: false
 ---
 
-# 保护机制
+# 防护
 
 ## 概览
 
-Protection 可在不将连续性变成语义路由的情况下，使 agent 对话保持稳定。每个请求仍会先经过正常的 decision 路由。adaptation 提出模型后，Protection 会决定是保持当前模型、允许切换，还是执行有界的救援切换。
+防护在不把连续性做成语义路由的情况下，保持智能体对话稳定。每个请求仍先经过正常决策路由。自适应提出模型后，防护决定是保持当前模型、允许切换，还是执行有界救援切换。
 
 ## 主要优势
 
-- 在 agent 对话或整个 session 内保持模型选择稳定。
+- 在智能体对话或整段会话内保持模型选择稳定。
 - 保护前缀缓存、工具循环连续性和交接成本。
 - 在协议敏感步骤中抑制随机探索。
 - 在证据足够强时，仍允许确定性切换和有界救援。
-- 允许敏感 decision 通过 decision 局部控制绕过 Protection。
+- 让敏感决策通过决策局部控制绕过防护。
 
 ## 解决什么问题？
 
-Agent 请求并非相互独立。工具调用、提供商状态、前缀缓存和用户可感知的连续性，都会让不必要的模型切换代价高昂或令人困惑。Protection 为路由器提供限定作用域的稳定性守卫，同时不会将 session 连续性变成语义 decision 规则。
+智能体请求并非彼此独立。工具调用、提供商状态、前缀缓存和用户可见的连续性，可能让不必要的模型切换变得昂贵或令人困惑。防护为路由器提供有范围的稳定性守卫，而不把会话连续性变成语义决策规则。
 
 ## 何时使用
 
-- 除非切换值得付出稳定性成本，否则对话应继续使用同一个模型。
-- 完整 session 应在多次由用户发起的运行之间保持稳定。
-- 工具循环或协议状态使随机探索变得不安全。
-- 即使受保护模型能力较弱，也仍应能通过有界救援切换脱离该模型。
+- 对话应继续使用同一模型，除非切换值得付出稳定性成本。
+- 整段会话应在多次用户发起的运行中保持稳定。
+- 工具循环或协议状态使随机探索不安全。
+- 较弱的受保护模型仍应能通过有界救援退出。
 
 ## 配置
 
@@ -37,6 +37,8 @@ global:
   router:
     learning:
       enabled: true
+      adaptation:
+        enabled: false
       protection:
         enabled: true
         scope: conversation
@@ -51,47 +53,55 @@ global:
           stability_weight: 1.0
 ```
 
-## 作用域
+此配置独立启用防护，不启用在线模型选择自适应。若仅打开总开关而省略两个组件的开关，它们默认都会启用。
 
-| 作用域 | 保护对象 | 可触发重新路由的条件 |
+## 范围 {#scopes}
+
+| 范围 | 保护什么 | 什么可以重新路由 |
 | --- | --- | --- |
-| `conversation` | 共享同一个 `x-conversation-id` 的回合。 | 新的 `x-conversation-id` 出现在同一 `x-session-id` 中。 |
-| `session` | 共享同一个 `x-session-id` 的回合。 | 空闲超时，或某个 decision 设置了 `adaptations.mode: bypass`。 |
+| `conversation` | 共享同一 `x-conversation-id` 的轮次。 | 同一 `x-session-id` 中的新 `x-conversation-id`。 |
+| `session` | 共享同一 `x-session-id` 的轮次。 | 空闲超时，或带 `adaptations.mode: bypass` 的决策。 |
 
-当每次 agent 运行都应独立路由时，请使用 `conversation`。当一个 session 级模型选择应在多次由用户发起的运行之间保持稳定时，请使用 `session`。
+当每次智能体运行应独立路由时，使用 `conversation`。当一次会话级模型选择应在多次用户发起的运行中保持稳定时，使用 `session`。在 `conversation` 范围内，决策变化会重置最少轮次和连续性成本偏好。在 `session` 范围内，仅改变决策或对话不会释放仍合格的当前模型；空闲超时、绕过防护、候选排除或满足条件的救援可以释放它。任何范围都不能在合格候选集之外保留先前模型。
 
-如果缺少已配置的身份 header，Protection 会采用 fail-open 行为并记录诊断，而不是令请求失败。
+若配置的身份请求头缺失，防护会失败开放并记录诊断，而不是让请求失败。
 
-## 守卫
+## 守卫 {#guards}
 
-Protection 有两个守卫点：
+防护有两个守卫点：
 
-- **preflight** 在工具、协议或例行延续步骤中抑制随机采样。
-- **switch guard** 根据缓存、交接、工具循环、session 和切换历史成本，接受或拒绝 adaptation 提出的模型。
+- **preflight** 在工具/协议/例行延续步骤中抑制随机采样。
+- **switch guard** 使用缓存、交接、工具循环、会话和切换历史成本，接受或拒绝自适应提议的模型。
 
-切换规则如下：
+切换规则是：
 
 ```text
 switch if proposal_gain >= switch_margin + stability_weight * switch_cost
 ```
 
-当重复失败、重试、验证失败或显式结果证据表明当前模型能力不足时，Protection 还可以允许确定性的 `rescue_switch`。
+后端重复失败，或关联 Replay 的结果表明当前模型能力不足时，防护还可以允许确定性的 `rescue_switch`。防护身份齐备时，即使自适应关闭，后端 `429` 和 `5xx` 响应也会提供失败观测；这不会启用自适应模型选择或质量更新。纠错或重试提示本身不算归属于模型的结果证据，但它的信号可能改变匹配的决策。救援需要另一个合格的提议模型以及足够证据，并不等于立即后端故障转移。
 
-## Decision 边界
+救援仅能在上下文可移植的轮次边界选择合格模型，不能覆盖活动工具循环或不可移植上下文的锁定。不存在这些硬边界时，最少轮次和会话连续性偏好可让位于救援。自适应与防护也保留决策选择器施加的候选限制，包括词典序容差范围。
 
-大多数 decision 不需要局部配置。对于硬策略边界，请使用 `bypass`：
+防护处于 `apply` 模式且所配置的身份齐备时，若硬锁定的原模型不在合格候选池内，请求返回 `503`，不会转移所有权或强行使用该模型。Router 自有 Responses 历史展开为完整无状态请求后，上下文可移植；保留的 `previous_response_id` 本身不构成锁定，但活动工具循环仍会锁定。未知响应 ID 在读取历史时失败，不进入模型选择。
+
+## 决策边界 {#decision-boundaries}
+
+大多数决策不需要局部配置。硬策略边界使用 `bypass`：
 
 ```yaml
 routing:
   decisions:
     - name: local_privacy_policy
+      description: Keep privacy-sensitive traffic on the local model.
+      priority: 200
       modelRefs:
         - model: local-private-model
       adaptations:
         mode: bypass
 ```
 
-使用 `observe` 可在不更改最终模型的情况下收集诊断：
+使用 `observe` 收集诊断而不更改最终模型：
 
 ```yaml
 adaptations:
@@ -99,7 +109,7 @@ adaptations:
     mode: observe
 ```
 
-## 诊断
+## 诊断 {#diagnostics}
 
 ```http
 x-vsr-learning-methods: protection
@@ -108,6 +118,6 @@ x-vsr-learning-scopes: protection=conversation
 x-vsr-learning-reasons: protection=cache_cost_high
 ```
 
-客户端 UI 应将原始 action 转换为面向用户的文本。例如，`hold_current` 可显示为“保留本次运行的模型”，`allow_switch` 可显示为“允许切换”，`rescue_switch` 可显示为“救援切换”，而 `bypass` 可显示为“已绕过学习”。
+客户端 UI 应将原始 action 翻译成面向用户的文本。例如，`hold_current` 可显示为“保持运行模型”，`allow_switch` 为“允许切换”，`rescue_switch` 为“救援切换”，`bypass` 为“已绕过学习”。
 
-Router Replay 会存储完整的 Protection 追踪信息：身份来源及哈希、受保护模型、基础模型、提议模型、最终模型、切换成本、缓存证据、工具循环状态、模式、作用域、动作和原因。
+路由回放存储完整防护 trace：身份来源和哈希、受保护模型、基础模型、提案模型、最终模型、切换成本、缓存证据、工具循环状态、模式、范围、action 和原因。

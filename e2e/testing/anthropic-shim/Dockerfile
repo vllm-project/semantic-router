@@ -12,6 +12,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY anthropic_shim/ ./anthropic_shim/
+COPY schema_contract.json ./
 COPY pyproject.toml ./
 COPY README.md ./
 

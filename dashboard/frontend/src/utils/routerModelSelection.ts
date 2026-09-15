@@ -34,6 +34,7 @@ interface RouterModelRoutingMetadata {
 }
 
 const LEGACY_AUTO_MODEL_IDS = new Set(['auto', CANONICAL_AUTO_MODEL])
+const RETIRED_ROUTER_MODEL_IDS = new Set(['mom'])
 
 function normalizeModelRecords(payload: unknown): RouterModelRecord[] {
   if (!payload || typeof payload !== 'object') {
@@ -52,6 +53,10 @@ function normalizeModelRecords(payload: unknown): RouterModelRecord[] {
 
 function modelId(entry: RouterModelRecord): string {
   return typeof entry.id === 'string' ? entry.id.trim() : ''
+}
+
+function isRetiredRouterModel(entry: RouterModelRecord): boolean {
+  return RETIRED_ROUTER_MODEL_IDS.has(modelId(entry).toLocaleLowerCase())
 }
 
 function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetadata | null {
@@ -96,12 +101,18 @@ function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetad
 function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
   const routing = modelRoutingMetadata(entry)
-  return Boolean(id) && Boolean(routing?.selectable && routing.defaultRoute)
+  return (
+    Boolean(id) &&
+    !isRetiredRouterModel(entry) &&
+    Boolean(routing?.selectable && routing.defaultRoute)
+  )
 }
 
 function isSelectableRouterModel(entry: RouterModelRecord): boolean {
   const id = modelId(entry)
-  return Boolean(id) && modelRoutingMetadata(entry)?.selectable === true
+  return (
+    Boolean(id) && !isRetiredRouterModel(entry) && modelRoutingMetadata(entry)?.selectable === true
+  )
 }
 
 export function selectRouterAutoModel(payload: unknown): string | null {

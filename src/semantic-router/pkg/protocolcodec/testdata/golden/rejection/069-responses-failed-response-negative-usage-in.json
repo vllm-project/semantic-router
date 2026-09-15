@@ -1,0 +1,12 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "resp_failed",
+    "object": "response",
+    "model": "provider-model",
+    "status": "failed",
+    "error": {"code": "provider_error", "message": "failed"},
+    "output": [],
+    "usage": {"input_tokens": 1, "output_tokens": 0, "total_tokens": -1}
+  }
+}

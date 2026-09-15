@@ -76,10 +76,10 @@ algorithm:
   type: confidence
   confidence:
     confidence_method: hybrid        # avg_logprob, margin, hybrid, self_verify, automix_entailment
-    threshold: 0.72                  # Escalation threshold (method-dependent)
-    escalation_order: small_to_large # Escalation direction
-    cost_quality_tradeoff: 0.3       # Cost vs quality balance
-    token_filter: stop               # Token filtering for confidence
+    threshold: 0.72                  # Normalized escalation threshold
+    escalation_order: small_to_large # size, small_to_large, declared, cost, or automix
+    cost_quality_tradeoff: 0.3       # Cost vs quality balance in (0, 1]
+    token_filter: tool_call_args     # all or tool_call_args
     on_error: skip                   # skip or fail
     hybrid_weights:
       logprob_weight: 0.5            # Weight for avg_logprob in hybrid
@@ -94,15 +94,21 @@ algorithm:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `confidence_method` | string | `avg_logprob` | Evaluation method: `avg_logprob`, `margin`, `hybrid`, `self_verify`, or `automix_entailment` |
-| `threshold` | float | method-dependent | Escalation threshold (negative for logprob, positive for margin/self_verify/automix_entailment) |
-| `escalation_order` | string | `small_to_large` | Escalation direction |
-| `cost_quality_tradeoff` | float | `0.3` | Cost vs. quality balance (0–1) |
-| `token_filter` | string | — | Token filtering strategy for confidence |
+| `threshold` | float | method-dependent | Configured nonzero thresholds are normalized values in `(0, 1]`. `0` is indistinguishable from omission and selects the method default. |
+| `escalation_order` | string | `size` | One of `size`, `small_to_large`, `declared`, `cost`, or `automix`. |
+| `cost_quality_tradeoff` | float | `0.3` | Cost vs. quality balance in `(0, 1]`. `0` is the unset sentinel and therefore also selects `0.3`. |
+| `token_filter` | string | `all` | `all` uses every generated token; `tool_call_args` excludes structural tool-call JSON where possible. |
 | `on_error` | string | `skip` | Behavior on model call failure: `skip` or `fail` |
-| `hybrid_weights.logprob_weight` | float | `0.5` | Weight for avg_logprob in hybrid mode |
-| `hybrid_weights.margin_weight` | float | `0.5` | Weight for margin in hybrid mode |
-| `verifier_server_url` | string | — | Required when `confidence_method = automix_entailment`. URL of the AutoMix entailment verifier (see [`automix_verifier.py`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_selection/rl_model_selection/automix_verifier.py)). |
-| `verifier_timeout_seconds` | int | `60` | HTTP timeout for verifier calls when `confidence_method = automix_entailment`. |
+| `hybrid_weights.logprob_weight` | float | `0.5` | Weight for avg_logprob in hybrid mode. Zero is the unset sentinel; the two effective weights must sum to `1`. |
+| `hybrid_weights.margin_weight` | float | `0.5` | Weight for margin in hybrid mode. Zero is the unset sentinel; the two effective weights must sum to `1`. |
+| `verifier_server_url` | string | — | Required only when `confidence_method = automix_entailment`. Must be an absolute HTTP(S) URL without credentials, query, or fragment (see [`automix_verifier.py`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_selection/rl_model_selection/automix_verifier.py)). |
+| `verifier_timeout_seconds` | int | `60` | Positive HTTP timeout for `automix_entailment`; `0` is the unset sentinel and selects 60 seconds. |
+
+The method defaults used when `threshold` is omitted (or explicitly `0`) are
+`-1` for `avg_logprob` (the permissive evidence-present default), `0.5` for
+`margin` and `hybrid`, and `0.7` for `self_verify` and
+`automix_entailment`. An explicitly configured threshold is always normalized
+to `(0, 1]`; negative configured thresholds are rejected.
 
 ### `self_verify` vs `automix_entailment`
 

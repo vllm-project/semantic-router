@@ -2,60 +2,30 @@
 
 ## Overview
 
-`ratings` is a **looper** algorithm that coordinates multiple candidates with bounded concurrency. It executes several candidate models and aggregates their results, using route-level rating signals for coordination.
+`ratings` calls every candidate model and returns one OpenAI-compatible choice
+per successful model. `max_concurrent` limits parallel work; it does not limit
+the total number of candidates executed.
 
-It aligns to `config/fragments/algorithm/looper/ratings.yaml`.
+Despite its name, the current runtime does not score, vote on, or synthesize
+the choices. The caller receives them for comparison or downstream rating.
 
 ## Key Advantages
 
-- Supports multi-model execution with a bounded concurrency cap.
-- Keeps rating-aware orchestration local to one route.
-- Makes error-handling behavior explicit.
-- Useful for A/B evaluation and ensemble strategies.
-
-## Algorithm Principle
-
-Ratings executes multiple candidate models concurrently (up to `max_concurrent`) and aggregates results:
-
-1. **Fan-out**: Launch up to `max_concurrent` model calls in parallel.
-2. **Collect**: Gather all responses (or handle errors per `on_error` policy).
-3. **Aggregate**: Combine results using rating-based weighting.
-4. **Return**: Return the aggregated response.
-
-## Execution Flow
-
-```mermaid
-flowchart TD
-    A[Request arrives] --> B[Decision matched]
-    B --> C[algorithm.type = ratings]
-    C --> D[Take first N models where N = max_concurrent]
-    D --> E[Launch all N model calls concurrently]
-    E --> F{All calls succeeded?}
-    F -- Yes --> G[Aggregate results with rating weights]
-    F -- No --> H{on_error = skip?}
-    H -- Yes --> I[Aggregate successful results only]
-    H -- No --> J[Return error]
-    G --> K[Return aggregated response]
-    I --> K
-```
+- Compares the same request across all declared candidates.
+- Bounds parallel work without dropping later candidates.
+- Preserves one identifiable response choice per successful model.
 
 ## What Problem Does It Solve?
 
-Some routes need more than one candidate to participate in a response, but still need bounded fan-out and predictable aggregation behavior. `ratings` exposes that controlled multi-model coordination as router policy instead of custom orchestration in the caller.
+Evaluation and comparison clients sometimes need the same prompt answered by
+several models through one Router request. Ratings provides bounded fan-out
+without introducing a judge model.
 
 ## When to Use
 
-- More than one candidate should run inside the same route.
-- Route-level ratings should influence the loop.
-- Concurrency needs a hard upper bound.
-- You want ensemble-style multi-model responses.
-
-## Known Limitations
-
-- Running multiple models concurrently increases cost.
-- Aggregation quality depends on the rating signal quality.
-- No built-in conflict resolution for contradictory responses.
-- `max_concurrent` limits parallelism — all models beyond the cap are excluded.
+Use Ratings for side-by-side evaluation or applications that understand
+multiple `choices`. Do not use it when the caller expects a single synthesized
+answer; use `fusion` or `remom` for that.
 
 ## Configuration
 
@@ -63,13 +33,22 @@ Some routes need more than one candidate to participate in a response, but still
 algorithm:
   type: ratings
   ratings:
-    max_concurrent: 3            # Maximum parallel model calls
-    on_error: skip               # skip or fail
+    max_concurrent: 3
+    on_error: skip
 ```
 
-### Parameters
+See a complete example:
+[`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml).
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `max_concurrent` | int | — | Maximum number of concurrent model calls |
-| `on_error` | string | `skip` | Behavior on failure: `skip` or `fail` |
+## Dependencies and Limitations
+
+- Requires more than one `modelRef` and a reachable
+  `global.integrations.looper.endpoint`.
+- Every candidate receives the request content, so all candidate providers must
+  be allowed by the route's data policy.
+- Cost grows with the number of candidates. Concurrency reduces wall-clock
+  time but not total model calls.
+- `on_error: skip` returns the successful choices; `on_error: fail` fails the
+  run if any model call fails. The run fails if all models fail.
+- Tool definitions are removed from Ratings subrequests; use Router Flow for
+  agent workflows that must continue tool calls.

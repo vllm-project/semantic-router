@@ -5,6 +5,8 @@ import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
 describe('formatRoutingMetadataValue', () => {
   it.each([
+    ['route', 'Route'],
+    ['unified_route', 'Route'],
     ['unified_balance_recovery', 'Balance Recovery'],
     ['unified_speed_first_route', 'Speed First'],
     ['unified_cost_reasoning', 'Cost Reasoning'],
@@ -51,7 +53,7 @@ describe('formatRoutingMetadataValue', () => {
       (match) => match[1],
     )
 
-    expect(decisions).toHaveLength(16)
+    expect(decisions).toHaveLength(21)
     expect(signals.length).toBeGreaterThan(40)
     expect(projections).toHaveLength(14)
 

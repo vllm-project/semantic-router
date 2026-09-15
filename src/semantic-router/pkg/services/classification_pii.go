@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,25 +26,35 @@ type PIIOptions struct {
 
 // PIIResponse represents the response from PII detection
 type PIIResponse struct {
-	HasPII                 bool        `json:"has_pii"`
-	Entities               []PIIEntity `json:"entities"`
-	MaskedText             string      `json:"masked_text,omitempty"`
-	SecurityRecommendation string      `json:"security_recommendation"`
-	ProcessingTimeMs       int64       `json:"processing_time_ms"`
+	HasPII   bool        `json:"has_pii"`
+	Entities []PIIEntity `json:"entities"`
+	// ScanIncomplete reports that the classifier saw only part of the text,
+	// because a remote token_spans.v1 backend declared a truncation. The
+	// entities below are real, but has_pii: false then means "nothing found in
+	// the part that was read", not "nothing to find". Absent when the scan was
+	// complete, which every local backend always is.
+	ScanIncomplete         bool   `json:"scan_incomplete,omitempty"`
+	MaskedText             string `json:"masked_text,omitempty"`
+	SecurityRecommendation string `json:"security_recommendation"`
+	ProcessingTimeMs       int64  `json:"processing_time_ms"`
 }
 
 // PIIEntity represents a detected PII entity
 type PIIEntity struct {
-	Type        string  `json:"type"`
-	Value       string  `json:"value"`
-	Confidence  float64 `json:"confidence"`
-	StartPos    int     `json:"start_position,omitempty"`
-	EndPos      int     `json:"end_position,omitempty"`
-	MaskedValue string  `json:"masked_value,omitempty"`
+	Type       string  `json:"type"`
+	Value      string  `json:"value"`
+	Confidence float64 `json:"confidence"`
+	// Pointers so that an absent field means the caller did not ask for
+	// positions. With a plain int, omitempty also drops an offset of 0.
+	StartPos    *int   `json:"start_position,omitempty"`
+	EndPos      *int   `json:"end_position,omitempty"`
+	MaskedValue string `json:"masked_value,omitempty"`
 }
 
 // DetectPII performs PII detection
-func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) {
+func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (*PIIResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	if blankText(req.Text) {
@@ -63,16 +75,21 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 	var detections []classification.PIIDetection
 	var err error
 	if req.Options != nil && req.Options.ConfidenceThreshold > 0 {
-		detections, err = classifier.ClassifyPIIWithDetailsAndThreshold(req.Text, float32(req.Options.ConfidenceThreshold))
+		detections, err = classifier.ClassifyPIIWithDetailsAndThreshold(ctx, req.Text, float32(req.Options.ConfidenceThreshold))
 	} else {
-		detections, err = classifier.ClassifyPIIWithDetails(req.Text)
+		detections, err = classifier.ClassifyPIIWithDetails(ctx, req.Text)
 	}
-	if err != nil {
+	// A declared truncation is not a failed call: the spans it returned are
+	// valid for the part the provider read. It is reported rather than
+	// swallowed, so a caller cannot read a partial scan as a clean one.
+	incomplete := errors.Is(err, classification.ErrTokenSpansTruncated)
+	if err != nil && !incomplete {
 		return nil, fmt.Errorf("PII detection failed: %w", err)
 	}
 
 	processingTime := time.Since(start).Milliseconds()
 	response := s.buildPIIResponse(req.Text, detections, req.Options)
+	response.ScanIncomplete = incomplete
 	response.ProcessingTimeMs = processingTime
 	return response, nil
 }

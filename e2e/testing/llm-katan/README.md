@@ -1,387 +1,149 @@
-# LLM Katan - Lightweight LLM Server for Testing
+# LLM Katan
 
-A lightweight LLM serving package using FastAPI and HuggingFace transformers,
-designed for testing and development with real tiny models.
+LLM Katan is a small OpenAI-shaped server used by Semantic Router tests. It can
+load a tiny model or return deterministic fixture responses, which makes it
+useful when a test needs a model endpoint without a production serving stack.
 
-> **🎬 [See Live Demo](https://vllm-project.github.io/semantic-router/e2e/testing/llm-katan/terminal-demo.html)**
-> Interactive terminal showing multi-instance setup in action!
+It implements the subset of the Chat Completions API used by this repository.
+It is not a production server or a general drop-in replacement for an OpenAI
+API.
 
-## Features
+## Choose a backend
 
-- 🚀 **FastAPI-based**: High-performance async web server
-- 🤗 **HuggingFace Integration**: Real model inference with transformers
-- ⚡ **Tiny Models**: Ultra-lightweight models for fast testing (Qwen3-0.6B, etc.)
-- 🔄 **Multi-Instance**: Run same model on different ports with different names
-- 🎯 **OpenAI Compatible**: Drop-in replacement for OpenAI API endpoints
-- 📦 **PyPI Ready**: Easy installation and distribution
-- 🛠️ **vLLM Support**: Optional vLLM backend for production-like performance
+| Backend | Use it for | Additional requirements |
+| --- | --- | --- |
+| `echo` | Inspecting messages sent by the router and deterministic memory tests | None |
+| `transformers` | Exercising real generation with a small Hugging Face model | Model download and PyTorch |
+| `vllm` | Exercising the same fixture API with a local vLLM engine | Install the `vllm` extra and provide suitable hardware |
 
-## Quick Start
+All backends expose `GET /health`, `GET /v1/models`,
+`POST /v1/chat/completions`, and `GET /metrics`. Interactive FastAPI
+documentation is available at `/docs`.
 
-### Installation
+## Run locally
 
-#### Option 1: PyPI
+From the repository root, install the package in an isolated environment:
 
 ```bash
-pip install llm-katan
+python3 -m venv .venv-llm-katan
+. .venv-llm-katan/bin/activate
+python -m pip install -e e2e/testing/llm-katan
 ```
 
-#### Option 2: Docker
+Start the download-free echo backend. `--model` is required by the CLI even
+when the echo backend is selected:
 
 ```bash
-# Pull and run the maintained nightly test-fixture image
-docker pull ghcr.io/vllm-project/semantic-router/llm-katan:nightly
-docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:nightly
-
-# Or with custom model
-docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:nightly \
-  llm-katan --served-model-name "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+llm-katan \
+  --model fixture-model \
+  --served-model-name fixture-model \
+  --backend echo \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
-`llm-katan` is an integration fixture, not a production release image. Nightly
-publishing updates the mutable `nightly` tag and also preserves a dated
-`nightly-YYYYMMDD` tag.
-
-#### Option 3: Kubernetes
+In another shell, verify the endpoint:
 
 ```bash
-# Quick start with make targets
-make kube-deploy-llm-katan-gpt35    # Deploy GPT-3.5 simulation
-make kube-deploy-llm-katan-claude   # Deploy Claude simulation
-make kube-deploy-llm-katan-multi    # Deploy both models
-
-# Or manually with kubectl
-kubectl apply -k deploy/kubernetes/llm-katan/overlays/gpt35
-kubectl apply -k deploy/kubernetes/llm-katan/overlays/claude
-
-# Port forward and test
-make kube-port-forward-llm-katan LLM_KATAN_OVERLAY=gpt35
-curl http://localhost:8000/health
-```
-
-**📚 For comprehensive Kubernetes deployment guide, see [deploy/kubernetes/llm-katan/README.md](../../../deploy/kubernetes/llm-katan/README.md)**
-
-### Setup
-
-#### HuggingFace Token (Required)
-
-LLM Katan uses HuggingFace transformers to download models.
-You'll need a HuggingFace token for:
-
-- Private models
-- Avoiding rate limits
-- Reliable model downloads
-
-#### Option 1: Environment Variable
-
-```bash
-export HUGGINGFACE_HUB_TOKEN="your_token_here"
-```
-
-#### Option 2: Login via CLI
-
-```bash
-huggingface-cli login
-```
-
-#### Option 3: Token file in home directory
-
-```bash
-# Create ~/.cache/huggingface/token file with your token
-echo "your_token_here" > ~/.cache/huggingface/token
-```
-
-**Get your token:**
-Visit [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-
-### Basic Usage
-
-```bash
-# Start server with a tiny model (quantization enabled by default for speed)
-llm-katan --model Qwen/Qwen3-0.6B --port 8000
-
-# Start with custom served model name
-llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-
-# Disable quantization for higher accuracy (slower)
-llm-katan --model Qwen/Qwen3-0.6B --port 8000 --no-quantize
-
-# With vLLM backend (optional)
-llm-katan --model Qwen/Qwen3-0.6B --port 8000 --backend vllm
-```
-
-### Multi-Instance Testing
-
-**🎬 [Live Demo](https://vllm-project.github.io/semantic-router/e2e/testing/llm-katan/terminal-demo.html)**
-See this in action with animated terminals!
-
-> *Note: If GitHub Pages isn't enabled, you can also
-> [download and open the demo locally](./terminal-demo.html)*
-
-<!-- markdownlint-disable MD033 -->
-<details>
-<summary>📺 Preview (click to expand)</summary>
-<!-- markdownlint-enable MD033 -->
-
-```bash
-# Terminal 1: Installing and starting GPT-3.5-Turbo mock
-$ pip install llm-katan
-Successfully installed llm-katan-0.1.8
-
-$ llm-katan --model Qwen/Qwen3-0.6B --port 8000 --served-model-name "gpt-3.5-turbo"
-🚀 Starting LLM Katan server with model: Qwen/Qwen3-0.6B
-📛 Served model name: gpt-3.5-turbo
-✅ Server running on http://0.0.0.0:8000
-
-# Terminal 2: Starting Claude-3-Haiku mock
-$ llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "claude-3-haiku"
-🚀 Starting LLM Katan server with model: Qwen/Qwen3-0.6B
-📛 Served model name: claude-3-haiku
-✅ Server running on http://0.0.0.0:8001
-
-# Terminal 3: Testing both endpoints
-$ curl localhost:8000/v1/models | jq '.data[0].id'
-"gpt-3.5-turbo"
-
-$ curl localhost:8001/v1/models | jq '.data[0].id'
-"claude-3-haiku"
-
-# Same tiny model, different API names! 🎯
-```
-
-</details>
-
-```bash
-# Terminal 1: Mock GPT-3.5-Turbo
-llm-katan --model Qwen/Qwen3-0.6B --port 8000 --served-model-name "gpt-3.5-turbo"
-
-# Terminal 2: Mock Claude-3-Haiku
-llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "claude-3-haiku"
-
-# Terminal 3: Test both endpoints
-curl http://localhost:8000/v1/models  # Returns "gpt-3.5-turbo"
-curl http://localhost:8001/v1/models  # Returns "claude-3-haiku"
-```
-
-**Perfect for testing multi-provider scenarios with one tiny model!**
-
-## API Endpoints
-
-- `GET /health` - Health check
-- `GET /v1/models` - List available models
-- `POST /v1/chat/completions` - Chat completions (OpenAI compatible)
-
-### Example API Usage
-
-```bash
-# Basic chat completion
-curl -X POST http://127.0.0.1:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
+curl --fail http://127.0.0.1:8000/health
+curl --fail http://127.0.0.1:8000/v1/chat/completions \
+  -H 'content-type: application/json' \
   -d '{
-    "model": "Qwen/Qwen2-0.5B-Instruct",
-    "messages": [
-      {"role": "user", "content": "What is the capital of France?"}
-    ],
-    "max_tokens": 50,
-    "temperature": 0.7
+    "model": "fixture-model",
+    "messages": [{"role": "user", "content": "hello"}],
+    "max_tokens": 16
   }'
-
-# Creative writing example
-curl -X POST http://127.0.0.1:8001/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-    "messages": [
-      {"role": "user", "content": "Write a short poem about coding"}
-    ],
-    "max_tokens": 100,
-    "temperature": 0.8
-  }'
-
-# Check available models
-curl http://127.0.0.1:8000/v1/models
-
-# Health check
-curl http://127.0.0.1:8000/health
 ```
 
-## CPU Optimization
+The echo response includes every inbound message. Tests use that behavior to
+check prompt, memory, and system-message injection without log scraping.
 
-LLM Katan includes **automatic int8 quantization** for CPU inference, providing significant performance improvements:
-
-### Performance Gains
-
-- **2-4x faster inference** on CPU (on supported platforms)
-- **4x memory reduction**
-- **Enabled by default** for best testing experience
-- **Minimal quality impact** (acceptable for testing scenarios)
-- **Platform support**: Works best on Linux x86_64; may not be available on all platforms (e.g., Mac)
-
-### When to Use Quantization
-
-✅ **Enabled (default)** - Recommended for:
-
-- Fast E2E testing
-- Development environments
-- CI/CD pipelines
-- Resource-constrained environments
-
-❌ **Disabled (--no-quantize)** - Use when you need:
-
-- Maximum accuracy (though tiny models have limited accuracy anyway)
-- Debugging precision-sensitive issues
-- Comparing with full-precision baselines
-
-### Example Performance
+### Use a real tiny model
 
 ```bash
-# Default: Fast with quantization (~50-100s per inference)
-llm-katan --model Qwen/Qwen3-0.6B
-
-# Slower but more accurate (~200s per inference)
-llm-katan --model Qwen/Qwen3-0.6B --no-quantize
+llm-katan \
+  --model Qwen/Qwen3-0.6B \
+  --served-model-name qwen-test \
+  --device cpu \
+  --port 8000
 ```
 
-> **Note**: Even with quantization, llm-katan is slower than production tools like LM Studio (which uses llama.cpp with extensive optimizations). For production workloads, use vLLM, Ollama, or similar solutions.
+The first run downloads the model. Authentication is only needed for gated or
+private repositories; follow the model host's credential guidance rather than
+putting a token in a command or document. Dynamic int8 quantization is enabled
+by default on CPU and falls back to full precision when the platform does not
+support it. Use `--no-quantize` when a test requires full-precision behavior.
 
-## Echo Backend for Integration Testing
+The Transformers and vLLM backends run model-supplied code with
+`trust_remote_code=True`. Only load repositories you trust.
 
-The **echo backend** is designed for integration tests where you need to verify
-that content (like memory context or system prompts) was properly injected into
-the prompt. Instead of generating a response, it echoes back all messages it receives.
+## Run the container fixture
 
-### Usage
+The nightly image is convenient for integration tests:
 
 ```bash
-# Start echo server (no model download required!)
-llm-katan --backend echo --served-model-name "test-model"
+docker run --rm -p 8000:8000 \
+  ghcr.io/vllm-project/semantic-router/llm-katan:nightly
 ```
 
-### What It Returns
-
-The echo backend returns all messages in the format `[role]: content`:
+`nightly` is a mutable development tag. Pin a dated or digest-qualified image
+when repeatability matters. The default container command downloads
+`Qwen/Qwen3-0.6B`; override the command to use the echo backend:
 
 ```bash
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "test-model",
-    "messages": [
-      {"role": "system", "content": "You are helpful. Memory: User has a Tesla"},
-      {"role": "user", "content": "What car do I have?"}
-    ]
-  }'
-
-# Response content will be:
-# [system]: You are helpful. Memory: User has a Tesla
-# [user]: What car do I have?
+docker run --rm -p 8000:8000 \
+  ghcr.io/vllm-project/semantic-router/llm-katan:nightly \
+  llm-katan --model fixture-model --backend echo --host 0.0.0.0
 ```
 
-### Use Cases for Echo Backend
+For the Kubernetes fixtures, see the
+[LLM Katan deployment README](../../../deploy/kubernetes/llm-katan/README.md).
 
-- **Memory injection tests**: Verify "Tesla" appears in the echoed system message
-- **System prompt tests**: Confirm the correct persona is being injected
-- **Prompt debugging**: See exactly what the router sends to the LLM
-- **Fast CI tests**: No model download or GPU required
+## Simulate multiple provider model names
 
-## Use Cases
+Several servers can load the same small model while advertising different
+names. This tests provider and model selection; it does not simulate the
+quality or protocol differences of those providers.
 
-### Strengths
+```bash
+# Shell 1
+llm-katan --model Qwen/Qwen3-0.6B --port 8000 \
+  --served-model-name gpt-test
 
-- **Fastest time-to-test**: 30 seconds from install to running
-- **Optimized for CPU**: Automatic int8 quantization for 2-4x speedup
-- **Minimal resource footprint**: Designed for tiny models and efficient testing
-- **No GPU required**: Runs on laptops, Macs, and any CPU-only environment
-- **CI/CD integration friendly**: Lightweight and automation-ready
-- **Multiple instances**: Run same model with different names on different ports
-
-### Ideal For
-
-- **Automated testing pipelines**: Quick LLM endpoint setup for test suites
-- **Development environment mocking**: Real inference without production overhead
-- **Quick prototyping**: Fast iteration with actual model behavior
-- **Educational/learning scenarios**: Easy setup for AI development learning
-
-### Not Ideal For
-
-- **Production workloads**: Use Ollama or vLLM for production deployments
-- **Large model serving**: Designed for tiny models (< 1B parameters)
-- **Complex multi-agent workflows**: Use Semantic Router or similar frameworks
-- **High-performance inference**: Use vLLM or specialized serving solutions
+# Shell 2
+llm-katan --model Qwen/Qwen3-0.6B --port 8001 \
+  --served-model-name claude-test
+```
 
 ## Configuration
 
-### Command Line Options
+Run `llm-katan --help` for the complete option list. The most relevant options
+are `--model`, `--served-model-name`, `--backend`, `--device`, `--host`,
+`--port`, `--max-tokens`, `--temperature`, and
+`--quantize/--no-quantize`. Supported devices are `auto`, `cpu`, `cuda`, and
+`xpu`.
 
-```bash
-# All available options
-llm-katan [OPTIONS]
+The process also accepts these environment overrides:
 
-Required:
-  -m, --model TEXT              Model name to load (e.g., 'Qwen/Qwen3-0.6B') [required]
+| Variable | Overrides |
+| --- | --- |
+| `YLLM_MODEL` | `--model` |
+| `YLLM_SERVED_MODEL_NAME` | `--served-model-name` |
+| `YLLM_BACKEND` | `--backend` |
+| `YLLM_HOST` | `--host` |
+| `YLLM_PORT` | `--port` |
 
-Optional:
-  -n, --name, --served-model-name TEXT
-                                Model name to serve via API (defaults to model name)
-  -p, --port INTEGER            Port to serve on (default: 8000)
-  -h, --host TEXT               Host to bind to (default: 0.0.0.0)
-  -b, --backend [transformers|vllm|echo]  Backend to use (default: transformers)
-  --max, --max-tokens INTEGER   Maximum tokens to generate (default: 512)
-  -t, --temperature FLOAT       Sampling temperature (default: 0.7)
-  -d, --device [auto|cpu|cuda]  Device to use (default: auto)
-  --quantize/--no-quantize      Enable int8 quantization for faster CPU inference (default: enabled)
-  --log-level [debug|info|warning|error]  Log level (default: INFO)
-  --version                     Show version and exit
-  --help                        Show help and exit
-```
-
-#### Advanced Usage Examples
-
-```bash
-# Custom generation settings
-llm-katan --model Qwen/Qwen3-0.6B --max-tokens 1024 --temperature 0.9
-
-# Force specific device with full precision (no quantization)
-llm-katan --model Qwen/Qwen3-0.6B --device cpu --no-quantize --log-level debug
-
-# Custom host and port
-llm-katan --model Qwen/Qwen3-0.6B --host 127.0.0.1 --port 9000
-
-# Multiple servers with different settings
-llm-katan --model Qwen/Qwen3-0.6B --port 8000 --max-tokens 512 --temperature 0.1
-llm-katan --model Qwen/Qwen3-0.6B --port 8001 \
-  --name "TinyLlama/TinyLlama-1.1B-Chat-v1.0" --max-tokens 256 --temperature 0.9
-```
-
-### Environment Variables
-
-- `LLM_KATAN_MODEL`: Default model to load
-- `LLM_KATAN_PORT`: Default port (8000)
-- `LLM_KATAN_BACKEND`: Backend type (transformers|vllm)
+Command-line values are parsed first, then these variables are applied.
 
 ## Development
 
+Install development dependencies from this directory:
+
 ```bash
-# Clone and install in development mode
-git clone <repo>
-cd e2e/testing/llm-katan
-pip install -e .
-
-# Run with development dependencies
-pip install -e ".[dev]"
-
-# Run with development dependencies for Intel XPU (optional)
-pip install -e ".[xpu,dev]" --extra-index-url https://download.pytorch.org/whl/xpu
+python -m pip install -e '.[dev]'
 ```
 
-## License
-
-Apache-2.0 License
-
-## Contributing
-
-Contributions welcome! Please see the main repository for guidelines.
-
----
-
-*Part of the [semantic-router project ecosystem](https://vllm-sr.ai/)*
+This package currently has no standalone test directory. Its behavior is
+covered through the repository's E2E profiles and container workflows; add
+unit tests with any behavior change that can be exercised without the full
+stack.

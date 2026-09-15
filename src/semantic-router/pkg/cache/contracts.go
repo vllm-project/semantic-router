@@ -27,14 +27,16 @@ const (
 // CachePartition is the trusted hard-isolation boundary. Namespace contains
 // only an opaque HMAC-derived user/team/tenant scope.
 type CachePartition struct {
-	Recipe        string `json:"recipe,omitempty"`
-	Decision      string `json:"decision,omitempty"`
-	RequestModel  string `json:"request_model,omitempty"`
-	SelectedModel string `json:"selected_model,omitempty"`
-	Protocol      string `json:"protocol,omitempty"`
-	Namespace     string `json:"namespace,omitempty"`
-	Epoch         string `json:"epoch,omitempty"`
-	epochResolved bool
+	Recipe                    string `json:"recipe,omitempty"`
+	Decision                  string `json:"decision,omitempty"`
+	RequestModel              string `json:"request_model,omitempty"`
+	SelectedModel             string `json:"selected_model,omitempty"`
+	Protocol                  string `json:"protocol,omitempty"`
+	Namespace                 string `json:"namespace,omitempty"`
+	Epoch                     string `json:"epoch,omitempty"`
+	epochResolved             bool
+	configuredEpoch           string
+	resolvedEmbeddingIdentity string
 }
 
 func (p CachePartition) Key() string {
@@ -62,6 +64,10 @@ type CacheIdentity struct {
 	ExactFingerprint         string         `json:"exact_fingerprint"`
 	CompatibilityFingerprint string         `json:"compatibility_fingerprint,omitempty"`
 	SemanticQuery            string         `json:"-"`
+}
+
+func (i CacheIdentity) SemanticPartitionKey() string {
+	return CombineFingerprints("semantic", i.Partition.Key(), i.CompatibilityFingerprint)
 }
 
 type TTLPolicy struct {

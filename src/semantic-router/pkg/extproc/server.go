@@ -6,11 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
-	"syscall"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc"
@@ -20,10 +19,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
+)
+
+const (
+	defaultGenerationDrainTimeout = 30 * time.Second
+	generationDrainReserve        = 5 * time.Second
 )
 
 var (
@@ -31,17 +37,18 @@ var (
 	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
 	buildReloadRouter        = buildOpenAIRouterFromConfig
 	replaceReloadConfig      = config.Replace
-	prepareReloadRuntime     = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
-			Component:                  "extproc",
-			MaxParallelism:             modelruntime.DefaultParallelism(5),
-			OnEvent:                    logReloadRuntimeLifecycleEvent,
-			InitModalityClassifierFunc: InitModalityClassifier,
-		})
+	// Embeddings are prepared by buildRouterComponents with the service pool.
+	// The preparation seam stays injectable for lifecycle fault tests.
+	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		return modelruntime.EmbeddingRuntimeState{}, nil
 	}
+
 	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
 		if router == nil {
 			return nil
+		}
+		if router.Embeddings != nil {
+			state = router.embeddingRuntimeState()
 		}
 		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
 			{
@@ -67,6 +74,7 @@ var (
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
+	modelPool  *binding.Pool
 	configPath string
 	service    *RouterService
 	server     *grpc.Server
@@ -74,6 +82,9 @@ type Server struct {
 	secure     bool
 	certPath   string
 	runtime    *routerruntime.Registry
+	reloadMu   sync.Mutex
+	servingMu  sync.Mutex
+	lifecycle  serverLifecycle
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -84,15 +95,19 @@ func NewServer(
 	certPath string,
 	runtimeRegistry *routerruntime.Registry,
 ) (*Server, error) {
-	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry)
+	modelPool := binding.NewPool()
+	if runtimeRegistry != nil {
+		modelPool = runtimeRegistry.ModelPool()
+	}
+	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry, modelPool)
 	if err != nil {
 		return nil, err
 	}
 	attachRuntimeRegistry(router, runtimeRegistry)
-	publishRouterState(router.Config, router, runtimeRegistry)
-
 	service := NewRouterService(router)
+	publishRouterState(router.Config, router, runtimeRegistry, service.current.Load().acquire)
 	return &Server{
+		modelPool:  modelPool,
 		configPath: configPath,
 		service:    service,
 		port:       port,
@@ -107,10 +122,56 @@ func (s *Server) GetRouter() *OpenAIRouter {
 	return s.service.GetRouter()
 }
 
-// Start starts the gRPC server
+// WarmupRouter loads generation-owned runtime data before serving requests.
+func (s *Server) WarmupRouter(
+	ctx context.Context,
+	state modelruntime.EmbeddingRuntimeState,
+	options modelruntime.WarmupRouterOptions,
+) error {
+	if s == nil || s.service == nil {
+		return nil
+	}
+	generation := s.service.current.Load()
+	if generation == nil || generation.router == nil {
+		return nil
+	}
+	_, err := modelruntime.WarmupRouter(ctx, []modelruntime.RouterWarmupTask{
+		{
+			Name:       "tools_database",
+			Ready:      state.ToolsReady,
+			SkipReason: "embedding_runtime_not_ready_for_tools",
+			Load: func() error {
+				return generation.withLease(generation.router.LoadToolsDatabase)
+			},
+		},
+		{
+			Name:       "knowledge_bases",
+			Ready:      state.AnyReady,
+			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
+			Load: func() error {
+				return generation.withLease(generation.router.PreloadKnowledgeBases)
+			},
+		},
+	}, options)
+	return err
+}
+
+// Start serves requests until Stop is called or the gRPC server fails.
 func (s *Server) Start() error {
+	return s.StartContext(context.Background())
+}
+
+// StartContext serves requests until ctx is cancelled or the gRPC server fails.
+func (s *Server) StartContext(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if s.lifecycle.isStopping() {
+		return errors.New("router server is shutting down")
+	}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
+		s.Stop()
 		return fmt.Errorf("failed to listen on port %d: %w", s.port, err)
 	}
 
@@ -127,6 +188,8 @@ func (s *Server) Start() error {
 			keyFile := filepath.Join(s.certPath, "tls.key")
 			cert, err = tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {
+				_ = lis.Close()
+				s.Stop()
 				return fmt.Errorf("failed to load TLS certificate from %s: %w", s.certPath, err)
 			}
 			logging.ComponentEvent("extproc", "tls_certificate_loaded", map[string]interface{}{
@@ -136,6 +199,8 @@ func (s *Server) Start() error {
 			// Create self-signed certificate
 			cert, err = tlsutil.CreateSelfSignedTLSCertificate()
 			if err != nil {
+				_ = lis.Close()
+				s.Stop()
 				return fmt.Errorf("failed to create self-signed certificate: %w", err)
 			}
 			logging.ComponentEvent("extproc", "tls_certificate_created", map[string]interface{}{
@@ -159,13 +224,21 @@ func (s *Server) Start() error {
 		"secure":     s.secure,
 		"max_msg_mb": maxMsgSize / (1024 * 1024),
 	})
-	s.server = grpc.NewServer(serverOpts...)
-	ext_proc.RegisterExternalProcessorServer(s.server, s.service)
+	grpcServer := grpc.NewServer(serverOpts...)
+	ext_proc.RegisterExternalProcessorServer(grpcServer, s.service)
+	s.servingMu.Lock()
+	if s.lifecycle.isStopping() {
+		s.servingMu.Unlock()
+		_ = lis.Close()
+		return errors.New("router server is shutting down")
+	}
+	s.server = grpcServer
+	s.servingMu.Unlock()
 
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
 	go func() {
-		if err := s.server.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+		if err := grpcServer.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			serverErrCh <- err
 		} else {
 			serverErrCh <- nil
@@ -173,15 +246,15 @@ func (s *Server) Start() error {
 	}()
 
 	// Start config file watcher in background
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go s.watchConfigAndReload(ctx)
+	watchCtx, watcherDone := s.lifecycle.startWatcher(ctx)
+	defer s.lifecycle.beginShutdown()
+	go func() {
+		defer watcherDone()
+		s.watchConfigAndReload(watchCtx)
+	}()
 
-	// Wait for interrupt signal to gracefully shut down the server
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Wait for either server error or shutdown signal
+	// Process signal ownership belongs to the command entrypoint. This server
+	// only observes the lifecycle context supplied by its caller.
 	select {
 	case err := <-serverErrCh:
 		if err != nil {
@@ -189,60 +262,322 @@ func (s *Server) Start() error {
 				"port":  s.port,
 				"error": err.Error(),
 			})
+			s.Stop()
 			return err
 		}
-	case <-signalChan:
+	case <-ctx.Done():
 		logging.ComponentEvent("extproc", "server_shutdown_requested", map[string]interface{}{
 			"port": s.port,
 		})
+		grpcServer.Stop()
+		<-serverErrCh
 	}
-
-	s.Stop()
 	return nil
 }
 
 // Stop stops the gRPC server
 func (s *Server) Stop() {
-	if s.server != nil {
-		s.server.GracefulStop()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+	defer cancel()
+	_ = s.Shutdown(ctx)
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+	return errors.Join(s.ShutdownServing(ctx), s.ShutdownResources(ctx))
+}
+
+// ShutdownServing stops accepting ExtProc requests and drains active streams.
+func (s *Server) ShutdownServing(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+
+	return s.lifecycle.serving.run(ctx, func() error { return s.shutdownServing(ctx) })
+}
+
+func (s *Server) shutdownServing(ctx context.Context) error {
+	s.lifecycle.beginShutdown()
+	var shutdownErr error
+	s.servingMu.Lock()
+	grpcServer := s.server
+	s.servingMu.Unlock()
+	if grpcServer != nil {
+		gracefulCtx := ctx
+		cancelGraceful := func() {}
+		if deadline, ok := ctx.Deadline(); ok {
+			reserve := generationDrainReserve
+			budget := time.Until(deadline)
+			switch {
+			case budget <= 0:
+				reserve = 0
+			case budget < 2*reserve:
+				reserve = budget / 2
+			}
+			gracefulCtx, cancelGraceful = context.WithDeadline(ctx, deadline.Add(-reserve))
+		}
+		defer cancelGraceful()
+
+		gracefulDone := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(gracefulDone)
+		}()
+		select {
+		case <-gracefulDone:
+		case <-gracefulCtx.Done():
+			shutdownErr = gracefulCtx.Err()
+			grpcServer.Stop()
+			<-gracefulDone
+		}
 		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
 			"port": s.port,
 		})
 	}
+	return shutdownErr
+}
+
+// ShutdownResources retires the active router generation and closes it after drain.
+func (s *Server) ShutdownResources(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+	return s.lifecycle.resources.run(ctx, func() error {
+		if err := s.lifecycle.stopAndWaitForBackgroundWork(context.Background()); err != nil {
+			return err
+		}
+		if s.service != nil {
+			return s.service.Shutdown(context.Background())
+		}
+		return nil
+	})
 }
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
 type RouterService struct {
-	current atomic.Pointer[OpenAIRouter]
+	current atomic.Pointer[routerGeneration]
+	mu      sync.Mutex
+	closed  bool
+	retired sync.WaitGroup
+	errMu   sync.Mutex
+	errors  []error
 }
+
+type routerGeneration struct {
+	router *OpenAIRouter
+
+	mu      sync.Mutex
+	refs    sync.WaitGroup
+	retired bool
+	drained chan struct{}
+}
+
+// AcquireFunc registers a reference on the live generation for the duration of
+// one acquire. It reports false once the generation is retired, so a caller that
+// loses the race against a reload falls back instead of using a closing router.
+type AcquireFunc func() (release func(), ok bool)
 
 func NewRouterService(r *OpenAIRouter) *RouterService {
 	rs := &RouterService{}
-	rs.current.Store(r)
+	rs.current.Store(newRouterGeneration(r))
 	return rs
 }
 
-// Swap replaces the current router implementation.
-func (rs *RouterService) Swap(r *OpenAIRouter) { rs.current.Store(r) }
+func newRouterGeneration(router *OpenAIRouter) *routerGeneration {
+	generation := &routerGeneration{
+		router:  router,
+		drained: make(chan struct{}),
+	}
+	if router != nil {
+		router.routerLearningMu.Lock()
+		router.generation = generation
+		if router.routerLearningRuntime != nil {
+			router.routerLearningRuntime.generation = generation
+		}
+		router.routerLearningMu.Unlock()
+	}
+	return generation
+}
+
+func (g *routerGeneration) acquire() (func(), bool) {
+	if g == nil {
+		return nil, false
+	}
+	g.mu.Lock()
+	if g.retired {
+		g.mu.Unlock()
+		return nil, false
+	}
+	g.refs.Add(1)
+	g.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(g.refs.Done)
+	}, true
+}
+
+func (g *routerGeneration) withLease(work func() error) error {
+	release, acquired := g.acquire()
+	if !acquired {
+		return errors.New("router generation is shutting down")
+	}
+	defer release()
+	return work()
+}
+
+func (g *routerGeneration) retire() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	if g.retired {
+		g.mu.Unlock()
+		return
+	}
+	g.retired = true
+	g.mu.Unlock()
+
+	go func() {
+		g.refs.Wait()
+		close(g.drained)
+	}()
+}
+
+// Swap replaces the current router implementation and closes the retired
+// generation after every stream that leased it has returned. The current
+// pointer is swapped before publish, but Process must take rs.mu and therefore
+// cannot observe the new generation until the management snapshot is also
+// published and this critical section ends.
+func (rs *RouterService) Swap(r *OpenAIRouter, publish func(acquire AcquireFunc)) error {
+	rs.mu.Lock()
+	if rs.closed {
+		rs.mu.Unlock()
+		if r != nil {
+			_ = r.Close()
+		}
+		return errors.New("router service is shutting down")
+	}
+	generation := newRouterGeneration(r)
+	old := rs.current.Swap(generation)
+	if publish != nil {
+		publish(generation.acquire)
+	}
+	if old != nil {
+		old.retire()
+		rs.retired.Add(1)
+	}
+	rs.mu.Unlock()
+	if old != nil {
+		go rs.closeRetiredGeneration(old)
+	}
+	return nil
+}
 
 // GetRouter returns the current router implementation.
 func (rs *RouterService) GetRouter() *OpenAIRouter {
-	return rs.current.Load()
+	generation := rs.current.Load()
+	if generation == nil {
+		return nil
+	}
+	return generation.router
 }
 
 // Process delegates to the current router.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	r := rs.current.Load()
-	return r.Process(stream)
+	rs.mu.Lock()
+	generation := rs.current.Load()
+	if generation == nil {
+		rs.mu.Unlock()
+		return errors.New("router is shutting down")
+	}
+	release, acquired := generation.acquire()
+	rs.mu.Unlock()
+	if !acquired {
+		return errors.New("router is shutting down")
+	}
+	defer release()
+	return generation.router.Process(stream)
+}
+
+func (rs *RouterService) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+	defer cancel()
+	return rs.Shutdown(ctx)
+}
+
+func (rs *RouterService) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+		defer cancel()
+	}
+
+	rs.mu.Lock()
+	if !rs.closed {
+		rs.closed = true
+		generation := rs.current.Swap(nil)
+		if generation != nil {
+			generation.retire()
+			rs.retired.Add(1)
+			go rs.closeRetiredGeneration(generation)
+		}
+	}
+	rs.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		rs.retired.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return errors.Join(ctx.Err(), rs.retiredGenerationErrors())
+	}
+
+	return rs.retiredGenerationErrors()
+}
+
+func (rs *RouterService) retiredGenerationErrors() error {
+	rs.errMu.Lock()
+	defer rs.errMu.Unlock()
+	return errors.Join(rs.errors...)
+}
+
+func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
+	defer rs.retired.Done()
+	<-generation.drained
+	if generation.router == nil {
+		return
+	}
+	if err := generation.router.Close(); err != nil {
+		rs.errMu.Lock()
+		rs.errors = append(rs.errors, err)
+		rs.errMu.Unlock()
+		logging.ComponentErrorEvent("extproc", "retired_router_close_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
 }
 
 func (s *Server) reloadRouterFromFile(configPath string) error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
 	candidateCfg, err := parseReloadConfig(configPath)
 	if err != nil {
 		return err
 	}
 
-	return s.reloadRouterFromConfig("file", configPath, candidateCfg)
+	return s.reloadRouterFromConfigLocked("file", configPath, candidateCfg)
 }
 
 func (s *Server) reloadRouterFromConfig(
@@ -250,7 +585,29 @@ func (s *Server) reloadRouterFromConfig(
 	configPath string,
 	candidateCfg *config.RouterConfig,
 ) error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	return s.reloadRouterFromConfigLocked(source, configPath, candidateCfg)
+}
+
+func (s *Server) reloadRouterFromConfigLocked(
+	source string,
+	configPath string,
+	candidateCfg *config.RouterConfig,
+) error {
+	if s.lifecycle.isStopping() {
+		return errors.New("router server is shutting down")
+	}
+	if err := config.ValidateRoutingPreviewReload(resolveServerConfig(s), candidateCfg); err != nil {
+		return err
+	}
+	if err := modeldownload.ValidateReloadArtifacts(resolveServerConfig(s), candidateCfg); err != nil {
+		return fmt.Errorf("model artifact reload preflight failed: %w", err)
+	}
 	if source == "file" {
+		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
+			return err
+		}
 		if err := ensureReloadConfigModels(candidateCfg); err != nil {
 			return fmt.Errorf("model download preflight failed: %w", err)
 		}
@@ -261,7 +618,7 @@ func (s *Server) reloadRouterFromConfig(
 		return fmt.Errorf("runtime dependency init failed: %w", err)
 	}
 
-	newRouter, err := buildReloadRouter(candidateCfg)
+	newRouter, err := buildReloadRouter(candidateCfg, s.modelPool)
 	if err != nil {
 		return err
 	}
@@ -270,6 +627,18 @@ func (s *Server) reloadRouterFromConfig(
 		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
 	}
+	if source == "file" {
+		release := s.runtime.LockConfigPublication()
+		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
+			release()
+			if closeErr := newRouter.Close(); closeErr != nil {
+				return fmt.Errorf("close discarded config generation: %w", closeErr)
+			}
+			return err
+		}
+		defer release()
+	}
+	inheritRouterLearningState(s.service.GetRouter(), newRouter)
 
 	// Kubernetes updates are already published through config.Replace in the
 	// controller callback. Replacing again here would re-enqueue the same config
@@ -278,14 +647,17 @@ func (s *Server) reloadRouterFromConfig(
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
-	oldRouter := s.service.GetRouter()
-	s.service.Swap(newRouter)
-	if oldRouter != nil {
-		_ = oldRouter.Close()
+	if err := s.service.Swap(newRouter, func(acquire AcquireFunc) {
+		publishRouterState(candidateCfg, newRouter, s.runtime, acquire)
+	}); err != nil {
+		return err
 	}
-	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
 }
+
+// CurrentConfig returns the published generation's configuration, including
+// while a Kubernetes candidate has been received but has not become ready.
+func (s *Server) CurrentConfig() *config.RouterConfig { return resolveServerConfig(s) }
 
 func (s *Server) configuredGRPCMaxMessageSize() int {
 	cfg := resolveServerConfig(s)
@@ -346,21 +718,43 @@ func publishRouterState(
 	cfg *config.RouterConfig,
 	router *OpenAIRouter,
 	runtimeRegistry *routerruntime.Registry,
+	acquire AcquireFunc,
 ) {
 	if router == nil {
 		return
 	}
+	publishRouterLearningStateStore(router)
 	if runtimeRegistry != nil {
-		runtimeRegistry.PublishRouterRuntime(cfg, router.ClassificationService, router.MemoryStore)
-		runtimeRegistry.SetModelSelector(router.ModelSelector)
-		runtimeRegistry.SetLearningRuntime(router.routerLearningRuntimeState())
-		runtimeRegistry.SetResponseCache(router.responseCacheService())
-		runtimeRegistry.SetContextCompression(
-			router.contextCompressionService(),
-			router.CompressionRecovery,
-		)
+		runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+			Config:                cfg,
+			ClassificationService: router.ClassificationService,
+			AcquireClassification: routerruntime.AcquireClassification(acquire),
+			MemoryStore:           router.MemoryStore,
+			ModelSelector:         router.ModelSelector,
+			LearningRuntime:       router.routerLearningRuntimeState(),
+			ReplayRuntime:         router,
+			ResponseCache:         router.responseCacheService(),
+			ContextCompression:    router.contextCompressionService(),
+			CompressionRecovery:   router.CompressionRecovery,
+		})
 		return
 	}
 	services.SetGlobalClassificationService(router.ClassificationService)
 	memory.SetGlobalMemoryStore(router.MemoryStore)
+	selection.SetGlobalRegistry(router.ModelSelector)
+}
+
+func (s *Server) EmbeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
+	if s == nil || s.service == nil {
+		return modelruntime.EmbeddingRuntimeState{}
+	}
+	router := s.service.GetRouter()
+	if router == nil {
+		return modelruntime.EmbeddingRuntimeState{}
+	}
+	return router.embeddingRuntimeState()
+}
+
+func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
+	return modelruntime.EmbeddingState(r.Config, r.Embeddings)
 }

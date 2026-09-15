@@ -2,9 +2,12 @@
 
 ## Overview
 
-`domain` classifies the request topic family. It maps to `config/fragments/signal/domain/` and is declared under `routing.signals.domains`.
+`domain` classifies the request topic family. Define domain rules under
+`routing.signals.domains`.
 
-This family is learned: the router uses the domain-classification path under `global.model_catalog.modules.classifier` and the stable domain system model bindings in `global.model_catalog.system`.
+The detector uses the classifier configured under
+`global.model_catalog.modules.classifier` and its model bindings under
+`global.model_catalog.system`.
 
 ## Key Advantages
 
@@ -30,8 +33,6 @@ Use `domain` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/domain/`
-
 ```yaml
 routing:
   signals:
@@ -54,3 +55,45 @@ routing:
 ```
 
 Keep domain names stable because decisions reference those names directly.
+
+### Local and remote classifier selection
+
+With no `backend`, category/domain classification keeps its existing local
+model behavior. Use `variant: candle`, `variant: modernbert`, or
+`variant: mmbert32k` for an explicit local selector; the deprecated
+`use_modernbert` and `use_mmbert_32k` keys remain readable for compatibility
+but are normalized to `variant` in canonical output. An agreeing canonical and
+legacy selector is accepted; contradictory active selectors are rejected.
+
+A remote category classifier uses the shared backend block. Its `model` is an
+explicit name from `global.model_catalog.external[]`, and that catalog entry
+must have `model_role: classification`. Category currently accepts only the
+`http_classify` protocol and the `label_distribution.v1` contract so the full
+label distribution continues to feed domain matching and routing decisions.
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: domain-service
+        model_role: classification
+        llm_endpoint:
+          address: domain-classifier.default.svc
+          port: 8080
+        llm_model_name: domain-intent-v1
+    modules:
+      classifier:
+        domain:
+          backend:
+            protocol: http_classify
+            contract: label_distribution.v1
+            model: domain-service
+            deadline_ms: 5000
+```
+
+## Dependencies and Limitations
+
+Domain classification uses the configured classifier module and processes the
+request text. Treat `other` as a fallback, and re-evaluate labels and thresholds
+when the classifier changes. See a complete example:
+[`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml).

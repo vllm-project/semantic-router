@@ -19,8 +19,10 @@ providers:
     - name: gpt-4o-mini
       backend_refs:
         - name: static-openai
+          provider: vllm
           api_key: "sk-proj-my-openai-key"
     - name: claude-sonnet-4-5-20250929
       backend_refs:
         - name: static-anthropic
+          provider: vllm
           api_key: "sk-ant-my-anthropic-key"

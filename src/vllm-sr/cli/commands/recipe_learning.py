@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import click
-import requests
 import yaml
 
+from cli.commands.common import exit_with_logged_error
+from cli.commands.eval_rendering import render_recipe_learning_artifact
 from cli.commands.recipe_learning_artifacts import (
     build_candidate_recipes,
     build_experience_seed_pack,
@@ -29,71 +29,18 @@ from cli.commands.recipe_learning_metrics import (
     update_experience_counts,
     update_metrics,
 )
-from cli.consts import DEFAULT_API_PORT, DEFAULT_LISTENER_PORT
+from cli.router_management_client import (
+    OBSERVABILITY_REPLAYS_PATH,
+    RouterManagementClient,
+    default_management_base_url,
+)
+from cli.terminal import echo
+from cli.utils import get_logger
+
+log = get_logger(__name__)
 
 _DEFAULT_REPLAY_LIMIT = 100
 _MAX_REPLAY_LIMIT = 500
-
-
-def default_replay_endpoint() -> str:
-    return f"http://localhost:{DEFAULT_LISTENER_PORT}/v1/router_replay"
-
-
-def normalize_replay_endpoint(endpoint: str, limit: int) -> str:
-    return candidate_replay_endpoints(endpoint, limit)[0]
-
-
-def candidate_replay_endpoints(endpoint: str, limit: int) -> list[str]:
-    endpoint = endpoint.strip()
-    if not endpoint:
-        endpoint = default_replay_endpoint()
-    if endpoint.endswith("/"):
-        endpoint = endpoint[:-1]
-    if not endpoint.endswith("/v1/router_replay"):
-        endpoint = urljoin(endpoint + "/", "v1/router_replay")
-
-    candidates = [endpoint]
-    listener_endpoint = listener_replay_endpoint(endpoint)
-    if listener_endpoint and listener_endpoint not in candidates:
-        candidates.append(listener_endpoint)
-
-    return [
-        normalize_replay_endpoint_query(candidate, limit) for candidate in candidates
-    ]
-
-
-def listener_replay_endpoint(endpoint: str) -> str | None:
-    parts = urlsplit(endpoint)
-    if parts.port != DEFAULT_API_PORT:
-        return None
-    if (
-        parts.path
-        and parts.path not in ("", "/")
-        and not parts.path.rstrip("/").endswith("/v1/router_replay")
-    ):
-        return None
-    host = parts.hostname
-    if not host:
-        return None
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    userinfo = ""
-    if parts.username:
-        userinfo = parts.username
-        if parts.password:
-            userinfo += f":{parts.password}"
-        userinfo += "@"
-    netloc = f"{userinfo}{host}:{DEFAULT_LISTENER_PORT}"
-    return urlunsplit((parts.scheme, netloc, "/v1/router_replay", "", ""))
-
-
-def normalize_replay_endpoint_query(endpoint: str, limit: int) -> str:
-    parts = urlsplit(endpoint)
-    query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    query.setdefault("limit", str(max(1, min(limit, _MAX_REPLAY_LIMIT))))
-    return urlunsplit(
-        (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
-    )
 
 
 def load_replay_records(
@@ -109,28 +56,12 @@ def load_replay_records(
 
 
 def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
-    errors: list[str] = []
-    for url in candidate_replay_endpoints(endpoint, limit):
-        try:
-            response = requests.get(url, timeout=timeout)
-        except requests.ConnectionError as exc:
-            errors.append(f"{url}: not reachable ({exc})")
-            continue
-        except requests.Timeout as exc:
-            errors.append(f"{url}: timed out after {timeout}s ({exc})")
-            continue
-        except requests.RequestException as exc:
-            errors.append(f"{url}: request failed ({exc})")
-            continue
-        if response.status_code == requests.codes.ok:
-            return response.json()
-        errors.append(f"{url}: HTTP {response.status_code} - {response.text}")
-
-    tried = "; ".join(errors)
-    raise ValueError(
-        "Router replay endpoint is not reachable. Start vllm-sr serve, pass "
-        f"--replay-file, or pass the Envoy listener /v1/router_replay URL. Tried: {tried}"
-    )
+    client = RouterManagementClient(endpoint or None, timeout=timeout)
+    return client.request(
+        "GET",
+        OBSERVABILITY_REPLAYS_PATH,
+        params={"limit": str(max(1, min(limit, _MAX_REPLAY_LIMIT)))},
+    ).payload
 
 
 def normalize_replay_payload(payload: Any) -> list[dict[str, Any]]:
@@ -285,27 +216,6 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
         )
 
 
-def summarize_recipe_learning_artifact(artifact: dict[str, Any]) -> str:
-    metrics = artifact["metrics"]["overall"]
-    findings = artifact["findings"]
-    lines = [
-        "Router Learning recipe analysis",
-        f"records: {artifact['metrics']['records']}",
-        f"learning coverage: {metrics['learning_coverage']:.2f}",
-        f"outcome coverage: {metrics['outcome_coverage']:.2f}",
-        f"switch rate: {metrics['switch_rate']:.2f}",
-        f"cache preservation: {metrics['cache_preservation']:.2f}",
-        f"cost savings: {metrics['cost_savings']:.6f}",
-        f"findings: {len(findings)}",
-        f"candidate recipes: {len(artifact['candidate_recipes'])}",
-    ]
-    for item in findings[:5]:
-        lines.append(
-            f"- [{item['severity']}] {item['decision']}: {item['type']} - {item['message']}"
-        )
-    return "\n".join(lines)
-
-
 @click.command("recipe-learning")
 @click.option(
     "--replay-file",
@@ -316,8 +226,9 @@ def summarize_recipe_learning_artifact(artifact: dict[str, Any]) -> str:
     "--endpoint",
     default=None,
     help=(
-        "Router base URL or /v1/router_replay endpoint. "
-        f"Defaults to {default_replay_endpoint()} when --replay-file is omitted."
+        "Router management base URL (origin or /api/v1). "
+        f"Defaults to {default_management_base_url()} when --replay-file is omitted."
+        " Uses VSR_MGMT_TOKEN for bearer auth when set."
     ),
 )
 @click.option(
@@ -355,6 +266,7 @@ def summarize_recipe_learning_artifact(artifact: dict[str, Any]) -> str:
 @click.option(
     "--timeout", default=15, show_default=True, help="HTTP request timeout in seconds."
 )
+@exit_with_logged_error(log)
 def recipe_learning(
     replay_file: Path | None,
     endpoint: str | None,
@@ -380,11 +292,9 @@ def recipe_learning(
     if output_dir is not None:
         write_recipe_learning_artifacts(artifact, output_dir)
     if output_json:
-        click.echo(json.dumps(artifact, indent=2, ensure_ascii=False))
+        echo(json.dumps(artifact, indent=2, ensure_ascii=False))
         return
-    click.echo(summarize_recipe_learning_artifact(artifact))
-    if output_dir is not None:
-        click.echo(f"artifacts: {output_dir}")
+    render_recipe_learning_artifact(artifact, output_dir)
 
 
 def load_recipe_file(recipe_file: Path | None) -> dict[str, Any] | None:

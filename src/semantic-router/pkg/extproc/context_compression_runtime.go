@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -47,48 +46,41 @@ func (r *OpenAIRouter) contextCompressionTokenCounter(
 	}
 }
 
-func (r *OpenAIRouter) contextCompressionScorer(
-	ctx context.Context,
-	cfg *config.ContextCompressionPluginConfig,
-) contextcompression.RelevanceScorer {
+func (r *OpenAIRouter) contextCompressionScorer(ctx context.Context, cfg *config.ContextCompressionPluginConfig, request *RequestContext) contextcompression.RelevanceScorer {
 	if cfg == nil || cfg.EffectiveScoring().Method == config.ContextCompressionScoringBM25 {
 		return nil
 	}
-	provider, err := r.contextCompressionEmbeddingProvider()
-	if err != nil || provider == nil {
+	modelConfig := r.Config
+	recipe := "default"
+	if request != nil && request.Routing.SelectedRecipe() != nil {
+		recipe = string(request.Routing.RecipeName())
+		classifier := r.classifierForRequest(request)
+		if classifier == nil {
+			return nil
+		}
+		modelConfig = classifier.Config
+	}
+	if modelConfig == nil {
 		return nil
 	}
-	r.contextCompressionMu.Lock()
-	defer r.contextCompressionMu.Unlock()
-	if r.CompressionScorer == nil {
-		r.CompressionScorer = contextcompression.NewMemoizedEmbeddingScorer(
-			func(callCtx context.Context, texts []string) ([][]float32, error) {
-				return provider.EmbedBatch(callCtx, texts)
-			},
-			1024,
-		)
-	}
-	return r.CompressionScorer
-}
-
-func (r *OpenAIRouter) contextCompressionEmbeddingProvider() (embedding.Provider, error) {
-	if r == nil || r.Config == nil {
-		return nil, fmt.Errorf("embedding configuration is unavailable")
-	}
-	r.contextCompressionMu.Lock()
-	defer r.contextCompressionMu.Unlock()
-	if r.CompressionEmbedding != nil {
-		return r.CompressionEmbedding, nil
-	}
-	provider, err := embedding.NewProviderFromRouterConfig(
-		r.Config,
-		embedding.ProviderOptions{},
-	)
+	provider, err := r.embeddingsForRequest(request).Get("", modelConfig.EmbeddingConfig.TargetDimension, modelConfig.EmbeddingConfig.TargetLayer)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	r.CompressionEmbedding = provider
-	return provider, nil
+	key := fmt.Sprintf("%s:%s:%d:%d", recipe, embedding.Identity(provider), modelConfig.EmbeddingConfig.TargetDimension, modelConfig.EmbeddingConfig.TargetLayer)
+	r.contextCompressionMu.Lock()
+	defer r.contextCompressionMu.Unlock()
+	if r.compressionScorers == nil {
+		r.compressionScorers = make(map[string]contextcompression.RelevanceScorer)
+	}
+	scorer := r.compressionScorers[key]
+	if scorer == nil {
+		scorer = contextcompression.NewMemoizedEmbeddingScorer(func(callCtx context.Context, texts []string) ([][]float32, error) {
+			return provider.EmbedBatch(callCtx, texts)
+		}, 1024)
+		r.compressionScorers[key] = scorer
+	}
+	return scorer
 }
 
 func (r *OpenAIRouter) contextCompressionRecoveryStore(
@@ -267,44 +259,6 @@ func compressionPolicyForRequest(
 	}
 	policy.Recovery.Enabled = false
 	return policy
-}
-
-func contextCompressionCapabilities(
-	routerConfig *config.RouterConfig,
-	ctx *RequestContext,
-) contextcompression.ModelContextCapabilities {
-	model := strings.TrimSpace(ctx.VSRSelectedModel)
-	if model == "" {
-		model = strings.TrimSpace(ctx.RequestModel)
-	}
-	contextWindow := 0
-	if routerConfig != nil {
-		if params, ok := routerConfig.ModelConfig[model]; ok {
-			contextWindow = params.ContextWindowSize
-		}
-	}
-	requestedOutput := requestOutputTokens(ctx.workingRequestBody())
-	return contextcompression.ModelContextCapabilities{
-		ContextWindow:   contextWindow,
-		RequestedOutput: requestedOutput,
-	}
-}
-
-func requestOutputTokens(body []byte) int {
-	var request map[string]interface{}
-	if err := json.Unmarshal(body, &request); err != nil {
-		return 0
-	}
-	for _, field := range []string{"max_completion_tokens", "max_tokens"} {
-		switch value := request[field].(type) {
-		case float64:
-			return int(value)
-		case json.Number:
-			parsed, _ := strconv.Atoi(string(value))
-			return parsed
-		}
-	}
-	return 0
 }
 
 func (r *OpenAIRouter) contextCompressionScope(ctx *RequestContext) string {

@@ -1,227 +1,109 @@
-# OpenVINO Binding for Semantic Router
+# OpenVINO binding
 
-OpenVINO Binding provides native C++ and Go integrations for running semantic routing models with Intel OpenVINO.
-It supports sequence classification, token classification, and embedding inference, and can be compared directly against Candle backend performance.
-
-## What Is Included
-
-- OpenVINO native runtime integration through CGO
-- ModernBERT sequence classification APIs
-- ModernBERT token classification APIs
-- ModernBERT embedding APIs
-- Benchmark programs for classifier and embedding comparison (OpenVINO vs Candle)
-
-## Repository Layout
-
-- `cpp/`: C++ implementation
-- `semantic-router.go`: Go binding surface
-- `bench/mmbert_classifier_bench.go`: sequence classifier benchmark (OpenVINO vs Candle)
-- `bench/mmbert_embedding_bench.go`: embedding benchmark (OpenVINO vs Candle)
-- `scripts/build_and_run_mmbert_classifier_bench.sh`: classifier benchmark automation script
-- `scripts/build_and_run_mmbert_embedding_bench.sh`: embedding benchmark automation script
+This module exposes Intel OpenVINO inference to the Semantic Router through a
+C++ library and Go binding. It supports sequence classification, token
+classification, and text embeddings. The benchmark helpers compare the same
+model with the OpenVINO and Candle backends; they are not published hardware
+performance claims.
 
 ## Prerequisites
 
-- OpenVINO runtime installed
-- Go toolchain
-- CMake and C++ compiler
-- Python (for tokenizer/model conversion)
-- Optional but recommended for conversion:
-  - `optimum[openvino]`
-  - `openvino-tokenizers`
-  - `transformers`
+- Go, CMake, and a C++17 compiler
+- the OpenVINO runtime and `openvino-tokenizers`
+- Python with `transformers` and `optimum[openvino]` when converting models
+- `numactl` for the benchmark scripts
+- a built Candle library for OpenVINO-versus-Candle comparisons
 
-## Build
+CMake can discover OpenVINO from its CMake package or from the active Python
+environment. If discovery fails, activate the environment that contains
+`openvino` and `openvino-tokenizers` before building.
 
-From repository root:
+## Build and test
 
-```bash
-cd openvino-binding
-mkdir -p build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . -j$(nproc)
-```
-
-Build Go binding checks:
+Run the maintained targets from the repository root:
 
 ```bash
-cd openvino-binding
-go build -v ./...
+make build-openvino-binding
+make test-openvino-binding
 ```
 
-## Benchmarks (Primary Entry: Script/Make)
-
-Use script or Make targets as the default operational path.
-Manual `go run` is for debugging only (see Appendix).
-
-### 1) Sequence Classifier Benchmark
-
-Run via script:
+The test target converts its fixture models when they are missing, so it needs
+network access on the first run. To build the C++ library directly:
 
 ```bash
-bash openvino-binding/scripts/build_and_run_mmbert_classifier_bench.sh
+cmake -S openvino-binding -B openvino-binding/build \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build openvino-binding/build --parallel
 ```
 
-Common modes:
+The shared library is written to
+`openvino-binding/build/libopenvino_semantic_router.so`.
+
+## Model files
+
+An OpenVINO model directory contains:
+
+- `openvino_model.xml` and `openvino_model.bin`
+- either `openvino_tokenizer.xml` and `openvino_tokenizer.bin`, or the legacy
+  `tokenizer.xml` and `tokenizer.bin` names
+
+The runtime prefers the `openvino_tokenizer.*` names and accepts the legacy
+pair for compatibility.
+
+Convert a local sequence-classification model with:
 
 ```bash
-bash openvino-binding/scripts/build_and_run_mmbert_classifier_bench.sh --build-only
-bash openvino-binding/scripts/build_and_run_mmbert_classifier_bench.sh --run-only
+optimum-cli export openvino \
+  --model models/<model-name> \
+  --task text-classification \
+  --weight-format fp32 \
+  models/<model-name>/openvino
 ```
 
-Run via Make:
+Use `--task token-classification` for token classifiers and
+`--task feature-extraction` for embedding models. The input directory must
+contain the original model weights and tokenizer files.
+
+## Benchmarks
+
+The script-backed Make targets build the binding and Candle dependency before
+running:
 
 ```bash
 make benchmark-openvino-classifier
+make benchmark-openvino-embedding
+```
+
+Use `ARGS` to separate build and run phases or select an embedding length
+profile:
+
+```bash
 make benchmark-openvino-classifier ARGS='--build-only'
 make benchmark-openvino-classifier ARGS='--run-only'
+make benchmark-openvino-embedding \
+  ARGS='--run-only --length-profile fixed-128'
 ```
 
-Useful overrides (environment variables):
+The default model locations are:
 
-- `CLASSIFIER_MODEL_DIR`
-- `CLASSIFIER_OPENVINO_MODEL_PATH`
-- `CLASSIFIER_CANDLE_MODEL_PATH`
-- `CLASSIFIER_MIN_MATCH_RATE`
-- `CLASSIFIER_MAX_CONFIDENCE_DELTA`
-- `OPENVINO_TOKENIZERS_LIB`
-- `OPENVINO_LIB_DIR`
+| Benchmark | Model root | OpenVINO IR |
+| --- | --- | --- |
+| Classifier | `models/mmbert-intent-classifier-merged` | `<root>/openvino/openvino_model.xml` |
+| Embedding | `models/mmbert-embed-32k-2d-matryoshka` | `<root>/openvino/openvino_model.xml` |
 
-### 2) Embedding Benchmark
+Override them with `CLASSIFIER_MODEL_DIR` for the classifier or
+`MMBERT_MODEL_PATH` for embeddings. The lower-level path overrides are
+`CLASSIFIER_OPENVINO_MODEL_PATH`, `CLASSIFIER_CANDLE_MODEL_PATH`,
+`OPENVINO_MODEL_PATH`, and `CANDLE_MODEL_PATH`.
 
-Run via script:
+Embedding runs accept
+`--length-profile mixed|fixed-32|fixed-128|fixed-512|fixed-1024|fixed-2048`,
+`--stage-timing`, and `--stage-timing-samples N`. `OV_MAX_LENGTH` defaults to
+512; inputs beyond that limit are truncated and reported by the benchmark.
 
-```bash
-bash openvino-binding/scripts/build_and_run_mmbert_embedding_bench.sh
-```
+## Interpreting results
 
-Common modes:
-
-```bash
-bash openvino-binding/scripts/build_and_run_mmbert_embedding_bench.sh --build-only
-bash openvino-binding/scripts/build_and_run_mmbert_embedding_bench.sh --run-only
-```
-
-Run via Make:
-
-```bash
-make benchmark-openvino-embedding
-make benchmark-openvino-embedding ARGS='--build-only'
-make benchmark-openvino-embedding ARGS='--run-only --length-profile fixed-128'
-```
-
-Useful script arguments:
-
-- `--stage-timing`
-- `--stage-timing-samples N`
-- `--length-profile mixed|fixed-32|fixed-128|fixed-512|fixed-1024|fixed-2048`
-
-When tokenized text length exceeds `OV_MAX_LENGTH`, benchmark logs a `note:` line indicating truncation before embedding.
-
-Useful overrides (environment variables):
-
-- `MMBERT_MODEL_PATH`
-- `OPENVINO_MODEL_PATH`
-- `CANDLE_MODEL_PATH`
-- `OV_MAX_LENGTH` (default: `512`)
-- `CANDLE_TARGET_DIM`
-- `EMBEDDING_STAGE_TIMING`
-- `EMBEDDING_STAGE_TIMING_SAMPLES`
-- `EMBEDDING_LENGTH_PROFILE`
-- `OPENVINO_TOKENIZERS_LIB`
-- `OPENVINO_LIB_DIR`
-
-## Tokenizer File Names
-
-OpenVINO exports commonly produce tokenizer files named:
-
-- `openvino_tokenizer.xml`
-- `openvino_tokenizer.bin`
-
-Current runtime loader behavior:
-
-1. Prefer `openvino_tokenizer.xml`
-2. Fallback to `tokenizer.xml` for backward compatibility
-
-This means both naming styles are supported without extra manual file renaming.
-
-## Model Conversion to OpenVINO IR
-
-OpenVINO requires model IR files:
-
-- `openvino_model.xml`
-- `openvino_model.bin`
-
-### Convert from a local model directory
-
-Use a local model path as input:
-
-```bash
-optimum-cli export openvino \
-  --model models/<your-model> \
-  --task text-classification \
-  models/<your-model>/openvino \
-  --weight-format fp32
-```
-
-For token classification models, set task accordingly:
-
-```bash
-optimum-cli export openvino \
-  --model models/<your-token-model> \
-  --task token-classification \
-  models/<your-token-model>/openvino \
-  --weight-format fp32
-```
-
-Note: local conversion requires actual model weights in the local directory (for example `model.safetensors` or `pytorch_model.bin`).
-
-## Precision and Performance
-
-Different numeric types may improve speed, depending on hardware and workload.
-
-- `fp32`: baseline, highest numerical stability
-- `fp16`: often reduces memory bandwidth pressure and can improve latency
-- `int8`: often offers larger CPU speedups but requires accuracy validation
-
-Recommended tuning workflow:
-
-1. Measure baseline with `fp32`
-2. Test `fp16` and compare latency/throughput
-3. Evaluate `int8` with representative datasets and verify accuracy before production
-
-## Appendix: Debug (Manual go run)
-
-Use manual mode only for low-level debugging. Script/Make is the supported operational path.
-
-Classifier debug run:
-
-```bash
-cd openvino-binding/bench
-OPENVINO_MODEL_PATH=/path/to/openvino_model.xml \
-CANDLE_MODEL_PATH=/path/to/model_dir \
-OPENVINO_TOKENIZERS_LIB=/path/to/libopenvino_tokenizers.so \
-LD_LIBRARY_PATH="/path/to/openvino/libs:/path/to/openvino-binding/build:/path/to/candle-binding/target/release:$LD_LIBRARY_PATH" \
-go run mmbert_classifier_bench.go
-```
-
-Embedding debug run:
-
-```bash
-cd openvino-binding/bench
-OPENVINO_MODEL_PATH=/path/to/openvino_model.xml \
-CANDLE_MODEL_PATH=/path/to/model_dir \
-OPENVINO_TOKENIZERS_LIB=/path/to/libopenvino_tokenizers.so \
-OV_MAX_LENGTH=512 \
-CANDLE_TARGET_DIM=768 \
-EMBEDDING_LENGTH_PROFILE=mixed \
-LD_LIBRARY_PATH="/path/to/openvino/libs:/path/to/openvino-binding/build:/path/to/candle-binding/target/release:$LD_LIBRARY_PATH" \
-go run mmbert_embedding_bench.go
-```
-
-## Notes for Customer Deployments
-
-- Keep model and tokenizer files in a consistent per-model directory layout.
-- Validate both correctness and performance when changing precision.
-- Use repeated runs and fixed CPU/NUMA settings for stable benchmark comparisons.
+Keep model revision, precision, CPU topology, thread settings, NUMA binding,
+and sample profile fixed when comparing runs. Treat `fp32` as the numerical
+baseline, then evaluate `fp16` or `int8` with representative accuracy data
+before using a faster precision in production.

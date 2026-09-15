@@ -21,7 +21,12 @@ func ReadFirstListenerEndpoint(configPath string) (ListenerEndpoint, bool, error
 	if err != nil {
 		return ListenerEndpoint{}, false, err
 	}
+	return ParseFirstListenerEndpoint(data)
+}
 
+// ParseFirstListenerEndpoint extracts the narrow listener discovery contract
+// from already bounded and securely opened runtime config bytes.
+func ParseFirstListenerEndpoint(data []byte) (ListenerEndpoint, bool, error) {
 	var config map[string]any
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return ListenerEndpoint{}, false, err

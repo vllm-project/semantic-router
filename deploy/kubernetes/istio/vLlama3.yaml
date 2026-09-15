@@ -41,10 +41,10 @@ spec:
       #     sizeLimit: "2Gi"
       containers:
       - name: llama-8b
-        image: vllm/vllm-openai:latest
+        image: vllm/vllm-openai:v0.17.0
         command: ["/bin/sh", "-c"]
         args: [
-          "vllm serve meta-llama/Llama-3.1-8B-Instruct --served-model-name llama3-8b meta-llama/Llama-3.1-8B-Instruct --trust-remote-code --enable-chunked-prefill --max_num_batched_tokens 1024"
+          "vllm serve meta-llama/Llama-3.1-8B-Instruct --served-model-name llama3-8b meta-llama/Llama-3.1-8B-Instruct --enable-chunked-prefill --max_num_batched_tokens 1024"
         ]
         env:
         - name: HUGGING_FACE_HUB_TOKEN
@@ -97,4 +97,3 @@ spec:
     app: vllm-llama3-8b-instruct
   sessionAffinity: None
   type: ClusterIP
-

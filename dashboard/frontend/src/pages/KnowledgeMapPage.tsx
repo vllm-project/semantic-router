@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { withAuthQuery } from '../utils/authFetch'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './KnowledgeMapPage.module.css'
 
 interface KnowledgeMapMetadata {
@@ -19,11 +19,13 @@ interface KnowledgeMapMetadata {
 function buildKnowledgeMapURL(name: string): string {
   const encodedName = encodeURIComponent(name)
   const params = new URLSearchParams({
-    metadataURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/metadata`),
-    dataURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/data.ndjson`),
+    // Plain same-origin paths: WizMap fetches these from inside the iframe and the browser
+    // attaches the session cookie. Before #2465 this one URL carried the token three times.
+    metadataURL: `/api/router/api/v1/storage/knowledge-bases/${encodedName}/map/metadata`,
+    dataURL: `/api/router/api/v1/storage/knowledge-bases/${encodedName}/map/data.ndjson`,
     title: name,
   })
-  return withAuthQuery(`/embedded/wizmap/?${params.toString()}`)
+  return `/embedded/wizmap/?${params.toString()}`
 }
 
 export default function KnowledgeMapPage() {
@@ -38,7 +40,7 @@ export default function KnowledgeMapPage() {
     setError(null)
     setIframeReady(false)
 
-    fetch(`/api/router/config/kbs/${encodeURIComponent(name)}/map/metadata`)
+    fetch(`/api/router/api/v1/storage/knowledge-bases/${encodeURIComponent(name)}/map/metadata`)
       .then(async (response) => {
         if (!response.ok) {
           const message = await response.text()
@@ -87,10 +89,10 @@ export default function KnowledgeMapPage() {
         </Link>
 
         {(loading || !iframeReady) && !error ? (
-          <div className={styles.loadingPanel} role="status" aria-live="polite">
-            <div className={styles.spinner} aria-hidden="true" />
-            <p>{loading ? 'Loading knowledge map metadata...' : 'Launching WizMap...'}</p>
-          </div>
+          <ProductLoadingState
+            label={loading ? 'Loading knowledge map' : 'Opening knowledge map'}
+            compact
+          />
         ) : null}
         {!error ? (
           <iframe

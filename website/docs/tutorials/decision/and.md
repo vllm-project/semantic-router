@@ -2,9 +2,8 @@
 
 ## Overview
 
-Use `config/fragments/decision/and/` when multiple signals must all match before the route is valid.
-
-`AND` is the standard shape for narrow, high-confidence routes.
+An `AND` decision matches only when every child condition matches. Use it for
+narrow routes that require several independent facts.
 
 ## Key Advantages
 
@@ -21,15 +20,13 @@ A single signal often matches too broadly. Domain alone may be insufficient with
 
 ## When to Use
 
-Use `and/` when:
+Use `AND` when:
 
 - domain and urgency must both be present
 - domain and safety clearance must both pass
 - preference and complexity should cooperate before escalation
 
 ## Configuration
-
-Source fragment: `config/fragments/decision/and/urgent-business.yaml`
 
 ```yaml
 routing:
@@ -50,3 +47,8 @@ routing:
 ```
 
 Use `AND` when a model should only activate for a narrow, high-confidence slice of traffic.
+
+Every referenced signal must be declared in the same recipe. `AND` reduces
+broad matches but does not make probabilistic signals authoritative. See a
+complete example:
+[`config/fragments/decision/and/urgent-business.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/and/urgent-business.yaml).

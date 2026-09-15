@@ -10,32 +10,28 @@ import (
 func (s *ClassificationService) buildIntentResponseFromSignals(
 	signals *classification.SignalResults,
 	decisionResult *decision.DecisionResult,
-	category string,
-	confidence float64,
-	processingTime int64,
+	category Classification,
 	req IntentRequest,
 	classifier *classification.Classifier,
 	runtimeConfig *config.RouterConfig,
 ) *IntentResponse {
-	response := &IntentResponse{
-		Classification: Classification{
-			Category:         category,
-			Confidence:       confidence,
-			ProcessingTimeMs: processingTime,
-		},
-	}
+	available := category.ConfidenceAvailable != nil && *category.ConfidenceAvailable
+	category.ConfidenceAvailable = confidenceAvailability(available)
+	response := &IntentResponse{Classification: category, ProbabilitiesAvailable: available}
 
-	populateIntentProbabilities(response, category, confidence, req.Options)
+	populateIntentProbabilities(response, category.Category, category.Confidence, req.Options)
 	response.RecommendedModel = resolveRecommendedModel(
 		decisionResult,
-		category,
+		category.Category,
 		classifier,
 		runtimeConfig,
 	)
-	response.RoutingDecision = s.resolveRoutingDecision(decisionResult, confidence, req.Options)
+	response.RoutingDecision = s.resolveRoutingDecision(decisionResult, category.Confidence, req.Options)
 	if signals != nil {
 		response.MatchedSignals = buildMatchedSignals(signals)
 		response.SignalErrors = signals.SignalErrors
+		response.SignalErrorMatches = signals.SignalErrorMatches
+		response.AppliedUnknownPolicies = signals.Diagnostics.AppliedUnknownPolicies
 	}
 	if decisionPayload := buildDecisionResultPayload(decisionResult); decisionPayload != nil {
 		response.DecisionResult = decisionPayload
@@ -52,11 +48,13 @@ func (s *ClassificationService) buildEvalResponse(
 	classifier *classification.Classifier,
 ) *EvalResponse {
 	response := &EvalResponse{
-		OriginalText:      text,
-		Metrics:           signals.Metrics,
-		SignalConfidences: signals.SignalConfidences,
-		SignalValues:      signals.SignalValues,
-		SignalErrors:      signals.SignalErrors,
+		OriginalText:           text,
+		Metrics:                signals.Metrics,
+		SignalConfidences:      signals.SignalConfidences,
+		SignalValues:           signals.SignalValues,
+		SignalErrors:           signals.SignalErrors,
+		SignalErrorMatches:     signals.SignalErrorMatches,
+		AppliedUnknownPolicies: signals.Diagnostics.AppliedUnknownPolicies,
 	}
 
 	matchedSignals := buildMatchedSignals(signals)
@@ -121,6 +119,10 @@ func populateIntentProbabilities(
 	if options == nil || !options.ReturnProbabilities {
 		return
 	}
+	if response.Classification.ConfidenceAvailable != nil && !*response.Classification.ConfidenceAvailable {
+		return
+	}
+	response.ProbabilitiesAvailable = true
 	response.Probabilities = map[string]float64{category: confidence}
 }
 
@@ -156,8 +158,9 @@ func buildDecisionResultPayload(decisionResult *decision.DecisionResult) *Decisi
 		return nil
 	}
 	return &DecisionResult{
-		DecisionName: decisionResult.Decision.Name,
-		Confidence:   decisionResult.Confidence,
-		MatchedRules: decisionResult.MatchedRules,
+		DecisionName:        decisionResult.Decision.Name,
+		Confidence:          decisionResult.Confidence,
+		ConfidenceAvailable: confidenceAvailability(decisionResult.ConfidenceScored),
+		MatchedRules:        decisionResult.MatchedRules,
 	}
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -75,7 +76,12 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	configRoot := filepath.Join(root, "config", "fragments")
 
-	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(configRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -83,7 +89,7 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -98,11 +104,45 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	}
 }
 
+func TestClassifierFragmentsCoverRemoteBackendTypes(t *testing.T) {
+	root := repoRootFromTestFile(t)
+	fragments := map[string]string{
+		ClassifierSignalTypeLLM:                "label-score.yaml",
+		ClassifierSignalTypeSequenceClassifier: "sequence-label-score.yaml",
+	}
+	for classifierType, filename := range fragments {
+		path := filepath.Join(root, "config", "fragments", "signal", "classifier", filename)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read classifier fragment %s: %v", path, err)
+		}
+		var fragment struct {
+			Routing struct {
+				Signals struct {
+					Classifiers []ClassifierSignalRule `yaml:"classifiers"`
+				} `yaml:"signals"`
+			} `yaml:"routing"`
+		}
+		if err := yaml.Unmarshal(data, &fragment); err != nil {
+			t.Fatalf("failed to parse classifier fragment %s: %v", path, err)
+		}
+		if len(fragment.Routing.Signals.Classifiers) != 1 ||
+			fragment.Routing.Signals.Classifiers[0].Type != classifierType {
+			t.Fatalf("classifier fragment %s must contain exactly one %q rule", path, classifierType)
+		}
+	}
+}
+
 func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	configRoot := filepath.Join(root, "config", "fragments")
 
-	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(configRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -110,7 +150,7 @@ func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}

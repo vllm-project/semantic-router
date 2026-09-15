@@ -1,5 +1,4 @@
 import importlib
-import os
 import subprocess
 import sys
 import tempfile
@@ -8,173 +7,102 @@ from pathlib import Path
 from unittest import mock
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+CI_DIR = SCRIPT_DIR.parents[1] / "ci"
+for path in (SCRIPT_DIR, CI_DIR):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
-agent_resolution = importlib.import_module("agent_resolution")
-agent_changed_files = importlib.import_module("agent_changed_files")
-agent_context_resolution = importlib.import_module("agent_context_resolution")
-run_agent_precommit_lint = importlib.import_module("run_agent_precommit_lint")
+changed_files = importlib.import_module("changed_files")
+harness = importlib.import_module("harness")
 
 
-class AgentResolutionChangedFilesPathTests(unittest.TestCase):
+class ChangedFilesTests(unittest.TestCase):
     def test_split_changed_files_accepts_common_separators(self) -> None:
-        changed_files = agent_resolution.split_changed_files(
-            "tools/agent/scripts/agent_gate.py tools/make/agent.mk,"
+        result = changed_files.split_changed_files(
+            "tools/agent/scripts/harness.py tools/make/agent.mk,"
             "\nsrc/semantic-router/pkg/apiserver/server.go"
         )
 
         self.assertEqual(
-            changed_files,
+            result,
             [
                 "src/semantic-router/pkg/apiserver/server.go",
-                "tools/agent/scripts/agent_gate.py",
+                "tools/agent/scripts/harness.py",
                 "tools/make/agent.mk",
             ],
         )
 
-    def test_get_changed_files_reads_changed_files_path(self) -> None:
+    def test_get_changed_files_reads_path_without_git_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            changed_files_path = Path(temp_dir) / "changed-files.txt"
-            changed_files_path.write_text(
-                "./tools/agent/scripts/agent_gate.py\n"
+            path = Path(temp_dir) / "changed-files.txt"
+            path.write_text(
+                "./tools/agent/scripts/harness.py\n"
                 "tools/make/agent.mk\n"
-                "tools/agent/scripts/agent_gate.py\n",
+                "tools/agent/scripts/harness.py\n",
                 encoding="utf-8",
             )
-
-            changed_files = agent_resolution.get_changed_files(
-                None, None, str(changed_files_path)
-            )
+            with mock.patch.object(changed_files, "git_changed_files") as git_diff:
+                result = changed_files.get_changed_files("", None, str(path))
 
         self.assertEqual(
-            changed_files,
-            [
-                "tools/agent/scripts/agent_gate.py",
-                "tools/make/agent.mk",
-            ],
-        )
-
-    def test_get_changed_files_prefers_path_when_explicit_is_empty(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            changed_files_path = Path(temp_dir) / "changed-files.txt"
-            changed_files_path.write_text(
-                "tools/agent/scripts/agent_changed_files.py\n",
-                encoding="utf-8",
-            )
-
-            with mock.patch.object(
-                agent_changed_files, "git_changed_files"
-            ) as git_diff:
-                changed_files = agent_resolution.get_changed_files(
-                    "", None, str(changed_files_path)
-                )
-
-        self.assertEqual(
-            changed_files,
-            ["tools/agent/scripts/agent_changed_files.py"],
+            result,
+            ["tools/agent/scripts/harness.py", "tools/make/agent.mk"],
         )
         git_diff.assert_not_called()
 
-    def test_resolve_e2e_profiles_does_not_mutate_default_profiles(self) -> None:
-        e2e_map = {
-            "full_ci_triggers": ["src/**"],
-            "default_local_profiles": ["envoy-ai-gateway"],
-            "full_ci_profiles": ["envoy-ai-gateway", "dashboard"],
-            "profile_rules": {},
-            "manual_profile_rules": {
-                "manual-smoke": {"paths": ["src/semantic-router/**"]}
-            },
-            "workflow_suite_rules": {},
-        }
+    def test_missing_changed_files_path_has_clear_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unable to read changed files"):
+            changed_files.load_changed_files("does-not-exist")
 
-        local_profiles, _, _, _ = agent_context_resolution.resolve_e2e_profiles(
-            ["src/semantic-router/pkg/apiserver/server.go"],
-            e2e_map,
-            set(),
-        )
-
-        self.assertEqual(local_profiles, ["envoy-ai-gateway", "manual-smoke"])
-        self.assertEqual(e2e_map["default_local_profiles"], ["envoy-ai-gateway"])
-
-
-class RunAgentPrecommitLintTests(unittest.TestCase):
-    def test_resolve_changed_files_tries_head_parent_when_default_diff_is_empty(
+    def test_git_changed_files_includes_branch_worktree_and_untracked_paths(
         self,
     ) -> None:
-        explicit_files = [
-            f"tools/security/generated_{index}.py"
-            for index in range(run_agent_precommit_lint.MAX_PRECOMMIT_PATHS + 1)
-        ]
-
-        with (
-            mock.patch.dict(os.environ, {}, clear=True),
-            mock.patch.object(sys, "argv", ["hook", *explicit_files]),
-            mock.patch.object(
-                run_agent_precommit_lint,
-                "git_changed_files",
-                side_effect=[
-                    [],
-                    ["tools/agent/scripts/run_agent_precommit_lint.py"],
-                ],
-            ) as git_changed_files,
-        ):
-            resolved = run_agent_precommit_lint.resolve_changed_files()
-
-        self.assertEqual(
-            resolved,
-            ["tools/agent/scripts/run_agent_precommit_lint.py"],
-        )
-        self.assertEqual(
-            git_changed_files.call_args_list,
-            [
-                mock.call(None),
-                mock.call("HEAD^"),
-            ],
-        )
-
-    def test_main_passes_changed_files_via_temp_file(self) -> None:
-        captured: dict[str, str] = {}
-
-        def fake_run(cmd, *, cwd, check, env):
-            self.assertEqual(
-                cmd,
-                ["make", "agent-lint", "AGENT_SKIP_PRECOMMIT_BASELINE=1"],
-            )
-            self.assertFalse(check)
-            self.assertEqual(cwd, run_agent_precommit_lint.REPO_ROOT)
-
-            changed_files_path = Path(env["AGENT_CHANGED_FILES_PATH"])
-            captured["path"] = str(changed_files_path)
-            captured["content"] = changed_files_path.read_text(encoding="utf-8")
-            self.assertTrue(changed_files_path.exists())
-
-            return subprocess.CompletedProcess(cmd, 0)
-
-        with (
-            mock.patch.dict(os.environ, {}, clear=True),
-            mock.patch.object(
-                run_agent_precommit_lint,
-                "resolve_changed_files",
-                return_value=[
-                    "tools/agent/scripts/agent_gate.py",
-                    "tools/make/agent.mk",
-                ],
+        outputs = {
+            ("rev-parse", "--verify", "origin/main"): (0, "base\n"),
+            ("merge-base", "HEAD", "origin/main"): (0, "base\n"),
+            ("diff", "--name-only", "-z", "base...HEAD"): (
+                0,
+                "committed.py\0shared.py\0",
             ),
-            mock.patch.object(
-                run_agent_precommit_lint.subprocess,
-                "run",
-                side_effect=fake_run,
+            ("diff", "--name-only", "-z", "HEAD"): (
+                0,
+                "working tree.py\0shared.py\0",
             ),
-        ):
-            result = run_agent_precommit_lint.main()
+            ("ls-files", "--others", "--exclude-standard", "-z"): (
+                0,
+                "untracked.py\0",
+            ),
+        }
 
-        self.assertEqual(result, 0)
+        def fake_run(
+            command: list[str], **_: object
+        ) -> subprocess.CompletedProcess[str]:
+            returncode, stdout = outputs[tuple(command[1:])]
+            return subprocess.CompletedProcess(command, returncode, stdout, "")
+
+        with mock.patch.object(changed_files.subprocess, "run", side_effect=fake_run):
+            result = changed_files.git_changed_files("origin/main")
+
         self.assertEqual(
-            captured["content"],
-            "tools/agent/scripts/agent_gate.py\ntools/make/agent.mk",
+            result,
+            ["committed.py", "shared.py", "untracked.py", "working tree.py"],
         )
-        self.assertFalse(Path(captured["path"]).exists())
+
+
+class ImpactTests(unittest.TestCase):
+    def test_impact_contains_facts_without_skill_or_completion_policy(self) -> None:
+        result = harness.build_impact(["tools/make/agent.mk"], "cpu")
+
+        self.assertEqual(
+            result["domains"], [{"name": "harness", "owner": "maintainers"}]
+        )
+        self.assertEqual(result["checks"], ["make harness-check"])
+        self.assertNotIn("primary_skill", result)
+        self.assertNotIn("completion_boundary", result)
+        self.assertNotIn("loop_mode", result)
+
+    def test_verify_requires_an_explicit_selection(self) -> None:
+        self.assertEqual(harness.run_verify((), ()), 2)
 
 
 if __name__ == "__main__":

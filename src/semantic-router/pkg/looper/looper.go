@@ -22,6 +22,7 @@ package looper
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/openai/openai-go"
 
@@ -30,8 +31,14 @@ import (
 
 // Request contains the input for looper execution
 type Request struct {
+	Grounding *GroundingBackends
 	// OriginalRequest is the OpenAI chat completion request from the client
 	OriginalRequest *openai.ChatCompletionNewParams
+
+	// BaseContextTokens retains the legacy original-plus-growth estimate.
+	// Strict CandidateRequirements instead count each complete outbound stage
+	// and its effective output budget once, without adding this estimate.
+	BaseContextTokens int
 
 	// ModelRefs contains the list of models to potentially use, ordered by preference
 	ModelRefs []config.ModelRef
@@ -39,6 +46,19 @@ type Request struct {
 	// ModelParams maps model names to their ModelParams configuration
 	// Used to lookup access_key and param_size for confidence routing
 	ModelParams map[string]config.ModelParams
+
+	// CandidateRequirements is the owning recipe's admission policy. Every
+	// generated stage rechecks this policy against its complete outbound request.
+	CandidateRequirements *config.CandidateRequirements
+
+	// PermittedModels contains the filtered assigned workers and explicitly
+	// configured helpers, including only their declared deployment aliases.
+	// A strict recipe never expands this boundary from the model catalog.
+	PermittedModels []string
+
+	// MaxTokensLimit retains the owning decision's cap after an algorithm
+	// overrides its stage output budget. It does not supply an omitted default.
+	MaxTokensLimit *int
 
 	// Algorithm defines the execution strategy
 	Algorithm *config.AlgorithmConfig
@@ -63,13 +83,15 @@ type Request struct {
 	// normalization and post-processing. OutputContract remains prompt text.
 	OutputContractSpec *config.OutputContractSpec
 
-	// Fusion carries request-level plugins[].id=fusion overrides.
+	// Fusion carries optional call-level configuration for direct Looper
+	// callers. A recipe-owned Fusion algorithm accepts only its trace-visibility
+	// fields; an algorithm-free internal call may use the complete configuration.
 	Fusion *config.FusionRequestConfig
 
-	// CachedPanel, when non-nil, is used verbatim as the fusion panel instead of
-	// calling the analysis models. It exists for paired multi-arm evaluation where
-	// every arm must synthesize from a byte-identical panel (see
-	// bench/grounded_fusion). Nil in production; only the fusioneval driver sets it.
+	// CachedPanel, when non-nil, replaces live Fusion analysis-model calls. Its
+	// entries still undergo the normal usability and quorum checks before every
+	// arm synthesizes from the same retained panel (see bench/grounded_fusion).
+	// Nil in production; only the fusioneval driver sets it.
 	CachedPanel []*ModelResponse
 }
 
@@ -77,6 +99,11 @@ type Request struct {
 type Response struct {
 	// Body is the response body (JSON for non-streaming, SSE for streaming)
 	Body []byte
+
+	// BufferedBody is the completed Chat result behind a locally synthesized
+	// stream. It preserves alternative choices for semantic accounting without
+	// feeding a multi-choice aggregate through a single-choice stream decoder.
+	BufferedBody []byte `json:"-"`
 
 	// ContentType is "application/json" or "text/event-stream"
 	ContentType string
@@ -111,12 +138,23 @@ type Response struct {
 	// so it reflects real elapsed time regardless of whether the algorithm
 	// dispatches its model calls sequentially or concurrently.
 	LatencyMs int64 `json:"latency_ms,omitempty"`
+
+	// ExecutionTrace is bounded, content-free diagnostic evidence for tracing
+	// and Router Replay. It is not included in the client response body.
+	ExecutionTrace ExecutionTrace `json:"-"`
 }
 
 // Looper defines the interface for multi-model execution strategies
 type Looper interface {
 	// Execute runs the looper algorithm and returns an aggregated response
 	Execute(ctx context.Context, req *Request) (*Response, error)
+}
+
+// ManagedLooper owns the resources created by Factory and must be closed by
+// its caller. Loopers built with FactoryWithClient borrow the supplied client.
+type ManagedLooper interface {
+	Looper
+	io.Closer
 }
 
 // UnsupportedAlgorithmError reports an algorithm that cannot be constructed
@@ -129,31 +167,55 @@ func (e *UnsupportedAlgorithmError) Error() string {
 	return fmt.Sprintf("unsupported Looper algorithm %q", e.AlgorithmType)
 }
 
-type algorithmConstructor func(*config.LooperConfig) Looper
+type algorithmConstructor func(*config.LooperConfig, clientBinding) ManagedLooper
 
 var algorithmConstructors = map[string]algorithmConstructor{
-	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig) Looper {
-		return NewConfidenceLooper(cfg)
+	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newConfidenceLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig) Looper {
-		return NewFusionLooper(cfg)
+	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newFusionLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig) Looper {
-		return NewRatingsLooper(cfg)
+	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newRatingsLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig) Looper {
-		return NewReMoMLooper(cfg)
+	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newReMoMLooper(cfg, binding)
 	},
-	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig) Looper {
-		return NewWorkflowsLooper(cfg)
+	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newWorkflowsLooper(cfg, binding)
 	},
 }
 
 // Factory creates a Looper instance based on the authoritative config catalog.
-func Factory(cfg *config.LooperConfig, algorithmType string) (Looper, error) {
+func Factory(cfg *config.LooperConfig, algorithmType string) (ManagedLooper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	client, err := NewConnectorClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return constructor(cfg, ownClient(client)), nil
+}
+
+// FactoryWithClient creates a Looper that reuses the supplied client.
+func FactoryWithClient(cfg *config.LooperConfig, algorithmType string, client *Client) (Looper, error) {
+	constructor, err := constructorFor(algorithmType)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, fmt.Errorf("looper client is required")
+	}
+	return constructor(cfg, borrowClient(client)), nil
+}
+
+func constructorFor(algorithmType string) (algorithmConstructor, error) {
 	constructor, ok := algorithmConstructors[algorithmType]
 	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
 		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
 	}
-	return constructor(cfg), nil
+	return constructor, nil
 }

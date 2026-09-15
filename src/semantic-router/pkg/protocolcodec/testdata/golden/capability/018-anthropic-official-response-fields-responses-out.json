@@ -1,0 +1,506 @@
+{
+  "cases": [
+    {
+      "name": "container",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "container",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "content",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "alternate",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "alternate",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "error",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "anthropic_transport_error_on_response_path"
+        }
+      }
+    },
+    {
+      "name": "id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_2",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_aa0b4fef707905070bb4f14d",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "model",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "role",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "stop_details",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "stop_details",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "stop_reason",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": {
+            "reason": "max_output_tokens"
+          },
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "incomplete",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "stop_sequence",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "type",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "name": "usage",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 0,
+          "error": null,
+          "id": "msg_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "done",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_50fa17334b475f883a9970b7",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "done",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 15,
+            "input_tokens_details": {
+              "cache_write_tokens": 3,
+              "cached_tokens": 4
+            },
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "reasoning_tokens": 3
+            },
+            "total_tokens": 20
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "usage.cache_creation",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.inference_geo",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.server_tool_use",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.service_tier",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}

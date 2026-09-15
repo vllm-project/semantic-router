@@ -1,13 +1,15 @@
 import type { Dispatch, SetStateAction } from 'react'
 
+import { type ParsedChatCompletion, type ParsedToolCallChunk } from './chatResponseParsing'
 import {
-  consumeEventStream,
-  isEventStreamContentType,
-  parseChatCompletionPayload,
-  type ParsedChatCompletion,
-  type ParsedToolCallChunk,
-} from './chatResponseParsing'
-import type { OutboundChatMessage } from './chatRequestSupport'
+  buildPlaygroundRequestHeaders,
+  buildExactChatRequestBody,
+  type OutboundChatMessage,
+} from './chatRequestSupport'
+import {
+  assertPlaygroundResponseSuccess,
+  consumePlaygroundResponseBody,
+} from './chatTaskResponseSupport'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import type { Message, PlaygroundTask } from './ChatComponentTypes'
 import {
@@ -65,14 +67,13 @@ export const runToolLoop = async ({
   toolCallsMap,
   updateConversationMessages,
 }: RunToolLoopOptions): Promise<string> => {
-  const MAX_TOOL_ITERATIONS = 30
   let iteration = 0
   let allToolCalls = Array.from(toolCallsMap.values())
   let allToolResults: ToolResult[] = []
   let finalContent = ''
   let currentMessages: OutboundChatMessage[] = [...initialMessages]
 
-  while (iteration < MAX_TOOL_ITERATIONS) {
+  while (toolCallsMap.size > 0) {
     iteration += 1
     const currentToolCalls = iteration === 1 ? allToolCalls : Array.from(toolCallsMap.values())
     if (currentToolCalls.length === 0) break
@@ -137,29 +138,31 @@ export const runToolLoop = async ({
       ...toolResults.map((toolResult) => ({
         role: 'tool',
         tool_call_id: toolResult.callId,
-        content: serializeToolResultForModel(toolResult),
+        content: serializeToolResultForModel(toolResult, 6_000),
       })),
     ]
 
     const followUpResponse = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-vsr-debug': 'true',
-      },
-      body: JSON.stringify({
-        model: task.requestOptions.model,
-        messages: currentMessages,
-        stream: true,
-        tools: activeTools,
-        tool_choice: 'auto',
-      }),
+      headers: buildPlaygroundRequestHeaders(task.conversationId),
+      body: JSON.stringify(
+        buildExactChatRequestBody(
+          {
+            model: task.requestOptions.model,
+            messages: currentMessages,
+            stream: true,
+            max_tokens: task.exactRequest?.max_tokens,
+            max_completion_tokens: task.exactRequest?.max_completion_tokens,
+            tools: activeTools,
+            tool_choice: 'auto',
+          },
+          task.requestOptions.model,
+        ),
+      ),
       signal: abortSignal,
     })
 
-    if (!followUpResponse.ok) {
-      break
-    }
+    await assertPlaygroundResponseSuccess(followUpResponse)
 
     let followUpContent = ''
     let followUpThinking = ''
@@ -240,23 +243,11 @@ export const runToolLoop = async ({
       syncFollowUpMessage(streaming)
     }
 
-    if (!isEventStreamContentType(followUpResponse.headers.get('content-type'))) {
-      const parsedFollowUp = parseChatCompletionPayload(await followUpResponse.text())
-      if (parsedFollowUp?.errorMessage) {
-        break
-      }
-      if (parsedFollowUp && parsedFollowUp.choices.length > 0) {
-        applyFollowUpCompletion(parsedFollowUp, false)
-      }
-    } else {
-      if (!followUpResponse.body) break
-      await consumeEventStream(followUpResponse.body, (data) => {
-        const parsedFollowUpChunk = parseChatCompletionPayload(data)
-        if (!parsedFollowUpChunk || parsedFollowUpChunk.errorMessage) {
-          return
-        }
-        applyFollowUpCompletion(parsedFollowUpChunk, true)
-      })
+    try {
+      await consumePlaygroundResponseBody(followUpResponse, applyFollowUpCompletion)
+    } finally {
+      // Keep partial follow-up text and reasoning visible when completion validation fails.
+      followUpStreamingSync.drain()
     }
 
     if (activeTools.length > 0) {
@@ -282,7 +273,7 @@ export const runToolLoop = async ({
     if (streamFinishReason === 'tool_calls' && toolCallsMap.size > 0) {
       continue
     }
-    if (streamFinishReason === 'stop' || streamFinishReason === 'length' || !hasMoreToolCalls) {
+    if (streamFinishReason === 'stop' || !hasMoreToolCalls) {
       break
     }
   }

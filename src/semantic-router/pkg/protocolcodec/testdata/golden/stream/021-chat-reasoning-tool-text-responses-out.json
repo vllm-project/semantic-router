@@ -1,0 +1,319 @@
+{
+  "frames": [
+    {
+      "event": "response.created",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_mixed_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 0,
+        "type": "response.created"
+      }
+    },
+    {
+      "event": "response.in_progress",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_mixed_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 1,
+        "type": "response.in_progress"
+      }
+    },
+    {
+      "event": "response.output_item.added",
+      "data": {
+        "item": {
+          "id": "item_12c0d3ab8979ad8d85cc0d5e",
+          "status": "in_progress",
+          "summary": [],
+          "type": "reasoning"
+        },
+        "output_index": 0,
+        "sequence_number": 2,
+        "type": "response.output_item.added"
+      }
+    },
+    {
+      "event": "response.reasoning_text.delta",
+      "data": {
+        "content_index": 0,
+        "delta": "I should inspect the weather first.",
+        "item_id": "item_12c0d3ab8979ad8d85cc0d5e",
+        "output_index": 0,
+        "sequence_number": 3,
+        "type": "response.reasoning_text.delta"
+      }
+    },
+    {
+      "event": "response.output_item.added",
+      "data": {
+        "item": {
+          "arguments": "",
+          "call_id": "call_weather",
+          "id": "item_494d51b82dd4c6235df35294",
+          "name": "lookup_weather",
+          "status": "in_progress",
+          "type": "function_call"
+        },
+        "output_index": 1,
+        "sequence_number": 4,
+        "type": "response.output_item.added"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.delta",
+      "data": {
+        "delta": "{\"city\":\"Paris\"}",
+        "item_id": "item_494d51b82dd4c6235df35294",
+        "output_index": 1,
+        "sequence_number": 5,
+        "type": "response.function_call_arguments.delta"
+      }
+    },
+    {
+      "event": "response.output_item.added",
+      "data": {
+        "item": {
+          "content": [],
+          "id": "item_f1e0914ed1be974ab1a6bc14",
+          "role": "assistant",
+          "status": "in_progress",
+          "type": "message"
+        },
+        "output_index": 2,
+        "sequence_number": 6,
+        "type": "response.output_item.added"
+      }
+    },
+    {
+      "event": "response.content_part.added",
+      "data": {
+        "content_index": 0,
+        "item_id": "item_f1e0914ed1be974ab1a6bc14",
+        "output_index": 2,
+        "part": {
+          "annotations": [],
+          "text": "",
+          "type": "output_text"
+        },
+        "sequence_number": 7,
+        "type": "response.content_part.added"
+      }
+    },
+    {
+      "event": "response.output_text.delta",
+      "data": {
+        "content_index": 0,
+        "delta": "The lookup is ready.",
+        "item_id": "item_f1e0914ed1be974ab1a6bc14",
+        "output_index": 2,
+        "sequence_number": 8,
+        "type": "response.output_text.delta"
+      }
+    },
+    {
+      "event": "response.reasoning_text.done",
+      "data": {
+        "content_index": 0,
+        "item_id": "item_12c0d3ab8979ad8d85cc0d5e",
+        "output_index": 0,
+        "sequence_number": 9,
+        "text": "I should inspect the weather first.",
+        "type": "response.reasoning_text.done"
+      }
+    },
+    {
+      "event": "response.output_item.done",
+      "data": {
+        "item": {
+          "content": [
+            {
+              "text": "I should inspect the weather first.",
+              "type": "reasoning_text"
+            }
+          ],
+          "id": "item_12c0d3ab8979ad8d85cc0d5e",
+          "status": "completed",
+          "summary": [],
+          "type": "reasoning"
+        },
+        "output_index": 0,
+        "sequence_number": 10,
+        "type": "response.output_item.done"
+      }
+    },
+    {
+      "event": "response.output_text.done",
+      "data": {
+        "content_index": 0,
+        "item_id": "item_f1e0914ed1be974ab1a6bc14",
+        "output_index": 2,
+        "sequence_number": 11,
+        "text": "The lookup is ready.",
+        "type": "response.output_text.done"
+      }
+    },
+    {
+      "event": "response.content_part.done",
+      "data": {
+        "content_index": 0,
+        "item_id": "item_f1e0914ed1be974ab1a6bc14",
+        "output_index": 2,
+        "part": {
+          "annotations": [],
+          "text": "The lookup is ready.",
+          "type": "output_text"
+        },
+        "sequence_number": 12,
+        "type": "response.content_part.done"
+      }
+    },
+    {
+      "event": "response.output_item.done",
+      "data": {
+        "item": {
+          "content": [
+            {
+              "annotations": [],
+              "text": "The lookup is ready.",
+              "type": "output_text"
+            }
+          ],
+          "id": "item_f1e0914ed1be974ab1a6bc14",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        },
+        "output_index": 2,
+        "sequence_number": 13,
+        "type": "response.output_item.done"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.done",
+      "data": {
+        "arguments": "{\"city\":\"Paris\"}",
+        "item_id": "item_494d51b82dd4c6235df35294",
+        "name": "lookup_weather",
+        "output_index": 1,
+        "sequence_number": 14,
+        "type": "response.function_call_arguments.done"
+      }
+    },
+    {
+      "event": "response.output_item.done",
+      "data": {
+        "item": {
+          "arguments": "{\"city\":\"Paris\"}",
+          "call_id": "call_weather",
+          "id": "item_494d51b82dd4c6235df35294",
+          "name": "lookup_weather",
+          "status": "completed",
+          "type": "function_call"
+        },
+        "output_index": 1,
+        "sequence_number": 15,
+        "type": "response.output_item.done"
+      }
+    },
+    {
+      "event": "response.completed",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "response_mixed_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "text": "I should inspect the weather first.",
+                  "type": "reasoning_text"
+                }
+              ],
+              "id": "item_12c0d3ab8979ad8d85cc0d5e",
+              "status": "completed",
+              "summary": [],
+              "type": "reasoning"
+            },
+            {
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_weather",
+              "id": "item_494d51b82dd4c6235df35294",
+              "name": "lookup_weather",
+              "status": "completed",
+              "type": "function_call"
+            },
+            {
+              "content": [
+                {
+                  "annotations": [],
+                  "text": "The lookup is ready.",
+                  "type": "output_text"
+                }
+              ],
+              "id": "item_f1e0914ed1be974ab1a6bc14",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 8,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 12,
+            "output_tokens_details": {
+              "reasoning_tokens": 6
+            },
+            "total_tokens": 20
+          }
+        },
+        "sequence_number": 16,
+        "type": "response.completed"
+      }
+    }
+  ]
+}

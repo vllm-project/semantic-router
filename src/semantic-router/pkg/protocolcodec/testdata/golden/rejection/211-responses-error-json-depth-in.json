@@ -1,0 +1,11 @@
+{
+  "operation": "error",
+  "limits": {"json_depth": 1},
+  "body": {
+    "error": {
+      "message": "authentication failed",
+      "type": "authentication_error",
+      "code": "invalid_api_key"
+    }
+  }
+}

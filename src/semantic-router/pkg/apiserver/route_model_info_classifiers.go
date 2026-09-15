@@ -9,19 +9,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelAvailability {
-	if s == nil || s.classificationSvc == nil {
+func classificationAvailabilityForService(service classificationService) classifierModelAvailability {
+	if service == nil {
 		return classifierModelAvailability{}
 	}
 
 	availability := classifierModelAvailability{
-		core:                   s.classificationSvc.HasClassifier(),
-		factCheck:              s.classificationSvc.HasFactCheckClassifier(),
-		hallucination:          s.classificationSvc.HasHallucinationDetector(),
-		hallucinationExplainer: s.classificationSvc.HasHallucinationExplainer(),
-		feedback:               s.classificationSvc.HasFeedbackDetector(),
+		core:                   service.HasClassifier(),
+		factCheck:              service.HasFactCheckClassifier(),
+		hallucination:          service.HasHallucinationDetector(),
+		hallucinationExplainer: service.HasHallucinationExplainer(),
+		feedback:               service.HasFeedbackDetector(),
 	}
-	if inventory, ok := s.classificationSvc.(classificationInventoryReadinessService); ok {
+	if inventory, ok := service.(classificationInventoryReadinessService); ok {
 		availability.factCheck = inventory.HasAnyFactCheckClassifier()
 		availability.hallucination = inventory.HasAnyHallucinationDetector()
 		availability.hallucinationExplainer = inventory.HasAnyHallucinationExplainer()
@@ -32,10 +32,10 @@ func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelA
 
 // getClassifierModelsInfo returns information about configured classifier models.
 func (s *ClassificationAPIServer) getClassifierModelsInfo(
+	cfg *routerconfig.RouterConfig,
 	availability classifierModelAvailability,
 	runtimeState *startupstatus.State,
 ) []ModelInfo {
-	cfg := s.currentConfig()
 	if cfg == nil {
 		return s.getPlaceholderModelsInfo(runtimeState)
 	}
@@ -75,7 +75,7 @@ func buildRoutingClassifierModels(
 			Categories: configuredCategoryNames(cfg),
 			Metadata: map[string]string{
 				"mapping_path": categoryModel.CategoryMappingPath,
-				"model_type":   resolveInlineModelType(categoryModel.UseMmBERT32K, categoryModel.UseModernBERT, false),
+				"model_type":   categoryModelInfoType(categoryModel),
 				"threshold":    fmt.Sprintf("%.2f", categoryModel.Threshold),
 			},
 		})
@@ -119,6 +119,18 @@ func buildRoutingClassifierModels(
 	}
 
 	return models
+}
+
+func categoryModelInfoType(model routerconfig.CategoryModel) string {
+	if model.Backend != nil {
+		// Match the existing prompt_guard convention: a remote classifier reports
+		// its effective transport rather than pretending to be a local model.
+		return model.Backend.Protocol
+	}
+	if variant, err := model.EffectiveVariant(); err == nil && variant != "" {
+		return variant
+	}
+	return resolveInlineModelType(model.UseMmBERT32K, model.UseModernBERT, false)
 }
 
 func buildHallucinationModels(
@@ -177,7 +189,8 @@ func buildHallucinationModels(
 
 	nliModel := cfg.HallucinationMitigation.NLIModel
 	if cfg.NeedsLocalHallucinationNLIForAPI() ||
-		cfg.NeedsLocalHallucinationNLIForRouting() {
+		cfg.NeedsLocalHallucinationNLIForRouting() ||
+		cfg.NeedsLocalNLIForSemanticCache() {
 		models = append(models, ModelInfo{
 			Name:      "hallucination_explainer",
 			Type:      "nli_explainer",

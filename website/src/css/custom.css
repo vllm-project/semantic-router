@@ -2,8 +2,10 @@
 @import './typography.css';
 @import './section-surfaces.css';
 @import './base.css';
+@import './components.css';
 @import './shell.css';
 @import './docs.css';
+@import './docs-intro.css';
 @import './blog.css';
 @import './search.css';
 @import 'katex/dist/katex.min.css';

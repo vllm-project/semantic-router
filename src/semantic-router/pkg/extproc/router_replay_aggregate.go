@@ -13,6 +13,7 @@ import (
 type routerReplayAggregateResponse struct {
 	Object               string                            `json:"object"`
 	RecordCount          int                               `json:"record_count"`
+	Lifecycle            routerReplayLifecycleSummary      `json:"lifecycle"`
 	Summary              routerReplayAggregateCostSummary  `json:"summary"`
 	ModelSelection       []routerReplayAggregateValue      `json:"model_selection"`
 	DecisionDistribution []routerReplayAggregateValue      `json:"decision_distribution"`
@@ -22,6 +23,14 @@ type routerReplayAggregateResponse struct {
 	AvailableRecipes     []string                          `json:"available_recipes"`
 	AvailableDecisions   []string                          `json:"available_decisions"`
 	AvailableModels      []string                          `json:"available_models"`
+}
+
+type routerReplayLifecycleSummary struct {
+	Completed  int `json:"completed"`
+	Failed     int `json:"failed"`
+	Aborted    int `json:"aborted"`
+	InProgress int `json:"in_progress"`
+	Unknown    int `json:"unknown"`
 }
 
 type routerReplayAggregateCostSummary struct {
@@ -87,6 +96,7 @@ func buildRouterReplayAggregatePayload(
 	return routerReplayAggregateResponse{
 		Object:               "router_replay.aggregate",
 		RecordCount:          len(filteredRecords),
+		Lifecycle:            buildRouterReplayLifecycleSummary(filteredRecords),
 		Summary:              buildRouterReplayAggregateCostSummary(filteredRecords),
 		ModelSelection:       buildRouterReplayModelSelection(filteredRecords),
 		DecisionDistribution: buildRouterReplayDecisionDistribution(filteredRecords),
@@ -99,11 +109,35 @@ func buildRouterReplayAggregatePayload(
 	}
 }
 
+func buildRouterReplayLifecycleSummary(
+	records []routerreplay.RoutingRecord,
+) routerReplayLifecycleSummary {
+	summary := routerReplayLifecycleSummary{}
+	for _, record := range records {
+		switch record.LifecycleState {
+		case routerreplay.LifecycleCompleted:
+			summary.Completed++
+		case routerreplay.LifecycleFailed:
+			summary.Failed++
+		case routerreplay.LifecycleAborted:
+			summary.Aborted++
+		case routerreplay.LifecycleInProgress:
+			summary.InProgress++
+		default:
+			summary.Unknown++
+		}
+	}
+	return summary
+}
+
 func buildRouterReplayAggregateCostSummary(
 	records []routerreplay.RoutingRecord,
 ) routerReplayAggregateCostSummary {
 	summary := routerReplayAggregateCostSummary{}
 	for _, record := range records {
+		if record.LifecycleState != routerreplay.LifecycleCompleted {
+			continue
+		}
 		if record.ActualCost == nil || record.BaselineCost == nil || record.CostSavings == nil {
 			continue
 		}

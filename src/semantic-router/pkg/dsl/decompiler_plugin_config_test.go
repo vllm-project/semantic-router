@@ -305,6 +305,38 @@ func assertRoundTripToolsPluginBasics(t *testing.T, cfg *config.ToolsPluginConfi
 	assertToolsPluginStrategy(t, cfg)
 }
 
+func TestDecompileRoutingRoundTripsToolsStripHistory(t *testing.T) {
+	cfg := mustParseRoutingPluginConfigTest(t, `
+version: v0.3
+routing:
+  modelCards:
+    - name: "local-guard"
+  decisions:
+    - name: privacy_route
+      priority: 100
+      modelRefs:
+        - model: local-guard
+      plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: none
+            strip_tool_history: true
+`)
+
+	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
+	assertDecompiledPluginConfigContains(t, dslText, []string{
+		`PLUGIN tools`,
+		`mode: "none"`,
+		`strip_tool_history: true`,
+	})
+	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
+	toolsCfg := compiled.Decisions[0].GetToolsConfig()
+	if toolsCfg == nil || !toolsCfg.StripToolHistory {
+		t.Fatal("tools.strip_tool_history was not preserved")
+	}
+}
+
 func findDecisionPluginForTest(t *testing.T, decision config.Decision, pluginType string) config.DecisionPlugin {
 	t.Helper()
 

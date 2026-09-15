@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 
 from anthropic_shim.translate import (
+    OpenAIStreamToAnthropic,
     anthropic_to_openai,
     apply_cache_usage,
     cache_prefix_hash,
@@ -18,6 +19,39 @@ from anthropic_shim.translate import (
     join_tool_result_content,
     openai_to_anthropic,
 )
+
+
+def test_openai_stream_adapter_emits_messages_event_sequence() -> None:
+    adapter = OpenAIStreamToAnthropic(
+        {"model": "qwen-test", "stop_sequences": ["STOP"]}
+    )
+    output = b"".join(
+        adapter.feed(
+            '{"id":"chatcmpl-1","model":"qwen-test","choices":[{"delta":{"content":"hello"},"finish_reason":null}]}'
+        )
+        + adapter.feed(
+            '{"id":"chatcmpl-1","model":"qwen-test","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"completion_tokens":2}}'
+        )
+        + adapter.feed("[DONE]")
+    ).decode()
+
+    events = [
+        line.removeprefix("event: ")
+        for line in output.splitlines()
+        if line.startswith("event: ")
+    ]
+    assert events == [
+        "message_start",
+        "content_block_start",
+        "content_block_delta",
+        "content_block_stop",
+        "message_delta",
+        "message_stop",
+    ]
+    assert '"text":"hello"' in output
+    assert '"stop_reason":"stop_sequence"' in output
+    assert '"stop_sequence":"STOP"' in output
+    assert '"output_tokens":2' in output
 
 
 def test_join_system_array_collapses_text_blocks_with_newline() -> None:
@@ -47,6 +81,31 @@ def test_anthropic_to_openai_maps_messages_and_stop_sequences() -> None:
         {"role": "user", "content": "hello"},
     ]
     assert translated["stop"] == ["STOP"]
+
+
+def test_anthropic_to_openai_preserves_structured_output_schema() -> None:
+    schema = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+        "additionalProperties": False,
+    }
+    translated = anthropic_to_openai(
+        {
+            "model": "qwen-test",
+            "messages": [{"role": "user", "content": "answer"}],
+            "output_config": {"format": {"type": "json_schema", "schema": schema}},
+        }
+    )
+
+    assert translated["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "structured_output",
+            "strict": True,
+            "schema": schema,
+        },
+    }
 
 
 def test_openai_to_anthropic_maps_usage_and_stop_reason() -> None:

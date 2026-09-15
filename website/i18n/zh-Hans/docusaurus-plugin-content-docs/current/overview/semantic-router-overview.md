@@ -1,185 +1,90 @@
 ---
-description: 语义路由器概览，说明多信号模型选择如何在 LLM 系统中提升成本、质量、安全与灵活性。
-translation:
-  source_commit: "ab2aa160"
-  source_file: "docs/overview/semantic-router-overview.md"
-  outdated: true
 sidebar_position: 2
+title: 系统概览
+description: vLLM Semantic Router 的数据面、控制面、配置模型和请求生命周期。
+translation:
+  source_commit: "a565be11ad49666c149840c91134ad1e4678e49b"
+  source_file: "docs/overview/semantic-router-overview.md"
+  outdated: false
 ---
 
-# 什么是语义路由器（Semantic Router）？
+# 系统概览
 
-**语义路由器（Semantic Router）** 是一层智能路由：根据从请求中提取的多种信号，为每次查询动态选择最合适的语言模型。
+vLLM Semantic Router 是 AI 客户端与模型后端之间的决策层。它按显式路由策略评估每次请求，再把请求转发到一个模型，或协调一条有界的多模型路径。
 
-## 问题
+项目把高吞吐请求路径与用于配置和运维的工具分开。
 
-传统 LLM 部署往往对所有任务使用单一模型：
+## 架构
 
-```text
-用户查询 → 单一 LLM → 响应
+```mermaid
+flowchart LR
+    Client["应用与 Agent"] --> Envoy["Envoy 数据面"]
+    Envoy <-->|"ExtProc"| Router["Semantic Router"]
+    Envoy --> Pool["模型与提供方池"]
+
+    CLI["vllm-sr CLI"] --> Config["规范配置与配方"]
+    Dashboard["Dashboard"] --> Config
+    Operator["Helm / Operator"] --> Config
+    Config --> Router
+
+    Router --> Telemetry["指标、回放、评估"]
+    Pool --> Telemetry
 ```
 
-**弊端**：
+### 数据面
 
-- 简单查询成本过高
-- 专项任务表现不佳
-- 缺少安全与合规控制
-- 资源利用率差
+- **Envoy** 接受客户端流量，通过 External Processing 协议调用 Router，再把结果请求转发到上游。
+- **Semantic Router** 提取信号、评估策略、应用路由特定行为，并选择或协调模型候选。
+- **后端** 是 OpenAI 兼容的模型服务或提供方端点。Router 不加载它们的模型权重。
 
-## 方案
+### 控制面
 
-语义路由器采用**信号驱动决策**，智能路由查询：
+- **规范 YAML** 是路由行为的可移植来源。
+- **入口** 把一个或多个公开模型别名映射到配方。
+- **配方** 是完整的策略与运行时状态隔离边界。一个或多个入口可以选择同一配方。
+- **CLI 和控制面板** 支持本地搭建、校验、模型发现、配置和运维。
+- **Helm 和 Operator** 把 Router 部署到 Kubernetes 环境。
+- **评估与可观测性** 暴露路由结果，便于运维人员测试和改进策略。
 
-```text
-用户查询 → 信号提取 → 投影协调 → 决策引擎 → 插件 + 模型分发 → 响应
-```
+## 核心对象
 
-**收益**：
+| 对象 | 用途 |
+| --- | --- |
+| **入口** | 把一个或多个公开模型别名映射到配方。 |
+| **配方** | 完整的路由策略与运行时状态隔离边界。 |
+| **信号** | 关于请求、身份、对话或内容的具名事实。 |
+| **投影** | 由信号导出的可复用分数、分区或区间。 |
+| **决策** | 选择合格路由和候选集的策略规则。 |
+| **插件** | 路由特定处理，例如请求控制、记忆、检索或响应处理。 |
+| **算法** | 用于选择或协调候选模型的方法。 |
+| **提供方模型** | 可供一个或多个配方使用的物理推理端点。 |
 
-- 成本更优（简单任务用小模型）
-- 质量更好（强项任务用专用模型）
-- 内置安全（越狱检测、PII 过滤等）
-- 灵活可扩展（投影 + 插件架构）
+这种分离很重要。检测可以跨策略复用，策略可以在不重写模型选择的情况下变更，物理池也可以演进而不改变公开入口。
 
-## 工作流程
+## 请求生命周期
 
-### 1. 信号提取
+1. 客户端使用 OpenAI Chat Completions、OpenAI Responses 或 Anthropic Messages 发送请求。
+2. Envoy 把请求交给 Router。
+3. 请求的模型解析为入口及其配方。
+4. Router 提取相关信号并计算投影。
+5. 决策强制约束并选出合格候选集。
+6. 路由的算法选择一个模型，或执行有界的多模型策略。
+7. 路由插件在已配置的请求、执行或响应钩子处运行。
+8. Envoy 把提供方形态的请求发送到所选后端，并返回规范化响应。
 
-路由器从每次请求中提取 **16 类维护中的信号族**：
+运维人员若希望直接选择，仍可暴露显式物理模型名。这些请求会直通，不经过配方信号、决策、路由插件、缓存、学习或会话路由。当客户端应选择目标、由 Router 负责物理路由时，虚拟模型名更有用。若所选配方内没有决策匹配，则使用已配置的默认提供方模型。
 
-| 信号族分组 | 族 | 示例作用 |
-| ---------- | -- | -------- |
-| **启发式** | `authz`、`context`、`keyword`、`language`、`structure` | 低成本策略、请求形态与区域门禁 |
-| **学习型** | `complexity`、`domain`、`embedding`、`kb`、`modality`、`fact-check`、`jailbreak`、`pii`、`preference`、`reask`、`user-feedback` | 语义、安全与响应质量理解 |
+## 协议与部署边界
 
-### 2. 投影协调
+Semantic Router 可以位于直接的 Envoy listener 之后，也可以与 Kubernetes 网关和推理平台部署集成。同一路由模型适用于本地 Docker、Kubernetes 和混合环境，但模型供给和容量管理仍由所选后端平台负责。
 
-投影将原始信号匹配协调为可复用的路由事实：
+Router 可以考虑请求语义和已配置的运行时观测；它不替代后端调度器。因此，一次部署可以用 Semantic Router 选择模型类别，再用另一个组件选择该模型的健康副本。
 
-```yaml
-routing:
-  projections:
-    partitions:
-      - name: support_intents
-        semantics: exclusive
-        members: [technical_support, account_management]
-        default: technical_support
-    scores:
-      - name: request_difficulty
-        method: weighted_sum
-        inputs:
-          - type: complexity
-            name: hard
-            weight: 0.4
-    mappings:
-      - name: difficulty_band
-        source: request_difficulty
-        method: threshold_bands
-        outputs:
-          - name: balance_reasoning
-            gte: 0.6
-```
-
-### 3. 决策
-
-信号与投影输出通过逻辑规则组合，形成路由决策：
-
-```yaml
-decisions:
-  - name: math_routing
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "mathematics"
-        - type: "projection"
-          name: "balance_reasoning"
-    modelRefs:
-      - model: qwen-math
-        weight: 1.0
-```
-
-**含义**：若查询被归类为数学**且**投影层标记为偏重推理，则路由到数学模型。
-
-### 4. 模型选择
-
-根据决策选择最合适的模型：
-
-- **数学查询** → 数学专用模型（如 Qwen-Math）
-- **代码查询** → 代码专用模型（如 DeepSeek-Coder）
-- **创意查询** → 创意向模型（如 Claude）
-- **简单查询** → 轻量模型（如 Llama-3-8B）
-
-### 5. 插件链
-
-在模型执行前后，插件处理请求/响应：
-
-```yaml
-routing:
-  decisions:
-    - name: "guarded-route"
-      plugins:
-        - type: "response_cache" # 先查缓存
-        - type: "response_jailbreak" # 响应侧风险筛查
-        - type: "system_prompt" # 添加上下文
-        - type: "hallucination" # 事实核验
-```
-
-## 关键概念
-
-### 模型混合（Mixture of Models, MoM）
-
-与在**单个模型内部**工作的 Mixture of Experts（MoE）不同，MoM 在**系统层面**运作：
-
-| 方面 | Mixture of Experts（MoE） | Mixture of Models（MoM） |
-| ---- | ------------------------- | ------------------------ |
-| **范围** | 单模型内部 | 跨多个模型 |
-| **路由** | 内部门控网络 | 外部语义路由器 |
-| **模型** | 共享架构 | 彼此独立 |
-| **灵活性** | 训练时固定 | 运行时动态 |
-| **场景** | 模型效率 | 系统级智能 |
-
-### 信号驱动决策
-
-传统路由常用简单规则：
-
-```yaml
-# 传统：简单关键词
-if "math" in query: route_to_math_model()
-```
-
-信号驱动路由组合多种信号：
-
-```yaml
-# 信号驱动：多信号组合
-if (has_math_keywords AND is_math_domain) OR has_high_math_embedding: route_to_math_model()
-```
-
-**收益**：
-
-- 路由更准确
-- 更好处理边界情况
-- 能适应上下文
-- 降低误报
-
-## 实例
-
-**用户查询**：「证明根号 2 是无理数」
-
-**信号提取**：
-
-- keyword：["prove", "square root", "irrational"] ✓
-- embedding：与数学查询相似度 0.89 ✓
-- domain："mathematics" ✓
-
-**决策**：路由到 `qwen-math`（数学相关信号一致）
-
-**插件**：response_cache 未命中；response_jailbreak 持续监测输出风险；system_prompt 增加「给出严格数学证明」；hallucination 用于核验
-
-**结果**：由专用数学模型给出高质量证明
+客户端和所选后端不必使用相同的线格式。支持的客户端端点、后端格式和成对转换矩阵见[协议兼容性](../installation/protocol-compatibility)。
 
 ## 下一步
 
-- [什么是集体智能？](collective-intelligence) — 信号如何形成系统智能
-- [什么是信号驱动决策？](signal-driven-decisions) — 深入决策引擎
-- [配置指南](../installation/configuration) — 部署语义路由器
+- [使用场景](use-cases)：实用部署模式。
+- [路由流水线](signal-driven-decisions)：策略分层。
+- [Mixture of Models](mom-model-family)：虚拟模型与多模型执行。
+- [快速开始](/zh-Hans/docs/installation)：运行本地协议栈。

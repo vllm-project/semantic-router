@@ -1,58 +1,90 @@
+---
+title: 文档指南
+translation:
+  source_commit: "f53d10fbf1021f9204e03afe2dd9a3374979e829"
+  source_file: "docs/community/documentation.md"
+  outdated: false
+---
+
 # 文档指南
 
-本指南介绍如何为 vLLM Semantic Router 贡献文档。
+公开文档在 `website/`。写给要理解或运维系统的读者，而不是记录某次改动怎么实现。
 
-## 目录结构
+## 放对位置
 
-文档使用 Docusaurus 构建。
+| 内容 | 位置 |
+|---------|----------|
+| 概念、使用场景和架构 | `website/docs/overview/` |
+| 首次运行、配置、部署和运维 | `website/sidebars.ts` 中对应小节 |
+| 信号、投影、决策、算法和插件 | `website/docs/tutorials/` |
+| 稳定的 HTTP 或 Kubernetes 字段参考 | `website/docs/api/` |
+| 贡献者工作流 | `website/docs/community/` 或仓库内权威贡献文档 |
 
-- `website/docs/`：主要英文文档（Markdown）。
-- `website/i18n/`：本地化文档（例如 `zh-Hans` 代表中文）。
-- `website/docusaurus.config.ts`：站点配置。
-- `website/sidebars.ts`：侧边栏导航。
+不要为代码已拥有的生成 schema、配置清单或命令再造一份真相源。链到权威参考，或更新它的生成器。
 
-## 编辑文档
+## 按任务写
 
-1. **定位文件：** 在 `website/docs/` 中找到 Markdown 文件。
-2. **进行更改：** 使用 Markdown 语法编辑内容。
-3. **本地预览：**
+能力页应按这个顺序回答：
 
-   ```bash
-   cd website
-   npm run start
-   ```
+1. 解决什么问题？
+2. 读者何时该用它？
+3. 最小可用配置或命令是什么？
+4. 重要限制、安全含义和依赖是什么？
 
-4. **验证链接：** 确保所有相对链接正确。
-5. **语法检查：** 运行 `make markdown-lint` 进行语法检查。
+宁可用一个真实例子，也不要堆几个几乎重复的例子。不要把本地终端记录、一次性测试输出、未限定条件的基准数字或实现记分卡贴进长期用户文档。
 
-## 国际化 (i18n)
+标题用句式大小写，代码块标明语言，其他文档页用相对链接。网站图片放在 `website/static/img/`。
 
-我们支持多种语言（如英语、中文）。默认语言为英语。
+## 预览和校验
 
-### 添加新页面
+```bash
+cd website
+npm ci
+npm run start
+```
 
-1. 在 `website/docs/` 中创建英文文件。
-2. 在 `website/i18n/{locale}/docusaurus-plugin-content-docs/current/` 中创建对应的翻译文件。
-   - 中文示例：`website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/`。
-3. 确保文件名和目录结构完全匹配。
+提交前：
 
-### 添加新语言
+```bash
+cd website
+npm test
+npm run build:en
+```
 
-1. 在 `website/docusaurus.config.ts` 中配置新语言环境 (locale)。
-2. 运行 `npm run write-translations -- --locale <new-locale>` 生成 JSON 翻译文件。
-3. 将 `docs` 目录结构复制到 `website/i18n/<new-locale>/...` 并翻译 Markdown 文件。
+从仓库根目录跑与 CI 相同的变更文件路径：
 
-### 更新翻译
+```bash
+make check BASE_REF=origin/main
+```
 
-更新英文文档时，请尽可能同时更新中文翻译。如果你无法翻译，请开启 Issue 寻求帮助。
+构建会把内部断链当错误。对流程重要的外部链接也要检查，尤其是下载、图表和上游带版本的指南。
 
-### 利用 LLM 加速翻译流程
+## 生成参考
 
-你可以参考我们的 [AI 自动翻译指南](./translation-guide) 来使用 LLM 进行辅助翻译。该指南包含了推荐的 Prompt 和术语表，能显著提高翻译效率和一致性。
+配置目录由 `config/fragments/` 以及对应能力指南 **概览** 的第一句派生。从仓库根目录重新生成并检查：
 
-## 风格指南
+```bash
+make docs-config
+make docs-config-check
+```
 
-- **标题：** 使用句首大写（Sentence case）。
-- **代码块：** 指定语言（例如 \`\`\`bash）。
-- **链接：** 内部链接使用相对路径。
-- **图片：** 将图片放置在 `website/static/img/` 并使用 `/img/...` 引用。
+Operator 字段参考由当前 Go API 类型生成：
+
+```bash
+make docs-crd
+make docs-crd-check
+```
+
+改源 fragment、能力指南或 Operator API 注释，不要手改生成块。
+
+## 本地化
+
+英文源页在 `website/docs/`。中文译文在：
+
+```text
+website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/
+```
+
+译文路径要和英文源路径对齐。若同一 pull request 无法更新译文，就删掉当前版 override，让 Docusaurus 提供当前英文页。历史 `version-v*` 译文保持不动。`make docs-check-translations` 把这种回退当作覆盖信息，但仍会因过期或无效 override 失败。
+
+新增语言时，把它加到 `website/docusaurus.config.ts`，用 `npm run write-translations -- --locale <locale>` 生成语言目录，并校验该语言构建。

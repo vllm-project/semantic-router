@@ -2,12 +2,16 @@
 
 // Core modules
 pub mod config_loader;
+pub mod device;
 pub mod similarity;
 pub mod tokenization;
+pub mod tokenization_window;
 pub mod unified_error;
 
 // Re-export main similarity functionality for backward compatibility
 pub use similarity::{normalize_l2, BertSimilarity};
+
+pub use device::{drain_loader_queue, resolve_device, run_on_inference_pool};
 
 // Re-export unified configuration loader
 pub use config_loader::{
@@ -39,3 +43,6 @@ pub mod similarity_test;
 pub mod tokenization_test;
 #[cfg(test)]
 pub mod unified_error_test;
+
+pub mod sequence_windows;
+pub mod token_windows;

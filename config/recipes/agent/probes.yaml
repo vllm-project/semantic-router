@@ -7,7 +7,14 @@ description: >
 routing_assets:
   yaml: config/recipes/agent/config.yaml
   dsl: config/recipes/agent/recipe.dsl
-router_eval_endpoint: /api/v1/eval
+fixtures:
+  images:
+    routing_pixel:
+      description: Minimal PNG fixture used to exercise image-bearing request routing.
+      media_type: image/png
+      sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
+      data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
+router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 4
@@ -37,6 +44,24 @@ coverage:
     tools: 100.0
     multi_turn: 100.0
 decisions:
+  - id: omni
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    expected_plugins: [router_replay]
+    variants:
+      - id: image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Inspect the attached image and summarize the visible information.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [agent_has_images]
+        tags: [language:en, multimodal, image, shape:messages]
+
   - id: local_security_containment
     expected_decision: local_security_containment
     expected_algorithm: static
@@ -71,6 +96,19 @@ decisions:
         query: Review the customer record for Ada Lovelace at ada@example.com and +1-415-555-0134.
         tags: [privacy, pii-only, negative:privacy-directive]
 
+      - id: email_with_allowed_city
+        query: "Contact entry in Oslo: morgan.lee@example.org."
+        notes: Fictional contact fixture using a reserved example domain.
+        expected_signals:
+          pii: [pii_strict]
+        tags: [privacy, pii-only, signal:pii, language:en]
+      - id: street_with_allowed_city
+        query: "Delivery address: 482 Cedar Lane, Portland."
+        notes: Invented street address for a synthetic contact fixture.
+        expected_signals:
+          pii: [pii_strict]
+        tags: [privacy, pii-only, signal:pii, language:en]
+
   - id: simple_math_fast_path
     expected_decision: simple_math_fast_path
     expected_algorithm: static
@@ -96,6 +134,11 @@ decisions:
       - id: clinical_risk
         query: Explain the clinical risk factors for pulmonary embolism and when urgent care is needed.
         tags: [domain:health, specialist]
+      - id: legal_over_code_marker
+        query: Analyze the indemnity and limitation-of-liability clauses in this contract before we implement the changes it requires.
+        expected_signals:
+          keywords: [code_request_markers]
+        tags: [domain:law, collision, priority]
 
   - id: domain_code_complex
     expected_decision: domain_code_complex
@@ -206,3 +249,17 @@ decisions:
       - id: multilingual_unmatched
         query: Responde de forma normal a esta solicitud cotidiana.
         tags: [fallback, language:es]
+
+  - id: public_geography
+    expected_decision: simple_general
+    expected_algorithm: static
+    expected_alias: qwen/qwen3.6-rocm
+    forbidden_signals:
+      pii: [pii_strict]
+    variants:
+      - id: public_country_geography
+        query: "Answer briefly: what is the capital of Spain?"
+        tags: [general, simple, class:negative, signal:pii, language:en]
+      - id: public_city_geography
+        query: "Answer briefly: which country is Oslo in?"
+        tags: [general, simple, class:negative, signal:pii, language:en]

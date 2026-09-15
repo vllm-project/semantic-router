@@ -1,0 +1,37 @@
+package classification
+
+import (
+	"context"
+	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+)
+
+func TestEmbeddingClassifierPassesTargetLayerToBackend(t *testing.T) {
+	capturedLayer := 0
+	originalFunc := getEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
+		capturedLayer = targetLayer
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+	}
+	t.Cleanup(func() {
+		getEmbedding2DMatryoshka = originalFunc
+	})
+
+	classifier, err := NewEmbeddingClassifier(nil, config.HNSWConfig{
+		ModelType:       "mmbert",
+		TargetLayer:     6,
+		TargetDimension: 256,
+	})
+	if err != nil {
+		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
+	}
+
+	if _, err := classifier.computeEmbedding(context.Background(), "query", "mmbert"); err != nil {
+		t.Fatalf("computeEmbedding failed: %v", err)
+	}
+	if capturedLayer != 6 {
+		t.Fatalf("backend received target layer %d, want 6", capturedLayer)
+	}
+}

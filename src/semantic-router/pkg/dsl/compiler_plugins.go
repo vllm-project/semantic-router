@@ -58,6 +58,14 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 	if v, ok := getFloat32Field(fields, "min_confidence_threshold"); ok {
 		cfg.MinConfidenceThreshold = &v
 	}
+	if raw, exists := fields["rerank"]; exists {
+		if obj, ok := raw.(ObjectValue); ok {
+			cfg.Rerank = &config.RAGRerankConfig{}
+			compilePluginFields(c, obj.Fields, cfg.Rerank)
+		} else {
+			c.addError(Position{}, "rag rerank must be an object")
+		}
+	}
 	cfg.BackendConfig = c.compileRAGBackendConfig(fields)
 	return cfg
 }
@@ -91,6 +99,9 @@ func (c *Compiler) compileToolsPlugin(fields map[string]Value) config.ToolsPlugi
 	}
 	if values, ok := getStringArrayField(fields, "block_tools"); ok {
 		cfg.BlockTools = values
+	}
+	if v, ok := getBoolField(fields, "strip_tool_history"); ok {
+		cfg.StripToolHistory = v
 	}
 	if v, ok := getStringField(fields, "strategy"); ok {
 		cfg.Strategy = v

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  decisionRulesForSave,
-  mergeDecisionForSave,
-  type DecisionConfig,
-} from './configPageSupport'
+import { decisionRulesForSave } from './configPageDecisionFormSupport'
+import { mergeDecisionForSave, type DecisionConfig } from './configPageSupport'
 
 describe('decision editor preservation', () => {
   it('preserves prompt algorithms and non-form fields during edits', () => {
@@ -69,12 +66,20 @@ describe('decision editor preservation', () => {
       ],
     }
 
-    const result = decisionRulesForSave(existing, {
-      operator: 'AND',
-      conditions: [{ type: 'keyword', name: 'flattened' }],
-    })
+    const result = decisionRulesForSave(existing)
 
-    expect(result).toEqual(existing)
+    expect(result.operator).toBe(existing.operator)
+    expect(result.conditions).toEqual(existing.conditions)
     expect(result).not.toBe(existing)
+  })
+
+  it('rejects a root unknown policy combined with a classifier on_error policy', () => {
+    expect(() =>
+      decisionRulesForSave({
+        operator: 'AND',
+        on_unknown: 'fail_request',
+        conditions: [{ type: 'classifier', name: 'risk', on_error: 'match' }],
+      }),
+    ).toThrow(/cannot be combined/)
   })
 })

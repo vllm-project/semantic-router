@@ -1,0 +1,10 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": [{"role": "user", "content": "Sample deterministically."}],
+    "seed": 7,
+    "frequency_penalty": 0.25,
+    "presence_penalty": -0.25
+  }
+}

@@ -65,6 +65,7 @@ describe('ConfigPageRouterStructuredEditor', () => {
           base_url: 'https://embedding.example.com/v1',
           model: 'text-embedding-3-small',
           api_key_env: 'OPENAI_API_KEY',
+          max_response_bytes: 16777216,
           dimensions: 1536,
         }}
         onChange={vi.fn()}
@@ -74,6 +75,7 @@ describe('ConfigPageRouterStructuredEditor', () => {
     expect(markup).toContain('Base URL')
     expect(markup).toContain('text-embedding-3-small')
     expect(markup).toContain('OPENAI_API_KEY')
+    expect(markup).toContain('Max Response Bytes')
     expect(markup).not.toContain('<textarea')
   })
 })

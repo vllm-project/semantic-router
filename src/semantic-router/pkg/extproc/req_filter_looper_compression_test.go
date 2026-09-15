@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestHandleLooperInternalRequestWithPluginsCompressesWorkingBody(t *testing.T) {
@@ -39,16 +40,16 @@ func TestHandleLooperInternalRequestWithPluginsCompressesWorkingBody(t *testing.
 	largeTool := strings.Repeat("irrelevant inventory ", 300) +
 		"authentication validator failed " +
 		strings.Repeat("irrelevant billing ", 300)
-	body := []byte(`{"model":"panel-a","messages":[` +
-		`{"role":"user","content":"fix authentication validator"},` +
-		`{"role":"tool","tool_call_id":"call_1","content":` + mustJSONString(t, largeTool) + `}]}`)
+	request := semanticCompressionRequest(largeTool)
+	request.Model = "panel-a"
 	ctx := &RequestContext{
 		LooperRequest:       true,
 		VSRSelectedDecision: &router.Config.Decisions[0],
+		SourceFormat:        llmprotocol.OpenAIChatV1,
+		SemanticRequest:     request,
 		Headers: map[string]string{
 			headers.VSRLooperDecision: "fusion_compressed",
 		},
-		OriginalRequestBody: body,
 	}
 
 	response, err := router.handleLooperInternalRequestWithPlugins("panel-a", ctx)

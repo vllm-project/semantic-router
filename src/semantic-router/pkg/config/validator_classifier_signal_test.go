@@ -89,6 +89,41 @@ func TestValidateClassifierSignalContractsRejectsInvalidEndpoint(t *testing.T) {
 	}
 }
 
+func TestValidateClassifierSignalContractsRejectsNonJSONParser(t *testing.T) {
+	for _, tc := range []struct {
+		parserType string
+		wantErr    bool
+	}{
+		{parserType: "", wantErr: false},
+		{parserType: "json", wantErr: false},
+		{parserType: "simple", wantErr: true},
+		{parserType: "qwen3guard", wantErr: true},
+	} {
+		cfg := &RouterConfig{
+			ExternalModels: []ExternalModelConfig{{
+				Name:          "judge",
+				ModelRole:     ModelRoleClassification,
+				ModelName:     "judge-model",
+				ParserType:    tc.parserType,
+				ModelEndpoint: ClassifierVLLMEndpoint{Address: "judge", Port: 8000},
+			}},
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+					Name:         "risk",
+					Type:         "llm",
+					Model:        "judge",
+					Labels:       []string{"SAFE", "RISKY"},
+					Instructions: "Classify.",
+				}}},
+			},
+		}
+		err := validateClassifierSignalContracts(cfg)
+		if (err != nil) != tc.wantErr {
+			t.Fatalf("parser_type %q: error = %v, wantErr %v", tc.parserType, err, tc.wantErr)
+		}
+	}
+}
+
 func TestValidateClassifierSignalContractsRejectsCaseCollidingNames(t *testing.T) {
 	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
 		Signals: Signals{ClassifierRules: []ClassifierSignalRule{
@@ -195,7 +230,7 @@ func TestPromptAlgorithmRejectsEffectiveLoRAIdentityCollision(t *testing.T) {
 	}
 }
 
-func TestValidateLocalClassifierReloadRequiresRestartForChanges(t *testing.T) {
+func TestValidateLocalClassifierReloadAllowsPreparedGenerationChanges(t *testing.T) {
 	current := &RouterConfig{IntelligentRouting: IntelligentRouting{
 		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
 			Name:      "risk",
@@ -224,18 +259,18 @@ func TestValidateLocalClassifierReloadRequiresRestartForChanges(t *testing.T) {
 	if err := ValidateLocalClassifierReload(current, same); err != nil {
 		t.Fatalf("same runtime contract rejected: %v", err)
 	}
-	if err := ValidateLocalClassifierReload(current, changed); err == nil {
-		t.Fatal("expected restart-required error for local classifier change")
+	if err := ValidateLocalClassifierReload(current, changed); err != nil {
+		t.Fatalf("candidate model change rejected: %v", err)
 	}
-	if err := ValidateLocalClassifierReload(&RouterConfig{}, current); err == nil {
-		t.Fatal("expected restart-required error when adding a local classifier")
+	if err := ValidateLocalClassifierReload(&RouterConfig{}, current); err != nil {
+		t.Fatalf("candidate classifier addition rejected: %v", err)
 	}
-	if err := ValidateLocalClassifierReload(current, &RouterConfig{}); err == nil {
-		t.Fatal("expected restart-required error when removing a local classifier")
+	if err := ValidateLocalClassifierReload(current, &RouterConfig{}); err != nil {
+		t.Fatalf("candidate classifier removal rejected: %v", err)
 	}
 }
 
-func TestRecipeLocalClassifiersShareOneRuntimeSignature(t *testing.T) {
+func TestRecipeLocalClassifiersHaveIndependentRuntimeSignatures(t *testing.T) {
 	rule := func(path string) ClassifierSignalRule {
 		return ClassifierSignalRule{
 			Name:      "risk",
@@ -263,8 +298,8 @@ func TestRecipeLocalClassifiersShareOneRuntimeSignature(t *testing.T) {
 	}
 
 	cfg.Recipes[1].Profile.Signals.ClassifierRules[0].ModelPath = "models/other-risk"
-	if err := validateGlobalClassifierRuntimeContracts(cfg); err == nil {
-		t.Fatal("expected incompatible recipe-local classifier error")
+	if err := validateGlobalClassifierRuntimeContracts(cfg); err != nil {
+		t.Fatalf("independent recipe models rejected: %v", err)
 	}
 }
 

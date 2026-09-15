@@ -1,0 +1,8 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "max_output_tokens": 0,
+    "input": "hello"
+  }
+}

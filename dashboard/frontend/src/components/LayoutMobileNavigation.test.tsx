@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import LayoutMobileNavigation from './LayoutMobileNavigation'
-import { BUILD_MENU_CATEGORIES } from './LayoutNavSupport'
+import { BUILD_MENU_CATEGORIES, OPERATE_MENU_CATEGORIES } from './LayoutNavSupport'
 
 describe('LayoutMobileNavigation contract', () => {
   it('keeps the active child and its workflow parent visible in the mobile hierarchy', () => {
@@ -19,7 +19,6 @@ describe('LayoutMobileNavigation contract', () => {
           openSection: 'build',
           pathname: '/config/models',
           sections: [{ key: 'build', label: 'Build', categories: BUILD_MENU_CATEGORIES }],
-          onConfigSelect: vi.fn(),
           onNavigate: vi.fn(),
           onSectionToggle: vi.fn(),
         }),
@@ -33,7 +32,8 @@ describe('LayoutMobileNavigation contract', () => {
     expect(markup).toContain('Current')
     expect(markup).toContain('data-mobile-nav-control="true"')
     expect(markup).toContain('Routing')
-    expect(markup).toContain('Integrations &amp; Policy')
+    expect(markup).toContain('Integrations')
+    expect(markup).toContain('href="/config/models"')
   })
 
   it('supports roving keyboard focus and returns focus when dismissed', () => {
@@ -57,16 +57,35 @@ describe('LayoutMobileNavigation contract', () => {
           pathname: '/dashboard',
           sections: [
             { key: 'build', label: 'Build', categories: [] },
-            { key: 'operate', label: 'Operate', categories: BUILD_MENU_CATEGORIES },
+            { key: 'operate', label: 'System', categories: BUILD_MENU_CATEGORIES },
           ],
-          onConfigSelect: vi.fn(),
           onNavigate: vi.fn(),
           onSectionToggle: vi.fn(),
         }),
       ),
     )
 
-    expect(markup).not.toContain('>Build<')
-    expect(markup).toContain('>Operate<')
+    expect(markup).not.toContain('Build</span>')
+    expect(markup).toContain('System</span>')
+  })
+
+  it('keeps the Router API documentation link outside SPA routing on mobile', () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/dashboard'] },
+        createElement(LayoutMobileNavigation, {
+          isConfigPage: false,
+          openSection: 'operate',
+          pathname: '/dashboard',
+          sections: [{ key: 'operate', label: 'System', categories: OPERATE_MENU_CATEGORIES }],
+          onNavigate: vi.fn(),
+          onSectionToggle: vi.fn(),
+        }),
+      ),
+    )
+
+    expect(markup).toContain('href="/api/router/docs"')
+    expect(markup).toContain('target="_blank"')
   })
 })

@@ -63,7 +63,7 @@ func (r *OpenAIRouter) observeRouterLearningProviderStatus(ctx *RequestContext, 
 	if statusCode != 429 && statusCode < 500 {
 		return
 	}
-	if !r.shouldObserveRouterLearningTelemetry(ctx) {
+	if !r.shouldObserveRouterLearningProviderFailure(ctx) {
 		return
 	}
 	r.routerLearningRuntimeState().recordModelTelemetry(
@@ -72,6 +72,23 @@ func (r *OpenAIRouter) observeRouterLearningProviderStatus(ctx *RequestContext, 
 		ctx.RequestModel,
 		routerLearningTelemetryObservation{ProviderFailureObserved: true},
 	)
+}
+
+func (r *OpenAIRouter) shouldObserveRouterLearningProviderFailure(ctx *RequestContext) bool {
+	if r.shouldObserveRouterLearningTelemetry(ctx) {
+		return true
+	}
+	// Reliability observations also serve protection-only rescue. Keep usage
+	// telemetry and adaptive model-choice updates behind their existing gate.
+	if r == nil || r.Config == nil || ctx == nil || ctx.RequestModel == "" || !r.Config.RouterLearning.Enabled {
+		return false
+	}
+	cfg := r.Config.RouterLearning.Protection
+	if !cfg.EffectiveEnabled() || protectionMode(ctx) == config.DecisionAdaptationModeBypass {
+		return false
+	}
+	_, identityOK := r.protectionIdentity(ctx, cfg)
+	return identityOK
 }
 
 func (r *OpenAIRouter) shouldObserveRouterLearningTelemetry(ctx *RequestContext) bool {
@@ -108,8 +125,8 @@ func (rt *routerLearningRuntime) recordModelTelemetry(
 	if rt == nil || model == "" {
 		return
 	}
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
 	rt.recordModelTelemetryLocked(decisionName, decisionTier, model, observation)
 	if decisionName != "" {
 		rt.recordModelTelemetryLocked("", decisionTier, model, observation)
@@ -126,13 +143,13 @@ func (rt *routerLearningRuntime) recordModelTelemetryLocked(
 	observation routerLearningTelemetryObservation,
 ) {
 	key := modelExperienceKey(decisionName, decisionTier, model)
-	exp := rt.experience[key]
+	exp := rt.shared.experience[key]
 	if exp == nil {
 		exp = &routerLearningModelExperience{
 			QualitySeed: 0.5,
 			SeedWeight:  2,
 		}
-		rt.experience[key] = exp
+		rt.shared.experience[key] = exp
 	}
 	if observation.LatencyObserved {
 		exp.LatencyEWMA = updateRouterLearningEWMA(exp.LatencyEWMA, observation.LatencySeconds)

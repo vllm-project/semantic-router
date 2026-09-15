@@ -15,12 +15,12 @@ on:
       issue_limit:
         description: Maximum open issues to fetch
         required: false
-        default: "100"
+        default: "500"
         type: string
       pr_limit:
         description: Maximum open pull requests to fetch
         required: false
-        default: "50"
+        default: "300"
         type: string
 
 permissions:

@@ -19,6 +19,7 @@ const (
 	WorkflowStateBackendFile   = "file"
 	WorkflowStateBackendRedis  = "redis"
 
+	DefaultWorkflowMaxParallel     = 2
 	DefaultWorkflowStateTTLSeconds = 1800
 )
 
@@ -62,6 +63,8 @@ type WorkflowFinalConfig struct {
 }
 
 type WorkflowPlannerConfig struct {
+	// Model overrides the planner; when absent, the first assigned worker
+	// eligible for the actual planner-stage request is used.
 	Model               string `yaml:"model,omitempty" json:"model,omitempty"`
 	MaxCompletionTokens int    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
 }
@@ -219,9 +222,6 @@ func validateWorkflowModeAndPlan(cfg *WorkflowsAlgorithmConfig) error {
 	default:
 		return fmt.Errorf("mode must be %q or %q, got %q", WorkflowModeStatic, WorkflowModeDynamic, cfg.Mode)
 	}
-	if mode == WorkflowModeDynamic && strings.TrimSpace(cfg.Planner.Model) == "" {
-		return fmt.Errorf("planner.model is required when mode=dynamic")
-	}
 	return validateWorkflowStaticPlanConfig(mode, cfg)
 }
 
@@ -240,6 +240,17 @@ func validateWorkflowPositiveControls(cfg *WorkflowsAlgorithmConfig) error {
 	}
 	if cfg.MinSuccessfulResponses < 0 {
 		return fmt.Errorf("min_successful_responses must be >= 1 when set")
+	}
+	maxParallel := cfg.MaxParallel
+	if maxParallel == 0 {
+		maxParallel = DefaultWorkflowMaxParallel
+	}
+	if cfg.MinSuccessfulResponses > maxParallel {
+		return fmt.Errorf(
+			"min_successful_responses=%d exceeds max_parallel=%d",
+			cfg.MinSuccessfulResponses,
+			maxParallel,
+		)
 	}
 	if cfg.Planner.MaxCompletionTokens < 0 {
 		return fmt.Errorf("planner.max_completion_tokens must be >= 1 when set")
@@ -263,6 +274,14 @@ func validateWorkflowStaticPlanConfig(mode string, cfg *WorkflowsAlgorithmConfig
 	for i, role := range cfg.Roles {
 		if err := validateWorkflowRoleConfig(i, role); err != nil {
 			return err
+		}
+		if cfg.MinSuccessfulResponses > len(role.Models) {
+			return fmt.Errorf(
+				"min_successful_responses=%d exceeds roles[%d] model count %d",
+				cfg.MinSuccessfulResponses,
+				i,
+				len(role.Models),
+			)
 		}
 	}
 	return nil

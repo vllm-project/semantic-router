@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
+import ProductLoadingState from '../components/ProductLoadingState'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -119,12 +120,12 @@ export default function InsightsPage() {
     try {
       const [listResponse, aggregateResponse] = await Promise.all([
         fetchAbortableInsightsJSON<InsightsListResponse>(
-          `/api/router/v1/router_replay${listQuery}`,
+          `/api/router/api/v1/observability/replays${listQuery}`,
           'insight records',
           abortController.signal,
         ),
         fetchAbortableInsightsJSON<InsightsAggregateResponse>(
-          `/api/router/v1/router_replay/aggregate${aggregateQuery}`,
+          `/api/router/api/v1/observability/replays/aggregate${aggregateQuery}`,
           'insight aggregates',
           abortController.signal,
         ),
@@ -243,12 +244,7 @@ export default function InsightsPage() {
   )
 
   if (loading && !hasReplayData && records.length === 0) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner} />
-        <p>Loading insight records...</p>
-      </div>
-    )
+    return <ProductLoadingState label="Loading insights" />
   }
 
   return (
@@ -256,15 +252,6 @@ export default function InsightsPage() {
       eyebrow="Insights"
       title="Insights"
       description="See what the router picked, what signals fired, and how much it saved."
-      configArea="Analysis"
-      scope="Filtered replay intelligence"
-      panelTitle="Semantic Router Insights"
-      panelDescription="Decisions, model picks, token usage, and savings in one view."
-      pills={[
-        { label: 'Cost Savings', active: true },
-        { label: 'Selections' },
-        { label: 'Signals' },
-      ]}
     >
       {error ? (
         <div className={styles.error}>
@@ -380,16 +367,14 @@ export default function InsightsPage() {
                     router.
                   </p>
                   <p className={styles.emptySubtext}>
-                    Enable `global.services.router_replay.enabled`, or override a specific decision
-                    with `router_replay.enabled: true`. Use `enabled: false` on a decision only when
-                    you need to turn replay off for that route.
+                    If capture is intended, check the global and decision replay settings together
+                    with the recipe's privacy policy.
                   </p>
                 </div>
               ) : error ? (
                 <div className={styles.emptyHint}>
                   <p>
-                    Unable to load insights. If replay is disabled, enable router replay globally or
-                    on the affected decision, then send traffic through the router.
+                    Unable to load insights. Check the Router connection and replay configuration.
                   </p>
                   <pre className={styles.configHint}>{`global:
   services:
@@ -405,17 +390,26 @@ routing:
           configuration:
             enabled: false  # optional per-decision opt-out`}</pre>
                   <p className={styles.emptySubtext}>
-                    Then restart the router and send some requests.
+                    Apply capture settings only where the recipe's privacy policy permits them.
                   </p>
                 </div>
               ) : (
                 <div className={styles.emptyHint}>
-                  <p>Insights records will appear here once requests are processed.</p>
+                  <p>No replay records are available for this view.</p>
                   <p className={styles.emptySubtext}>
-                    Send chat completion traffic through the router to populate this view.
+                    Check the filters, capture settings, and whether requests have reached the
+                    router.
                   </p>
                 </div>
               )}
+              <p className={styles.emptySubtext}>
+                A recipe with <code>routing.data_policy.replay: false</code> produces no replay
+                records, even when global or decision capture is enabled. See{' '}
+                <a href="https://vllm-sr.ai/docs/api/router#router-replay">
+                  Replay privacy controls
+                </a>
+                .
+              </p>
             </div>
           ) : (
             <DataTable

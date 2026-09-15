@@ -39,6 +39,22 @@ func TestParseStreamingUsage_ExtractsFinalUsageChunk(t *testing.T) {
 	}
 }
 
+func TestParseStreamingUsage_AcceptsDataWithoutSpace(t *testing.T) {
+	body := "data:{\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\r\n" +
+		"data:{\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":4,\"total_tokens\":11}}\r\n" +
+		"data:[DONE]\r\n"
+
+	want := TokenUsage{PromptTokens: 7, CompletionTokens: 4, TotalTokens: 11}
+	if got := parseStreamingUsage([]byte(body)); got != want {
+		t.Fatalf("parseStreamingUsage() = %+v, want %+v", got, want)
+	}
+
+	content, _, chunks := parseSSEContent([]byte(body))
+	if content != "hi" || len(chunks) != 3 || chunks[2] != "[DONE]" {
+		t.Fatalf("parseSSEContent() = content %q chunks %v, want no-space data fields parsed", content, chunks)
+	}
+}
+
 func TestParseStreamingUsage_NoUsageChunkReturnsZero(t *testing.T) {
 	body := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
 		"data: [DONE]\n"
@@ -60,9 +76,10 @@ func TestParseStreamingUsage_IgnoresNullUsageChunks(t *testing.T) {
 
 func TestParseStreamingResponse_PopulatesUsage(t *testing.T) {
 	c := &Client{}
-	body := []byte("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
-		"data: {\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n" +
-		"data: [DONE]\n")
+	body := []byte("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n\n" +
+		"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n")
 
 	resp, err := c.parseStreamingResponse(body, "model-a")
 	if err != nil {

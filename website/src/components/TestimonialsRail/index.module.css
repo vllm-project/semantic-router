@@ -9,8 +9,6 @@
 
 .header {
   composes: site-section-intro from global;
-  gap: 0.65rem;
-  max-width: 40rem;
   margin-bottom: clamp(1.5rem, 2.5vw, 2.25rem);
 }
 

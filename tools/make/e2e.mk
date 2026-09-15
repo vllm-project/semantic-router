@@ -130,9 +130,9 @@ e2e-help: ## Show help for E2E testing
 	@echo ""
 	@echo "Available Profiles:"
 	@echo "  envoy-ai-gateway - Test the baseline contract through Envoy AI Gateway"
-	@echo "  agentgateway			 - Test Semantic Router with agentgateway gateway controller"
-	@echo "  aibrix           - Test Semantic Router with vLLM AIBrix"F
-	@echo "  dynamo           - Test Semantic Router with Nvidia Dynamo (requires 3+ GPUs)"
+	@echo "  agentgateway     - Test Semantic Router with the agentgateway controller"
+	@echo "  aibrix           - Test Semantic Router with AIBrix"
+	@echo "  dynamo           - Test Semantic Router with NVIDIA Dynamo (requires 3+ GPUs)"
 	@echo "  istio            - Test Semantic Router with Istio service mesh"
 	@echo "  llm-d            - Test Semantic Router with LLM-D"
 	@echo "  production-stack - Test Semantic Router in production-like stack (HA/LB/Obs)"

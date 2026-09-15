@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "043cee97"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/decision/or.md"
   outdated: false
 ---
@@ -9,34 +9,30 @@ translation:
 
 ## 概览
 
-在**多种等价信号匹配**应导向同一路由时使用 `config/fragments/decision/or/`。
-
-`OR` 适用于多个独立信号应得到相同路由结果的情形。
+`OR` 决策在任一子条件匹配时匹配。当几种独立请求类型应共享同一路由结果时使用它。
 
 ## 主要优势
 
-- 避免为同一路由重复写多条决策。
-- 回退或共享策略路由更紧凑。
-- 等价触发显式表达。
-- 一个模型策略可覆盖多个主题或信号时很合适。
+- 避免在多个决策中复制同一路由。
+- 让回退或共享策略路由保持紧凑。
+- 让等价匹配保持显式。
+- 当一种模型策略覆盖多个主题或信号时效果好。
 
 ## 解决什么问题？
 
-没有 `OR` 时，团队常为支持不同匹配条件而复制同一路由逻辑，导致漂移与后续策略变更风险。
+没有 `OR` 时，团队常常为了支持不同匹配条件而多次复制同一路由逻辑。这会造成漂移，也让后续策略变更更危险。
 
-`OR` 将等价触发合并为一条路由。
+`OR` 通过把等价触发器折叠进一条路由来解决这个问题。
 
 ## 何时使用
 
-在以下情况使用 `or/`：
+在以下情况使用 `OR`：
 
-- 两个领域共用同一模型策略
-- 多种信号变体映射到同一回退路由
-- 一个运维插件应对多种独立情况
+- 两个领域共享同一模型策略
+- 多个信号变体映射到一条回退路由
+- 一个运维插件应对多种独立情况运行
 
 ## 配置
-
-源片段：`config/fragments/decision/or/business-or-law.yaml`
 
 ```yaml
 routing:
@@ -56,4 +52,7 @@ routing:
           use_reasoning: false
 ```
 
-当**路由结果相同**但允许多种信号触发时使用 `OR`。
+当路由结果相同，但应允许多个信号触发它时，使用 `OR`。
+
+任一子条件都可以让路由有资格，因此请把每个子条件当作独立路由条件来审计。完整示例见：
+[`config/fragments/decision/or/business-or-law.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/or/business-or-law.yaml)。

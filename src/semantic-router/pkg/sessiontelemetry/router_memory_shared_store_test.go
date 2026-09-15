@@ -1,6 +1,8 @@
 package sessiontelemetry
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -27,6 +29,37 @@ func (f *fakeRouterSessionStateStore) Save(
 
 func (f *fakeRouterSessionStateStore) Close() error { return nil }
 
+type blockingRouterSessionStateStore struct {
+	saveStarted     chan struct{}
+	allowSave       chan struct{}
+	startOnce       sync.Once
+	activeSave      atomic.Bool
+	closeDuringSave atomic.Bool
+	closeCalls      atomic.Int32
+}
+
+func (s *blockingRouterSessionStateStore) Load(string) (RouterSessionSnapshot, bool, error) {
+	return RouterSessionSnapshot{}, false, nil
+}
+
+func (s *blockingRouterSessionStateStore) Save(RouterSessionSnapshot, time.Duration) error {
+	s.activeSave.Store(true)
+	defer s.activeSave.Store(false)
+	s.startOnce.Do(func() {
+		close(s.saveStarted)
+	})
+	<-s.allowSave
+	return nil
+}
+
+func (s *blockingRouterSessionStateStore) Close() error {
+	if s.activeSave.Load() {
+		s.closeDuringSave.Store(true)
+	}
+	s.closeCalls.Add(1)
+	return nil
+}
+
 func TestRouterSessionStateStoreRestoresAfterLocalReset(t *testing.T) {
 	ResetRouterSessionMemoryForTesting()
 	store := &fakeRouterSessionStateStore{}
@@ -52,5 +85,86 @@ func TestRouterSessionStateStoreRestoresAfterLocalReset(t *testing.T) {
 	}
 	if snapshot.CurrentModel != "model-a" {
 		t.Fatalf("restored model = %q", snapshot.CurrentModel)
+	}
+}
+
+func TestPublishedStoreOperationLeaseSurvivesDoubleSwap(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	firstSlot := NewRouterSessionStateStoreSlot(&fakeRouterSessionStateStore{})
+	secondStore := &blockingRouterSessionStateStore{
+		saveStarted: make(chan struct{}),
+		allowSave:   make(chan struct{}),
+	}
+	secondSlot := NewRouterSessionStateStoreSlot(secondStore)
+	thirdSlot := NewRouterSessionStateStoreSlot(&fakeRouterSessionStateStore{})
+	var releaseSave sync.Once
+	t.Cleanup(func() {
+		releaseSave.Do(func() {
+			close(secondStore.allowSave)
+		})
+		PublishRouterSessionStateStore(nil)
+		_ = firstSlot.RetireAndClose()
+		_ = secondSlot.RetireAndClose()
+		_ = thirdSlot.RetireAndClose()
+		ResetRouterSessionMemoryForTesting()
+	})
+
+	// G1 is still active when G1 -> G2 publishes S2. Its next persistence
+	// operation therefore leases S2 and deliberately blocks inside Save.
+	PublishRouterSessionStateStore(firstSlot)
+	PublishRouterSessionStateStore(secondSlot)
+	saveDone := make(chan struct{})
+	go func() {
+		RecordSessionDecision(SessionDecisionParams{
+			SessionID:     "g1-long-stream",
+			SelectedModel: "model-a",
+			Timestamp:     time.Now(),
+		})
+		close(saveDone)
+	}()
+	waitForSignal(t, secondStore.saveStarted, "S2 Save did not start")
+
+	// G2 -> G3 retires S2 even though G2 itself has no request leases. S2's
+	// operation lease must keep Close blocked until the G1 operation returns.
+	PublishRouterSessionStateStore(thirdSlot)
+	retireDone := make(chan error, 1)
+	go func() {
+		retireDone <- secondSlot.RetireAndClose()
+	}()
+	waitForSignal(t, secondSlot.retiredCh, "S2 retirement did not start")
+	if got := secondStore.closeCalls.Load(); got != 0 {
+		t.Fatalf("S2 close calls while Save is leased = %d, want 0", got)
+	}
+	if _, release, acquired := secondSlot.acquire(); acquired {
+		release()
+		t.Fatal("retired S2 accepted a new operation lease")
+	}
+
+	releaseSave.Do(func() {
+		close(secondStore.allowSave)
+	})
+	waitForSignal(t, saveDone, "S2 Save did not finish")
+	select {
+	case err := <-retireDone:
+		if err != nil {
+			t.Fatalf("S2 retirement error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("S2 retirement did not finish")
+	}
+	if got := secondStore.closeCalls.Load(); got != 1 {
+		t.Fatalf("S2 close calls after Save release = %d, want 1", got)
+	}
+	if secondStore.closeDuringSave.Load() {
+		t.Fatal("S2 was closed while its Save operation was still active")
+	}
+}
+
+func waitForSignal(t *testing.T, signal <-chan struct{}, failure string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(time.Second):
+		t.Fatal(failure)
 	}
 }

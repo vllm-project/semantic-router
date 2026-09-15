@@ -15,7 +15,8 @@ spec:
   vllmEndpoints:
     - name: my-llama-model
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
@@ -39,7 +40,7 @@ spec:
     # Embedding models configuration with mmBERT 2D Matryoshka
     embedding_models:
       # Path to mmBERT model (downloads automatically on startup, or run: make download-models)
-      mmbert_model_path: "models/mom-embedding-ultra"
+      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
       use_cpu: true
 
       # HNSW configuration for embedding-based classification
@@ -47,11 +48,9 @@ spec:
         # Use mmBERT model
         model_type: "mmbert"
 
-        # Layer early exit: balance between speed and accuracy
-        # Layer 3: ~7x speedup (good for high-volume, simple queries)
-        # Layer 6: ~3.6x speedup (balanced - recommended for most use cases)
-        # Layer 11: ~2x speedup (higher accuracy)
-        # Layer 22: full model (maximum accuracy)
+        # Lower early-exit layers reduce encoder work but may reduce quality.
+        # Layer 22 uses the full encoder depth. Evaluate the trade-off on
+        # representative deployment data.
         target_layer: 6
 
         # Dimension reduction: lower dimensions = faster similarity search
@@ -86,6 +85,11 @@ spec:
     prompt_guard:
       enabled: true
       threshold: "0.7"
+      # Optional local mmbert32k token scanning; omission uses whole input.
+      # max_sequence_length: 32768
+      # window:
+      #   size: 128
+      #   overlap: 63
 
     # Tools auto-selection
     tools:

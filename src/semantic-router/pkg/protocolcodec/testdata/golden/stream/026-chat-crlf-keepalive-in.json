@@ -1,0 +1,8 @@
+{
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "\ufeff: keepalive\r\n\r\ndata: {\"id\":\"chatcmpl_crlf\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"done\"},\"finish_reason\":null}]}\r\n\r\n",
+    "data: {\"id\":\"chatcmpl_crlf\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\r\n\r\ndata: [DONE]\r\n\r\n"
+  ]
+}

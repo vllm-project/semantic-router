@@ -2,14 +2,17 @@ package extproc
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -80,8 +83,8 @@ func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 // actually happened — or when the request opted into debug headers (#2216).
 // Same-protocol non-debug calls omit them to keep the contract lean.
 func (builder *responseHeaderMutationBuilder) addProtocolMarkers(ctx *RequestContext) {
-	client := normalizeProtocol(ctx.ClientProtocol)
-	upstream := normalizeProtocol(ctx.APIFormat)
+	client := normalizeProtocol(string(ctx.SourceFormat))
+	upstream := normalizeProtocol(string(ctx.TargetFormat))
 	if client == upstream && !debugHeadersRequested(ctx) {
 		return
 	}
@@ -127,7 +130,7 @@ func (builder *responseHeaderMutationBuilder) addJoined(key string, values []str
 	builder.addString(key, strings.Join(values, ","))
 }
 
-// addLossinessWarnings encodes ctx.IRExtensions.Warnings into the
+// addProtocolDiagnostics encodes neutral codec diagnostics into the
 // x-vsr-protocol-warnings header, increments the per-warning Prometheus
 // counter, and emits a structured log event per warning. Returns
 // without emitting anything when warnings is empty.
@@ -137,21 +140,21 @@ func (builder *responseHeaderMutationBuilder) addJoined(key string, values []str
 // structured log) to keep the header short. If the encoded list would
 // exceed lossinessHeaderSizeLimit the builder truncates and appends a
 // synthetic "error;warnings_truncated;count=N" trailer.
-func (builder *responseHeaderMutationBuilder) addLossinessWarnings(
+func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 	ctx *RequestContext,
-	warnings []ir.Warning,
+	diagnostics llmprotocol.Diagnostics,
 ) {
-	if len(warnings) == 0 {
+	if len(diagnostics) == 0 {
 		return
 	}
 
-	inbound := normalizeProtocol(ctx.ClientProtocol)
-	outbound := normalizeProtocol(ctx.APIFormat)
+	inbound := normalizeProtocol(string(ctx.SourceFormat))
+	outbound := normalizeProtocol(string(ctx.TargetFormat))
 
 	var sb strings.Builder
 	truncatedAt := -1
-	for i, w := range warnings {
-		entry := formatLossinessEntry(w)
+	for i, diagnostic := range diagnostics {
+		entry := formatProtocolDiagnostic(diagnostic)
 		separatorLen := 0
 		if sb.Len() > 0 {
 			separatorLen = 1
@@ -164,14 +167,14 @@ func (builder *responseHeaderMutationBuilder) addLossinessWarnings(
 			sb.WriteByte(',')
 		}
 		sb.WriteString(entry)
-		recordWarning(ctx, inbound, outbound, w)
+		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
 	}
 
 	if truncatedAt >= 0 {
 		trailer := fmt.Sprintf("%s;%s;count=%d",
-			ir.WarningSeverityError,
-			ir.ReasonWarningsTruncated,
-			len(warnings)-truncatedAt,
+			llmprotocol.DiagnosticTruncated,
+			"diagnostics_truncated",
+			len(diagnostics)-truncatedAt,
 		)
 		if sb.Len() > 0 {
 			sb.WriteByte(',')
@@ -182,11 +185,11 @@ func (builder *responseHeaderMutationBuilder) addLossinessWarnings(
 	builder.addString(headers.VSRProtocolWarnings, sb.String())
 }
 
-func formatLossinessEntry(w ir.Warning) string {
+func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
 	return fmt.Sprintf("%s;%s;%s",
-		w.Severity,
-		sanitizeWarningField(string(w.Reason)),
-		sanitizeWarningField(w.Field),
+		diagnostic.Action,
+		sanitizeWarningField(diagnostic.Reason),
+		sanitizeWarningField(diagnostic.Field),
 	)
 }
 
@@ -218,16 +221,15 @@ func sanitizeWarningField(field string) string {
 	return sb.String()
 }
 
-func recordWarning(ctx *RequestContext, inbound, outbound string, w ir.Warning) {
-	metrics.RecordTranslationWarning(inbound, outbound, w.Severity.String(), string(w.Reason))
+func recordProtocolDiagnostic(ctx *RequestContext, inbound, outbound string, diagnostic llmprotocol.Diagnostic) {
+	metrics.RecordTranslationWarning(inbound, outbound, string(diagnostic.Action), diagnostic.Reason)
 	logging.ComponentDebugEvent("extproc", "translation_lossy", map[string]interface{}{
 		"request_id":        ctx.RequestID,
 		"inbound_protocol":  inbound,
 		"outbound_protocol": outbound,
-		"field":             w.Field,
-		"reason":            w.Reason,
-		"severity":          w.Severity.String(),
-		"detail":            w.Detail,
+		"field":             diagnostic.Field,
+		"reason":            diagnostic.Reason,
+		"action":            diagnostic.Action,
 	})
 }
 
@@ -235,10 +237,16 @@ func recordWarning(ctx *RequestContext, inbound, outbound string, w ir.Warning) 
 // and metrics, defaulting empty to "openai".
 func normalizeProtocol(value string) string {
 	v := strings.TrimSpace(value)
-	if v == "" {
+	switch llmprotocol.WireFormat(v) {
+	case llmprotocol.AnthropicMessagesV1:
+		return "anthropic"
+	case llmprotocol.OpenAIResponsesV1:
+		return "responses"
+	case llmprotocol.OpenAIChatV1, "":
 		return protocolDefault
+	default:
+		return v
 	}
-	return v
 }
 
 func (builder *responseHeaderMutationBuilder) mutation() *ext_proc.HeaderMutation {
@@ -260,7 +268,7 @@ func buildResponseHeaderMutation(
 
 	// The keystone headers, protocol markers, and protocol warnings ride on
 	// every non-cache-hit response (success or 4xx/5xx). Cache-hit responses
-	// are an exception: the IRExtensions.Warnings slice is per-request, so a
+	// are an exception: protocol diagnostics are request-local, so a
 	// cached response would attribute warnings from a different request — we
 	// skip these headers entirely on cache hits and let the cached payload
 	// flow unchanged.
@@ -272,9 +280,7 @@ func buildResponseHeaderMutation(
 		// Client/upstream protocol markers ride only on cross-protocol responses
 		// (#2206); same-protocol calls omit them.
 		builder.addProtocolMarkers(ctx)
-		if ctx.IRExtensions != nil {
-			builder.addLossinessWarnings(ctx, ctx.IRExtensions.Warnings)
-		}
+		builder.addProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics)
 	}
 
 	if !isSuccessful || ctx.VSRCacheHit {
@@ -329,17 +335,39 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 
 // addFinalDecisionHeaders adds the final routing facts that ride on the default
 // surface of every successful non-cache-hit response: the selected decision and
-// its confidence, the selection algorithm, the selected model, and the replay-id
-// entry point.
+// its confidence, the selection algorithm, the selected model and how long
+// choosing it took, and the replay-id entry point.
 func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName()))
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
-	if ctx.VSRSelectedDecisionName != "" {
+	if ctx.VSRSelectedDecisionName != "" && ctx.VSRSelectedDecisionConfidenceScored {
 		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
 	}
 	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	if ctx.RoutingLatency > 0 {
+		builder.addString(headers.VSRRoutingLatencyMs, formatMilliseconds(ctx.RoutingLatency))
+	}
+	builder.addString(headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
+}
+
+// formatMilliseconds keeps sub-millisecond precision: keyword routing usually
+// finishes well under 1 ms, which whole milliseconds would report as 0.
+func formatMilliseconds(d time.Duration) string {
+	return strconv.FormatFloat(float64(d)/float64(time.Millisecond), 'f', 3, 64)
+}
+
+func appliedUnknownPolicyHeader(ctx *RequestContext) string {
+	if ctx == nil || len(ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies) == 0 {
+		return ""
+	}
+	policies := ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies
+	pairs := make([]string, 0, len(policies))
+	for _, name := range slices.Sorted(maps.Keys(policies)) {
+		pairs = append(pairs, sanitizeWarningField(name)+"="+sanitizeWarningField(policies[name]))
+	}
+	return strings.Join(pairs, ",")
 }
 
 // addDecisionDetailHeaders adds the intermediate decision/classification details
@@ -386,10 +414,12 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
 	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)
 	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
+	builder.addJoined(headers.VSRMatchedSafety, ctx.VSRMatchedSafety)
 	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
 	builder.addJoined(headers.VSRMatchedKB, ctx.VSRMatchedKB)
 	builder.addJoined(headers.VSRMatchedConversation, ctx.VSRMatchedConversation)
 	builder.addJoined(headers.VSRMatchedEvent, ctx.VSRMatchedEvent)
+	builder.addJoined(headers.VSRMatchedInputModality, ctx.VSRMatchedInputModality)
 	builder.addJoined(headers.VSRMatchedProjection, ctx.VSRMatchedProjection)
 }
 

@@ -33,6 +33,7 @@ export const EMBEDDING_MODELS_STRUCTURED_FIELDS: Record<string, RouterStructured
       api_key_env: text('API Key Environment Variable', { placeholder: 'OPENAI_API_KEY' }),
       timeout_seconds: number('Timeout Seconds', { min: 0 }),
       max_retries: number('Max Retries', { min: 0 }),
+      max_response_bytes: number('Max Response Bytes', { min: 0 }),
       dimensions: number('Dimensions', { min: 1 }),
     }),
   },

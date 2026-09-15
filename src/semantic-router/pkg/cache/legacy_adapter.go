@@ -1,12 +1,19 @@
 package cache
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+)
 
 // LegacyBackendAdapter confines the old backend API to one migration boundary.
 // Request paths and management APIs depend on TypedCacheStore instead.
 type LegacyBackendAdapter struct {
-	backend      CacheBackend
-	capabilities BackendCapabilities
+	backend           CacheBackend
+	capabilities      BackendCapabilities
+	embeddingModel    string
+	embeddingProvider embedding.Provider
 }
 
 func NewLegacyBackendAdapter(
@@ -21,8 +28,32 @@ func NewLegacyBackendAdapter(
 	}
 }
 
+func (a *LegacyBackendAdapter) WithEmbeddingModel(model string) *LegacyBackendAdapter {
+	a.embeddingModel = normalizeEmbeddingModel(model)
+	return a
+}
+
+func (a *LegacyBackendAdapter) WithEmbeddingProvider(provider embedding.Provider) *LegacyBackendAdapter {
+	a.embeddingProvider = provider
+	return a
+}
+
+func (a *LegacyBackendAdapter) exceedsEmbeddingWindow(ctx context.Context, query string) bool {
+	provider, ok := a.embeddingProvider.(embedding.WindowProvider)
+	if !ok {
+		return false
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	windows, err := provider.Windows(ctx, query, 0)
+	// A failed tokenizer check cannot establish that a query fits. Exact
+	// cache operations remain independent of this conservative semantic guard.
+	return err != nil || len(windows) > 1
+}
+
 func (a *LegacyBackendAdapter) LookupExact(
-	_ context.Context,
+	ctx context.Context,
 	lookup ExactLookup,
 ) (CacheResult, error) {
 	exact, ok := a.backend.(ExactCacheBackend)
@@ -30,22 +61,27 @@ func (a *LegacyBackendAdapter) LookupExact(
 		return CacheResult{}, ErrUnsupported
 	}
 	result, err := exact.FindExact(
+		ctx,
 		lookup.Identity.Partition.Key(),
 		lookup.Identity.ExactFingerprint,
 	)
 	if err != nil {
 		return CacheResult{}, err
 	}
+	age, ageKnown := resultAge(result)
 	return CacheResult{
 		ResponseBody: result.ResponseBody,
 		Found:        result.Found,
 		HitKind:      HitKindExact,
 		Source:       CacheSourceL2,
 		Similarity:   result.Similarity,
+		Age:          age,
+		AgeKnown:     ageKnown,
+		ExpiresAt:    result.ExpiresAt,
 	}, nil
 }
 
-func (a *LegacyBackendAdapter) StoreExact(_ context.Context, write CacheWrite) error {
+func (a *LegacyBackendAdapter) StoreExact(ctx context.Context, write CacheWrite) error {
 	exact, ok := a.backend.(ExactCacheBackend)
 	if !ok {
 		return ErrUnsupported
@@ -54,6 +90,7 @@ func (a *LegacyBackendAdapter) StoreExact(_ context.Context, write CacheWrite) e
 		return nil
 	}
 	return exact.AddExact(
+		ctx,
 		write.Identity.Partition.Key(),
 		write.Identity.ExactFingerprint,
 		write.ResponseBody,
@@ -62,33 +99,49 @@ func (a *LegacyBackendAdapter) StoreExact(_ context.Context, write CacheWrite) e
 }
 
 func (a *LegacyBackendAdapter) LookupSemantic(
-	_ context.Context,
+	ctx context.Context,
 	lookup SemanticLookup,
 ) (CacheResult, error) {
+	if a.exceedsEmbeddingWindow(ctx, lookup.Identity.SemanticQuery) {
+		return CacheResult{HitKind: HitKindMiss}, nil
+	}
 	result, err := a.backend.LookupSimilarWithThreshold(
-		lookup.Identity.Partition.Key(),
+		ctx,
+		lookup.Identity.SemanticPartitionKey(),
 		lookup.Identity.SemanticQuery,
 		lookup.Threshold,
 	)
 	if err != nil {
 		return CacheResult{}, err
 	}
+	age, ageKnown := resultAge(result)
 	return CacheResult{
 		ResponseBody: result.ResponseBody,
 		Found:        result.Found,
 		HitKind:      HitKindSemantic,
 		Source:       CacheSourceL2,
 		Similarity:   result.Similarity,
+		Age:          age,
+		AgeKnown:     ageKnown,
+		ExpiresAt:    result.ExpiresAt,
 	}, nil
 }
 
-func (a *LegacyBackendAdapter) StoreSemantic(_ context.Context, write CacheWrite) error {
-	if write.TTL.NoStore {
+func resultAge(result LookupResult) (time.Duration, bool) {
+	if !result.StoredAt.IsZero() {
+		return time.Since(result.StoredAt), true
+	}
+	return result.Age, result.AgeKnown
+}
+
+func (a *LegacyBackendAdapter) StoreSemantic(ctx context.Context, write CacheWrite) error {
+	if write.TTL.NoStore || a.exceedsEmbeddingWindow(ctx, write.Identity.SemanticQuery) {
 		return nil
 	}
 	return a.backend.AddEntry(
+		ctx,
 		write.RequestID,
-		write.Identity.Partition.Key(),
+		write.Identity.SemanticPartitionKey(),
 		write.Identity.SemanticQuery,
 		write.RequestBody,
 		write.ResponseBody,
@@ -96,8 +149,8 @@ func (a *LegacyBackendAdapter) StoreSemantic(_ context.Context, write CacheWrite
 	)
 }
 
-func (a *LegacyBackendAdapter) Health(_ context.Context) error {
-	return a.backend.CheckConnection()
+func (a *LegacyBackendAdapter) Health(ctx context.Context) error {
+	return a.backend.CheckConnection(ctx)
 }
 
 func (a *LegacyBackendAdapter) Close() error {

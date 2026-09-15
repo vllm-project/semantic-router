@@ -31,9 +31,10 @@ func TestQdrantExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 		port = parsed
 	}
 	cache, err := NewQdrantCache(QdrantCacheOptions{
-		Enabled:        true,
-		TTLSeconds:     60,
-		EmbeddingModel: "bert",
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		TTLSeconds:        60,
+		EmbeddingModel:    "bert",
 		Config: &config.QdrantConfig{
 			Host:           host,
 			Port:           port,
@@ -55,14 +56,14 @@ func TestQdrantExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 	fingerprint := fmt.Sprintf("exact-%d", time.Now().UnixNano())
 	require.NoError(
 		t,
-		cache.AddExact("tenant-a", fingerprint, []byte(`{"answer":"cached"}`), 60),
+		cache.AddExact(context.Background(), "tenant-a", fingerprint, []byte(`{"answer":"cached"}`), 60),
 	)
-	hit, err := cache.FindExact("tenant-a", fingerprint)
+	hit, err := cache.FindExact(context.Background(), "tenant-a", fingerprint)
 	require.NoError(t, err)
 	require.True(t, hit.Found)
 	assert.JSONEq(t, `{"answer":"cached"}`, string(hit.ResponseBody))
 
-	miss, err := cache.FindExact("tenant-b", fingerprint)
+	miss, err := cache.FindExact(context.Background(), "tenant-b", fingerprint)
 	require.NoError(t, err)
 	assert.False(t, miss.Found)
 }

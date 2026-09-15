@@ -1,65 +1,45 @@
 ---
+sidebar_position: 3
 translation:
-  source_commit: "49e7c766"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/projection/scores.md"
   outdated: false
-sidebar_position: 3
 ---
 
-# 分数（Scores）
+# 分数
 
 ## 概览
 
-`routing.projections.scores` 将匹配信号证据合成为**一个连续数值**。
-
-在以下情况使用分数：
-
-- 一条路由依赖多个弱信号而非单一决定性检测器
-- 学习型与启发式证据应贡献同一路由结果
-- 希望数值聚合留在决策层之外
-
-## 主要优势
-
-- 将多个弱信号聚合成单一连续数值供路由使用。
-- 加权混合逻辑集中在一处，便于审计。
-- 支持二值、置信度与原始数值三种值源。
-- 负权重可在信号匹配时主动拉低分数（例如明显简单请求）。
+`routing.projections.scores` 将已匹配的信号证据组合成一个连续数值。
 
 ## 解决什么问题？
 
-决策适合可读布尔逻辑，不适合表达「从上下文长度取一点、从推理标记取一点、对极简单请求减权，再判断属于哪一档」。
+决策适合可读的布尔逻辑。它们不适合表达“从上下文长度取一点证据，从推理标记再取一些，对非常简单的请求减去一些权重，然后再决定属于哪一档”。
 
-分数在信号与决策策略之间提供显式数值层。
+分数通过在信号和决策策略之间提供一层显式数值来解决该问题。
 
-在 `balance` 配方中例如：
+## 分数在运行时如何表现 {#how-scores-behave-at-runtime}
 
-- `difficulty_score` 混合简洁性、上下文长度、结构、推理标记、嵌入与复杂度等
-- `verification_pressure` 混合事实核查需求、引用请求、高风险领域、纠正反馈与上下文长度
-
-这样权重故事集中在一处，而不是散落在多条决策中。
-
-## 运行时行为
-
-当前实现仅支持 `method: weighted_sum`。
+只支持 `method: weighted_sum`。
 
 每个输入贡献：
 
 `weight * input_value`
 
-`input_value` 取决于 `value_source`：
+`input_value` 的计算取决于 `value_source`：
 
-- 省略或 `binary`：信号匹配用 `match`，未匹配用 `miss`
-- `confidence`：使用匹配置信度，未匹配为 `0`
-- `raw`：使用 `SignalValues` 中的原始数值（如计数或度量值），缺失时为 `0`
+- 省略或 `binary`：信号匹配时使用 `match`，未匹配时使用 `miss`
+- `confidence`：使用已匹配信号的置信度，信号未匹配时为 `0`
+- `raw`：使用来自 `SignalValues` 的原始数值（例如计数或测量值），缺失时为 `0`
 
-当前默认：
+默认值：
 
 - `match` 默认为 `1.0`
 - `miss` 默认为 `0.0`
 
-校验器要求每个输入引用 `routing.signals` 中已声明的信号。
+大多数输入引用 `routing.signals` 下已声明的信号。`kb_metric` 和 `projection` 类型改为引用如下所述的派生运行时状态。
 
-当前支持的输入类型包括：
+支持的输入类型包括：
 
 - `keyword`
 - `embedding`
@@ -76,10 +56,17 @@ sidebar_position: 3
 - `authz`
 - `jailbreak`
 - `pii`
+- `kb`
+- `conversation`
+- `event`
+- `kb_metric`
+- `projection`
 
-分数是内部投影状态；决策不直接引用分数名；下一步由映射消费。
+对于 `kb_metric`，`kb` 标识已配置的知识库，`metric` 选择 `best_score`、`best_matched_score` 或该知识库声明的指标，`value_source` 为 `score`。对于 `projection`，`name` 标识更早的分数或映射输出。
 
-## 规范 YAML
+分数是内部投影状态。决策不直接引用分数名；接下来由映射消费它们。
+
+## 配置
 
 ```yaml
 routing:
@@ -107,9 +94,9 @@ routing:
             weight: 0.22
 ```
 
-### 原始值源
+### 原始值来源 {#raw-value-source}
 
-当信号族通过 `SignalValues` 暴露数值度量（计数、距离、token 总数）时，使用 `value_source: raw` 将这些值直接送入加权和，而不是将其简化为二值或置信度标量。
+当某个信号家族通过 `SignalValues` 暴露数值测量（计数、距离、token 总量）时，使用 `value_source: raw` 把它们直接送入加权和，而不是先降成二元或置信度标量。
 
 ```yaml
 routing:
@@ -128,67 +115,42 @@ routing:
             value_source: raw
 ```
 
-不同信号族的原始值可能采用不同量纲。请谨慎选择权重，或使用与预期数值范围相符的阈值区间。
+原始值在不同信号家族间可能尺度不同。请谨慎选择权重，或使用考虑预期数值范围的阈值档。
 
-## DSL
-
-```dsl
-PROJECTION score difficulty_score {
-  method: "weighted_sum"
-  inputs: [
-    { type: "keyword", name: "simple_request_markers", weight: -0.28 },
-    { type: "context", name: "long_context", weight: 0.18 },
-    { type: "keyword", name: "reasoning_request_markers", weight: 0.22, value_source: "confidence" },
-    { type: "embedding", name: "agentic_workflows", weight: 0.18, value_source: "confidence" },
-    { type: "complexity", name: "general_reasoning:hard", weight: 0.22 }
-  ]
-}
-```
-
-## 配置字段
+## 配置字段 {#config-fields}
 
 | 字段 | 含义 |
-|------|------|
-| `name` | 分数标识 |
+|-------|---------|
+| `name` | 分数标识符 |
 | `method` | 当前为 `weighted_sum` |
-| `inputs[].type` | 读取的信号族；也可以是 `projection`，用于引用先前的分数或映射输出 |
-| `inputs[].name` | 已声明的信号名；当 `type: projection` 且 `value_source: score`（默认）时为分数名，当 `value_source: confidence` 时为映射输出名 |
-| `inputs[].weight` | 贡献系数；负权重降低分数 |
-| `inputs[].value_source` | `binary`、`confidence`、`raw` 或 `score`（用于投影输入）；投影输入使用 `confidence` 时读取映射输出的校准置信度 |
-| `inputs[].match` / `inputs[].miss` | 二值模式下的显式取值 |
-
-## 配置
-
-分数位于 `routing.projections.scores`。每个分数需要 `name`、`method`（当前为 `weighted_sum`）以及引用已声明信号的 `inputs` 列表。完整说明见 [规范 YAML](#规范-yaml) 与 [配置字段](#配置字段)。
+| `inputs[].type` | 支持的信号家族、`kb_metric` 或 `projection` |
+| `inputs[].name` | 已声明的信号名，或 `projection` 的更早分数/映射输出 |
+| `inputs[].kb` / `inputs[].metric` | `kb_metric` 的知识库名和数值指标 |
+| `inputs[].weight` | 贡献乘数；负权重会降低分数 |
+| `inputs[].value_source` | `binary`、`confidence`、`raw`，或投影输入的 `score`；投影输入上的 `confidence` 读取映射输出的校准置信度 |
+| `inputs[].match` / `inputs[].miss` | 二元模式的显式值 |
 
 ## 何时使用
 
 在以下情况使用分数：
 
-- 多个弱指标应合成为单一难度或升级信号
-- 同一加权故事要在多条路由间复用
-- 希望在一处集中调节路由敏感度
+- 若干弱指标应组合成一条难度或升级信号
+- 同一加权故事应由多条路由复用
+- 希望在一处集中调优路由灵敏度
 
-## 何时不用
+## 何时不使用 {#when-not-to-use}
 
-在以下情况不要使用分数：
+不要在以下情况使用分数：
 
-- 单一原始信号已能干净决定路由
-- 规则用普通布尔逻辑即可保持可读
-- 需要立即可见的决策输出名——分数仍需映射
+- 一条原始信号已经干净地决定路由
+- 规则可以保持为普通布尔逻辑
+- 需要立即得到决策可见的输出名；分数仍需要映射
 
-## 设计说明
+## 分层组合 {#hierarchical-composition}
 
-- 保持分数名稳定，因为 `routing.projections.mappings[*].source` 依赖它们。
-- 记录每个权重的理由，尤其在混合置信型学习信号与启发式信号时。
-- 数值聚合优先用分数，让 `routing.decisions` 专注可读布尔组合。
-- 当匹配信号应主动降低档位时（如 `balance` 对明显简单请求），使用负权重。
+分数可以用 `type: projection` 引用更早的投影分数或映射输出置信度。这支持一层分数建立在另一层之上的分层路由构造。
 
-## 层级组合
-
-分数可以通过 `type: projection` 引用先前的投影分数或映射输出置信度。这样便可构建由一个分数叠加另一个分数的分层路由结构。
-
-### 分数引用分数
+### 分数到分数引用 {#score-to-score-reference}
 
 使用 `value_source: score`（或省略 `value_source`）读取先前计算的分数值：
 
@@ -226,9 +188,9 @@ routing:
             lt: 0.7
 ```
 
-### 引用置信度
+### 置信度引用 {#confidence-reference}
 
-使用 `value_source: confidence` 读取映射输出区间的校准置信度：
+使用 `value_source: confidence` 读取映射输出档的校准置信度：
 
 ```yaml
 - type: projection
@@ -237,20 +199,9 @@ routing:
   weight: 0.5
 ```
 
-### 依赖顺序
+### 依赖顺序 {#dependency-ordering}
 
-分数可以按任意顺序声明。运行时会按拓扑顺序计算，确保始终先解析依赖项，再计算依赖它们的分数。配置校验会拒绝循环依赖。
+分数可以按任意顺序声明。运行时按拓扑顺序评估它们，以便依赖总是在被依赖者之前解析。环会在配置校验时被拒绝。
 
-### 投影输入配置字段
-
-| 字段 | 含义 |
-|------|------|
-| `type` | `projection` |
-| `name` | 已声明的分数名（用于 `value_source: score`）或映射输出名（用于 `value_source: confidence`） |
-| `value_source` | `score`（读取原始分数值）或 `confidence`（读取映射输出置信度） |
-| `weight` | 贡献系数 |
-
-## 下一步
-
-- 阅读[映射](./mappings)，将分数转为决策可用的命名档位。
-- 阅读[概览](./overview)，了解完整投影工作流及与信号、决策的关系。
+分数不做额外模型调用，也不会自行持久化内容；它们组合请求上已有的信号结果。权重不会自动校准异构输入，因此请在带标签的流量上评估完整分数和映射。完整示例见
+[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)。

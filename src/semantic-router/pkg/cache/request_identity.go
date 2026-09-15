@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 const semanticQueryPlaceholder = "[response-cache-query]"
@@ -17,6 +19,112 @@ type RequestIdentity struct {
 	ExactFingerprint         string
 	CompatibilityFingerprint string
 	SemanticSafe             bool
+}
+
+// BuildSemanticRequestIdentity derives cache identity from the protocol-neutral
+// request contract. Transport envelopes and trusted runtime identity are
+// deliberately excluded: neither may become cache persistence state.
+func BuildSemanticRequestIdentity(request llmprotocol.Request) (RequestIdentity, error) {
+	normalized, err := cloneSemanticRequest(request)
+	if err != nil {
+		return RequestIdentity{}, fmt.Errorf("normalize semantic request: %w", err)
+	}
+	normalized.Generation = 0
+	normalized.Trusted = llmprotocol.TrustedMetadata{}
+
+	exactFingerprint, err := fingerprintJSON(normalized)
+	if err != nil {
+		return RequestIdentity{}, err
+	}
+	query := semanticRequestQuery(normalized)
+
+	compatible, err := cloneSemanticRequest(normalized)
+	if err != nil {
+		return RequestIdentity{}, fmt.Errorf("normalize compatible semantic request: %w", err)
+	}
+	compatible.Model = ""
+	semanticSafe := replaceSemanticRequestQuery(&compatible)
+	compatibilityFingerprint, err := fingerprintJSON(compatible)
+	if err != nil {
+		return RequestIdentity{}, err
+	}
+
+	return RequestIdentity{
+		Model:                    request.Model,
+		Query:                    query,
+		ExactFingerprint:         exactFingerprint,
+		CompatibilityFingerprint: compatibilityFingerprint,
+		SemanticSafe:             semanticSafe,
+	}, nil
+}
+
+// MarshalSemanticRequest returns the normalized request representation that a
+// cache backend may retain. It never includes the source envelope or trusted
+// transport identity.
+func MarshalSemanticRequest(request llmprotocol.Request) ([]byte, error) {
+	normalized, err := cloneSemanticRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	normalized.Generation = 0
+	normalized.Trusted = llmprotocol.TrustedMetadata{}
+	return json.Marshal(normalized)
+}
+
+func cloneSemanticRequest(request llmprotocol.Request) (llmprotocol.Request, error) {
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		return llmprotocol.Request{}, err
+	}
+	var cloned llmprotocol.Request
+	if err := json.Unmarshal(encoded, &cloned); err != nil {
+		return llmprotocol.Request{}, err
+	}
+	return cloned, nil
+}
+
+func semanticRequestQuery(request llmprotocol.Request) string {
+	for index := len(request.Messages) - 1; index >= 0; index-- {
+		message := request.Messages[index]
+		if message.Role != llmprotocol.RoleUser {
+			continue
+		}
+		var combined string
+		for _, content := range message.Content {
+			if content.Kind != llmprotocol.ContentText || content.Text == "" {
+				continue
+			}
+			if combined != "" {
+				combined += "\n"
+			}
+			combined += content.Text
+		}
+		return combined
+	}
+	return ""
+}
+
+func replaceSemanticRequestQuery(request *llmprotocol.Request) bool {
+	if request == nil {
+		return false
+	}
+	for messageIndex := len(request.Messages) - 1; messageIndex >= 0; messageIndex-- {
+		message := &request.Messages[messageIndex]
+		if message.Role != llmprotocol.RoleUser {
+			continue
+		}
+		replaced := false
+		for contentIndex := range message.Content {
+			content := &message.Content[contentIndex]
+			if content.Kind != llmprotocol.ContentText {
+				continue
+			}
+			content.Text = semanticQueryPlaceholder
+			replaced = true
+		}
+		return replaced
+	}
+	return false
 }
 
 // BuildRequestIdentity derives exact and semantic-compatibility fingerprints

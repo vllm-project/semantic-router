@@ -1,93 +1,91 @@
-# Install with Envoy AI Gateway
+---
+title: Deploy with Envoy AI Gateway
+description: Use Semantic Router for model selection or Responses state while Envoy AI Gateway owns provider and gateway policy.
+---
 
-This guide provides step-by-step instructions for integrating the vLLM Semantic Router with Envoy AI Gateway on Kubernetes for advanced traffic management and AI-specific features.
+# Deploy with Envoy AI Gateway
 
-For large request bodies or streamed immediate responses from Semantic Router, also see [Streamed ExtProc and immediate responses](./streamed-extproc.md). That guide shows how to switch the ExtProc filter from `BUFFERED` to `STREAMED` request bodies and how streamed Chat Completions clients receive looper or `fast_response` immediate responses.
+Use this topology when Envoy AI Gateway already owns north-south traffic and
+provider integration. Semantic Router can either choose a model from the
+request's meaning or run only as an ExtProc service for OpenAI Responses state
+and protocol conversion. Envoy AI Gateway remains responsible for Gateway API
+resources, provider credentials, rate limits, and traffic policy.
 
-## Architecture Overview
+For large request bodies or streamed immediate responses from Semantic Router, also see [Streamed ExtProc and immediate responses](./streamed-extproc). That guide shows how to switch the ExtProc filter from `BUFFERED` to `STREAMED` request bodies and how streamed Chat Completions clients receive looper or `fast_response` immediate responses.
+
+## Responsibility split
 
 The deployment consists of:
 
-- **vLLM Semantic Router**: Provides intelligent request routing and semantic understanding
-- **Envoy Gateway**: Core gateway functionality and traffic management
-- **Envoy AI Gateway**: AI Gateway built on Envoy Gateway for LLM providers
+- **Semantic Router** evaluates the selected recipe and chooses the logical
+  model or provider alias.
+- **Envoy Gateway** provides the Kubernetes Gateway API data plane.
+- **Envoy AI Gateway** translates provider APIs and applies gateway-owned
+  authentication, rate limiting, and traffic policy.
+- **Model providers** serve the selected model. This guide uses a demo backend;
+  it does not install production inference capacity.
 
-## Benefits of Integration
+Provider support changes independently of Semantic Router. Use the
+[Envoy AI Gateway provider documentation](https://aigateway.envoyproxy.io/docs/capabilities/llm-integrations/supported-providers/)
+to choose an `AIServiceBackend` and credential policy, then bind the provider
+names to the aliases used by your Semantic Router configuration.
 
-Integrating vLLM Semantic Router with Envoy AI Gateway provides enterprise-grade capabilities for production LLM deployments:
+## Responses state without model selection
 
-### 1. **Hybrid Model Selection**
+Use the
+[`responses-state.yaml`](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/responses-state.yaml)
+profile when the external gateway already selects the route and backend, but
+clients need Semantic Router's OpenAI Responses implementation. The profile
+enables `POST /v1/responses`, `GET /v1/responses/{id}`, and
+`previous_response_id` conversation chaining. It converts Responses requests
+to the declared upstream wire format and converts upstream responses back to
+Responses objects.
 
-Seamlessly route requests between cloud LLM providers (OpenAI, Anthropic, etc.) and self-hosted models.
+The ownership boundary is:
 
-### 2. **Token Rate Limiting**
+| Concern | Owner |
+| --- | --- |
+| Public listener, Gateway/route, provider backend, credentials, rate limits, and traffic policy | External gateway |
+| Responses object storage, `previous_response_id` expansion, and request/response protocol conversion | Semantic Router ExtProc |
 
-Protect your infrastructure and control costs with fine-grained rate limiting:
+This profile deliberately has no Semantic Router listener, backend reference,
+credential, routing signal, decision, or optional plugin. Model entries are
+protocol metadata only. Keep their names and `api_format` values aligned with
+the models accepted by the external gateway. Semantic Router rewrites the
+upstream API path as part of protocol conversion without clearing Envoy's route
+cache, so the route selected by the gateway remains authoritative.
 
-- **Input token limits**: Control request size to prevent abuse
-- **Output token limits**: Manage response generation costs
-- **Total token limits**: Set overall usage quotas per user/tenant
-- **Time-based windows**: Configure limits per second, minute, or hour
+Install the chart with the state-only profile in place of the model-selection
+values used in Step 2:
 
-### 3. **Model/Provider Failover**
+```bash
+helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version 0.0.0-latest \
+  --namespace vllm-semantic-router-system \
+  --create-namespace \
+  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/responses-state.yaml
+```
 
-Ensure high availability with automatic failover mechanisms:
-
-- Detect unhealthy backends and route traffic to healthy instances
-- Support for active-passive and active-active failover strategies
-- Graceful degradation when primary models are unavailable
-
-### 4. **Traffic Splitting & Canary Testing**
-
-Deploy new models safely with progressive rollout capabilities:
-
-- **A/B Testing**: Split traffic between model versions to compare performance
-- **Canary Deployments**: Gradually shift traffic to new models (e.g., 5% → 25% → 50% → 100%)
-- **Shadow Traffic**: Send duplicate requests to new models without affecting production
-- **Weight-based routing**: Fine-tune traffic distribution across model variants
-
-### 5. **LLM Observability & Monitoring**
-
-Gain deep insights into your LLM infrastructure:
-
-- **Request/Response Metrics**: Track latency, throughput, token usage, and error rates
-- **Model Performance**: Monitor accuracy, quality scores, and user satisfaction
-- **Cost Analytics**: Analyze spending patterns across models and providers
-- **Distributed Tracing**: End-to-end visibility with OpenTelemetry integration
-- **Custom Dashboards**: Visualize metrics in Prometheus, Grafana, or your preferred monitoring stack
-
-## Supported LLM Providers
-
-| Provider Name                                                | API Schema Config on [AIServiceBackend](https://aigateway.envoyproxy.io/docs/api/#aiservicebackendspec) | Upstream Authentication Config on [BackendSecurityPolicy](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyspec) | Status |
-| ------------------------------------------------------------ | :----------------------------------------------------------: | :----------------------------------------------------------: | :----: |
-| [OpenAI](https://platform.openai.com/docs/api-reference)     |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [AWS Bedrock](https://docs.aws.amazon.com/bedrock/latest/APIReference/) |                   `{"name":"AWSBedrock"}`                    | [AWS Bedrock Credentials](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyawscredentials) |   ✅    |
-| [Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference) | `{"name":"AzureOpenAI","version":"2025-01-01-preview"}` or `{"name":"OpenAI", "version": "openai/v1"}` | [Azure Credentials](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyazurecredentials) or [Azure API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyazureapikey) |   ✅    |
-| [Google Gemini on AI Studio](https://ai.google.dev/gemini-api/docs/openai) |        `{"name":"OpenAI","version":"v1beta/openai"}`         | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Google Vertex AI](https://cloud.google.com/vertex-ai/docs/reference/rest) |                   `{"name":"GCPVertexAI"}`                   | [GCP Credentials](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicygcpcredentials) |   ✅    |
-| [Anthropic on GCP Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/claude) |   `{"name":"GCPAnthropic", "version":"vertex-2023-10-16"}`   | [GCP Credentials](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicygcpcredentials) |   ✅    |
-| [Groq](https://console.groq.com/docs/openai)                 |          `{"name":"OpenAI","version":"openai/v1"}`           | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Grok](https://docs.x.ai/docs/api-reference?utm_source=chatgpt.com#chat-completions) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Together AI](https://docs.together.ai/docs/openai-api-compatibility) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Cohere](https://docs.cohere.com/v2/docs/compatibility-api)  | `{"name":"Cohere","version":"v2"}` or `{"name":"OpenAI","version":"v1"}` | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Mistral](https://docs.mistral.ai/api/#tag/chat/operation/chat_completion_v1_chat_completions_post) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [DeepInfra](https://deepinfra.com/docs/inference)            |          `{"name":"OpenAI","version":"v1/openai"}`           | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [DeepSeek](https://api-docs.deepseek.com/)                   |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Hunyuan](https://cloud.tencent.com/document/product/1729/111007) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [MiniMax](https://platform.minimaxi.com/document/introduction) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Tencent LLM Knowledge Engine](https://www.tencentcloud.com/document/product/1255/70381?lang=en) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Tetrate Agent Router Service (TARS)](https://router.tetrate.ai/) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [SambaNova](https://docs.sambanova.ai/sambastudio/latest/open-ai-api.html) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
-| [Anthropic](https://docs.claude.com/en/home)                 |                    `{"name":"Anthropic"}`                    | [Anthropic API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyanthropicapikey) |   ✅    |
-| Self-hosted-models                                           |              `{"name":"OpenAI","version":"v1"}`              |                             N/A                              |   ✅    |
+The included in-memory response store is intended for a single-replica demo or
+local validation; state is lost on restart. Configure the Response API Redis
+backend for durable or replicated production deployments. The external
+gateway's ExtProc filter must send buffered request and response headers and
+bodies to Semantic Router, and its route for `/v1/responses` must select the
+intended provider backend before request-body conversion runs.
 
 ## Prerequisites
 
-Before starting, ensure you have the following tools installed:
+You need:
 
-- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker (Optional)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
-- [Helm](https://helm.sh/docs/intro/install/) - Package manager for Kubernetes
+- Kubernetes `1.32` or later for the pinned Envoy AI Gateway `v1.0.x` and
+  Envoy Gateway `v1.8.x` compatibility set; [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+  is sufficient for the demo;
+- Gateway API `v1.5.x` CRDs. The default Envoy Gateway Helm installation below
+  installs a compatible set; if your platform owns those CRDs, verify its
+  versions before installing the chart;
+- [kubectl](https://kubernetes.io/docs/tasks/tools/);
+- [Helm](https://helm.sh/docs/intro/install/); and
+- credentials and network access for every provider used by your config.
 
 ## Step 1: Create Kind Cluster (Optional)
 
@@ -102,13 +100,13 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
 ## Step 2: Deploy vLLM Semantic Router
 
-Deploy the semantic router service with all required components using Helm:
+Deploy Semantic Router with the integration values:
 
 ```bash
 # Install with custom values from GHCR OCI registry
 # (Optional) If you use a registry mirror/proxy, append: --set global.imageRegistry=<your-registry>
 helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version v0.0.0-latest \
+  --version 0.0.0-latest \
   --namespace vllm-semantic-router-system \
   --create-namespace \
   -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml
@@ -120,36 +118,44 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 kubectl get pods -n vllm-semantic-router-system
 ```
 
-**Note**: The values file contains the configuration for the semantic router, including model settings, categories, and routing rules. You can download and customize it from [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml).
+**Note**: The values file contains the Semantic Router model bindings, signals,
+decisions, and routing rules. Download and review
+[values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml)
+before adapting it to a real provider pool.
 
 ## Step 3: Install Envoy Gateway
 
-Install the core Envoy Gateway for traffic management:
+Install the Envoy Gateway release supported by Envoy AI Gateway `v1.0.0`:
 
 ```bash
-# Install Envoy Gateway using Helm
+export AIGW_VERSION=v1.0.0
+export ENVOY_GATEWAY_VERSION=v1.8.1
+
 helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
-  --version v0.0.0-latest \
+  --version "${ENVOY_GATEWAY_VERSION}" \
   --namespace envoy-gateway-system \
   --create-namespace \
-  -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml
+  -f "https://raw.githubusercontent.com/envoyproxy/ai-gateway/${AIGW_VERSION}/manifests/envoy-gateway-values.yaml"
 
 kubectl wait --timeout=2m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
 ```
 
 ## Step 4: Install Envoy AI Gateway
 
-Install the AI-specific extensions for inference workloads:
+Install the AI Gateway CRDs before the controller. These versions follow the
+upstream [`v1.0.x` compatibility matrix](https://aigateway.envoyproxy.io/docs/compatibility/).
 
 ```bash
-# Install Envoy AI Gateway using Helm
-helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
-    --version v0.0.0-latest \
-    --namespace envoy-ai-gateway-system \
-    --create-namespace
-
 # Install Envoy AI Gateway CRDs
-helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm --version v0.0.0-latest --namespace envoy-ai-gateway-system
+helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
+  --version "${AIGW_VERSION}" \
+  --namespace envoy-ai-gateway-system \
+  --create-namespace
+
+# Install the controller
+helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version "${AIGW_VERSION}" \
+  --namespace envoy-ai-gateway-system
 
 # Wait for AI Gateway Controller to be ready
 kubectl wait --timeout=300s -n envoy-ai-gateway-system deployment/ai-gateway-controller --for=condition=Available
@@ -196,7 +202,7 @@ Once the gateway is accessible, test the inference endpoint:
 curl -i -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "MoM",
+    "model": "vllm-sr/auto",
     "messages": [
       {"role": "user", "content": "What is the derivative of f(x) = x^3?"}
     ]
@@ -262,7 +268,9 @@ kind delete cluster --name semantic-router-cluster
 
 ## Next Steps
 
-- Configure custom routing rules in the AI Gateway
-- Set up monitoring and observability
-- Implement authentication and authorization
-- Scale the semantic router deployment for production workloads
+- Replace the demo backend with the provider resources and credentials owned by
+  your gateway team.
+- Keep the model aliases in `AIGatewayRoute` aligned with the names emitted by
+  Semantic Router.
+- Add authentication, rate limits, observability, and capacity policy at their
+  owning layers before exposing the gateway.

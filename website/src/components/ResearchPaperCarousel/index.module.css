@@ -21,17 +21,15 @@
   composes: site-section-intro from global;
   position: relative;
   z-index: 1;
-  max-width: none;
 }
 
 .title {
-  composes: site-section-intro__title site-section-intro__title--offset from global;
+  composes: site-section-intro__title from global;
   color: var(--site-text);
 }
 
 .subtitle {
   composes: site-section-intro__lede from global;
-  max-width: 38rem;
 }
 
 .carouselShell {

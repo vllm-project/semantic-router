@@ -18,8 +18,22 @@ const (
 	runtimeAlgorithmEnv  = "VLLM_SR_ALGORITHM_OVERRIDE"
 	runtimePlatformEnv   = "VLLM_SR_PLATFORM"
 	dashboardPlatformEnv = "DASHBOARD_PLATFORM"
+	configBaseDirEnv     = "VLLM_SR_CONFIG_BASE_DIR"
 	defaultPythonCLIPath = "/app"
 )
+
+func configPersistenceBaseDir(sourceConfigPath string) string {
+	if configured := strings.TrimSpace(os.Getenv(configBaseDirEnv)); configured != "" && filepath.IsAbs(configured) {
+		return filepath.Clean(configured)
+	}
+	cleaned := filepath.Clean(sourceConfigPath)
+	parent := filepath.Dir(cleaned)
+	base := filepath.Base(cleaned)
+	if filepath.Base(parent) == ".vllm-sr" && strings.HasPrefix(base, "runtime-config") && strings.HasSuffix(base, ".yaml") {
+		return filepath.Dir(parent)
+	}
+	return parent
+}
 
 type configPersistencePaths struct {
 	activePath  string
