@@ -62,6 +62,7 @@ type chatChunkWire struct {
 	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
+	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -176,6 +177,12 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
 			"stream.kv_transfer", "provider KV-transfer metadata is not model output",
+		)
+	}
+	if len(chunk.XGroq) > 0 {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.x_groq", "provider request metadata is not model output",
 		)
 	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {

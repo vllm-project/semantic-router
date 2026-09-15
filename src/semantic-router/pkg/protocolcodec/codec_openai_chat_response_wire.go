@@ -33,6 +33,8 @@ type chatResponseWire struct {
 	RemoteEngineID      *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost          *string                   `json:"remote_host,omitempty"`
 	RemotePort          *int64                    `json:"remote_port,omitempty"`
+	// Groq attaches its request id here; it is provider metadata, not output.
+	XGroq json.RawMessage `json:"x_groq,omitempty"`
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response
@@ -137,6 +139,14 @@ type chatUsageWire struct {
 	ComputeUnits            json.RawMessage                  `json:"compute_units,omitempty"`
 	PromptTokensDetails     *chatPromptTokensDetailsWire     `json:"prompt_tokens_details,omitempty"`
 	CompletionTokensDetails *chatCompletionTokensDetailsWire `json:"completion_tokens_details,omitempty"`
+	// Provider accounting extensions: xAI reports its own billing and search
+	// usage, Groq reports queue and generation timings in seconds.
+	CostInUSDTicks *int64   `json:"cost_in_usd_ticks,omitempty"`
+	NumSourcesUsed *int64   `json:"num_sources_used,omitempty"`
+	QueueTime      *float64 `json:"queue_time,omitempty"`
+	PromptTime     *float64 `json:"prompt_time,omitempty"`
+	CompletionTime *float64 `json:"completion_time,omitempty"`
+	TotalTime      *float64 `json:"total_time,omitempty"`
 }
 
 type chatPromptTokensDetailsWire struct {

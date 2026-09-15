@@ -685,6 +685,39 @@
           }
         }
       }
+    },
+    {
+      "name": "x_groq",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 100,
+          "id": "chatcmpl_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "x_groq",
+            "action": "dropped"
+          }
+        ]
+      }
     }
   ]
 }

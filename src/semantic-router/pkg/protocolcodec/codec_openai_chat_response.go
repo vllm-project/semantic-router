@@ -25,6 +25,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"kv_transfer": wire.hasLegacyKVTransferMetadata(),
 		"metadata":    len(wire.Metadata) > 0,
 		"moderation":  len(wire.Moderation) > 0,
+		"x_groq":      len(wire.XGroq) > 0,
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
@@ -64,6 +65,12 @@ func decodeChatResponseUsage(
 		"usage.completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
 		"usage.completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
 		"usage.completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
+		"usage.cost_in_usd_ticks":                                    wire.CostInUSDTicks != nil,
+		"usage.num_sources_used":                                     wire.NumSourcesUsed != nil && *wire.NumSourcesUsed != 0,
+		"usage.queue_time":                                           wire.QueueTime != nil,
+		"usage.prompt_time":                                          wire.PromptTime != nil,
+		"usage.completion_time":                                      wire.CompletionTime != nil,
+		"usage.total_time":                                           wire.TotalTime != nil,
 	}, "provider accounting detail has no separate protocol-neutral bucket")
 }
 
