@@ -105,6 +105,39 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/ai21labs/AI21-Jamba-Reasoning-3B
+- catalog: ai2/olmo-3-32b-base
+  relationship: self_hosted
+  id: allenai/Olmo-3-1125-32B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B
+- catalog: ai2/olmo-3-1-32b-think
+  relationship: self_hosted
+  id: allenai/Olmo-3.1-32B-Think
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think
+- catalog: ai2/olmo-3-1-32b-instruct
+  relationship: self_hosted
+  id: allenai/Olmo-3.1-32B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct
 - catalog: bytedance/seed-oss-36b-instruct
   relationship: self_hosted
   id: ByteDance-Seed/Seed-OSS-36B-Instruct
