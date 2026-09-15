@@ -301,6 +301,7 @@ async def test_protocol_matrix_probe_is_native_anthropic_and_deterministic(
             in response.text
         )
         assert '"stop_reason":"end_turn"' in response.text
+        assert '"iterations":[{"type":"message"' in response.text
         assert "event: message_stop" in response.text
     else:
         assert response.json()["content"] == [
@@ -380,6 +381,7 @@ async def test_mock_tool_lifecycle_stream_is_native_anthropic_and_deterministic(
     assert '"type":"tool_use","id":"call_mock_lookup","name":"lookup"' in stream
     assert stream.count('"type":"input_json_delta"') == 2
     assert '"stop_reason":"tool_use"' in stream
+    assert '"iterations":[{"type":"message"' in stream
     assert "event: message_stop" in stream
 
     result = await client.post(
