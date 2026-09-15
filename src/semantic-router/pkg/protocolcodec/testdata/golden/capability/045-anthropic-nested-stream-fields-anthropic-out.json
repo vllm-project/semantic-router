@@ -115,6 +115,10 @@
         },
         "diagnostics": [
           {
+            "field": "stream.context_management",
+            "action": "dropped"
+          },
+          {
             "field": "stream.delta.container",
             "action": "dropped"
           },

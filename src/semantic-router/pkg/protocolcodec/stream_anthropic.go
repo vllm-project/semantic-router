@@ -1,7 +1,6 @@
 package protocolcodec
 
 import (
-	"bytes"
 	"encoding/json"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -47,6 +46,9 @@ type anthropicEventWire struct {
 	Delta        *anthropicDeltaWire             `json:"delta,omitempty"`
 	Usage        *anthropicMessageDeltaUsageWire `json:"usage,omitempty"`
 	Error        *anthropicErrorWire             `json:"error,omitempty"`
+	// Beta extension (context-management-2025-06-27): sibling of delta and usage
+	// on message_delta, not a member of usage. Accepted, never consumed. See #3417.
+	ContextManagement json.RawMessage `json:"context_management,omitempty"`
 }
 
 type anthropicMessageDeltaUsageWire struct {
@@ -69,6 +71,9 @@ type anthropicDeltaWire struct {
 	Container    json.RawMessage `json:"container,omitempty"`
 	StopDetails  json.RawMessage `json:"stop_details,omitempty"`
 	Citation     json.RawMessage `json:"citation,omitempty"`
+	// Beta thinking telemetry on every thinking_delta. Accepted and ignored;
+	// authoritative counts arrive in message_delta.usage. No diagnostic (D2).
+	EstimatedTokens *int64 `json:"estimated_tokens,omitempty"`
 }
 
 func (wire anthropicDeltaWire) MarshalJSON() ([]byte, error) {
@@ -228,7 +233,7 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicMessageDelta(
 	if err := decoder.observeAnthropicStop(wire.Delta); err != nil {
 		return nil, nil, err
 	}
-	diagnostics := decoder.anthropicMessageDeltaDiagnostics(wire.Delta)
+	diagnostics := decoder.anthropicMessageDeltaDiagnostics(wire)
 	if wire.Usage == nil {
 		return nil, diagnostics, nil
 	}
@@ -254,26 +259,6 @@ func (decoder *anthropicStreamDecoder) observeAnthropicStop(delta *anthropicDelt
 	}
 	decoder.stopSequence = *delta.StopSequence
 	return nil
-}
-
-func (decoder *anthropicStreamDecoder) anthropicMessageDeltaDiagnostics(delta *anthropicDeltaWire) llmprotocol.Diagnostics {
-	var diagnostics llmprotocol.Diagnostics
-	if delta == nil {
-		return diagnostics
-	}
-	if len(delta.Container) > 0 && !bytes.Equal(bytes.TrimSpace(delta.Container), []byte("null")) {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
-			"stream.delta.container", "container metadata has no protocol-neutral representation",
-		)
-	}
-	if len(delta.StopDetails) > 0 && !bytes.Equal(bytes.TrimSpace(delta.StopDetails), []byte("null")) {
-		appendProviderFieldOmission(
-			&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
-			"stream.delta.stop_details", "refusal details have no protocol-neutral representation",
-		)
-	}
-	return diagnostics
 }
 
 func decodeAnthropicStreamError(wire anthropicEventWire) llmprotocol.Event {
