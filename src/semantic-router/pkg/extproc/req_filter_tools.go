@@ -173,6 +173,13 @@ func (r *OpenAIRouter) handleToolSelection(
 	tsPlugin := ctx.VSRSelectedDecision.GetToolSelectionConfig()
 	toolsCfg := resolveDecisionToolsConfig(ctx)
 
+	// The trusted-facts gate runs before the decision-plugin branch and
+	// before relevance/ranking so deny and narrow close the bypass for
+	// tool_selection flows too: neither outcome can widen the tool set.
+	if r.applyTrustedFactsGate(request, ctx, toolsCfg) {
+		return nil
+	}
+
 	handled, err := r.handleToolSelectionDecisionPlugin(request, userContent, nonUserMessages, response, ctx, tsPlugin, toolsCfg)
 	if err != nil {
 		return err
