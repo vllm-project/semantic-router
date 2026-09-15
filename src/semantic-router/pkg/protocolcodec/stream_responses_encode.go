@@ -182,6 +182,15 @@ func (encoder *responsesStreamEncoder) encodeResponsesStart(event llmprotocol.Ev
 	response := newResponsesResponseWire(event.ResponseID, event.Model, "in_progress", 0, encoder.context.PreviousResponseID)
 	frames := make([][]byte, 0, 2)
 	for _, eventType := range []string{"response.created", "response.in_progress"} {
+		if eventType == "response.created" && event.DynamoNVExt != nil {
+			var err error
+			response.NVExt, err = encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			response.NVExt = nil
+		}
 		wire := responsesEventWire{
 			Type: eventType, Sequence: encoder.nextWireSequence(), Response: &response,
 		}
@@ -230,6 +239,12 @@ func (encoder *responsesStreamEncoder) responsesCompletionWire(
 	}
 	response.Output = output
 	response.Usage = encodeResponsesUsage(*event.Usage)
+	if event.DynamoNVExt != nil {
+		response.NVExt, err = encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+		if err != nil {
+			return responsesEventWire{}, nil, err
+		}
+	}
 	wire := responsesEventWire{
 		Type:     "response.completed",
 		Response: &response,
@@ -271,6 +286,12 @@ func (encoder *responsesStreamEncoder) responsesFailureWire(
 	response.Error = &responsesErrorWire{Code: responsesErrorCode(event.Error), Message: event.Error.Message}
 	if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
 		response.Usage = encodeResponsesUsage(*event.Usage)
+	}
+	if event.DynamoNVExt != nil {
+		response.NVExt, err = encodeDynamoResponseNVExt(event.DynamoNVExt, encoder.policy)
+		if err != nil {
+			return responsesEventWire{}, nil, err
+		}
 	}
 	return responsesEventWire{
 		Type:     "response.failed",
@@ -342,6 +363,18 @@ func (encoder *responsesStreamEncoder) encodeResponsesReasoningDelta(
 }
 
 func (encoder *responsesStreamEncoder) encodeResponsesOpaque(event llmprotocol.Event) ([][]byte, error) {
+	if event.DynamoRequestID {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_request_id_translation",
+			"Dynamo request_id SSE events cannot be translated across wire formats", nil,
+		)
+	}
+	if event.DynamoNVExt != nil {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_dynamo_nvext_translation",
+			"Dynamo nvext stream chunks cannot be translated across wire formats", nil,
+		)
+	}
 	if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
 	}

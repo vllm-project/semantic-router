@@ -75,6 +75,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-catalog-astra",
 		"protocol-codec-chat-backend-buffered-matrix",
 		"protocol-codec-chat-backend-streaming-matrix",
+		"dynamo-nvext-chat-contract",
 		"protocol-codec-responses-backend-buffered-matrix",
 		"protocol-codec-responses-backend-streaming-matrix",
 		"protocol-codec-chat-backend-tool-lifecycle",

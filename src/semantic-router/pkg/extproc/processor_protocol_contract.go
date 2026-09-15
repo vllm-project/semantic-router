@@ -119,6 +119,15 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 		}
 		return nil, r.createErrorResponse(400, "invalid inference request")
 	}
+	if err := validateDynamoRoutingHeaders(ctx, llmprotocol.DefaultPolicy().Limits); err != nil {
+		recordIngressProtocolError(ctx, err)
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
+		return nil, r.createErrorResponse(400, "invalid Dynamo routing header")
+	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
@@ -235,6 +244,9 @@ func (r *OpenAIRouter) decodeClientResponse(
 	}
 	decoded, err := engine.TranslateResponse(source, target, body, mutation)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateDynamoResponseBackend(ctx, decoded.Envelope); err != nil {
 		return nil, err
 	}
 	ctx.SemanticResponse = &decoded.Response

@@ -483,6 +483,296 @@ func TestShadowDispatchUnknownModelRecordsBackendUnresolved(t *testing.T) {
 	}
 }
 
+func TestShadowDispatchRejectsDynamoExtensionForNonDynamoBackend(t *testing.T) {
+	tests := []struct {
+		name   string
+		dynamo *llmprotocol.DynamoEnvelope
+	}{
+		{
+			name:   "nvext",
+			dynamo: &llmprotocol.DynamoEnvelope{RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: "tenant-a"}},
+		},
+		{
+			name: "top-level cache_salt",
+			dynamo: func() *llmprotocol.DynamoEnvelope {
+				salt := "tenant-a"
+				return &llmprotocol.DynamoEnvelope{RequestTopLevelCacheSalt: &salt}
+			}(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primaryModel := newShadowTestRouter(t, backend)
+			for index := range router.Config.VLLMEndpoints {
+				endpoint := &router.Config.VLLMEndpoints[index]
+				endpoint.Type = "dynamo"
+				if endpoint.Name == "shadow-backend" {
+					endpoint.Type = "vllm"
+				}
+			}
+
+			run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+				ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+				ctx.ProtocolEnvelope.Dynamo = test.dynamo
+			})
+			waitForShadow(t, router)
+
+			outcome := singleShadowOutcome(t, run)
+			if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonDynamoBackend {
+				t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
+			}
+			if backend.requestCount() != 0 {
+				t.Fatal("non-Dynamo shadow backend received a Dynamo extension")
+			}
+		})
+	}
+}
+
+func TestShadowDispatchAllowsDynamoExtensionForDynamoBackend(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{
+			RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: "tenant-a"},
+		}
+	})
+	waitForShadow(t, router)
+
+	if backend.requestCount() != 1 {
+		t.Fatalf("Dynamo shadow backend requests = %d, want 1", backend.requestCount())
+	}
+	outcome := singleShadowOutcome(t, run)
+	if outcome.Verdict != shadowVerdictCompleted || outcome.Reason != shadowReasonCompleted {
+		t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
+	}
+}
+
+func TestShadowDispatchRejectsDynamoExtensionForCrossFormatTarget(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+	shadowModel := router.Config.ModelConfig[shadowTestModel]
+	shadowModel.APIFormat = "responses"
+	router.Config.ModelConfig[shadowTestModel] = shadowModel
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{
+			RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: "tenant-a"},
+		}
+	})
+	waitForShadow(t, router)
+
+	outcome := singleShadowOutcome(t, run)
+	if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonDynamoFormat {
+		t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
+	}
+	if backend.requestCount() != 0 {
+		t.Fatal("cross-format shadow backend received a Dynamo extension")
+	}
+}
+
+func TestShadowDispatchPreservesHeaderOnlyDynamoRouting(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.Headers[headers.DynamoTenantID] = "tenant-shadow"
+		ctx.Headers[headers.DynamoDPRank] = "7"
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	wire := backend.headers[0]
+	if got := wire.Get(headers.DynamoTenantID); got != "tenant-shadow" {
+		t.Fatalf("%s = %q, want tenant-shadow", headers.DynamoTenantID, got)
+	}
+	if got := wire.Get(headers.DynamoDPRank); got != "7" {
+		t.Fatalf("%s = %q, want 7", headers.DynamoDPRank, got)
+	}
+}
+
+func TestShadowDispatchPreservesDynamoHeaderOverBodyPrecedence(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+	bodyRank := uint32(1)
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{
+			RequestNVExt: &llmprotocol.DynamoRequestNVExt{DPRank: &bodyRank},
+		}
+		ctx.Headers[headers.DynamoDPRank] = "7"
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	if got := backend.headers[0].Get(headers.DynamoDPRank); got != "7" {
+		t.Fatalf("%s = %q, want header override 7", headers.DynamoDPRank, got)
+	}
+	var wire struct {
+		NVExt struct {
+			DPRank uint32 `json:"dp_rank"`
+		} `json:"nvext"`
+	}
+	if err := json.Unmarshal(backend.bodies[0], &wire); err != nil {
+		t.Fatalf("decode shadow body: %v", err)
+	}
+	if wire.NVExt.DPRank != bodyRank {
+		t.Fatalf("body nvext.dp_rank = %d, want %d", wire.NVExt.DPRank, bodyRank)
+	}
+}
+
+func TestShadowDispatchUsesProfileEffectiveDynamoRoutingHeader(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+	primaryProfile := router.Config.ProviderProfiles["provider"]
+	primaryProfile.ExtraHeaders = map[string]string{
+		headers.DynamoTenantID: "profile-tenant",
+	}
+	router.Config.ProviderProfiles["provider"] = primaryProfile
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.Headers[headers.DynamoTenantID] = "client-tenant"
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	if got := backend.headers[0].Get(headers.DynamoTenantID); got != "profile-tenant" {
+		t.Fatalf("%s = %q, want profile-tenant", headers.DynamoTenantID, got)
+	}
+}
+
+func TestShadowDispatchUsesDecisionEffectiveDynamoRoutingHeaders(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.Headers[headers.DynamoTenantID] = "client-tenant"
+		ctx.Headers[headers.DynamoDPRank] = "3"
+		ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{
+			Type: config.DecisionPluginHeaderMutation,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"update": []map[string]string{{
+					"name": headers.DynamoDPRank, "value": "9",
+				}},
+				"delete": []string{headers.DynamoTenantID},
+			}),
+		}}
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	wire := backend.headers[0]
+	if got := wire.Get(headers.DynamoDPRank); got != "9" {
+		t.Fatalf("%s = %q, want decision update 9", headers.DynamoDPRank, got)
+	}
+	if got := wire.Get(headers.DynamoTenantID); got != "" {
+		t.Fatalf("%s = %q, want decision deletion preserved", headers.DynamoTenantID, got)
+	}
+}
+
+func TestShadowDispatchGatesEffectiveDynamoRoutingHeaders(t *testing.T) {
+	for _, source := range []string{"profile", "decision"} {
+		for _, target := range []struct {
+			name        string
+			backendType string
+			format      string
+			wantReason  string
+		}{
+			{
+				name:        "non-Dynamo target",
+				backendType: "vllm",
+				format:      config.APIFormatOpenAI,
+				wantReason:  shadowReasonDynamoBackend,
+			},
+			{
+				name:        "cross-format target",
+				backendType: "dynamo",
+				format:      config.APIFormatResponses,
+				wantReason:  shadowReasonDynamoFormat,
+			},
+		} {
+			t.Run(source+"/"+target.name, func(t *testing.T) {
+				backend := newShadowTestBackend(t)
+				router, primaryModel := newShadowTestRouter(t, backend)
+				for index := range router.Config.VLLMEndpoints {
+					endpoint := &router.Config.VLLMEndpoints[index]
+					endpoint.Type = "dynamo"
+					if endpoint.Name == "shadow-backend" {
+						endpoint.Type = target.backendType
+					}
+				}
+				shadowModel := router.Config.ModelConfig[shadowTestModel]
+				shadowModel.APIFormat = target.format
+				router.Config.ModelConfig[shadowTestModel] = shadowModel
+
+				if source == "profile" {
+					profile := router.Config.ProviderProfiles["provider"]
+					profile.ExtraHeaders = map[string]string{
+						headers.DynamoTenantID: "profile-only-tenant",
+					}
+					router.Config.ProviderProfiles["provider"] = profile
+				}
+
+				run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+					ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+					if source == "decision" {
+						ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{
+							Type: config.DecisionPluginHeaderMutation,
+							Configuration: config.MustStructuredPayload(map[string]interface{}{
+								"update": []map[string]string{{
+									"name": headers.DynamoDPRank, "value": "7",
+								}},
+							}),
+						}}
+					}
+				})
+				waitForShadow(t, router)
+
+				outcome := singleShadowOutcome(t, run)
+				if outcome.Verdict != shadowVerdictFailed || outcome.Reason != target.wantReason {
+					t.Fatalf("outcome verdict=%q reason=%q, want failed/%s", outcome.Verdict, outcome.Reason, target.wantReason)
+				}
+				if backend.requestCount() != 0 {
+					t.Fatal("incompatible shadow target received effective Dynamo routing headers")
+				}
+			})
+		}
+	}
+}
+
 func TestShadowDispatchWithoutReplayStillObserves(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)
