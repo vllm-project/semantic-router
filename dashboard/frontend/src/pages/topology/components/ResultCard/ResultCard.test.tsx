@@ -28,3 +28,19 @@ describe('unavailable routing confidence', () => {
     expect(html).toContain('Score 0%')
   })
 })
+
+it('shows a failed live preview without a fabricated default decision', () => {
+  const failed = {
+    ...result(null, false),
+    isAccurate: false,
+    matchedDecision: null,
+    matchedSignals: [],
+    warning: 'decision unresolved',
+    signalErrors: { 'fact_check:verify': 'classifier unavailable' },
+  }
+  const html = renderToStaticMarkup(<ResultCard result={failed} onClose={() => {}} />)
+  expect(html).toContain('decision unresolved')
+  expect(html).toContain('Unavailable')
+  expect(html).toContain('fact_check:verify: classifier unavailable')
+  expect(html).not.toContain('Default')
+})
