@@ -264,10 +264,17 @@ func (r *OpenAIRouter) processRequestBody(
 // routing or dispatch into an immediate client-facing response. Capability
 // mismatches (a request requiring capabilities the chosen backend wire cannot
 // express, e.g. image output on chat completions) are client errors, not
-// server failures; every other error keeps the caller's generic path.
+// server failures; every other error keeps the caller's generic path, except
+// a masking failure, which is answered with 503.
 func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool) {
 	if err == nil {
 		return nil, false
+	}
+	var maskingErr *maskingDispatchError
+	if errors.As(err, &maskingErr) {
+		// A stream error would let failure_mode_allow forward the unmasked
+		// body upstream, so a masking failure always answers here (#3566).
+		return r.createErrorResponse(http.StatusServiceUnavailable, maskingUnavailableMessage), true
 	}
 	var protocolError *llmprotocol.ProtocolError
 	if !errors.As(err, &protocolError) {

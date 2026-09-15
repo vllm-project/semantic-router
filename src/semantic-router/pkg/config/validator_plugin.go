@@ -65,7 +65,8 @@ func validateDecisionPluginPayload(
 		normalizedType == DecisionPluginResponseCache ||
 		normalizedType == DecisionPluginResponseJailbreak ||
 		normalizedType == DecisionPluginContextCompression ||
-		normalizedType == DecisionPluginShadowDispatch {
+		normalizedType == DecisionPluginShadowDispatch ||
+		normalizedType == DecisionPluginMasking {
 		err = plugin.Configuration.DecodeIntoStrict(target)
 	} else {
 		err = plugin.Configuration.DecodeInto(target)
@@ -108,6 +109,23 @@ func validateDecodedPluginContract(
 		return validateContextCompressionPlugin(decisionName, index, pluginType, typed)
 	case *ShadowDispatchPluginConfig:
 		return validateShadowDispatchPlugin(decisionName, index, pluginType, typed)
+	case *MaskingPluginConfig:
+		return validateMaskingPlugin(decisionName, index, pluginType, typed)
+	}
+	return nil
+}
+
+func validateMaskingPlugin(decisionName string, index int, pluginType string, typed *MaskingPluginConfig) error {
+	scope := fmt.Sprintf("decision %q plugins[%d] (%s)", decisionName, index, pluginType)
+	if typed.Threshold < 0 || typed.Threshold > 1 {
+		return fmt.Errorf("%s: threshold must be between 0 and 1", scope)
+	}
+	for entityType, template := range typed.Placeholders {
+		// Without {index} two distinct values collapse onto one placeholder,
+		// which the issue's determinism criterion forbids (#3566).
+		if !strings.Contains(template, MaskingPlaceholderIndexToken) {
+			return fmt.Errorf("%s: placeholder for %q must contain %s", scope, entityType, MaskingPlaceholderIndexToken)
+		}
 	}
 	return nil
 }
