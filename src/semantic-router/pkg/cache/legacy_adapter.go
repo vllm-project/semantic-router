@@ -107,7 +107,7 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	}
 	result, err := a.backend.LookupSimilarWithThreshold(
 		ctx,
-		lookup.Identity.Partition.Key(),
+		lookup.Identity.SemanticPartitionKey(),
 		lookup.Identity.SemanticQuery,
 		lookup.Threshold,
 	)
@@ -141,7 +141,7 @@ func (a *LegacyBackendAdapter) StoreSemantic(ctx context.Context, write CacheWri
 	return a.backend.AddEntry(
 		ctx,
 		write.RequestID,
-		write.Identity.Partition.Key(),
+		write.Identity.SemanticPartitionKey(),
 		write.Identity.SemanticQuery,
 		write.RequestBody,
 		write.ResponseBody,

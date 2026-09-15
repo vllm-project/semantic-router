@@ -40,8 +40,8 @@ ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
 # Configure OpenSSL for cross-compilation
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
-ENV OPENSSL_DIR=/usr
-ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+# Keep host build dependencies on native OpenSSL discovery; cargo commands
+# below scope target library overrides to their Rust target triple.
 
 # Optimize Rust compilation
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -65,9 +65,9 @@ RUN cd candle-binding && \
     mkdir -p src && \
     echo "pub fn _dummy() {}" > src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+        AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
-        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
+        X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
     fi && \
     rm -rf src
 
@@ -81,9 +81,9 @@ RUN echo "Building Rust library (CPU-only, no CUDA) for TARGETARCH=$TARGETARCH..
     find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+        AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
-        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
+        X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
     fi && \
     echo "=== Verifying library ===" && \
     find target -name "libcandle_semantic_router.so" -type f -exec ls -la {} \; && \
@@ -121,8 +121,8 @@ ENV STRIP_aarch64_unknown_linux_gnu=aarch64-linux-gnu-strip
 ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
-ENV OPENSSL_DIR=/usr
-ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+# Keep host build dependencies on native OpenSSL discovery; cargo commands
+# below scope target library overrides to their Rust target triple.
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 ENV CARGO_INCREMENTAL=1
 ENV CARGO_PROFILE_RELEASE_LTO=thin
@@ -139,9 +139,9 @@ COPY onnx-binding/Cargo.loc[k] ./onnx-binding/
 RUN cd onnx-binding && \
     mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu; \
+        AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu; \
     else \
-        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target x86_64-unknown-linux-gnu; \
+        X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target x86_64-unknown-linux-gnu; \
     fi && rm -rf src
 
 COPY onnx-binding/src/ ./onnx-binding/src/
@@ -151,9 +151,9 @@ RUN cd onnx-binding && \
     find target -name "libonnx_semantic_router.a" -delete && \
     touch src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu; \
+        AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu; \
     else \
-        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target x86_64-unknown-linux-gnu; \
+        X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target x86_64-unknown-linux-gnu; \
     fi
 
 # ort rc.10 uses ORT API 22. Stage the official matching shared CPU runtime.
