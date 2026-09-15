@@ -8,6 +8,7 @@
   "cases": [
     {"name": "cache_control", "patch": {"cache_control": {"type": "ephemeral"}}},
     {"name": "container", "patch": {"container": "container-1"}},
+    {"name": "context_management", "patch": {"context_management": {"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]}}},
     {"name": "inference_geo", "patch": {"inference_geo": "us"}},
     {"name": "max_tokens", "patch": {"max_tokens": 64}},
     {"name": "messages", "patch": {"messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]}},

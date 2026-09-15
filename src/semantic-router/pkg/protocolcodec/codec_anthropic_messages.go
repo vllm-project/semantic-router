@@ -31,24 +31,25 @@ func (AnthropicMessagesCodec) Capabilities() llmprotocol.CapabilitySet {
 }
 
 type anthropicRequestWire struct {
-	Model         string                     `json:"model"`
-	System        json.RawMessage            `json:"system,omitempty"`
-	Messages      []anthropicMessageWire     `json:"messages"`
-	MaxTokens     *int64                     `json:"max_tokens"`
-	Temperature   *float64                   `json:"temperature,omitempty"`
-	TopP          *float64                   `json:"top_p,omitempty"`
-	TopK          *int64                     `json:"top_k,omitempty"`
-	StopSequences []string                   `json:"stop_sequences,omitempty"`
-	Tools         json.RawMessage            `json:"tools,omitempty"`
-	ToolChoice    *anthropicToolChoiceWire   `json:"tool_choice,omitempty"`
-	Metadata      *anthropicMetadataWire     `json:"metadata,omitempty"`
-	Thinking      *anthropicThinkingWire     `json:"thinking,omitempty"`
-	Stream        bool                       `json:"stream,omitempty"`
-	InferenceGeo  json.RawMessage            `json:"inference_geo,omitempty"`
-	Container     json.RawMessage            `json:"container,omitempty"`
-	CacheControl  json.RawMessage            `json:"cache_control,omitempty"`
-	OutputConfig  *anthropicOutputConfigWire `json:"output_config,omitempty"`
-	ServiceTier   json.RawMessage            `json:"service_tier,omitempty"`
+	Model             string                     `json:"model"`
+	System            json.RawMessage            `json:"system,omitempty"`
+	Messages          []anthropicMessageWire     `json:"messages"`
+	MaxTokens         *int64                     `json:"max_tokens"`
+	Temperature       *float64                   `json:"temperature,omitempty"`
+	TopP              *float64                   `json:"top_p,omitempty"`
+	TopK              *int64                     `json:"top_k,omitempty"`
+	StopSequences     []string                   `json:"stop_sequences,omitempty"`
+	Tools             json.RawMessage            `json:"tools,omitempty"`
+	ToolChoice        *anthropicToolChoiceWire   `json:"tool_choice,omitempty"`
+	Metadata          *anthropicMetadataWire     `json:"metadata,omitempty"`
+	Thinking          *anthropicThinkingWire     `json:"thinking,omitempty"`
+	Stream            bool                       `json:"stream,omitempty"`
+	InferenceGeo      json.RawMessage            `json:"inference_geo,omitempty"`
+	Container         json.RawMessage            `json:"container,omitempty"`
+	CacheControl      json.RawMessage            `json:"cache_control,omitempty"`
+	OutputConfig      *anthropicOutputConfigWire `json:"output_config,omitempty"`
+	ServiceTier       json.RawMessage            `json:"service_tier,omitempty"`
+	ContextManagement json.RawMessage            `json:"context_management,omitempty"`
 }
 
 type anthropicMessageWire struct {
@@ -273,6 +274,9 @@ func decodeAnthropicBaseRequest(wire anthropicRequestWire) llmprotocol.Request {
 	}
 	if wire.Metadata != nil && wire.Metadata.UserID != "" {
 		request.EndUserID = wire.Metadata.UserID
+	}
+	if len(wire.ContextManagement) > 0 {
+		request.AnthropicContextManagement = append(json.RawMessage(nil), wire.ContextManagement...)
 	}
 	return request
 }
