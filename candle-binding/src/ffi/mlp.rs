@@ -45,9 +45,17 @@ fn device_from_type(device_type: c_int) -> Device {
                 Device::Cpu
             }
         }
-        // Metal is not a supported cargo feature for this crate yet, so retain
-        // the existing CPU fallback without advertising a broken feature flag.
-        2 => Device::Cpu,
+        // Metal (Apple Silicon GPU; enabled via the `metal` cargo feature).
+        2 => {
+            #[cfg(feature = "metal")]
+            {
+                Device::new_metal(0).unwrap_or(Device::Cpu)
+            }
+            #[cfg(not(feature = "metal"))]
+            {
+                Device::Cpu
+            }
+        }
         _ => Device::Cpu,
     }
 }
@@ -229,5 +237,12 @@ mod tests {
         let handle = candle_mlp_new();
         assert_eq!(candle_mlp_is_trained(handle), 0);
         candle_mlp_free(handle);
+    }
+
+    #[cfg(all(feature = "metal", target_os = "macos"))]
+    #[test]
+    fn test_device_type_2_is_metal() {
+        let device = device_from_type(2);
+        assert!(device.is_metal(), "expected Metal, got {device:?}");
     }
 }
