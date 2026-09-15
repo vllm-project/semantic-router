@@ -16,16 +16,49 @@ func validateKnownFields(raw map[string]interface{}, targetType reflect.Type) er
 	return fmt.Errorf("config contains unknown fields: %s", strings.Join(unknown, "; "))
 }
 
+type unknownFieldRecord struct {
+	Field   string
+	Message string
+}
+
+// CollectUnknownFieldDiagnostics returns schema-unknown YAML keys as
+// field-addressable diagnostics. The loader treats these as fatal; Evaluate
+// surfaces the same findings on the v1 validate contract.
+func CollectUnknownFieldDiagnostics(raw map[string]interface{}) []Diagnostic {
+	records := collectUnknownFieldRecords(raw, reflect.TypeOf(CanonicalConfig{}))
+	diagnostics := make([]Diagnostic, 0, len(records))
+	for _, record := range records {
+		diagnostics = append(diagnostics, Diagnostic{
+			Code:     DiagnosticUnknownField,
+			Severity: SeverityError,
+			Resource: resourceFromField(record.Field),
+			Stage:    StageParse,
+			Field:    record.Field,
+			Message:  record.Message,
+		})
+	}
+	return diagnostics
+}
+
 // collectUnknownFields returns path-aware diagnostics for keys not represented
 // by the canonical Go contract. Opaque StructuredPayload values are excluded;
 // their discriminator-specific validators own those nested fields.
 func collectUnknownFields(raw map[string]interface{}, targetType reflect.Type) []string {
-	var diagnostics []string
-	collectUnknownFieldsRecursive(raw, targetType, "", &diagnostics)
+	records := collectUnknownFieldRecords(raw, targetType)
+	diagnostics := make([]string, 0, len(records))
+	for _, record := range records {
+		diagnostics = append(diagnostics, record.Message)
+	}
 	return diagnostics
 }
 
-func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, path string, out *[]string) {
+func collectUnknownFieldRecords(raw map[string]interface{}, targetType reflect.Type) []unknownFieldRecord {
+	var records []unknownFieldRecord
+	collectUnknownFieldsRecursive(raw, targetType, "", &records)
+	return records
+}
+
+func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, path string, out *[]unknownFieldRecord) {
 	t = derefType(t)
 	if t.Kind() != reflect.Struct {
 		return
@@ -38,7 +71,10 @@ func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, p
 	for key := range raw {
 		entry, ok := known[key]
 		if !ok {
-			*out = append(*out, formatUnknownField(key, path, known))
+			*out = append(*out, unknownFieldRecord{
+				Field:   joinPath(path, key),
+				Message: formatUnknownField(key, path, known),
+			})
 			continue
 		}
 		recurseIntoValue(raw[key], entry.fieldType, joinPath(path, key), out)
@@ -67,7 +103,7 @@ func closestField(unknown string, known map[string]fieldEntry) string {
 	return best
 }
 
-func recurseIntoValue(value interface{}, fieldType reflect.Type, path string, out *[]string) {
+func recurseIntoValue(value interface{}, fieldType reflect.Type, path string, out *[]unknownFieldRecord) {
 	if fieldType == nil {
 		return
 	}
@@ -86,7 +122,7 @@ func recurseIntoValue(value interface{}, fieldType reflect.Type, path string, ou
 	}
 }
 
-func recurseIntoSlice(value interface{}, ft reflect.Type, path string, out *[]string) {
+func recurseIntoSlice(value interface{}, ft reflect.Type, path string, out *[]unknownFieldRecord) {
 	elemType := derefType(ft.Elem())
 	if elemType.Kind() != reflect.Struct {
 		return
@@ -103,7 +139,7 @@ func recurseIntoSlice(value interface{}, ft reflect.Type, path string, out *[]st
 	}
 }
 
-func recurseIntoMap(value interface{}, ft reflect.Type, path string, out *[]string) {
+func recurseIntoMap(value interface{}, ft reflect.Type, path string, out *[]unknownFieldRecord) {
 	elemType := derefType(ft.Elem())
 	if elemType.Kind() != reflect.Struct {
 		return
