@@ -21,6 +21,7 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	body []byte,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
+	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return r.createErrorResponse(503, "protocol runtime unavailable")

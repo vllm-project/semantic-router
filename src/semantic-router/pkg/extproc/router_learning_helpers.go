@@ -53,6 +53,24 @@ func protectionSessionStateKey(ctx *RequestContext) string {
 	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.VSRLearningSessionID)
 }
 
+// routingLearningStateKey returns the key protection records per-request
+// decision state under (current model, last switch, switch history). Protection
+// resolves a conversation-scoped memory key when its scope is conversation, so
+// the gate must read that same key instead of the session-scoped routing key.
+func routingLearningStateKey(ctx *RequestContext) string {
+	if ctx == nil || ctx.Routing.IsPassthrough() {
+		return ""
+	}
+	sessionID := ctx.VSRLearningSessionID
+	if sessionID == "" || protectionMode(ctx) == config.DecisionAdaptationModeObserve {
+		sessionID = ctx.SessionID
+	}
+	if sessionID == "" {
+		return ""
+	}
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), sessionID)
+}
+
 func requestBypassesRouting(ctx *RequestContext) bool {
 	return ctx != nil && ctx.Routing.IsPassthrough()
 }
