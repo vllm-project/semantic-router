@@ -25,15 +25,16 @@ func recordAgenticSessionDecision(
 		previousModel = selCtx.AgenticSession.PreviousModel
 	}
 	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
-		SessionID:      config.RoutingNamespaceKey(selCtx.RecipeName, selCtx.SessionID),
-		UserID:         selCtx.UserID,
-		PreviousModel:  previousModel,
-		SelectedModel:  selectedModelRef.Model,
-		DecisionName:   selectionDecisionStateKey(selCtx),
-		TurnIndex:      ctx.TurnIndex,
-		ActiveToolLoop: activeToolLoop,
-		Policy:         policy,
-		Timestamp:      time.Now(),
+		SessionID:         config.RoutingNamespaceKey(selCtx.RecipeName, selCtx.SessionID),
+		UserID:            selCtx.UserID,
+		PreviousModel:     previousModel,
+		SelectedModel:     selectedModelRef.Model,
+		SelectedCandidate: selectedModelRef,
+		DecisionName:      selectionDecisionStateKey(selCtx),
+		TurnIndex:         ctx.TurnIndex,
+		ActiveToolLoop:    activeToolLoop,
+		Policy:            policy,
+		Timestamp:         time.Now(),
 	})
 }
 

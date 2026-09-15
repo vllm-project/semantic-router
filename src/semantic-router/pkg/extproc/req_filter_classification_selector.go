@@ -30,12 +30,25 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 	selCtx *selection.SelectionContext,
 	algorithm *config.AlgorithmConfig,
 	ctx *RequestContext,
-) (*config.ModelRef, string, error) {
+) (chosen *config.ModelRef, chosenMethod string, selectionErr error) {
+	if ctx != nil {
+		ctx.VSRSelectedCandidate = nil
+	}
+	defer func() {
+		if ctx != nil && chosen != nil && selectionErr == nil {
+			ctx.VSRSelectedCandidate = (&selection.SelectionResult{}).WithCandidate(*chosen).SelectedCandidate
+		}
+	}()
+	method := r.getSelectionMethod(algorithm)
+	filtered, err := r.capabilityEligibleSelectionContext(selCtx, algorithm, ctx)
+	if err != nil {
+		return nil, string(method), err
+	}
+	selCtx = filtered
 	defaultCandidate := firstValidCandidateModelRef(selCtx)
 	if defaultCandidate == nil {
 		return nil, "", nil
 	}
-	method := r.getSelectionMethod(algorithm)
 	if err := selection.ValidateSelectionContext(selCtx); err != nil {
 		logging.Warnf("[ModelSelection] Invalid selection context: %v, using default candidate", err)
 		selected := r.recordSelectionFallback(
@@ -113,8 +126,11 @@ func (r *OpenAIRouter) selectWithSelector(
 		)
 		return selected, string(method), nil
 	}
-	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", err)
+	if validationErr := selection.ValidateSelectionResult(selCtx, result); validationErr != nil {
+		if errors.Is(validationErr, selection.ErrNoEligibleCandidates) {
+			return nil, string(method), validationErr
+		}
+		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", validationErr)
 		selected := r.recordSelectionFallback(
 			method,
 			selectionFallbackInvalidResult,
@@ -147,7 +163,7 @@ func (r *OpenAIRouter) selectWithSelector(
 	}
 	recordCtx, result, selectedModel, learningApplied := r.applyRouterLearning(
 		selCtx,
-		result,
+		result.WithCandidate(*selectedModel),
 		selectedModel,
 		ctx,
 	)
@@ -213,14 +229,15 @@ func (r *OpenAIRouter) selectSingleCandidateModel(
 	ctx *RequestContext,
 ) (*config.ModelRef, string, error) {
 	result := &selection.SelectionResult{
-		SelectedModel: defaultCandidate.Model,
-		LoRAName:      defaultCandidate.LoRAName,
-		Score:         1.0,
-		Confidence:    1.0,
-		Method:        method,
-		Tier:          selection.TierSupported,
-		Reasoning:     "single candidate",
-		AllScores:     map[string]float64{defaultCandidate.Model: 1.0},
+		SelectedModel:     defaultCandidate.Model,
+		SelectedCandidate: defaultCandidate,
+		LoRAName:          defaultCandidate.LoRAName,
+		Score:             1.0,
+		Confidence:        1.0,
+		Method:            method,
+		Tier:              selection.TierSupported,
+		Reasoning:         "single candidate",
+		AllScores:         map[string]float64{defaultCandidate.Model: 1.0},
 	}
 	recordCtx, result, selectedModel, learningApplied := r.applyRouterLearning(
 		selCtx,
@@ -273,12 +290,13 @@ func (r *OpenAIRouter) recordSelectionFallback(
 		tier = selector.Tier()
 	}
 	fallbackResult := &selection.SelectionResult{
-		SelectedModel: fallback.Model,
-		LoRAName:      fallback.LoRAName,
-		Method:        method,
-		Tier:          tier,
-		Reasoning:     reason,
-		AllScores:     map[string]float64{fallback.Model: 0},
+		SelectedModel:     fallback.Model,
+		SelectedCandidate: fallback,
+		LoRAName:          fallback.LoRAName,
+		Method:            method,
+		Tier:              tier,
+		Reasoning:         reason,
+		AllScores:         map[string]float64{fallback.Model: 0},
 	}
 	recordCtx, fallbackResult, selected, learningApplied := r.applyRouterLearning(
 		selCtx,

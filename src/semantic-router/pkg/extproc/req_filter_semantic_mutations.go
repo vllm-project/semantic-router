@@ -205,32 +205,52 @@ func (r *OpenAIRouter) applySemanticRequestParams(
 	if decision == nil || request == nil || decision.GetRequestParamsConfig() == nil {
 		return false, nil
 	}
-	params := decision.GetRequestParamsConfig()
+	changes, err := projectSemanticRequestParams(request, decision.GetRequestParamsConfig())
 	decisionKey := config.RoutingDecisionKey(routingScope, decision.Name)
-	changed := false
+	for _, field := range changes.blocked {
+		metrics.RecordBlockedParam(decisionKey, field)
+	}
+	if changes.tokensCapped {
+		metrics.RecordMaxTokensCapped(decisionKey)
+	}
+	if changes.nCapped {
+		metrics.RecordMaxNCapped(decisionKey)
+	}
+	return len(changes.blocked) > 0 || changes.tokensCapped || changes.nCapped, err
+}
+
+type requestParamChanges struct {
+	blocked      []string
+	tokensCapped bool
+	nCapped      bool
+}
+
+// projectSemanticRequestParams is shared by capability preview and actual
+// dispatch. Preview must not emit plugin metrics or mutate the real request.
+func projectSemanticRequestParams(request *llmprotocol.Request, params *config.RequestParamsPluginConfig) (changes requestParamChanges, err error) {
+	if request == nil || params == nil {
+		return changes, nil
+	}
 	for _, field := range params.BlockedParams {
 		blocked, err := blockSemanticRequestField(request, strings.TrimSpace(field))
 		if err != nil {
-			return false, err
+			return changes, err
 		}
 		if blocked {
-			changed = true
-			metrics.RecordBlockedParam(decisionKey, field)
+			changes.blocked = append(changes.blocked, field)
 		}
 	}
 	if params.MaxTokensLimit != nil && request.Sampling.MaxOutputTokens != nil &&
 		*request.Sampling.MaxOutputTokens > int64(*params.MaxTokensLimit) {
 		request.Sampling.MaxOutputTokens = llmprotocol.Int64(int64(*params.MaxTokensLimit))
-		metrics.RecordMaxTokensCapped(decisionKey)
-		changed = true
+		changes.tokensCapped = true
 	}
 	if params.MaxN != nil && request.CandidateCount != nil &&
 		*request.CandidateCount > int64(*params.MaxN) {
 		request.CandidateCount = llmprotocol.Int64(int64(*params.MaxN))
-		metrics.RecordMaxNCapped(decisionKey)
-		changed = true
+		changes.nCapped = true
 	}
-	return changed, nil
+	return changes, nil
 }
 
 //nolint:cyclop,funlen // Blocking is an exhaustive mapping of the public request-parameter vocabulary.
