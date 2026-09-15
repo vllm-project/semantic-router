@@ -468,6 +468,9 @@ func TestHandleAutoModelRoutingSameModelEncodesCurrentSemanticRequest(t *testing
 	if body.Model != "auto" || len(body.Messages) != 1 || body.Messages[0].Content != "short semantic content" {
 		t.Fatalf("unexpected encoded semantic request: %+v", body)
 	}
+	if ctx.VSRSelectedModel != "auto" {
+		t.Fatalf("selected model = %q, want the final routed model", ctx.VSRSelectedModel)
+	}
 }
 
 func TestSpecifiedModelPreservesAnthropicWireAtExtProcBoundary(t *testing.T) {

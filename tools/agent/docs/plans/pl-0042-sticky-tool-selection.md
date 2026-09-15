@@ -21,11 +21,13 @@
 - Router 是 Envoy ExtProc gRPC 请求路由层：它将公开协议解码为中立请求，
   提取 signals，执行 decision 和 model algorithm，运行 request/response
   plugins，最后由 provider codec 编码并转发。
-- 当前工具选择是每请求独立完成的：
+- 上游 `main` 的基线工具选择是每请求独立完成的：
   `handleToolSelectionForRequest` → `handleToolSelection` → early mode
   (`none`/`filtered`/`passthrough`) → semantic retrieval 或
   `tool_selection` plugin → `applySelectedTools` → `commitToolSelection`。
-  尚不存在 session-scoped selected-tool state。
+  当前工作分支已经在这条链上接入了 opt-in session-scoped selected-tool
+  state；本计划保留上游基线描述，避免把 fork 分支状态误写成已合并到
+  `main`。
 - 当前本地栈曾验证过 Router `localhost:8080`、Envoy `localhost:8899`、
   Dashboard `localhost:8700` 等入口；`/ready` 可能因 embedding/classifier
   模型下载或 Hugging Face 限流保持 503。真实生成请求还需要配置中的 vLLM
@@ -125,11 +127,29 @@ Anthropic 信号、消息指纹或 request ID 推导；这些来源中有客户�
 
 ## Dependency status
 
-当前 `main` 中未找到 #3392 的独立 bounded state、storage、fingerprint 或
-trusted-identity seam。可复用的只是上述 session telemetry 参考实现和已有
-`TrustedMetadata` 类型。因此正式 runtime work 之前需要先落地一个最小 foundation
-contract，或把 #3392 的已审查提交合并到本分支；不能把现有 `RequestContext.SessionID`
-或 `sessiontelemetry.RouterSessionSnapshot` 当成替代品。
+上游 `main` 仍未包含 #3392 的完整 runtime；当前工作分支已经具备一个等价的窄
+foundation seam，可供本分支的 runtime 使用。该 seam 包括 `pkg/sessiontools`
+中的 identity-only bounded state、store/manager、fingerprint、trusted identity
+判定，以及本地 `MemoryStore` 和可选 standalone Redis CAS store。运行时仍保持
+每轮重新授权，sticky 默认关闭；这些事实只适用于当前工作分支，不能当作已经合并
+到上游 `main` 的公共 API，也不能把现有 `RequestContext.SessionID` 单独当成可信
+sticky key。
+
+## Current audit status
+
+- STICKY-01 至 STICKY-05 的 foundation、确定性 merge、runtime integration、
+  invalidation、local/shared persistence 已实现，并有相应窄单元/集成覆盖。
+- 三种 provider codec（OpenAI Chat、OpenAI Responses、Anthropic）已有 retained
+  definition 顺序和字节稳定性测试。
+- Sticky 维护 E2E 已注册并可编译，覆盖 reuse、growth、called-tool pin、replacement、
+  schema invalidation、untrusted identity 和 concurrency；尚未在 live Kubernetes/
+  AI Gateway 环境执行。
+- STICKY-06 仍缺 provider prompt-cache read/write usage 与 stateless-selection
+  baseline 的真实对比证据。
+- STICKY-07 仍缺 Redis restart/unavailable、TTL expiry 等 live recovery E2E；当前
+  只有 unit/integration 证据。
+- STICKY-08 的完整 Go/Python/repository gates 受当前环境的缺失 module、DNS、pytest
+  和容器/Kubernetes 条件限制，不能宣布全部完成。
 
 ## Proposed state contract
 
@@ -163,26 +183,26 @@ ToolSelectionState
 
 ## Exit Criteria
 
-- [ ] #3392 foundation 或等价的、经过审查的 trusted identity/state seam 已可用。
-- [ ] 重复可信 session turn 产生有界且确定性的工具顺序。
-- [ ] 每轮重新授权，catalog/schema/policy/capability 变化会安全失效。
+- [x] #3392 foundation 或等价的、经过审查的 trusted identity/state seam 已可用。
+- [x] 重复可信 session turn 产生有界且确定性的工具顺序。
+- [x] 每轮重新授权，catalog/schema/policy/capability 变化会安全失效。
 - [ ] expiry、restart、并发和 store 不可用都能安全回退到 stateless selection。
 - [ ] provider-visible retained prefix 和维护 E2E 证据已完成。
 - [ ] 适用 repository gates 通过，最终测试报告记录提交和已知限制。
 
 ## Task List
 
-- [ ] `STICKY-00` 记录基线、确认 #3392 API/依赖和当前工作树；不改业务代码。
-- [ ] `STICKY-01` 落地/接入 foundation：trusted identity、独立 state schema、
+- [x] `STICKY-00` 记录基线、确认 #3392 API/依赖和当前工作树；不改业务代码。
+- [x] `STICKY-01` 落地/接入 foundation：trusted identity、独立 state schema、
       TTL/cardinality 限制、local/shared store seam、fingerprint helper。
-- [ ] `STICKY-02` 实现纯逻辑 deterministic merge：reuse、去重、called-tool pin、
+- [x] `STICKY-02` 实现纯逻辑 deterministic merge：reuse、去重、called-tool pin、
       append/growth、bounded replacement、disabled 等价路径。
-- [ ] `STICKY-03` 在 `req_filter_tools*.go` 邻近 seam 接入；覆盖 `none`、
+- [x] `STICKY-03` 在 `req_filter_tools*.go` 邻近 seam 接入；覆盖 `none`、
       `filtered`、`passthrough`、`tool_selection add/filter`、fallback 和显式
       model；每轮仍走授权。
-- [ ] `STICKY-04` 增加 catalog/schema/policy/capability/fingerprint invalidation、
+- [x] `STICKY-04` 增加 catalog/schema/policy/capability/fingerprint invalidation、
       state corrupt/expired/untrusted/store unavailable 的安全恢复与 receipts。
-- [ ] `STICKY-05` 增加 local/shared persistence、版本/CAS 或 session serialization、
+- [x] `STICKY-05` 增加 local/shared persistence、版本/CAS 或 session serialization、
       reload/restart/expiry/concurrency/race 覆盖。
 - [ ] `STICKY-06` 增加三种 provider codec 的 retained-prefix 字节稳定性验证，
       并与 stateless prompt-cache baseline 对比。
@@ -206,6 +226,22 @@ ToolSelectionState
 新增配置字段时还必须运行 `src/vllm-sr/tests/test_plugin_tool_selection.py`、
 `test_plugin_parsing_advanced_filtering.py` 和相关 canonical/reference config
 contract tests。若修改 `sessiontelemetry/*memory*`，补跑 `make memory-test-integration`。
+
+## Current test report
+
+```text
+Scope: STICKY-01 through STICKY-08 audit
+Passed evidence: sessiontools/merge/store unit coverage; runtime identity, mode,
+  invalidation, recovery, replacement and concurrency contract tests; provider-prefix
+  codec tests; sticky E2E package compilation.
+Latest checks: git diff --check passed; protocolcodec targeted Go tests passed.
+Blocked checks: current sessiontools/config/tools/extproc rerun needs missing Go
+  modules and DNS access to proxy.golang.org; Python pytest is not installed; live
+  Kubernetes/AI Gateway E2E and provider cache-usage baseline were not run.
+Known limits: Redis restart/unavailable and TTL expiry have unit/integration coverage
+  but no live E2E receipt; provider cache hit is not guaranteed.
+Push status: no intermediate push; only the final reviewed version may be pushed.
+```
 
 ## Operating Rules
 
@@ -237,9 +273,11 @@ Push status:
 
 ## Next Action
 
-先完成 `STICKY-00`：以当前 `main` 为基线，确认 #3392 的真实接口是否可以取得。
-在依赖未落地前只提交设计/文档或 foundation contract，不把启发式
-`RequestContext.SessionID` 直接接到工具状态存储上。
+下一步只处理未完成边界：补齐 STICKY-06 的 provider prompt-cache usage 与
+stateless baseline 证据，执行 STICKY-07 的 live E2E（尤其 TTL、restart、Redis
+unavailable），然后运行适用 repository gates 并更新 STICKY-08。若环境仍无法
+提供依赖下载、容器或 Kubernetes，保留明确的 blocked evidence，不把编译或 unit
+coverage 宣布为完整 E2E 通过。
 
 ## Related Docs
 

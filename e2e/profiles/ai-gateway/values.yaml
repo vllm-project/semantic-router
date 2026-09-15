@@ -133,6 +133,35 @@ config:
             threshold: 0.72
             on_error: skip
             escalation_order: small_to_large
+      - name: sticky_tool_selection_decision
+        description: Contract route for trusted-session sticky tool selection and provider-prefix retention
+        priority: 505
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: sticky_tool_selection
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: filter
+              relevance_threshold: 0.95
+              preserve_count: 1
+              sticky:
+                enabled: true
+                max_tools: 2
+                max_new_tools_per_turn: 1
+                pin_called_tools: true
       - name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
         priority: 500
@@ -662,6 +691,11 @@ config:
           keywords:
             - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
           case_sensitive: false
+        - name: sticky_tool_selection
+          operator: OR
+          keywords:
+            - __STICKY_TOOL_SELECTION__
+          case_sensitive: false
         - name: retention_probe_keywords
           operator: OR
           keywords:
@@ -898,6 +932,13 @@ config:
           mode: lexical+nli
           nli:
             contradiction_threshold: 0.5
+      tool_sessions:
+        backend: local
+        ttl_seconds: 300
+        max_sessions: 100
+        max_sessions_per_identity: 10
+        max_state_bytes: 4096
+        timeout_ms: 50
       memory:
         embedding_model: mmbert
       vector_store:
@@ -985,3 +1026,7 @@ resources:
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false
+
+extraEnv:
+  - name: USER_SCOPE_NAMESPACE_SECRET
+    value: e2e-sticky-tool-selection-secret

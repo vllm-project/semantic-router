@@ -333,7 +333,20 @@ func runStickyUntrustedComparison(
 		)
 	}
 
-	request := stickyNormalRequest("__STICKY_TOOL_SELECTION__ Search recent weather reports.", tools)
+	request := map[string]any{
+		"model": "MoM",
+		"messages": []fixtures.ChatMessage{{
+			Role:    "user",
+			Content: "__STICKY_TOOL_SELECTION__ Search recent weather reports.",
+		}},
+		"metadata": map[string]string{
+			// Request metadata is client-controlled and must not become the
+			// authenticated principal used to scope sticky state.
+			"user_id": "sticky-e2e-user",
+		},
+		"tools":       tools,
+		"tool_choice": "auto",
+	}
 	trusted, err := runStickyTurn(ctx, sessions, sessionID, request, trustedHeaders, "trusted control turn")
 	if err != nil {
 		return stickyToolSnapshot{}, stickyToolSnapshot{}, stickyToolSnapshot{}, err

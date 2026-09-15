@@ -123,17 +123,22 @@ sticky 逻辑应围绕这条链的窄 seam 工作：先完成正常 request-time
 - 不承诺 provider 一定命中 prompt cache；只验证 Router 没有无谓破坏前缀。
 - 不在 foundation API 未确认前直接把 `RequestContext.SessionID` 接成 sticky key。
 
-### 依赖状态审计（2026-09-11）
+### 依赖状态审计（2026-09-15）
 
-截至本次审计，#3392 仍是 open/in-progress，负责该 foundation 的 PR #3391
-仍未合并到上游 `main`，且处于 review 迭代状态。因此下面这些名称只能作为
-待核对的设计方向，不能当作当前分支已经存在的公共 API：
+上游 `vllm-project/main` 仍未合并 #3392 的完整 runtime；当前工作分支已经具备
+一个等价的窄 foundation seam，并在 runtime 中启用 opt-in sticky selection。当前
+分支已有：
 
-- 预期的 `pkg/sessiontools` `State`、`Store`/CAS、TTL 和 bounded local store；
-- `pkg/tools` 的 definition/catalog/policy/capability fingerprint helper；
-- `RequestContext.SessionProvenance`、服务端派生的 `ResolveStickyToolIdentity`；
+- `pkg/sessiontools` 的 identity-only bounded state、`Store`/CAS、TTL、quota 和
+  local `MemoryStore`；
+- 可选 standalone Redis CAS store、selection manager 和稳定 fingerprint helper；
+- trusted identity 判定、每轮重新授权，以及 catalog/schema/policy/capability
+  invalidation；
 - `tool_selection.sticky` 与 `global.stores.tool_sessions` 的 disabled-by-default
   配置契约。
+
+这些是当前工作分支的实现事实，不是已经合并到上游 `main` 的公共 API。不能把
+客户端 `RequestContext.SessionID` 或消息推导值单独当作可信 sticky key。
 
 该 PR 的公开 review 还暴露了实现必须吸收的安全教训：过期 key 的清理需要防止
 ABA race；foundation 阶段在 runtime 尚未接入时必须拒绝 `sticky.enabled: true`，
@@ -148,26 +153,25 @@ ABA race；foundation 阶段在 runtime 尚未接入时必须拒绝 `sticky.enab
 ## 依赖和实现顺序
 
 父需求是 #2973；#3392 负责 bounded state、storage、fingerprint 和 trusted
-identity foundation。当前 `main` 审计显示这些独立 seam 尚未可直接使用，#3392
-仍需确认真实 API/合并状态。因此先做设计和窄 contract，不要凭候选分支 API 写运行时代码。
+identity foundation。上游 `main` 尚未合并完整 runtime，但当前工作分支已经有
+可供后续审计使用的窄 foundation 和请求管线接入。按 [PL-0042](plans/pl-0042-sticky-tool-selection.md)
+的状态推进：
 
-建议按现有执行计划 [PL-0042](plans/pl-0042-sticky-tool-selection.md) 的
-`STICKY-00` 到 `STICKY-08` 顺序推进：
+| 阶段 | 当前状态 | 审计结论 |
+| --- | --- | --- |
+| STICKY-00 | 已完成 | 已记录基线、依赖、工作树和安全边界 |
+| STICKY-01 | 已完成 | foundation、trusted identity、bounded state、store、fingerprint 已具备 |
+| STICKY-02 | 已完成 | deterministic reuse、called pin、growth、replacement 有窄测试 |
+| STICKY-03 | 已完成 | runtime 接入覆盖主要 mode/plugin 路径，默认关闭 |
+| STICKY-04 | 已完成 | 每轮授权、fingerprint invalidation、corrupt/expired/untrusted/store fallback 已覆盖 |
+| STICKY-05 | 已完成 | local/shared persistence、CAS、expiry、并发 contract 已覆盖 |
+| STICKY-06 | 部分完成 | 三种 provider codec retained-prefix 测试完成；prompt-cache/stateless baseline 待补 |
+| STICKY-07 | 部分完成 | E2E 已注册并可编译；live TTL/restart/unavailable-store recovery 待执行 |
+| STICKY-08 | 未完成 | repository gates、最终报告和环境限制收敛待完成 |
 
-1. **Foundation**：冻结 state schema、可信身份解析、TTL/cardinality、local/shared
-   store seam 和稳定 fingerprint helper。
-2. **纯逻辑 merge**：输入当前 request-time selection 与历史 state，输出有序且有界
-   的新集合和 receipt；先写纯函数单测。
-3. **runtime 接入**：只在 `req_filter_tools*.go` 邻近 seam 接入，覆盖 `none`、
-   `filtered`、`passthrough`、plugin add/filter 和显式 model。
-4. **失效/恢复**：每轮重授权；catalog/schema/policy/capability/fingerprint、
-   expired/corrupt/untrusted/unavailable 均回退 stateless。
-5. **持久化/并发**：加入 revision/CAS 或 session serialization，验证 reload、
-   restart、race 和 store 缺失。
-6. **provider-prefix**：对 OpenAI Chat、Responses、Anthropic 验证 retained 定义
-   的顺序和字节稳定性，并与 stateless baseline 对比。
-7. **维护 E2E**：覆盖 reuse、growth、called pin、replacement、expiry、invalidation、
-   concurrency、restart 和 unavailable-store fallback。
+实现顺序仍遵循“先正常 request-time selection，再做有界历史合并，最后编码”的
+边界；剩余工作只补验证证据，不得绕过每轮授权或把 state 扩展成原始 schema、
+prompt、参数和结果缓存。
 
 每一步都先做最小可验证改动；不要为了“顺手”重排 import、格式化无关文件或扩大
 热点模块职责。
@@ -224,9 +228,14 @@ listener `8899`；`serve` 负责路由栈，不会自动启动物理 vLLM 后端
 [nvidia-local.md](nvidia-local.md)。
 
 本次勘察环境的限制必须如实记录：Docker/OrbStack socket 不可用，无法声称服务
-启动成功；`go` 不在 `PATH`，因此 Go targeted test 尚未执行；外部 GitHub/raw
-查询受 DNS 限制。它们是环境限制，不是功能通过证据。可运行的 harness 检查仍应
-优先执行 `make agent-validate`、`git diff --check` 和相应 `make agent-report`。
+启动成功；`go` 不在 `PATH`，但本地 toolchain 可用路径为
+`/private/tmp/semantic-router-go.3tZHpZ/go/bin/go`，最新 targeted rerun 因缺失
+Go modules 和 DNS 无法访问 `proxy.golang.org`；Python `pytest` 未安装；外部
+GitHub/raw 查询受 DNS 限制。`pkg/protocolcodec` 的缓存 targeted tests 已通过，
+sticky E2E package 已编译，但 live Kubernetes/AI Gateway E2E、Redis recovery 和
+provider cache-usage baseline 尚未完成。它们是环境限制，不是功能通过证据。可运行
+的 harness 检查仍应优先执行 `make agent-validate`、`git diff --check` 和相应
+`make agent-report`。
 
 ## 分阶段测试矩阵
 
@@ -278,9 +287,11 @@ Known uncovered cases:
 Push status:
 ```
 
-当前文档阶段的证据：`make agent-validate`、`git diff --check` 和对应
-`make agent-report ENV=cpu ...` 已通过；Go、容器启动和外部网络检查分别受上述
-环境限制。业务代码尚未修改，故不能把 sticky runtime 功能宣布为完成。
+当前审计阶段的证据：`git diff --check` 和对应 `make agent-report ENV=cpu ...`
+已通过；`pkg/protocolcodec` targeted Go tests 通过，sticky E2E package 可编译。
+Go 其他 targeted rerun、pytest、容器启动、live E2E、provider cache baseline 和
+完整 repository gates 分别受上述环境限制或尚未执行。业务 runtime 已实现，但
+不能把 STICKY-06～08 或 Sticky Tool Selection 全部宣布为完成。
 
 ## 继续阅读
 

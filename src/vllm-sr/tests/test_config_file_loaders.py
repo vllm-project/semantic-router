@@ -314,7 +314,7 @@ def test_parse_user_config_accepts_tool_session_store(
 @pytest.mark.parametrize(
     "tool_sessions, expected",
     [
-        ({"backend": "postgres"}, "backend must be 'local' or 'redis'"),
+        ({"backend": "postgres"}, r"backend.*local.*redis"),
         (
             {"backend": "redis"},
             "redis.address is required when backend is redis",

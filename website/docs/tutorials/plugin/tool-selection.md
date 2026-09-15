@@ -95,9 +95,16 @@ Sticky state is scoped to a trusted, authenticated session — it is never
 active for an anonymous or derived session identity — and every stored
 identity is re-authorized and re-validated against the current request's
 catalog, policy, and model/wire capabilities before use; a stored identity
-is never trusted blindly. Full runtime behavior (this configuration
-contract is Phase 1 of 4; the plugin does not yet read or write session
-state) is tracked in
+is never trusted blindly. Runtime support is implemented in the Router request
+path and is tracked in
 [PL-0042](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/docs/plans/pl-0042-sticky-tool-selection.md).
+The default local `MemoryStore` is process-local; configure
+`global.stores.tool_sessions.backend: redis` for the optional standalone Redis
+CAS store when state must survive restarts or be shared across replicas. No
+store is constructed unless at least one decision enables sticky selection.
+Expired, invalid, corrupt, untrusted, unavailable, and CAS-conflicted state
+falls back to ordinary request-time selection. Authorization decisions are
+never cached, and persisted state contains only bounded tool identities and
+fingerprints — never schemas, prompts, arguments, or results.
 See the complete disabled example:
 [`sticky-add-from-database.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/sticky-add-from-database.yaml).

@@ -193,6 +193,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 
 	if matchedModel == originalModel || matchedModel == "" {
 		ctx.RequestModel = originalModel
+		ctx.VSRSelectedModel = originalModel
 		dispatch, err := r.prepareProviderDispatch(
 			request, originalModel, decisionName, reasoningDecision.UseReasoning, ctx,
 		)

@@ -1056,16 +1056,29 @@ class StickyToolSelectionConfig(BaseModel):
     """Session-scoped sticky tool-set selection (issue #3347).
 
     Mirrors the Go-side `config.StickyToolSelectionConfig`. Opt-in and
-    disabled by default. This layer only mirrors the schema surface so
-    Pydantic stops dropping the subtree; the Go side is authoritative for
-    bounds (max_tools 1..128, max_new_tools_per_turn 0..max_tools) and for
-    rejecting sticky.enabled under a disabled tool_selection plugin.
+    disabled by default. This layer mirrors the schema and structural bounds
+    so Pydantic does not drop malformed nested configuration; the Go side
+    remains authoritative for full runtime admission and request-time checks.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     max_tools: Optional[int] = Field(default=None, ge=1, le=128)
     max_new_tools_per_turn: Optional[int] = Field(default=None, ge=0)
     pin_called_tools: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_bounds(self):
+        effective_max_tools = self.max_tools if self.max_tools is not None else 16
+        if (
+            self.max_new_tools_per_turn is not None
+            and self.max_new_tools_per_turn > effective_max_tools
+        ):
+            raise ValueError(
+                "max_new_tools_per_turn must be less than or equal to max_tools"
+            )
+        return self
 
 
 class ToolSessionRedisConfig(BaseModel):
@@ -1125,6 +1138,12 @@ class ToolSelectionPluginConfig(BaseModel):
     preserve_count: Optional[int] = Field(default=None, ge=0)
     advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
     sticky: Optional[StickyToolSelectionConfig] = None
+
+    @model_validator(mode="after")
+    def validate_sticky_contract(self):
+        if self.sticky is not None and self.sticky.enabled and not self.enabled:
+            raise ValueError("sticky.enabled requires tool_selection to be enabled")
+        return self
 
 
 class SystemPromptPluginConfig(BaseModel):

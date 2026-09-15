@@ -61,7 +61,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
-	return testmatrix.Combine(testmatrix.BaselineRouterContract)
+	return testmatrix.Combine(testmatrix.BaselineRouterContract, testmatrix.StickyToolSelectionContract)
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service.

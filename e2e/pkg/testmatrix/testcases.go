@@ -51,6 +51,14 @@ var BaselineRouterContract = []string{
 	"event-routing",
 }
 
+// StickyToolSelectionContract covers the opt-in trusted-session tool-set
+// behavior. It is kept separate from the stateless baseline so profiles that
+// do not configure a session store retain the existing contract unchanged.
+var StickyToolSelectionContract = []string{
+	"sticky-tool-selection",
+	"sticky-tool-selection-recovery",
+}
+
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
 var DashboardContract = []string{
 	// Core API
@@ -80,6 +88,7 @@ var AnthropicShimContract = []string{
 	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
 	"anthropic-chat-cache-control",
+	"sticky-tool-selection-provider-prefix",
 	"anthropic-messages-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",

@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -28,29 +29,30 @@ type classifierMappings struct {
 }
 
 type routerComponents struct {
-	cfg                  *config.RouterConfig
-	categoryDescriptions []string
-	classifier           *classification.Classifier
-	recipeClassifiers    *classification.RecipeClassifiers
-	classificationSvc    *services.ClassificationService
-	semanticCache        cache.CacheBackend
-	toolsDatabase        *tools.ToolsDatabase
-	toolEmbedder         *cachedToolEmbedder
-	responseAPIFilter    *ResponseAPIFilter
-	replayRecorder       *routerreplay.Recorder
-	replayStoreShared    bool
-	replayRecorders      map[string]*routerreplay.Recorder
-	modelSelector        *selection.Registry
-	recipeModelSelectors map[config.RecipeName]*selection.Registry
-	lookupTable          lookuptable.LookupTable
-	memoryStore          memory.Store
-	memoryExtractor      *memory.MemoryExtractor
-	protocolCodecs       *protocolcodec.Registry
-	credentialResolver   *authz.CredentialResolver
-	rateLimiter          *ratelimit.RateLimitResolver
-	lookupTableCancel    func()
-	routerSessionStore   *sessiontelemetry.RouterSessionStateStoreSlot
-	resources            *resourceScope
+	cfg                        *config.RouterConfig
+	categoryDescriptions       []string
+	classifier                 *classification.Classifier
+	recipeClassifiers          *classification.RecipeClassifiers
+	classificationSvc          *services.ClassificationService
+	semanticCache              cache.CacheBackend
+	toolsDatabase              *tools.ToolsDatabase
+	toolEmbedder               *cachedToolEmbedder
+	stickyToolSelectionManager *sessiontools.Manager
+	responseAPIFilter          *ResponseAPIFilter
+	replayRecorder             *routerreplay.Recorder
+	replayStoreShared          bool
+	replayRecorders            map[string]*routerreplay.Recorder
+	modelSelector              *selection.Registry
+	recipeModelSelectors       map[config.RecipeName]*selection.Registry
+	lookupTable                lookuptable.LookupTable
+	memoryStore                memory.Store
+	memoryExtractor            *memory.MemoryExtractor
+	protocolCodecs             *protocolcodec.Registry
+	credentialResolver         *authz.CredentialResolver
+	rateLimiter                *ratelimit.RateLimitResolver
+	lookupTableCancel          func()
+	routerSessionStore         *sessiontelemetry.RouterSessionStateStoreSlot
+	resources                  *resourceScope
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -133,9 +135,6 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 }
 
 func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error) {
-	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
-		return nil, err
-	}
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
@@ -149,41 +148,11 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error
 	return components.buildRouter(), nil
 }
 
-// validateStickyToolSelectionPhaseSupport rejects any decision that enables
-// tool_selection.sticky.enabled (issue #3347 phase 1 / sub-issue #3392): no
-// production request path consumes ResolveStickyToolIdentity or the
-// sessiontools store yet, so accepting sticky.enabled: true here would
-// construct successfully and then silently never activate sticky selection
-// for any request. config.ToolSelectionPluginConfig.Validate() already
-// rejects this at config-admission time (config.ErrToolSelectionStickyUnsupported);
-// this is a second, router-construction-time gate over the same condition
-// via the same sentinel error, checked here too since config admission and
-// router construction are two different entry points into this codebase
-// (config.Parse vs. an already-parsed *config.RouterConfig handed directly
-// to buildOpenAIRouterFromConfig, e.g. from the Kubernetes reconciler path)
-// and this must fail closed regardless of which one produced cfg.
-func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
-	if cfg == nil {
-		return nil
-	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		plugin := decision.GetToolSelectionConfig()
-		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
-			continue
-		}
-		return config.ErrToolSelectionStickyUnsupported
-	}
-	return nil
-}
-
 // validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
 // whenever any decision enables tool_selection.sticky.enabled (issue #3347,
-// PL-0042 section 2.4). Retained as a construction-time guard for once
-// Phase 2 lifts validateStickyToolSelectionPhaseSupport's rejection above —
-// sticky.enabled: true cannot reach this check today, since the
-// phase-support gate now rejects it first. Unlike
-// validateResponseCacheScopeSecret just below, this is unconditional — not
-// gated on cfg.ManagementAPI.RemoteExposure. Response-cache scoping without
+// PL-0042 section 2.4). Unlike validateResponseCacheScopeSecret just below,
+// this is unconditional — not gated on cfg.ManagementAPI.RemoteExposure.
+// Response-cache scoping without
 // the secret degrades to a documented, bounded fallback (a plain hash) that
 // is merely weaker, not silently wrong; sticky tool-set identity has no
 // such acceptable degraded mode — ResolveStickyToolIdentity
@@ -247,6 +216,14 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
+	stickyManager, stickyStore, err := buildStickyToolSelectionManager(cfg)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
+	components.stickyToolSelectionManager = stickyManager
+	if stickyStore != nil {
+		components.resources.add(stickyStore.Close)
+	}
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
@@ -388,29 +365,30 @@ func buildToolsRuntime(cfg *config.RouterConfig) (*tools.ToolsDatabase, *cachedT
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
-		Config:                  components.cfg,
-		CategoryDescriptions:    components.categoryDescriptions,
-		Classifier:              components.classifier,
-		RecipeClassifiers:       components.recipeClassifiers,
-		ClassificationService:   components.classificationSvc,
-		Cache:                   components.semanticCache,
-		ToolsDatabase:           components.toolsDatabase,
-		toolEmbedder:            components.toolEmbedder,
-		ResponseAPIFilter:       components.responseAPIFilter,
-		ReplayRecorder:          components.replayRecorder,
-		ReplayStoreShared:       components.replayStoreShared,
-		ModelSelector:           components.modelSelector,
-		RecipeModelSelectors:    components.recipeModelSelectors,
-		LookupTable:             components.lookupTable,
-		ReplayRecorders:         components.replayRecorders,
-		MemoryStore:             components.memoryStore,
-		MemoryExtractor:         components.memoryExtractor,
-		ProtocolCodecs:          components.protocolCodecs,
-		CredentialResolver:      components.credentialResolver,
-		RateLimiter:             components.rateLimiter,
-		lookupTableCancel:       components.lookupTableCancel,
-		routerSessionStateStore: components.routerSessionStore,
-		resources:               components.resources,
+		Config:                     components.cfg,
+		CategoryDescriptions:       components.categoryDescriptions,
+		Classifier:                 components.classifier,
+		RecipeClassifiers:          components.recipeClassifiers,
+		ClassificationService:      components.classificationSvc,
+		Cache:                      components.semanticCache,
+		ToolsDatabase:              components.toolsDatabase,
+		toolEmbedder:               components.toolEmbedder,
+		stickyToolSelectionManager: components.stickyToolSelectionManager,
+		ResponseAPIFilter:          components.responseAPIFilter,
+		ReplayRecorder:             components.replayRecorder,
+		ReplayStoreShared:          components.replayStoreShared,
+		ModelSelector:              components.modelSelector,
+		RecipeModelSelectors:       components.recipeModelSelectors,
+		LookupTable:                components.lookupTable,
+		ReplayRecorders:            components.replayRecorders,
+		MemoryStore:                components.memoryStore,
+		MemoryExtractor:            components.memoryExtractor,
+		ProtocolCodecs:             components.protocolCodecs,
+		CredentialResolver:         components.credentialResolver,
+		RateLimiter:                components.rateLimiter,
+		lookupTableCancel:          components.lookupTableCancel,
+		routerSessionStateStore:    components.routerSessionStore,
+		resources:                  components.resources,
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)

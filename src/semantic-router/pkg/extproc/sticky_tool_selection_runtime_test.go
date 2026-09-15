@@ -123,7 +123,7 @@ func TestShouldApplyStickyToolSelectionBypassesExplicitAndUnresolvedRequests(t *
 	}
 }
 
-func TestHandleToolSelectionDecisionPluginDefaultsChoiceOnlyForStickyAdd(t *testing.T) {
+func TestHandleToolSelectionDecisionPluginDefaultsChoiceForStickyModes(t *testing.T) {
 	tests := []struct {
 		name       string
 		mode       string
@@ -145,9 +145,10 @@ func TestHandleToolSelectionDecisionPluginDefaultsChoiceOnlyForStickyAdd(t *test
 			wantChoice: llmprotocol.ToolChoiceAuto,
 		},
 		{
-			name:   "sticky enabled filter mode",
-			mode:   config.ToolSelectionModeFilter,
-			sticky: &config.StickyToolSelectionConfig{Enabled: true},
+			name:       "sticky enabled filter mode",
+			mode:       config.ToolSelectionModeFilter,
+			sticky:     &config.StickyToolSelectionConfig{Enabled: true},
+			wantChoice: llmprotocol.ToolChoiceAuto,
 		},
 	}
 
