@@ -1,0 +1,110 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: Never
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      model: openai/mock-model
+    models:
+      - name: openai/mock-model
+        backend_refs:
+          - name: mock-vllm
+            provider: vllm
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: openai/mock-model
+    decisions:
+      # The only decision: every request masks. There is no PII signal to
+      # gate on, because masking calls the classifier directly at the
+      # dispatch boundary (applyMaskingBeforeDispatch) rather than through a
+      # routing-time signal -- it does not need one to run.
+      - name: mask_pii
+        description: Masks detected PII before dispatch on every request
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/mock-model
+            use_reasoning: false
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              threshold: 0.5
+              entity_types: []
+              placeholders: {}
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      external:
+        # The same remote token_spans.v1 stub the pii-remote-backend profile
+        # uses. No PII model is hosted here either; every span this profile
+        # sees came from this HTTP call.
+        - name: e2e-pii-spans
+          model_role: classification
+          llm_endpoint:
+            address: mock-pii-spans.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_model_name: pii-spans-service
+          llm_timeout_seconds: 5
+      modules:
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            # No local selectors: model_id empty and use_mmbert_32k false, so
+            # the candle PII path cannot run and every span comes from the
+            # remote backend below -- a detection here is attributable to it.
+            model_ref: ""
+            model_id: ""
+            use_mmbert_32k: false
+            pii_mapping_path: /app/models/pii-remote-backend/pii_type_mapping.json
+            backend:
+              protocol: http_classify
+              contract: token_spans.v1
+              model: e2e-pii-spans
+              deadline_ms: 5000
+            on_error: block
+        hallucination_mitigation:
+          enabled: false
+
+# The router requires a pii_type_mapping.json on disk even for a remote
+# backend, and the token_spans decoder needs it to resolve labels. Reuses the
+# same stand-in ConfigMap the pii-remote-backend profile applies as a
+# prerequisite -- no need for a second copy or the real model.
+extraVolumes:
+  - name: pii-mapping
+    configMap:
+      name: pii-remote-backend-mapping
+extraVolumeMounts:
+  - name: pii-mapping
+    mountPath: /app/models/pii-remote-backend/pii_type_mapping.json
+    subPath: pii_type_mapping.json
+    readOnly: true
+
+resources:
+  # Same headroom as the other remote-backend profiles: taking the classifier
+  # off-box does not avoid the startup embedding-model load.
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 250m
+
+# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
+persistence:
+  enabled: false
