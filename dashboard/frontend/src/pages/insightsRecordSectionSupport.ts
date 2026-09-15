@@ -7,6 +7,7 @@ const SECTION_PRESENTATION: Record<
   Lifecycle: { size: 'compact' },
   'Decision Information': { size: 'compact' },
   'Model Selection': { size: 'compact' },
+  Outcomes: { size: 'compact' },
   'Usage & Cost': { size: 'compact' },
   Signals: { size: 'compact' },
   'Plugin Status': { size: 'compact' },

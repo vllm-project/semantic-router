@@ -339,10 +339,11 @@ func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testi
 		readerRecorder,
 		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/router/api/v1/observability/outcomes", `{}`),
 	)
-	if readerRecorder.Code != http.StatusForbidden || nextCalled {
+	if readerRecorder.Code != http.StatusNoContent || !nextCalled {
 		t.Fatalf("read role status = %d, next called = %v", readerRecorder.Code, nextCalled)
 	}
 
+	nextCalled = false
 	writerRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		writerRecorder,

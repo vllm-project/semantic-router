@@ -401,6 +401,15 @@ const (
 	// VSRInternalAuth authenticates in-process request context that must not
 	// be accepted from external callers or forwarded to model backends.
 	VSRInternalAuth = "x-vsr-internal-auth"
+
+	// VSROutcomeSource carries server-attested outcome provenance between a
+	// trusted control plane and the Router management API. External callers
+	// must not be allowed to supply this header through a proxy.
+	VSROutcomeSource = "x-vsr-outcome-source"
+
+	// VSROutcomePrincipal carries an opaque, server-attested identity used to
+	// isolate outcome-ingest rate limits. It is not persisted with the outcome.
+	VSROutcomePrincipal = "x-vsr-outcome-principal"
 )
 
 // Looper Request Headers

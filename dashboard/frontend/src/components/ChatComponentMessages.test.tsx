@@ -9,6 +9,7 @@ describe('incomplete chat messages', () => {
   it('retains the warning next to a partial answer after streaming has ended', () => {
     const markup = renderToStaticMarkup(
       createElement(ChatComponentMessages, {
+        canSubmitFeedback: false,
         expandedToolCards: new Set<string>(),
         onToggleToolCard: vi.fn(),
         messages: [

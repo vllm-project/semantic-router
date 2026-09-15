@@ -50,7 +50,12 @@ type dashboardProxySet struct {
 	jaegerStatic  *httputil.ReverseProxy
 }
 
-func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvider ...routerauth.CredentialProvider) {
+func registerProxyRoutes(
+	mux *http.ServeMux,
+	cfg *config.Config,
+	feedbackStore playgroundFeedbackStore,
+	credentialProvider ...routerauth.CredentialProvider,
+) {
 	var provider routerauth.CredentialProvider
 	if len(credentialProvider) > 0 {
 		provider = credentialProvider[0]
@@ -58,7 +63,8 @@ func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvi
 	proxies := dashboardProxySet{
 		envoy: configureEnvoyProxy(cfg),
 	}
-	registerRouterAPIProxy(mux, cfg, proxies.envoy, provider)
+	attachPlaygroundReplayTracking(proxies.envoy, feedbackStore)
+	registerRouterAPIProxy(mux, cfg, proxies.envoy, feedbackStore, provider)
 	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
 
@@ -99,6 +105,7 @@ func registerRouterAPIProxy(
 	mux *http.ServeMux,
 	cfg *config.Config,
 	envoyProxy *httputil.ReverseProxy,
+	feedbackStore playgroundFeedbackStore,
 	credentialProvider routerauth.CredentialProvider,
 ) *httputil.ReverseProxy {
 	if cfg.RouterAPIURL == "" {
@@ -114,7 +121,7 @@ func registerRouterAPIProxy(
 	attachRouterReplayResponseRedaction(routerAPIProxy)
 
 	mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
-		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, credentialProvider)
+		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, feedbackStore, credentialProvider)
 	})
 	log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)
 	return routerAPIProxy
@@ -125,6 +132,7 @@ func serveRouterAPIProxy(
 	r *http.Request,
 	cfg *config.Config,
 	envoyProxy, routerAPIProxy *httputil.ReverseProxy,
+	feedbackStore playgroundFeedbackStore,
 	credentialProvider routerauth.CredentialProvider,
 ) {
 	if cfg.ReadonlyMode && isReadonlyRouterMutation(r) {
@@ -140,6 +148,10 @@ func serveRouterAPIProxy(
 	}
 	if !routerManagementProxyRouteAllowed(r.Method, r.URL.Path) {
 		writeDisallowedRouterManagementResponse(w, r)
+		return
+	}
+	if r.Method == http.MethodPost && r.URL.Path == "/api/router/api/v1/observability/outcomes" && feedbackStore != nil {
+		servePlaygroundOutcome(w, r, cfg.RouterAPIURL, routerAPIProxy, feedbackStore, credentialProvider)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/router/api/v1/observability/replays") {

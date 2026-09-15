@@ -21,6 +21,9 @@ type RouterOutcomeRequest struct {
 	Reason    string            `json:"reason,omitempty"`
 	Score     *float64          `json:"score,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
+	// RecordOnly stores feedback for audit and Insights without changing
+	// online model selection. The Dashboard forces this for read-only users.
+	RecordOnly bool `json:"record_only,omitempty"`
 }
 
 type RouterOutcomeResponse struct {
@@ -138,13 +141,14 @@ func normalizeRouterOutcomeRequest(req RouterOutcomeRequest) (*routerruntime.Rou
 		}
 	}
 	return &routerruntime.RouterOutcome{
-		ReplayID:  replayID,
-		Target:    target,
-		TargetRef: boundedOutcomeTargetRef(req.TargetRef),
-		Verdict:   verdict,
-		Reason:    strings.TrimSpace(req.Reason),
-		Score:     score,
-		Metadata:  boundedOutcomeMetadata(req.Metadata),
+		ReplayID:   replayID,
+		Target:     target,
+		TargetRef:  boundedOutcomeTargetRef(req.TargetRef),
+		Verdict:    verdict,
+		Reason:     strings.TrimSpace(req.Reason),
+		Score:      score,
+		Metadata:   boundedOutcomeMetadata(req.Metadata),
+		RecordOnly: req.RecordOnly,
 	}, nil
 }
 
