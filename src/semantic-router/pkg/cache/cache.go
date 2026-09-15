@@ -12,6 +12,7 @@ import (
 	"github.com/openai/openai-go"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // extractUserContent returns the text portion of a user message's content.

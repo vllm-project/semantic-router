@@ -48,7 +48,10 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 	options := embedding.Options{}
 	switch modelName {
 	case "qwen3", "gemma", "bert", "":
-		// These paths have always requested the provider's full output.
+		// The store resolves Dimension from the model contract before inference.
+		// Pass that width through so reduced Qwen3/Gemma vectors match the
+		// Milvus schema instead of silently returning the native width.
+		options.Dimension = cfg.Dimension
 	case "mmbert":
 		options = embedding.Options{Dimension: cfg.Dimension, Layer: cfg.Layer}
 		if options.Dimension <= 0 {

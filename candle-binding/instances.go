@@ -177,6 +177,7 @@ func (m *EmbeddingModel) DimensionContract() (EmbeddingDimensionContract, error)
 		SupportedDimensions: dimensions,
 	}, nil
 }
+
 func (i *instance) clone() (*instance, error) {
 	h, err := useInstance(i, nativeInstanceClone)
 	if err != nil {
