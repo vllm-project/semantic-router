@@ -61,7 +61,8 @@ func validateDecisionPluginPayload(
 		)
 	}
 	var err error
-	if normalizedType == DecisionPluginResponseCache ||
+	if normalizedType == DecisionPluginRequestParams ||
+		normalizedType == DecisionPluginResponseCache ||
 		normalizedType == DecisionPluginResponseJailbreak ||
 		normalizedType == DecisionPluginContextCompression ||
 		normalizedType == DecisionPluginShadowDispatch ||
@@ -94,6 +95,10 @@ func validateDecodedPluginContract(
 	target interface{},
 ) error {
 	switch typed := target.(type) {
+	case *RequestParamsPluginConfig:
+		if err := ValidateRequestParamsPluginConfig(typed); err != nil {
+			return fmt.Errorf("decision %q plugins[%d] (%s): %w", decisionName, index, pluginType, err)
+		}
 	case *ResponseCachePluginConfig:
 		return validateResponseCachePlugin(decisionName, index, pluginType, typed)
 	case *FastResponsePluginConfig:

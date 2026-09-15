@@ -21,6 +21,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 type routeHeaderState struct {
@@ -66,6 +67,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	}
 	required := llmprotocol.RequiredCapabilities(*request)
 	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
+		if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.isLooperRequest(ctx) {
+			return nil, protocolErr // An explicit algorithm role must not silently become another worker.
+		}
 		rerouted, ok := r.rerouteToQualifiedDecisionModel(request, dispatch, required, ctx)
 		if !ok {
 			return nil, protocolErr
@@ -115,6 +119,9 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
+	if err := r.validateDispatchRequirements(request, dispatch, ctx); err != nil {
+		return err
+	}
 	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(*request)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
@@ -212,8 +219,13 @@ func (r *OpenAIRouter) findQualifiedRerouteModel(
 	}
 	for _, modelRef := range refs {
 		model := modelRef.Model
-		if model == "" || model == selected.logicalModel || r.modelRefExceedsContextWindow(modelRef, ctx.VSRContextTokenCount) {
+		if model == "" || model == selected.logicalModel || (!selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.modelRefExceedsContextWindow(modelRef, ctx.VSRContextTokenCount)) {
 			continue
+		}
+		if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
+			if err := r.validateModelDemand(r.candidateRequirements(ctx), model, selection.DemandForRequest(ctx.SemanticRequest)); err != nil {
+				continue
+			}
 		}
 		if r.qualifiedRerouteCandidate(model, required) != "" {
 			return model
@@ -363,7 +375,10 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
-	return buildRequestBodyContinueResponse(state, nil, false)
+	// Body-stage model and path mutations can change the Envoy route selected
+	// during headers. Apply the same cache policy to every provider dispatch,
+	// including internal multi-model calls and unchanged logical model names.
+	return buildRequestBodyContinueResponse(state, nil, r.shouldClearRouteCache())
 }
 
 // finalizeProviderDispatchResponse serializes the request only after every
@@ -376,6 +391,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 ) (*ext_proc.ProcessingResponse, error) {
 	if dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
+	}
+	if err := r.validateDispatchRequirements(ctx.SemanticRequest, dispatch, ctx); err != nil {
+		return nil, err
 	}
 	// Masking is the last provider-bound content mutation, so content added by
 	// any earlier plugin is covered. All five dispatch paths reach this

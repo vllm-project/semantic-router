@@ -22,25 +22,46 @@ func TestMoMRecipeDocumentContract(t *testing.T) {
 	if document.Version != "v0.3" {
 		t.Fatalf("Recipe document version = %q, want v0.3", document.Version)
 	}
+	resolved, err := ParseYAMLBytes(mustReadRepoFile(t, momAsset))
+	if err != nil {
+		t.Fatal(err)
+	}
+	learning := resolved.RouterLearning
+	if !learning.Enabled || learning.Adaptation.EffectiveEnabled() ||
+		!learning.Protection.EffectiveEnabled() || learning.Protection.EffectiveScope() != RouterLearningScopeConversation {
+		t.Fatalf("built-in defaults must enable conversation protection only: %+v", learning)
+	}
 
-	wantDecisions := map[string]int{
-		"balance":  6,
-		"speed":    5,
-		"cost":     4,
-		"accuracy": 7,
-		"vault":    5,
+	wantDecisions := map[string][]string{
+		"balance":  {"reasoning", "simple", "medium"},
+		"speed":    {"tools", "reasoning", "fast"},
+		"cost":     {"tools", "reasoning", "economy"},
+		"accuracy": {"agent", "review", "reasoning", "simple"},
+		"vault":    {"guard", "sensitive", "private"},
 	}
 	if len(document.Recipes) != len(wantDecisions) {
 		t.Fatalf("Recipe count = %d, want %d", len(document.Recipes), len(wantDecisions))
 	}
 
 	for _, recipe := range document.Recipes {
-		wantCount, ok := wantDecisions[recipe.Name]
+		wantNames, ok := wantDecisions[recipe.Name]
 		if !ok {
 			t.Fatalf("unexpected built-in Recipe %q", recipe.Name)
 		}
-		if got := len(recipe.Routing.Decisions); got != wantCount {
-			t.Fatalf("Recipe %q decision count = %d, want %d", recipe.Name, got, wantCount)
+		if got := len(recipe.Routing.Decisions); got != len(wantNames) {
+			t.Fatalf("Recipe %q decision count = %d, want %d", recipe.Name, got, len(wantNames))
+		}
+		for i, decision := range recipe.Routing.Decisions {
+			if decision.Name != wantNames[i] {
+				t.Errorf("Recipe %q decision %d = %q, want %q", recipe.Name, i, decision.Name, wantNames[i])
+			}
+			wantMode := DecisionAdaptationModeApply
+			if recipe.Name == "vault" || recipe.Name == "accuracy" && (decision.Name == "agent" || decision.Name == "review") {
+				wantMode = DecisionAdaptationModeBypass
+			}
+			if got := decision.Adaptations.ProtectionMode(); got != wantMode {
+				t.Errorf("Recipe %s decision %s protection mode = %s, want %s", recipe.Name, decision.Name, got, wantMode)
+			}
 		}
 		assertModelFreeRecipe(t, recipe)
 	}
@@ -54,6 +75,12 @@ func assertModelFreeRecipe(t *testing.T, recipe CanonicalRecipe) {
 	for _, decision := range recipe.Routing.Decisions {
 		if len(decision.ModelRefs) != 0 {
 			t.Fatalf("Recipe %q decision %q must receive models through assignments", recipe.Name, decision.Name)
+		}
+		if recipe.Name == "vault" && decision.Name == "guard" {
+			if decision.GetFastResponseConfig() == nil || decision.Algorithm != nil {
+				t.Fatal("Vault guard must respond immediately without selecting a backend")
+			}
+			continue
 		}
 		if decision.Algorithm == nil || decision.Algorithm.MinimumCandidates < 1 {
 			t.Fatalf(

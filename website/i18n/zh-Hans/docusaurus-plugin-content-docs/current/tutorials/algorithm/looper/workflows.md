@@ -80,7 +80,12 @@ routing:
 
 `output_contract` 是决策范围的提示词文本。把它用于应同时作用于静态 Flow、动态 Flow、Fusion 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。使用 `output_contract_spec` 做类型化的路由器可执行归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
 
-规划器模型是控制面模型。它不必出现在 `modelRefs` 中。worker 调用受限于 `modelRefs`；如果规划器点名该列表之外的模型，执行器会拒绝该计划。
+规划器模型生成控制计划。省略 `planner.model` 时，路由器按声明顺序选择首个满足完整规划请求要求的已分配 worker，
+包括 JSON 输出能力和实际输出、上下文预算。扫描过程不调用模型。
+显式指定的规划器保持原目标并接受相同阶段检查，失败时不会替换为其他模型；没有合格规划器时请求直接失败。
+显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须有运营者分配的后端。
+worker 调用始终限制在 `modelRefs` 内，执行器会拒绝包含范围外 worker 的计划。
+规划器选择不会降低已配置的不同成功 worker 最小数量。
 
 静态模式使用显式角色计划。每个角色模型都必须在决策的 `modelRefs` 中。
 
@@ -124,7 +129,7 @@ routing:
 | `roles` | list[object] | static 必填 | 有序静态角色，每个含 `name`、`models`，可选 `prompt`，以及可选的更早角色 id 或智能体 id 的 `access_list` |
 | `final.model` | string | 第一个 worker 响应 | 可选的静态最终合成模型，来自 `modelRefs` |
 | `final.prompt` | string | 内置合成提示 | 可选的静态最终合成指令 |
-| `planner.model` | string | dynamic 必填 | 用于生成工作流计划的控制面模型 |
+| `planner.model` | string | 首个合格的已分配 worker | 可选的显式规划模型，用于生成工作流计划 |
 | `planner.max_completion_tokens` | int | `2048` | 仅用于规划器 JSON 计划的最大补全 token 数 |
 | `minimum_candidates` | int | 未设置 | 配方物化和上下文资格过滤后，决策 `modelRefs` 所需的最少不同模型数 |
 | `max_steps` | int | `3` | 规划器可接受的最大工作流步数 |

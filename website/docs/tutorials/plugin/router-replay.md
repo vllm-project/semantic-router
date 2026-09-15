@@ -4,6 +4,17 @@
 
 `router_replay` is a route-local plugin for overriding replay/debug capture on one route.
 
+A recipe's `routing.data_policy.replay: false` takes precedence over global and
+route-local replay settings. It prevents capture even for rejected requests;
+`router_replay.enabled: true` cannot override it. Vault uses this policy, so its
+requests are intentionally absent from Dashboard Insights. See the
+[Replay API and privacy controls](../../api/router#router-replay).
+
+The default `memory` store loses records when configuration is reloaded or the
+router restarts. To keep session history available while changing recipes,
+configure a durable store such as Postgres or Redis in the
+[shared replay service](../learning/memory-and-replay#configuration).
+
 ## Key Advantages
 
 - Lets one route override the router-wide replay default.

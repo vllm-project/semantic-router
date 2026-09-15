@@ -18,8 +18,8 @@ import (
 
 // writeClassificationError maps a classification service error to an HTTP
 // status code: empty/whitespace input is a client error (400 INVALID_INPUT);
-// an unresolved decision under fail_request is a backend outage
-// (503 DECISION_UNRESOLVED, matching ExtProc); anything else is treated as an
+// an unavailable classifier or unresolved decision under fail_request is a
+// service outage (503); anything else is treated as an
 // internal error (500 CLASSIFICATION_ERROR).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
 	if errors.Is(err, services.ErrEmptyText) ||
@@ -29,6 +29,10 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 	}
 	if errors.Is(err, services.ErrUnknownRoutingModel) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrClassifierUnavailable) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CLASSIFIER_UNAVAILABLE", err.Error())
 		return
 	}
 	if errors.Is(err, decision.ErrDecisionUnresolved) {
@@ -75,17 +79,7 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 		}
 		req.Options.Trace = true
 	}
-	response, err := s.classificationSvc.ClassifyIntentForEval(r.Context(), req)
-	if err != nil {
-		if response != nil {
-			s.writeJSONResponse(w, http.StatusServiceUnavailable, response)
-			return
-		}
-		s.writeClassificationError(w, err)
-		return
-	}
-
-	s.writeJSONResponse(w, http.StatusOK, response)
+	s.runRoutingPreview(w, r, req)
 }
 
 // handlePIIDetection handles PII detection requests

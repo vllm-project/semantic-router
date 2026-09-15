@@ -154,12 +154,11 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
 
-      # Regenerates the apiserver OpenAPI JSON and reference Markdown from the
-      # route catalog and fails if either committed artifact differs, so API
-      # docs cannot be hand-edited or left stale when a route changes.
+      # Recompute all public contracts from their authored sources and reject
+      # drift in config JSON/TypeScript, OpenAPI/index, and skill/references.
       # Runs before the model/service setup so drift fails fast.
-      - name: Check generated API docs are up to date
-        run: make api-docs-check
+      - name: Check generated public contracts are up to date
+        run: make generated-contract-check
         env:
           CI: true
           CGO_ENABLED: 1

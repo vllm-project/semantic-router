@@ -19,7 +19,6 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 ) *ext_proc.ProcessingResponse {
-	usage := invalidResponseTerminalUsage("authoritative_usage_missing")
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
@@ -39,7 +38,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			return r.createErrorResponse(502, "The selected model returned an incompatible response")
 		}
 	}
-	usage = r.takeNeutralResponseUsage(ctx)
+	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 

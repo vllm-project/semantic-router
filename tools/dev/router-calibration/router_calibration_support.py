@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 import tempfile
 import time
+from collections import Counter
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from router_calibration_evaluation import (
+    EVALUATION_SCOPES,
     compare_eval_selection,
     compare_eval_trace,
     compare_expected_plugins,
@@ -46,6 +49,7 @@ from router_calibration_manifest import (
     summarize_decision_results,
     summarize_tag_results,
 )
+from router_calibration_signal_values import compare_signal_values
 
 __all__ = [
     "compare_eval_selection",
@@ -192,6 +196,8 @@ def evaluate_probe(
     probe: Probe,
     request_timeout_seconds: float = 60.0,
     allowed_decisions: frozenset[str] | None = None,
+    *,
+    scope: str = "deployment",
 ) -> dict[str, Any]:
     """Evaluate one probe while preserving the patchable transport seam."""
     return evaluate_probe_request(
@@ -200,6 +206,7 @@ def evaluate_probe(
         request_timeout_seconds=request_timeout_seconds,
         allowed_decisions=allowed_decisions,
         http_client=http_json,
+        scope=scope,
     )
 
 
@@ -208,7 +215,11 @@ def evaluate_probes(
     probes: Iterable[Probe],
     manifest: dict[str, Any] | None = None,
     selected_probe_ids: Iterable[str] | None = None,
+    *,
+    scope: str = "deployment",
 ) -> dict[str, Any]:
+    if scope not in EVALUATION_SCOPES:
+        raise ValueError(f"unknown evaluation scope {scope!r}")
     manifest = manifest or {}
     settings = resolve_evaluation_settings(manifest)
     all_probes = list(probes)
@@ -228,9 +239,11 @@ def evaluate_probes(
                 probe,
                 settings.request_timeout_seconds,
                 frozenset(decisions_by_recipe[recipe_key]),
+                scope=scope,
             )
         except RuntimeError as exc:
             result = failed_probe_result(probe, exc)
+            result["evaluation_scope"] = scope
         result["latency_ms"] = round((time.perf_counter() - probe_started) * 1000, 3)
         return result
 
@@ -259,6 +272,28 @@ def evaluate_probes(
         else 0.0
     )
     return {
+        "evaluation_scope": scope,
+        "scopes": {
+            name: summarize_scope_results(results, manifest, name)
+            for name in EVALUATION_SCOPES
+        },
+        "selection_status_counts": dict(
+            sorted(
+                Counter(
+                    result.get("selection_status") or "missing" for result in results
+                ).items()
+            )
+        ),
+        "selection_reasons": [
+            {
+                "id": result["id"],
+                "status": result.get("selection_status") or "missing",
+                "reason": result.get("selection_reason") or "",
+                "error": result.get("error"),
+            }
+            for result in results
+            if result.get("selection_reason") or result.get("error")
+        ],
         "router_url": normalize_router_url(router_url),
         "evaluated_at": utc_now(),
         "request_timeout_seconds": settings.request_timeout_seconds,
@@ -279,6 +314,31 @@ def evaluate_probes(
         "decisions": decision_summaries,
         "tags": tag_summaries,
         "results": results,
+    }
+
+
+def summarize_scope_results(
+    results: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    scope: str,
+) -> dict[str, Any]:
+    scoped = [
+        {**result, "matched": bool(result.get(f"{scope}_matched"))}
+        for result in results
+    ]
+    matched = sum(result["matched"] for result in scoped)
+    total = len(scoped)
+    success_rate = round(matched / total * 100, 1) if total else 0.0
+    decisions = summarize_decision_results(scoped, manifest)
+    acceptance = resolve_acceptance(manifest)
+    return {
+        "matched": matched,
+        "total": total,
+        "success_rate": success_rate,
+        "matched_decisions": sum(bool(item["passed"]) for item in decisions),
+        "total_decisions": len(decisions),
+        "passed": success_rate >= acceptance["min_probe_pass_rate"]
+        and all(item["passed"] for item in decisions),
     }
 
 
@@ -372,7 +432,12 @@ def resolve_eval_request_timeout(manifest: dict[str, Any]) -> float:
 
 
 def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
-    return {
+    result = {
+        "evaluation_scope": "deployment",
+        "policy_matched": False,
+        "deployment_matched": False,
+        "raw_response": getattr(exc, "raw_response", None),
+        "http_status": getattr(exc, "http_status", None),
         "id": probe.probe_id,
         "decision_id": probe.decision_id,
         "variant_id": probe.variant_id,
@@ -381,6 +446,8 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "actual_model": "",
         "selected_model": "",
         "selection_status": "",
+        "expected_selection_status": probe.expected_selection_status,
+        "selection_reason": "",
         "selection_method": "",
         "signal_errors": {},
         "expected_recipe": probe.expected_recipe or "default",
@@ -395,6 +462,11 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "unexpected_plugins": [],
         "forbidden_plugin_matches": [],
         "expected_signals": expected_signals_by_type(probe.expected_signals),
+        "expected_signal_values": probe.expected_signal_values,
+        "observed_signal_values": {},
+        "signal_value_errors": [
+            "Eval request failed; raw values do not establish success"
+        ],
         "forbidden_signals": expected_signals_by_type(probe.forbidden_signals),
         "signal_match": probe.signal_match,
         "missing_expected_signals": [
@@ -421,11 +493,18 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "algorithm_matched": False,
         "plugins_matched": False,
         "signals_matched": False,
+        "signal_values_matched": False,
         "alias_matched": False,
         "trace_matched": False,
         "signal_errors_matched": False,
         "selection_matched": False,
-        "selection_errors": ["Eval request failed before model selection"],
+        "selection_structure_matched": False,
+        "selection_structure_errors": [
+            "Eval request failed; returned selection diagnostics do not establish success"
+        ],
+        "selection_errors": [
+            "Eval request failed; returned selection diagnostics do not establish success"
+        ],
         "trace_decisions": [],
         "trace_errors": [str(exc)],
         "recommended_models": [],
@@ -436,6 +515,60 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "metrics": {},
         "error": str(exc),
     }
+    result.update(_failed_response_diagnostics(result["raw_response"]))
+    payload = result["raw_response"]
+    values = payload.get("signal_values") if isinstance(payload, dict) else None
+    comparison = compare_signal_values(
+        probe.expected_signal_values, values, result["signal_errors"]
+    )
+    result["observed_signal_values"] = comparison["observed"]
+    result["signal_value_errors"].extend(comparison["errors"])
+    return result
+
+
+def _failed_response_diagnostics(payload: Any) -> dict[str, Any]:
+    """Retain returned observations without accepting remote evaluation outcomes."""
+    if not isinstance(payload, dict):
+        return {}
+    result: dict[str, Any] = {}
+    fields = {
+        "requested_model": ("actual_model", str),
+        "recipe": ("actual_recipe", str),
+        "routing_decision": ("actual_decision", str),
+        "selected_model": ("selected_model", str),
+        "selection_status": ("selection_status", str),
+        "selection_method": ("selection_method", str),
+        "selection_reason": ("selection_reason", str),
+        "recommended_models": ("recommended_models", list),
+        "signal_errors": ("signal_errors", dict),
+        "signal_error_matches": ("signal_error_matches", dict),
+        "signal_confidences": ("signal_confidences", dict),
+        "signal_values": ("signal_values", dict),
+        "applied_unknown_policies": ("applied_unknown_policies", dict),
+        "decision_error": ("decision_error", str),
+        "metrics": ("metrics", dict),
+        "eval_trace": ("eval_trace", list),
+    }
+    for source, (target, value_type) in fields.items():
+        value = payload.get(source)
+        if isinstance(value, value_type):
+            result[target] = copy.deepcopy(value)
+    decision = payload.get("decision_result")
+    if isinstance(decision, dict):
+        for source, target, value_type in (
+            ("algorithm", "actual_algorithm", str),
+            ("plugins", "actual_plugins", list),
+            ("used_signals", "used_signals", dict),
+            ("matched_signals", "matched_signals", dict),
+            ("unmatched_signals", "unmatched_signals", dict),
+        ):
+            value = decision.get(source)
+            if isinstance(value, value_type):
+                result[target] = copy.deepcopy(value)
+        name = decision.get("decision_name")
+        if not result.get("actual_decision") and isinstance(name, str):
+            result["actual_decision"] = name
+    return result
 
 
 def run_validate(dsl_path: Path | None, yaml_path: Path | None) -> dict[str, Any]:

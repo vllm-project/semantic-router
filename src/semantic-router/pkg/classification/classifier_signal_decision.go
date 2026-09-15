@@ -77,6 +77,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		SignalConfidences:  signals.SignalConfidences,
 		AuthzRules:         signals.MatchedAuthzRules,
 		JailbreakRules:     signals.MatchedJailbreakRules,
+		SafetyRules:        signals.MatchedSafetyRules,
 		PIIRules:           signals.MatchedPIIRules,
 		KBRules:            signals.MatchedKBRules,
 		ConversationRules:  signals.MatchedConversationRules,

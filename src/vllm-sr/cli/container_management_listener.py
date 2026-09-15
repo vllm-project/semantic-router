@@ -26,9 +26,7 @@ def resolve_managed_management_listener(
     bind_address, port = _management_endpoint(management)
     _validate_management_access(management)
     _validate_management_endpoint(bind_address, port)
-    host_port = port + stack_layout.port_offset
-    if host_port > _MAX_PORT:
-        raise ValueError("management API host port is outside the valid range")
+    host_port = stack_layout.host_port(port, name="management API host port")
     return {
         "bind_address": bind_address,
         "port": port,

@@ -20,7 +20,7 @@ machine where you want to run vLLM Semantic Router:
 That is the complete bootstrap prompt. It points the agent to the public,
 self-contained <a href={AGENT_SKILL_PATH}>vLLM SR Skill</a>; installation details
 stay in the Skill instead of being copied into every prompt. The Dashboard is
-optional and is not part of the agent workflow.
+optional; the agent can verify it when you request Dashboard or Playground work.
 
 ## What the agent does
 
@@ -28,13 +28,16 @@ The Skill directs the agent to:
 
 1. Inspect the host, existing installation, container runtime, accelerator, and
    available model endpoints without changing them.
-2. Install the stable CLI when needed, then discover the running Router's
-   supported operations, configuration schema, and OpenAPI contract.
+2. Install the latest published dev CLI when needed, then verify its supported
+   commands before changing a runtime. Discover configuration progressively from
+   the CLI and the selected Router's schema and OpenAPI contract.
 3. Create or update canonical YAML for the available model pool while keeping
-   credentials in environment variables.
-4. Validate and plan the change before applying it. Changes to listeners or
-   provider topology require an explicit deployment restart.
-5. Preview the routing decision without calling a model, then send a real
+   credentials in environment variables. Reuse packaged built-in Recipes through
+   `vllm-sr recipe builtin list`, `export`, and `init` when requested.
+4. For a new stack, validate locally, launch, and wait for readiness. For an
+   existing stack, validate and plan before applying; listener or provider
+   topology changes require an authorized deployment restart.
+5. Preview the routing decision without backend generation, then send a real
    end-to-end request through the routed inference endpoint.
 6. Leave the config path, active revision, validation result, and routing
    evidence for review.
@@ -46,16 +49,19 @@ required.
 
 ## Direct contracts
 
-The agent works against the same contracts used by the CLI and Dashboard; it
-does not automate the Dashboard UI.
+The agent works against the same contracts used by the CLI and Dashboard.
+Dashboard verification is optional and uses real server responses and streamed
+Playground output when requested.
 
 | Purpose | CLI or Router contract |
 | --- | --- |
 | Discover operations | `GET /api/v1?audience=agent&visibility=primary` |
 | Inspect an operation | `GET /openapi.json?path=...&method=...` |
 | Discover configuration | `vllm-sr config schema` or `GET /api/v1/config/schema` |
-| Validate and plan | `vllm-sr config validate`, then `vllm-sr config plan` |
-| Apply a hot-reloadable change | `vllm-sr config apply` with the planned ETag |
+| Discover packaged Recipes | `vllm-sr recipe builtin list` |
+| First launch | `vllm-sr config validate`, then `vllm-sr serve` and readiness |
+| Plan an existing-stack change | `vllm-sr config validate`, then `vllm-sr config plan` |
+| Apply a hot-reloadable change | `vllm-sr config apply`, which plans again before applying |
 | Test routing logic | `vllm-sr route preview` |
 | Test the complete data path | `vllm-sr route probe` |
 
@@ -67,9 +73,10 @@ agent must discover both rather than infer one from the other.
 
 - Keep API keys and provider credentials in environment variables; do not put
   secret values in prompts, YAML, command arguments, or logs.
-- Review any privileged, destructive, publicly exposed, or service-disrupting
-  action before allowing it.
-- A routing preview proves the decision path but does not call a model. A route
+- Keep changes within the requested deployment and existing authorization;
+  obtain missing authorization before destructive changes, public exposure, or
+  disruption of an unrelated service.
+- A routing preview runs routing signals without backend generation. A route
   probe is the end-to-end check that reaches the selected backend.
 - Use the running Router's discovery, schema, and OpenAPI responses as the
   authority for its installed version.
@@ -79,3 +86,18 @@ For deeper configuration work, continue with the
 [configuration workflows](configuration-workflows). For model and
 Mixture-of-Models evaluation, use the
 [agent evaluation loop](../benchmarking/agent-evaluation-loop).
+
+## Maintaining the Skill
+
+The single authored source is
+[`tools/agent/skills/vllm-sr-agent-operations/`](https://github.com/vllm-project/semantic-router/tree/main/tools/agent/skills/vllm-sr-agent-operations),
+including its optional references. Edit those files and run
+`make agent-skill-sync`; do not edit the public copies directly. The generator
+changes only the public skill name and relative reference links to absolute URLs
+on the same site. Commit the generated files alongside their source; the website
+publishes those static files directly. A remote agent can load each reference
+without a repository checkout.
+
+`make agent-skill-check`, pre-commit, and `make harness-check` reject missing or
+stale generated files. The repository and website therefore share one workflow
+while keeping their respective skill names and installation paths.

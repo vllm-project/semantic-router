@@ -73,10 +73,10 @@ export default function ConfigPageModelLiveVerification({
         className={styles.liveVerificationButton}
         disabled={!hasBackend || !allowed || pending}
         onClick={onVerify}
+        title={buttonLabel}
         aria-label={`${buttonLabel} ${model} with a real inference query`}
       >
         <ProductIcon name="refresh" width={13} height={13} />
-        {buttonLabel}
       </button>
     </div>
   )

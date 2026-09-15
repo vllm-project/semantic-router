@@ -5,8 +5,11 @@ import "fmt"
 func applyRawRouting(prog *Program, raw *rawRoutingDecl) []error {
 	fields := entriesToMap(raw.Fields)
 	strategy, ok := getStringField(fields, "strategy")
-	if !ok && fields["model_bindings"] == nil {
-		return []error{fmt.Errorf("%s: ROUTING requires strategy or model_bindings", posFromLexer(raw.Pos))}
+	if !ok && fields["model_bindings"] == nil && fields["candidate_requirements"] == nil && fields["data_policy"] == nil {
+		return []error{fmt.Errorf("%s: ROUTING requires strategy, model_bindings, candidate_requirements, or data_policy", posFromLexer(raw.Pos))}
+	}
+	if err := applyRoutingPolicies(prog, fields); err != nil {
+		return []error{fmt.Errorf("%s: ROUTING %w", posFromLexer(raw.Pos), err)}
 	}
 	prog.Strategy = strategy
 	if value, exists := fields["model_bindings"]; exists {

@@ -244,6 +244,11 @@ type EmbeddingSignal struct {
 	// +kubebuilder:default=max
 	AggregationMethod string `json:"aggregationMethod,omitempty" yaml:"aggregationMethod,omitempty"`
 
+	// PrototypeScoring overrides the family's prototype construction and scoring.
+	// An omitted object inherits the family; an empty object uses core defaults.
+	// +optional
+	PrototypeScoring *PrototypeScoringConfig `json:"prototypeScoring,omitempty" yaml:"prototypeScoring,omitempty"`
+
 	// QueryModality declares which modality of the incoming request payload
 	// the query embedding is computed from. Candidates always remain text;
 	// the rule cosine-matches the text-anchor set against a query embedding

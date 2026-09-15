@@ -4,14 +4,15 @@ Both halves of that job live here. The local Docker half takes the runtime
 config lock, finishes any Recipe activation the last run left pending, and
 materializes this stack's active config under its private state root; the
 Kubernetes half deliberately keeps its translation in memory so a target-neutral
-transform never lands in the local active config path. Neither is Click plumbing
-and neither is deployment, so they stay out of `commands.runtime`, which owns
-the command surface and the user-facing serve flow.
+transform never lands in the local active config path. Before replacing an
+existing Docker config, preparation stops its old consumers so the restart
+cannot also trigger a reload in the departing process.
 """
 
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 from cli.bootstrap import is_setup_mode_config
@@ -23,18 +24,42 @@ from cli.commands.runtime_support import (
     build_effective_config_bytes,
     build_effective_config_document,
     validate_config_recipe_env_bindings,
+    validate_setup_mode_flags,
 )
 from cli.container_services import container_status_strict
+from cli.parser import parse_user_config
 from cli.recipe_activation_recovery import (
     active_recipe_package_config_path,
     active_recipe_package_for_stack,
     recover_pending_recipe_activation_for_stack,
 )
 from cli.runtime_config_lock import acquire_runtime_config_lock
-from cli.runtime_stack import resolve_runtime_stack
+from cli.runtime_lifecycle import stop_runtime_before_config_replacement
+from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
+from cli.validator import validate_user_config
 
 log = get_logger(__name__)
+
+
+def _prepare_runtime_config_replacement(
+    effective_data: bytes,
+    stack_layout: RuntimeStackLayout,
+    *,
+    minimal: bool,
+    readonly: bool,
+) -> None:
+    # Validate the candidate without publishing it to the running file watcher.
+    # A restart owns the next generation; the departing process must not build it.
+    with tempfile.TemporaryDirectory(prefix="vllm-sr-config-") as directory:
+        candidate = Path(directory) / "config.yaml"
+        candidate.write_bytes(effective_data)
+        prepared = parse_user_config(str(candidate), log_summary=False)
+        errors = validate_user_config(prepared, log_summary=False)
+        if errors:
+            raise ValueError("Invalid runtime config: " + "; ".join(map(str, errors)))
+        validate_setup_mode_flags(is_setup_mode_config(candidate), minimal, readonly)
+    stop_runtime_before_config_replacement(stack_layout)
 
 
 def _prepare_docker_runtime_config(
@@ -44,6 +69,9 @@ def _prepare_docker_runtime_config(
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
     replace_active_config: bool,
+    *,
+    minimal: bool = False,
+    readonly: bool = False,
 ):
     stack_layout = resolve_runtime_stack()
     state_root_dir = (
@@ -106,6 +134,12 @@ def _prepare_docker_runtime_config(
                 state_root_dir=state_root_dir,
                 stack_name=stack_layout.stack_name,
                 replace_active=replace_active_config,
+                before_replace=lambda: _prepare_runtime_config_replacement(
+                    effective_config_bytes,
+                    stack_layout,
+                    minimal=minimal,
+                    readonly=readonly,
+                ),
             )
         setup_mode = is_setup_mode_config(effective_config_path)
         return effective_config_path, setup_mode, runtime_lock
@@ -123,6 +157,8 @@ def _prepare_effective_serve_config(
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
     replace_active_config: bool,
+    minimal: bool = False,
+    readonly: bool = False,
 ):
     """Prepare the target-specific active config and its optional runtime lock."""
 
@@ -142,6 +178,8 @@ def _prepare_effective_serve_config(
             platform,
             recipe_env_bindings,
             replace_active_config,
+            minimal=minimal,
+            readonly=readonly,
         )
         return effective_path, setup_mode, runtime_lock, None
 
