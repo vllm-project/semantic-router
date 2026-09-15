@@ -229,10 +229,17 @@ var (
 	replaceKubernetesRuntimeConfig = config.Replace
 )
 
+// applyBackendRuntimeTuningDefaults pins the native math libraries to one
+// thread per call. candle-core parallelizes every CPU matmul across
+// num_cpus::get() when RAYON_NUM_THREADS is unset, so N concurrent requests
+// contend for N*cores threads. Request-level concurrency already uses the
+// cores; intra-op parallelism on top of it only adds contention.
+//
+// Values set by the operator are preserved.
 func applyBackendRuntimeTuningDefaults() {
 	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
-	if backend != "candle" {
-		return
+	if backend == "" {
+		backend = "default"
 	}
 
 	defaults := map[string]string{
