@@ -123,6 +123,14 @@ codes; the configured unknown-signal policy determines the route outcome.
 Secrets in classifier information are redacted unless the caller has
 `secret_view`.
 
+The model inventory reports successfully prepared task bindings in the active
+runtime generation, including each binding's `recipe` and effective provider,
+device, precision, and input limit in `metadata`. Shared artifacts may appear
+under several recipe bindings. Configured but unused models are not marked ready.
+During startup, the inventory can instead report pending artifact downloads.
+`system.gpu_available` means an active prepared binding uses local GPU execution;
+it does not indicate whether the host has unused GPU hardware.
+
 ## Read and change router configuration
 
 Read the current canonical document and its `ETag` before making a change:
