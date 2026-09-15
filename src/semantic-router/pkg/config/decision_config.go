@@ -35,8 +35,8 @@ const DecisionActionRoute = "route"
 // cannot bypass the guard by naming a model. Destination must resolve in
 // model_config and the decision's rules must reference a jailbreak signal.
 type DecisionAction struct {
-	Type        string `yaml:"type" json:"type"`
-	Destination string `yaml:"destination" json:"destination"`
+	Type        string `yaml:"type" json:"type" jsonschema:"required"`
+	Destination string `yaml:"destination" json:"destination" jsonschema:"required"`
 }
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.

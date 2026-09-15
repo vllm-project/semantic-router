@@ -60,7 +60,7 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		RAGToolCallIDs:       ctx.RAGToolCallIDs,
 		MemoryMessageIndexes: ctx.MemoryMessageIndexes,
 	}
-	requestIR := contextcompression.ParseSemanticRequest(request, provenance)
+	requestIR := contextRequestIR(ctx, request)
 	model := strings.TrimSpace(ctx.VSRSelectedModel)
 	if model == "" {
 		model = strings.TrimSpace(ctx.RequestModel)
@@ -76,7 +76,7 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		Policy:       policy,
 		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),
 		TokenCounter: r.contextCompressionTokenCounter(ctx),
-		Scorer:       r.contextCompressionScorer(callContext, pluginConfig),
+		Scorer:       r.contextCompressionScorer(callContext, pluginConfig, ctx),
 		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
 		Provenance:   provenance,
 	}

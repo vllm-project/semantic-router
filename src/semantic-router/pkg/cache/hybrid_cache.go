@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -101,6 +102,7 @@ type HybridCache struct {
 
 // HybridCacheOptions contains configuration for the hybrid cache
 type HybridCacheOptions struct {
+	EmbeddingProvider embedding.Provider
 	// Core settings
 	Enabled             bool
 	SimilarityThreshold float32
@@ -221,6 +223,7 @@ func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCache
 		SimilarityThreshold: options.SimilarityThreshold,
 		TTLSeconds:          options.TTLSeconds,
 		EmbeddingModel:      options.EmbeddingModel,
+		EmbeddingProvider:   options.EmbeddingProvider,
 	}
 
 	if options.Milvus != nil {

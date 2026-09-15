@@ -144,7 +144,10 @@ config:
           model_ref: ""
           model_id: ""
           variant: ""
-          protocol: http_classify
+          backend:
+            protocol: http_classify
+            contract: label_distribution.v1
+            model: mock-guardrail
           threshold: 0.5
           positive_labels: [jailbreak]
           jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json

@@ -87,10 +87,20 @@ domains:
     owner: router-core
     documentation_check: true
     paths:
+      - src/semantic-router/pkg/apiserver/**/*.go
+      - src/semantic-router/pkg/catalog/**/*.go
+      - src/semantic-router/pkg/config/**/*.go
+      - src/semantic-router/pkg/configschema/**/*.go
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - tools/configschema/**
       - tools/openapi-gen/**
+      - tools/agent/scripts/embed_generated_index.py
+      - tools/make/docs.mk
+      - tools/make/golang.mk
+      - dashboard/frontend/src/generated/routerConfigContract.ts
       - website/docs/api/apiserver.md
       - website/static/openapi/apiserver/**
-    checks: [make api-docs-check]
+    checks: [make generated-contract-check]
     ci_jobs: [core-tests]
 
   router-core:
@@ -98,11 +108,13 @@ domains:
     paths:
       - src/semantic-router/**
       - config/**
+      - tools/configschema/**
+      - dashboard/frontend/src/generated/routerConfigContract.ts
       - go.mod
       - go.sum
       - Cargo.toml
       - Cargo.lock
-    checks: [make test-semantic-router]
+    checks: [make test-semantic-router, make config-schema-check]
     ci_jobs: [core-tests]
 
   native-bindings:
@@ -285,6 +297,15 @@ domains:
     checks: [make test-training-contracts]
     ci_jobs: []
 
+  model-selection-parity:
+    owner: training
+    paths:
+      - src/training/model_selection/ml_model_selection/models.py
+      - src/training/model_selection/ml_model_selection/tests/**
+      - src/training/model_selection/ml_model_selection/requirements-parity.txt
+    checks: []
+    ci_jobs: [core-tests]
+
 images:
   dashboard:
     pr_paths:
@@ -300,7 +321,21 @@ images:
       - tools/docker/Dockerfile.extproc
   extproc-rocm:
     pr_paths: [tools/docker/Dockerfile.extproc-rocm]
-    publish_paths: [tools/docker/Dockerfile.extproc-rocm]
+    publish_paths:
+      - src/semantic-router/**
+      - config/**
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - onnx-binding/**
+      - openvino-binding/**
+      - tools/docker/Dockerfile.extproc-rocm
+      - tools/docker/check-native-abi.sh
+      - tools/docker/entrypoint.sh
+      - tools/make/**
+      - Makefile
+      - .dockerignore
+      - tools/agent/domains.yaml
   operator:
     pr_paths: [deploy/operator/Dockerfile*]
     publish_paths: [deploy/operator/**]
@@ -327,7 +362,18 @@ images:
       - tools/docker/*cuda*
   vllm-sr-rocm:
     pr_paths: [src/vllm-sr/Dockerfile.rocm]
-    publish_paths: [src/vllm-sr/Dockerfile.rocm]
+    publish_paths:
+      - src/vllm-sr/**
+      - src/semantic-router/**
+      - config/**
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - onnx-binding/**
+      - openvino-binding/**
+      - tools/docker/check-native-abi.sh
+      - .dockerignore
+      - tools/agent/domains.yaml
   anthropic-shim:
     pr_paths: [e2e/testing/anthropic-shim/Dockerfile]
     publish_paths: []
@@ -376,6 +422,19 @@ profiles:
     paths:
       - e2e/profiles/category-remote-backend/**
       - e2e/testcases/category_backend_routing.go
+  complexity-remote-backend:
+    owner: e2e
+    coverage_role: complexity-remote-scorer-backend
+    selection: pr
+    paths:
+      - e2e/profiles/complexity-remote-backend/**
+      - e2e/testcases/complexity_backend_routing.go
+      # The router surface this profile exists to protect, so a change to the
+      # score.v1 path cannot land without exercising it.
+      - src/semantic-router/pkg/config/classifier_backend_complexity.go
+      - src/semantic-router/pkg/config/complexity_boundaries.go
+      - src/semantic-router/pkg/classification/complexity_remote_backend.go
+      - src/semantic-router/pkg/classification/complexity_remote_eval.go
   external-gateway-responses:
     owner: e2e
     coverage_role: responses-state-with-external-dispatch
@@ -577,12 +636,16 @@ profiles:
   hallucination:
     owner: e2e
     coverage_role: hallucination-detection
-    selection: manual
+    selection: pr
     paths:
       - e2e/profiles/hallucination/**
       - e2e/testcases/hallucination_detection*.go
       - deploy/kubernetes/hallucination/**
       - e2e/testcases/testdata/hallucination_detection_cases.json
+      - src/semantic-router/pkg/extproc/res_filter_hallucination.go
+      - src/semantic-router/pkg/extproc/res_filter_response_stage_hallucination.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   jailbreak-onerror:
     owner: e2e
     coverage_role: prompt-guard-on-error
@@ -602,6 +665,8 @@ profiles:
       - deploy/kubernetes/response-jailbreak/**
       - src/semantic-router/pkg/extproc/res_filter_jailbreak.go
       - src/semantic-router/pkg/extproc/res_filter_response_stage_signal.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/classification/classifier_signal_response_jailbreak.go
       - src/semantic-router/pkg/classification/classifier_jailbreak_risk.go
       - src/semantic-router/pkg/config/signal_stage.go

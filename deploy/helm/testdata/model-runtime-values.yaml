@@ -1,0 +1,51 @@
+# Rendering fixture: model paths identify maintained artifacts, not installed weights.
+configOverride:
+  version: v0.3
+  listeners: []
+  providers: {}
+  routing:
+    model_bindings:
+      domain_classifier:
+        deployment: local-domain
+        contract: label_distribution.v1
+        adapter: mmbert
+        mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+  recipes:
+    - name: private
+      routing:
+        model_bindings:
+          pii_classifier:
+            deployment: local-pii
+            contract: token_spans.v1
+            adapter: mmbert
+            mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+  global:
+    model_catalog:
+      deployments:
+        local-domain:
+          artifact: models/mmbert32k-intent-classifier-merged
+          provider: candle
+          device: cpu
+          precision: native
+          input:
+            max_tokens: 512
+            overflow: reject
+        local-pii:
+          artifact: models/mmbert32k-pii-detector-merged
+          provider: candle
+          device: cpu
+          precision: native
+          input:
+            max_tokens: 512
+            overflow: reject
+      admission:
+        local-domain:
+          max_concurrency: 2
+          max_queue: 8
+          queue_timeout_ms: 1000
+          on_overflow: shed
+        local-pii:
+          max_concurrency: 1
+          max_queue: 4
+          queue_timeout_ms: 500
+          on_overflow: shed

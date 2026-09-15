@@ -196,6 +196,15 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 }
 
 func mergeProgram(dst, src *Program) {
+	if src.ModelBindings != nil {
+		if dst.ModelBindings == nil {
+			dst.ModelBindings = cloneModelBindings(src.ModelBindings)
+		} else {
+			for name, binding := range src.ModelBindings {
+				dst.ModelBindings[name] = binding
+			}
+		}
+	}
 	if src.Strategy != "" {
 		dst.Strategy = src.Strategy
 	}
@@ -454,6 +463,7 @@ var knownInlinePluginAliases = map[string]string{
 	"system-prompt":       "system_prompt",
 	"header-mutation":     "header_mutation",
 	"router-replay":       "router_replay",
+	"shadow-dispatch":     "shadow_dispatch",
 	"fast-response":       "fast_response",
 	"request-params":      "request_params",
 	"response-jailbreak":  "response_jailbreak",

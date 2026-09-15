@@ -374,22 +374,42 @@ func (evaluator *indexEvaluator) compute(indexID string) (IndexResult, error) {
 
 func (evaluator *indexEvaluator) evaluateComponent(component IndexComponent) (evaluatedIndexComponent, error) {
 	result := IndexComponentResult{
-		Benchmark: component.Benchmark, Metric: component.Metric,
-		BenchmarkProfile: component.BenchmarkProfile, Index: component.Index,
-		Weight: component.Weight, Status: "missing",
+		Benchmark:         component.Benchmark,
+		Metric:            component.Metric,
+		BenchmarkProfile:  component.BenchmarkProfile,
+		BenchmarkProfiles: append([]string(nil), component.BenchmarkProfiles...),
+		Index:             component.Index,
+		Weight:            component.Weight,
+		Status:            "missing",
 	}
 	if component.Metric != "" {
-		key := evaluationMetricKey(component.Benchmark, component.BenchmarkProfile, component.Metric)
-		raw, present := evaluator.values[key]
-		provenance := []string{}
-		if recordID := evaluator.evidence[key]; recordID != "" {
-			provenance = append(provenance, recordID)
-			result.Evaluation = recordID
+		profiles, err := indexComponentProfiles(component, "index component")
+		if err != nil {
+			return evaluatedIndexComponent{}, err
 		}
-		metricID := component.Benchmark + "#" + component.Metric
+		for _, profile := range profiles {
+			key := evaluationMetricKey(component.Benchmark, profile, component.Metric)
+			raw, present := evaluator.values[key]
+			if !present {
+				continue
+			}
+			provenance := []string{}
+			if recordID := evaluator.evidence[key]; recordID != "" {
+				provenance = append(provenance, recordID)
+				result.Evaluation = recordID
+			}
+			result.BenchmarkProfile = profile
+			return evaluatedIndexComponent{
+				result:     result,
+				raw:        raw,
+				present:    true,
+				domain:     evaluator.metrics[component.Benchmark+"#"+component.Metric].domain,
+				provenance: provenance,
+			}, nil
+		}
 		return evaluatedIndexComponent{
-			result: result, raw: raw, present: present,
-			domain: evaluator.metrics[metricID].domain, provenance: provenance,
+			result: result,
+			domain: evaluator.metrics[component.Benchmark+"#"+component.Metric].domain,
 		}, nil
 	}
 	return evaluator.evaluateNestedComponent(component, result)
@@ -470,6 +490,8 @@ func (accumulator *indexAccumulator) finish(definition IndexDefinition) IndexRes
 				weighted/accumulator.domainCoverage[domain], definition.Scale,
 			)
 		}
+	} else if coverage > 0 {
+		accumulator.result.Status = "partial"
 	}
 	for recordID := range accumulator.provenance {
 		accumulator.result.Provenance = append(accumulator.result.Provenance, recordID)
@@ -543,7 +565,11 @@ func lookupNormalizedValue(value float64, values map[string]float64) (float64, e
 
 func componentIdentity(component IndexComponent) string {
 	if component.Metric != "" {
-		return component.Benchmark + "#" + component.Metric + "@" + component.BenchmarkProfile
+		profiles := component.BenchmarkProfiles
+		if len(profiles) == 0 {
+			profiles = []string{component.BenchmarkProfile}
+		}
+		return component.Benchmark + "#" + component.Metric + "@" + strings.Join(profiles, "|")
 	}
 	return component.Index
 }

@@ -26,5 +26,5 @@ Then:
 2. Suggest:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```

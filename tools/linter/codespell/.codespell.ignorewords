@@ -86,3 +86,7 @@ deques
 # Intentional typos for config unknown-field validation tests (validate_test.go)
 wieght
 naem
+# Metric acronyms (not spelling errors)
+FPR
+# go.sum hash fragment (perf/go.sum, not a spelling error)
+NCe

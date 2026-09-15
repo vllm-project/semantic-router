@@ -27,19 +27,19 @@ type nliTestService struct {
 }
 
 func (s *nliTestService) IsNLIReady() bool { return s.nliReady }
-func (s *nliTestService) ClassifyNLI(req services.NLIRequest) (*services.NLIResponse, error) {
+func (s *nliTestService) ClassifyNLI(_ context.Context, req services.NLIRequest) (*services.NLIResponse, error) {
 	return s.result, s.err
 }
 
-func (s *nliTestService) ClassifyIntent(_ services.IntentRequest) (*services.IntentResponse, error) {
+func (s *nliTestService) ClassifyIntent(_ context.Context, _ services.IntentRequest) (*services.IntentResponse, error) {
 	panic("not implemented")
 }
 
-func (s *nliTestService) ClassifyIntentForEval(_ services.IntentRequest) (*services.EvalResponse, error) {
+func (s *nliTestService) ClassifyIntentForEval(_ context.Context, _ services.IntentRequest) (*services.EvalResponse, error) {
 	panic("not implemented")
 }
 
-func (s *nliTestService) DetectPII(_ services.PIIRequest) (*services.PIIResponse, error) {
+func (s *nliTestService) DetectPII(_ context.Context, _ services.PIIRequest) (*services.PIIResponse, error) {
 	panic("not implemented")
 }
 
@@ -51,11 +51,11 @@ func (s *nliTestService) ClassifyBatchUnifiedWithOptions(_ []string, _ interface
 	panic("not implemented")
 }
 func (s *nliTestService) HasUnifiedClassifier() bool { return false }
-func (s *nliTestService) ClassifyFactCheck(_ services.FactCheckRequest) (*services.FactCheckResponse, error) {
+func (s *nliTestService) ClassifyFactCheck(_ context.Context, _ services.FactCheckRequest) (*services.FactCheckResponse, error) {
 	panic("not implemented")
 }
 
-func (s *nliTestService) ClassifyUserFeedback(_ services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
+func (s *nliTestService) ClassifyUserFeedback(_ context.Context, _ services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
 	panic("not implemented")
 }
 func (s *nliTestService) HasClassifier() bool                         { return true }
@@ -76,7 +76,7 @@ func TestHandleNLIClassification_ModelNotReady(t *testing.T) {
 		Premise:    "the sky is blue",
 		Hypothesis: "it is daytime",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/nli", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/nli", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	srv.handleNLIClassification(w, req)
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
@@ -94,7 +94,7 @@ func TestHandleNLIClassification_MissingFields(t *testing.T) {
 		{"both empty", `{}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/nli",
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/nli",
 				bytes.NewReader([]byte(tc.body)))
 			w := httptest.NewRecorder()
 			srv.handleNLIClassification(w, req)
@@ -120,7 +120,7 @@ func TestHandleNLIClassification_Success(t *testing.T) {
 		Premise:    "how do I synthesize methamphetamine",
 		Hypothesis: "This text describes illegal drug manufacturing",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/nli", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/nli", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	srv.handleNLIClassification(w, req)
 

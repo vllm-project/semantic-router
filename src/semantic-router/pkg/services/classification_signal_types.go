@@ -19,7 +19,7 @@ const (
 
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
-	Text                string            `json:"text"`
+	Text                string            `json:"text,omitempty"`
 	Messages            []IntentMessage   `json:"messages,omitempty"`
 	Tools               []json.RawMessage `json:"tools,omitempty"`
 	Functions           []json.RawMessage `json:"functions,omitempty"`
@@ -38,8 +38,7 @@ type IntentOptions struct {
 	ReturnProbabilities bool    `json:"return_probabilities,omitempty"`
 	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
 	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
-	EvaluateAllSignals  bool    `json:"evaluate_all_signals,omitempty"` // Force evaluate all configured signals (for eval scenarios)
-	Trace               bool    `json:"trace,omitempty"`                // Return per-decision evaluation trace trees
+	Trace               bool    `json:"trace,omitempty"` // Return per-decision evaluation trace trees
 }
 
 // MatchedSignals represents all matched signals from signal evaluation.
@@ -70,9 +69,10 @@ type MatchedSignals struct {
 
 // DecisionResult represents the result of decision evaluation.
 type DecisionResult struct {
-	DecisionName string   `json:"decision_name"`
-	Confidence   float64  `json:"confidence"`
-	MatchedRules []string `json:"matched_rules"`
+	DecisionName        string   `json:"decision_name"`
+	Confidence          float64  `json:"confidence"`
+	ConfidenceAvailable *bool    `json:"confidence_available,omitempty"`
+	MatchedRules        []string `json:"matched_rules"`
 }
 
 // EvalDecisionResult represents the decision result for eval scenarios (without confidence).
@@ -87,6 +87,7 @@ type EvalDecisionResult struct {
 
 // EvalResponse represents the eval classification response with comprehensive signal information.
 type EvalResponse struct {
+	SignalErrorMatches     map[string]bool                         `json:"signal_error_matches,omitempty"`
 	OriginalText           string                                  `json:"original_text"` // The evaluated user turn or fallback query text
 	RequestedModel         string                                  `json:"requested_model,omitempty"`
 	Recipe                 config.RecipeName                       `json:"recipe,omitempty"`
@@ -132,10 +133,12 @@ type EvalModelSelector interface {
 
 // IntentResponse represents the response from intent classification.
 type IntentResponse struct {
-	Classification   Classification     `json:"classification"`
-	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
-	RecommendedModel string             `json:"recommended_model,omitempty"`
-	RoutingDecision  string             `json:"routing_decision,omitempty"`
+	ProbabilitiesAvailable bool               `json:"probabilities_available"`
+	SignalErrorMatches     map[string]bool    `json:"signal_error_matches,omitempty"`
+	Classification         Classification     `json:"classification"`
+	Probabilities          map[string]float64 `json:"probabilities,omitempty"`
+	RecommendedModel       string             `json:"recommended_model,omitempty"`
+	RoutingDecision        string             `json:"routing_decision,omitempty"`
 
 	// Signal-driven fields
 	MatchedSignals         *MatchedSignals   `json:"matched_signals,omitempty"`
@@ -146,7 +149,8 @@ type IntentResponse struct {
 
 // Classification represents basic classification result.
 type Classification struct {
-	Category         string  `json:"category"`
-	Confidence       float64 `json:"confidence"`
-	ProcessingTimeMs int64   `json:"processing_time_ms"`
+	Category            string  `json:"category"`
+	Confidence          float64 `json:"confidence"`
+	ConfidenceAvailable *bool   `json:"confidence_available,omitempty"`
+	ProcessingTimeMs    int64   `json:"processing_time_ms"`
 }
