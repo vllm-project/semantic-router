@@ -13,10 +13,60 @@ config:
           currency: USD
           prompt_per_1m: 0.10
           completion_per_1m: 0.30
+        reliability:
+          request_timeout: 30s
+          stream_idle_timeout: 5s
+          connect_timeout: 5s
         backend_refs:
           - name: local-vllm
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: timeout-probe-fast
+        reasoning:
+          family: qwen3
+        provider_model_id: timeout-probe-fast
+        reliability:
+          request_timeout: 2s
+          stream_idle_timeout: 2s
+          connect_timeout: 2s
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: timeout-probe-slow
+        reasoning:
+          family: qwen3
+        provider_model_id: timeout-probe-slow
+        reliability:
+          request_timeout: 15s
+          stream_idle_timeout: 15s
+          connect_timeout: 5s
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: timeout-probe-stall
+        reasoning:
+          family: qwen3
+        provider_model_id: timeout-probe-stall
+        reliability:
+          request_timeout: 15s
+          stream_idle_timeout: 2s
+          connect_timeout: 2s
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: timeout-probe-unreachable
+        reasoning:
+          family: qwen3
+        provider_model_id: timeout-unreachable-backend
+        reliability:
+          connect_timeout: 1s
+        backend_refs:
+          - name: timeout-unreachable-backend
+            endpoint: 198.51.100.1:81
             weight: 1
   routing:
     projections:
@@ -821,6 +871,10 @@ config:
           - name: general-expert
             description: General-purpose adapter for diverse topics
       - name: general-expert
+      - name: timeout-probe-fast
+      - name: timeout-probe-slow
+      - name: timeout-probe-stall
+      - name: timeout-probe-unreachable
   entrypoints:
     - model_names: ["vllm-sr/e2e-recipe-probe"]
       recipe: entrypoint-probe

@@ -18,6 +18,7 @@ var resourceManifests = []string{
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/timeout-route.yaml",
 }
 
 // Profile implements the Envoy AI Gateway baseline test profile.

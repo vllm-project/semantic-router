@@ -6,12 +6,14 @@ import (
 	"io"
 	"net/http"
 	"runtime/debug"
+	"time"
 
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -105,11 +107,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 }
 
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
-	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
+	if ctx != nil && ctx.IsStreamingResponse && !ctx.StreamingComplete {
 		ctx.StreamingAborted = true
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
-	if ctx.InflightToken != 0 {
+	if ctx != nil && ctx.InflightToken != 0 {
 		inflight.End(ctx.RequestModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 	}
@@ -117,8 +119,8 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 	state, reason := replayLifecycleForReceiveError(err)
 	r.finalizeRouterReplay(ctx, state, reason)
 
-	if errors.Is(err, io.EOF) {
-		logging.Debugf("Stream ended gracefully")
+	if r.isVerifiedTimeoutTermination(ctx, err) {
+		recordProcessTimeout(ctx)
 		return nil
 	}
 
@@ -130,8 +132,130 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		return nil
 	}
 
+	// If upstream returned an error status (e.g. 503) whose metric was deferred waiting
+	// for the response body, but the stream terminated before the body arrived, record it now.
+	if ctx != nil && !ctx.UpstreamErrorMetricRecorded && ctx.UpstreamStatusCode >= 400 {
+		if ctx.UpstreamStatusCode == 503 {
+			rel := r.getModelReliability(ctx.RequestModel)
+			if connDur, ok := parseDurationSafe(rel.ConnectTimeout); ok {
+				elapsed := time.Since(ctx.StartTime)
+				if elapsed >= connDur-250*time.Millisecond {
+					recordProcessTimeout(ctx)
+					ctx.UpstreamErrorMetricRecorded = true
+					return nil
+				}
+			}
+		}
+		if ctx.UpstreamStatusCode >= 500 {
+			metrics.RecordRequestError(ctx.RequestModel, "upstream_5xx")
+		} else {
+			metrics.RecordRequestError(ctx.RequestModel, "upstream_4xx")
+		}
+		ctx.UpstreamErrorMetricRecorded = true
+	}
+
+	if errors.Is(err, io.EOF) {
+		logging.Debugf("Stream ended gracefully")
+		return nil
+	}
+
 	logging.Errorf("Error receiving request: %v", err)
 	return err
+}
+
+func parseDurationSafe(s string) (time.Duration, bool) {
+	if s == "" {
+		return 0, false
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return 0, false
+	}
+	return d, true
+}
+
+func (r *OpenAIRouter) getModelReliability(model string) config.ProviderReliability {
+	if r == nil || r.Config == nil || model == "" {
+		return config.ProviderReliability{}
+	}
+	if params, ok := r.Config.ModelConfig[model]; ok {
+		return params.Reliability
+	}
+	return config.ProviderReliability{}
+}
+
+func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err error) bool {
+	if ctx == nil || ctx.RequestModel == "" || ctx.ImmediateResponseEncoded || ctx.SkipProcessing {
+		return false
+	}
+
+	// Exclude explicit cancellations: client cancellations and aborts are not timeouts
+	if errors.Is(err, context.Canceled) || status.Code(err) == codes.Canceled {
+		return false
+	}
+
+	// Direct timeout error signals
+	if errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+		return true
+	}
+
+	rel := r.getModelReliability(ctx.RequestModel)
+
+	var start time.Time
+	if !ctx.ProcessingStartTime.IsZero() {
+		start = ctx.ProcessingStartTime
+	} else if !ctx.StartTime.IsZero() {
+		start = ctx.StartTime
+	}
+	var elapsed time.Duration
+	if !start.IsZero() {
+		elapsed = time.Since(start)
+	}
+
+	// Mid-stream stall termination (stream idle timeout)
+	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
+		// Measure the actual idle gap since the last received response frame
+		var lastActivity time.Time
+		if !ctx.LastStreamChunkTime.IsZero() {
+			lastActivity = ctx.LastStreamChunkTime
+		} else if !ctx.ProcessingStartTime.IsZero() {
+			lastActivity = ctx.ProcessingStartTime
+		} else if !ctx.StartTime.IsZero() {
+			lastActivity = ctx.StartTime
+		}
+		var idleGap time.Duration
+		if !lastActivity.IsZero() {
+			idleGap = time.Since(lastActivity)
+		}
+
+		if idleDur, ok := parseDurationSafe(rel.StreamIdleTimeout); ok && idleGap >= idleDur-300*time.Millisecond {
+			return true
+		}
+		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok && elapsed >= reqDur-300*time.Millisecond {
+			return true
+		}
+		return false
+	}
+
+	// Pre-header termination (Envoy local reply due to request timeout or connect timeout)
+	if ctx.UpstreamStatusCode == 0 && elapsed > 0 {
+		// Check if request exceeded request_timeout
+		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok {
+			if elapsed >= reqDur-300*time.Millisecond {
+				return true
+			}
+		}
+
+		// Check if request exceeded connect_timeout
+		if connDur, ok := parseDurationSafe(rel.ConnectTimeout); ok {
+			reqDur, hasReq := parseDurationSafe(rel.RequestTimeout)
+			if elapsed >= connDur-250*time.Millisecond && (!hasReq || elapsed < reqDur-300*time.Millisecond) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func replayLifecycleForProcessError(err error) (string, string) {
@@ -188,7 +312,9 @@ func handleProcessContextError(ctx *RequestContext, err error) bool {
 
 func recordProcessTimeout(ctx *RequestContext) {
 	logging.Infof("Stream deadline exceeded")
-	metrics.RecordRequestError(ctx.RequestModel, "timeout")
+	if ctx != nil && ctx.RequestModel != "" && !ctx.ImmediateResponseEncoded && !ctx.SkipProcessing {
+		metrics.RecordRequestError(ctx.RequestModel, "timeout")
+	}
 }
 
 func (r *OpenAIRouter) handleProcessRequest(
