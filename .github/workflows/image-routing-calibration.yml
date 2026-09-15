@@ -1,0 +1,179 @@
+name: Image Routing Calibration
+
+# Exact-head trust gate for the image-routing threshold pack (issue #2165).
+# Reruns cmd/image-routing-calibration over every fixture in its calibration
+# set at the calibrated model snapshot and fails unless each shipped
+# threshold in config/fragments/signal/embedding/image-routing.yaml equals
+# the value the report selects. It also runs the multimodal-routing profile
+# package tests, which assert the E2E CRD mirrors the pack.
+#
+# Dispatched by pr.yml through the image-calibration registry job whenever a
+# calibration input changes (see tools/agent/domains.yaml), so it feeds the
+# required PR Gate; it can also be run by hand against any ref.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to calibrate; the PR caller passes the pull-request head so the report's provenance is the exact head, not the synthetic merge commit
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to calibrate (defaults to the dispatching ref)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  calibrate:
+    name: Calibrate image-routing thresholds
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MODEL_REPO: llm-semantic-router/multi-modal-embed-small
+      MODEL_DIR: models/mom-embedding-multimodal
+      # Snapshot the shipped thresholds were calibrated on. The download is
+      # pinned to it and the resolved revision is verified before the gate
+      # runs, so the check never validates thresholds against other weights.
+      CALIBRATED_REVISION: fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      # The report records the checked-out commit as the fixture provenance;
+      # refuse to calibrate anything other than the commit the caller named.
+      - name: Assert the checked-out commit is the requested ref
+        if: inputs.ref != ''
+        env:
+          REQUESTED_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          requested="$(git rev-parse --verify "${REQUESTED_REF}^{commit}")"
+          if [ "${head}" != "${requested}" ]; then
+            echo "::error::checked out ${head} but the caller requested ${requested} (${REQUESTED_REF})"
+            exit 1
+          fi
+          echo "calibrating exact commit ${head}"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make build-essential pkg-config
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+            ml-binding/target/
+            nlp-binding/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('candle-binding/Cargo.lock', 'ml-binding/Cargo.lock', 'nlp-binding/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # rust-ci builds candle-binding, ml-binding, and nlp-binding; the router
+      # module links all three, so the tool needs every target dir on the
+      # runtime library path below.
+      - name: Build Rust libraries (CPU-only, no CUDA)
+        run: make rust-ci
+
+      # The gate runs with -require-clean. A Cargo.toml bump without its
+      # lockfile makes cargo rewrite Cargo.lock during the build, which would
+      # otherwise surface as an opaque "worktree has uncommitted changes".
+      - name: Assert the native build left the lockfiles untouched
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code --stat -- '*/Cargo.lock'; then
+            echo "::error::cargo rewrote a Cargo.lock during the build; commit the updated lockfile so the calibration is reproducible from the commit"
+            exit 1
+          fi
+
+      # The profile package asserts the E2E CRD mirrors the shipped pack and
+      # that the profile keeps the chart's runtime defaults; no cluster needed.
+      - name: Run multimodal-routing profile package tests
+        run: make test-e2e-profile-multimodal
+
+      - name: Install HuggingFace CLI
+        run: pip install -U "huggingface_hub[cli]"
+
+      - name: Download the multimodal embedding model at the calibrated snapshot
+        run: |
+          set -euo pipefail
+          hf download "${MODEL_REPO}" \
+            config.json model.safetensors tokenizer.json tokenizer_config.json special_tokens_map.json \
+            --revision "${CALIBRATED_REVISION}" \
+            --local-dir "${MODEL_DIR}"
+          test -f "${MODEL_DIR}/model.safetensors"
+
+      # Fail closed: every downloaded file must resolve to the calibrated
+      # snapshot. This runs before the gate so a drifted or mis-pinned model
+      # can never produce a passing check.
+      - name: Verify the resolved model snapshot
+        run: |
+          set -euo pipefail
+          status=0
+          for f in config.json model.safetensors tokenizer.json tokenizer_config.json special_tokens_map.json; do
+            meta="${MODEL_DIR}/.cache/huggingface/download/${f}.metadata"
+            resolved="$(head -n1 "${meta}" 2>/dev/null || echo missing)"
+            if [ "${resolved}" != "${CALIBRATED_REVISION}" ]; then
+              echo "::error::${f} resolved to snapshot ${resolved}, expected ${CALIBRATED_REVISION}"
+              status=1
+            fi
+          done
+          exit "${status}"
+
+      - name: Run the calibration gate
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/image-routing-calibration"
+          cd src/semantic-router
+          go run ./cmd/image-routing-calibration \
+            -model "${GITHUB_WORKSPACE}/${MODEL_DIR}" \
+            -artifact-revision "${CALIBRATED_REVISION}" \
+            -expect-artifact-revision "${CALIBRATED_REVISION}" \
+            -rules ../../config/fragments/signal/embedding/image-routing.yaml \
+            -cases ./cmd/image-routing-calibration/testdata/calibration-set.json \
+            -fixture-root ../.. \
+            -output "${RUNNER_TEMP}/image-routing-calibration/report.json" \
+            -markdown "${RUNNER_TEMP}/image-routing-calibration/report.md" \
+            -check -require-clean | tee "${RUNNER_TEMP}/image-routing-calibration/gate.txt"
+          {
+            echo "## Image-routing calibration gate"
+            echo
+            echo '```'
+            cat "${RUNNER_TEMP}/image-routing-calibration/gate.txt"
+            echo '```'
+            echo
+            cat "${RUNNER_TEMP}/image-routing-calibration/report.md"
+          } >> "${GITHUB_STEP_SUMMARY}"
+        env:
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release:${{ github.workspace }}/ml-binding/target/release:${{ github.workspace }}/nlp-binding/target/release
+
+      - name: Upload calibration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-routing-calibration
+          path: ${{ runner.temp }}/image-routing-calibration/
+          if-no-files-found: ignore

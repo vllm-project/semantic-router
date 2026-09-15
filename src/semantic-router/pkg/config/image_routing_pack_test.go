@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,10 +40,10 @@ func TestImageRoutingPack_StructuralContract(t *testing.T) {
 		// shipped multimodal embedding model; range-bound it rather
 		// than pinning an exact value so future calibration changes
 		// don't trip an unrelated structural test. The bounds catch
-		// silent regression to the original 0.70 (no rules fire) or
-		// accidental zero (every rule fires).
-		if rule.SimilarityThreshold <= 0 || rule.SimilarityThreshold >= 0.5 {
-			t.Errorf("rule %q: threshold = %v, want (0, 0.5) consistent with the calibrated image-modality range", rule.Name, rule.SimilarityThreshold)
+		// accidental zero (every rule fires) and a value no image can
+		// reach (no rule ever fires).
+		if rule.SimilarityThreshold <= 0 || rule.SimilarityThreshold >= 0.9 {
+			t.Errorf("rule %q: threshold = %v, want (0, 0.9) consistent with the calibrated image-modality range", rule.Name, rule.SimilarityThreshold)
 		}
 		if got, want := rule.AggregationMethodConfiged, AggregationMethodMax; got != want {
 			t.Errorf("rule %q: aggregation_method = %q, want %q", rule.Name, got, want)
@@ -87,6 +88,44 @@ func TestImageRoutingPack_ValidatorRejectsUnderTextOnlyModel(t *testing.T) {
 	for _, want := range []string{"identifier_document_imagery", "code_or_terminal_imagery", "ambient_office_imagery", "model_type=multimodal"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("rejection error should mention %q, got: %s", want, msg)
+		}
+	}
+}
+
+func TestImageRoutingPack_MatchesMultimodalE2EProfile(t *testing.T) {
+	canonical := loadImageRoutingPackRules(t)
+	root := repoRootFromTestFile(t)
+	path := filepath.Join(root, "e2e", "profiles", "multimodal-routing", "crds", "intelligentroute.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	var document struct {
+		Spec struct {
+			Signals struct {
+				Embeddings []struct {
+					Name              string   `yaml:"name"`
+					QueryModality     string   `yaml:"queryModality"`
+					Threshold         float32  `yaml:"threshold"`
+					AggregationMethod string   `yaml:"aggregationMethod"`
+					Candidates        []string `yaml:"candidates"`
+				} `yaml:"embeddings"`
+			} `yaml:"signals"`
+		} `yaml:"spec"`
+	}
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		t.Fatalf("failed to parse %s: %v", path, err)
+	}
+	if got, want := len(document.Spec.Signals.Embeddings), len(canonical); got != want {
+		t.Fatalf("E2E profile embedding rule count = %d, want %d", got, want)
+	}
+	for i, rule := range canonical {
+		mirror := document.Spec.Signals.Embeddings[i]
+		if mirror.Name != rule.Name || mirror.QueryModality != string(rule.QueryModality) ||
+			mirror.Threshold != rule.SimilarityThreshold ||
+			mirror.AggregationMethod != string(rule.AggregationMethodConfiged) ||
+			!slices.Equal(mirror.Candidates, rule.Candidates) {
+			t.Errorf("E2E profile rule %q does not match canonical image-routing.yaml", rule.Name)
 		}
 	}
 }

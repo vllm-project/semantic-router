@@ -19,6 +19,7 @@ type profileValues struct {
 					Semantic struct {
 						EmbeddingConfig struct {
 							TargetLayer *int `json:"target_layer"`
+							TopK        *int `json:"top_k"`
 						} `json:"embedding_config"`
 					} `json:"semantic"`
 				} `json:"embeddings"`
@@ -27,15 +28,26 @@ type profileValues struct {
 	} `json:"config"`
 }
 
+type embeddingRule struct {
+	Name      string  `json:"name"`
+	Threshold float64 `json:"threshold"`
+}
+
 type intelligentRouteManifest struct {
 	Spec struct {
 		Signals struct {
-			Embeddings []struct {
-				Name      string  `json:"name"`
-				Threshold float64 `json:"threshold"`
-			} `json:"embeddings"`
+			Embeddings []embeddingRule `json:"embeddings"`
 		} `json:"signals"`
 	} `json:"spec"`
+}
+
+// imageRoutingPack is the shape of config/fragments/signal/embedding/image-routing.yaml.
+type imageRoutingPack struct {
+	Routing struct {
+		Signals struct {
+			Embeddings []embeddingRule `json:"embeddings"`
+		} `json:"signals"`
+	} `json:"routing"`
 }
 
 func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
@@ -67,9 +79,22 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	if targetLayer == nil || *targetLayer != 6 {
 		t.Fatalf("multimodal profile target_layer = %v, want explicit 6", targetLayer)
 	}
+
+	// The image cases assert non-matches from the matched-embeddings header.
+	// top_k limits that header to the highest-scoring rules, so anything but
+	// unlimited (0) lets a second rule fire on a labelled negative unseen.
+	if topK := embeddingConfig.TopK; topK == nil {
+		t.Fatal("multimodal profile embedding top_k is unset, want explicit 0 (unlimited) so cross-rule negatives are observable")
+	} else if *topK != 0 {
+		t.Fatalf("multimodal profile embedding top_k = %d, want 0 (unlimited) so cross-rule negatives are observable", *topK)
+	}
 }
 
-func TestImageRulesKeepCalibratedDiscriminationThreshold(t *testing.T) {
+// The profile thresholds are not tuned to the three fixtures; they mirror the
+// calibrated values shipped in the image-routing pack, so the E2E run is an
+// acceptance test of what users deploy. cmd/image-routing-calibration
+// derives the pack values and CI gates them; this keeps the mirror honest.
+func TestImageRulesMirrorTheShippedPack(t *testing.T) {
 	raw, err := os.ReadFile("crds/intelligentroute.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -82,13 +107,31 @@ func TestImageRulesKeepCalibratedDiscriminationThreshold(t *testing.T) {
 	if err := json.Unmarshal(jsonDocument, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	rules := manifest.Spec.Signals.Embeddings
-	if len(rules) != 3 {
-		t.Fatalf("embedding rules = %d, want 3", len(rules))
+
+	packRaw, err := os.ReadFile("../../../config/fragments/signal/embedding/image-routing.yaml")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, rule := range rules {
-		if rule.Name == "" || rule.Threshold != 0.42 {
+	packJSON, err := utilyaml.ToJSON(packRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pack imageRoutingPack
+	if err := json.Unmarshal(packJSON, &pack); err != nil {
+		t.Fatal(err)
+	}
+
+	rules := manifest.Spec.Signals.Embeddings
+	shipped := pack.Routing.Signals.Embeddings
+	if len(rules) != 3 || len(shipped) != 3 {
+		t.Fatalf("embedding rules: profile=%d pack=%d, want 3 and 3", len(rules), len(shipped))
+	}
+	for i, rule := range rules {
+		if rule.Name == "" || rule.Threshold <= 0 {
 			t.Fatalf("uncalibrated image rule: %+v", rule)
+		}
+		if rule.Name != shipped[i].Name || rule.Threshold != shipped[i].Threshold {
+			t.Fatalf("profile rule %d = %+v does not mirror the shipped pack rule %+v", i, rule, shipped[i])
 		}
 	}
 }
