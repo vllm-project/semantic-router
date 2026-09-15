@@ -287,28 +287,54 @@ def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
     return path
 
 
-def write_runtime_config_projection(path: Path, data: bytes) -> Path:
-    """Publish a runtime-only projection without adopting unrelated active edits.
-
-    The caller holds the runtime config lock. Advance the materialization receipt
-    only if the previous document was still CLI-owned; otherwise keep its drift
-    visible so the next serve continues preserving Dashboard/package edits.
-    """
-    provenance_path = _runtime_config_provenance_path(path)
+def runtime_config_projection_receipt(path: Path, data: bytes) -> dict[str, object]:
+    """Describe a projection before publishing it under the runtime config lock."""
     try:
-        provenance = _load_provenance(provenance_path)
+        provenance = _load_provenance(_runtime_config_provenance_path(path))
     except ValueError:
         provenance = None
-    owned = provenance and provenance["last_materialized_active_digest"] == (
-        _digest_bytes(path.read_bytes())
+    return {
+        "pre_projection_digest": _digest_bytes(path.read_bytes()),
+        "projected_digest": _digest_bytes(data),
+        "provenance": provenance,
+    }
+
+
+def recover_runtime_config_projection(path: Path, receipt: dict[str, object]) -> None:
+    """Finish only the provenance write for an exact CLI-owned projection.
+
+    A differing active document or provenance belongs to another edit. Never
+    adopt it, even when its tracing block happens to match the projection.
+    """
+    provenance = receipt.get("provenance")
+    if not isinstance(provenance, dict) or provenance.get(
+        "last_materialized_active_digest"
+    ) != receipt.get("pre_projection_digest"):
+        return
+    if not path.exists() or _digest_bytes(path.read_bytes()) != receipt.get(
+        "projected_digest"
+    ):
+        return
+    provenance_path = _runtime_config_provenance_path(path)
+    try:
+        current = _load_provenance(provenance_path)
+    except ValueError:
+        return
+    if current != provenance:
+        return
+    updated = dict(provenance)
+    updated["last_materialized_active_digest"] = receipt["projected_digest"]
+    write_private_state_bytes(
+        provenance_path, (json.dumps(updated, sort_keys=True) + "\n").encode()
     )
+
+
+def write_runtime_config_projection(
+    path: Path, data: bytes, receipt: dict[str, object]
+) -> Path:
+    """Publish a journaled projection without adopting unrelated active edits."""
     write_runtime_config_bytes(path, data)
-    if owned:
-        provenance["last_materialized_active_digest"] = _digest_bytes(data)
-        write_private_state_bytes(
-            provenance_path,
-            (json.dumps(provenance, sort_keys=True) + "\n").encode(),
-        )
+    recover_runtime_config_projection(path, receipt)
     return path
 
 

@@ -11,6 +11,8 @@ import yaml
 
 from cli.commands.runtime_paths import (
     read_private_state_bytes,
+    recover_runtime_config_projection,
+    runtime_config_projection_receipt,
     write_private_state_bytes,
     write_runtime_config_projection,
 )
@@ -76,6 +78,45 @@ def _tracing_block(config: dict[str, object]) -> dict[str, object] | None:
     return current
 
 
+def validate_package_tracing_mode(
+    runtime_path: Path, stack_layout: RuntimeStackLayout, *, minimal: bool
+) -> None:
+    """Keep the immutable Recipe's realized config and pointer untouched."""
+    if not minimal:
+        return
+    config = yaml.safe_load(runtime_path.read_bytes()) or {}
+    if apply_local_tracing_endpoint(config, stack_layout, enable_observability=False):
+        raise ValueError(
+            "The active Recipe package uses the local tracing collector, which "
+            "--minimal does not start. Use the Recipe deployment workflow to "
+            "disable tracing or configure an external collector before serving "
+            "this package with --minimal."
+        )
+
+
+def _load_tracing_projection(state_path: Path) -> dict[str, object] | None:
+    state_data = read_private_state_bytes(state_path)
+    state = json.loads(state_data) if state_data else None
+    if state is not None and (
+        not isinstance(state, dict)
+        or not {"original_enabled", "projected_tracing"} <= set(state)
+        or set(state) - {"original_enabled", "projected_tracing", "write"}
+        or not isinstance(state["original_enabled"], dict)
+        or set(state["original_enabled"]) - {"enabled"}
+        or not isinstance(state["projected_tracing"], dict)
+        or ("write" in state and not isinstance(state["write"], dict))
+    ):
+        raise ValueError(f"Invalid local tracing projection state: {state_path}")
+    return state
+
+
+def recover_runtime_tracing_projection(runtime_path: Path) -> None:
+    """Recover source provenance before deciding whether source edits apply."""
+    state = _load_tracing_projection(runtime_path.with_suffix(".tracing.json"))
+    if state is not None and "write" in state:
+        recover_runtime_config_projection(runtime_path, state["write"])
+
+
 def reconcile_runtime_tracing(
     runtime_path: Path,
     stack_layout: RuntimeStackLayout,
@@ -93,16 +134,8 @@ def reconcile_runtime_tracing(
     the config, so an interrupted write cannot lose an applied override's origin.
     """
     state_path = runtime_path.with_suffix(".tracing.json")
-    state_data = read_private_state_bytes(state_path)
-    state = json.loads(state_data) if state_data else None
-    if state is not None and (
-        not isinstance(state, dict)
-        or set(state) != {"original_enabled", "projected_tracing"}
-        or not isinstance(state["original_enabled"], dict)
-        or set(state["original_enabled"]) - {"enabled"}
-        or not isinstance(state["projected_tracing"], dict)
-    ):
-        raise ValueError(f"Invalid local tracing projection state: {state_path}")
+    state = _load_tracing_projection(state_path)
+    had_state = state is not None
 
     # A newly selected source owns even an explicit false equal to our override.
     if reset_projection:
@@ -133,12 +166,23 @@ def reconcile_runtime_tracing(
             },
             "projected_tracing": deepcopy(_tracing_block(config)),
         }
-        write_private_state_bytes(state_path, json.dumps(state).encode())
     if changed or restored:
         projected_data = yaml.dump(
             config, default_flow_style=False, sort_keys=False
         ).encode()
         before_replace(projected_data)
-        write_runtime_config_projection(runtime_path, projected_data)
-    if state_data is not None and (enable_observability or state is None):
+        if state is None:
+            state = {
+                "original_enabled": {
+                    key: value
+                    for key, value in original_tracing.items()
+                    if key == "enabled"
+                },
+                "projected_tracing": deepcopy(_tracing_block(config)),
+            }
+        state["write"] = runtime_config_projection_receipt(runtime_path, projected_data)
+        write_private_state_bytes(state_path, json.dumps(state).encode())
+        write_runtime_config_projection(runtime_path, projected_data, state["write"])
+        had_state = True
+    if had_state and (enable_observability or state is None):
         write_private_state_bytes(state_path, b"null\n")

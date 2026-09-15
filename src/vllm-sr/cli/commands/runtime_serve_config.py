@@ -16,7 +16,11 @@ import tempfile
 from pathlib import Path
 
 from cli.bootstrap import is_setup_mode_config
-from cli.commands.runtime_observability import reconcile_runtime_tracing
+from cli.commands.runtime_observability import (
+    reconcile_runtime_tracing,
+    recover_runtime_tracing_projection,
+    validate_package_tracing_mode,
+)
 from cli.commands.runtime_paths import (
     _runtime_config_output_path,
     materialize_runtime_config,
@@ -126,7 +130,11 @@ def _prepare_docker_runtime_config(
                 or effective_config_path,
                 recipe_env_bindings,
             )
+            validate_package_tracing_mode(
+                effective_config_path, stack_layout, minimal=minimal
+            )
         else:
+            recover_runtime_tracing_projection(effective_config_path)
             effective_config_bytes = build_effective_config_bytes(
                 config_path, algorithm, source_setup_mode, platform
             )
@@ -147,7 +155,7 @@ def _prepare_docker_runtime_config(
                 effective_config_path.read_bytes() == effective_config_bytes
             )
         setup_mode = is_setup_mode_config(effective_config_path)
-        if not setup_mode:
+        if not setup_mode and not package_active:
             reconcile_runtime_tracing(
                 effective_config_path,
                 stack_layout,

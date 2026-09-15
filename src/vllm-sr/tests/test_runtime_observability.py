@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import pytest
 import yaml
+from cli.commands import runtime_paths
 from cli.commands.runtime_observability import apply_local_tracing_endpoint
 from cli.commands.runtime_paths import (
     _runtime_config_provenance_path,
@@ -18,6 +19,8 @@ from cli.commands.runtime_support import (
     realize_runtime_config,
 )
 from cli.consts import DEFAULT_STACK_NAME
+from cli.recipe_activation_recovery import active_recipe_package_for_stack
+from cli.recipe_package import recipe_digest
 from cli.runtime_stack import resolve_runtime_stack
 
 
@@ -234,30 +237,139 @@ def test_tracing_mode_switch_preserves_edits_and_provenance(
         assert source.read_bytes() == authored
 
 
-@pytest.mark.parametrize("enabled", [None, True, False])
-def test_package_active_tracing_switches_without_replacing_package(
+def install_active_package(tmp_path, source, active, *, name="test"):
+    files = {
+        "metadata.yaml": f"schema_version: vllm-sr/recipe-metadata/v1\nid: {name}\n".encode(),
+        "config.yaml": source.read_bytes(),
+        "probes.yaml": b"schema_version: vllm-sr/recipe-probes/v1\nname: test\n",
+        "recipe.dsl": b'recipe "test" {}\n',
+        "README.md": b"# Test Recipe\n",
+    }
+    digest = recipe_digest(files)
+    store = tmp_path / ".vllm-sr" / "recipe-store" / "named-trial"
+    object_dir = store / "objects" / "sha256" / digest.removeprefix("sha256:")
+    object_dir.mkdir(parents=True)
+    for filename, data in files.items():
+        (object_dir / filename).write_bytes(data)
+    pointer = {
+        "schema_version": "vllm-sr/recipe-active/v1",
+        "recipe_digest": digest,
+        "config_digest": "sha256:" + hashlib.sha256(files["config.yaml"]).hexdigest(),
+        "realized_config_digest": "sha256:"
+        + hashlib.sha256(active.read_bytes()).hexdigest(),
+        "activated_at": "2026-09-15T19:00:00Z",
+    }
+    (store / "active.json").write_text(json.dumps(pointer))
+    assert active_recipe_package_for_stack(
+        state_root_dir=tmp_path, stack_name="named-trial"
+    )
+
+
+def runtime_snapshot(tmp_path):
+    return {
+        str(path.relative_to(tmp_path)): path.read_bytes()
+        for path in (tmp_path / ".vllm-sr").rglob("*")
+        if path.is_file()
+    }
+
+
+@pytest.mark.parametrize("enabled", [None, True])
+def test_package_local_collector_rejects_minimal_without_mutation(
     tmp_path, monkeypatch, prepare_serve, enabled
 ):
-    tracing = {"enabled": enabled} if enabled is not None else None
+    source = source_config(tmp_path, {"enabled": enabled} if enabled else None)
+    active = prepare_serve(source, minimal=False)
+    install_active_package(tmp_path, source, active)
+    before = runtime_snapshot(tmp_path)
+    stops = []
+    monkeypatch.setattr(
+        "cli.commands.runtime_serve_config.stop_runtime_before_config_replacement",
+        stops.append,
+    )
+    for minimal in (True, False, True, False):
+        if minimal:
+            with pytest.raises(ValueError, match="Recipe deployment workflow"):
+                prepare_serve(source, minimal=True)
+        else:
+            prepare_serve(source, minimal=False)
+        assert runtime_snapshot(tmp_path) == before
+        assert active_recipe_package_for_stack(
+            state_root_dir=tmp_path, stack_name="named-trial"
+        )
+    assert not stops
+
+
+@pytest.mark.parametrize(
+    "tracing",
+    [
+        {"enabled": False},
+        {"enabled": True, "exporter": {"endpoint": "external.example:4317"}},
+        {"exporter": {"type": "stdout"}},
+    ],
+)
+def test_package_explicit_tracing_survives_repeated_serve(
+    tmp_path, prepare_serve, tracing
+):
     source = source_config(tmp_path, tracing)
     active = prepare_serve(source, minimal=False)
-    config = yaml.safe_load(active.read_text())
-    config["global"]["router"] = {"clear_route_cache": False}
-    active.write_text(yaml.safe_dump(config))
-    monkeypatch.setattr(
-        "cli.commands.runtime_serve_config.active_recipe_package_for_stack",
-        lambda **kwargs: {"name": "active-package"},
-    )
-    monkeypatch.setattr(
-        "cli.commands.runtime_serve_config.active_recipe_package_config_path",
-        lambda **kwargs: source,
-    )
+    install_active_package(tmp_path, source, active)
+    before = runtime_snapshot(tmp_path)
     for minimal in (True, True, False, False):
         prepare_serve(source, minimal=minimal)
-        config = yaml.safe_load(active.read_text())
-        assert config["global"]["router"]["clear_route_cache"] is False
-        actual_enabled = tracing_block(config).get("enabled")
-        assert actual_enabled is (False if minimal else enabled)
+        assert runtime_snapshot(tmp_path) == before
+        assert active_recipe_package_for_stack(
+            state_root_dir=tmp_path, stack_name="named-trial"
+        )
+
+
+def test_new_package_disable_does_not_restore_previous_projection(
+    tmp_path, prepare_serve
+):
+    source = source_config(tmp_path)
+    active = prepare_serve(source, minimal=True)
+    disabled = deepcopy(tracing_block(yaml.safe_load(active.read_text())))
+    source_config(tmp_path, disabled)
+    install_active_package(tmp_path, source, active, name="replacement")
+    before = runtime_snapshot(tmp_path)
+    for minimal in (False, True, False):
+        prepare_serve(source, minimal=minimal)
+        assert tracing_block(yaml.safe_load(active.read_text())) == disabled
+        assert runtime_snapshot(tmp_path) == before
+        assert active_recipe_package_for_stack(
+            state_root_dir=tmp_path, stack_name="named-trial"
+        )
+
+
+@pytest.mark.parametrize("user_edited", [False, True])
+def test_interrupted_projection_recovers_only_cli_owned_provenance(
+    tmp_path, monkeypatch, prepare_serve, user_edited
+):
+    source = source_config(tmp_path)
+    active = prepare_serve(source, minimal=False)
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(
+            runtime_paths,
+            "write_private_state_bytes",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                OSError("interrupted provenance write")
+            ),
+        )
+        with pytest.raises(OSError, match="interrupted provenance write"):
+            prepare_serve(source, minimal=True)
+    if user_edited:
+        edited = yaml.safe_load(active.read_text())
+        edited["global"]["router"] = {"clear_route_cache": True}
+        active.write_text(yaml.safe_dump(edited))
+    updated = yaml.safe_load(source.read_text())
+    updated["global"] = {"router": {"clear_route_cache": False}}
+    source.write_text(yaml.safe_dump(updated))
+    prepare_serve(source, minimal=True)
+    config = yaml.safe_load(active.read_text())
+    assert config["global"]["router"]["clear_route_cache"] is user_edited
+    receipt = json.loads(_runtime_config_provenance_path(active).read_text())
+    current_digest = "sha256:" + hashlib.sha256(active.read_bytes()).hexdigest()
+    assert (receipt["last_materialized_active_digest"] != current_digest) == user_edited
+    assert tracing_block(config)["enabled"] is False
 
 
 @pytest.mark.parametrize(
