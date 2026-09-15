@@ -74,6 +74,7 @@ type workflowStateClaim struct {
 
 type workflowToolStateStore interface {
 	Put(ctx context.Context, state *workflowPendingToolState) (string, error)
+	Replace(ctx context.Context, recipe config.RecipeName, id, token string, state *workflowPendingToolState) error
 	Claim(ctx context.Context, recipe config.RecipeName, id string) (*workflowStateClaim, bool, error)
 	Renew(ctx context.Context, recipe config.RecipeName, id, token string) error
 	Commit(ctx context.Context, recipe config.RecipeName, id, token string) error
@@ -140,11 +141,64 @@ func normalizeWorkflowToolStateForStore(state *workflowPendingToolState) {
 	state.ClaimedAt = time.Time{}
 }
 
+func cloneWorkflowPendingToolState(state *workflowPendingToolState) (*workflowPendingToolState, error) {
+	if state == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return nil, fmt.Errorf("clone workflow state: %w", err)
+	}
+	return cloneWorkflowPendingToolStateFromJSON(data)
+}
+
+func cloneWorkflowPendingToolStateFromJSON(data []byte) (*workflowPendingToolState, error) {
+	var clone workflowPendingToolState
+	if err := json.Unmarshal(data, &clone); err != nil {
+		return nil, fmt.Errorf("clone workflow state: %w", err)
+	}
+	return &clone, nil
+}
+
 func workflowToolStateExpired(state *workflowPendingToolState, ttl time.Duration, now time.Time) bool {
 	if state == nil || ttl <= 0 {
 		return false
 	}
 	return now.Sub(state.CreatedAt) > ttl
+}
+
+func workflowMemoryClaimHeld(entry memoryStateEntry, now time.Time) bool {
+	return entry.claimToken != "" && now.Before(entry.claimedUntil)
+}
+
+func workflowDurableClaimHeld(state *workflowPendingToolState, now time.Time) bool {
+	if state == nil || state.ClaimToken == "" || state.ClaimedAt.IsZero() {
+		return false
+	}
+	return now.Sub(state.ClaimedAt) < currentWorkflowStateClaimLease()
+}
+
+func workflowStateRecipeMissing(state *workflowPendingToolState) bool {
+	return state == nil || strings.TrimSpace(state.RecipeName) == ""
+}
+
+func errWorkflowStateClaimHeld(id string) error {
+	return fmt.Errorf("workflow state %q claim is held", id)
+}
+
+func errWorkflowStateClaimNotHeld(id string) error {
+	return fmt.Errorf("workflow state %q claim is not held", id)
+}
+
+func redisExpirationMillis(d time.Duration) int64 {
+	if d <= 0 {
+		return 0
+	}
+	ms := d.Milliseconds()
+	if ms < 1 {
+		return 1
+	}
+	return ms
 }
 
 // checkPayloadSize rejects payloads that exceed the hard cap. Applied to
@@ -245,28 +299,77 @@ func (s *workflowMemoryToolStateStore) Put(_ context.Context, state *workflowPen
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cleanupLocked(time.Now().UTC())
+	now := time.Now().UTC()
+	s.cleanupLocked(now)
 	key, err := workflowNamespacedStateID(config.RecipeName(state.RecipeName), state.ID)
 	if err != nil {
 		return "", err
 	}
-	_, replacing := s.states[key]
+	old, replacing := s.states[key]
+	if replacing && workflowMemoryClaimHeld(old, now) {
+		return "", errWorkflowStateClaimHeld(state.ID)
+	}
 	if !replacing && len(s.states) >= maxMemoryStateEntries {
 		return "", fmt.Errorf("workflow memory state store at capacity (%d entries)", maxMemoryStateEntries)
 	}
 	var oldSize int64
-	if old, exists := s.states[key]; exists {
+	if replacing {
 		oldSize = old.size
 	}
 	if s.currentBytes+int64(len(data))-oldSize > maxAggregateStateBytes {
 		return "", fmt.Errorf("workflow memory state store at capacity (%d bytes, max %d)", s.currentBytes+int64(len(data))-oldSize, maxAggregateStateBytes)
 	}
+	cloned, err := cloneWorkflowPendingToolStateFromJSON(data)
+	if err != nil {
+		return "", err
+	}
 	s.states[key] = memoryStateEntry{
-		state: state,
+		state: cloned,
 		size:  int64(len(data)),
 	}
 	s.currentBytes += int64(len(data)) - oldSize
 	return state.ID, nil
+}
+
+func (s *workflowMemoryToolStateStore) Replace(_ context.Context, recipe config.RecipeName, id, token string, state *workflowPendingToolState) error {
+	if state == nil {
+		return fmt.Errorf("workflow tool state missing")
+	}
+	if state.ID != "" && state.ID != id {
+		return fmt.Errorf("workflow state %q replace id mismatch", id)
+	}
+	state.ID = id
+	normalizeWorkflowToolStateForStore(state)
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("marshal workflow state: %w", err)
+	}
+	if sizeErr := checkUnclaimedPayloadSize(data); sizeErr != nil {
+		return sizeErr
+	}
+	key, err := workflowNamespacedStateID(recipe, id)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.states[key]
+	if !ok || entry.claimToken != token {
+		return errWorkflowStateClaimNotHeld(id)
+	}
+	if s.currentBytes+int64(len(data))-entry.size > maxAggregateStateBytes {
+		return fmt.Errorf("workflow memory state store at capacity (%d bytes, max %d)", s.currentBytes+int64(len(data))-entry.size, maxAggregateStateBytes)
+	}
+	cloned, err := cloneWorkflowPendingToolStateFromJSON(data)
+	if err != nil {
+		return err
+	}
+	s.states[key] = memoryStateEntry{
+		state: cloned,
+		size:  int64(len(data)),
+	}
+	s.currentBytes += int64(len(data)) - entry.size
+	return nil
 }
 
 func (s *workflowMemoryToolStateStore) Claim(_ context.Context, recipe config.RecipeName, id string) (*workflowStateClaim, bool, error) {
@@ -278,7 +381,7 @@ func (s *workflowMemoryToolStateStore) Claim(_ context.Context, recipe config.Re
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
 	s.cleanupLocked(now)
-	if _, ok := s.states[id]; ok {
+	if unscoped, ok := s.states[id]; ok && workflowStateRecipeMissing(unscoped.state) {
 		return nil, false, errWorkflowStateUnscoped
 	}
 	entry, ok := s.states[key]
@@ -295,11 +398,18 @@ func (s *workflowMemoryToolStateStore) Claim(_ context.Context, recipe config.Re
 	entry.claimToken = token
 	entry.claimedUntil = now.Add(currentWorkflowStateClaimLease())
 	s.states[key] = entry
+	snapshot, err := cloneWorkflowPendingToolState(entry.state)
+	if err != nil {
+		entry.claimToken = ""
+		entry.claimedUntil = time.Time{}
+		s.states[key] = entry
+		return nil, false, err
+	}
 	return &workflowStateClaim{
 		Recipe: normalizeWorkflowRecipeName(recipe),
 		ID:     id,
 		Token:  token,
-		State:  entry.state,
+		State:  snapshot,
 	}, true, nil
 }
 
@@ -312,7 +422,7 @@ func (s *workflowMemoryToolStateStore) Renew(_ context.Context, recipe config.Re
 	defer s.mu.Unlock()
 	entry, ok := s.states[key]
 	if !ok || entry.claimToken != token {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	entry.claimedUntil = time.Now().UTC().Add(currentWorkflowStateClaimLease())
 	s.states[key] = entry
@@ -338,7 +448,7 @@ func (s *workflowMemoryToolStateStore) Commit(_ context.Context, recipe config.R
 	if entry.claimToken == "" {
 		return nil
 	}
-	return fmt.Errorf("workflow state %q claim is not held", id)
+	return errWorkflowStateClaimNotHeld(id)
 }
 
 func (s *workflowMemoryToolStateStore) Release(_ context.Context, recipe config.RecipeName, id, token string) error {
@@ -350,7 +460,7 @@ func (s *workflowMemoryToolStateStore) Release(_ context.Context, recipe config.
 	defer s.mu.Unlock()
 	entry, ok := s.states[key]
 	if !ok || entry.claimToken != token {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	entry.claimToken = ""
 	entry.claimedUntil = time.Time{}
@@ -376,6 +486,9 @@ func (s *workflowMemoryToolStateStore) Close() error {
 
 func (s *workflowMemoryToolStateStore) cleanupLocked(now time.Time) {
 	for id, entry := range s.states {
+		if workflowMemoryClaimHeld(entry, now) {
+			continue
+		}
 		if workflowToolStateExpired(entry.state, s.ttl, now) {
 			s.currentBytes -= entry.size
 			delete(s.states, id)
@@ -487,10 +600,14 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.cleanupExpiredLocked(time.Now().UTC())
+	now := time.Now().UTC()
+	s.cleanupExpiredLocked(now)
 
 	var oldSize int64
-	if info, statErr := os.Stat(path); statErr == nil {
+	if existing, info, readErr := s.readStateLocked(path); readErr == nil {
+		if workflowDurableClaimHeld(existing, now) {
+			return "", errWorkflowStateClaimHeld(state.ID)
+		}
 		oldSize = info.Size()
 	}
 
@@ -515,6 +632,34 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	return state.ID, nil
 }
 
+func (s *workflowFileToolStateStore) Replace(_ context.Context, recipe config.RecipeName, id, token string, state *workflowPendingToolState) error {
+	if state == nil {
+		return fmt.Errorf("workflow tool state missing")
+	}
+	if state.ID != "" && state.ID != id {
+		return fmt.Errorf("workflow state %q replace id mismatch", id)
+	}
+	state.ID = id
+	normalizeWorkflowToolStateForStore(state)
+	path, err := s.pathForID(recipe, id)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, _, err := s.readStateLocked(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return errWorkflowStateClaimNotHeld(id)
+		}
+		return err
+	}
+	if current.ClaimToken != token {
+		return errWorkflowStateClaimNotHeld(id)
+	}
+	return s.writeUnclaimedStateLocked(path, state)
+}
+
 func (s *workflowFileToolStateStore) Claim(_ context.Context, recipe config.RecipeName, id string) (*workflowStateClaim, bool, error) {
 	path, err := s.pathForID(recipe, id)
 	if err != nil {
@@ -530,9 +675,12 @@ func (s *workflowFileToolStateStore) Claim(_ context.Context, recipe config.Reci
 	now := time.Now().UTC()
 	s.cleanupExpiredLocked(now)
 
-	if _, statErr := os.Stat(legacyPath); statErr == nil {
-		if _, namespacedErr := os.Stat(path); errors.Is(namespacedErr, os.ErrNotExist) {
-			return nil, false, errWorkflowStateUnscoped
+	if _, namespacedErr := os.Stat(path); errors.Is(namespacedErr, os.ErrNotExist) {
+		if data, readErr := os.ReadFile(legacyPath); readErr == nil {
+			var legacy workflowPendingToolState
+			if unmarshalErr := json.Unmarshal(data, &legacy); unmarshalErr == nil && workflowStateRecipeMissing(&legacy) {
+				return nil, false, errWorkflowStateUnscoped
+			}
 		}
 	}
 
@@ -584,7 +732,7 @@ func (s *workflowFileToolStateStore) Renew(_ context.Context, recipe config.Reci
 		return err
 	}
 	if state.ClaimToken != token {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	state.ClaimedAt = time.Now().UTC()
 	return s.writeStateLocked(path, state)
@@ -617,7 +765,7 @@ func (s *workflowFileToolStateStore) Commit(_ context.Context, recipe config.Rec
 	if state.ClaimToken == "" {
 		return nil
 	}
-	return fmt.Errorf("workflow state %q claim is not held", id)
+	return errWorkflowStateClaimNotHeld(id)
 }
 
 func (s *workflowFileToolStateStore) Release(_ context.Context, recipe config.RecipeName, id, token string) error {
@@ -632,7 +780,7 @@ func (s *workflowFileToolStateStore) Release(_ context.Context, recipe config.Re
 		return err
 	}
 	if state.ClaimToken != token {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	state.ClaimToken = ""
 	state.ClaimedAt = time.Time{}
@@ -655,6 +803,24 @@ func (s *workflowFileToolStateStore) readStateLocked(path string) (*workflowPend
 	return &state, info, nil
 }
 
+func (s *workflowFileToolStateStore) writeUnclaimedStateLocked(path string, state *workflowPendingToolState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("marshal workflow state: %w", err)
+	}
+	if sizeErr := checkUnclaimedPayloadSize(data); sizeErr != nil {
+		return sizeErr
+	}
+	var oldSize int64
+	if info, statErr := os.Stat(path); statErr == nil {
+		oldSize = info.Size()
+	}
+	if s.currentBytes+int64(len(data))-oldSize > maxAggregateStateBytes {
+		return fmt.Errorf("workflow file state store at capacity (%d bytes, max %d)", s.currentBytes+int64(len(data))-oldSize, maxAggregateStateBytes)
+	}
+	return s.writeBytesLocked(path, data)
+}
+
 func (s *workflowFileToolStateStore) writeStateLocked(path string, state *workflowPendingToolState) error {
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -663,6 +829,10 @@ func (s *workflowFileToolStateStore) writeStateLocked(path string, state *workfl
 	if sizeErr := checkPayloadSize(data); sizeErr != nil {
 		return sizeErr
 	}
+	return s.writeBytesLocked(path, data)
+}
+
+func (s *workflowFileToolStateStore) writeBytesLocked(path string, data []byte) error {
 	var oldSize int64
 	if info, statErr := os.Stat(path); statErr == nil {
 		oldSize = info.Size()
@@ -745,7 +915,19 @@ func (s *workflowFileToolStateStore) cleanupExpiredLocked(now time.Time) {
 			continue
 		}
 		var state workflowPendingToolState
-		if err := json.Unmarshal(data, &state); err != nil || workflowToolStateExpired(&state, s.ttl, now) {
+		if err := json.Unmarshal(data, &state); err != nil {
+			if err := os.Remove(path); err == nil {
+				s.currentBytes -= info.Size()
+				if s.currentBytes < 0 {
+					s.currentBytes = 0
+				}
+			}
+			continue
+		}
+		if workflowDurableClaimHeld(&state, now) {
+			continue
+		}
+		if workflowToolStateExpired(&state, s.ttl, now) {
 			if err := os.Remove(path); err == nil {
 				s.currentBytes -= info.Size()
 				if s.currentBytes < 0 {
@@ -840,11 +1022,55 @@ func (s *workflowRedisToolStateStore) Put(ctx context.Context, state *workflowPe
 	if sizeErr := checkUnclaimedPayloadSize(data); sizeErr != nil {
 		return "", sizeErr
 	}
-	if err := s.client.Set(ctx, s.key(config.RecipeName(state.RecipeName), state.ID), data, s.ttl).Err(); err != nil {
+	result, err := workflowRedisPutScript.Run(
+		ctx,
+		s.client,
+		[]string{s.key(config.RecipeName(state.RecipeName), state.ID), s.claimKey(config.RecipeName(state.RecipeName), state.ID)},
+		data,
+		strconv.FormatInt(redisExpirationMillis(s.ttl), 10),
+	).Result()
+	if err != nil {
 		return "", fmt.Errorf("store workflow state in redis: %w", err)
 	}
-	_ = s.client.Del(ctx, s.claimKey(config.RecipeName(state.RecipeName), state.ID)).Err()
+	accepted, _ := result.(int64)
+	if accepted != 1 {
+		return "", errWorkflowStateClaimHeld(state.ID)
+	}
 	return state.ID, nil
+}
+
+func (s *workflowRedisToolStateStore) Replace(ctx context.Context, recipe config.RecipeName, id, token string, state *workflowPendingToolState) error {
+	if state == nil {
+		return fmt.Errorf("workflow tool state missing")
+	}
+	if state.ID != "" && state.ID != id {
+		return fmt.Errorf("workflow state %q replace id mismatch", id)
+	}
+	state.ID = id
+	normalizeWorkflowToolStateForStore(state)
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("marshal workflow state: %w", err)
+	}
+	if sizeErr := checkUnclaimedPayloadSize(data); sizeErr != nil {
+		return sizeErr
+	}
+	result, err := workflowRedisReplaceScript.Run(
+		ctx,
+		s.client,
+		[]string{s.key(recipe, id), s.claimKey(recipe, id)},
+		token,
+		data,
+		strconv.FormatInt(redisExpirationMillis(s.ttl), 10),
+	).Result()
+	if err != nil {
+		return fmt.Errorf("replace workflow state in redis: %w", err)
+	}
+	accepted, _ := result.(int64)
+	if accepted != 1 {
+		return errWorkflowStateClaimNotHeld(id)
+	}
+	return nil
 }
 
 func (s *workflowRedisToolStateStore) Claim(ctx context.Context, recipe config.RecipeName, id string) (*workflowStateClaim, bool, error) {
@@ -853,11 +1079,15 @@ func (s *workflowRedisToolStateStore) Claim(ctx context.Context, recipe config.R
 	}
 	data, err := s.client.Get(ctx, s.key(recipe, id)).Bytes()
 	if errors.Is(err, redis.Nil) {
-		legacy, legacyErr := s.client.Exists(ctx, s.legacyKey(id)).Result()
+		legacy, legacyErr := s.client.Get(ctx, s.legacyKey(id)).Bytes()
+		if errors.Is(legacyErr, redis.Nil) {
+			return nil, false, nil
+		}
 		if legacyErr != nil {
 			return nil, false, fmt.Errorf("inspect legacy workflow state in redis: %w", legacyErr)
 		}
-		if legacy > 0 {
+		var legacyState workflowPendingToolState
+		if unmarshalErr := json.Unmarshal(legacy, &legacyState); unmarshalErr == nil && workflowStateRecipeMissing(&legacyState) {
 			return nil, false, errWorkflowStateUnscoped
 		}
 		return nil, false, nil
@@ -873,7 +1103,9 @@ func (s *workflowRedisToolStateStore) Claim(ctx context.Context, recipe config.R
 		return nil, false, claimErr
 	}
 	now := time.Now().UTC()
-	if workflowToolStateExpired(&state, s.ttl, now) {
+	sidecar, sidecarErr := s.client.Get(ctx, s.claimKey(recipe, id)).Result()
+	sidecarLive := sidecarErr == nil && sidecar != "" && sidecar == state.ClaimToken
+	if workflowToolStateExpired(&state, s.ttl, now) && !sidecarLive {
 		_ = s.client.Del(ctx, s.key(recipe, id), s.claimKey(recipe, id)).Err()
 		return nil, false, nil
 	}
@@ -930,7 +1162,7 @@ func (s *workflowRedisToolStateStore) Renew(ctx context.Context, recipe config.R
 	}
 	accepted, _ := result.(int64)
 	if accepted != 1 {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	return nil
 }
@@ -947,7 +1179,7 @@ func (s *workflowRedisToolStateStore) Commit(ctx context.Context, recipe config.
 	}
 	accepted, _ := result.(int64)
 	if accepted != 1 {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	return nil
 }
@@ -955,7 +1187,7 @@ func (s *workflowRedisToolStateStore) Commit(ctx context.Context, recipe config.
 func (s *workflowRedisToolStateStore) Release(ctx context.Context, recipe config.RecipeName, id, token string) error {
 	data, err := s.client.Get(ctx, s.key(recipe, id)).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	if err != nil {
 		return fmt.Errorf("read workflow state from redis: %w", err)
@@ -965,7 +1197,7 @@ func (s *workflowRedisToolStateStore) Release(ctx context.Context, recipe config
 		return fmt.Errorf("parse workflow state: %w", parseErr)
 	}
 	if state.ClaimToken != token {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	released, err := marshalWorkflowStateWithClaim(&state, "", time.Time{})
 	if err != nil {
@@ -983,7 +1215,7 @@ func (s *workflowRedisToolStateStore) Release(ctx context.Context, recipe config
 	}
 	accepted, _ := result.(int64)
 	if accepted != 1 {
-		return fmt.Errorf("workflow state %q claim is not held", id)
+		return errWorkflowStateClaimNotHeld(id)
 	}
 	return nil
 }
@@ -1061,6 +1293,38 @@ func marshalWorkflowStateWithClaim(state *workflowPendingToolState, token string
 	return data, nil
 }
 
+var workflowRedisPutScript = redis.NewScript(`
+if redis.call("GET", KEYS[2]) then
+  return 0
+end
+local ttl = tonumber(ARGV[2]) or 0
+if ttl > 0 then
+  redis.call("SET", KEYS[1], ARGV[1], "PX", ttl)
+else
+  redis.call("SET", KEYS[1], ARGV[1])
+end
+return 1
+`)
+
+var workflowRedisReplaceScript = redis.NewScript(`
+local value = redis.call("GET", KEYS[1])
+if not value then
+  return 0
+end
+local needle = '"claim_token":"' .. ARGV[1] .. '"'
+if not string.find(value, needle, 1, true) then
+  return 0
+end
+local ttl = tonumber(ARGV[3]) or 0
+if ttl > 0 then
+  redis.call("SET", KEYS[1], ARGV[2], "PX", ttl)
+else
+  redis.call("SET", KEYS[1], ARGV[2])
+end
+redis.call("DEL", KEYS[2])
+return 1
+`)
+
 var workflowRedisClaimScript = redis.NewScript(`
 local value = redis.call("GET", KEYS[1])
 if not value then
@@ -1074,17 +1338,20 @@ if live then
   end
 end
 local ttl = redis.call("PTTL", KEYS[1])
+local lease = tonumber(ARGV[3]) or 0
+if ttl and ttl > 0 and lease > ttl then
+  ttl = lease
+end
 redis.call("SET", KEYS[1], ARGV[2])
 if ttl and ttl > 0 then
   redis.call("PEXPIRE", KEYS[1], ttl)
 end
-redis.call("SET", KEYS[2], ARGV[1], "PX", tonumber(ARGV[3]))
+redis.call("SET", KEYS[2], ARGV[1], "PX", lease)
 return value
 `)
 
 var workflowRedisCommitScript = redis.NewScript(`
 local value = redis.call("GET", KEYS[1])
-local claim = redis.call("GET", KEYS[2])
 local needle = '"claim_token":"' .. ARGV[1] .. '"'
 if not value then
   redis.call("DEL", KEYS[2])
@@ -1092,10 +1359,6 @@ if not value then
 end
 if string.find(value, needle, 1, true) then
   redis.call("DEL", KEYS[1], KEYS[2])
-  return 1
-end
-if claim == ARGV[1] or not claim then
-  redis.call("DEL", KEYS[2])
   return 1
 end
 return 0
@@ -1128,6 +1391,11 @@ local needle = '"claim_token":"' .. ARGV[1] .. '"'
 if not string.find(value, needle, 1, true) then
   return 0
 end
-redis.call("SET", KEYS[2], ARGV[1], "PX", tonumber(ARGV[2]))
+local ttl = redis.call("PTTL", KEYS[1])
+local lease = tonumber(ARGV[2]) or 0
+if ttl and ttl > 0 and lease > ttl then
+  redis.call("PEXPIRE", KEYS[1], lease)
+end
+redis.call("SET", KEYS[2], ARGV[1], "PX", lease)
 return 1
 `)

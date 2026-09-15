@@ -54,6 +54,42 @@ func TestReloadRouterFromConfig_FailedWarmupDoesNotApplyFileTTL(t *testing.T) {
 	}
 }
 
+func TestReloadRouterFromConfig_SuccessfulReloadCommitsFileTTL(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+
+	upstream, _ := newWorkflowPauseResumeServer(t)
+	cfg := newWorkflowLooperConfig(t, upstream.URL, config.WorkflowStateBackendFile)
+	oldRouter := newWorkflowRouter(t, cfg)
+	server := &Server{service: NewRouterService(oldRouter)}
+	t.Cleanup(func() { _ = server.service.Close() })
+	stubWorkflowReloadSeams(t, cfg)
+
+	pauseResp := routeWorkflowRequest(t, oldRouter, workflowPauseChatBody(t))
+	if got := immediateStatus(pauseResp); got != 200 {
+		t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
+	}
+
+	candidate := cfg
+	candidate.Flow.State.TTLSeconds = 1
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		return newWorkflowRouter(t, candidate), nil
+	}
+
+	time.Sleep(1500 * time.Millisecond)
+	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err != nil {
+		t.Fatalf("reloadRouterFromConfig: %v", err)
+	}
+
+	resumeResp := routeWorkflowRequest(t, server.service.GetRouter(), workflowResumeChatBody(t, immediateBody(pauseResp)))
+	if got := immediateStatus(resumeResp); got != 500 {
+		t.Fatalf("resume after committed TTL status = %d, want 500, body %s", got, immediateBody(resumeResp))
+	}
+	if !strings.Contains(string(immediateBody(resumeResp)), "not found or expired") {
+		t.Fatalf("resume after committed TTL body = %s", immediateBody(resumeResp))
+	}
+}
+
 func TestReloadRouterFromConfig_WorkflowMemoryStateDoesNotSurvive(t *testing.T) {
 	restore := stubReloadSeams(t)
 	defer restore()

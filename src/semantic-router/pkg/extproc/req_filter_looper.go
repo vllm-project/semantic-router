@@ -118,6 +118,13 @@ func (r *OpenAIRouter) handleLooperExecution(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
+	if r.WorkflowStateService != nil && decision != nil && decision.Algorithm != nil &&
+		decision.Algorithm.Type == config.DecisionAlgorithmWorkflows {
+		if !r.WorkflowStateService.Acquire() {
+			return r.createErrorResponse(503, "Router is shutting down"), nil
+		}
+		defer r.WorkflowStateService.Release()
+	}
 	// Create looper based on algorithm type
 	l, err := r.createLooper(decision, reqCtx)
 	if err != nil {

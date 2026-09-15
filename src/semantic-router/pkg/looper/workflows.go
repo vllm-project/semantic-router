@@ -198,7 +198,8 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		return nil, err
 	}
 	if interrupt != nil {
-		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		out, _, formatErr := l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, nil)
+		return out, formatErr
 	}
 
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, plan, original, stepResults, plannerResp, workerModels)
@@ -216,7 +217,8 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		logging.Warnf("[Workflows] Final synthesis failed; using worker response fallback because on_error=skip: %v", err)
 	}
 	if interrupt != nil {
-		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		out, _, formatErr := l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, nil)
+		return out, formatErr
 	}
 	applyJSONActionOutputContract(req.OutputContractSpec, finalResp, workflowStepModelResponses(stepResults))
 	applyFinalOutputContract(req.OutputContractSpec, finalResp)

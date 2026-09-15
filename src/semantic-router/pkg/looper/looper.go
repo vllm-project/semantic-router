@@ -207,9 +207,11 @@ func NewWorkflowStateService(cfg *config.LooperConfig) *WorkflowStateService {
 	}
 }
 
-// CommitStorePolicy applies this generation's store policy after the router
-// swap commits. File-backed stores are shared across overlapping generations,
-// so TTL must not change while a candidate is only warming up.
+// CommitStorePolicy applies this generation's store policy inside the
+// generation-publication critical section. File-backed stores are shared
+// across overlapping generations, so TTL must not change while a candidate is
+// only warming up, and Process must not observe the new router with the
+// previous expiry policy.
 func (s *WorkflowStateService) CommitStorePolicy() {
 	if s == nil {
 		return

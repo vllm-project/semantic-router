@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -827,7 +828,7 @@ func TestWorkflowRedisToolStateStore_CommitAfterLeaseExpiryDeletesState(t *testi
 	}
 }
 
-func TestWorkflowRedisToolStateStore_CommitKeepsReplacementPause(t *testing.T) {
+func TestWorkflowRedisToolStateStore_CommitDoesNotDeleteReplacementPause(t *testing.T) {
 	mr := miniredis.RunT(t)
 	s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
 		Address:   mr.Addr(),
@@ -849,19 +850,22 @@ func TestWorkflowRedisToolStateStore_CommitKeepsReplacementPause(t *testing.T) {
 
 	replacement := makeTestState(id)
 	replacement.DecisionName = "second"
-	if _, putErr := s.Put(ctx, replacement); putErr != nil {
-		t.Fatalf("Put replacement: %v", putErr)
+	if _, putErr := s.Put(ctx, replacement); putErr == nil {
+		t.Fatal("Put replaced a live claim")
 	}
-	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); commitErr != nil {
-		t.Fatalf("Commit after replacement Put: %v", commitErr)
+	if replaceErr := s.Replace(ctx, config.DefaultRecipeName, id, claim.Token, replacement); replaceErr != nil {
+		t.Fatalf("Replace: %v", replaceErr)
+	}
+	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); commitErr == nil {
+		t.Fatal("Commit after fenced Replace succeeded; the replacement pause should stay")
 	}
 
 	got, ok, err := consumeWorkflowState(s, id)
 	if err != nil || !ok || got == nil {
-		t.Fatalf("replacement pause missing after Commit: ok=%v err=%v", ok, err)
+		t.Fatalf("replacement pause missing after Replace: ok=%v err=%v", ok, err)
 	}
 	if got.DecisionName != "second" {
-		t.Fatalf("Commit deleted the replacement pause: decision=%q", got.DecisionName)
+		t.Fatalf("replacement pause decision=%q, want second", got.DecisionName)
 	}
 }
 
@@ -1054,5 +1058,345 @@ func assertRenewKeepsClaimPastLease(t *testing.T, s workflowToolStateStore, adva
 	}
 	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, recovered.Token); commitErr != nil {
 		t.Fatalf("Commit recovered claim: %v", commitErr)
+	}
+}
+
+func TestStateStore_ClaimSnapshotSurvivesFailedResume(t *testing.T) {
+	for _, backend := range append(backends(t), redisBackend(t)) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			ctx := context.Background()
+			const id = "failed-resume"
+			original := makeTestState(id)
+			original.DecisionName = "original-decision"
+			original.Iteration = 2
+			original.Streaming = false
+			if _, err := s.Put(ctx, original); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+
+			claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+			if err != nil || !ok || claim == nil || claim.State == nil {
+				t.Fatalf("Claim: ok=%v err=%v", ok, err)
+			}
+			claim.State.Streaming = true
+			claim.State.Iteration = 9
+			claim.State.DecisionName = "mutated-decision"
+			claim.State.AgentRequest = &openai.ChatCompletionNewParams{}
+			if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, claim.Token); releaseErr != nil {
+				t.Fatalf("Release after failed resume: %v", releaseErr)
+			}
+
+			retried, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+			if err != nil || !ok || retried == nil || retried.State == nil {
+				t.Fatalf("retry Claim: ok=%v err=%v", ok, err)
+			}
+			if retried.State == claim.State {
+				t.Fatal("retry Claim returned the mutated snapshot pointer")
+			}
+			if retried.State.Streaming || retried.State.Iteration != 2 || retried.State.DecisionName != "original-decision" {
+				t.Fatalf("retry Claim saw failed-resume mutations: %+v", retried.State)
+			}
+			if retried.State.AgentRequest != nil {
+				t.Fatal("retry Claim retained a mutated AgentRequest")
+			}
+			if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, retried.Token); commitErr != nil {
+				t.Fatalf("Commit retried claim: %v", commitErr)
+			}
+		})
+	}
+}
+
+func TestMemoryStateStore_PutAndClaimKeepStoredEntriesImmutable(t *testing.T) {
+	s := newWorkflowMemoryToolStateStore(time.Hour)
+	t.Cleanup(func() { _ = s.Close() })
+	ctx := context.Background()
+	const id = "put-isolation"
+	original := makeTestState(id)
+	original.DecisionName = "stored"
+	if _, err := s.Put(ctx, original); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	original.DecisionName = "caller-mutated"
+
+	claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || claim == nil || claim.State == nil {
+		t.Fatalf("Claim: ok=%v err=%v", ok, err)
+	}
+	if claim.State == original {
+		t.Fatal("Claim returned the caller's Put pointer")
+	}
+	if claim.State.DecisionName != "stored" {
+		t.Fatalf("stored entry tracked caller mutation: %q", claim.State.DecisionName)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			s.mu.Lock()
+			s.cleanupLocked(time.Now().UTC())
+			s.mu.Unlock()
+		}
+	}()
+	claim.State.Streaming = true
+	claim.State.Iteration++
+	claim.State.DecisionName = "race-mutated"
+	claim.State.CreatedAt = time.Now().UTC().Add(time.Hour)
+	<-done
+	if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, claim.Token); releaseErr != nil {
+		t.Fatalf("Release: %v", releaseErr)
+	}
+	retried, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || retried == nil || retried.State == nil {
+		t.Fatalf("retry Claim after race: ok=%v err=%v", ok, err)
+	}
+	if retried.State.Streaming || retried.State.Iteration != 0 || retried.State.DecisionName != "stored" {
+		t.Fatalf("sweeper race published claim mutations: %+v", retried.State)
+	}
+	if retried.State.CreatedAt.After(original.CreatedAt.Add(time.Minute)) {
+		t.Fatalf("sweeper race published CreatedAt mutation: %v", retried.State.CreatedAt)
+	}
+	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, retried.Token); commitErr != nil {
+		t.Fatalf("Commit: %v", commitErr)
+	}
+}
+
+func TestStateStore_PutDoesNotOverrideLiveClaim(t *testing.T) {
+	for _, backend := range append(backends(t), redisBackend(t)) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			ctx := context.Background()
+			const id = "live-put"
+			original := makeTestState(id)
+			original.DecisionName = "original"
+			if _, err := s.Put(ctx, original); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+			if err != nil || !ok || claim == nil {
+				t.Fatalf("Claim: ok=%v err=%v", ok, err)
+			}
+			overwrite := makeTestState(id)
+			overwrite.DecisionName = "stale"
+			if _, putErr := s.Put(ctx, overwrite); putErr == nil {
+				t.Fatal("Put overwrote a live claim")
+			}
+			if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, claim.Token); releaseErr != nil {
+				t.Fatalf("Release: %v", releaseErr)
+			}
+			got, ok, err := consumeWorkflowState(s, id)
+			if err != nil || !ok || got == nil {
+				t.Fatalf("original pause missing: ok=%v err=%v", ok, err)
+			}
+			if got.DecisionName != "original" {
+				t.Fatalf("live Put mutated stored decision=%q", got.DecisionName)
+			}
+		})
+	}
+}
+
+func TestStateStore_ReplaceIsFencedToHeldToken(t *testing.T) {
+	for _, backend := range append(backends(t), redisBackend(t)) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			ctx := context.Background()
+			const id = "fenced-replace"
+			original := makeTestState(id)
+			original.DecisionName = "original"
+			if _, err := s.Put(ctx, original); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			first, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+			if err != nil || !ok || first == nil {
+				t.Fatalf("first Claim: ok=%v err=%v", ok, err)
+			}
+
+			next := makeTestState(id)
+			next.DecisionName = "re-pause"
+			if replaceErr := s.Replace(ctx, config.DefaultRecipeName, id, "not-the-token", next); replaceErr == nil {
+				t.Fatal("Replace accepted a foreign token")
+			}
+
+			if replaceErr := s.Replace(ctx, config.DefaultRecipeName, id, first.Token, next); replaceErr != nil {
+				t.Fatalf("Replace with held token: %v", replaceErr)
+			}
+			got, ok, err := consumeWorkflowState(s, id)
+			if err != nil || !ok || got == nil {
+				t.Fatalf("re-pause missing: ok=%v err=%v", ok, err)
+			}
+			if got.DecisionName != "re-pause" {
+				t.Fatalf("replaced decision=%q, want re-pause", got.DecisionName)
+			}
+		})
+	}
+}
+
+func TestStateStore_StaleReplaceLosesToLiveClaimant(t *testing.T) {
+	setWorkflowStateClaimLease(t, 80*time.Millisecond)
+	for _, backend := range backends(t) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			assertStaleReplaceLosesToLiveClaimant(t, s, func() {
+				time.Sleep(120 * time.Millisecond)
+			})
+		})
+	}
+	t.Run("redis", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+			Address:   mr.Addr(),
+			KeyPrefix: "test-stale-replace:",
+		}, time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		assertStaleReplaceLosesToLiveClaimant(t, s, func() {
+			mr.FastForward(120 * time.Millisecond)
+		})
+	})
+}
+
+func assertStaleReplaceLosesToLiveClaimant(t *testing.T, s workflowToolStateStore, expire func()) {
+	t.Helper()
+	ctx := context.Background()
+	const id = "stale-replace"
+	if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	stale, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || stale == nil {
+		t.Fatalf("stale Claim: ok=%v err=%v", ok, err)
+	}
+	expire()
+	live, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || live == nil {
+		t.Fatalf("live Claim: ok=%v err=%v", ok, err)
+	}
+	staleWrite := makeTestState(id)
+	staleWrite.DecisionName = "stale-writer"
+	if replaceErr := s.Replace(ctx, config.DefaultRecipeName, id, stale.Token, staleWrite); replaceErr == nil {
+		t.Fatal("stale Replace overwrote the live claim")
+	}
+	if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, live.Token); releaseErr != nil {
+		t.Fatalf("Release live claim: %v", releaseErr)
+	}
+	got, ok, err := consumeWorkflowState(s, id)
+	if err != nil || !ok || got == nil {
+		t.Fatalf("live pause missing: ok=%v err=%v", ok, err)
+	}
+	if got.DecisionName == "stale-writer" {
+		t.Fatal("stale Replace published into the live pause")
+	}
+}
+
+func TestStateStore_SweepSkipsLiveClaim(t *testing.T) {
+	const id = "claimed-ttl"
+	t.Run("memory", func(t *testing.T) {
+		s := newWorkflowMemoryToolStateStore(10 * time.Millisecond)
+		t.Cleanup(func() { _ = s.Close() })
+		ctx := context.Background()
+		if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if err != nil || !ok || claim == nil {
+			t.Fatalf("Claim: ok=%v err=%v", ok, err)
+		}
+		time.Sleep(30 * time.Millisecond)
+		busy, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if err != nil {
+			t.Fatalf("Claim after TTL while held: %v", err)
+		}
+		if ok || busy != nil {
+			t.Fatal("TTL sweep deleted or released a live claim")
+		}
+		if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, claim.Token); releaseErr != nil {
+			t.Fatalf("Release: %v", releaseErr)
+		}
+	})
+	t.Run("file", func(t *testing.T) {
+		s := newWorkflowFileToolStateStore(filepath.Join(t.TempDir(), "claimed-ttl"), 10*time.Millisecond)
+		t.Cleanup(func() { _ = s.Close() })
+		ctx := context.Background()
+		if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if err != nil || !ok || claim == nil {
+			t.Fatalf("Claim: ok=%v err=%v", ok, err)
+		}
+		time.Sleep(30 * time.Millisecond)
+		busy, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if err != nil {
+			t.Fatalf("Claim after TTL while held: %v", err)
+		}
+		if ok || busy != nil {
+			t.Fatal("TTL sweep deleted or released a live claim")
+		}
+		if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, claim.Token); releaseErr != nil {
+			t.Fatalf("Release: %v", releaseErr)
+		}
+	})
+	t.Run("redis", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+			Address:   mr.Addr(),
+			KeyPrefix: "test-claimed-ttl:",
+		}, 50*time.Millisecond)
+		t.Cleanup(func() { _ = s.Close() })
+		ctx := context.Background()
+		if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if err != nil || !ok || claim == nil {
+			t.Fatalf("Claim: ok=%v err=%v", ok, err)
+		}
+		mr.FastForward(80 * time.Millisecond)
+		busy, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if err != nil {
+			t.Fatalf("Claim after Redis TTL while held: %v", err)
+		}
+		if ok || busy != nil {
+			t.Fatal("Redis TTL deleted a live claim")
+		}
+		if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, claim.Token); releaseErr != nil {
+			t.Fatalf("Release: %v", releaseErr)
+		}
+	})
+}
+
+func TestStateStore_NamespacedIDIsNotUnscoped(t *testing.T) {
+	for _, backend := range append(backends(t), redisBackend(t)) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			ctx := context.Background()
+			const id = "raw-id"
+			if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			namespaced, err := workflowNamespacedStateID(config.DefaultRecipeName, id)
+			if err != nil {
+				t.Fatalf("namespace: %v", err)
+			}
+			claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, namespaced)
+			if errors.Is(err, errWorkflowStateUnscoped) {
+				t.Fatal("namespaced id was reported unscoped")
+			}
+			if err != nil {
+				t.Fatalf("Claim namespaced id: %v", err)
+			}
+			if ok || claim != nil {
+				t.Fatal("Claim treated a namespaced key as a raw state id")
+			}
+			got, ok, err := consumeWorkflowState(s, id)
+			if err != nil || !ok || got == nil {
+				t.Fatalf("raw id consume: ok=%v err=%v", ok, err)
+			}
+		})
 	}
 }
