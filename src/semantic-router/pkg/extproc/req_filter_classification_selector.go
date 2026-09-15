@@ -39,11 +39,16 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 			ctx.VSRSelectedCandidate = (&selection.SelectionResult{}).WithCandidate(*chosen).SelectedCandidate
 		}
 	}()
+	method := r.getSelectionMethod(algorithm)
+	filtered, err := r.capabilityEligibleSelectionContext(selCtx, algorithm, ctx)
+	if err != nil {
+		return nil, string(method), err
+	}
+	selCtx = filtered
 	defaultCandidate := firstValidCandidateModelRef(selCtx)
 	if defaultCandidate == nil {
 		return nil, "", nil
 	}
-	method := r.getSelectionMethod(algorithm)
 	if err := r.validateProtectedCandidateOwnership(selCtx, ctx); err != nil {
 		return nil, string(method), err
 	}
