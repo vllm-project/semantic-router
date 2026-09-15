@@ -21,7 +21,7 @@ import {
 
 interface RouterModelInventoryProps {
   modelsInfo?: RouterModelsInfo | null
-  mode?: 'preview' | 'full'
+  mode?: 'preview' | 'full' | 'detail'
   previewLimit?: number
   showSummary?: boolean
   emptyMessage?: string
@@ -115,6 +115,8 @@ function getModelKind(model: RouterModelInfo): string {
 
 function getModelDescription(model: RouterModelInfo): string | undefined {
   const description = model.registry?.description?.trim()
+  // Model-card HTML is not a plain description; the task subtitle remains visible.
+  if (description && /<!--|<\/?[a-z][^>]*>/i.test(description)) return undefined
   return description || undefined
 }
 
