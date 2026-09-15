@@ -40,8 +40,8 @@ func TestOwnedMemoryProviderPreservesModelOptionsAndRawVector(t *testing.T) {
 		{EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 128, Layer: 6}, embedding.Options{Dimension: 128, Layer: 6}},
 		{EmbeddingConfig{Model: EmbeddingModelMulti}, embedding.Options{Dimension: 384}},
 		{EmbeddingConfig{Model: EmbeddingModelBERT, Dimension: 10}, embedding.Options{}},
-		{EmbeddingConfig{Model: EmbeddingModelQwen3, Dimension: 10}, embedding.Options{}},
-		{EmbeddingConfig{Model: EmbeddingModelGemma, Dimension: 10}, embedding.Options{}},
+		{EmbeddingConfig{Model: EmbeddingModelQwen3, Dimension: 10}, embedding.Options{Dimension: 10}},
+		{EmbeddingConfig{Model: EmbeddingModelGemma, Dimension: 10}, embedding.Options{Dimension: 10}},
 	} {
 		p := &recordingMemoryProvider{}
 		cfg := test.cfg
