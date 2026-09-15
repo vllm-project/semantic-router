@@ -93,14 +93,20 @@ spec:
         - containerPort: {{ .Values.service.api.targetPort }}
           name: classify-api
           protocol: TCP
-        {{- if or .Values.env .Values.extraEnv }}
         env:
+          # Lets the config write API patch this ConfigMap through the
+          # Kubernetes API instead of the read-only mounted file (issue #3688).
+          - name: VLLM_SR_K8S_CONFIGMAP_NAME
+            value: {{ include "semantic-router.configMapName" . | quote }}
+          - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
         {{- with .Values.extraEnv }}
           {{- toYaml . | nindent 10 }}
-        {{- end }}
         {{- end }}
         {{- with .Values.envFromSecrets }}
         envFrom:

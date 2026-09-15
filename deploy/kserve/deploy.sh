@@ -534,7 +534,7 @@ else
     echo -e "${YELLOW}⚠ Missing envoy config source: $ENVOY_CONFIG_SRC${NC}"
 fi
 
-for file in serviceaccount.yaml pvc.yaml peerauthentication.yaml deployment.yaml service.yaml route.yaml; do
+for file in serviceaccount.yaml rbac.yaml pvc.yaml peerauthentication.yaml deployment.yaml service.yaml route.yaml; do
     if [ -f "$SCRIPT_DIR/$file" ]; then
         substitute_vars "$SCRIPT_DIR/$file" "$TEMP_DIR/$file"
         echo -e "${GREEN}✓${NC} Generated: $file"
@@ -596,6 +596,9 @@ if oc get deployment semantic-router-kserve -n "$NAMESPACE" &>/dev/null; then
 fi
 
 oc apply -f "$TEMP_DIR/serviceaccount.yaml" -n "$NAMESPACE"
+# Lets the config write API patch the router ConfigMap through the
+# Kubernetes API instead of the read-only mounted file (issue #3688).
+oc apply -f "$TEMP_DIR/rbac.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/pvc.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/configmap-router-config.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/configmap-envoy-config.yaml" -n "$NAMESPACE"

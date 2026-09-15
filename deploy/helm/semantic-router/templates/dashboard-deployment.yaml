@@ -40,6 +40,7 @@ spec:
         {{- include "semantic-router.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: dashboard
     spec:
+      serviceAccountName: {{ include "semantic-router.dashboardServiceAccountName" . }}
       securityContext:
         {{- toYaml .Values.dashboard.podSecurityContext | nindent 8 }}
       {{- with .Values.imagePullSecrets }}
@@ -57,6 +58,14 @@ spec:
           name: http
           protocol: TCP
         env:
+        # Lets the config write/deploy handlers patch this ConfigMap through
+        # the Kubernetes API instead of the read-only mounted file (#3688).
+        - name: VLLM_SR_K8S_CONFIGMAP_NAME
+          value: {{ include "semantic-router.configMapName" . | quote }}
+        - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         - name: TARGET_ROUTER_API_URL
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
