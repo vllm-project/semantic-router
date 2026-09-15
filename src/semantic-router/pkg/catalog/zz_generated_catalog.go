@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:59aa26f1e4bb0fa52987c265a626962efb8b610e804d9d92e946e1daccb0506f"
+const builtInCatalogDigest = "sha256:ca0bcce326e201ebf798ceb56edced86ea52c7e7c1adde7d45e5338c6ae22588"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -12957,6 +12957,611 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "Gemma 3 12B Instruct",
         "source_model_slug": "gemma-3-12b"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-report-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.8975
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_variant": "MMLU-Pro",
+        "evaluation_harness": "OpenCompass",
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_technical_report",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/TIGER-AI-Lab/MMLU-Pro",
+        "task_count": 12000
+      }
+    },
+    {
+      "benchmark": "matharena/hmmt-feb@2026.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-report-hmmt@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.9157
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_variant": "February 2026 Harvard-MIT Mathematics Tournament",
+        "evaluation_harness": "OpenCompass",
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_technical_report",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/eth-sri/matharena",
+        "task_count": 33
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu-pro@1.0.0",
+      "benchmark_profile": "standard-10",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-report-mmmu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.8046
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_variant": "MMMU-Pro",
+        "evaluation_harness": "VLMEvalKit",
+        "latency_ms": null,
+        "maximum_inference_tokens": 65536,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_technical_report",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/MMMU-Benchmark/MMMU"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-report-terminal-bench@1.0.0",
+      "metrics": {
+        "resolved": 0.6742
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Terminus 2",
+        "cost_usd": null,
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_technical_report",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/harbor-framework/terminal-bench-2-1",
+        "task_count": 89
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-report-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.6156
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Mini-SWE-Agent",
+        "cost_usd": null,
+        "evaluation_image": "modified official evaluation image",
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_technical_report",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://scale.com/leaderboard/swe_bench_pro_public",
+        "task_count": 1865
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-report-scicode@1.0.0",
+      "metrics": {
+        "score": 0.4911
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_variant": "80 problems / 338 subproblems",
+        "evaluation_harness": "OpenCompass",
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_technical_report",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/scicode-bench/SciCode",
+        "task_count": 338
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-anchor-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.8475
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-12",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_variant": "GPQA Diamond",
+        "evaluation_harness": "OpenCompass",
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_anchor_reproduction",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/idavidrein/gpqa",
+        "task_count": 198
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "text-only",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-anchor-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.268
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-12",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_variant": "May 2025 text-only subset",
+        "evaluation_harness": "OpenCompass",
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_anchor_reproduction",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/centerforaisafety/hle",
+        "task_count": 2158,
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2608.13505v1",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-397b-anchor-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.734
+      },
+      "model": "intern/intern-s2-preview-397b",
+      "observed_at": "2026-09-12",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "cost_usd": null,
+        "dataset_release": "v6",
+        "evaluation_harness": "OpenCompass",
+        "latency_ms": null,
+        "maximum_inference_tokens": 262144,
+        "model_revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+        "problem_window": "2023-05_to_2025-04",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_anchor_reproduction",
+        "source_model": "Intern-S2-Preview-397B",
+        "source_model_slug": "intern-s2-preview-397b",
+        "task_artifact": "https://github.com/LiveCodeBench/LiveCodeBench",
+        "task_count": 1055
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-35b-eval-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.88
+      },
+      "model": "intern/intern-s2-preview-35b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MMLU-Pro",
+        "evaluation_harness": "OpenCompass",
+        "maximum_inference_tokens": 131072,
+        "model_revision": "4f57cab513689b089019fce4ad24e26520df183c",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_huggingface_eval_result",
+        "variant": "Intern-S2-Preview 35B"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-35b-eval-hle@1.0.0",
+      "metrics": {
+        "accuracy": 0.2194
+      },
+      "model": "intern/intern-s2-preview-35b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "HLE",
+        "evaluation_harness": "unspecified",
+        "maximum_inference_tokens": 131072,
+        "model_revision": "4f57cab513689b089019fce4ad24e26520df183c",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_huggingface_eval_result",
+        "tool_policy": "unspecified",
+        "variant": "Intern-S2-Preview 35B"
+      }
+    },
+    {
+      "benchmark": "matharena/hmmt-feb@2026.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-35b-eval-hmmt@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.8731
+      },
+      "model": "intern/intern-s2-preview-35b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "February 2026 Harvard-MIT Mathematics Tournament",
+        "evaluation_harness": "OpenCompass",
+        "maximum_inference_tokens": 131072,
+        "model_revision": "4f57cab513689b089019fce4ad24e26520df183c",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_huggingface_eval_result",
+        "variant": "Intern-S2-Preview 35B"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu-pro@1.0.0",
+      "benchmark_profile": "standard-10",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-35b-eval-mmmu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.7688
+      },
+      "model": "intern/intern-s2-preview-35b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MMMU-Pro",
+        "evaluation_harness": "VLMEvalKit",
+        "evaluation_label": "MMMU Pro Vision",
+        "maximum_inference_tokens": 65536,
+        "model_revision": "4f57cab513689b089019fce4ad24e26520df183c",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.8,
+        "sampling_top_k": 50,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_huggingface_eval_result",
+        "variant": "Intern-S2-Preview 35B"
+      }
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s2-preview-35b-eval-swe-bench-verified@1.0.0",
+      "metrics": {
+        "resolved": 0.64
+      },
+      "model": "intern/intern-s2-preview-35b",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_label": "SWE-bench Verified",
+        "model_revision": "4f57cab513689b089019fce4ad24e26520df183c",
+        "source_kind": "official_huggingface_eval_result",
+        "variant": "Intern-S2-Preview 35B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S1/blob/4ecad381e28293c4825793f113327cc016cdcbda/README.md",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s1-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.835
+      },
+      "model": "intern/intern-s1",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MMLU-Pro",
+        "evaluation_harness": "OpenCompass",
+        "model_revision": "4ecad381e28293c4825793f113327cc016cdcbda",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.7,
+        "sampling_top_k": 50,
+        "sampling_top_p": 1.0,
+        "source_kind": "official_model_card",
+        "variant": "Intern-S1"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu@1.0.0",
+      "benchmark_profile": "dev-val",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S1/blob/4ecad381e28293c4825793f113327cc016cdcbda/README.md",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s1-model-card-mmmu@1.0.0",
+      "metrics": {
+        "accuracy": 0.777
+      },
+      "model": "intern/intern-s1",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MMMU (model card table; split unspecified)",
+        "evaluation_harness": "VLMEvalKit",
+        "model_revision": "4ecad381e28293c4825793f113327cc016cdcbda",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.7,
+        "sampling_top_k": 50,
+        "sampling_top_p": 1.0,
+        "source_kind": "official_model_card",
+        "variant": "Intern-S1"
+      }
+    },
+    {
+      "benchmark": "mathvista/mathvista@1.0.0",
+      "benchmark_profile": "mini",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S1/blob/4ecad381e28293c4825793f113327cc016cdcbda/README.md",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s1-model-card-mathvista@1.0.0",
+      "metrics": {
+        "accuracy": 0.815
+      },
+      "model": "intern/intern-s1",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "MathVista mini",
+        "evaluation_harness": "VLMEvalKit",
+        "model_revision": "4ecad381e28293c4825793f113327cc016cdcbda",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.7,
+        "sampling_top_k": 50,
+        "sampling_top_p": 1.0,
+        "source_kind": "official_model_card",
+        "variant": "Intern-S1"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S1/blob/4ecad381e28293c4825793f113327cc016cdcbda/README.md",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s1-model-card-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.86
+      },
+      "model": "intern/intern-s1",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_variant": "AIME2025",
+        "evaluation_harness": "OpenCompass",
+        "model_revision": "4ecad381e28293c4825793f113327cc016cdcbda",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.7,
+        "sampling_top_k": 50,
+        "sampling_top_p": 1.0,
+        "source_kind": "official_model_card",
+        "variant": "Intern-S1"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/internlm/Intern-S1/blob/4ecad381e28293c4825793f113327cc016cdcbda/README.md",
+        "verification": "claimed"
+      },
+      "id": "intern/intern-s1-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.867
+      },
+      "model": "intern/intern-s1",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "OpenCompass",
+        "model_revision": "4ecad381e28293c4825793f113327cc016cdcbda",
+        "sampling_min_p": 0.0,
+        "sampling_temperature": 0.7,
+        "sampling_top_k": 50,
+        "sampling_top_p": 1.0,
+        "source_kind": "official_model_card",
+        "variant": "Intern-S1"
       }
     },
     {
@@ -52578,6 +53183,997 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "intern/intern-s2-preview-397b-report-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.8975,
+          "status": "available",
+          "value": 0.8975,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 89.75
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [
+        "intern/intern-s2-preview-397b-report-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 89.75,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "intern/intern-s2-preview-397b-anchor-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.8475,
+          "status": "available",
+          "value": 0.8475,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "intern/intern-s2-preview-397b-anchor-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.268,
+          "status": "available",
+          "value": 0.268,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "frontier_reasoning": 26.8,
+        "scientific_reasoning": 84.75
+      },
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [
+        "intern/intern-s2-preview-397b-anchor-gpqa-diamond@1.0.0",
+        "intern/intern-s2-preview-397b-anchor-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 55.775,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "intern/intern-s2-preview-397b-anchor-livecodebench-v6@1.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.734,
+          "status": "available",
+          "value": 0.734,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "intern/intern-s2-preview-397b-report-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.4911,
+          "status": "available",
+          "value": 0.4911,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "competitive_programming": 73.4,
+        "scientific_coding": 49.11
+      },
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [
+        "intern/intern-s2-preview-397b-anchor-livecodebench-v6@1.0.0",
+        "intern/intern-s2-preview-397b-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 61.254999999999995,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "intern/intern-s2-preview-397b-report-terminal-bench@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.6742,
+          "status": "available",
+          "value": 0.6742,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 67.42
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [
+        "intern/intern-s2-preview-397b-report-terminal-bench@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 67.42,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.8975,
+          "status": "available",
+          "value": 0.8975,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": 0.55775,
+          "status": "available",
+          "value": 0.55775,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": 0.6125499999999999,
+          "status": "available",
+          "value": 0.6125499999999999,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.6742,
+          "status": "available",
+          "value": 0.6742,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "intern/intern-s2-preview-397b",
+      "provenance": [
+        "intern/intern-s2-preview-397b-anchor-gpqa-diamond@1.0.0",
+        "intern/intern-s2-preview-397b-anchor-humanitys-last-exam@1.0.0",
+        "intern/intern-s2-preview-397b-anchor-livecodebench-v6@1.0.0",
+        "intern/intern-s2-preview-397b-report-mmlu-pro@1.0.0",
+        "intern/intern-s2-preview-397b-report-scicode@1.0.0",
+        "intern/intern-s2-preview-397b-report-terminal-bench@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 65.995,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "intern/intern-s2-preview-35b-eval-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.88,
+          "status": "available",
+          "value": 0.88,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 88.0
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [
+        "intern/intern-s2-preview-35b-eval-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 88.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.88,
+          "status": "available",
+          "value": 0.88,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "intern/intern-s2-preview-35b",
+      "provenance": [
+        "intern/intern-s2-preview-35b-eval-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "intern/intern-s1-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.835,
+          "status": "available",
+          "value": 0.835,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 83.5
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [
+        "intern/intern-s1-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 83.5,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.835,
+          "status": "available",
+          "value": 0.835,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "intern/intern-s1",
+      "provenance": [
+        "intern/intern-s1-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "meta/muse-spark-1.3",
       "provenance": [],
       "reasoning_effort": "minimal",
@@ -87970,6 +89566,172 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "vision",
+        "long_context"
+      ],
+      "description": "Shanghai AI Laboratory's multimodal scientific foundation model for long-horizon reasoning and agentic workflows.",
+      "display_name": "Intern-S2-Preview 397B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview-397B",
+        "type": "open_weights"
+      },
+      "family": "intern-s2-preview",
+      "id": "intern/intern-s2-preview-397b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "397B (17B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "I"
+      },
+      "publisher": "Shanghai AI Laboratory / Intern",
+      "released_at": "2026-07-16",
+      "revision": "f4ed28782e23ad9fb4e4895b9069dcd889f5e2a1",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "reasoning",
+        "agentic",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Shanghai AI Laboratory / Intern",
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview-397B",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "long_context"
+      ],
+      "description": "Shanghai AI Laboratory's efficient multimodal scientific foundation model for reasoning and scientific agent workflows.",
+      "display_name": "Intern-S2-Preview 35B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+        "type": "open_weights"
+      },
+      "family": "intern-s2-preview",
+      "id": "intern/intern-s2-preview-35b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "35B (3B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "I"
+      },
+      "publisher": "Shanghai AI Laboratory / Intern",
+      "released_at": "2026-05-15",
+      "revision": "4f57cab513689b089019fce4ad24e26520df183c",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "reasoning",
+        "agentic",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Shanghai AI Laboratory / Intern",
+        "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "video",
+        "long_context"
+      ],
+      "description": "Shanghai AI Laboratory's open multimodal reasoning model for scientific understanding and research assistance.",
+      "display_name": "Intern-S1",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/internlm/Intern-S1",
+        "type": "open_weights"
+      },
+      "family": "intern-s1",
+      "id": "intern/intern-s1",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 65536,
+        "max_output_tokens": 32768
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "235B (22B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "I"
+      },
+      "publisher": "Shanghai AI Laboratory / Intern",
+      "released_at": "2025-07-24",
+      "revision": "4ecad381e28293c4825793f113327cc016cdcbda",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "reasoning",
+        "scientific",
+        "agentic",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Shanghai AI Laboratory / Intern",
+        "source": "https://huggingface.co/internlm/Intern-S1",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "structured_output",
         "vision",
         "audio",
@@ -95561,6 +97323,51 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/ai21labs/AI21-Jamba-Reasoning-3B",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "intern/intern-s2-preview-397b",
+          "id": "internlm/Intern-S2-Preview-397B",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/internlm/Intern-S2-Preview-397B",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
+          }
+        },
+        {
+          "catalog": "intern/intern-s2-preview-35b",
+          "id": "internlm/Intern-S2-Preview",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/internlm/Intern-S2-Preview",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
+          }
+        },
+        {
+          "catalog": "intern/intern-s1",
+          "id": "internlm/Intern-S1",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/internlm/Intern-S1",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
           }
         },
         {

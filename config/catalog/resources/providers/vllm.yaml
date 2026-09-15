@@ -105,6 +105,39 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/ai21labs/AI21-Jamba-Reasoning-3B
+- catalog: intern/intern-s2-preview-397b
+  relationship: self_hosted
+  id: internlm/Intern-S2-Preview-397B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/internlm/Intern-S2-Preview-397B
+- catalog: intern/intern-s2-preview-35b
+  relationship: self_hosted
+  id: internlm/Intern-S2-Preview
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/internlm/Intern-S2-Preview
+- catalog: intern/intern-s1
+  relationship: self_hosted
+  id: internlm/Intern-S1
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/internlm/Intern-S1
 - catalog: bytedance/seed-oss-36b-instruct
   relationship: self_hosted
   id: ByteDance-Seed/Seed-OSS-36B-Instruct

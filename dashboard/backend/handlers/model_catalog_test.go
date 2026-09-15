@@ -451,7 +451,7 @@ func TestGeneratedPublicModelCatalogSatisfiesDashboardContract(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(normalized, &document); unmarshalErr != nil {
 		t.Fatalf("decode normalized public catalog: %v", unmarshalErr)
 	}
-	if len(document.Models) != 101 || len(document.Providers) != 61 || len(document.Evaluations) != 1510 {
+	if len(document.Models) != 104 || len(document.Providers) != 61 || len(document.Evaluations) != 1529 {
 		t.Fatalf(
 			"unexpected generated inventory: models=%d providers=%d evaluations=%d; "+
 				"regenerate the catalog, or update these counts if the change is intended",
