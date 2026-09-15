@@ -58,17 +58,6 @@ config:
         modelRefs:
           - model: base-model
             lora_name: general-expert
-      - name: long_context_routing
-        description: Route requests whose estimated token count matches the long_context band
-        priority: 1500
-        rules:
-          operator: AND
-          conditions:
-            - type: context
-              name: long_context
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
       - name: block_jailbreak
         description: Block jailbreak attempts
         priority: 1000
@@ -664,6 +653,17 @@ config:
               enabled: true
               system_prompt: The user has asked a similar question multiple times without a resolution. Acknowledge this and provide a definitive, complete answer.
               mode: replace
+      - name: long_context_routing
+        description: Route requests whose estimated token count matches the long_context band. Kept below block_jailbreak/block_pii so a long unsafe request is still blocked (see the jailbreak-overlap case in context_routing_cases.json).
+        priority: 50
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
       - name: other_decision
         description: General knowledge and miscellaneous topics
         priority: 1
