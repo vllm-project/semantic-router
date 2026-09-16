@@ -140,9 +140,6 @@ func TestValidatePromptGuardBackend_StillRejectsUnknownOnError(t *testing.T) {
 		t.Errorf("error %q should name on_error", err)
 	}
 }
-<<<<<<< ours
-=======
-
 func TestValidatePromptGuardNamedBackend(t *testing.T) {
 	cfg := remotePromptGuardConfig()
 	cfg.PromptGuard.Protocol = ""
@@ -227,8 +224,3 @@ func TestValidatePromptGuardBackend_AcceptsPositiveCircuitBreaker(t *testing.T) 
 
 	if err := validatePromptGuardBackend(cfg); err != nil {
 		t.Fatalf("unexpected error for positive circuit_breaker config: %v", err)
-	}
-}
-	}
-}
->>>>>>> theirs
