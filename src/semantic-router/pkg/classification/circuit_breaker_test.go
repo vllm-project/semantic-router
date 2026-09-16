@@ -335,7 +335,7 @@ func TestHalfOpenMaxProbesGreaterThanOne(t *testing.T) {
 
 	// Trip breaker.
 	for i := 0; i < 3; i++ {
-		cb.recordFailure()
+		cb.recordFailure(0)
 	}
 	if got := cb.getState(); got != circuitBreakerOpen {
 		t.Fatalf("expected open after threshold, got %v", got)
@@ -345,15 +345,17 @@ func TestHalfOpenMaxProbesGreaterThanOne(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 
 	// Admit two probes.
-	if !cb.allow() {
+	ok1, gen1 := cb.allow()
+	if !ok1 {
 		t.Fatal("expected to admit probe 1")
 	}
-	if !cb.allow() {
+	ok2, gen2 := cb.allow()
+	if !ok2 {
 		t.Fatal("expected to admit probe 2")
 	}
 
 	// First probe succeeds — must NOT close the breaker (other probe unresolved).
-	cb.recordSuccess()
+	cb.recordSuccess(gen1)
 	if got := cb.getState(); got != circuitBreakerHalfOpen {
 		t.Fatalf("expected half-open after first success (pending probe), got %v", got)
 	}
@@ -361,13 +363,13 @@ func TestHalfOpenMaxProbesGreaterThanOne(t *testing.T) {
 	// Second probe fails — with maxProbes > 1 the breaker records the failure
 	// while keeping the leftover success as neutral. All unresolved now
 	// resolved, halfOpenFailed=true → open.
-	cb.recordFailure()
+	cb.recordFailure(gen2)
 	if got := cb.getState(); got != circuitBreakerOpen {
 		t.Fatalf("expected open after failure in half-open with maxProbes=2, got %v", got)
 	}
 
 	// Subsequent requests must be rejected.
-	if cb.allow() {
+	if ok, _ := cb.allow(); ok {
 		t.Fatal("expected reject after open from half-open failure")
 	}
 }
@@ -389,18 +391,18 @@ func TestCircuitBreakerGaugeTransitions(t *testing.T) {
 	cb := newCircuitBreaker(name, cfg)
 	assertGauge(t, name, 0) // closed
 
-	cb.recordFailure()
+	cb.recordFailure(0)
 	assertGauge(t, name, 0) // still closed (failureCount=1 < threshold=2)
 
-	cb.recordFailure()
+	cb.recordFailure(0)
 	assertGauge(t, name, 1) // open
 
 	time.Sleep(60 * time.Millisecond)
 
-	cb.allow()              // open→half-open
+	_, gen := cb.allow()        // open→half-open
 	assertGauge(t, name, 2) // half-open
 
-	cb.recordSuccess()      // half-open→closed
+	cb.recordSuccess(gen)       // half-open→closed
 	assertGauge(t, name, 0) // closed
 }
 
@@ -455,4 +457,93 @@ func TestCircuitBreakerConcurrentSafety(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestHalfOpenStaleGenerationIgnored verifies that a request admitted while
+// closed does not interfere with a subsequent half-open probe after the breaker
+// has tripped and cooled down (item 2, stale-generation blocker).
+func TestHalfOpenStaleGenerationIgnored(t *testing.T) {
+	threshold := 1
+	openInterval := 50
+	probes := 1
+	cfg := &config.RemoteClassifierCircuitBreakerConfig{
+		Enabled:             true,
+		ConsecutiveFailures: &threshold,
+		OpenIntervalMs:      &openInterval,
+		HalfOpenMaxRequests: &probes,
+	}
+	cb := newCircuitBreaker("test", cfg)
+
+	// Admit a request while closed. Record its generation (will be 0).
+	ok, genClosed := cb.allow()
+	if !ok {
+		t.Fatal("expected admit while closed")
+	}
+	if genClosed != 0 {
+		t.Fatalf("expected generation 0 for closed admit, got %d", genClosed)
+	}
+
+	// Trip the breaker.
+	cb.recordFailure(0)
+	if got := cb.getState(); got != circuitBreakerOpen {
+		t.Fatalf("expected open, got %v", got)
+	}
+
+	// Wait for half-open interval.
+	time.Sleep(60 * time.Millisecond)
+
+	// Admit a half-open probe.
+	ok, genHalfOpen := cb.allow()
+	if !ok {
+		t.Fatal("expected half-open probe admit")
+	}
+	if genHalfOpen == genClosed {
+		t.Fatal("half-open generation must differ from closed generation")
+	}
+
+	// Now the stale closed-state request completes with success. It carries
+	// genClosed which does NOT match the current half-open generation, so
+	// it must NOT consume the probe slot or close the breaker.
+	cb.recordSuccess(genClosed)
+	if got := cb.getState(); got != circuitBreakerHalfOpen {
+		t.Fatalf("expected half-open (stale success ignored), got %v", got)
+	}
+
+	// The real half-open probe fails — breaker must reopen.
+	cb.recordFailure(genHalfOpen)
+	if got := cb.getState(); got != circuitBreakerOpen {
+		t.Fatalf("expected open after half-open probe failure, got %v", got)
+	}
+}
+
+// TestIsUnavailableCountsClassifierTimeout verifies that a connector error
+// wrapping DeadlineExceeded (classifier's own HTTP timeout) counts as
+// unavailable and advances the breaker (item 1, classifier-owned timeout).
+func TestIsUnavailableCountsClassifierTimeout(t *testing.T) {
+	// A connector error wrapping DeadlineExceeded with KindTransport and
+	// Retryable=false simulates the connector wrapping the classifier's own
+	// HTTP timeout after exhausting retries.
+	wrapped := &connector.Error{
+		Kind:      connector.KindTransport,
+		Operation: "http_classify",
+		Retryable: false,
+		Cause:     context.DeadlineExceeded,
+	}
+	if !isUnavailableError(wrapped) {
+		t.Fatal("classifier-owned DeadlineExceeded should count as unavailable")
+	}
+
+	// A bare DeadlineExceeded (caller timeout without connector wrapping)
+	// must NOT count toward the breaker.
+	if isUnavailableError(context.DeadlineExceeded) {
+		t.Fatal("bare caller DeadlineExceeded should not count as unavailable")
+	}
+
+	// Caller cancellation must not count.
+	if isUnavailableError(connCancelledError()) {
+		t.Fatal("caller cancellation wrapped in connector should not count")
+	}
+	if isUnavailableError(context.Canceled) {
+		t.Fatal("bare context.Canceled should not count")
+	}
 }
