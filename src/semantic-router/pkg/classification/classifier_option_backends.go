@@ -43,6 +43,19 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 	if err != nil {
 		return err
 	}
+<<<<<<< ours
+=======
+	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
+	cbCfg := backendCfg.CircuitBreaker
+	owned, err := prepareRemoteSequence(models, models.remoteSpec("domain_classifier", backendCfg), external, transport)
+	if err != nil {
+		return err
+	}
+	backend := &categoryHTTPBackend{backend: owned}
+	if cbCfg != nil && cbCfg.Enabled {
+		backend.backend = newCircuitBreakingBackend(backend.backend, cbCfg, external.ModelName)
+	}
+>>>>>>> theirs
 	b.options = append(b.options, withCategory(categoryMapping, nil, backend))
 	return nil
 }
@@ -93,7 +106,18 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
 	}
+<<<<<<< ours
 	if cfg.PromptGuard.Protocol != "" {
+=======
+	if cfg.PromptGuard.Protocol != "" || cfg.PromptGuard.Backend != nil {
+		externalCfg := cfg.FindExternalModelByRole(config.ModelRoleGuardrail)
+		if externalCfg != nil {
+			cbCfg := cfg.PromptGuard.CircuitBreaker
+			if cbCfg != nil && cbCfg.Enabled {
+				jailbreakInference = newCircuitBreakingBackend(jailbreakInference, cbCfg, externalCfg.ModelName)
+			}
+		}
+>>>>>>> theirs
 		// Remote backends have no local model to initialize.
 		return nil, jailbreakInference, nil
 	}
@@ -152,6 +176,10 @@ func (b *classifierOptionBuilder) addComplexityBackend() error {
 		if err != nil {
 			return err
 		}
+		cbCfg := backendCfg.CircuitBreaker
+		if cbCfg != nil && cbCfg.Enabled {
+			scorer = newCircuitBreakingBackendScoring(scorer, cbCfg, external.ModelName)
+		}
 		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
 			"contract": config.RemoteClassifierContractScore,
 		})
@@ -164,6 +192,10 @@ func (b *classifierOptionBuilder) addComplexityBackend() error {
 		)
 		if err != nil {
 			return err
+		}
+		cbCfg := backendCfg.CircuitBreaker
+		if cbCfg != nil && cbCfg.Enabled {
+			labels = newCircuitBreakingBackend(labels, cbCfg, external.ModelName)
 		}
 		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
 			"contract": config.RemoteClassifierContractLabelDistribution,
