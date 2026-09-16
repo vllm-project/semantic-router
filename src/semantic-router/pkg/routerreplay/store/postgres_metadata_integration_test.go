@@ -36,8 +36,8 @@ func TestPostgresMetadataIntegration(t *testing.T) {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cleanupCancel()
 		//nolint:gosec // generated table name was validated above
-		if _, err := db.ExecContext(cleanupCtx, "DROP TABLE IF EXISTS "+cfg.TableName); err != nil {
-			t.Errorf("drop owned test table: %v", err)
+		if _, dropErr := db.ExecContext(cleanupCtx, "DROP TABLE IF EXISTS "+cfg.TableName); dropErr != nil {
+			t.Errorf("drop owned test table: %v", dropErr)
 		}
 		_ = db.Close()
 	})
@@ -49,16 +49,16 @@ func TestPostgresMetadataIntegration(t *testing.T) {
 	t.Cleanup(func() { _ = initial.Close() })
 	legacy := postgresMetadataFixture()
 	legacy.ID = "legacy"
-	if _, err := initial.Add(ctx, legacy); err != nil {
-		t.Fatal(err)
+	if _, addErr := initial.Add(ctx, legacy); addErr != nil {
+		t.Fatal(addErr)
 	}
 	// Reproduce the schema before routing metadata existed, retaining its rows.
 	//nolint:gosec // generated table name was validated above
-	if _, err := db.ExecContext(ctx, "ALTER TABLE "+cfg.TableName+" DROP COLUMN routing_metadata"); err != nil {
-		t.Fatal(err)
+	if _, dropErr := db.ExecContext(ctx, "ALTER TABLE "+cfg.TableName+" DROP COLUMN routing_metadata"); dropErr != nil {
+		t.Fatal(dropErr)
 	}
-	if err := initial.Close(); err != nil {
-		t.Fatal(err)
+	if closeErr := initial.Close(); closeErr != nil {
+		t.Fatal(closeErr)
 	}
 
 	migrated, err := NewPostgresStore(&cfg, 0, false)
@@ -71,11 +71,11 @@ func TestPostgresMetadataIntegration(t *testing.T) {
 		t.Fatalf("legacy row was lost or gained invented routing metadata: found=%v available=%v method=%q recipe=%q err=%v", found, old.ConfidenceScoreAvailable, old.SelectionMethod, old.Recipe, err)
 	}
 	input := postgresMetadataFixture()
-	if id, err := migrated.Add(ctx, input); err != nil || id != input.ID {
-		t.Fatalf("Add returned id=%q err=%v", id, err)
+	if id, addErr := migrated.Add(ctx, input); addErr != nil || id != input.ID {
+		t.Fatalf("Add returned id=%q err=%v", id, addErr)
 	}
-	if err := migrated.Close(); err != nil {
-		t.Fatal(err)
+	if closeErr := migrated.Close(); closeErr != nil {
+		t.Fatal(closeErr)
 	}
 
 	reopened, err := NewPostgresStore(&cfg, 0, false)
