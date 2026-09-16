@@ -2,7 +2,7 @@
 
 ## Overview
 
-`authz` turns identity and policy bindings into reusable routing inputs. It maps to `config/signal/authz/` and is declared under `routing.signals.role_bindings`.
+`authz` turns identity and policy bindings into reusable routing inputs. It maps to `config/fragments/signal/authz/` and is declared under `routing.signals.role_bindings`.
 
 This family is heuristic: it matches request identity against explicit roles and subjects instead of classifier output.
 
@@ -30,7 +30,7 @@ Use `authz` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/authz/`
+Source fragment family: `config/fragments/signal/authz/`
 
 ```yaml
 routing:

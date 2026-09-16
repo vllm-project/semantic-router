@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -51,6 +52,7 @@ func setupValkeyCacheBench(b *testing.B) *ValkeyCache {
 	valkeyConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
 		// Gate at raw cosine >= 0.8 to match the in-memory backend, so
 		// BenchmarkCacheComparison compares equivalent hit paths. Valkey reports
 		// COSINE distance and maps it to similarity = (1 + cos) / 2
@@ -64,7 +66,7 @@ func setupValkeyCacheBench(b *testing.B) *ValkeyCache {
 	if err != nil {
 		unavailable("valkey server not available: %v", err)
 	}
-	if err := cache.CheckConnection(); err != nil {
+	if err := cache.CheckConnection(context.Background()); err != nil {
 		unavailable("valkey connection check failed: %v", err)
 	}
 	return cache

@@ -289,7 +289,7 @@ providers:
 
             plugin_types = [p.type.value for p in config.decisions[0].plugins]
             assert "router_replay" in plugin_types
-            assert "semantic-cache" in plugin_types
+            assert "response_cache" in plugin_types
             assert "system_prompt" in plugin_types
 
             errors = validate_user_config(config)
@@ -370,7 +370,7 @@ providers:
             plugin_types = [p.type.value for p in config.decisions[0].plugins]
             assert "system_prompt" in plugin_types
             assert "rag" in plugin_types
-            assert "semantic-cache" in plugin_types
+            assert "response_cache" in plugin_types
             assert "router_replay" in plugin_types
 
             # Verify RAG plugin configuration is correctly parsed

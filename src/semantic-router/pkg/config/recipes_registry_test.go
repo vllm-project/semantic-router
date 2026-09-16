@@ -126,6 +126,48 @@ func TestDefaultRecipeFallsBackToFlatRoutingProfile(t *testing.T) {
 	}
 }
 
+func TestReachableRoutingRecipesIncludesAutoDefaultAndEntrypointRecipes(t *testing.T) {
+	cfg := &RouterConfig{
+		Recipes: []RoutingRecipe{
+			{Name: DefaultRecipeName},
+			{Name: "mapped"},
+			{Name: "unmapped"},
+		},
+		Entrypoints: []EntrypointMapping{{
+			ModelNames: []string{"vllm-sr/mapped"},
+			Recipe:     "mapped",
+		}},
+	}
+
+	reachable := cfg.ReachableRoutingRecipes()
+	if len(reachable) != 2 ||
+		reachable[0].Name != DefaultRecipeName ||
+		reachable[1].Name != "mapped" {
+		t.Fatalf("reachable recipes = %+v, want default and mapped", reachable)
+	}
+	if cfg.IsRecipeReachableForRouting("unmapped") {
+		t.Fatal("unmapped named recipe unexpectedly reported reachable")
+	}
+}
+
+func TestReachableRoutingRecipesHonorsExplicitlyDisabledAutoAliases(t *testing.T) {
+	cfg := &RouterConfig{
+		RouterOptions: RouterOptions{AutoModelNames: []string{}},
+		Recipes:       []RoutingRecipe{{Name: DefaultRecipeName}},
+	}
+	if got := cfg.ReachableRoutingRecipes(); len(got) != 0 {
+		t.Fatalf("reachable recipes = %+v, want none with auto aliases disabled", got)
+	}
+
+	cfg.Entrypoints = []EntrypointMapping{{
+		ModelNames: []string{"vllm-sr/default"},
+		Recipe:     DefaultRecipeName,
+	}}
+	if got := cfg.ReachableRoutingRecipes(); len(got) != 1 || got[0].Name != DefaultRecipeName {
+		t.Fatalf("default entrypoint did not restore reachability: %+v", got)
+	}
+}
+
 func TestConfigForRecipeKeepsOnlyReferencedKnowledgeBases(t *testing.T) {
 	cfg := &RouterConfig{
 		KnowledgeBases: []KnowledgeBaseConfig{

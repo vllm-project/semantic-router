@@ -1,9 +1,10 @@
 name: Check Translation Staleness
 
 on:
-  schedule:
-    - cron: '0 0 * * *'  # Daily at UTC 00:00
-  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   check:

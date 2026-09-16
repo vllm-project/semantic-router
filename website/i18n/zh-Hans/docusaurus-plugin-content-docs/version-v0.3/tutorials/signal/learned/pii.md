@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`pii` 检测请求中的敏感个人数据。映射到 `config/signal/pii/`，在 `routing.signals.pii` 中声明。
+`pii` 检测请求中的敏感个人数据。映射到 `config/fragments/signal/pii/`，在 `routing.signals.pii` 中声明。
 
 该族为学习型：使用通过 `global.model_catalog.system.pii_classifier` 配置的 PII 检测路径。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/pii/`
+源片段族：`config/fragments/signal/pii/`
 
 ```yaml
 routing:

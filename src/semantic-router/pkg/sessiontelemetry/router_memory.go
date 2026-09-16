@@ -124,6 +124,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	RecordLastModel(p.SessionID, p.SelectedModel)
 
 	s := globalRouterSessionMemory
+	defer persistRouterSessionState(p.SessionID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -160,12 +161,15 @@ func RecordSessionDecision(p SessionDecisionParams) {
 }
 
 // RecordSessionUsage attaches response usage and cost to router-owned session
-// memory. It does not create a model checkout when no prior decision exists.
+// memory. Flows without a dispatch decision (such as Looper) retain their last
+// observed response model. Once RecordSessionDecision establishes ownership,
+// responses must not change it: they can complete out of order.
 func RecordSessionUsage(p SessionUsageParams) {
 	if p.SessionID == "" || p.Model == "" {
 		return
 	}
 	s := globalRouterSessionMemory
+	defer persistRouterSessionState(p.SessionID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -175,7 +179,9 @@ func RecordSessionUsage(p SessionUsageParams) {
 	}
 	s.evictExpiredLocked(now)
 	st := s.sessionLocked(p.SessionID)
-	st.currentModel = p.Model
+	if st.turnCount == 0 {
+		st.currentModel = p.Model
+	}
 	st.lastSeen = now
 	usage := modelpricing.Normalize(modelpricing.Usage{
 		PromptTokens:      p.PromptTokens,
@@ -204,11 +210,10 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 	}
 	s := globalRouterSessionMemory
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	st := s.sessions[sessionID]
 	if st == nil {
-		return RouterSessionSnapshot{}, false
+		s.mu.Unlock()
+		return loadSharedRouterSessionSnapshot(sessionID, now)
 	}
 	if now.IsZero() {
 		now = s.nowFn()
@@ -219,9 +224,10 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 	}
 	if idleFor > routerMemoryTTL {
 		delete(s.sessions, sessionID)
+		s.mu.Unlock()
 		return RouterSessionSnapshot{}, false
 	}
-	return RouterSessionSnapshot{
+	snapshot := RouterSessionSnapshot{
 		SessionID:                       st.sessionID,
 		UserID:                          st.userID,
 		CurrentModel:                    st.currentModel,
@@ -242,7 +248,9 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		LastDecisionReason:              st.lastDecisionReason,
 		LastCacheAccountingSource:       st.lastCacheAccountingSource,
 		LastPolicy:                      clonePolicyMap(st.lastPolicy),
-	}, true
+	}
+	s.mu.Unlock()
+	return snapshot, true
 }
 
 func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessionState {

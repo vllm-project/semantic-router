@@ -1,42 +1,135 @@
-# Multi-objective routing recipe
+# Multi-Objective Routing Recipe Model Card
 
-This is the complete entrypoints + recipes example. Clients choose a stable
-request-facing model ID to select an isolated objective:
+## Overview
 
-| Entrypoint | Recipe objective |
+Multi-Objective Routing exposes five request-facing virtual models over one
+shared provider pool. Clients choose the objective they care about—balance,
+speed, cost, accuracy, or privacy—while each objective keeps its own signals,
+decisions, algorithms, and plugins.
+
+The virtual model IDs select routing policies. They do not identify or start a
+physical model server.
+
+## Model details
+
+| Virtual model | Objective | Main trade-off |
+| --- | --- | --- |
+| `vllm-sr/mom-v1-blend` | Adapt quality, speed, and efficiency to the request. | No single metric is always minimized. |
+| `vllm-sr/mom-v1-flash` | Prefer low observed latency. | Heavy requests may still use a slower capable lane. |
+| `vllm-sr/mom-v1-lite` | Keep work on economical local models. | Lower peak capability than frontier routing. |
+| `vllm-sr/mom-v1-ultra` | Use direct frontier or bounded orchestration for accuracy. | Higher latency and compute use. |
+| `vllm-sr/mom-v1-vault` | Keep sensitive and suspicious traffic local. | Reduced provider diversity and no cloud escalation. |
+
+The reference configuration shares nine logical provider models across these
+five policies. Operators can replace that pool while keeping the public
+entrypoint names.
+
+## Intended use
+
+Use this recipe when:
+
+- one deployment serves clients with different service objectives;
+- provider capacity should be shared without mixing routing state;
+- applications need stable model IDs instead of client-side policy flags; or
+- operators want to compare objective-specific behavior on the same workload.
+
+It is not a universal model benchmark. The outcome depends on the configured
+provider pool, live health, latency, load, and cost metadata.
+
+## Routing behavior
+
+| Objective | High-level behavior |
 | --- | --- |
-| `vllm-sr/mom-balanced-v1` | Adaptive quality, speed, and efficiency. |
-| `vllm-sr/mom-flash-v1` | Lowest practical latency with a bounded heavy lane. |
-| `vllm-sr/mom-economy-v1` | Local-first cost control. |
-| `vllm-sr/mom-frontier-v1` | Direct frontier, ReMoM, Fusion, or Router Flow for accuracy. |
-| `vllm-sr/mom-private-v1` | Local-only private and suspicious traffic handling. |
+| Balanced | Recovers from poor answers, spends more effort on difficult work, and otherwise weighs quality, latency, cost, and load. |
+| Speed | Uses observed latency for interactive work and keeps a bounded capable lane for heavier requests. |
+| Cost | Uses economical local replicas and enables bounded reasoning only when the request calls for it. |
+| Accuracy | Keeps ordinary work direct; explicit verification, expert comparison, multi-path reasoning, or workflows can use confidence, fusion, ReMoM, or Router Flow. |
+| Privacy | Contains jailbreak and sensitive-data signals locally and defaults to a local model. |
 
-Signals, projections, decisions, algorithms, and decision plugins are owned by
-one recipe and cannot match another recipe. Provider bindings, model cards, and
-runtime services remain shared infrastructure.
+In the balanced objective, FactCheck estimates the need for external knowledge;
+that signal alone does not establish high effort. Explicit verification, proof,
+and demanding reasoning retain the deliberate lane.
 
-## DSL and evaluation
+Every objective includes an `omni` decision. Image-bearing requests use the
+shared local visual-language model; the privacy objective still gives attack
+containment higher priority.
 
-`recipe.dsl` uses first-class `ENTRYPOINT` and `RECIPE` scopes. Compiling it
-over `config.yaml` reproduces the same five mappings and five isolated routing
-programs. The probe suite contains 100 multilingual, negative, collision,
-multi-turn, tool-shape, PII/jailbreak, and long-input cases across all 15
-decisions.
+Workflow owns tool interruption and resume. Fusion and confidence routes may
+return a tool call only from the final selected model. Multi-response routes do
+not attempt to merge independent tool trajectories.
+
+## Requirements
+
+- Reachable OpenAI-compatible endpoints for every provider alias used by the
+  selected objectives.
+- Live latency and load observations for objectives that use them.
+- The embedding, feedback, fact-check, PII, jailbreak, language, complexity,
+  and privacy-KB assets referenced by [`config.yaml`](config.yaml).
+- Redis for the response API and startup-status service.
+- Postgres for Router Replay. Local `vllm-sr serve` provisions managed Redis
+  and Postgres services with development-only runtime defaults. Direct Router,
+  Kubernetes, and production deployments must supply explicit connections and
+  secret-managed credentials in a user-owned config.
+- Looper support for orchestration routes.
+
+## Data handling and safety
+
+Vela Guard scans up to 32,768 input tokens in overlapping 512-token windows.
+An attack detected in any window takes the security lane before the privacy
+lane. Both remain local with tools disabled; classifier errors and overload are
+reported in the signal trace. The bounded admission queue waits at most five
+seconds before reporting overload.
+
+The PII rule allows GPE entities such as cities and countries, so ordinary
+geography does not trigger privacy containment. Other detected entity types,
+including email and street addresses, remain restricted at the configured
+threshold. This is a type-level allowance: a person's city is also allowed by
+this PII rule. It does not distinguish public geography from personal location
+disclosure; explicit private-context signals still apply.
+
+Each objective has isolated routing state, but providers and supporting stores
+are shared infrastructure. The privacy objective keeps model traffic local and
+disables inappropriate tool use; operators must still configure storage,
+logging, and network boundaries accordingly.
+
+The checked-in config enables Postgres-backed Router Replay for 30 days. Unless
+a route overrides it, replay captures up to 4 KiB each from request and
+response bodies. This also applies to the privacy objective: its provider path
+is local, but its replay records use the shared store. Restrict and protect that
+database, or disable replay or body capture when content must not be retained.
+
+## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/multi-objective/config.yaml
-(cd src/semantic-router && go run ./cmd/dsl validate ../../config/recipes/multi-objective/recipe.dsl)
-python tools/agent/scripts/router_calibration_loop.py \
-  eval \
-  --router-url http://127.0.0.1:8080 \
-  --probes config/recipes/multi-objective/probes.yaml
+vllm-sr serve
 ```
 
-The manifest runs these 100 cases with bounded concurrency and includes
-end-to-end latency percentiles, throughput, and error count in the JSON report.
-This exercises recipe isolation under load without invoking an inference
-backend.
+In the Dashboard, connect the physical Models, choose **Multi-Objective
+Routing** in **Recipes**, assign every objective lane, and publish the desired
+Mixture-of-Model Entrypoints. Clients then send one of those published model
+IDs in the OpenAI-compatible request body.
 
-Use the management API to validate, create, update, or delete one named recipe.
-Updates require `If-Match`; the default recipe and recipes referenced by an
-entrypoint are protected from unsafe deletion.
+## Evaluation
+
+The probe set covers every objective, route priority, multilingual and negative
+cases, tool and multi-turn shapes, privacy signals, and long-input boundaries.
+It validates recipe isolation and selection without requiring generation from
+the provider pool. See [`probes.yaml`](probes.yaml) and the
+[conformance guide](../CONFORMANCE.md).
+
+## Limitations
+
+- Virtual model names do not guarantee a fixed physical backend or latency.
+- Multi-model orchestration can multiply latency and compute use.
+- Cost and quality metadata must be recalibrated for each deployment.
+- Tool execution remains the client's responsibility.
+- The reference provider aliases and context limits are deployment examples,
+  not architectural limits of the underlying checkpoints.
+
+## References
+
+- [Recipe metadata](metadata.yaml)
+- [Runtime configuration](config.yaml)
+- [Routing DSL](recipe.dsl)
+- [Evaluation probes](probes.yaml)
+- [Recipe authoring and conformance](../CONFORMANCE.md)

@@ -4,7 +4,7 @@
 
 `latency_aware` is a selection algorithm that prefers the fastest acceptable candidate according to **TPOT and TTFT percentile** statistics.
 
-It aligns to `config/algorithm/selection/latency-aware.yaml`.
+It aligns to `config/fragments/algorithm/selection/latency-aware.yaml`.
 
 ## Key Advantages
 

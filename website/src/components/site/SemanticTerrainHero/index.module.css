@@ -218,17 +218,21 @@
   letter-spacing: 0.1em;
 }
 
+/* The hero is committed to dark regardless of colour mode, so it states the
+ * blues literally rather than through the theme-switching tokens. The values
+ * are the dark half of the --site-cta-* / hover ladder. */
 .actions .primaryCta {
   border-color: #30a2ff;
   background: #30a2ff;
-  color: #030303;
+  color: #04121f;
   box-shadow: 0 16px 36px rgba(48, 162, 255, 0.22);
 }
 
-.actions .primaryCta:hover {
+.actions .primaryCta:hover,
+.actions .primaryCta:focus-visible {
   border-color: #75c5ff;
   background: #75c5ff;
-  color: #030303;
+  color: #04121f;
 }
 
 .actions .secondaryCta {
@@ -238,9 +242,10 @@
   box-shadow: none;
 }
 
-.actions .secondaryCta:hover {
-  border-color: rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.08);
+.actions .secondaryCta:hover,
+.actions .secondaryCta:focus-visible {
+  border-color: rgba(48, 162, 255, 0.52);
+  background: rgba(48, 162, 255, 0.14);
   color: #ffffff;
 }
 

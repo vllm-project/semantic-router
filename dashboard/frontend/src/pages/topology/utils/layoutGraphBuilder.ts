@@ -23,6 +23,7 @@ import {
   DecisionDensityMode,
   DENSITY_VISIBLE_DECISION_LIMIT,
   getDecisionNodeHeight,
+  getDecisionReachability,
   getModelConfigKey,
   getPhysicalModelKey,
   getPluginChainHeight,
@@ -103,9 +104,12 @@ export function buildLayoutGraph(
 
   if (testResult?.matchedSignals?.length) {
     const existingGroupTypes = new Set(activeSignalTypes)
-    const dynamicSignalsByType = new Map<SignalType, { name: string; confidence?: number }[]>()
+    const configuredProjections = new Set(signalGroups.projection.map(signal => signal.name))
+    const dynamicSignalsByType = new Map<SignalType, { name: string; confidence?: number | null }[]>()
 
     testResult.matchedSignals.forEach(signal => {
+      // Configured projections have their own mapping nodes, outside activeSignalTypes.
+      if (signal.type === 'projection' && configuredProjections.has(signal.name)) return
       if (!existingGroupTypes.has(signal.type)) {
         if (!dynamicSignalsByType.has(signal.type)) {
           dynamicSignalsByType.set(signal.type, [])
@@ -122,7 +126,7 @@ export function buildLayoutGraph(
       const syntheticSignals = signals.map(signal => ({
         type: signalType,
         name: signal.name,
-        description: `Detected by ML model (confidence: ${signal.confidence ? (signal.confidence * 100).toFixed(0) + '%' : 'N/A'})`,
+        description: `Matched signal (score: ${typeof signal.confidence === 'number' ? (signal.confidence * 100).toFixed(0) + '%' : 'unavailable'})`,
         latency: SIGNAL_LATENCY[signalType] || '~100ms',
         config: {},
         isDynamic: true,
@@ -184,7 +188,8 @@ export function buildLayoutGraph(
         latencyLabel: SIGNAL_LATENCY.projection,
         signals: group.outputs,
         collapsed: isCollapsed,
-        isHighlighted: isHighlighted(group.nodeId),
+        isHighlighted: isHighlighted(group.nodeId)
+          || group.outputs.some(output => isHighlighted(`signal-projection-${output.name}`)),
       },
     })
 
@@ -239,12 +244,8 @@ export function buildLayoutGraph(
 
     nodeDimensions.set(decisionId, { width: 200, height: nodeHeight })
 
+    const reachability = getDecisionReachability(decision, configuredSignals)
     const leafConditions = collectRuleConditions(decision.rules)
-    const hasConditions = leafConditions.length > 0
-    const hasValidConditions = hasConditions && leafConditions.some(
-      condition => configuredSignals.has(`${condition.type}:${condition.name}`)
-    )
-    const isUnreachable = !hasValidConditions
 
     nodes.push({
       id: decisionId,
@@ -257,10 +258,9 @@ export function buildLayoutGraph(
         isFocusTarget: layoutOptions?.focusMode && layoutOptions?.focusedDecisionName === decision.name,
         focusModeEnabled: layoutOptions?.focusMode ?? false,
         onFocusDecision: layoutOptions?.onFocusDecision,
-        isUnreachable,
-        unreachableReason: !hasConditions
-          ? 'No conditions defined'
-          : 'Referenced signals not configured',
+        isFallback: reachability.isFallback,
+        isUnreachable: reachability.isUnreachable,
+        unreachableReason: reachability.unreachableReason,
       },
     })
 
@@ -378,7 +378,7 @@ export function buildLayoutGraph(
 
       nodeDimensions.set(pluginChainId, { width: 160, height: pluginHeight })
 
-      const globalCachePlugin = topology.globalPlugins.find(plugin => plugin.type === 'semantic_cache')
+      const globalCachePlugin = topology.globalPlugins.find(plugin => plugin.type === 'response_cache')
 
       nodes.push({
         id: pluginChainId,

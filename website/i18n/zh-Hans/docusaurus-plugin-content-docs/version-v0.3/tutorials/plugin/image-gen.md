@@ -11,7 +11,7 @@ translation:
 
 `image_gen` 是路由局部插件：将已匹配路由交给图像生成后端。
 
-对应 `config/plugin/image-gen/basic.yaml`。
+对应 `config/fragments/plugin/image-gen/basic.yaml`。
 
 ## 主要优势
 

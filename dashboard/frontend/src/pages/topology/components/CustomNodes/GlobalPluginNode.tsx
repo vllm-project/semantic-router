@@ -36,8 +36,8 @@ function getPluginStatus(plugin: GlobalPluginConfig): { text: string; tooltip: s
     }
   }
 
-  // Semantic Cache: Active globally, can be overridden
-  if (plugin.type === 'semantic_cache') {
+  // Response Cache: Active globally, can be overridden
+  if (plugin.type === 'response_cache') {
     const threshold = plugin.config?.similarity_threshold as number
     return {
       text: `✓ Active`,

@@ -3,11 +3,12 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
     models:
       - name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
         backend_refs:
           - name: dynamo-frontend
+            provider: vllm
             endpoint: dynamo-vllm-frontend.dynamo-system.svc.cluster.local:8000
             weight: 1
   routing:
@@ -58,7 +59,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -130,7 +131,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -270,7 +271,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -325,13 +326,12 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
           max_concurrency: 8
       observability:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

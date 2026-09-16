@@ -1,43 +1,41 @@
 ---
 translation:
-  source_commit: "c904264a"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/signal/learned/reask.md"
   outdated: false
 ---
 
-# Reask 信号
+# 再询问信号 {#reask-signal}
 
-## 概览
+## 概览 {#overview}
 
-`reask` 用于检测当前用户轮次是否在语义上重复同一对话中最近的用户轮次。它对应 `config/signal/reask/`，并在 `routing.signals.reasks` 下声明。
+`reask` 检测当前用户轮次是否在语义上重复同一对话中的近期用户轮次。在 `routing.signals.reasks` 下定义重复提问规则。
 
-该信号族属于学习型信号：它使用路由器共享的语义 embedding 路径，将当前用户轮次与之前的用户轮次进行比较。
+该族为学习型：使用 Router 的共享语义嵌入路径，将当前用户轮次与先前用户轮次比较。
 
-## 主要优势
+## 主要优势 {#key-advantages}
 
-- 无需用户明确说出“这是错的”等措辞，也能捕获隐含的不满。
-- 区分一次重复提问和连续多轮重复所形成的不满趋势。
-- 允许 decision 根据最近的对话历史升级，而不是只依据单条消息。
-- 复用现有的语义相似度技术栈，不引入第二套模型能力面。
+- 捕捉隐式不满，而不要求「this is wrong」这类显式短语。
+- 区分一轮重复与多轮持续不满。
+- 让决策基于近期对话历史升级，而不是单条消息。
+- 复用现有语义相似度栈，而不引入第二套模型表面。
 
-## 解决什么问题？
+## 解决什么问题？ {#what-problem-does-it-solve}
 
-当上一次回答没有帮助时，用户通常会重新表述同一个问题。单轮分类器可能无法识别这种模式，因为用户的不满是隐含的，而非明确表达的。
+上一轮回答没用时，用户常常重述同一问题。单轮分类器可能漏掉该模式，因为抱怨是隐式而非显式的。
 
-`reask` 通过比较最新用户轮次与最近的用户轮次来解决这一问题；当连续的近期轮次在语义上保持相似时，它会产生可配置的不满信号。
+`reask` 将最近用户轮次与最近若干用户轮次比较，并在连续轮次保持语义相似时浮现可配置的不满信号。
 
-## 何时使用
+## 何时使用 {#when-to-use}
 
-在以下场景使用 `reask`：
+在以下情况使用 `reask`：
 
-- 重复的问题应升级到更强的模型
-- 一次重复提问与多次重复提问需要采用不同的处理方式
-- 显式反馈较少，但用户轮次的重复仍具有意义
-- 路由 decision 应依赖同一对话中的用户历史
+- 重复提问应升级到更强模型
+- 希望对一次重复提问与多次重复提问做不同处理
+- 显式反馈稀少，但重复用户轮次仍然重要
+- 路由决策应依赖同一对话中的用户历史
 
-## 配置
-
-源片段信号族：`config/signal/reask/`
+## 配置 {#configuration}
 
 ```yaml
 routing:
@@ -53,4 +51,9 @@ routing:
         lookback_turns: 2
 ```
 
-每条规则都会将当前用户轮次与最近的 `lookback_turns` 个历史用户轮次进行比较。只有该连续近期序列中的每个轮次都高于配置的相似度阈值时，规则才会匹配。
+每条规则将当前用户轮次与最近 `lookback_turns` 个先前用户轮次比较。仅当该近期连续中的每一轮都高于已配置相似度阈值时，规则才匹配。
+
+## 依赖与限制 {#dependencies-and-limitations}
+
+Reask 使用共享嵌入路径，并在配置了远程嵌入提供方时把近期用户轮次发给它。重复可能是有意的，而不一定是不满，因此把该信号用于升级而非惩罚。完整示例见：
+[`config/fragments/signal/reask/dissatisfaction.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/reask/dissatisfaction.yaml)。

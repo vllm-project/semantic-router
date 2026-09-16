@@ -1,10 +1,21 @@
+from typing import get_args
+
+import pytest
+from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    UNKNOWN_POLICY_VALUES,
+    UnknownPolicy,
     build_projection_reference_index,
     build_signal_reference_index,
     signal_reference_exists,
 )
 from cli.models import Decision, Projections, Signals
+
+
+def test_unknown_policy_literal_matches_allowed_values():
+    assert get_args(UnknownPolicy) == UNKNOWN_POLICY_VALUES
+    assert UNKNOWN_POLICY_VALUES == ("no_match", "match", "fail_request")
 
 
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
@@ -115,6 +126,24 @@ def test_decision_without_rules_is_a_match_all_fallback():
 
     assert decision.rules.operator == "AND"
     assert decision.rules.conditions == []
+
+
+def test_decision_enforces_minimum_candidates_after_materialization():
+    with pytest.raises(ValueError, match="minimum_candidates=2"):
+        Decision(
+            name="panel",
+            priority=1,
+            modelRefs=[{"model": "model-a", "use_reasoning": False}],
+            algorithm=AlgorithmConfig(type="fusion", minimum_candidates=2),
+        )
+
+    model_free = Decision(
+        name="model-free-panel",
+        priority=1,
+        modelRefs=[],
+        algorithm=AlgorithmConfig(type="fusion", minimum_candidates=2),
+    )
+    assert model_free.modelRefs == []
 
 
 def test_decision_accepts_terminal_action_output_contract_spec():

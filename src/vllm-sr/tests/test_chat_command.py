@@ -1,4 +1,4 @@
-"""Tests for vllm-sr chat and chat_client helpers."""
+"""Tests for ``vllm-sr request chat`` and its HTTP helpers."""
 
 from __future__ import annotations
 
@@ -38,6 +38,17 @@ def _patch_stack_layout(monkeypatch: pytest.MonkeyPatch, port_offset: int) -> No
 def test_resolve_chat_base_url_k8s_not_supported():
     with pytest.raises(ValueError, match="Non-Docker"):
         chat_client.resolve_chat_base_url(config_path="config.yaml", target="k8s")
+
+
+def test_resolve_chat_base_url_explicit_url_overrides_target():
+    assert (
+        chat_client.resolve_chat_base_url(
+            config_path="missing.yaml",
+            target="k8s",
+            base_url="https://router.example.test/",
+        )
+        == "https://router.example.test"
+    )
 
 
 def test_resolve_listener_host_port_with_offset(
@@ -88,14 +99,33 @@ def test_extract_assistant_text_api_error():
         )
 
 
-def test_chat_completions_url():
-    u = chat_client.chat_completions_url("http://localhost:8899")
-    assert u.endswith("/v1/chat/completions")
-    assert u.startswith("http://localhost:8899")
+@pytest.mark.parametrize(
+    ("base_url", "expected"),
+    [
+        (
+            "http://localhost:8899",
+            "http://localhost:8899/v1/chat/completions",
+        ),
+        (
+            "http://localhost:8899/v1/",
+            "http://localhost:8899/v1/chat/completions",
+        ),
+        (
+            "https://router.example.test/prefix/v1",
+            "https://router.example.test/prefix/v1/chat/completions",
+        ),
+        (
+            "https://router.example.test/v1/chat/completions",
+            "https://router.example.test/v1/chat/completions",
+        ),
+    ],
+)
+def test_chat_completions_url(base_url: str, expected: str):
+    assert chat_client.chat_completions_url(base_url) == expected
 
 
 def test_cli_chat_help_uses_namespaced_auto_model():
-    result = CliRunner().invoke(main, ["chat", "--help"])
+    result = CliRunner().invoke(main, ["request", "chat", "--help"])
 
     assert result.exit_code == 0
     assert "vllm-sr/auto" in result.output
@@ -132,7 +162,7 @@ def test_cli_chat_invokes_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     runner = CliRunner()
     result = runner.invoke(
         main,
-        ["chat", "hello", "--config", str(cfg)],
+        ["request", "chat", "hello", "--config", str(cfg)],
     )
 
     assert result.exit_code == 0
@@ -142,6 +172,37 @@ def test_cli_chat_invokes_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     assert "json" in call_kw
     assert call_kw["json"]["model"] == "vllm-sr/auto"
     assert call_kw["json"]["messages"][-1]["content"] == "hello"
+
+
+def test_cli_chat_base_url_skips_local_container_check(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: False)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "choices": [{"message": {"content": "remote response"}}]
+    }
+    mock_post = MagicMock(return_value=mock_resp)
+    monkeypatch.setattr(chat_command.requests, "post", mock_post)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "request",
+            "chat",
+            "hello",
+            "--base-url",
+            "https://router.example.test/",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output.strip() == "remote response"
+    assert mock_post.call_args.args[0] == (
+        "https://router.example.test/v1/chat/completions"
+    )
 
 
 def test_cli_chat_json_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -171,15 +232,15 @@ def test_cli_chat_json_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
 
     runner = CliRunner()
-    result = runner.invoke(main, ["chat", "--json", "hi", "--config", str(cfg)])
+    result = runner.invoke(
+        main, ["request", "chat", "--json", "hi", "--config", str(cfg)]
+    )
 
     assert result.exit_code == 0
     assert json.loads(result.output) == body
 
 
-def test_cli_chat_not_running(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
-):
+def test_cli_chat_not_running(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
         yaml.safe_dump(
@@ -197,17 +258,15 @@ def test_cli_chat_not_running(
     _patch_stack_layout(monkeypatch, 0)
     monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: False)
 
-    with caplog.at_level("ERROR", logger="cli.commands.chat"):
-        runner = CliRunner()
-        result = runner.invoke(main, ["chat", "hello", "--config", str(cfg)])
+    runner = CliRunner()
+    result = runner.invoke(main, ["request", "chat", "hello", "--config", str(cfg)])
 
     assert result.exit_code != 0
-    assert "does not appear to be running" in caplog.text
+    assert result.stdout == ""
+    assert "does not appear to be running" in result.stderr
 
 
-def test_cli_chat_connection_error(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
-):
+def test_cli_chat_connection_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
         yaml.safe_dump(
@@ -231,9 +290,9 @@ def test_cli_chat_connection_error(
         MagicMock(side_effect=requests.exceptions.ConnectionError("refused")),
     )
 
-    with caplog.at_level("ERROR", logger="cli.commands.chat"):
-        runner = CliRunner()
-        result = runner.invoke(main, ["chat", "hello", "--config", str(cfg)])
+    runner = CliRunner()
+    result = runner.invoke(main, ["request", "chat", "hello", "--config", str(cfg)])
 
     assert result.exit_code != 0
-    assert "Could not reach" in caplog.text
+    assert result.stdout == ""
+    assert "Could not reach" in result.stderr

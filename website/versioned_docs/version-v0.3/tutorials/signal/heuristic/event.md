@@ -4,7 +4,7 @@
 
 `event` is a heuristic routing signal family for **structured event metadata** extracted from request text: event type, severity level, temporal urgency, and domain-specific action codes.
 
-It maps to `config/signal/event/` and is declared under `routing.signals.events`.
+It maps to `config/fragments/signal/event/` and is declared under `routing.signals.events`.
 
 ## Key Advantages
 

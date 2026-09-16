@@ -1,0 +1,4 @@
+{
+  "operation": "request",
+  "body_json": "{\"model\":\"source-model\",\"model\":\"shadow-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}"
+}

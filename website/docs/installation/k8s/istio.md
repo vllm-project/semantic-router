@@ -1,50 +1,57 @@
-# Install with Istio Gateway
+---
+title: Deploy with Istio Gateway
+description: Run Semantic Router as an ExtProc service behind an Istio Gateway and two model backends.
+---
 
-This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) with Istio Gateway on Kubernetes. Istio Gateway uses Envoy under the covers so it is possible to use vsr with it. However there are differences between how different Envoy based Gateways process the ExtProc protocol, hence the deployment described here is different from the deployment of vsr alongwith other types of Envoy based Gateways as described in the other guides in this repo. There are multiple architecture options possible to combine Istio Gateway with vsr. This document describes one of the options.
+# Deploy with Istio Gateway
 
-## Architecture Overview
+This guide shows a reference topology for running Semantic Router as an
+ExtProc service behind an Istio Gateway. Istio owns ingress and `HTTPRoute`
+processing; Semantic Router owns prompt-aware model selection. The supplied
+`EnvoyFilter` and `DestinationRule` are specific to this example, so do not
+reuse manifests from a different gateway integration without comparing its
+ExtProc mode.
+
+## Responsibility split
 
 The deployment consists of:
 
-- **vLLM Semantic Router**: Provides intelligent request routing and processing decisions to Envoy based Gateways
-- **Istio Gateway**: Istio's implementation of Kubernetes Gateway API that uses an Envoy proxy under the covers
-- **Gateway API Inference Extension**: Additional APIs to extend the Gateway API for Inference via ExtProc servers
-- **Two instances of vLLM serving 1 model each**:  Example backend LLMs for illustrating semantic routing in this topology
+- **Semantic Router** evaluates routing policy and selects a model.
+- **Istio Gateway** accepts client traffic and calls Semantic Router through
+  ExtProc.
+- **Gateway API resources** map the selected model to a Kubernetes backend.
+- **The two vLLM deployments** are example inference backends and require
+  suitable compute and model access.
 
 ## Prerequisites
 
-Before starting, ensure you have the following tools installed:
+You need:
 
-- [Docker](https://docs.docker.com/get-docker/) - Container runtime
-- [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes
-- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
-- [Helm](https://helm.sh/docs/intro/install/) - Package manager for Kubernetes
+- Kubernetes `1.31`–`1.35`, the supported range for the pinned Istio `1.29`
+  release, with at least two schedulable NVIDIA GPUs for the supplied model
+  manifests or equivalent capacity for replacement backends;
+- [kubectl](https://kubernetes.io/docs/tasks/tools/);
+- [Helm](https://helm.sh/docs/intro/install/); and
+- [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/).
 
-Either minikube or kind works to deploy a local kubernetes cluster needed for this exercise so you only need one of these two. We use minikube in the description below but the same steps should work with a Kind cluster once the cluster is created in Step 1.
+The supplied manifests request one `nvidia.com/gpu` device for each of two
+vLLM Deployments. They pin the vLLM image used by this example. You can replace
+them with other OpenAI-compatible backends, but the Router providers, Service
+names, and `HTTPRoute` matches must change together.
 
-We will also deploy two different LLMs in this exercise to illustrate the semantic routing and model routing function more clearly so you ideally you should run this on a machine that has GPU support to run the two models used in this exercise and adequate memory and storage for these models. You can also use equivalent steps on a smaller server that runs smaller LLMs on a CPU based server without GPUs.
-
-## Step 1: Create Minikube Cluster
-
-Create a local Kubernetes cluster via minikube (or equivalently via Kind).
+## Step 1: Verify the cluster
 
 ```bash
-# Create cluster
-$ minikube start \
-    --driver docker \
-    --container-runtime docker \
-    --gpus all \
-    --memory no-limit \
-    --cpus no-limit
-
-# Verify cluster is ready
-$ kubectl wait --for=condition=Ready nodes --all --timeout=300s
+kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
 ## Step 2: Deploy LLM models
 
-In this exercise we deploy two LLMs viz. a llama3-8b model (meta-llama/Llama-3.1-8B-Instruct) and a phi4-mini model (microsoft/Phi-4-mini-instruct). We serve these models using two separate instances of the [vLLM inference server](https://docs.vllm.ai/en/latest/) running in the default namespace of the kubernetes cluster. You may choose any other inference engines as long as they expose OpenAI API endpoints. First install a secret for your HuggingFace token previously stored in env variable HF_TOKEN and then deploy the models as shown below. Note that the file path names used in the example kubectl clis in this guide are expected to be executed from the top folder of this repo.
+The example deploys `meta-llama/Llama-3.1-8B-Instruct` and
+`microsoft/Phi-4-mini-instruct` with separate vLLM servers. Export a Hugging
+Face token before creating the Kubernetes Secret. To use different
+OpenAI-compatible backends, update the model names and endpoint references in
+both the Router values and the route manifests.
 
 ```bash
 kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
@@ -55,52 +62,39 @@ kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vLlama3.yaml
 ```
 
-This may take several (10+) minutes the first time this is run to download the model up until the vLLM pod running this model is in READY state.  Similarly also deploy the second LLM (phi4-mini) and wait for several minutes until the pod is in READY state.
+The first start downloads model weights and can take several minutes. Deploy
+the second backend, then wait for both Deployments.
 
 ```bash
 # Create vLLM service running phi4-mini
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vPhi4.yaml
 ```
 
-At the end of this you should be able to see both your vLLM pods are READY and serving these LLMs using the command below. You should also see Kubernetes services exposing the IP/ port on which these models are being served. In the example below the llama3-8b model is being served via a kubernetes service with service IP of 10.108.250.109 and port 80.
-
 ```bash
-# Verify that vLLM pods running the two LLMs are READY and serving
-
-kubectl get pods
-NAME                                           READY   STATUS    RESTARTS     AGE
-llama-8b-57b95475bd-ph7s4                      1/1     Running   0            9d
-phi4-mini-887476b56-74twv                      1/1     Running   0            9d
-
-# View the IP/port of the Kubernetes services on which these models are being served
-
-kubectl get service
-NAME                                  TYPE           CLUSTER-IP       EXTERNAL-IP      PORT(S)                        AGE
-kubernetes                            ClusterIP      10.96.0.1        <none>           443/TCP                        36d
-llama-8b                              ClusterIP      10.108.250.109   <none>           80/TCP                         18d
-phi4-mini                             ClusterIP      10.97.252.33     <none>           80/TCP                         9d
+kubectl wait --for=condition=Available deployment/llama-8b --timeout=900s
+kubectl wait --for=condition=Available deployment/phi4-mini --timeout=900s
+kubectl get pods,services
 ```
 
-## Step 3: Install Istio Gateway, Gateway API, Inference Extension CRDs
+## Step 3: Install Gateway API and Istio
 
-We will use a recent build of Istio for this exercise so that we have the option of also using  the v1.0.0 GA version of the Gateway API Inference Extension  CRDs and EPP functionality.
-
-Follow the procedures described in the Gateway API [Inference Extensions documentation](https://gateway-api-inference-extension.sigs.k8s.io/guides/) to deploy the 1.28 (or newer) version of Istio control plane, Istio Gateway, the Kubernetes Gateway API CRDs and the Gateway API Inference Extension v1.0.0. Do not install any of the HTTPRoute resources nor the EndPointPicker from that guide however, just use it to deploy the Istio gateway and CRDs.  If installed correctly you should see the api CRDs for gateway api and inference extension as well as pods running for the Istio gateway and Istiod using the commands shown below.
-
-```bash
-kubectl get crds | grep gateway
-```
+This direct-Service topology needs Kubernetes Gateway API and Istio; it does
+not need Gateway API Inference Extension CRDs. Install a compatible pair and
+pin the versions in your deployment automation:
 
 ```bash
-kubectl get crds | grep inference
-```
+export GATEWAY_API_VERSION=v1.5.1
+export ISTIO_VERSION=1.29.6
 
-```bash
-kubectl get pods | grep istio
-```
+kubectl apply --server-side \
+  -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
 
-```bash
-kubectl get pods -n istio-system
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION="${ISTIO_VERSION}" sh -
+export PATH="$PWD/istio-${ISTIO_VERSION}/bin:$PATH"
+istioctl install -y --set profile=minimal
+
+kubectl wait --for=condition=Available deployment/istiod \
+  -n istio-system --timeout=300s
 ```
 
 ## Step 4: Update vsr config (Optional)
@@ -116,12 +110,12 @@ Ensure that the models in the config file match the models you are using. It is 
 
 ## Step 5: Deploy vLLM Semantic Router
 
-Deploy the semantic router service with all required components using Helm:
+Deploy Semantic Router with the integration values:
 
 ```bash
 # Install semantic router using Helm from GHCR OCI registry
 helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version v0.0.0-latest \
+  --version 0.0.0-latest \
   --namespace vllm-semantic-router-system \
   --create-namespace \
   -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/semantic-router-values/values.yaml
@@ -133,90 +127,48 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 kubectl get pods -n vllm-semantic-router-system
 ```
 
-**Note**: The values file contains the configuration for the semantic router, including model settings, categories, and routing rules. You can download and customize it from [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/semantic-router-values/values.yaml).
+**Note**: The values file contains provider bindings, signals, decisions, and
+routing rules. Download and review
+[values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/semantic-router-values/values.yaml)
+before adapting it to a real provider pool. Keep
+`global.router.clear_route_cache: true`: after ExtProc writes
+`x-selected-model`, Envoy must discard its earlier route and evaluate the
+header-based `HTTPRoute` again.
 
 ## Step 6: Install additional Istio configuration
 
-Install the destinationrule and envoy filter needed for Istio gateway to use ExtProc based interface with vLLM Semantic router
+Install the `DestinationRule` and gateway-scoped `EnvoyFilter` that connect the
+Istio gateway to Semantic Router over ExtProc:
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/destinationrule.yaml
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
+The example filter sets `failure_mode_allow: true`, which lets Envoy continue
+its HTTP filter chain when ExtProc is unavailable. It does not guarantee that
+the request reaches a backend: the supplied routes require `x-selected-model`,
+so route selection can still fail when the Router did not add that header. A
+true bypass needs a deliberate catch-all route, which also changes the security
+boundary. Prefer fail-close behavior when semantic routing is an authorization
+or data-boundary control, and test the exact outage path before production use.
+
 ## Step 7: Install gateway routes
 
-Install HTTPRoutes in the Istio gateway.
+Create the Istio-managed Gateway, then install the two `HTTPRoute` resources.
 
 ```bash
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/gateway.yaml
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/httproute-llama3-8b.yaml
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/httproute-phi4-mini.yaml
 ```
 
 ## Step 8: Testing the Deployment
 
-To expose the IP on which the Istio gateway listens to client requests from outside the cluster, you can choose any standard kubernetes  option for external load balancing. We tested our feature by [deploying and configuring metallb](https://metallb.universe.tf/installation/) into the cluster to be the LoadBalancer provider. Please refer to metallb documentation for installation procedures if needed. Finally, for the minikube case, we get the external url as shown below.
-
-```bash
-minikube service inference-gateway-istio --url
-http://192.168.49.2:30913
-```
-
-Now we can send LLM prompts via curl to http://192.168.49.2:30913 to access the Istio gateway  which will then use information from vLLM semantic router to dynamically route to one of the two LLMs we are using as backends in this case.
-
-### Send Test Requests
-
-Try the following cases with and without model "auto" selection to confirm that Istio + vsr together are able to route queries to the appropriate model. The query responses will include information about which model was used to serve that request.
-
-Example queries to try include the following
-
-```bash
-# Model name llama3-8b provided explicitly, should route to this backend
-curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
-        "model": "llama3-8b",
-        "messages": [
-          {"role": "user", "content": "Linux is said to be an open source kernel because "}
-         ],
-        "max_tokens": 100,
-        "temperature": 0
-      }'
-```
-
-```bash
-# Model name set to "auto", should categorize to "computer science" & route to llama3-8b
-curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
-        "model": "auto",
-        "messages": [
-          {"role": "user", "content": "Linux is said to be an open source kernel because "}
-         ],
-        "max_tokens": 100,
-        "temperature": 0
-      }'
-```
-
-```bash
-# Model name phi4-mini provided explicitly, should route to this backend
-curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
-        "model": "phi4-mini",
-        "messages": [
-          {"role": "user", "content": "2+2 is  "}
-         ],
-        "max_tokens": 100,
-        "temperature": 0
-      }'
-```
-
-```bash
-# Model name set to "auto", should categorize to "math" & route to phi4-mini
-curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
-        "model": "auto",
-        "messages": [
-          {"role": "user", "content": "2+2 is  "}
-         ],
-        "max_tokens": 100,
-        "temperature": 0
-      }'
-```
+Follow [Test a Kubernetes Gateway Deployment](gateway-testing) to resolve the
+actual gateway URL, compare direct and routed model requests, inspect routing
+headers, and verify the selected backend. Do not copy the example IP or port;
+they are assigned by your cluster.
 
 ## Troubleshooting
 
@@ -256,6 +208,7 @@ To remove the entire deployment:
 # Remove gateway routes
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/httproute-llama3-8b.yaml
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/httproute-phi4-mini.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/gateway.yaml
 
 # Remove Istio configuration
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/envoyfilter.yaml
@@ -271,17 +224,12 @@ istioctl uninstall --purge
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vLlama3.yaml
 kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vPhi4.yaml
 
-# Stop minikube cluster
-minikube stop
-
-# Delete minikube cluster (optional)
-minikube delete
 ```
 
 ## Next Steps
 
-- Test/ experiment with different features of vLLM Semantic Router
-- Additional use cases/ topologies with Istio Gateway (including with EPP and LLM-D)
-- Set up monitoring and observability
-- Implement authentication and authorization
-- Scale the semantic router deployment for production workloads
+- Replace the example models with pinned, production-operated backends.
+- Add authentication, network policy, observability, and capacity controls.
+- Use the [Gateway API Inference Extension guide](gateway-api-inference-extension)
+  when each selected model needs an endpoint picker rather than a direct
+  Service backend.

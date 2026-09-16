@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`authz` 将身份与策略绑定转为可复用的路由输入。映射到 `config/signal/authz/`，在 `routing.signals.role_bindings` 中声明。
+`authz` 将身份与策略绑定转为可复用的路由输入。映射到 `config/fragments/signal/authz/`，在 `routing.signals.role_bindings` 中声明。
 
 该族为启发式：用显式角色与主体匹配请求身份，而非分类器输出。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/authz/`
+源片段族：`config/fragments/signal/authz/`
 
 ```yaml
 routing:

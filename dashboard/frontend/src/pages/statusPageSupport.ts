@@ -2,6 +2,11 @@ import type { EmbeddingProviderRuntimeStatus, ServiceStatus } from '../utils/rou
 
 export type ServiceHealthFilter = 'all' | 'healthy' | 'unhealthy'
 
+export function formatStatusLabel(value?: string): string {
+  if (!value) return 'Unavailable'
+  return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
 export function filterServices(
   services: ServiceStatus[],
   query: string,

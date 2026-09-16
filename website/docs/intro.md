@@ -1,103 +1,88 @@
 ---
 sidebar_position: 1
-description: Research-driven introduction to vLLM Semantic Router, an Envoy-based control plane for signal-aware LLM routing, policy enforcement, and token efficiency.
+sidebar_label: Introduction
+description: Build a programmable Mixture-of-Models system behind one stable model API.
 ---
 
-# vLLM Semantic Router
+import ThemedImage from '@theme/ThemedImage';
 
-**We believe Mixture-of-Models is the next-generation model architecture for
-heterogeneous LLM inference.**
+# Welcome to vLLM Semantic Router
 
-**That is why we built vLLM Semantic Router**—to turn signals and preferences
-into executable model paths for every user, product, and workload.
+<div className="docs-intro-brand">
+  <ThemedImage
+    className="docs-intro-brand__logo"
+    alt="vLLM Semantic Router"
+    sources={{
+      light: '/img/vllm-sr-logo.light.png',
+      dark: '/img/vllm-sr-logo.white.png',
+    }}
+  />
+  <p className="docs-intro-brand__tagline">Make your Mixture-of-Models programmable.</p>
+</div>
 
-The project sits between clients and model backends as an Envoy External
-Processor (`ext_proc`), turning routing from ad hoc application logic into an
-observable, configurable control plane for multi-model systems.
+vLLM Semantic Router is an open-source routing and control layer for building
+Mixture-of-Models systems across heterogeneous AI infrastructure. Applications
+call a stable OpenAI- or Anthropic-compatible endpoint while the serving layer
+chooses—or composes—the capability path for each request.
 
-## Research Focus
+## The problem: an AI request is more than traffic
 
-We use the project to answer a small set of hard systems questions:
+Modern AI applications rarely rely on one interchangeable model. A request may
+need a fast local model, a specialist or frontier model, retrieval, memory,
+tools, a verifier, or several models working together. Those paths may span
+the cloud, a data center, or the edge.
 
-1. **How do we capture missing signals** from requests, responses, users, and runtime context?
-2. **How do we compose those signals** into robust routing and policy decisions?
-3. **How do multiple models collaborate** as a system instead of serving as isolated endpoints?
-4. **How do we optimize latency, spend, and tool usage** as part of a practical token economy?
-5. **How do we add safety, feedback, and observability** without fragmenting the serving stack?
+Each path carries different tradeoffs in capability, latency, cost, and trust.
+The right choice can also change with the request, user, session, and available
+infrastructure.
 
-## Core System
+When every application hard-codes these choices, product code becomes coupled
+to the current model fleet. The same routing logic is repeated across clients,
+and it becomes difficult to change, explain, or evaluate as the system grows.
 
-### Signal and Projection Routing
+## The idea: make intelligence programmable
 
-Captures **16 maintained signal families** and coordinates them with reusable
-projections before route selection:
+Semantic Router moves that decision into a shared layer in the request path. It
+can observe the work in front of it—intent, difficulty, context, modality,
+identity, risk, preference, and system state—then resolve a stable entrypoint
+to an isolated recipe.
 
-| Layer           | Components                                                                                                                                                               | Role                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| **Signals**     | `authz`, `context`, `keyword`, `language`, `structure`, `complexity`, `domain`, `embedding`, `kb`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `reask`, `user-feedback` | Extract reusable request, safety, follow-up, and preference facts |
-| **Projections** | `partitions`, `scores`, `mappings`                                                                                                                                       | Coordinate competing matches and emit named routing bands |
-| **Decisions**   | AND/OR policy rules over signals and projections                                                                                                                         | Select the active route and model candidates              |
+A recipe can choose one model, escalate through a cascade, coordinate a bounded
+multi-model workflow, or attach behavior such as retrieval, memory, tool
+filtering, caching, safety checks, and verification. The application keeps one
+familiar API while the capability path can evolve behind it.
 
-**How it works**: Signals are extracted from requests, projections coordinate
-matched evidence, decision rules evaluate the resulting facts, and the chosen
-route drives plugins plus model dispatch.
+The result is more than a model name:
 
-### Plugin Chain Architecture
+- **The right model path:** direct, specialist, local, cascade, or collaborative.
+- **The right supporting capabilities:** retrieval, memory, tools, prompts,
+  caching, or verification where the request needs them.
+- **The right execution boundary:** configured cloud, data center, or edge
+  backends across heterogeneous hardware.
+- **Evidence for what happened:** routing metadata plus configured feedback,
+  replay, and evaluation workflows.
 
-Extensible plugin system for request/response processing:
+vLLM Semantic Router does not replace the gateway or the model servers. Envoy
+continues to carry traffic, and inference runtimes continue to generate
+responses. The Router coordinates the semantic work between them.
 
-| Plugin Type         | Description                                   | Use Case                                      |
-| ------------------- | --------------------------------------------- | --------------------------------------------- |
-| **semantic-cache**  | Semantic similarity-based caching             | Reduce latency and costs for similar queries  |
-| **jailbreak**       | Adversarial prompt detection                  | Block prompt injection and jailbreak attempts |
-| **pii**             | Personally identifiable information detection | Protect sensitive data and ensure compliance  |
-| **system_prompt**   | Dynamic system prompt injection               | Add context-aware instructions per route      |
-| **header_mutation** | HTTP header manipulation                      | Control routing and backend behavior          |
-| **hallucination**   | Token-level hallucination detection           | Real-time fact verification during generation |
+## Start with what you want to do
 
-**How it works**: Plugins form a processing chain, each plugin can inspect/modify requests and responses, with configurable enable/disable per decision.
+- **Run it locally:** follow the [Quickstart](/docs/installation) and send a
+  request through the Router.
+- **Find the pattern for your workload:** explore [use cases](overview/use-cases)
+  from cloud and data center to edge and enterprise deployments.
+- **Understand the system:** read the [System
+  Overview](overview/semantic-router-overview) and [Routing
+  Pipeline](overview/signal-driven-decisions).
+- **Create a stable model experience:** learn how [entrypoints and
+  recipes](tutorials/global/entrypoints-and-recipes) turn one shared model pool
+  into purpose-built virtual models.
+- **Choose an environment:** compare [Docker, Kubernetes, and hardware
+  paths](installation/deployment-options).
 
-## Key Benefits
+## Project
 
-### A Control Plane for LLMRouting
-
-- **Policy instead of hard-coded branches**: Move routing logic out of application code into reusable signals, decisions, and configuration.
-- **Capability-aware selection**: Route by task shape, risk, and quality requirements instead of defaulting every request to one model.
-
-### A Practical Token Economy Layer
-
-- **Spend budget where it matters**: Reserve premium models, long context, and tool calls for the requests that need them.
-- **Reduce waste without collapsing quality**: Use semantic caching, context-aware routing, and explicit policy to control latency and token spend.
-
-### Governance in the Request Path
-
-- **Built-in safety and compliance**: Apply jailbreak, PII, hallucination, prompt, and header controls at the same layer that makes routing decisions.
-- **Observable decisions**: Keep routing and policy outcomes auditable so teams can tune behavior with data instead of guesswork.
-
-### A Research Surface That Can Ship
-
-- **Fast experimentation**: Add new signals, algorithms, and plugins without rewriting the serving path.
-- **Production alignment**: Connect experimentation, observability, and deployment in one maintained system.
-
-## Use Cases
-
-- **Multi-model inference gateways**: Route to specialized models based on capability, context, and policy.
-- **Cost-aware copilots**: Balance quality, latency, and spend for internal assistants and developer tooling.
-- **Safety-sensitive assistants**: Enforce PII, jailbreak, and hallucination controls in the live request path.
-- **Research platforms**: Evaluate routing policies, collect feedback signals, and iterate on model collaboration strategies.
-
-## Start Here
-
-- [**Overview**](overview/goals) for project goals, semantic routing concepts, and collective intelligence.
-- [**Installation**](installation) for setup, deployment options, and configuration.
-- [**Fleet Simulator**](fleet-sim/overview) for planning GPU fleets, evaluating routing strategies, and reading the guide PDF.
-- [**Capacities**](tutorials/signal/overview) for signals, projections, decisions, plugins, algorithms, and global controls.
-- [**Proposals**](proposals/unified-config-contract-v0-3) for design work that has not yet been folded into the stable docs set.
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) for details.
-
-## License
-
-This project is licensed under the Apache 2.0 License - see the [LICENSE](https://github.com/vllm-project/semantic-router/blob/main/LICENSE) file for details.
+vLLM Semantic Router is open source under the Apache 2.0 license. See the
+[contributing guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md)
+to propose a change or join the community.

@@ -2,9 +2,18 @@ package config
 
 const SignalTypeClassifier = "classifier"
 
+// Backend types a ClassifierSignalRule may declare. They are named here rather
+// than spelled inline so the validator and the builder cannot drift apart.
+const (
+	ClassifierSignalTypeLocal              = "local"
+	ClassifierSignalTypeLLM                = "llm"
+	ClassifierSignalTypeSequenceClassifier = "sequence_classifier"
+)
+
 // ClassifierSignalRule exposes a reusable label-score classifier as a signal.
-// Supported types are "local" for native sequence-classification models and
-// "llm" for configured external chat classifiers.
+// Supported types are "local" for native sequence-classification models, "llm"
+// for configured external chat classifiers, and "sequence_classifier" for a
+// remote sequence classifier reached over the shared http_classify contract.
 type ClassifierSignalRule struct {
 	Name         string   `yaml:"name"`
 	Description  string   `yaml:"description,omitempty"`

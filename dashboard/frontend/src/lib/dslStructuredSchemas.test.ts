@@ -21,18 +21,33 @@ function flattenSchema(schema: FieldSchema[]): FieldSchema[] {
 }
 
 describe('DSL structured field schemas', () => {
-  it('does not expose raw JSON controls for known algorithm, signal, or plugin fields', () => {
+  it.each(['embedding', 'complexity'])('offers typed prototype controls for %s rules', (signal) => {
+    const prototype = requireField(getSignalFieldSchema(signal), 'prototype_scoring')
+    expect(prototype.type).toBe('object')
+    expect(prototype.required).toBeFalsy()
+    expect(requireField(prototype.fields || [], 'enabled').type).toBe('boolean')
+    for (const key of ['max_prototypes', 'best_weight', 'top_m']) {
+      expect(requireField(prototype.fields || [], key).type, key).toBe('number')
+    }
+  })
+
+  it('uses JSON controls only for recursive or deliberately open payloads', () => {
     const schemas = [
       ...ALGORITHM_TYPES.flatMap((type) => getAlgorithmFieldSchema(type)),
       ...SIGNAL_TYPES.flatMap((type) => getSignalFieldSchema(type)),
       ...PLUGIN_TYPES.flatMap((type) => getPluginFieldSchema(type)),
     ]
 
-    expect(flattenSchema(schemas).map((field) => field.type)).not.toContain('json')
+    expect(
+      flattenSchema(schemas)
+        .filter((field) => field.type === 'json')
+        .map((field) => field.key),
+    ).toEqual(['conditions', 'backend_config'])
   })
 
   it('describes workflow and multi-factor structures with typed nested schemas', () => {
     const workflows = getAlgorithmFieldSchema('workflows')
+    expect(requireField(workflows, 'minimum_candidates')).toMatchObject({ type: 'number', min: 1 })
     const planner = requireField(workflows, 'planner')
     const roles = requireField(workflows, 'roles')
     const final = requireField(workflows, 'final')
@@ -50,6 +65,18 @@ describe('DSL structured field schemas', () => {
       'max_cost_per_1m',
       'max_inflight',
     ])
+    const quality = requireField(multiFactor, 'quality')
+    expect(quality.type).toBe('object')
+    expect(quality.fields?.map((field) => field.key)).toEqual([
+      'index',
+      'on_missing',
+      'min_coverage',
+      'min_score',
+    ])
+    expect(requireField(quality.fields || [], 'on_missing').options).toEqual([
+      'exclude',
+      'disable_quality',
+    ])
 
     const prompt = getAlgorithmFieldSchema('prompt')
     const promptConfig = requireField(prompt, 'prompt')
@@ -59,6 +86,7 @@ describe('DSL structured field schemas', () => {
       'instructions',
       'timeout_seconds',
     ])
+    expect(prompt.some((field) => field.key === 'model')).toBe(false)
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {
@@ -80,11 +108,54 @@ describe('DSL structured field schemas', () => {
 
     const metadataPredicate = requireField(getSignalFieldSchema('metadata'), 'predicate')
     expect(metadataPredicate.fields?.map((field) => field.key)).toEqual(['equals', 'in', 'exists'])
+    expect(requireField(getSignalFieldSchema('classifier'), 'type').options).toEqual([
+      'local',
+      'llm',
+      'sequence_classifier',
+    ])
     expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
+
+    const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
+    const conversationSource = requireField(conversationFeature.fields || [], 'source')
+    expect(requireField(conversationSource.fields || [], 'type').options).toEqual(
+      expect.arrayContaining([
+        'tool_choice_required',
+        'tool_choice_none',
+        'flow_tool_state',
+        'image_content',
+      ]),
+    )
 
     const headerMutation = getPluginFieldSchema('header_mutation')
     expect(requireField(headerMutation, 'add').type).toBe('object[]')
     expect(requireField(headerMutation, 'update').type).toBe('object[]')
     expect(requireField(headerMutation, 'delete').type).toBe('string[]')
+
+    const tools = getPluginFieldSchema('tools')
+    expect(requireField(tools, 'strip_tool_history').type).toBe('boolean')
+    const dynamicRetrieval = requireField(tools, 'dynamic_retrieval')
+    expect(dynamicRetrieval.type).toBe('object')
+    expect(requireField(dynamicRetrieval.fields || [], 'history_window').type).toBe('number')
+    expect(requireField(dynamicRetrieval.fields || [], 'weights').type).toBe('object')
+  })
+
+  it('offers every conversation source type and non_user as a role', () => {
+    const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
+    const source = requireField(conversationFeature.fields || [], 'source')
+    const sourceType = requireField(source.fields || [], 'type')
+    const role = requireField(source.fields || [], 'role')
+
+    expect(sourceType.options).toEqual([
+      'message',
+      'tool_definition',
+      'tool_choice_required',
+      'tool_choice_none',
+      'assistant_tool_call',
+      'assistant_tool_cycle',
+      'active_tool_loop',
+      'image_content',
+      'flow_tool_state',
+    ])
+    expect(role.options).toContain('non_user')
   })
 })

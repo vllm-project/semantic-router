@@ -2,7 +2,7 @@
 
 ## Overview
 
-Use `config/decision/composite/` when the policy needs nested `AND`, `OR`, and `NOT` logic in one route.
+Use `config/fragments/decision/composite/` when the policy needs nested `AND`, `OR`, and `NOT` logic in one route.
 
 This is the right shape for realistic production policies where business logic and safety logic have to coexist.
 
@@ -29,7 +29,7 @@ Use `composite/` when:
 
 ## Configuration
 
-Source fragment: `config/decision/composite/priority-safe-escalation.yaml`
+Source fragment: `config/fragments/decision/composite/priority-safe-escalation.yaml`
 
 ```yaml
 routing:

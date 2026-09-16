@@ -82,6 +82,7 @@ func assertSearchEnforcesUserScope(t *testing.T, useHNSW bool) {
 	bobScope := CacheScopeNamespaceOf(bobQ)
 
 	c := NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		MaxEntries:          100,

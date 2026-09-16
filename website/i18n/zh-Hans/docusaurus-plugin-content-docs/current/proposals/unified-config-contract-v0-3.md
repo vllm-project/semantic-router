@@ -1,165 +1,119 @@
 ---
+title: 统一配置契约 v0.3
+description: 记录路由器、CLI、仪表盘、Helm、operator 和 DSL 共享的已实现配置契约。
+created: 2026-03-17
+status: Implemented
 translation:
-  source_commit: "baa07413"
+  source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
   source_file: "docs/proposals/unified-config-contract-v0-3.md"
-  outdated: true
+  outdated: false
 ---
 
-# 统一配置契约 v0.3
+> **状态：** 已实现 · **创建日期：** 2026-03-17
 
-Issue: [#1505](https://github.com/vllm-project/semantic-router/issues/1505)
+## 问题 {#problem}
 
----
+路由器、CLI、仪表盘、Helm chart、operator 和 DSL 先前解释重叠的配置形态。一个表面接受的文件，在另一表面可能需要翻译或未文档化的默认值。模型身份也与部署端点和凭证混在一起。
 
-## 以前
+## 已实现契约 {#implemented-contract}
 
-在 v0.3 之前，仓库里存在多份部分重叠的配置契约：
-
-- 路由器运行时消费扁平的 Go 配置
-- Python CLI 使用自己的嵌套 YAML 及合并/默认逻辑
-- 控制面板与引导流程导入 YAML，但仍假设旧版顶层 `signals` 与 `decisions`
-- Helm 与 Operator 各自以不同方式翻译配置
-- DSL 将路由语义与旧版 `BACKEND`、`GLOBAL` 预期混在一起
-
-这带来三个长期问题：
-
-1. 同一概念需要在多个 schema 层反复编辑。
-2. 端点、API Key 与模型语义被混在一起。
-3. 运行时默认依赖 `router-defaults.yaml` 等外部模板，难以推理与替换。
-
-## 旧模型的问题
-
-### CLI 与路由器漂移
-
-Python CLI 与 Go 路由器没有单一的 schema 所有者。用户可能通过 CLI、控制面板或 Kubernetes 构建配置，仍会遇到结构不一致。
-
-### 模型语义与部署绑定纠缠
-
-逻辑模型同时承载：
-
-- 语义路由身份
-- 端点绑定
-- API Key
-- 提供商模型 ID
-
-导致难以复用。若多个逻辑模型指向同一后端，配置仍会重复后端细节。
-
-### DSL 范围过宽
-
-DSL 适合表达路由语义，但旧版 `BACKEND` 与 `GLOBAL` 块使其看起来也像部署与运行时状态的编写入口，在本地、面板与 Kubernetes 工作流下不可持续。
-
-## v0.3 契约
-
-v0.3 定义唯一 canonical 配置：
+公开配置有八个顶层部分：
 
 ```yaml
 version:
 listeners:
 providers:
+evaluation:
 routing:
+entrypoints:
+recipes:
 global:
 ```
 
-### 各节含义
+| 部分 | 职责 |
+| --- | --- |
+| `version` | 选择配置契约。 |
+| `listeners` | 定义面向请求和管理的监听器。 |
+| `providers` | 将逻辑模型名称绑定到提供商标识符和端点。 |
+| `evaluation` | 可选定义运营方自有基准、指数 DAG 和模型关联记录。 |
+| `routing` | 定义默认模型卡片、信号、投影、决策、算法和插件。 |
+| `entrypoints` | 将面向请求的模型名称映射到默认配置文件或命名配方。 |
+| `recipes` | 定义共享提供商和全局基础设施的额外隔离路由配置文件。 |
+| `global` | 保存路由器范围的服务、存储、集成、模型模块和稀疏运行时覆盖。 |
 
-- `providers`：部署绑定与提供商默认值
-- `routing`：语义路由图
-- `global`：稀疏的路由器级运行时覆盖
+未知或已退役形态应以清晰的校验错误失败，而不是在运行时悄悄翻译。
 
-### DSL 边界
+## 提供商与模型边界 {#provider-and-model-boundary}
 
-DSL 仅拥有：
+`providers.defaults` 拥有默认提供商行为和默认模型。
+`providers.models[].backend_refs[]` 拥有物理后端绑定。
+`providers.models[].api_format` 只拥有上游线格式，从不选择 Provider。Router 拥有的监听器配置中的物理模型必须声明显式后端 Provider；仅元数据的外部网关配置和内置虚拟模型可以保持无后端。
+本地 CLI serve 路径拥有 Envoy 传输，并拒绝无后端物理模型；仅元数据的外部网关配置通过网关集成部署，而不是转换成独立 Envoy 数据面。
+`providers.models[].pricing` 拥有成本感知选择和账务使用的可选部署成本元数据。定价不属于路由模型卡片。
 
-- `routing.modelCards`
-- `routing.signals`
-- 用于信号协调与派生路由输出的 `routing.projections`
-- `routing.decisions`
+`evaluation` 拥有可选运营方基准定义、指数 DAG 和测量记录。每个 `evaluation.records[].model` 引用一个规范 Model Card 身份，因此可复用评分语义和模型证据有一个顶层所有者，而不嵌入路由元数据。
 
-不再拥有端点、API Key、监听器或路由器全局运行时设置。
+`routing.modelCards` 描述面向路由的模型身份。可选 `routing.modelCards[].loras` 声明决策可以用 `lora_name` 选择的 LoRA adapter。信号和决策引用逻辑模型名称，而不是端点或凭证。
 
-### 部署绑定拆分
+## 路由与 DSL 边界 {#routing-and-dsl-boundary}
 
-模型语义与部署绑定被显式分离：
+路由拥有：
 
-- `routing.modelCards` 承载语义目录数据（规模、上下文窗口、描述、能力等）
-- `routing.modelCards[].loras` 承载每个逻辑模型的 canonical LoRA 适配器目录
-- `providers.defaults` 承载提供商级默认，如 `default_model`、`reasoning_families`、`default_reasoning_effort`
-- `providers.models` 直接承载各模型的访问绑定
-- 每个 `providers.models[].backend_refs[]` 项自带传输与鉴权字段，如 `endpoint`、`base_url`、`protocol`、`auth_header`、`auth_prefix`、`api_key`、`api_key_env`
-- `routing.decisions[].modelRefs[].lora_name` 与对应 `routing.modelCards[].loras` 条目解析，故 `lora_name` 现为受支持的路由契约的一部分，而非仅运行时逃生舱
+- 模型卡片；
+- 命名信号和投影；
+- 决策、候选 `modelRefs`、算法和插件；
+- 路由本地输出和适配策略。
 
-## 全局默认
+算法可以声明 `minimum_candidates` 作为可移植配方契约。无模型资产可以带着该声明并使用空 `modelRefs`；具体入口绑定必须满足它，并且请求时资格过滤器必须在选择或多模型执行开始前保持它。
 
-路由器级默认由路由器自身持有，不再依赖第二份用户维护的默认文件。
+结构化请求控制在信号边界仍是事实。例如，对话信号暴露协议是要求还是禁止工具执行，投影将这些事实与文本派生观察调和，决策消费面向策略的结果输出。
 
-- 路由器提供类型化的内置默认
-- `global:` 仅覆盖需要修改的字段
-- `global.router` 聚合路由引擎控制项，含 `config_source`
-- `global.services` 聚合共享 API 与运行时服务
-- `global.stores` 聚合有存储支撑的服务
-- `global.integrations` 聚合辅助运行时集成
-- `global.model_catalog` 聚合路由器持有的模型资产，含 `embeddings`、`system`、`external`、`classifiers`、`modules`，以及如 `embedding_config.top_k` 等嵌入回退旋钮
-- `global.model_catalog.modules` 存放路由器自有模块设置，如 `prompt_compression`、`prompt_guard`、`classifier`、`hallucination_mitigation`、`feedback_detector`、`modality_detector`
-- 省略的字段保留内置默认
+顶层 `entrypoints` 选择默认路由配置文件或顶层 `recipes` 中的命名项；它们不嵌套在 `routing` 内。
 
-这使本地、面板、Helm 与 Operator 在相同基线上一致。
+DSL 是路由语义的编写视图。它不拥有提供商凭证、监听器、评估定义或记录、存储或全局运行时服务。导入和导出保持同一规范路由文档，而不是发明另一稳态 schema。
 
-## 各入口如何统一
+分类器后端失败以 `Unknown` 进入决策评估。`NOT` 保留该状态，而 `AND` 和 `OR` 使用 CEL 风格的短路语义。决策用根级 `rules.on_unknown: no_match|match|fail_request` 解析终端 `Unknown`；省略则保留现有按族兼容行为。
 
-### 引导导入
+## 入口点与多配方路由 {#entrypoints-and-multi-recipe-routing}
 
-远程引导导入可拉取并应用完整 canonical YAML，保留「一份远程 YAML 即可配置整台路由器」的初衷。
+`entrypoints[]` 将请求模型名称映射到顶层路由或一个命名配方。`recipes[]` 包含复用同一提供商清单和全局运行时的隔离路由配置文件。
 
-### DSL 导入
+这使公开 API 保持稳定，同时允许一个进程中共存多种路由策略。入口点在信号和决策运行之前解析配方。
 
-DSL 导入仍接受完整路由器配置 YAML，但仅将 `routing` 节反编译为 DSL。静态部署与全局运行时设置保留在 YAML 中。
+## 默认值与配置来源 {#defaults-and-configuration-source}
 
-路由器解析器对稳态运行时配置**仅**接受 canonical v0.3 YAML。旧版混排布局须先经显式迁移。
+内置默认值位于路由器中。`global.router.config_source` 选择基于文件的配置或 Kubernetes CRD 调和。外部模板不得在校验后应用隐藏默认值。
 
-进程内 CRD 协调路径也通过 `global.router.config_source: kubernetes` 回到同一 canonical 解析器，而不再维护单独的稳态运行时布局。
+内置类别/领域推断将其运行时策略保持在 `global.model_catalog.modules.classifier.domain`。本地模型使用规范 `variant` 字段；远程分类器使用共享 `backend` 块（`protocol`、`contract`、`model` 和 `deadline_ms`），并按精确外部目录名称解析 `model`。类别消费者目前接受 `http_classify` 加 `label_distribution.v1`，保留完整标签分数分布。提示词防护仍留在其现有配置表面，直到其单独范围的迁移。
 
-### 仓库配置资产
+复杂度是第二个消费者，其运行时策略保持在 `global.model_catalog.modules.complexity`，因此后端能在每配方替换 `routing.signals` 后存活。它接受带 `score.v1` 的 `http_classify`（连续分数，信号通过每规则边界转换成裁决），或 `label_distribution.v1`（获胜标签即为裁决）。读取多于一种契约的消费者不能默认该字段：省略会使运行时猜测期望的响应形态，猜错会按请求而不是在配置加载时暴露。只读取一种契约的消费者将其作为默认，因此类别不变。连接器字节上限属于连接器配置。外部 LLM 分类器条目和 MCP 分类器模块使用 `max_response_bytes`。
+仪表盘、Helm chart 和 operator 可以帮助用户编写或传输配置，但得到的文档仍使用同一契约。
 
-仓库不再在 `config/intelligent-routing/` 等目录下提供大型完整示例树，而是：
+## 仓库来源 {#repository-sources}
 
-- `config/config.yaml` 为详尽的 canonical 参考配置
-- `config/signal/`、`config/decision/`、`config/algorithm/`、`config/plugin/` 存放可复用的路由片段
-- `config/decision/` 按布尔规则形状组织（`single`、`and`、`or`、`not`、`composite`）
-- `config/algorithm/` 按路由策略族组织（`looper`、`selection`）
-- 最新 `docs/tutorials/` 源码树与 `signal/decision/algorithm/plugin/global` 对齐，旧教程树已从活跃文档面移除
-- 运行时支持示例如 `config/runtime/semantic-cache/`、`response-api/`、`tools/` 保持独立，因其不属于面向用户的配置契约
-- 仅测试台使用的清单位于 `e2e/config/`
-- `go test ./pkg/config/...` 与 `make agent-lint` 约束 `config/config.yaml` 与公开配置契约对齐且保持详尽
+`config/config.yaml` 是详尽的规范参考配置。可复用示例位于：
 
-### Helm 与 Operator
+- `config/fragments/signal/`；
+- `config/fragments/decision/`；
+- `config/fragments/algorithm/`；以及
+- `config/fragments/plugin/`。
 
-Helm values 与 Operator 配置对齐到相同 canonical 概念，而非另造稳态路由器 schema。
+运行时部署示例与路由片段保持分开。契约测试和 `make check` 保持参考配置、schema、示例和公开文档对齐。
 
-## 迁移路径
+## 迁移 {#migration}
 
-旧配置可用：
+使用 `vllm-sr config migrate --config old-config.yaml` 转换受支持的旧布局。审阅结果，通过部署的密钥机制解析凭证，并在服务前校验。
 
-```bash
-vllm-sr config migrate --config old-config.yaml
-```
+`vllm-sr init` 已移除。规范 YAML 是稳态配置来源；交互式或图形编写工具必须导出同一文档。
 
-该命令将旧配置重写为 canonical 的 `providers`/`routing`/`global`。
+## 范围与非目标 {#scope-and-non-goals}
 
-覆盖混排嵌套布局与旧版扁平运行时布局（如顶层 `keyword_rules`、`model_config`、`vllm_endpoints`、`provider_profiles`）。
+该契约统一配置所有权。它不要求每个编写表面都以一种形式暴露每个高级字段，也不使 DSL 成为部署语言的替代。
 
-清理过程中已移除 `vllm-sr init`。canonical `config.yaml` 现为唯一预期用户编写的稳态文件。
+## 参考资料 {#references}
 
-## 结果
-
-仓库现在只有一套公开的配置叙事：
-
-- 完整路由器配置位于 canonical YAML
-- DSL 是该配置的**路由语义**视图
-- 部署绑定位于 `providers.defaults` 与 `providers.models[]`
-- 运行时覆盖位于 `global.router`、`global.services`、`global.stores`、`global.integrations`、`global.model_catalog`，模型相关模块在 `global.model_catalog.modules`
-- 结构信号 `density` 使用单一内置多语言归一化路径，不再暴露按规则的 `normalize_by` 选择
-- `global.router.config_source` 是文件配置与 Kubernetes CRD 协调之间的 canonical 开关
-- 内置默认由路由器持有
-- 仓库样例资产按 `signal/decision/algorithm/plugin` 片段组织，而非并行完整配置示例
-
-这消除了旧有 CLI/路由器/面板/Helm/Operator 漂移，使各环境共享同一契约。
+- [当前配置指南](../installation/configuration)
+- [配置工作流](../installation/configuration-workflows)
+- [信号、决策与模型选择](../overview/signal-driven-decisions)
+- [虚拟模型](../tutorials/global/entrypoints-and-recipes)
+- [相关议题 #1505](https://github.com/vllm-project/semantic-router/issues/1505)

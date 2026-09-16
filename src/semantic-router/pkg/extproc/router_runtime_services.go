@@ -23,3 +23,14 @@ func (r *OpenAIRouter) currentVectorStoreEmbedder() vectorstore.Embedder {
 	}
 	return runtime.Embedder
 }
+
+func (r *OpenAIRouter) currentFileStore() *vectorstore.FileStore {
+	if r == nil || r.RuntimeRegistry == nil {
+		return nil
+	}
+	runtime := r.RuntimeRegistry.VectorStoreRuntime()
+	if runtime == nil {
+		return nil
+	}
+	return runtime.FileStore
+}

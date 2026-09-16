@@ -65,7 +65,7 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 			PromptGuard: config.PromptGuardConfig{
 				Enabled:              true,
 				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				UseMmBERT32K:         true,
+				Variant:              config.PromptGuardVariantMmBERT32K,
 				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 			},
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -105,11 +105,45 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				Categories: []config.Category{
 					{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
 				},
+				FactCheckRules: []config.FactCheckRule{
+					{Name: "verification-needed"},
+				},
 				UserFeedbackRules: []config.UserFeedbackRule{
 					{Name: "satisfied"},
 				},
 			},
+			Decisions: []config.Decision{{
+				Name: "model-backed-route",
+				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
+					{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
+					{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
+				}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginHallucination,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}},
 		},
+	}
+}
+
+func TestCategoryModelInfoReportsEffectiveVariant(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		model    config.CategoryModel
+		wantType string
+	}{
+		{name: "mmbert32k", model: config.CategoryModel{Variant: config.CategoryVariantMmBERT32K}, wantType: config.CategoryVariantMmBERT32K},
+		{name: "modernbert", model: config.CategoryModel{Variant: config.CategoryVariantModernBERT}, wantType: config.CategoryVariantModernBERT},
+		{name: "remote protocol", model: config.CategoryModel{Backend: &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPClassify}}, wantType: config.RemoteClassifierProtocolHTTPClassify},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := categoryModelInfoType(test.model); got != test.wantType {
+				t.Fatalf("category model type = %q, want %q", got, test.wantType)
+			}
+		})
 	}
 }
 
@@ -267,6 +301,53 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 
 	for name, path := range expected {
 		requireReadyModel(t, modelsByName, name, path)
+	}
+}
+
+func TestBuildHallucinationModelsReportsTokenSpansAdapter(t *testing.T) {
+	cfg := buildAuxiliaryModelsConfig()
+	cfg.ExternalModels = append(cfg.ExternalModels, config.ExternalModelConfig{Name: "grounding", ModelName: "grounding-spans", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 9000}})
+	if cfg.ModelDeployments == nil {
+		cfg.ModelDeployments = map[string]config.ModelDeployment{}
+	}
+	if cfg.ModelBindings == nil {
+		cfg.ModelBindings = map[string]config.ModelBinding{}
+	}
+	cfg.ModelDeployments["grounding"] = config.ModelDeployment{Provider: "http", ExternalModel: "grounding"}
+	cfg.ModelBindings["hallucination_detector"] = config.ModelBinding{Deployment: "grounding", Adapter: config.RemoteClassifierProtocolHTTPClassify, Contract: config.RemoteClassifierContractTokenSpans}
+
+	detector := requireModelInfo(t, buildHallucinationModels(cfg, classifierModelAvailability{}), "hallucination_detector")
+	if detector.Metadata["model_type"] != "token_spans_endpoint" || detector.Metadata["adapter"] != config.RemoteClassifierProtocolHTTPClassify || detector.Metadata["lifecycle"] != "external" {
+		t.Fatalf("token_spans detector metadata is not truthful: %+v", detector.Metadata)
+	}
+	if _, ok := detector.Metadata["include_explanation"]; ok {
+		t.Fatalf("a token_spans service has no explanation prompt to advertise: %+v", detector.Metadata)
+	}
+}
+
+func TestBuildHallucinationModelsOmitsLocalExplainerForEndpointBackend(t *testing.T) {
+	cfg := buildAuxiliaryModelsConfig()
+	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
+	cfg.HallucinationMitigation.HallucinationModel.Endpoint = "http://127.0.0.1:8077/v1"
+
+	models := buildHallucinationModels(cfg, classifierModelAvailability{})
+	detector := requireModelInfo(t, models, "hallucination_detector")
+	if detector.Metadata["backend"] != config.HallucinationBackendEndpoint ||
+		detector.Metadata["model_type"] != "openai_compatible_endpoint" ||
+		detector.Metadata["lifecycle"] != "external" {
+		t.Fatalf("endpoint detector metadata is not truthful: %+v", detector.Metadata)
+	}
+	if _, ok := detector.Metadata["use_cpu"]; ok {
+		t.Fatalf("endpoint detector must not advertise local runtime fields: %+v", detector.Metadata)
+	}
+	enriched := enrichModelInfo(detector, nil)
+	if enriched.Registry != nil || enriched.ResolvedModelPath != "" {
+		t.Fatalf("endpoint detector must not acquire local model metadata: %+v", enriched)
+	}
+	for _, model := range models {
+		if model.Name == "hallucination_explainer" {
+			t.Fatal("endpoint backend must not advertise the local hallucination explainer")
+		}
 	}
 }
 

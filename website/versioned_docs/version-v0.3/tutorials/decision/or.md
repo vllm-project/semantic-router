@@ -2,7 +2,7 @@
 
 ## Overview
 
-Use `config/decision/or/` when one route should handle several equivalent signal matches.
+Use `config/fragments/decision/or/` when one route should handle several equivalent signal matches.
 
 `OR` is the right shape when multiple independent signals lead to the same route outcome.
 
@@ -29,7 +29,7 @@ Use `or/` when:
 
 ## Configuration
 
-Source fragment: `config/decision/or/business-or-law.yaml`
+Source fragment: `config/fragments/decision/or/business-or-law.yaml`
 
 ```yaml
 routing:

@@ -5,7 +5,10 @@ package apiserver
 import (
 	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
@@ -16,6 +19,8 @@ import (
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
 	classificationSvc     classificationService
+	previewAdmissionOnce  sync.Once
+	previewAdmission      admission.Admissioner
 	configMu              sync.RWMutex
 	config                *config.RouterConfig
 	runtimeConfig         *liveRuntimeConfig
@@ -27,7 +32,51 @@ type ClassificationAPIServer struct {
 	// The startup-status writer is created once during process bootstrap. Keep
 	// its storage contract stable across live config swaps so /ready does not
 	// start reading from a different backend after a successful reload.
-	startupStatusConfig *config.StartupStatusConfig
+	startupStatusConfig     *config.StartupStatusConfig
+	responseCache           *cache.ResponseCacheService
+	contextCompression      *contextcompression.Service
+	compressionRecovery     contextcompression.RecoveryStore
+	managementAuditMu       sync.Mutex
+	managementAuditEntries  []managementAuditEntry
+	managementAuditLastHash string
+	managementAuditSequence uint64
+	// learningOutcomePolicy gates POST /api/v1/observability/outcomes (idempotency + rate limit).
+	learningOutcomePolicyOnce sync.Once
+	learningOutcomePolicy     *learningOutcomeIngestPolicy
+}
+
+func (s *ClassificationAPIServer) currentContextCompression() (
+	*contextcompression.Service,
+	contextcompression.RecoveryStore,
+	func(),
+) {
+	if s == nil {
+		return nil, nil, func() {}
+	}
+	if s.runtimeRegistry != nil {
+		service, recovery, release := s.runtimeRegistry.AcquireContextCompression()
+		if service != nil {
+			return service, recovery, release
+		}
+		release()
+		return nil, nil, func() {}
+	}
+	return s.contextCompression, s.compressionRecovery, func() {}
+}
+
+func (s *ClassificationAPIServer) currentResponseCache() (*cache.ResponseCacheService, func()) {
+	if s == nil {
+		return nil, func() {}
+	}
+	if s.runtimeRegistry != nil {
+		if service, release := s.runtimeRegistry.AcquireResponseCache(); service != nil {
+			return service, release
+		} else {
+			release()
+		}
+		return nil, func() {}
+	}
+	return s.responseCache, func() {}
 }
 
 type (
@@ -42,6 +91,7 @@ type (
 
 // BatchClassificationRequest represents a batch classification request
 type BatchClassificationRequest struct {
+	Recipe   string                 `json:"recipe,omitempty"`
 	Texts    []string               `json:"texts"`
 	TaskType string                 `json:"task_type,omitempty"` // "intent", "pii", "security", or "all"
 	Options  *ClassificationOptions `json:"options,omitempty"`
@@ -57,6 +107,7 @@ type BatchClassificationResult struct {
 
 // BatchClassificationResponse represents the response from batch classification
 type BatchClassificationResponse struct {
+	Recipe           string                           `json:"recipe,omitempty"`
 	Results          []BatchClassificationResult      `json:"results"`
 	TotalCount       int                              `json:"total_count"`
 	ProcessingTimeMs int64                            `json:"processing_time_ms"`
@@ -79,7 +130,8 @@ type ClassificationOptions struct {
 
 // EmbeddingRequest represents a request for embedding generation
 type EmbeddingRequest struct {
-	Texts           []string `json:"texts"`
+	Recipe          string   `json:"recipe,omitempty"`
+	Texts           []string `json:"texts,omitempty"`
 	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
 	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
 	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
@@ -101,6 +153,7 @@ type EmbeddingResult struct {
 
 // EmbeddingResponse represents the response from embedding generation
 type EmbeddingResponse struct {
+	Recipe                string            `json:"recipe,omitempty"`
 	Embeddings            []EmbeddingResult `json:"embeddings"`
 	TotalCount            int               `json:"total_count"`
 	TotalProcessingTimeMs int64             `json:"total_processing_time_ms"`
@@ -109,6 +162,7 @@ type EmbeddingResponse struct {
 
 // SimilarityRequest represents a request to calculate similarity between two texts
 type SimilarityRequest struct {
+	Recipe          string  `json:"recipe,omitempty"`
 	Text1           string  `json:"text1"`
 	Text2           string  `json:"text2"`
 	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
@@ -120,6 +174,7 @@ type SimilarityRequest struct {
 
 // SimilarityResponse represents the response of a similarity calculation
 type SimilarityResponse struct {
+	Recipe           string  `json:"recipe,omitempty"`
 	ModelUsed        string  `json:"model_used"`         // "qwen3", "gemma", or "unknown"
 	Similarity       float32 `json:"similarity"`         // Cosine similarity score (-1.0 to 1.0)
 	ProcessingTimeMs float32 `json:"processing_time_ms"` // Processing time in milliseconds
@@ -127,6 +182,7 @@ type SimilarityResponse struct {
 
 // BatchSimilarityRequest represents a request to find top-k similar candidates for a query
 type BatchSimilarityRequest struct {
+	Recipe          string   `json:"recipe,omitempty"`
 	Query           string   `json:"query"`                      // Query text
 	Candidates      []string `json:"candidates"`                 // Array of candidate texts
 	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
@@ -146,6 +202,7 @@ type BatchSimilarityMatch struct {
 
 // BatchSimilarityResponse represents the response of batch similarity matching
 type BatchSimilarityResponse struct {
+	Recipe           string                 `json:"recipe,omitempty"`
 	Matches          []BatchSimilarityMatch `json:"matches"`            // Top-k matches, sorted by similarity (descending)
 	TotalCandidates  int                    `json:"total_candidates"`   // Total number of candidates processed
 	ModelUsed        string                 `json:"model_used"`         // "qwen3", "gemma", or "unknown"
@@ -154,9 +211,12 @@ type BatchSimilarityResponse struct {
 
 // EndpointInfo represents information about an API endpoint
 type EndpointInfo struct {
-	Path        string `json:"path"`
-	Method      string `json:"method"`
-	Description string `json:"description"`
+	Path        string           `json:"path"`
+	Method      string           `json:"method"`
+	Description string           `json:"description"`
+	Permission  RoutePermission  `json:"permission"`
+	Sensitivity RouteSensitivity `json:"sensitivity"`
+	EndpointContract
 }
 
 // TaskTypeInfo represents information about a task type
@@ -170,4 +230,6 @@ type EndpointMetadata struct {
 	Path        string
 	Method      string
 	Description string
+	Parameters  []OpenAPIParameter
+	EndpointContract
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package extproc
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -81,6 +82,58 @@ func TestRouterLearningAdaptationOnlyCanSwitchWhenProtectionDisabled(t *testing.
 	}
 }
 
+func TestRouterLearningAdaptationGivesUnobservedCandidateColdStartExposure(t *testing.T) {
+	originalSeedSource := routerLearningSamplingSeedSource
+	routerLearningSamplingSeedSource = func() int64 { return 7 }
+	t.Cleanup(func() { routerLearningSamplingSeedSource = originalSeedSource })
+
+	router := &OpenAIRouter{Config: routerLearningAdaptationTestConfig()}
+	router.routerLearningRuntimeState().recordModelExperience(
+		"adaptive",
+		2,
+		"cheap",
+		routerLearningOutcomeGoodFit,
+		1,
+	)
+	ctx := &RequestContext{
+		VSRSelectedDecision: &config.Decision{Name: "adaptive", Tier: 2},
+	}
+	selCtx := &selection.SelectionContext{
+		DecisionName: "adaptive",
+		CandidateModels: []config.ModelRef{
+			{Model: "cheap"},
+			{Model: "frontier"},
+		},
+	}
+	baseResult := &selection.SelectionResult{
+		SelectedModel: "cheap",
+		Score:         1,
+		Method:        selection.MethodStatic,
+		AllScores:     map[string]float64{"cheap": 1},
+	}
+
+	_, result, selected, applied := router.applyRouterLearning(
+		selCtx,
+		baseResult,
+		&selCtx.CandidateModels[0],
+		ctx,
+	)
+
+	if !applied || selected == nil || selected.Model != "frontier" ||
+		result.SelectedModel != "frontier" {
+		t.Fatalf(
+			"expected unobserved frontier cold-start exposure, result=%#v selected=%#v applied=%v",
+			result,
+			selected,
+			applied,
+		)
+	}
+	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation)
+	if !ok || policy.Reason != "cold_start" {
+		t.Fatalf("expected cold_start adaptation reason, got %#v", ctx.VSRLearningPolicies)
+	}
+}
+
 func TestRouterLearningUnknownAdaptationStrategyKeepsBaseModel(t *testing.T) {
 	cfg := routerLearningAdaptationTestConfig()
 	cfg.RouterLearning.Adaptation.Strategy = "missing_strategy"
@@ -130,7 +183,7 @@ func TestRouterLearningUnknownAdaptationStrategyKeepsBaseModel(t *testing.T) {
 	}
 }
 
-func TestRouterLearningProtectionOnlyCanGuardWhenAdaptationDisabled(t *testing.T) {
+func TestRouterLearningProtectionOnlyCannotEscapeDecisionCandidates(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
@@ -148,21 +201,20 @@ func TestRouterLearningProtectionOnlyCanGuardWhenAdaptationDisabled(t *testing.T
 	ctx.VSRSelectedDecision = &config.Decision{Name: "simple-followup"}
 	ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
 
-	selected, _, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+	selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{
 		SessionID:       "session-a",
 		DecisionName:    "simple-followup",
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},
 	}, nil, ctx)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected protection-only guard to keep frontier, got %#v", selected)
+	if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("protection-only ownership conflict must reject: selected=%+v err=%v", selected, err)
 	}
 	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation); ok {
 		t.Fatalf("expected no adaptation policy when adaptation is disabled, got %#v", ctx.VSRLearningPolicies)
 	}
-	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection)
-	if !ok || policy.Action != routerLearningActionHoldCurrent {
-		t.Fatalf("expected protection hold_current policy, got %#v", ctx.VSRLearningPolicies)
+	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection); ok {
+		t.Fatalf("rejected selection must not claim a protection switch: %#v", ctx.VSRLearningPolicies)
 	}
 }
 

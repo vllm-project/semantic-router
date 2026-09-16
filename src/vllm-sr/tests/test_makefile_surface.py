@@ -10,7 +10,7 @@ def test_makefile_uses_current_cli_config_commands() -> None:
     assert "config-envoy: install" in content
     assert "python -m cli.main config router --config $(CONFIG_FILE)" in content
     assert "python -m cli.main config envoy --config $(CONFIG_FILE)" in content
-    assert "python -m cli.main validate --config $(CONFIG_FILE)" in content
+    assert "python -m cli.main config validate --config $(CONFIG_FILE)" in content
     assert "docker-build-router:" in content
     assert "docker-build-envoy:" in content
     assert "docker-build-dashboard:" in content
@@ -30,6 +30,7 @@ def test_makefile_does_not_reference_removed_cli_commands() -> None:
         "python -m cli.main generate",
         "make show-config",
         "make generate     - Generate configurations",
+        "python -m cli.main validate --config $(CONFIG_FILE)",
     ]
     for needle in forbidden:
         assert (

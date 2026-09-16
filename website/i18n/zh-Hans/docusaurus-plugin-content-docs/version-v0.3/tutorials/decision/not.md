@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-在路由仅当**存在风险或不允许的信号缺失**时才匹配时使用 `config/decision/not/`。
+在路由仅当**存在风险或不允许的信号缺失**时才匹配时使用 `config/fragments/decision/not/`。
 
 `NOT` 是决策目录中最简单的排除规则。
 
@@ -36,7 +36,7 @@ translation:
 
 ## 配置
 
-源片段：`config/decision/not/exclude-jailbreak.yaml`
+源片段：`config/fragments/decision/not/exclude-jailbreak.yaml`
 
 ```yaml
 routing:

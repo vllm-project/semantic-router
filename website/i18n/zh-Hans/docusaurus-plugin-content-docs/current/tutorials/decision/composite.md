@@ -1,42 +1,38 @@
 ---
 translation:
-  source_commit: "043cee97"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/decision/composite.md"
-  outdated: true
+  outdated: false
 ---
 
-# 组合决策
+# 复合决策
 
 ## 概览
 
-在策略需要**单条路由内嵌套 `AND`、`OR`、`NOT`** 时使用 `config/decision/composite/`。
-
-适合业务逻辑与安全逻辑必须共存的真实生产策略。
+复合决策在一条路由中嵌套 `AND`、`OR` 和 `NOT` 组。当业务、运维和安全要求必须一起评估时使用它。
 
 ## 主要优势
 
-- 支持嵌套逻辑，无需把策略压成不可读的条件列表。
-- 业务、运维与安全约束放在同一路由中。
-- 复杂准入规则显式、可review。
-- 避免仅因分支差异而复制多条相关路由。
+- 支持嵌套逻辑，而不把策略压平成难以阅读的条件。
+- 把业务、运维和安全约束保留在一条路由中。
+- 让复杂资格规则显式且可审查。
+- 避免只因一个分支不同而复制相关路由。
 
 ## 解决什么问题？
 
-扁平布尔规则在路由依赖多个独立分支、排除与升级路径时难以扩展。
+一旦路由依赖多个独立分支、排除条件和升级路径，扁平布尔规则就难以扩展。
 
-`composite/` 用真实的匹配树表达策略，而不是强行简化形态。
+复合决策把策略编码成可读的匹配树，而不是强迫它变成扁平条件列表。
 
 ## 何时使用
 
-在以下情况使用 `composite/`：
+在以下情况使用复合决策：
 
-- 领域路由需要紧急度或复杂度升级
+- 特定领域路由需要按紧急度或复杂度升级
 - 生产安全策略必须排除不安全流量
-- 一条路由在同一匹配树中结合业务与安全逻辑
+- 一条路由在同一匹配树中同时组合业务逻辑和安全逻辑
 
 ## 配置
-
-源片段：`config/decision/composite/priority-safe-escalation.yaml`
 
 ```yaml
 routing:
@@ -54,7 +50,7 @@ routing:
               - type: keyword
                 name: urgent_keywords
               - type: complexity
-                name: needs_reasoning
+                name: needs_reasoning:hard
           - operator: NOT
             conditions:
               - type: jailbreak
@@ -64,4 +60,7 @@ routing:
           use_reasoning: true
 ```
 
-若需要嵌套逻辑，优先使用 `composite/` 片段，而不是把单一块扁平规则撑到不可读。
+如果决策需要嵌套逻辑，请保持分组显式，而不是把一个扁平规则块拉长到难以阅读。
+
+嵌套应浅到足以审查和测试每个分支。信号结果可能是概率性的，因此复杂树不能替代授权或后端策略。完整示例见：
+[`config/fragments/decision/composite/priority-safe-escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/composite/priority-safe-escalation.yaml)。

@@ -1,0 +1,287 @@
+{
+  "cases": [
+    {
+      "name": "citation_and_obfuscation",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "role": "assistant"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "content": ""
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "content": "source"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "annotations": [
+                        {
+                          "type": "url_citation",
+                          "url_citation": {
+                            "end_index": 6,
+                            "start_index": 0,
+                            "title": "Source",
+                            "url": "https://example.com/source"
+                          }
+                        }
+                      ],
+                      "content": ""
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {},
+                    "finish_reason": "stop",
+                    "index": 0
+                  }
+                ],
+                "id": "resp_1",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": "[DONE]",
+              "event": ""
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "stream.logprobs",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.logprobs",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reasoning_summary",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "role": "assistant"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_2",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "reasoning_content": ""
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_2",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "reasoning_content": "summary"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_2",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "error": {
+                  "code": "stream_incomplete",
+                  "message": "upstream stream ended before completion",
+                  "param": null,
+                  "type": "server_error"
+                }
+              },
+              "event": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "refusal",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "role": "assistant"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_3",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "refusal": ""
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_3",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "refusal": "cannot comply"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "id": "resp_3",
+                "model": "public-model",
+                "object": "chat.completion.chunk"
+              },
+              "event": ""
+            },
+            {
+              "data": {
+                "error": {
+                  "code": "stream_incomplete",
+                  "message": "upstream stream ended before completion",
+                  "param": null,
+                  "type": "server_error"
+                }
+              },
+              "event": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "transport_error_param",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "error": {
+                  "code": "rate_limit_exceeded",
+                  "message": "slow down",
+                  "param": "model",
+                  "type": "server_error"
+                }
+              },
+              "event": ""
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

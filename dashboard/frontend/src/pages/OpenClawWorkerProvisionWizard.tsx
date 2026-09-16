@@ -1,4 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './OpenClawPage.module.css'
 import { CANONICAL_AUTO_MODEL } from '../utils/routerModelSelection'
 import {
@@ -535,9 +536,7 @@ export const SkillsStep: React.FC<{
       </div>
 
       {skillsLoading && skills.length === 0 ? (
-        <div className={styles.loading} role="status">
-          Loading skill catalog…
-        </div>
+        <ProductLoadingState compact label="Loading skills" />
       ) : visibleSkills.length === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyStateText}>

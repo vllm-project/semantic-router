@@ -3,6 +3,7 @@ package extproc
 import (
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -22,43 +23,74 @@ func buildReplayRouteDiagnostics(
 	decisionTier int,
 	decisionPriority int,
 ) *routerreplay.RouteDiagnostics {
-	finalModel := replaySelectedModel(originalModel, selectedModel)
+	finalModel := replaySelectedModel(selectedModel)
 	diagnostics := &routerreplay.RouteDiagnostics{
-		Decision:                     decisionName,
-		DecisionTier:                 decisionTier,
-		DecisionPriority:             decisionPriority,
-		SelectionMethod:              ctx.VSRSelectionMethod,
-		SelectionReasoning:           ctx.VSRSelectionReasoning,
-		PromptHelperModel:            ctx.VSRPromptHelperModel,
-		PromptHelperPromptTokens:     ctx.VSRPromptHelperPromptTokens,
-		PromptHelperCompletionTokens: ctx.VSRPromptHelperCompletionTokens,
-		PromptHelperTotalTokens:      ctx.VSRPromptHelperTotalTokens,
-		PromptHelperLatencyMs:        ctx.VSRPromptHelperLatencyMs,
-		OriginalModel:                originalModel,
-		ProposalModel:                finalModel,
-		SelectedModel:                finalModel,
-		SessionAction:                replaySessionActionNone,
-		MemoryBackend:                ctx.MemoryBackend,
-		MemoryStatus:                 ctx.MemoryStatus,
-		MemoryReason:                 ctx.MemoryReason,
-		MemoryFallbackReason:         ctx.MemoryFallbackReason,
-		MemoryFailOpen:               ctx.MemoryFailOpen,
-		MemoryResultCount:            ctx.MemoryResultCount,
-		SignalErrors:                 cloneReplayStringMap(ctx.VSRSignalErrors),
+		Decision:                       decisionName,
+		DecisionTier:                   decisionTier,
+		DecisionPriority:               decisionPriority,
+		SelectionMethod:                ctx.VSRSelectionMethod,
+		SelectionReasoning:             ctx.VSRSelectionReasoning,
+		FusionQuorum:                   ctx.VSRFusionQuorum,
+		Looper:                         ctx.VSRLooperDiagnostics,
+		PromptHelperModel:              ctx.VSRPromptHelperModel,
+		PromptHelperPromptTokens:       ctx.VSRPromptHelperPromptTokens,
+		PromptHelperCompletionTokens:   ctx.VSRPromptHelperCompletionTokens,
+		PromptHelperTotalTokens:        ctx.VSRPromptHelperTotalTokens,
+		PromptHelperLatencyMs:          ctx.VSRPromptHelperLatencyMs,
+		OriginalModel:                  originalModel,
+		ProposalModel:                  finalModel,
+		SelectedModel:                  finalModel,
+		SessionAction:                  replaySessionActionNone,
+		MemoryBackend:                  ctx.MemoryBackend,
+		MemoryStatus:                   ctx.MemoryStatus,
+		MemoryReason:                   ctx.MemoryReason,
+		MemoryFallbackReason:           ctx.MemoryFallbackReason,
+		MemoryFailOpen:                 ctx.MemoryFailOpen,
+		MemoryResultCount:              ctx.MemoryResultCount,
+		ContextCompressionApplied:      ctx.ContextCompressionApplied,
+		ContextCompressionBefore:       ctx.ContextCompressionBefore,
+		ContextCompressionAfter:        ctx.ContextCompressionAfter,
+		ContextCompressionMessages:     ctx.ContextCompressionMessages,
+		ContextCompressionFormat:       ctx.ContextCompressionFormat,
+		ContextCompressionOmitted:      ctx.ContextCompressionOmitted,
+		ContextCompressionSkipReason:   ctx.ContextCompressionSkipReason,
+		ContextCompressionStrategy:     ctx.ContextCompressionStrategy,
+		ContextCompressionBudgetMode:   ctx.ContextCompressionBudgetMode,
+		ContextCompressionTokenSource:  ctx.ContextCompressionTokenSource,
+		ContextCompressionTrigger:      ctx.ContextCompressionTrigger,
+		ContextCompressionRevision:     ctx.ContextCompressionRevision,
+		ContextCompressionRecoveryKeys: len(ctx.ContextCompressionRecoveryKeys),
+		ContextCompressionQuality:      ctx.ContextCompressionQuality,
+		ContextCompressionFallback:     ctx.ContextCompressionFallback,
+		ContextCompressionCostSaved:    ctx.ContextCompressionCostSaved,
+		RequestDemandSnapshots:         cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
+		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
+		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 	}
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}
 
 	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
-		diagnostics.SessionPolicyApplied = true
+		diagnostics.SessionPolicyApplied = policy.Mode == config.DecisionAdaptationModeApply &&
+			policy.Details.ProtectionTrace() != nil
 		diagnostics.SessionPhase = policy.SessionPhase()
 		diagnostics.PreviousModel = policy.CurrentModel()
 		diagnostics.ProposalModel = firstNonEmpty(policy.BaseSelectedModel(), diagnostics.ProposalModel)
-		diagnostics.SelectedModel = firstNonEmpty(policy.SelectedModel(), diagnostics.SelectedModel)
-		diagnostics.HardLockReason = policy.HardLockReason()
 		diagnostics.DecisionReason = policy.DecisionReason()
-		diagnostics.SessionAction = replaySessionAction(diagnostics, policy.HardLocked())
+		// The dispatch result is authoritative. Observe-mode traces describe a
+		// counterfactual selection and must not turn a real switch into a hold.
+		hardLocked := diagnostics.SessionPolicyApplied && policy.HardLocked() &&
+			diagnostics.SelectedModel == diagnostics.PreviousModel
+		if hardLocked {
+			diagnostics.HardLockReason = policy.HardLockReason()
+		}
+		if policy.Details.ProtectionTrace() != nil {
+			diagnostics.SessionAction = replaySessionAction(diagnostics, hardLocked)
+		}
+		if policy.Mode == config.DecisionAdaptationModeObserve {
+			diagnostics.DecisionReason = "observe_only"
+		}
 		diagnostics.SessionReason = replaySessionReason(diagnostics, policy)
 		return diagnostics
 	}

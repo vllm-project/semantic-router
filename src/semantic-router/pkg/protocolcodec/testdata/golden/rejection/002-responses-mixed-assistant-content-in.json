@@ -1,0 +1,16 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "source-model",
+    "input": [
+      {
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {"type": "input_text", "text": "first"},
+          {"type": "output_text", "text": "second"}
+        ]
+      }
+    ]
+  }
+}

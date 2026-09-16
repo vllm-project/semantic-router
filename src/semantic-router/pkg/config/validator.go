@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-type configContractValidator func(*RouterConfig) error
-
 var (
 	// Pre-compiled regular expressions for better performance
 	protocolRegex = regexp.MustCompile(`^https?://`)
@@ -17,42 +15,6 @@ var (
 	ipv4PortRegex = regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$`)
 	// Pattern to match IPv6 address followed by port number [::1]:8080
 	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
-
-	globalConfigContractValidators = []configContractValidator{
-		validateGlobalSemanticCacheContracts,
-		validateGlobalMemoryContracts,
-		validateEmbeddingModelContracts,
-		validateGlobalModalityContracts,
-		validateModelSelectionConfig,
-		validateGlobalClassifierRuntimeContracts,
-		validateGlobalRouterLearningConfig,
-		validateReMoMContracts,
-		validateFusionContracts,
-		validateFlowContracts,
-		validateAdvancedToolFilteringConfig,
-		validatePromptCompressionContracts,
-		validateHallucinationContracts,
-	}
-
-	routingProfileContractValidators = []configContractValidator{
-		validateRoutingLocalNames,
-		validateLanguageContracts,
-		validateRoutingStrategy,
-		validateDecisionSignalReferences,
-		validateDomainContracts,
-		validateStructureContracts,
-		validateReaskContracts,
-		validateProjectionContracts,
-		validateKnowledgeBaseContracts,
-		validateConversationContracts,
-		validateDecisionContracts,
-		validateDecisionSemanticCacheContracts,
-		validateDecisionMemoryContracts,
-		validateEmbeddingSignalContracts,
-		validateRoutingModalityContracts,
-		validateComplexityContracts,
-		validateDecisionRouterLearningConfig,
-	}
 )
 
 // validateIPAddress validates IP address format
@@ -95,6 +57,15 @@ func validateRoutingStrategy(cfg *RouterConfig) error {
 	return cfg.Strategy.Validate()
 }
 
+// validPromptGuardVariants is the set of recognized PromptGuardConfig.Variant values.
+var validPromptGuardVariants = map[string]bool{
+	"":                          true, // unset defaults to PromptGuardVariantMmBERT32K under canonical resolution
+	PromptGuardVariantCandle:    true,
+	PromptGuardVariantMmBERT32K: true,
+}
+
+// prompt_guard backend validation lives in validator_prompt_guard.go.
+
 // isValidIPv4 checks if the address is a valid IPv4 address
 func isValidIPv4(address string) bool {
 	ip := net.ParseIP(address)
@@ -118,44 +89,10 @@ func getIPAddressType(address string) string {
 	return "invalid"
 }
 
-// validateConfigStructure performs additional validation on the parsed config.
-func validateConfigStructure(cfg *RouterConfig) error {
-	// In Kubernetes mode, decisions and model_config will be loaded from CRDs
-	// Skip validation for these fields during initial config parse
-	if cfg.ConfigSource == ConfigSourceKubernetes {
-		return nil
-	}
-	return validateConfigContracts(cfg)
-}
-
-// ValidateKubernetesConfigContracts runs the validators that apply after CRDs
-// have been converted into the canonical runtime config. The initial
-// Kubernetes static-config parse stays tolerant because routing state is still
-// absent there; the reconciler calls this function once the pool and route have
-// been merged.
-func ValidateKubernetesConfigContracts(cfg *RouterConfig) error {
-	return validateConfigContracts(cfg)
-}
-
-func validateConfigContracts(cfg *RouterConfig) error {
-	if err := runConfigContractValidators(cfg, globalConfigContractValidators); err != nil {
+func validateModelSelectionConfig(cfg *RouterConfig) error {
+	if err := validatePromptGuardStaticContracts(cfg); err != nil {
 		return err
 	}
-	return visitRoutingProfileConfigs(cfg, func(profile *RouterConfig) error {
-		return runConfigContractValidators(profile, routingProfileContractValidators)
-	})
-}
-
-func runConfigContractValidators(cfg *RouterConfig, validators []configContractValidator) error {
-	for _, validator := range validators {
-		if err := validator(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateModelSelectionConfig(cfg *RouterConfig) error {
 	if isSessionAwareSelectionConfigConfigured(cfg.ModelSelection.SessionAware) {
 		return fmt.Errorf("global.router.model_selection.session_aware is no longer supported; use global.router.learning.protection")
 	}

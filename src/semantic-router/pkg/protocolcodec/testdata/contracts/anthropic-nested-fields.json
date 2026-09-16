@@ -1,0 +1,24 @@
+{
+  "protocol": "anthropic_messages",
+  "schema_revision": "d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa",
+  "objects": [
+    {"wire": "anthropic_message", "official": ["content", "role"], "fixtures": ["request/006-anthropic-tool-lifecycle-in.json", "request/009-anthropic-ordered-multimodal-in.json"]},
+    {"wire": "anthropic_metadata", "official": ["user_id"], "fixtures": ["capability/015-anthropic-official-request-fields-in.json"]},
+    {"wire": "anthropic_content", "official": ["cache_control", "caller", "citations", "content", "context", "data", "file_id", "id", "input", "is_error", "name", "signature", "source", "text", "thinking", "title", "tool_use_id", "toolset_name", "transformations", "type"], "fixtures": ["request/006-anthropic-tool-lifecycle-in.json", "request/009-anthropic-ordered-multimodal-in.json", "response/008-anthropic-tool-call-in.json", "capability/009-anthropic-signed-reasoning-response-in.json", "capability/043-anthropic-nested-request-fields-in.json", "capability/044-anthropic-nested-response-fields-in.json", "capability/047-anthropic-unsupported-stream-unions-in.json"]},
+    {"wire": "anthropic_stream_event", "official": ["content_block", "delta", "index", "message", "type", "usage"], "extensions": ["error"], "fixtures": ["stream/003-anthropic-text-in.json", "stream/006-anthropic-tool-call-in.json", "stream/012-anthropic-midstream-error-in.json", "stream/019-anthropic-parallel-tool-calls-in.json", "capability/045-anthropic-nested-stream-fields-in.json"]},
+    {"wire": "anthropic_stream_delta", "official": ["citation", "container", "partial_json", "signature", "stop_details", "stop_reason", "stop_sequence", "text", "thinking", "type"], "fixtures": ["stream/003-anthropic-text-in.json", "stream/006-anthropic-tool-call-in.json", "stream/019-anthropic-parallel-tool-calls-in.json", "capability/019-anthropic-stop-sequence-stream-in.json", "capability/030-anthropic-signed-reasoning-stream-in.json", "capability/045-anthropic-nested-stream-fields-in.json"]},
+    {"wire": "anthropic_media_source", "official": ["content", "data", "file_id", "media_type", "type", "url"], "fixtures": ["request/009-anthropic-ordered-multimodal-in.json", "capability/043-anthropic-nested-request-fields-in.json"]},
+    {"wire": "anthropic_tool", "official": ["allowed_callers", "cache_control", "defer_loading", "description", "eager_input_streaming", "input_examples", "input_schema", "name", "strict", "type"], "fixtures": ["request/006-anthropic-tool-lifecycle-in.json", "capability/008-anthropic-cache-directive-in.json", "capability/036-anthropic-official-tool-discriminators-in.json", "capability/043-anthropic-nested-request-fields-in.json"]},
+    {"wire": "anthropic_cache_control", "official": ["ttl", "type"], "fixtures": ["capability/008-anthropic-cache-directive-in.json"]},
+    {"wire": "anthropic_tool_choice", "official": ["disable_parallel_tool_use", "name", "type"], "fixtures": ["capability/015-anthropic-official-request-fields-in.json"]},
+    {"wire": "anthropic_output_config", "official": ["effort", "format"], "fixtures": ["request/012-anthropic-structured-output-in.json"]},
+    {"wire": "anthropic_thinking", "official": ["budget_tokens", "display", "type"], "fixtures": ["capability/024-anthropic-thinking-display-in.json"]},
+    {"wire": "anthropic_json_output_format", "official": ["schema", "type"], "fixtures": ["request/012-anthropic-structured-output-in.json"]},
+    {"wire": "anthropic_cache_creation_usage", "official": ["ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"], "fixtures": ["capability/018-anthropic-official-response-fields-in.json"]},
+    {"wire": "anthropic_output_usage_details", "official": ["thinking_tokens"], "fixtures": ["capability/018-anthropic-official-response-fields-in.json"]},
+    {"wire": "anthropic_server_tool_usage", "official": ["web_fetch_requests", "web_search_requests"], "fixtures": ["capability/018-anthropic-official-response-fields-in.json"]},
+    {"wire": "anthropic_error", "official": ["message", "type"], "fixtures": ["error/003-anthropic-overloaded-in.json", "stream/012-anthropic-midstream-error-in.json"]},
+    {"wire": "anthropic_transport_error", "official": ["error", "request_id", "type"], "fixtures": ["error/003-anthropic-overloaded-in.json"]},
+    {"wire": "anthropic_message_delta_usage", "official": ["cache_creation_input_tokens", "cache_read_input_tokens", "input_tokens", "output_tokens", "output_tokens_details", "server_tool_use"], "fixtures": ["stream/003-anthropic-text-in.json", "capability/019-anthropic-stop-sequence-stream-in.json", "capability/045-anthropic-nested-stream-fields-in.json"]}
+  ]
+}

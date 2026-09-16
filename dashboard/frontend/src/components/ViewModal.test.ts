@@ -2,7 +2,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import ViewModal, { transitionFromViewToEdit } from './ViewModal'
+import ViewModal from './ViewModal'
+import { transitionFromViewToEdit } from './viewModalSupport'
 
 describe('ViewModal edit transition', () => {
   it('closes the view before opening edit', () => {

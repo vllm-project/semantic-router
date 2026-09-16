@@ -1,0 +1,127 @@
+{
+  "cases": [
+    {
+      "name": "tool_result",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "invalid_request",
+          "code": "orphan_tool_result"
+        }
+      }
+    },
+    {
+      "name": "image_base64",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 32,
+          "messages": [
+            {
+              "content": [
+                {
+                  "image_url": {
+                    "url": "data:image/png;base64,aW1hZ2U="
+                  },
+                  "type": "image_url"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "document_file",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content_title"
+        }
+      }
+    },
+    {
+      "name": "document_content",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_document_source"
+        }
+      }
+    },
+    {
+      "name": "image_transformations",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content_transformations"
+        }
+      }
+    },
+    {
+      "name": "search_result_metadata",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "server_tool_use_metadata",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_content"
+        }
+      }
+    },
+    {
+      "name": "tool_allowed_callers",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tools_allowed_callers"
+        }
+      }
+    },
+    {
+      "name": "tool_defer_loading",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tools_defer_loading"
+        }
+      }
+    },
+    {
+      "name": "tool_eager_input_streaming",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tools_eager_input_streaming"
+        }
+      }
+    },
+    {
+      "name": "tool_input_examples",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tools_input_examples"
+        }
+      }
+    }
+  ]
+}

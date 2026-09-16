@@ -232,9 +232,10 @@ spec:
           useReasoning: false
       plugins:
 
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
+            scope: global
             similarity_threshold: 0.92
         - type: "system_prompt"
           configuration:
@@ -315,9 +316,10 @@ spec:
           useReasoning: false
       plugins:
 
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
+            scope: global
             similarity_threshold: 0.95
         - type: "system_prompt"
           configuration:
@@ -458,9 +460,10 @@ spec:
           loraName: "science-expert"
           useReasoning: false
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
+            scope: global
             similarity_threshold: 0.75
         - type: "system_prompt"
           configuration:

@@ -1,21 +1,12 @@
-export interface Signal {
-  keyword?: string[]
-  embedding?: string[]
-  domain?: string[]
-  fact_check?: string[]
-  user_feedback?: string[]
-  reask?: string[]
-  preference?: string[]
-  language?: string[]
-  context?: string[]
-  structure?: string[]
-  complexity?: string[]
-  modality?: string[]
-  authz?: string[]
-  jailbreak?: string[]
-  pii?: string[]
-  kb?: string[]
-}
+import type {
+  InsightsTrajectoryRoute,
+  ReplayAdaptationScore,
+  ReplayRouteDiagnostics,
+  ReplaySessionPolicy,
+} from './insightsPageRoutingTypes'
+import type { SignalType } from '../generated/routerConfigContract'
+
+export type Signal = Partial<Record<SignalType, string[]>>
 
 export interface ToolTraceStep {
   type: string
@@ -98,9 +89,12 @@ export interface ProjectionTrace {
 }
 
 export interface InsightsRecord {
+  conversation_id?: string
   id: string
   timestamp: string
   request_id?: string
+  session_id?: string
+  turn_index: number
   recipe?: string
   decision?: string
   decision_tier: number
@@ -109,18 +103,37 @@ export interface InsightsRecord {
   original_model?: string
   selected_model?: string
   reasoning_mode?: string
-  confidence_score?: number
+  confidence_score?: number | null
+  confidence_score_available?: boolean
   selection_method?: string
+  route_diagnostics?: ReplayRouteDiagnostics
+  session_policy?: ReplaySessionPolicy
+  learning?: {
+    protection?: ReplaySessionPolicy
+    protection_preflight?: ReplaySessionPolicy
+    adaptation?: {
+      mode?: string
+      action?: string
+      reason?: string
+      scores?: Record<string, ReplayAdaptationScore>
+    }
+  }
   signals: Signal
   projections?: string[]
   projection_scores?: Record<string, number>
   projection_trace?: ProjectionTrace
   signal_confidences?: Record<string, number>
   signal_values?: Record<string, number>
+  signal_error_matches?: Record<string, boolean>
   tool_trace?: ToolTrace
   request_body?: string
   response_body?: string
   response_status?: number
+  /** A response header alone is not terminal; only completed records are successful. */
+  lifecycle_state?: 'unknown' | 'in_progress' | 'completed' | 'aborted' | 'failed'
+  ended_at?: string
+  duration_ms?: number
+  terminal_reason?: string
   from_cache?: boolean
   streaming?: boolean
   request_body_truncated?: boolean
@@ -130,10 +143,12 @@ export interface InsightsRecord {
   pii_enabled?: boolean
   jailbreak_detected?: boolean
   jailbreak_type?: string
-  jailbreak_confidence?: number
+  jailbreak_confidence?: number | null
+  jailbreak_score_available?: boolean
   response_jailbreak_detected?: boolean
   response_jailbreak_type?: string
-  response_jailbreak_confidence?: number
+  response_jailbreak_confidence?: number | null
+  response_jailbreak_score_available?: boolean
   pii_detected?: boolean
   pii_entities?: string[]
   pii_blocked?: boolean
@@ -159,6 +174,37 @@ export interface InsightsRecord {
   baseline_model?: string
 }
 
+export interface InsightsTrajectoryToolCall {
+  id: string
+  type: string
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+export interface InsightsTrajectoryMessage {
+  conversation_id?: string
+  role: 'user' | 'assistant' | 'tool'
+  content?: string
+  tool_calls?: InsightsTrajectoryToolCall[]
+  tool_call_id?: string
+  tool_name?: string
+  status?: 'succeeded' | 'failed'
+  content_redacted?: boolean
+  turn_index: number
+}
+
+export interface InsightsTrajectory {
+  object: 'router_replay.trajectory'
+  session_id: string
+  recipe?: string
+  routes?: InsightsTrajectoryRoute[]
+  record_count: number
+  turn_count: number
+  messages: InsightsTrajectoryMessage[]
+}
+
 export interface InsightsListResponse {
   object: string
   count: number
@@ -172,6 +218,14 @@ export interface InsightsListResponse {
 
 export type InsightsFilterType = 'all' | 'cached' | 'streamed'
 
+export interface InsightsCurrencyCostSummary {
+  totalSaved: number
+  baselineSpend: number
+  actualSpend: number
+  currency: string
+  costRecordCount: number
+}
+
 export interface InsightsCostSummary {
   totalSaved: number
   baselineSpend: number
@@ -179,11 +233,20 @@ export interface InsightsCostSummary {
   currency?: string
   costRecordCount: number
   excludedRecordCount: number
+  byCurrency?: InsightsCurrencyCostSummary[]
 }
 
 export interface InsightsAggregateValue {
   name: string
   value: number
+}
+
+export interface InsightsAggregateCurrencySummary {
+  total_saved: number
+  baseline_spend: number
+  actual_spend: number
+  currency: string
+  cost_record_count: number
 }
 
 export interface InsightsAggregateSummary {
@@ -193,6 +256,7 @@ export interface InsightsAggregateSummary {
   currency?: string
   cost_record_count: number
   excluded_record_count: number
+  by_currency?: InsightsAggregateCurrencySummary[]
 }
 
 export interface InsightsAggregateTokenVolume {
@@ -217,6 +281,13 @@ export interface InsightsAggregateTokenBreakdown {
 export interface InsightsAggregateResponse {
   object: string
   record_count: number
+  lifecycle: {
+    completed: number
+    failed: number
+    aborted: number
+    in_progress: number
+    unknown: number
+  }
   summary: InsightsAggregateSummary
   model_selection: InsightsAggregateValue[]
   decision_distribution: InsightsAggregateValue[]

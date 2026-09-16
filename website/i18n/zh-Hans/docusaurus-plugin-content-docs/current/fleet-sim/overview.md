@@ -1,41 +1,60 @@
 ---
 title: 概览
 translation:
-  source_commit: "0c5b1d02"
+  source_commit: "33349fdab9ad294da19ebd11588f8adbe8771b4a"
   source_file: "docs/fleet-sim/overview.md"
   outdated: false
 ---
 
-# Fleet Sim 概览
+# 机队模拟概览
 
-Fleet Sim 是 vLLM Semantic Router 维护的机队模拟器。`vllm-sr-sim` 包提供其 CLI 与服务入口，用于在部署前规划 GPU 机队、比较路由与拆分策略，并在仪表盘中暴露这些工作流，而无需恢复单独的模拟器前端。
+Fleet Sim 回答那些在真实 GPU 机队上探索成本很高的规划问题：工作负载可能需要多少 worker、流量应在哪些池之间拆分，以及哪些假设对延迟或成本目标影响最大。
 
-## Fleet Sim 的用途
+它提供 `vllm-sr-sim` 命令行工具，以及可选的独立 HTTP 服务，供自动化或自定义规划客户端使用。
 
-- 在延迟目标下为同构、异构或拆分的机队做规模估算
-- 比较不同 GPU、路由策略与阈值下的年化成本
-- 用仿真运行、轨迹回放与假设分析验证规划假设
-- 通过维护中的后端代理在仪表盘中呈现上述工作流
+## 一次研究需要什么 {#what-goes-into-a-study}
 
-## Fleet Sim 不做什么
+一次有用的研究需要四类输入：
 
-- 不是路由器的在线请求路径
-- 不是运行时自动扩缩或突发控制器
-- 不是针对单个部署副本的逐算子分析器
-- 不能替代路由器配置文档
+- 工作负载分布，或上传的轨迹（服务会从中推导 token 长度分布）；
+- 服务目标，目前主要以 P99 首 token 时间（TTFT）报告；
+- 一个或多个池，包含 GPU profile、数量和最大上下文长度；以及
+- 路由策略，例如按提示词长度拆分，或模型到池的映射。
 
-## 部署形态
+随后模拟器可以比较机队规模、排队延迟、利用率、建模成本，并在有功耗 profile 时估计能耗行为。
 
-`vllm-sr-sim` 可以：
+## 两层分析 {#two-levels-of-analysis}
 
-- 作为独立 Python CLI，用于本地规模估算与假设分析
-- 以 HTTP 服务运行：`vllm-sr-sim serve`
-- 作为 `vllm-sr serve` 默认在共享 `vllm-sr-network` 上启动的边车容器
+Fleet Sim 用解析规模估算做快速搜索，用离散事件模拟器（DES）做逐请求校验。
 
-## 建议阅读顺序
+1. 解析规模估算能快速缩小大型配置空间。
+2. DES 用显式到达、排队、prefill、decode 和 KV-cache 准入来测试选定候选。
 
-1. [快速开始](./getting-started.md)：本地边车、独立 CLI 与外部服务
-2. [仪表盘集成](./dashboard-integration.md)：代理路径与 UI 入口
-3. [容量规划场景](./use-cases.md)：示例驱动的决策流程
-4. 需要底层机制时查阅 [仿真模型参考](./sim-algorithms.md) 与 [功耗模型参考](./power-model.md)
-5. 需要可打印版本或源文件时使用 [指南 PDF](pathname:///files/fleet-sim/fleet-sim.pdf) 与 [指南资源](./guide.md)
+两者一致是有用证据，但都不是生产保证。最终设计要用你将部署的模型、硬件、张量并行布局、vLLM 配置和运行时版本上的轨迹与测量来验证。
+
+## 内置数据只是起点 {#built-in-data-is-a-starting-point}
+
+仓库包含工作负载 CDF 和 GPU profile，便于在尚未收集数据时学习工作流。其中的常量是规划默认值，不是当前价格，也不是每个模型的基准结果。只有在校准这些输入之后，成本、延迟、KV 容量和功耗结论才针对具体部署。
+
+这一区别在硬件比较中最重要：部分内置 profile 代表不同的模型规模和并行布局。直接比较其输出可以衡量组合后的系统选择，但不能单独隔离 GPU 本身。
+
+HTTP 服务会把上传的轨迹转换成总 token CDF，并为模拟生成泊松到达。它不会回放轨迹原来的到达间隔或每条请求的路由标签。需要精确的带时间戳回放时，可使用 Python 库的 `TraceWorkload`。
+
+## Fleet Sim 不做什么 {#what-fleet-sim-does-not-do}
+
+- 它不是路由器在线推理路径的一部分。
+- 它不会对正在运行的部署做自动扩缩或限流。
+- 它不会以目标系统测量那样的保真度建模内核、网络、故障或调度器行为。
+- 它不会判断更小的模型答案质量是否可接受。
+- 它不能替代承诺容量之前的负载测试。
+
+## 选择工作流 {#choose-a-workflow}
+
+| 目标 | 从这里开始 |
+| --- | --- |
+| 运行第一次规模估算研究 | [快速开始](./getting-started) |
+| 走完一项规划决策 | [容量规划工作流](./use-cases) |
+| 理解方程和模拟器行为 | [仿真模型](./sim-algorithms) |
+| 校准能耗估计 | [功耗模型](./power-model) |
+
+[研究背景](./related-work)说明了该规划工具与服务引擎、高保真模拟器和自动扩缩系统的关系。

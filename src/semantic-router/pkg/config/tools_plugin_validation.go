@@ -8,13 +8,30 @@ func (c *ToolsPluginConfig) Validate() error {
 	}
 
 	mode := c.EffectiveMode()
+	if err := validateToolsPluginMode(mode); err != nil {
+		return err
+	}
+	if err := validateToolsPluginLists(mode, c.AllowTools, c.BlockTools); err != nil {
+		return err
+	}
+	if c.StripToolHistory && mode != ToolsPluginModeNone {
+		return fmt.Errorf("tools plugin: strip_tool_history requires mode=%q", ToolsPluginModeNone)
+	}
+
+	return c.DynamicRetrieval.Validate()
+}
+
+func validateToolsPluginMode(mode string) error {
 	switch mode {
 	case ToolsPluginModeNone, ToolsPluginModePassthrough, ToolsPluginModeFiltered:
+		return nil
 	default:
 		return fmt.Errorf("tools plugin: mode must be one of %q, %q, or %q", ToolsPluginModeNone, ToolsPluginModePassthrough, ToolsPluginModeFiltered)
 	}
+}
 
-	hasLists := len(c.AllowTools) > 0 || len(c.BlockTools) > 0
+func validateToolsPluginLists(mode string, allowTools, blockTools []string) error {
+	hasLists := len(allowTools) > 0 || len(blockTools) > 0
 	switch mode {
 	case ToolsPluginModeFiltered:
 		if !hasLists {
@@ -25,11 +42,6 @@ func (c *ToolsPluginConfig) Validate() error {
 			return fmt.Errorf("tools plugin: allow_tools/block_tools require mode=%q", ToolsPluginModeFiltered)
 		}
 	}
-
-	if err := c.DynamicRetrieval.Validate(); err != nil {
-		return err
-	}
-
 	return nil
 }
 

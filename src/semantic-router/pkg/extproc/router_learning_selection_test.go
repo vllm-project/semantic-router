@@ -27,39 +27,63 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
-func TestRouterLearningProtectionKeepsCurrentModelAcrossDecisionCandidates(t *testing.T) {
-	sessiontelemetry.ResetRouterSessionMemoryForTesting()
-	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+func TestRouterLearningProtectionCannotRestoreModelOutsideDecisionCandidates(t *testing.T) {
+	for _, activeToolLoop := range []bool{false, true} {
+		t.Run(map[bool]string{false: "portable", true: "tool_loop"}[activeToolLoop], func(t *testing.T) {
+			sessiontelemetry.ResetRouterSessionMemoryForTesting()
+			t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
-	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
-		SessionID:      "session-a/conversation-a",
-		SelectedModel:  "frontier",
-		DecisionName:   "complex-code",
-		TurnIndex:      2,
-		ActiveToolLoop: true,
-		Timestamp:      time.Now(),
-	})
+			sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+				SessionID:      "session-a/conversation-a",
+				SelectedModel:  "frontier",
+				DecisionName:   "complex-code",
+				TurnIndex:      2,
+				ActiveToolLoop: activeToolLoop,
+				Timestamp:      time.Now(),
+			})
 
-	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
-	ctx := routerLearningRequestContext("session-a", "conversation-a")
-	ctx.VSRSelectedDecision = &config.Decision{Name: "simple-followup"}
-	ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
+			router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
+			ctx := routerLearningRequestContext("session-a", "conversation-a")
+			ctx.VSRSelectedDecision = &config.Decision{Name: "simple-followup"}
+			ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: activeToolLoop}
 
-	selected, method, _ := router.selectModelFromCandidates(&selection.SelectionContext{
-		SessionID:       "session-a",
-		DecisionName:    "simple-followup",
-		CandidateModels: []config.ModelRef{{Model: "cheap"}},
-	}, nil, ctx)
+			selected, method, err := router.selectModelFromCandidates(&selection.SelectionContext{
+				SessionID:       "session-a",
+				DecisionName:    "simple-followup",
+				CandidateModels: []config.ModelRef{{Model: "cheap"}},
+			}, nil, ctx)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected learning to keep frontier across decision candidates, got %#v", selected)
+			if activeToolLoop {
+				if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
+					t.Fatalf("tool ownership conflict must reject: selected=%+v err=%v", selected, err)
+				}
+				return
+			}
+			if err != nil || selected == nil || selected.Model != "cheap" {
+				t.Fatalf("expected learning to stay inside decision candidates, got %#v", selected)
+			}
+			if method != string(selection.MethodStatic) {
+				t.Fatalf("expected base method static, got %q", method)
+			}
+			assertCandidateBoundaryRelease(t, ctx)
+			assertLearningIdentityDiagnostics(t, ctx)
+			if ctx.VSRLearningSessionID != "session-a/conversation-a" {
+				t.Fatalf("expected conversation memory key, got %q", ctx.VSRLearningSessionID)
+			}
+		})
 	}
-	if method != "single" {
-		t.Fatalf("expected base method single, got %q", method)
+}
+
+func assertCandidateBoundaryRelease(t *testing.T, ctx *RequestContext) {
+	t.Helper()
+	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionAllowSwitch) ||
+		ctx.VSRLearningPolicy.String("reason") != "previous_model_not_in_candidates" {
+		t.Fatalf("expected an explicit candidate-boundary release, got %#v", ctx.VSRLearningPolicy)
 	}
-	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionHoldCurrent) {
-		t.Fatalf("expected hold_current learning action, got %#v", ctx.VSRLearningPolicy)
-	}
+}
+
+func assertLearningIdentityDiagnostics(t *testing.T, ctx *RequestContext) {
+	t.Helper()
 	policyMap := ctx.VSRLearningPolicy.ToMap()
 	if _, ok := policyMap["session_id"]; ok {
 		t.Fatalf("learning diagnostics must not expose raw session_id: %#v", ctx.VSRLearningPolicy)
@@ -74,12 +98,9 @@ func TestRouterLearningProtectionKeepsCurrentModelAcrossDecisionCandidates(t *te
 	if sessionIdentity["hash"] == "session-a" || sessionIdentity["hash"] == "" {
 		t.Fatalf("expected non-raw session identity hash, got %#v", sessionIdentity)
 	}
-	if ctx.VSRLearningSessionID != "session-a/conversation-a" {
-		t.Fatalf("expected conversation memory key, got %q", ctx.VSRLearningSessionID)
-	}
 }
 
-func TestRouterLearningProtectionAppliesToSelectorFallback(t *testing.T) {
+func TestRouterLearningProtectionFallbackCannotEscapeDecisionCandidates(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
@@ -104,7 +125,7 @@ func TestRouterLearningProtectionAppliesToSelectorFallback(t *testing.T) {
 		LastMessageToolResult: true,
 	}
 
-	selected, _, _ := router.selectModelFromCandidates(
+	selected, _, err := router.selectModelFromCandidates(
 		&selection.SelectionContext{
 			SessionID:       "session-a",
 			DecisionName:    "simple-followup",
@@ -114,8 +135,8 @@ func TestRouterLearningProtectionAppliesToSelectorFallback(t *testing.T) {
 		ctx,
 	)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("fallback bypassed learning protection: %#v", selected)
+	if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("fallback transferred hard ownership: selected=%+v err=%v", selected, err)
 	}
 }
 
@@ -153,7 +174,7 @@ func TestRouterLearningProtectionReleasesOnNewConversationScope(t *testing.T) {
 	}
 }
 
-func TestRouterLearningProtectionSessionScopeProtectsAcrossConversations(t *testing.T) {
+func TestRouterLearningProtectionSessionScopeCannotEscapeDecisionCandidates(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
@@ -175,17 +196,17 @@ func TestRouterLearningProtectionSessionScopeProtectsAcrossConversations(t *test
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},
 	}, nil, ctx)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected session scope to keep frontier, got %#v", selected)
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("expected session scope to stay inside decision candidates, got %#v", selected)
 	}
 	if ctx.VSRLearningSessionID != "session-a" {
 		t.Fatalf("expected session memory key, got %q", ctx.VSRLearningSessionID)
 	}
-	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionHoldCurrent) {
-		t.Fatalf("expected session scope hold_current action, got %#v", ctx.VSRLearningPolicy)
+	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionAllowSwitch) {
+		t.Fatalf("expected session scope to release an ineligible current model, got %#v", ctx.VSRLearningPolicy)
 	}
-	if ctx.VSRLearningPolicy.String("reason") != "session_scope_protect" {
-		t.Fatalf("expected session scope protect reason, got %#v", ctx.VSRLearningPolicy)
+	if ctx.VSRLearningPolicy.String("reason") != "previous_model_not_in_candidates" {
+		t.Fatalf("expected candidate-boundary release reason, got %#v", ctx.VSRLearningPolicy)
 	}
 	conversationIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "conversation")
 	if conversationIdentity["status"] != "present" || conversationIdentity["required"] != false {
@@ -261,7 +282,7 @@ func TestRouterLearningProtectionRescueSwitchEscapesUnderpoweredCurrentModel(t *
 	}
 }
 
-func TestRouterLearningDecisionScopeOverrideProtectsAcrossConversations(t *testing.T) {
+func TestRouterLearningDecisionScopeOverrideCannotEscapeDecisionCandidates(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
@@ -285,8 +306,8 @@ func TestRouterLearningDecisionScopeOverrideProtectsAcrossConversations(t *testi
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},
 	}, nil, ctx)
 
-	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected session-scope protection to keep frontier, got %#v", selected)
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("expected session-scope protection to stay inside decision candidates, got %#v", selected)
 	}
 	if ctx.VSRLearningSessionID != "session-a" {
 		t.Fatalf("expected session memory key, got %q", ctx.VSRLearningSessionID)
@@ -713,6 +734,9 @@ func TestRouterLearningProtectionConfigPreservesExplicitZeroValues(t *testing.T)
 		cfg.HandoffPenaltyWeight != 0 ||
 		cfg.SwitchHistoryWeight != 0 {
 		t.Fatalf("expected explicit zero Router Learning protection tuning to be preserved, got %#v", cfg)
+	}
+	if !cfg.DecisionDriftReset {
+		t.Fatal("Router Learning protection must reset continuity across decision boundaries")
 	}
 }
 

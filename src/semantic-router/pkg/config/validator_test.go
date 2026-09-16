@@ -101,7 +101,7 @@ func registerValidateConfigStructureCoreSpecs() {
 }
 
 func registerValidateConfigStructureCoreDispatchSpecs() {
-	It("skips everything in k8s mode", func() {
+	It("defers routing contracts until CRDs are available in k8s mode", func() {
 		cfg := &RouterConfig{
 			ConfigSource: ConfigSourceKubernetes,
 			IntelligentRouting: IntelligentRouting{
@@ -133,6 +133,7 @@ func registerValidateConfigStructureCoreDispatchSpecs() {
 	It("keeps the shared dispatch table wired for file and k8s validation", func() {
 		for _, validators := range [][]configContractValidator{
 			globalConfigContractValidators,
+			routingConfigContractValidators,
 			routingProfileContractValidators,
 		} {
 			Expect(validators).NotTo(BeEmpty())
@@ -862,7 +863,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 		Expect(err.Error()).To(ContainSubstring("algorithm.workflows.final.model references model \"final-a\" outside decision modelRefs"))
 	})
 
-	It("rejects dynamic workflows without planner model", func() {
+	It("accepts dynamic workflows with an assigned worker planner default", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{{
@@ -882,8 +883,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 		}
 
 		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.workflows: planner.model is required"))
+		Expect(err).NotTo(HaveOccurred())
 	})
 }
 
@@ -1049,4 +1049,58 @@ var _ = Describe("validateConfigStructure", func() {
 	registerValidateConfigStructureCoreSpecs()
 	registerValidateConfigStructureLoRASpecs()
 	registerValidateConfigStructureAlgorithmSpecs()
+})
+
+var _ = Describe("validatePromptGuardBackendConfig", func() {
+	It("accepts an unset variant/protocol (defaults to candle)", func() {
+		cfg := &PromptGuardConfig{}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts variant candle", func() {
+		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts variant mmbert32k", func() {
+		cfg := &PromptGuardConfig{Variant: PromptGuardVariantMmBERT32K}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts protocol http_chat", func() {
+		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPChat}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts protocol http_classify", func() {
+		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPClassify}
+		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects an unrecognized variant", func() {
+		cfg := &PromptGuardConfig{Variant: "some_typo"}
+		err := validatePromptGuardBackendConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("some_typo"))
+	})
+
+	It("rejects an unrecognized protocol", func() {
+		cfg := &PromptGuardConfig{Protocol: "some_typo"}
+		err := validatePromptGuardBackendConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("some_typo"))
+	})
+
+	It("rejects a stale boolean-flag-era value", func() {
+		cfg := &PromptGuardConfig{Variant: "use_vllm"}
+		err := validatePromptGuardBackendConfig(cfg)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("rejects setting both variant and protocol", func() {
+		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle, Protocol: PromptGuardProtocolHTTPChat}
+		err := validatePromptGuardBackendConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
+	})
 })

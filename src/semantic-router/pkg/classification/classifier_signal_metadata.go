@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // RequestFacts carries untrusted request-envelope facts used by signal
@@ -16,6 +15,35 @@ import (
 type RequestFacts struct {
 	Metadata map[string]string
 	Context  context.Context
+
+	// JailbreakInput, when present, supplies role-scoped Guard content separately
+	// from the general routing text. Nil preserves flat-text classifier callers.
+	JailbreakInput *JailbreakInput
+
+	// ContextTokenFloor and the related scalar fields carry the content-free,
+	// request-envelope estimate used by the context signal. They account for
+	// prompt-bearing request components that are intentionally absent from the
+	// semantic signal text, such as prior user turns, tool schemas/results, and
+	// image reserves. ContextTextBytes remains separate so non-text equivalent
+	// bytes can never train the prose token calibrator.
+	ContextTokenFloor      int
+	ContextTextBytes       int
+	ContextEquivalentBytes int
+	ContextHasNonText      bool
+
+	// InputModality carries structural input-modality presence counts for the
+	// input_modality signal family.
+	InputModality InputModalityFacts
+}
+
+// InputModalityFacts counts content parts per input modality across the
+// request's user messages. Counting is purely structural: no classifier or
+// embedding model runs, and media payloads are never inspected or retained.
+type InputModalityFacts struct {
+	TextContentCount  int
+	ImageContentCount int
+	AudioContentCount int
+	VideoContentCount int
 }
 
 func (c *Classifier) evaluateMetadataSignal(
@@ -38,7 +66,7 @@ func (c *Classifier) evaluateMetadataSignal(
 		results.SignalConfidences[signalConfidenceKey(config.SignalTypeMetadata, rule.Name)] = 1.0
 		mu.Unlock()
 		bestConfidence = 1.0
-		metrics.RecordSignalMatch(config.SignalTypeMetadata, rule.Name)
+		c.recordSignalMatch(config.SignalTypeMetadata, rule.Name)
 	}
 	elapsed := time.Since(start)
 	results.Metrics.Metadata.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0

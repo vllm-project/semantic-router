@@ -11,7 +11,7 @@ translation:
 
 `hybrid` 将多种排序信号合成为单一加权分数的选择算法。
 
-对应 `config/algorithm/selection/hybrid.yaml`。
+对应 `config/fragments/algorithm/selection/hybrid.yaml`。
 
 ## 主要优势
 

@@ -11,7 +11,7 @@ translation:
 
 `content-safety` 是可复用的路由局部安全包：在一个片段中组合多个已支持的安全类插件。
 
-对应 `config/plugin/content-safety/hybrid.yaml`。
+对应 `config/fragments/plugin/content-safety/hybrid.yaml`。
 
 ## 主要优势
 

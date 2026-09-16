@@ -1,0 +1,22 @@
+id: sambanova
+display_name: SambaNova
+description: Hosted inference on SambaNova Cloud.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.sambanova.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:sambanova
+  monogram: S
+  monochrome: false
+conformance:
+  status: unverified

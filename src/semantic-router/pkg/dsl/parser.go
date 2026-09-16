@@ -196,6 +196,21 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 }
 
 func mergeProgram(dst, src *Program) {
+	if src.ModelBindings != nil {
+		if dst.ModelBindings == nil {
+			dst.ModelBindings = cloneModelBindings(src.ModelBindings)
+		} else {
+			for name, binding := range src.ModelBindings {
+				dst.ModelBindings[name] = binding
+			}
+		}
+	}
+	if src.CandidateRequirements != nil {
+		dst.CandidateRequirements = src.CandidateRequirements.Clone()
+	}
+	if src.DataPolicy != nil {
+		dst.DataPolicy = src.DataPolicy.Clone()
+	}
 	if src.Strategy != "" {
 		dst.Strategy = src.Strategy
 	}
@@ -379,12 +394,7 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 		Pos:  posFromLexer(r.Pos),
 	}
 
-	// Process options
-	for _, opt := range r.Opts {
-		if opt.Key == "description" && opt.Value != nil && opt.Value.Str != nil {
-			route.Description = unquote(*opt.Value.Str)
-		}
-	}
+	applyRouteOptions(route, r.Opts)
 
 	// Process body items
 	for _, item := range r.Body {
@@ -405,6 +415,12 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
 		case item.Description != nil:
 			route.Description = unquote(*item.Description)
+		case item.Action != nil:
+			route.Action = &ActionDecl{
+				Type:        item.Action.Type,
+				Destination: unquoteIdent(item.Action.Destination),
+				Pos:         posFromLexer(item.Action.Pos),
+			}
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
 		case item.Emit != nil:
@@ -447,14 +463,16 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":     "semantic_cache",
-	"system-prompt":      "system_prompt",
-	"header-mutation":    "header_mutation",
-	"router-replay":      "router_replay",
-	"image-gen":          "image_gen",
-	"fast-response":      "fast_response",
-	"request-params":     "request_params",
-	"response-jailbreak": "response_jailbreak",
+	"semantic-cache":      "response_cache",
+	"response-cache":      "response_cache",
+	"context-compression": "context_compression",
+	"system-prompt":       "system_prompt",
+	"header-mutation":     "header_mutation",
+	"router-replay":       "router_replay",
+	"shadow-dispatch":     "shadow_dispatch",
+	"fast-response":       "fast_response",
+	"request-params":      "request_params",
+	"response-jailbreak":  "response_jailbreak",
 }
 
 // normalizePluginName converts known hyphenated plugin type aliases to their
@@ -494,6 +512,10 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 		case "effort":
 			if v.Str != nil {
 				m.Effort = unquote(*v.Str)
+			}
+		case "mode":
+			if v.Str != nil {
+				m.Mode = unquote(*v.Str)
 			}
 		case "lora":
 			if v.Str != nil {
@@ -593,7 +615,7 @@ func valToValue(v *Val) Value {
 		}
 		return ArrayValue{Items: items}
 	case v.Object != nil:
-		return ObjectValue{Fields: entriesToMap(v.Object)}
+		return ObjectValue{Fields: entriesToMap(v.Object.Fields)}
 	case v.BareStr != nil:
 		return StringValue{V: *v.BareStr}
 	}

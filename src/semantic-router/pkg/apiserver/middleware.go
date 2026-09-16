@@ -37,7 +37,13 @@ func (s *ClassificationAPIServer) wrapRouteHandler(route apiRoute, handler http.
 		}
 
 		ctx := withManagementRequestContext(r.Context(), requestID, principal)
-		handler(w, r.WithContext(ctx))
+		if route.AuditAction == AuditActionNone {
+			handler(w, r.WithContext(ctx))
+			return
+		}
+		capture := &statusCaptureWriter{ResponseWriter: w}
+		handler(capture, r.WithContext(ctx))
+		s.appendManagementAudit(route, requestID, principal, r, capture.status)
 	}
 }
 
@@ -66,14 +72,10 @@ func (s *ClassificationAPIServer) writeManagementError(
 	message string,
 	requestID string,
 ) {
-	s.writeJSONResponse(w, statusCode, map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":       code,
-			"message":    scrubSecretsInErrorMessage(message),
-			"request_id": requestID,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-		},
-	})
+	s.writeJSONResponse(w, statusCode, managementErrorResponse{Error: managementErrorDetail{
+		Code: code, Message: scrubSecretsInErrorMessage(message), RequestID: requestID,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}})
 }
 
 func managementErrorMessage(code string) string {

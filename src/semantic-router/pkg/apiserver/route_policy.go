@@ -6,17 +6,26 @@ package apiserver
 type RoutePermission string
 
 const (
-	PermHealthRead     RoutePermission = "health.read"
-	PermReadyRead      RoutePermission = "ready.read"
-	PermDocsRead       RoutePermission = "docs.read"
-	PermClassifyInvoke RoutePermission = "classify.invoke"
-	PermConfigRead     RoutePermission = "config.read"
-	PermConfigWrite    RoutePermission = "config.write"
-	PermSecretView     RoutePermission = "secret_view"
-	PermLearningIngest RoutePermission = "learning.ingest"
-	PermDataRead       RoutePermission = "data.read"
-	PermDataWrite      RoutePermission = "data.write"
-	PermMetricsRead    RoutePermission = "metrics.read"
+	PermHealthRead         RoutePermission = "health.read"
+	PermReadyRead          RoutePermission = "ready.read"
+	PermDocsRead           RoutePermission = "docs.read"
+	PermClassifyInvoke     RoutePermission = "classify.invoke"
+	PermConfigRead         RoutePermission = "config.read"
+	PermConfigWrite        RoutePermission = "config.write"
+	PermSecretView         RoutePermission = "secret_view"
+	PermLearningIngest     RoutePermission = "learning.ingest"
+	PermReplayRead         RoutePermission = "replay.read"
+	PermReplayDetail       RoutePermission = "replay.detail"
+	PermDataRead           RoutePermission = "data.read"
+	PermDataWrite          RoutePermission = "data.write"
+	PermMetricsRead        RoutePermission = "metrics.read"
+	PermAuditRead          RoutePermission = "audit.read"
+	PermCacheRead          RoutePermission = "cache.read"
+	PermCacheInvalidate    RoutePermission = "cache.invalidate"
+	PermCacheManage        RoutePermission = "cache.manage"
+	PermCompressionRead    RoutePermission = "compression.read"
+	PermCompressionPreview RoutePermission = "compression.preview"
+	PermCompressionManage  RoutePermission = "compression.manage"
 )
 
 // RouteSensitivity classifies response risk for inventory and policy.
@@ -26,6 +35,7 @@ const (
 	SensitivityPublic      RouteSensitivity = "public"
 	SensitivityOperational RouteSensitivity = "operational"
 	SensitivityConfig      RouteSensitivity = "config"
+	SensitivityReplay      RouteSensitivity = "replay"
 	SensitivitySecretView  RouteSensitivity = "secret_view"
 	SensitivityMutation    RouteSensitivity = "mutation"
 )
@@ -34,17 +44,21 @@ const (
 type RouteAuditAction string
 
 const (
-	AuditActionNone              RouteAuditAction = ""
-	AuditActionConfigPatch       RouteAuditAction = "config.patch"
-	AuditActionConfigPut         RouteAuditAction = "config.put"
-	AuditActionConfigRollback    RouteAuditAction = "config.rollback"
-	AuditActionRecipeSave        RouteAuditAction = "recipe.save"
-	AuditActionRecipeDelete      RouteAuditAction = "recipe.delete"
-	AuditActionKnowledgeBaseSave RouteAuditAction = "knowledge_base.save"
-	AuditActionKnowledgeBaseDel  RouteAuditAction = "knowledge_base.delete"
-	AuditActionOutcomeIngest     RouteAuditAction = "outcome.ingest"
-	AuditActionMemoryDelete      RouteAuditAction = "memory.delete"
-	AuditActionDataWrite         RouteAuditAction = "data.write"
+	AuditActionNone                  RouteAuditAction = ""
+	AuditActionConfigPatch           RouteAuditAction = "config.patch"
+	AuditActionConfigPut             RouteAuditAction = "config.put"
+	AuditActionConfigRollback        RouteAuditAction = "config.rollback"
+	AuditActionRecipeSave            RouteAuditAction = "recipe.save"
+	AuditActionRecipeDelete          RouteAuditAction = "recipe.delete"
+	AuditActionKnowledgeBaseSave     RouteAuditAction = "knowledge_base.save"
+	AuditActionKnowledgeBaseDel      RouteAuditAction = "knowledge_base.delete"
+	AuditActionOutcomeIngest         RouteAuditAction = "outcome.ingest"
+	AuditActionMemoryDelete          RouteAuditAction = "memory.delete"
+	AuditActionDataWrite             RouteAuditAction = "data.write"
+	AuditActionCacheInvalidate       RouteAuditAction = "cache.invalidate"
+	AuditActionCacheFlush            RouteAuditAction = "cache.flush"
+	AuditActionCompressionPreview    RouteAuditAction = "compression.preview"
+	AuditActionCompressionInvalidate RouteAuditAction = "compression.recovery.invalidate"
 )
 
 type routePolicy struct {
@@ -57,7 +71,7 @@ func managedRoute(
 	meta EndpointMetadata,
 	policy routePolicy,
 	handler apiRouteHandler,
-	body ...apiRequestBody,
+	options ...apiRouteOption,
 ) apiRoute {
 	route := apiRoute{
 		EndpointMetadata: meta,
@@ -66,8 +80,8 @@ func managedRoute(
 		Sensitivity:      policy.Sensitivity,
 		AuditAction:      policy.AuditAction,
 	}
-	if len(body) > 0 {
-		route.RequestBody = body[0]
+	for _, option := range options {
+		option.applyRoute(&route)
 	}
 	return route
 }

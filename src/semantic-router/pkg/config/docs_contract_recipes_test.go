@@ -37,7 +37,7 @@ var entrypointsRecipesRequiredDocs = []docNeedles{
 			"`recipes`",
 			"`vllm-sr/auto`",
 			"`/v1/models`",
-			"`providers.defaults.default_model`",
+			"`providers.defaults.model`",
 		},
 	},
 }

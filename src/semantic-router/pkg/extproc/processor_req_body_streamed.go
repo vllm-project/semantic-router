@@ -11,33 +11,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// streamedBodyState tracks the processing phase for STREAMED body mode.
-type streamedBodyState int
-
-const (
-	stateInit        streamedBodyState = iota // accumulating until model field is detected
-	statePassthrough                          // non-auto model: eat chunks, emit full body on EOS
-	stateAccumulate                           // auto model: eat chunks, classify on EOS
-)
-
 // StreamedBodyHandler implements semi-streaming request body processing.
 //
 // In Envoy STREAMED or FULL_DUPLEX_STREAMED mode, body arrives as multiple
-// HttpBody messages. The handler accumulates bytes until the model field can
-// be extracted (via gjson), then branches:
+// HttpBody messages. The handler treats those chunks as protocol-neutral bytes
+// and accumulates them until EOS. Only then does the standard request-body
+// pipeline invoke the ingress Codec to decode the complete wire request.
 //
-//   - Passthrough (non-auto model): continue eating chunks (replacing each
-//     with an empty body) so that upstream sees nothing until EOS. On EOS the
-//     full accumulated body is passed to handleRequestBody which may apply
-//     model-alias rewrites and header mutations, then emits the complete
-//     (possibly mutated) body as a single response.
-//   - Accumulate (auto model): same chunk-eating strategy. On EOS the full
-//     classification + body mutation pipeline runs.
-//
-// In STREAMED mode, both paths eat every non-EOS chunk with a regular empty
-// body mutation. In FULL_DUPLEX_STREAMED mode, intermediate replies are
-// deferred and the complete body is emitted at EOS with StreamedBodyResponse,
-// as required by the ExtProc protocol.
+// In STREAMED mode, every non-EOS chunk is eaten with a regular empty body
+// mutation. In FULL_DUPLEX_STREAMED mode, intermediate replies are deferred
+// and the complete body is emitted at EOS with StreamedBodyResponse, as
+// required by the ExtProc protocol.
 //
 // Safety:
 //   - MaxBytes: if configured, rejects requests whose accumulated body exceeds
@@ -49,12 +33,7 @@ const (
 type StreamedBodyHandler struct {
 	router *OpenAIRouter
 	ctx    *RequestContext
-	state  streamedBodyState
 	buf    bytes.Buffer
-
-	model    string
-	isStream bool
-	isAuto   bool
 
 	// Guards: populated once from config at creation time.
 	maxBytes int64
@@ -90,11 +69,7 @@ func newStreamedBodyHandler(router *OpenAIRouter, ctx *RequestContext) *Streamed
 	h := streamedHandlerPool.Get().(*StreamedBodyHandler)
 	h.router = router
 	h.ctx = ctx
-	h.state = stateInit
 	h.buf.Reset()
-	h.model = ""
-	h.isStream = false
-	h.isAuto = false
 
 	h.maxBytes = 0
 	h.deadline = time.Time{}
@@ -126,16 +101,11 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 		return nil, err
 	}
 
-	switch h.state {
-	case stateInit:
-		return h.handleInit(eos)
-	case statePassthrough:
-		return h.handlePassthrough(eos)
-	case stateAccumulate:
-		return h.handleAccumulate(eos)
-	default:
+	if !eos {
 		return h.intermediateResponse(), nil
 	}
+
+	return h.handleAccumulatedBody()
 }
 
 func (h *StreamedBodyHandler) intermediateResponse() *ext_proc.ProcessingResponse {
@@ -162,79 +132,15 @@ func (h *StreamedBodyHandler) checkGuards() error {
 	return nil
 }
 
-// handleInit accumulates bytes until the model field can be extracted from the
-// partial JSON, then transitions to passthrough or accumulate. Keeps waiting if
-// the model key hasn't appeared yet (e.g., because json.Marshal alphabetizes
-// keys and "messages" appears before "model").
-func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse, error) {
-	buf := h.buf.Bytes()
-
-	h.model = extractModelFast(buf)
-
-	if h.model == "" && !eos {
-		return h.intermediateResponse(), nil
-	}
-
-	h.isStream = extractStreamParamFast(buf)
-
-	if h.isStream {
-		h.ctx.ExpectStreamingResponse = true
-	}
-
-	if h.model != "" {
-		h.ctx.RequestModel = h.model
-	}
-
-	h.isAuto = h.router.requestModelActsAsAuto(h.model)
-
-	if h.isAuto {
-		h.state = stateAccumulate
-		logging.Infof("[StreamedBody] Model %q detected as auto — accumulating", h.model)
-		return h.handleAccumulate(eos)
-	}
-
-	h.state = statePassthrough
-	logging.Infof("[StreamedBody] Model %q detected as specified — passthrough", h.model)
-	return h.handlePassthrough(eos)
-}
-
-// handlePassthrough eats chunks (replacing each with an empty body so upstream
-// sees nothing yet). On EOS the full accumulated body is passed through the
-// standard pipeline for model-alias rewrites and header mutations, then emitted
-// as a single complete body. This avoids the corrupted-body problem where
-// forwarded intermediate chunks would be duplicated by an EOS body mutation.
-func (h *StreamedBodyHandler) handlePassthrough(eos bool) (*ext_proc.ProcessingResponse, error) {
-	if !eos {
-		return h.intermediateResponse(), nil
-	}
-
+// handleAccumulatedBody passes the complete wire request to the standard
+// request-body pipeline. The ingress Codec is the only semantic parser.
+func (h *StreamedBodyHandler) handleAccumulatedBody() (*ext_proc.ProcessingResponse, error) {
 	h.ctx.ProcessingStartTime = time.Now()
-	h.ctx.OriginalRequestBody = bytes.Clone(h.buf.Bytes())
+	body := bytes.Clone(h.buf.Bytes())
 
 	v := &ext_proc.ProcessingRequest_RequestBody{
 		RequestBody: &ext_proc.HttpBody{
-			Body:        h.ctx.OriginalRequestBody,
-			EndOfStream: true,
-		},
-	}
-
-	response, err := h.router.handleRequestBody(v, h.ctx)
-	return h.finalizeResponse(response), err
-}
-
-// handleAccumulate eats chunks (replaces with empty body). On EOS the full
-// classification + body mutation pipeline runs on the accumulated body.
-func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingResponse, error) {
-	if !eos {
-		return h.intermediateResponse(), nil
-	}
-
-	h.ctx.ProcessingStartTime = time.Now()
-	h.ctx.OriginalRequestBody = bytes.Clone(h.buf.Bytes())
-
-	v := &ext_proc.ProcessingRequest_RequestBody{
-		RequestBody: &ext_proc.HttpBody{
-			Body:        h.ctx.OriginalRequestBody,
+			Body:        body,
 			EndOfStream: true,
 		},
 	}

@@ -8,11 +8,12 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: openai/gpt-oss-20b
+      model: openai/gpt-oss-20b
     models:
       - name: openai/gpt-oss-20b
         backend_refs:
           - name: test-endpoint
+            provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -72,7 +73,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -87,7 +88,6 @@ config:
           model_ref: ""
           model_id: ""
           jailbreak_mapping_path: ""
-          use_mmbert_32k: false
         classifier:
           domain:
             model_ref: ""

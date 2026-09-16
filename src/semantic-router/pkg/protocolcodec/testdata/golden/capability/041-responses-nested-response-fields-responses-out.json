@@ -1,0 +1,146 @@
+{
+  "cases": [
+    {
+      "name": "text_annotations_and_logprobs",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_1",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "annotations": [
+                    {
+                      "end_index": 6,
+                      "start_index": 0,
+                      "title": "Source",
+                      "type": "url_citation",
+                      "url": "https://example.com/source"
+                    }
+                  ],
+                  "text": "source",
+                  "type": "output_text"
+                }
+              ],
+              "id": "msg_1",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "output_text": "source",
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 2,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          },
+          {
+            "field": "output.content.logprobs",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "refusal",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_refusal",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [
+                {
+                  "refusal": "cannot comply",
+                  "type": "refusal"
+                }
+              ],
+              "id": "msg_refusal",
+              "role": "assistant",
+              "status": "completed",
+              "type": "message"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reasoning_and_namespaced_tool",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "empty_output_item"
+        },
+        "diagnostics": [
+          {
+            "field": "output.encrypted_content",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          },
+          {
+            "field": "output.caller",
+            "action": "dropped"
+          },
+          {
+            "field": "output.namespace",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}

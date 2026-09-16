@@ -7,17 +7,19 @@ import ChatComposerModelSelect from './ChatComposerModelSelect'
 
 const models = [
   {
-    id: 'vllm-sr/mom-balanced-v1',
+    id: 'vllm-sr/mom-v1-blend',
     description: 'Balanced Mixture-of-Models profile',
+    recipe: 'balanced',
   },
   {
-    id: 'vllm-sr/mom-flash-v1',
+    id: 'vllm-sr/mom-v1-flash',
     description: 'Latency-first Mixture-of-Models profile',
+    recipe: 'speed-first',
   },
 ]
 
 describe('ChatComposerModelSelect', () => {
-  it('renders a compact MoM dropdown beside the composer add button', () => {
+  it('renders a compact model dropdown without a redundant prefix badge', () => {
     const markup = renderToStaticMarkup(
       createElement(ChatComposerModelSelect, {
         models,
@@ -28,10 +30,11 @@ describe('ChatComposerModelSelect', () => {
 
     expect(markup).toContain('data-testid="playground-composer-model-select"')
     expect(markup).toContain('aria-haspopup="listbox"')
+    expect(markup).toContain('aria-label="Model: vllm-sr/mom-v1-blend"')
     expect(markup).toContain('aria-expanded="false"')
-    expect(markup).toContain('MoM')
+    expect(markup).not.toContain('>MoM<')
     expect(markup).not.toContain('AMD')
-    expect(markup).toContain('vllm-sr/mom-balanced-v1')
+    expect(markup).toContain('vllm-sr/mom-v1-blend')
   })
 
   it('disables selection while model discovery is unavailable', () => {
@@ -40,7 +43,7 @@ describe('ChatComposerModelSelect', () => {
         disabled: true,
         models: [],
         onChange: vi.fn(),
-        value: 'vllm-sr/mom-balanced-v1',
+        value: 'vllm-sr/mom-v1-blend',
       }),
     )
 
@@ -55,5 +58,13 @@ describe('ChatComposerModelSelect', () => {
     expect(source).toContain("event.key === 'Home'")
     expect(source).toContain("event.key === 'End'")
     expect(source).toContain('triggerRef.current?.focus()')
+  })
+
+  it('keeps options compact and presents recipe names as objective chips', () => {
+    const source = readFileSync(new URL('./ChatComposerModelSelect.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain('styles.objectiveChip')
+    expect(source).not.toContain('recipe: {model.recipe}')
+    expect(source).not.toContain('styles.optionDescription')
   })
 })

@@ -24,6 +24,7 @@ type mockChatMessage struct {
 }
 
 type mockChatResponse struct {
+	ID      string           `json:"id"`
 	Choices []mockChatChoice `json:"choices"`
 }
 
@@ -96,8 +97,9 @@ func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
 		assert.Contains(t, req.Messages[1].Content, "Hawaii")
 
 		resp := mockChatResponse{
+			ID: "chatcmpl-rewrite",
 			Choices: []mockChatChoice{
-				{Message: mockChatMessage{Content: "What is the budget for the Hawaii vacation?"}},
+				{Message: mockChatMessage{Role: "assistant", Content: "What is the budget for the Hawaii vacation?"}},
 			},
 		}
 
@@ -118,11 +120,46 @@ func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
 	assert.Equal(t, "What is the budget for the Hawaii vacation?", result)
 }
 
+func TestBuildSearchQuery_ResponseLimit(t *testing.T) {
+	responseBody, err := json.Marshal(mockChatResponse{
+		ID: "chatcmpl-rewrite",
+		Choices: []mockChatChoice{
+			{Message: mockChatMessage{Role: "assistant", Content: "rewritten query"}},
+		},
+	})
+	require.NoError(t, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(responseBody)
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name  string
+		limit int64
+		want  string
+	}{
+		{name: "at limit is parsed", limit: int64(len(responseBody)), want: "rewritten query"},
+		{name: "one byte over falls back", limit: int64(len(responseBody) - 1), want: "original query"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			routerCfg := createMockRouterConfig(server.URL)
+			routerCfg.ExternalModels[0].MaxResponseBytes = tt.limit
+
+			result, err := BuildSearchQuery(context.Background(), nil, "original query", routerCfg)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
 func TestBuildSearchQuery_SelfContainedQuery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := mockChatResponse{
+			ID: "chatcmpl-rewrite",
 			Choices: []mockChatChoice{
-				{Message: mockChatMessage{Content: "What is the capital of France?"}},
+				{Message: mockChatMessage{Role: "assistant", Content: "What is the capital of France?"}},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -152,8 +189,9 @@ func TestBuildSearchQuery_LLMError_FallbackToOriginal(t *testing.T) {
 func TestBuildSearchQuery_CleanupQuotes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := mockChatResponse{
+			ID: "chatcmpl-rewrite",
 			Choices: []mockChatChoice{
-				{Message: mockChatMessage{Content: `"What is my budget for Hawaii?"`}},
+				{Message: mockChatMessage{Role: "assistant", Content: `"What is my budget for Hawaii?"`}},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -170,8 +208,9 @@ func TestBuildSearchQuery_CleanupQuotes(t *testing.T) {
 func TestBuildSearchQuery_CleanupWhitespace(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := mockChatResponse{
+			ID: "chatcmpl-rewrite",
 			Choices: []mockChatChoice{
-				{Message: mockChatMessage{Content: "  What is the budget?  \n"}},
+				{Message: mockChatMessage{Role: "assistant", Content: "  What is the budget?  \n"}},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")

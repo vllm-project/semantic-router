@@ -9,26 +9,29 @@ import (
 )
 
 var signalTutorialBuckets = map[string]string{
-	"authz":         "heuristic",
-	"complexity":    "learned",
-	"context":       "heuristic",
-	"conversation":  "heuristic",
-	"domain":        "learned",
-	"embedding":     "learned",
-	"fact-check":    "learned",
-	"jailbreak":     "learned",
-	"keyword":       "heuristic",
-	"language":      "heuristic",
-	"modality":      "learned",
-	"structure":     "heuristic",
-	"pii":           "learned",
-	"preference":    "learned",
-	"reask":         "learned",
-	"kb":            "learned",
-	"user-feedback": "learned",
-	"event":         "heuristic",
-	"metadata":      "heuristic",
-	"classifier":    "learned",
+	"safety":         "learned",
+	"authz":          "heuristic",
+	"complexity":     "learned",
+	"context":        "heuristic",
+	"conversation":   "heuristic",
+	"domain":         "learned",
+	"embedding":      "learned",
+	"fact-check":     "learned",
+	"hallucination":  "learned",
+	"jailbreak":      "learned",
+	"keyword":        "heuristic",
+	"language":       "heuristic",
+	"modality":       "learned",
+	"structure":      "heuristic",
+	"pii":            "learned",
+	"preference":     "learned",
+	"reask":          "learned",
+	"kb":             "learned",
+	"user-feedback":  "learned",
+	"event":          "heuristic",
+	"metadata":       "heuristic",
+	"classifier":     "learned",
+	"input-modality": "heuristic",
 }
 
 var retiredSignalTutorialDocs = []string{
@@ -40,7 +43,7 @@ var retiredSignalTutorialDocs = []string{
 func assertSignalTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 	t.Helper()
 
-	configRoot := filepath.Join(root, repoRel("config", "signal"))
+	configRoot := filepath.Join(root, repoRel("config", "fragments", "signal"))
 	entries, err := os.ReadDir(configRoot)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", configRoot, err)
@@ -58,13 +61,13 @@ func assertSignalTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 		docPath := repoRel("website", "docs", "tutorials", "signal", bucket, entry.Name()+".md")
 		fullDocPath := filepath.Join(root, docPath)
 		if _, err := os.Stat(fullDocPath); err != nil {
-			t.Fatalf("%s should exist for config/signal/%s: %v", docPath, entry.Name(), err)
+			t.Fatalf("%s should exist for config/fragments/signal/%s: %v", docPath, entry.Name(), err)
 		}
 		delete(remaining, entry.Name())
 	}
 
 	for family := range remaining {
-		t.Fatalf("signal tutorial mapping declares %q, but config/signal/%s is missing", family, family)
+		t.Fatalf("signal tutorial mapping declares %q, but config/fragments/signal/%s is missing", family, family)
 	}
 
 	assertPathsDoNotExist(t, root, retiredSignalTutorialDocs)

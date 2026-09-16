@@ -1,0 +1,19 @@
+{
+  "input": "Return the weather as JSON.",
+  "max_output_tokens": 48,
+  "model": "client-model",
+  "reasoning": {"effort": "high"},
+  "text": {
+    "format": {
+      "type": "json_schema",
+      "name": "structured_output",
+      "strict": true,
+      "schema": {
+        "type": "object",
+        "properties": {"temperature_c": {"type": "number"}},
+        "required": ["temperature_c"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

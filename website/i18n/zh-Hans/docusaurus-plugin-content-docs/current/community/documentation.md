@@ -1,58 +1,95 @@
+---
+title: 文档指南
+translation:
+  source_commit: "f53d10fbf1021f9204e03afe2dd9a3374979e829"
+  source_file: "docs/community/documentation.md"
+  outdated: false
+---
+
 # 文档指南
 
-本指南介绍如何为 vLLM Semantic Router 贡献文档。
+公开文档在 `website/`。写给要理解或运维系统的读者，而不是记录某次改动怎么实现。
 
-## 目录结构
+## 放对位置
 
-文档使用 Docusaurus 构建。
+| 内容 | 位置 |
+|---------|----------|
+| 概念、使用场景和架构 | `website/docs/overview/` |
+| 首次运行、配置、部署和运维 | `website/sidebars.ts` 中对应小节 |
+| 信号、投影、决策、算法和插件 | `website/docs/tutorials/` |
+| CLI 命令、HTTP API 或 Kubernetes 字段参考 | `website/docs/api/` |
+| 贡献者工作流 | `website/docs/community/` 或仓库内权威贡献文档 |
 
-- `website/docs/`：主要英文文档（Markdown）。
-- `website/i18n/`：本地化文档（例如 `zh-Hans` 代表中文）。
-- `website/docusaurus.config.ts`：站点配置。
-- `website/sidebars.ts`：侧边栏导航。
+不要为代码已拥有的生成 schema、配置清单或命令再造一份真相源。链到权威参考，或更新它的生成器。
 
-## 编辑文档
+## 按任务写
 
-1. **定位文件：** 在 `website/docs/` 中找到 Markdown 文件。
-2. **进行更改：** 使用 Markdown 语法编辑内容。
-3. **本地预览：**
+能力页应按这个顺序回答：
 
-   ```bash
-   cd website
-   npm run start
-   ```
+1. 解决什么问题？
+2. 读者何时该用它？
+3. 最小可用配置或命令是什么？
+4. 重要限制、安全含义和依赖是什么？
 
-4. **验证链接：** 确保所有相对链接正确。
-5. **语法检查：** 运行 `make markdown-lint` 进行语法检查。
+宁可用一个真实例子，也不要堆几个几乎重复的例子。不要把本地终端记录、一次性测试输出、未限定条件的基准数字或实现记分卡贴进长期用户文档。
 
-## 国际化 (i18n)
+标题用句式大小写，代码块标明语言，其他文档页用相对链接。网站图片放在 `website/static/img/`。
 
-我们支持多种语言（如英语、中文）。默认语言为英语。
+## 预览和校验
 
-### 添加新页面
+```bash
+cd website
+python3 -m pip install -r requirements.txt
+npm ci
+npm run start
+```
 
-1. 在 `website/docs/` 中创建英文文件。
-2. 在 `website/i18n/{locale}/docusaurus-plugin-content-docs/current/` 中创建对应的翻译文件。
-   - 中文示例：`website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/`。
-3. 确保文件名和目录结构完全匹配。
+提交前：
 
-### 添加新语言
+```bash
+cd website
+npm test
+npm run build:en
+```
 
-1. 在 `website/docusaurus.config.ts` 中配置新语言环境 (locale)。
-2. 运行 `npm run write-translations -- --locale <new-locale>` 生成 JSON 翻译文件。
-3. 将 `docs` 目录结构复制到 `website/i18n/<new-locale>/...` 并翻译 Markdown 文件。
+从仓库根目录跑与 CI 相同的变更文件路径：
 
-### 更新翻译
+```bash
+make check BASE_REF=origin/main
+```
 
-更新英文文档时，请尽可能同时更新中文翻译。如果你无法翻译，请开启 Issue 寻求帮助。
+构建会把内部断链当错误。对流程重要的外部链接也要检查，尤其是下载、图表和上游带版本的指南。
 
-### 利用 LLM 加速翻译流程
+## 生成参考
 
-你可以参考我们的 [AI 自动翻译指南](./translation-guide) 来使用 LLM 进行辅助翻译。该指南包含了推荐的 Prompt 和术语表，能显著提高翻译效率和一致性。
+源文件变更应同时提交对应的生成产物。检查命令会重新计算预期内容并与已提交的文件比较，发现过期即失败，不会改写文件；网站构建也不会自动修复过期参考。
 
-## 风格指南
+| 参考 | 权威源 | 重新生成 | 检查 |
+| --- | --- | --- | --- |
+| Model Hub 与内置 catalog | `config/catalog/` 和内置 recipe bundles | `make model-catalog-generate` | `make model-catalog-generated-check` |
+| [CLI 命令](../api/cli) | `src/vllm-sr/cli/` 中注册的 Click 命令 | `make docs-cli` | `make docs-cli-check` |
+| 配置目录 | `config/fragments/` 与能力指南的 **Overview** | `make docs-config` | `make docs-config-check` |
+| OpenAPI 与端点索引 | Go API 路由目录与配置 schema | `make api-docs-generate` | `make api-docs-check` |
+| Operator 字段参考 | Operator Go API 类型及注释 | `make docs-crd` | `make docs-crd-check` |
+| 公开运维 skill | `tools/agent/skills/vllm-sr-agent-operations/` | `make agent-skill-sync` | `make agent-skill-check` |
+| GitHub 社区统计 | 生成器、身份信息与带日期的 GitHub 快照 | 在 `website/` 运行 `npm run contributors:rank` / `npm run committers:activity` | `make docs-community-check` |
 
-- **标题：** 使用句首大写（Sentence case）。
-- **代码块：** 指定语言（例如 \`\`\`bash）。
-- **链接：** 内部链接使用相对路径。
-- **图片：** 将图片放置在 `website/static/img/` 并使用 `/img/...` 引用。
+`make docs-generated-check` 检查 catalog、CLI 参考、配置目录与公开 skill，不依赖原生库构建。每次 PR 和 main 校验都执行该检查，包括只改源文件或文档的情况。`npm run build` 和 `npm test` 也会先执行这些参考检查。它们需要 Python 3.10 或更新版本以及 `website/requirements.txt` 中的依赖；可通过 `VLLM_SR_DOCS_PYTHON` 指定 Python 解释器。
+
+`make generated-contract-check` 还会检查配置 schema、OpenAPI 与 Operator 参考，使用现有 Go/原生库构建前置条件。`make generated-contract-generate` 按依赖顺序刷新这些公开参考。应修改源文件或生成器，不要手改生成块。
+
+社区统计是外部动态数据的带日期快照。离线检查同时验证生成源和生成内容的摘要，不与持续变化的 GitHub 活跃度比较。修改生成器或身份信息后必须成功刷新；网络失败不能静默复用源文件已过期的快照。
+
+网站在构建时导入模型 catalog。重新生成并提交后，还需要成功发布生产网站。排查网站过期时，可将线上 `/model-catalog/catalog.json` 与目标版本的 `website/static/model-catalog/catalog.json` 比较；Git 内文件一致并不代表该版本已经上线。
+
+## 本地化
+
+英文源页在 `website/docs/`。中文译文在：
+
+```text
+website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/
+```
+
+译文路径要和英文源路径对齐。若同一 pull request 无法更新译文，就删掉当前版 override，让 Docusaurus 提供当前英文页。历史 `version-v*` 译文保持不动。`make docs-check-translations` 把这种回退当作覆盖信息，但仍会因过期或无效 override 失败。
+
+新增语言时，把它加到 `website/docusaurus.config.ts`，用 `npm run write-translations -- --locale <locale>` 生成语言目录，并校验该语言构建。

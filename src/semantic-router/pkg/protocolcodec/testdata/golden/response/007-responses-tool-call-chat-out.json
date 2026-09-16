@@ -1,0 +1,36 @@
+{
+  "choices": [
+    {
+      "finish_reason": "tool_calls",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\":\"Paris\"}",
+              "name": "lookup_weather"
+            },
+            "id": "call_weather_1",
+            "type": "function"
+          }
+        ]
+      }
+    }
+  ],
+  "created": 100,
+  "id": "response_tool_1",
+  "model": "routed-model",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 3,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 8
+  }
+}

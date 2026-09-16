@@ -2,7 +2,7 @@
 
 ## Overview
 
-`modality` detects whether a request should stay in text generation, switch into image generation, or support both. It maps to `config/signal/modality/` and is declared under `routing.signals.modality`.
+`modality` detects whether a request should stay in text generation, switch into image generation, or support both. It maps to `config/fragments/signal/modality/` and is declared under `routing.signals.modality`.
 
 This family now sits under `learned` because maintained deployments typically rely on the router-owned `modality_detector` module to classify output mode, even when the routing outcome still looks like a simple request-shape decision.
 
@@ -30,7 +30,7 @@ Use `modality` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/modality/`
+Source fragment family: `config/fragments/signal/modality/`
 
 ```yaml
 routing:

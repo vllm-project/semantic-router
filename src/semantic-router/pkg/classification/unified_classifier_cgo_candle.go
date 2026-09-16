@@ -11,12 +11,14 @@ package classification
 import "C"
 
 var nativeBackendCapabilities = NativeBackendCapabilities{
-	Name:                       "candle",
-	UnifiedBatchClassification: true,
-	LoRABatchClassification:    true,
-	BatchedEmbedding:           true,
-	MultimodalEmbedding:        true,
-	ModalityRouting:            true,
-	MLPSelector:                true,
-	ExplicitReset:              false,
+	Name:                        "candle",
+	UnifiedBatchClassification:  true,
+	LoRABatchClassification:     true,
+	BatchedEmbedding:            true,
+	MultimodalEmbedding:         true,
+	ModalityRouting:             true,
+	MLPSelector:                 true,
+	LocalHallucinationDetection: true,
+	LocalHallucinationNLI:       true,
+	ExplicitReset:               false,
 }

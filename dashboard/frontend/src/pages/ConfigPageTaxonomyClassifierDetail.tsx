@@ -1,6 +1,7 @@
 import pageStyles from './ConfigPage.module.css'
 import styles from './ConfigPageTaxonomyClassifiers.module.css'
 import {
+  formatKnowledgeBaseSourcePath,
   formatSignalReference,
   type TaxonomyClassifierRecord,
 } from './configPageTaxonomyClassifierSupport'
@@ -37,7 +38,7 @@ export default function ConfigPageTaxonomyClassifierDetail({
   const groupEntries = Object.entries(selectedClassifier?.groups ?? {})
   const thresholdEntries = Object.entries(selectedClassifier?.label_thresholds ?? {})
   const sourcePath = selectedClassifier
-    ? `${selectedClassifier.source.path}${selectedClassifier.source.manifest ? `/${selectedClassifier.source.manifest}` : ''}`
+    ? formatKnowledgeBaseSourcePath(selectedClassifier.source)
     : ''
 
   if (!selectedClassifier) {

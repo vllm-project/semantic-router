@@ -1,6 +1,6 @@
 # Streamed ExtProc and immediate responses
 
-This guide explains how to run vLLM Semantic Router behind an Envoy-compatible gateway when request bodies are delivered to ExtProc in streamed mode, and how streamed clients receive Semantic Router immediate responses such as looper, semantic-cache, and `fast_response` results.
+This guide explains how to run vLLM Semantic Router behind an Envoy-compatible gateway when request bodies are delivered to ExtProc in streamed mode, and how streamed clients receive Semantic Router immediate responses such as looper, `response_cache`, and `fast_response` results.
 
 Use this guide when you need one of the following:
 
@@ -96,7 +96,7 @@ agentgateway uses the Gateway API `AgentgatewayPolicy` abstraction rather than r
 Buffered request bodies remain common in proxy defaults and other deployment
 examples. The bundled agentgateway example opts into streaming explicitly in
 `deploy/kubernetes/agentgateway/extproc-policy.yaml`; the Helm command in the
-[agentgateway installation guide](./agentgateway.md) explicitly enables
+[agentgateway installation guide](./agentgateway) explicitly enables
 `global.router.streamed_body`. Use both settings together when adopting that
 example.
 
@@ -144,26 +144,31 @@ Example decision fragment:
 ```yaml
 routing:
   decisions:
-  - name: streamed_confidence_route
-    priority: 100
-    conditions:
-      all:
-      - signal: domain
-        operator: equals
-        value: code
-    modelRefs:
-    - modelName: small-code-model
-      weight: 1
-    - modelName: large-code-model
-      weight: 1
-    algorithm:
-      type: confidence
-      confidence:
-        confidence_method: hybrid
-        threshold: 0.72
-        escalation_order: small_to_large
-        on_error: skip
+    - name: streamed_confidence_route
+      description: Escalate code requests when the first model is uncertain.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: computer science
+      modelRefs:
+        - model: small-code-model
+          use_reasoning: false
+        - model: large-code-model
+          use_reasoning: false
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: hybrid
+          threshold: 0.72
+          escalation_order: small_to_large
+          on_error: skip
 ```
+
+The `computer science` signal and both provider models must also exist in the
+same recipe. See the [Confidence tutorial](/docs/tutorials/algorithm/looper/confidence)
+for the complete contract.
 
 When the client sends `"stream": true`, Semantic Router calls the candidate model(s), aggregates the looper result, and returns an immediate SSE body to the gateway. The client still receives a normal OpenAI-compatible stream:
 
@@ -194,18 +199,26 @@ Look for:
 
 ```yaml
 routing:
+  signals:
+    jailbreak:
+      - name: streamed_jailbreak
+        method: classifier
+        threshold: 0.6
+        description: Detect prompt-injection attempts before forwarding.
   decisions:
-  - name: streamed_jailbreak_block
-    priority: 1000
-    conditions:
-      all:
-      - signal: jailbreak
-        operator: greater_than
-        value: 0.6
-    plugins:
-    - type: fast_response
-      configuration:
-        message: This request was blocked by policy.
+    - name: streamed_jailbreak_block
+      description: Return a policy response for detected prompt injection.
+      priority: 1000
+      rules:
+        operator: AND
+        conditions:
+          - type: jailbreak
+            name: streamed_jailbreak
+      modelRefs: []
+      plugins:
+        - type: fast_response
+          configuration:
+            message: This request was blocked by policy.
 ```
 
 With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Semantic Router accumulates the body, runs the safety signal at end-of-stream, and returns the configured immediate response without forwarding the request to the backend.

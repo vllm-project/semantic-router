@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -380,28 +381,6 @@ func valkeyEscapeTagValue(val string) string {
 	return b.String()
 }
 
-// valkeyDistanceToSimilarity converts a vector distance to a similarity score based on the metric type.
-// Follows the same conversion as the Valkey cache backend (pkg/cache/valkey_cache_helpers.go)
-// and the Valkey vector store backend (pkg/vectorstore/valkey_backend.go).
-//
-// Valkey Search COSINE distance is in [0, 2] where 0 = identical vectors.
-// The formula 1 - d/2 maps [0, 2] → [1, 0], producing the same similarity
-// range [0, 1] that Milvus returns directly, so threshold values are portable
-// across backends.
-func valkeyDistanceToSimilarity(metricType string, distance float64) float64 {
-	switch strings.ToUpper(metricType) {
-	case "COSINE":
-		return 1.0 - distance/2.0
-	case "L2":
-		return 1.0 / (1.0 + distance)
-	case "IP":
-		return distance
-	default:
-		logging.Warnf("ValkeyStore: unknown metric type %q in distance conversion, using 1-d fallback", metricType)
-		return 1.0 - distance
-	}
-}
-
 // valkeyParseScoreFromMap extracts a distance value from the fields map and converts it to similarity.
 func valkeyParseScoreFromMap(fields map[string]interface{}, key string, metricType string) float64 {
 	raw, exists := fields[key]
@@ -412,7 +391,7 @@ func valkeyParseScoreFromMap(fields map[string]interface{}, key string, metricTy
 	if err != nil {
 		return 0
 	}
-	return valkeyDistanceToSimilarity(metricType, distance)
+	return valkeyutil.DistanceToSimilarity(metricType, distance)
 }
 
 // valkeyBuildHashFields builds the HSET field map for storing a memory in Valkey.

@@ -57,7 +57,8 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
             <div className={styles.compactItem}>
               <span className={styles.label}>Decision:</span>
               <span className={styles.value}>
-                {result.matchedDecision || 'Default'}
+                {result.matchedDecision || (result.isAccurate ? 'Default' : 'Unavailable')}
+                {result.decisionConfidenceAvailable === false && ' · Score unavailable'}
               </span>
             </div>
             <div className={styles.compactItem}>
@@ -67,6 +68,21 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
               </span>
             </div>
           </div>
+
+          {result.selectionReason && (
+            <div className={styles.fallbackReason}>
+              {result.selectionReason}
+            </div>
+          )}
+
+          {result.signalErrors && Object.keys(result.signalErrors).length > 0 && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Signal errors:</span>
+              {Object.entries(result.signalErrors).map(([signal, error]) => (
+                <div key={signal} className={styles.signalReason}>{signal}: {error}</div>
+              ))}
+            </div>
+          )}
 
           {/* Matched Signals */}
           {matchedSignals.length > 0 && (
@@ -91,11 +107,11 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
                       {signal.value !== undefined && (
                         <span className={styles.signalMetric}>Value {formatValue(signal.value)}</span>
                       )}
-                      {(signal.score ?? signal.confidence) !== undefined && (
-                        <span className={styles.signalMetric}>
-                          Score {formatScore(signal.score ?? signal.confidence ?? 0)}
-                        </span>
-                      )}
+                      <span className={styles.signalMetric}>
+                        {signal.confidenceAvailable !== false && typeof (signal.score ?? signal.confidence) === 'number'
+                          ? `Score ${formatScore((signal.score ?? signal.confidence) as number)}`
+                          : 'Score unavailable'}
+                      </span>
                     </div>
                     {signal.reason && <div className={styles.signalReason}>{signal.reason}</div>}
                   </div>

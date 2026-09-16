@@ -1,18 +1,24 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	modelselection "github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // ClassifyIntentForEval performs intent classification specifically for evaluation scenarios.
 // This method forces evaluation of all signals and returns comprehensive signal information.
-func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalResponse, error) {
+func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req IntentRequest) (*EvalResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	input, err := req.resolveSignalInput()
 	if err != nil {
 		return nil, err
@@ -23,15 +29,11 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	}
 
 	if classifier == nil {
-		return &EvalResponse{
-			OriginalText:   input.evaluationText,
-			RequestedModel: strings.TrimSpace(req.Model),
-			Recipe:         recipeName,
-			Metrics:        &classification.SignalMetricsCollection{},
-		}, nil
+		return nil, ErrClassifierUnavailable
 	}
 
 	wantTrace := req.Options != nil && req.Options.Trace
+	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
@@ -48,9 +50,13 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	)
 
 	var decisionResult *decision.DecisionResult
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var traces []decision.DecisionTrace
+	var decisionErr error
 	if len(candidates) > 0 {
-		decisionResult, traces = evaluateIntentDecision(
+		decisionResult, traces, decisionErr = evaluateIntentDecision(
 			classifier,
 			signals,
 			candidates,
@@ -67,7 +73,50 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	resp.RequestedModel = strings.TrimSpace(req.Model)
 	resp.Recipe = recipeName
 	resp.EvalTrace = traces
+	if decisionErr != nil {
+		resp.DecisionError = decisionErr.Error()
+		return resp, decisionErr
+	}
+	s.populateEvalModelSelection(resp, input, decisionResult)
 	return resp, nil
+}
+
+func (s *ClassificationService) populateEvalModelSelection(
+	response *EvalResponse,
+	input intentSignalInput,
+	decisionResult *decision.DecisionResult,
+) {
+	if response == nil || decisionResult == nil || decisionResult.Decision == nil {
+		return
+	}
+	selector := s.evalModelSelectorSnapshot()
+	if selector == nil {
+		response.SelectionStatus = EvalSelectionUnavailable
+		response.SelectionReason = "live model selector is unavailable"
+		return
+	}
+	demand, _ := modelselection.EffectiveCandidateDemand(input.semanticRequest, decisionResult.Decision)
+	selection := selector.SelectModelForEval(EvalModelSelectionInput{
+		Demand:            demand,
+		Recipe:            response.Recipe,
+		Decision:          decisionResult.Decision,
+		Query:             input.currentUserText,
+		Category:          evalDecisionCategory(decisionResult.MatchedRules),
+		ContextTokenCount: input.requestFacts.ContextTokenFloor,
+	})
+	response.SelectedModel = selection.SelectedModel
+	response.SelectionStatus = selection.Status
+	response.SelectionMethod = selection.Method
+	response.SelectionReason = selection.Reason
+}
+
+func evalDecisionCategory(matchedRules []string) string {
+	for _, rule := range matchedRules {
+		if strings.HasPrefix(rule, "domain:") {
+			return strings.TrimPrefix(rule, "domain:")
+		}
+	}
+	return ""
 }
 
 func evaluateIntentDecision(
@@ -75,13 +124,13 @@ func evaluateIntentDecision(
 	signals *classification.SignalResults,
 	candidates []config.Decision,
 	wantTrace bool,
-) (*decision.DecisionResult, []decision.DecisionTrace) {
+) (*decision.DecisionResult, []decision.DecisionTrace, error) {
 	if !wantTrace {
 		decisionResult, err := classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 		if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
-			logging.Warnf("Decision evaluation failed: %v", err)
+			return nil, nil, err
 		}
-		return decisionResult, nil
+		return decisionResult, nil, nil
 	}
 
 	decisionResult, traces, err := classifier.EvaluateDecisionWithEngineAndTraceForDecisions(
@@ -89,9 +138,9 @@ func evaluateIntentDecision(
 		candidates,
 	)
 	if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
-		logging.Warnf("Decision evaluation failed: %v", err)
+		return nil, traces, err
 	}
-	return decisionResult, traces
+	return decisionResult, traces, nil
 }
 
 func (s *ClassificationService) evalRoutingScopeSnapshot(
@@ -124,7 +173,7 @@ func (s *ClassificationService) evalRoutingScope(modelName string) (*classificat
 		var found bool
 		classifier, found = s.recipeClassifiers.ForRecipe(recipe.Name)
 		if !found {
-			return nil, nil, "", fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
+			return nil, nil, "", fmt.Errorf("%w for routing recipe %q", ErrClassifierUnavailable, recipe.Name)
 		}
 	}
 	return classifier, recipe.Profile.Decisions, recipe.Name, nil

@@ -1,6 +1,7 @@
 import React from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import useBaseUrl from '@docusaurus/useBaseUrl'
+import IconExternalLink from '@theme/Icon/ExternalLink'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -74,6 +75,7 @@ export default function SemanticTerrainHero(): JSX.Element {
                 <Translate id="homepage.hero.primaryCta">
                   Try the Playground
                 </Translate>
+                <IconExternalLink />
               </PillLink>
               <PillLink
                 className={styles.secondaryCta}

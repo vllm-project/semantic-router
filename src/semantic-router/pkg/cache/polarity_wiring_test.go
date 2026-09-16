@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -50,15 +51,17 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 		if !result.polarityRejected {
 			t.Fatalf("expected candidate diverted to polarityRejected, got %+v", result)
 		}
-		body, hit, err := c.finishFindSimilarSearch(time.Now(), "model-x", query, threshold, result)
+		lookup, err := c.finishFindSimilarSearch(
+			context.Background(), time.Now(), "model-x", query, threshold, result,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if hit || body != nil {
-			t.Fatalf("expected miss on polarity mismatch, got hit=%v body=%q", hit, string(body))
+		if lookup.Found || lookup.ResponseBody != nil {
+			t.Fatalf("expected miss on polarity mismatch, got %+v", lookup)
 		}
-		if got := c.LastSimilarity(); got != aboveThreshold {
-			t.Errorf("LastSimilarity = %.4f, want %.4f (similarity must still be recorded on reject)", got, aboveThreshold)
+		if lookup.Similarity != aboveThreshold {
+			t.Errorf("Similarity = %.4f, want %.4f (similarity must still be recorded on reject)", lookup.Similarity, aboveThreshold)
 		}
 	})
 
@@ -69,12 +72,14 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 		if result.polarityRejected || result.bestIndex != 0 {
 			t.Fatalf("expected genuine match promoted to bestIndex 0, got %+v", result)
 		}
-		body, hit, err := c.finishFindSimilarSearch(time.Now(), "model-x", query, threshold, result)
+		lookup, err := c.finishFindSimilarSearch(
+			context.Background(), time.Now(), "model-x", query, threshold, result,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !hit || string(body) != "ENABLE-ANSWER" {
-			t.Fatalf("expected hit returning the cached answer, got hit=%v body=%q", hit, string(body))
+		if !lookup.Found || string(lookup.ResponseBody) != "ENABLE-ANSWER" {
+			t.Fatalf("expected hit returning the cached answer, got %+v", lookup)
 		}
 	})
 }

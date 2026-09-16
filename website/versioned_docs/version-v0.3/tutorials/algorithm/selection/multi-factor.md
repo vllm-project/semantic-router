@@ -4,7 +4,7 @@
 
 `multi_factor` is a selection algorithm that composes four raw runtime signals — **quality**, **latency**, **cost**, and **load** — into a single weighted score per candidate, with optional SLO hard ceilings that prune candidates before scoring.
 
-It aligns to `config/algorithm/selection/multi-factor.yaml` and addresses issue [#37](https://github.com/vllm-project/semantic-router/issues/37).
+It aligns to `config/fragments/algorithm/selection/multi-factor.yaml` and addresses issue [#37](https://github.com/vllm-project/semantic-router/issues/37).
 
 ## Key Advantages
 

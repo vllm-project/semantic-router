@@ -1,11 +1,10 @@
 package classification
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -13,39 +12,51 @@ import (
 	"github.com/openai/openai-go/shared"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // VLLMClient handles communication with vLLM REST API for classifiers
 type VLLMClient struct {
-	httpClient *http.Client
-	endpoint   *config.ClassifierVLLMEndpoint
-	baseURL    string
-	accessKey  string // Optional access key for Authorization header
+	connector        *connector.Client
+	initErr          error
+	endpoint         *config.ClassifierVLLMEndpoint
+	timeout          time.Duration
+	transportOptions connector.Options
+	accessKey        string
 }
 
 // NewVLLMClient creates a new vLLM REST API client for classifiers
 func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
-	scheme := endpoint.Protocol
-	if scheme == "" {
-		scheme = "http"
-	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, endpoint.Address, endpoint.Port)
-
-	return &VLLMClient{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		endpoint: endpoint,
-		baseURL:  baseURL,
-	}
+	return newVLLMClient(endpoint, "", config.DefaultClassifyMaxResponseBytes, time.Duration(config.DefaultClassifierTimeoutSeconds)*time.Second)
 }
 
 // NewVLLMClientWithAuth creates a new vLLM REST API client with access key
 func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey string) *VLLMClient {
-	client := NewVLLMClient(endpoint)
-	client.accessKey = accessKey
-	return client
+	return newVLLMClient(endpoint, accessKey, config.DefaultClassifyMaxResponseBytes, time.Duration(config.DefaultClassifierTimeoutSeconds)*time.Second)
+}
+
+func newVLLMClientFromConfig(cfg *config.ExternalModelConfig) *VLLMClient {
+	return newVLLMClientWithLimits(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxRequestBytes(), cfg.GetMaxResponseBytes(), cfg.GetTimeout())
+}
+
+func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxResponseBytes int64, timeout time.Duration) *VLLMClient {
+	return newVLLMClientWithLimits(endpoint, accessKey, config.DefaultClassifyMaxRequestBytes, maxResponseBytes, timeout)
+}
+
+func newVLLMClientWithLimits(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxRequestBytes, maxResponseBytes int64, timeout time.Duration) *VLLMClient {
+	if endpoint == nil {
+		return &VLLMClient{initErr: fmt.Errorf("classifier endpoint is required")}
+	}
+	endpointCopy := *endpoint
+	scheme := endpointCopy.Protocol
+	if scheme == "" {
+		scheme = "http"
+	}
+	baseURL := fmt.Sprintf("%s://%s:%d", scheme, endpointCopy.Address, endpointCopy.Port)
+	options := connector.Options{AttemptTimeout: timeout, MaxRequestBytes: maxRequestBytes, MaxResponseBytes: maxResponseBytes, MaxErrorBytes: maxClassifyErrorBodyBytes}
+	transport, err := connector.New(baseURL, bearerAuthorizer(accessKey), options)
+	return &VLLMClient{connector: transport, initErr: err, endpoint: &endpointCopy, timeout: timeout, transportOptions: options, accessKey: accessKey}
 }
 
 // vllmChatCompletionRequest extends openai.ChatCompletionNewParams with
@@ -158,32 +169,17 @@ func (c *VLLMClient) generateWithMessages(
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/chat/completions", c.baseURL)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+	body, err := c.connector.Do(ctx, connector.Operation{Name: "http_chat", Method: http.MethodPost, Path: "/v1/chat/completions"}, jsonData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-
-	if c.accessKey != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessKey))
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("vLLM API returned status %d: %s", resp.StatusCode, string(body))
+		var remoteErr *connector.Error
+		if errors.As(err, &remoteErr) && remoteErr.StatusCode != 0 {
+			response, truncated := remoteErr.ResponseBody()
+			return nil, fmt.Errorf("vLLM API returned status %d (response body %d bytes, truncated=%t, not logged): %w", remoteErr.StatusCode, len(response), truncated, err)
+		}
+		return nil, fmt.Errorf("vLLM request failed: %w", err)
 	}
 
 	var chatResp openai.ChatCompletion
@@ -194,4 +190,13 @@ func (c *VLLMClient) generateWithMessages(
 	logging.Debugf("vLLM API call successful: model=%s, choices=%d", modelName, len(chatResp.Choices))
 
 	return &chatResp, nil
+}
+
+// Close releases only this connector's idle connections. Active requests are
+// protected by the owning typed binding's close/drain lifecycle.
+func (c *VLLMClient) Close() error {
+	if c != nil && c.connector != nil {
+		return c.connector.Close()
+	}
+	return nil
 }

@@ -1,0 +1,144 @@
+{
+  "cases": [
+    {
+      "name": "message_legacy_function_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_legacy_function_call"
+        }
+      }
+    },
+    {
+      "name": "file_data",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "file_data": "aGVsbG8=",
+                  "filename": "brief.txt",
+                  "type": "input_file"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "file_id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "file_id": "file_1",
+                  "type": "input_file"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "image_detail",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "detail": "high",
+                  "image_url": "https://example.com/image.png",
+                  "type": "input_image"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "input_audio",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_breakpoint",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_messages_content_prompt_cache_breakpoint"
+        }
+      }
+    },
+    {
+      "name": "tool_cache_control",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "custom_tool_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool_call"
+        }
+      }
+    },
+    {
+      "name": "assistant_refusal",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "refusal": "declined",
+                  "type": "refusal"
+                }
+              ],
+              "id": "item_6a32e29c376158d871e9638e",
+              "role": "assistant",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    }
+  ]
+}

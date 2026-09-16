@@ -62,6 +62,37 @@ ROUTE flow_code {
 	}
 }
 
+func TestWorkflowsPlannerCompletionLimitRoundTrips(t *testing.T) {
+	input := `
+ROUTE flow_code {
+  PRIORITY 10
+  MODEL "qwen-coordinator", "deepseek-worker"
+  ALGORITHM workflows {
+    mode: "dynamic"
+    planner: {
+      model: "qwen-coordinator",
+      max_completion_tokens: 2048
+    }
+  }
+}`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	workflows := cfg.Decisions[0].Algorithm.Workflows
+	if workflows == nil || workflows.Planner.MaxCompletionTokens != 2048 {
+		t.Fatalf("planner = %#v", workflows)
+	}
+
+	source, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("decompile: %v", err)
+	}
+	if !strings.Contains(source, "max_completion_tokens: 2048") {
+		t.Fatalf("decompiled planner omitted completion limit:\n%s", source)
+	}
+}
+
 func TestCompileWorkflowsStaticRolesAlgorithm(t *testing.T) {
 	input := `
 ROUTE flow_static {

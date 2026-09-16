@@ -58,14 +58,16 @@ entrypoints:
     recipe: default
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
+          provider: vllm
 `
 
 func newEntrypointTestRouter(t *testing.T) *OpenAIRouter {
@@ -155,6 +157,61 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, ctx)
 	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
 		t.Fatalf("expected the auto model to use default recipe candidates, got %+v", candidates)
+	}
+}
+
+func TestDirectLooperAliasesResolveOnlyTheirAlgorithm(t *testing.T) {
+	decisions := []config.Decision{
+		{
+			Name:      "remom_route",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmReMoM},
+		},
+		{
+			Name:      "fusion_route",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion},
+		},
+		{
+			Name:      "flow_route",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmWorkflows},
+		},
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{Decisions: decisions},
+		Looper: config.LooperConfig{
+			Endpoint: "http://router.test/v1/chat/completions",
+			ReMoM:    config.ReMoMRuntimeConfig{ModelNames: []string{"router/remom"}},
+			Fusion:   config.FusionRuntimeConfig{ModelNames: []string{"router/fusion"}},
+			Flow:     config.FlowRuntimeConfig{ModelNames: []string{"router/flow"}},
+		},
+	}}
+
+	testCases := []struct {
+		alias        string
+		wantDecision string
+	}{
+		{alias: "router/remom", wantDecision: "remom_route"},
+		{alias: "router/fusion", wantDecision: "fusion_route"},
+		{alias: "router/flow", wantDecision: "flow_route"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.alias, func(t *testing.T) {
+			ctx := &RequestContext{}
+			router.resolveEntrypointForRequest(testCase.alias, ctx)
+			if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != config.DefaultRecipeName {
+				t.Fatalf("direct alias %q did not resolve the default recipe", testCase.alias)
+			}
+			candidates := router.decisionCandidatesForRequest(testCase.alias, ctx)
+			if len(candidates) != 1 || candidates[0].Name != testCase.wantDecision {
+				t.Fatalf("direct alias %q candidates = %+v, want %q", testCase.alias, candidates, testCase.wantDecision)
+			}
+			ctx.VSRSelectedDecision = &candidates[0]
+			if !router.routeExecutesLooper(ctx) {
+				t.Fatalf("direct alias %q did not enter the unified Looper path", testCase.alias)
+			}
+		})
 	}
 }
 
@@ -382,14 +439,16 @@ entrypoints:
     recipe: privacy
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
+          provider: vllm
 `
 
 func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
@@ -488,11 +547,12 @@ entrypoints:
     recipe: screening
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 `
 
 func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {

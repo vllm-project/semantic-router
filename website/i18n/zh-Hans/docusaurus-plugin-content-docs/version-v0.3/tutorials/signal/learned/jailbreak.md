@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`jailbreak` 在路由器提交路由前检测提示注入与越狱企图。映射到 `config/signal/jailbreak/`，在 `routing.signals.jailbreak` 中声明。
+`jailbreak` 在路由器提交路由前检测提示注入与越狱企图。映射到 `config/fragments/signal/jailbreak/`，在 `routing.signals.jailbreak` 中声明。
 
 该族为学习型：使用 `global.model_catalog.modules.prompt_guard` 与 `global.model_catalog.system` 中的越狱模型绑定。
 
@@ -37,14 +37,14 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/jailbreak/`
+源片段族：`config/fragments/signal/jailbreak/`
 
 ```yaml
 routing:
   signals:
     jailbreak:
       - name: prompt_injection
-        method: hybrid
+        method: contrastive
         threshold: 0.8
         include_history: true
         description: Detect common prompt-injection or jailbreak attempts.

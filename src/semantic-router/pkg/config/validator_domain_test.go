@@ -10,9 +10,9 @@ import (
 )
 
 func TestSupportedRoutingDomainNamesStayInSyncWithCommittedDomainContract(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(referenceConfigRepoRoot(t), "config", "signal", "domain", "mmlu.yaml"))
+	data, err := os.ReadFile(filepath.Join(referenceConfigRepoRoot(t), "config", "fragments", "signal", "domain", "mmlu.yaml"))
 	if err != nil {
-		t.Fatalf("read config/signal/domain/mmlu.yaml: %v", err)
+		t.Fatalf("read config/fragments/signal/domain/mmlu.yaml: %v", err)
 	}
 
 	var fragment struct {

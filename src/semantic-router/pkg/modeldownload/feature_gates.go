@@ -9,6 +9,14 @@ type modelFeatureGate struct {
 
 var optionalModelFeatureGates = []modelFeatureGate{
 	{
+		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(false) },
+		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Safety.ModelID} },
+	},
+	{
+		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(true) },
+		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Hazard.ModelID} },
+	},
+	{
 		enabled: func(cfg *config.RouterConfig) bool {
 			return !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend()
 		},
@@ -48,7 +56,8 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsFactCheckClassifierEnabled()
+			return cfg.NeedsFactCheckModelForAPI() ||
+				cfg.NeedsFactCheckModelForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.HallucinationMitigation.FactCheckModel.ModelID}
@@ -56,18 +65,28 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsHallucinationModelEnabled()
+			return cfg.NeedsLocalHallucinationModelsForRouting() ||
+				(cfg.NeedsHallucinationDetectorForDefaultRuntime() &&
+					cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendCandle)
 		},
 		paths: func(cfg *config.RouterConfig) []string {
-			return []string{
-				cfg.HallucinationMitigation.HallucinationModel.ModelID,
-				cfg.HallucinationMitigation.NLIModel.ModelID,
-			}
+			return []string{cfg.HallucinationMitigation.HallucinationModel.ModelID}
 		},
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsFeedbackDetectorEnabled()
+			return cfg.NeedsLocalHallucinationNLIForAPI() ||
+				cfg.NeedsLocalHallucinationNLIForRouting() ||
+				cfg.NeedsLocalNLIForSemanticCache()
+		},
+		paths: func(cfg *config.RouterConfig) []string {
+			return []string{cfg.HallucinationMitigation.NLIModel.ModelID}
+		},
+	},
+	{
+		enabled: func(cfg *config.RouterConfig) bool {
+			return cfg.NeedsFeedbackModelForAPI() ||
+				cfg.NeedsFeedbackModelForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.FeedbackDetector.ModelID}
@@ -86,12 +105,25 @@ var optionalModelFeatureGates = []modelFeatureGate{
 
 func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) []string {
 	disabled := make(map[string]struct{})
+	enabled := make(map[string]bool)
+	for _, rule := range cfg.ClassifierRules {
+		if rule.ModelPath != "" {
+			enabled[rule.ModelPath] = true
+		}
+	}
+	for _, gate := range optionalModelFeatureGates {
+		if gate.enabled(cfg) {
+			for _, path := range gate.paths(cfg) {
+				enabled[path] = true
+			}
+		}
+	}
 	for _, gate := range optionalModelFeatureGates {
 		if gate.enabled(cfg) {
 			continue
 		}
 		for _, path := range gate.paths(cfg) {
-			if path != "" {
+			if path != "" && !enabled[path] {
 				disabled[path] = struct{}{}
 			}
 		}
@@ -109,7 +141,9 @@ func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) 
 
 func isModalityClassifierEnabled(cfg *config.RouterConfig) bool {
 	md := cfg.ModalityDetector
-	if !md.Enabled || md.Classifier == nil || md.Classifier.ModelPath == "" {
+	// Match runtime ownership: inherited settings alone do not prepare a
+	// modality classifier in a recipe that declares no modality rules.
+	if len(cfg.ModalityRules) == 0 || !md.Enabled || md.Classifier == nil || md.Classifier.ModelPath == "" {
 		return false
 	}
 

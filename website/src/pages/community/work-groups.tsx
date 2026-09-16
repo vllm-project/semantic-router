@@ -1,263 +1,114 @@
-import React from 'react'
-import Layout from '@theme/Layout'
+import type { ReactNode } from 'react'
 import Translate from '@docusaurus/Translate'
-import Link from '@docusaurus/Link'
+import Layout from '@theme/Layout'
+import React from 'react'
 import CommunityLayout from '@site/src/components/community/CommunityLayout'
+import {
+  type WorkGroup,
+  type WorkGroupPerson,
+  workGroups,
+} from '@site/src/data/workGroups'
 import styles from './work-groups.module.css'
 
-interface WorkGroup {
-  name: string
-  description: string
-  label: string
-  icon: string
-  skills: string[]
-  needs: string[]
-}
+const GITHUB_BASE = 'https://github.com/vllm-project/semantic-router'
+const VLLM_LOGO = '/img/acknowledgements/vllm-logo.png'
 
-const workingGroups: WorkGroup[] = [
-  // First column - Core areas
-  {
-    name: 'RouterCore',
-    description: 'Using embedded SLM, implement advanced routing algorithm like classify, security detection, auto reasoning etc.',
-    label: 'area/core',
-    icon: 'RC',
-    skills: ['Machine learning', 'BERT models', 'Classification algorithms'],
-    needs: ['Model optimization', 'Algorithm improvements', 'Reasoning logic'],
-  },
-  {
-    name: 'Research',
-    description: 'Explore the frontier of SLM (Small Language Model) in vLLM Semantic Router, improving latency and context of SLM.',
-    label: 'area/research',
-    icon: 'RS',
-    skills: ['Model Training', 'Model Fine-Tuning', 'Deep Learning'],
-    needs: ['SLM research', 'Latency optimization', 'Context improvement'],
-  },
-  {
-    name: 'Networking',
-    description: 'Envoy ExtProc, Traffic Management, Networks Optimization',
-    label: 'area/networking',
-    icon: 'NW',
-    skills: ['Envoy proxy', 'Network protocols', 'Performance optimization'],
-    needs: ['Load balancing', 'Traffic routing', 'Network security'],
-  },
-  // Second column - Operations and monitoring
-  {
-    name: 'Observability',
-    description: 'Metrics collection, distributed tracing, monitoring dashboards, and structured logging for production visibility',
-    label: 'area/observability',
-    icon: 'OB',
-    skills: ['Prometheus/Grafana', 'OpenTelemetry', 'Log aggregation', 'Monitoring systems'],
-    needs: ['Metrics implementation', 'Tracing integration', 'Dashboard creation', 'Log standardization'],
-  },
-  {
-    name: 'Bench',
-    description: 'Reasoning Benchmark Framework, Performance Optimization',
-    label: 'area/benchmark',
-    icon: 'BM',
-    skills: ['Performance testing', 'Benchmarking tools', 'Data analysis'],
-    needs: ['Benchmark frameworks', 'Performance metrics', 'Testing automation'],
-  },
-  {
-    name: 'Environment',
-    description: 'Docker Compose, Kubernetes, Local support, Cloud Foundry Integration',
-    label: 'area/environment',
-    icon: 'EN',
-    skills: ['Docker', 'Kubernetes', 'Cloud platforms', 'DevOps'],
-    needs: ['Helm charts', 'Deployment automation', 'Cloud integrations'],
-  },
-  // Third column - Development and user experience
-  {
-    name: 'Test and Release',
-    description: 'CI/CD, Build, test, release',
-    label: 'area/tooling, area/ci',
-    icon: 'TR',
-    skills: ['CI/CD tools', 'Build automation', 'Release processes'],
-    needs: ['Test automation', 'Release pipelines', 'Quality assurance'],
-  },
-  {
-    name: 'User Experience',
-    description: 'User experience across vLLM Semantic Router, API, Configuration and CLI guidelines and support',
-    label: 'area/user-experience',
-    icon: 'UX',
-    skills: ['API design', 'UX/UI', 'Developer experience'],
-    needs: ['API improvements', 'CLI enhancements', 'User feedback integration'],
-  },
-  {
-    name: 'Docs',
-    description: 'User docs, information architecture, infrastructure',
-    label: 'area/document',
-    icon: 'DX',
-    skills: ['Technical writing', 'Documentation tools', 'User experience design'],
-    needs: ['API documentation', 'Tutorials', 'Deployment guides'],
-  },
-]
-
-interface WorkGroupCardProps {
-  group: WorkGroup
-}
-
-const WorkGroupCard: React.FC<WorkGroupCardProps> = ({ group }) => {
-  const groupId = group.name.replace(/\s+/g, '').toLowerCase()
-
-  return (
-    <div className={styles.workGroupCard}>
-      <div className={styles.cardHeader}>
-        <span className={styles.icon}>{group.icon}</span>
-        <h3 className={styles.groupName}>
-          <Translate id={`workGroups.group.${groupId}.name`}>{group.name}</Translate>
-        </h3>
-        <span className={styles.label}>{group.label}</span>
-      </div>
-      <p className={styles.description}>
-        <Translate id={`workGroups.group.${groupId}.description`}>{group.description}</Translate>
-      </p>
-
-      <div className={styles.skillsSection}>
-        <h4><Translate id="workGroups.card.skillsNeeded">Skills Needed:</Translate></h4>
-        <ul className={styles.skillsList}>
-          {group.skills && group.skills.map((skill, index) => (
-            <li key={index}>
-              <Translate id={`workGroups.group.${groupId}.skills.${index}`}>{skill}</Translate>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className={styles.needsSection}>
-        <h4><Translate id="workGroups.card.currentNeeds">Current Needs:</Translate></h4>
-        <ul className={styles.needsList}>
-          {group.needs && group.needs.map((need, index) => (
-            <li key={index}>
-              <Translate id={`workGroups.group.${groupId}.needs.${index}`}>{need}</Translate>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  )
-}
-
-const WorkGroups: React.FC = () => {
+export default function WorkGroups(): ReactNode {
   return (
     <Layout
-      title="Work Groups"
-      description="vLLM Semantic Router Community Working Groups"
+      title="Working Groups"
+      description="Direction-based vLLM Semantic Router Working Groups"
     >
       <CommunityLayout
         activeKey="work-groups"
-        title={<Translate id="workGroups.title">vLLM Semantic Router Work Groups</Translate>}
+        title={<Translate id="workGroups.page.title">Working Groups</Translate>}
+        description={(
+          <Translate id="workGroups.page.description">
+            Find a technical focus, meet collaborators, and contribute to accepted work.
+          </Translate>
+        )}
       >
         <div className={styles.main}>
-          <section className={styles.intro}>
-            <h2>
-              <Translate id="workGroups.init.title">WG Initialization</Translate>
-            </h2>
-            <p>
-              <Translate id="workGroups.init.description">
-                We are looking for interests around vLLM Semantic Router project and separate it into different WGs.
-              </Translate>
-            </p>
-            <p>
-              <Translate id="workGroups.init.comment.prefix">Please comment on</Translate>
-              {' '}
-              <a
-                href="https://github.com/vllm-project/semantic-router/issues/15"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.link}
-              >
-                GitHub Issue #15
-              </a>
-              {' '}
-              <Translate id="workGroups.init.comment.suffix">if you are interested in one or more.</Translate>
-            </p>
-          </section>
+          <section className={styles.groupsSection}>
+            <header className={styles.groupsHeader}>
+              <h2>
+                <Translate id="workGroups.page.focusTitle">Find your focus and passion</Translate>
+              </h2>
+              <p>
+                <Translate id="workGroups.page.focusDescription">
+                  Build and grow with the community.
+                </Translate>
+              </p>
+            </header>
 
-          <section className={styles.workingGroupsSection}>
-            <h2>
-              <Translate id="workGroups.community.title">vLLM Semantic Router Community WG</Translate>
-            </h2>
-            <p>
-              <Translate id="workGroups.community.description">
-                This section is about setting WG around this project, to gather focus on specify areas.
-              </Translate>
-            </p>
-
-            <div className={styles.workGroupsGrid}>
-              {workingGroups.map((group, index) => (
-                <WorkGroupCard key={index} group={group} />
+            <div className={styles.groupList}>
+              {workGroups.map((group, index) => (
+                <WorkGroupRow key={group.id} group={group} index={index + 1} />
               ))}
             </div>
           </section>
 
-          <section className={styles.promotion}>
-            <h2>
-              <Translate id="workGroups.promotion.title">Community Promotion</Translate>
-            </h2>
+          <section className={styles.participation}>
+            <header className={styles.sectionHeading}>
+              <span><Translate id="workGroups.participation.label">Participation</Translate></span>
+              <div>
+                <h2><Translate id="workGroups.participation.title">Lead and Member roles</Translate></h2>
+                <p>
+                  <Translate id="workGroups.participation.description">
+                    Roles make technical ownership and contribution paths visible.
+                  </Translate>
+                </p>
+              </div>
+            </header>
+            <dl className={styles.rules}>
+              <div>
+                <dt><Translate id="workGroups.participation.lead.title">Lead</Translate></dt>
+                <dd>
+                  <Translate id="workGroups.participation.lead.description">
+                    One or more per group; a Committer or a Contributor sponsored by a Maintainer.
+                  </Translate>
+                </dd>
+              </div>
+              <div>
+                <dt><Translate id="workGroups.participation.member.title">Member</Translate></dt>
+                <dd>
+                  <Translate id="workGroups.participation.member.description">
+                    A Contributor with at least one merged repository commit.
+                  </Translate>
+                </dd>
+              </div>
+              <div>
+                <dt><Translate id="workGroups.participation.visibility.title">Visibility</Translate></dt>
+                <dd>
+                  <Translate id="workGroups.participation.visibility.description">
+                    Confirmed Leads and Members appear here with their avatar and name.
+                  </Translate>
+                </dd>
+              </div>
+              <div>
+                <dt><Translate id="workGroups.participation.authority.title">Authority</Translate></dt>
+                <dd>
+                  <Translate id="workGroups.participation.authority.description">
+                    Workgroup roles are separate from Open Source Team repository and release authority.
+                  </Translate>
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className={styles.proposal}>
             <p>
-              <Translate id="workGroups.promotion.description">
-                We are grateful for any contributions, and if you show consistent contributions to the above specify area,
-                you will be promoting as its maintainer after votes from maintainer team, and you will be invited to
-                semantic-router-maintainer group, and granted WRITE access to this repo.
+              <strong>
+                <Translate id="workGroups.proposal.title">Need a new Workgroup?</Translate>
+              </strong>
+              {' '}
+              <Translate id="workGroups.proposal.description">
+                Propose one only when a durable problem does not fit an existing charter.
               </Translate>
             </p>
-          </section>
-
-          <section className={styles.getInvolved}>
-            <h2><Translate id="workGroups.getInvolved.title">How to Get Involved</Translate></h2>
-            <ol className={styles.stepsList}>
-              <li>
-                <strong><Translate id="workGroups.step1.title">Choose Your Interest Area:</Translate></strong>
-                {' '}
-                <Translate id="workGroups.step1.desc">Review the working groups above and identify which areas align with your skills and interests</Translate>
-              </li>
-              <li>
-                <strong><Translate id="workGroups.step2.title">Join the Discussion:</Translate></strong>
-                {' '}
-                <Translate id="workGroups.step2.desc.prefix">Comment on</Translate>
-                {' '}
-                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">GitHub Issue #15</a>
-                {' '}
-                <Translate id="workGroups.step2.desc.suffix">to express your interest</Translate>
-              </li>
-              <li>
-                <strong><Translate id="workGroups.step3.title">Start Contributing:</Translate></strong>
-                {' '}
-                <Translate id="workGroups.step3.desc">Look for issues labeled with the corresponding area tags (e.g.,</Translate>
-                {' '}
-                <code>area/document</code>
-                ,
-                {' '}
-                <code>area/core</code>
-                )
-              </li>
-              <li>
-                <strong><Translate id="workGroups.step4.title">Collaborate:</Translate></strong>
-                {' '}
-                <Translate id="workGroups.step4.desc">Connect with other community members working in the same areas</Translate>
-              </li>
-            </ol>
-          </section>
-
-          <section className={styles.contact}>
-            <h2><Translate id="workGroups.contact.title">Contact</Translate></h2>
-            <p><Translate id="workGroups.contact.desc">For questions about working groups or to get involved:</Translate></p>
-            <ul>
-              <li>
-                <Translate id="workGroups.contact.issue">Open an issue on</Translate>
-                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer"> Issue </a>
-              </li>
-              <li>
-                <Translate id="workGroups.contact.discussion">Join the discussion on</Translate>
-                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer"> Issue #15</a>
-              </li>
-              <li>
-                <Translate id="workGroups.contact.docs">Check out our</Translate>
-                <Link to="/docs/intro"> documentation</Link>
-                {' '}
-                <Translate id="workGroups.contact.start">to get started</Translate>
-              </li>
-            </ul>
+            <a href={`${GITHUB_BASE}/issues/new?template=001_feature_request.yaml`}>
+              <Translate id="workGroups.proposal.link">Open a proposal</Translate>
+            </a>
           </section>
         </div>
       </CommunityLayout>
@@ -265,4 +116,109 @@ const WorkGroups: React.FC = () => {
   )
 }
 
-export default WorkGroups
+function WorkGroupRow({
+  group,
+  index,
+}: {
+  group: WorkGroup
+  index: number
+}): ReactNode {
+  const charterUrl = `${GITHUB_BASE}/issues/${group.charterIssue}`
+  const epicsUrl = `${GITHUB_BASE}/issues?q=${encodeURIComponent(`is:issue is:open label:epic label:${group.label}`)}`
+
+  return (
+    <article className={styles.workGroup} id={group.id}>
+      <div className={styles.groupLogo}>
+        <img src={VLLM_LOGO} alt="" />
+      </div>
+
+      <header className={styles.groupIdentity}>
+        <span>{String(index).padStart(2, '0')}</span>
+        <h3>
+          <Translate id={`workGroups.group.${group.id}.name`}>{group.name}</Translate>
+        </h3>
+        <p>
+          <Translate id={`workGroups.group.${group.id}.goal`}>{group.goal}</Translate>
+        </p>
+        <code>{group.label}</code>
+      </header>
+
+      <div className={styles.groupDetails}>
+        <div className={styles.focus}>
+          <h4><Translate id="workGroups.group.focus">Focus</Translate></h4>
+          <ul>
+            {group.scope.map((item, scopeIndex) => (
+              <li key={item}>
+                <Translate id={`workGroups.group.${group.id}.scope.${scopeIndex}`}>{item}</Translate>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <footer className={styles.groupFooter}>
+          <div className={styles.roster}>
+            <Roster
+              title="Leads"
+              titleId="workGroups.roster.leads"
+              people={group.leads ?? []}
+              empty="Open"
+              emptyId="workGroups.roster.open"
+            />
+            <Roster
+              title="Members"
+              titleId="workGroups.roster.members"
+              people={group.members ?? []}
+              empty="Forming"
+              emptyId="workGroups.roster.forming"
+            />
+          </div>
+          <div className={styles.groupLinks}>
+            <a className={styles.charterLink} href={epicsUrl}>
+              <Translate id="workGroups.group.epicsLink">Current Epics →</Translate>
+            </a>
+            <a className={styles.charterLink} href={charterUrl}>
+              <Translate id="workGroups.group.charterLink">Charter & self-nomination →</Translate>
+            </a>
+          </div>
+        </footer>
+      </div>
+    </article>
+  )
+}
+
+function Roster({
+  title,
+  titleId,
+  people,
+  empty,
+  emptyId,
+}: {
+  title: string
+  titleId: string
+  people: WorkGroupPerson[]
+  empty: string
+  emptyId: string
+}): ReactNode {
+  return (
+    <div className={styles.rosterGroup}>
+      <span><Translate id={titleId}>{title}</Translate></span>
+      {people.length === 0
+        ? <strong><Translate id={emptyId}>{empty}</Translate></strong>
+        : (
+            <div className={styles.people}>
+              {people.map(person => (
+                <a
+                  key={person.profile}
+                  className={styles.person}
+                  href={person.profile}
+                  aria-label={`${person.name} on GitHub`}
+                >
+                  <img src={person.avatar} alt="" loading="lazy" />
+                  <strong>{person.name}</strong>
+                </a>
+              ))}
+            </div>
+          )}
+    </div>
+  )
+}

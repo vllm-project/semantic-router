@@ -1,10 +1,13 @@
 package classification
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -76,7 +79,8 @@ func createJailbreakInitializer() JailbreakInitializer {
 
 // MmBERT32KJailbreakInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for jailbreak detection.
 type MmBERT32KJailbreakInitializerImpl struct {
-	usedMmBERT32K bool
+	maxSequenceLength int
+	usedMmBERT32K     bool
 }
 
 func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
@@ -84,7 +88,7 @@ func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, nu
 		"backend":   "mmbert_32k",
 		"model_ref": modelID,
 	})
-	err := candle_binding.InitMmBert32KJailbreakClassifier(modelID, useCPU)
+	err := candle_binding.InitMmBert32KJailbreakClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector: %w", err)
 	}
@@ -96,104 +100,160 @@ func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, nu
 	return nil
 }
 
-// createMmBERT32KJailbreakInitializer creates an mmBERT-32K jailbreak initializer.
-func createMmBERT32KJailbreakInitializer() JailbreakInitializer {
-	return &MmBERT32KJailbreakInitializerImpl{}
+// deriveArgmax returns the index and score of the highest-probability class
+// in a complete distribution. It is the single place argmax/confidence is
+// computed for jailbreak classification, so every SequenceClassifierBackend
+// only ever returns raw probabilities.
+func deriveArgmax(probabilities []float32) (int, float32) {
+	bestIdx := -1
+	var bestScore float32
+	for idx, p := range probabilities {
+		if bestIdx == -1 || p > bestScore {
+			bestIdx = idx
+			bestScore = p
+		}
+	}
+	return bestIdx, bestScore
 }
 
-type JailbreakInference interface {
-	Classify(text string) (candle_binding.ClassResult, error)
-}
-
-// JailbreakProbInference is optionally implemented by jailbreak backends that can
-// return the full class-probability distribution, not just the argmax class. When a
-// backend implements it, callers can report the probability of the jailbreak class
-// itself rather than the confidence of whichever class wins argmax.
-type JailbreakProbInference interface {
-	ClassifyWithProbs(text string) (candle_binding.ClassResultWithProbs, error)
+// candleResultToSequenceClassification drops the argmax fields Candle's FFI
+// layer computes and keeps only the probability distribution, so local
+// backends return the same classification-owned type as every other backend.
+func candleResultToSequenceClassification(result candle_binding.ClassResultWithProbs) SequenceClassificationResult {
+	return SequenceClassificationResult{Probabilities: append([]float32(nil), result.Probabilities...)}
 }
 
 type JailbreakInferenceImpl struct{}
 
-func (c *JailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+func (c *JailbreakInferenceImpl) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
 	// Try jailbreak-specific classifier first, fall back to ModernBERT if it fails
-	result, err := candle_binding.ClassifyJailbreakText(text)
+	result, err := candle_binding.ClassifyJailbreakTextWithProbs(text)
 	if err != nil {
 		// Jailbreak classifier not initialized or failed, try ModernBERT
-		return candle_binding.ClassifyModernBertJailbreakText(text)
+		result, err = candle_binding.ClassifyModernBertJailbreakTextWithProbs(text)
+		if err != nil {
+			return SequenceClassificationResult{}, err
+		}
 	}
-	return result, nil
+	return candleResultToSequenceClassification(result), nil
 }
 
 // createJailbreakInferenceCandle creates Candle-based jailbreak inference (auto-detecting).
-func createJailbreakInferenceCandle() JailbreakInference {
+func createJailbreakInferenceCandle() SequenceClassifierBackend {
 	return &JailbreakInferenceImpl{}
 }
 
 // MmBERT32KJailbreakInferenceImpl uses mmBERT-32K for jailbreak detection.
 type MmBERT32KJailbreakInferenceImpl struct{}
 
-func (c *MmBERT32KJailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
-	return candle_binding.ClassifyMmBert32KJailbreak(text)
-}
-
-// ClassifyWithProbs returns the mmBERT-32K jailbreak prediction together with the
-// full softmax probability distribution, satisfying JailbreakProbInference.
-func (c *MmBERT32KJailbreakInferenceImpl) ClassifyWithProbs(text string) (candle_binding.ClassResultWithProbs, error) {
-	return candle_binding.ClassifyMmBert32KJailbreakWithProbs(text)
+func (c *MmBERT32KJailbreakInferenceImpl) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
+	result, err := candle_binding.ClassifyMmBert32KJailbreakWithProbs(text)
+	if err != nil {
+		return SequenceClassificationResult{}, err
+	}
+	return candleResultToSequenceClassification(result), nil
 }
 
 // createMmBERT32KJailbreakInference creates mmBERT-32K jailbreak inference.
-func createMmBERT32KJailbreakInference() JailbreakInference {
+func createMmBERT32KJailbreakInference() SequenceClassifierBackend {
 	return &MmBERT32KJailbreakInferenceImpl{}
 }
 
-// createJailbreakInference creates the appropriate jailbreak inference based on configuration.
-// Checks UseMmBERT32K and UseVLLM flags to decide between mmBERT-32K, vLLM, or Candle implementation.
-// When UseMmBERT32K is true, uses mmBERT-32K (32K context, YaRN RoPE, multilingual).
-// When UseVLLM is true, it will try to find external model config with role="guardrail".
-func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig) (JailbreakInference, error) {
-	// Check for mmBERT-32K first (takes precedence)
-	if promptGuardCfg.UseMmBERT32K {
-		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend": "mmbert_32k",
-		})
-		return createMmBERT32KJailbreakInference(), nil
+// createJailbreakInference creates the appropriate jailbreak inference based on
+// the configured prompt_guard.protocol (remote) or prompt_guard.variant
+// (local) - the two are mutually exclusive, validated at config load time.
+// An empty/unset variant reaching this switch falls back to candle - but a
+// canonical-resolved config never actually reaches here empty: canonical
+// defaults set variant to mmbert32k explicitly (see
+// config.PromptGuardVariantCandle's doc comment). This fallback only fires
+// for configs built without going through canonical resolution.
+func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping, models ...*classifierModelRuntime) (SequenceClassifierBackend, error) {
+	if promptGuardCfg.Backend != nil {
+		backend := promptGuardCfg.Backend
+		contract := config.RemoteClassifierContractLabelDistribution
+		if backend.Protocol == config.RemoteClassifierProtocolHTTPChat {
+			contract = config.RemoteClassifierContractLabelDecision
+		}
+		external, err := config.ResolveRemoteClassifierBackend(routerCfg, backend, config.ModelRoleGuardrail, contract)
+		if err != nil {
+			return nil, err
+		}
+		switch backend.Protocol {
+		case config.RemoteClassifierProtocolHTTPClassify:
+			inference, err := newHTTPClassifierInference(external, jailbreakMapping, time.Duration(backend.EffectiveDeadlineMs())*time.Millisecond)
+			if err != nil {
+				return nil, err
+			}
+			return bindRemoteJailbreak(models, routerCfg, backend, external, jailbreakMapping, inference)
+		case config.RemoteClassifierProtocolHTTPChat:
+			inference, err := NewVLLMJailbreakInference(external, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
+			if err != nil {
+				return nil, err
+			}
+			inference.timeout = time.Duration(backend.EffectiveDeadlineMs()) * time.Millisecond
+			return bindRemoteJailbreak(models, routerCfg, backend, external, jailbreakMapping, inference)
+		default:
+			return nil, fmt.Errorf("unsupported prompt guard adapter %q", backend.Protocol)
+		}
 	}
-
-	if promptGuardCfg.UseVLLM {
-		// Try to find external model configuration with role="guardrail"
-		externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleGuardrail)
-		if externalCfg == nil {
-			return nil, fmt.Errorf("external model with model_role='%s' is required when use_vllm=true", config.ModelRoleGuardrail)
+	if promptGuardCfg.Protocol != "" {
+		externalCfg, err := findGuardrailExternalModel(routerCfg)
+		if err != nil {
+			return nil, err
 		}
-
-		// Validate required fields
-		if externalCfg.ModelEndpoint.Address == "" {
-			return nil, fmt.Errorf("external guardrail model endpoint address is required")
-		}
-		if externalCfg.ModelName == "" {
-			return nil, fmt.Errorf("external guardrail model name is required")
-		}
-
 		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend":  "external_guardrail",
+			"protocol": promptGuardCfg.Protocol,
 			"provider": externalCfg.Provider,
 		})
-
-		// Use vLLM-based inference with external config.
-		// Pass default threshold from PromptGuardConfig.
-		return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold)
+		switch promptGuardCfg.Protocol {
+		case config.PromptGuardProtocolHTTPChat:
+			// Pass default threshold from PromptGuardConfig.
+			return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
+		case config.PromptGuardProtocolHTTPClassify:
+			return NewHTTPClassifierInference(externalCfg, jailbreakMapping)
+		default:
+			return nil, fmt.Errorf("prompt_guard.protocol: unrecognized value %q", promptGuardCfg.Protocol)
+		}
 	}
-	// Use Candle-based inference.
-	return createJailbreakInferenceCandle(), nil
+
+	switch promptGuardCfg.Variant {
+	case config.PromptGuardVariantMmBERT32K:
+		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
+			"variant": config.PromptGuardVariantMmBERT32K,
+		})
+		return createMmBERT32KJailbreakInference(), nil
+
+	default:
+		// Empty/unset or "candle": use Candle-based inference.
+		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
+			"variant": config.PromptGuardVariantCandle,
+		})
+		return createJailbreakInferenceCandle(), nil
+	}
+}
+
+// findGuardrailExternalModel looks up and validates the external model
+// configuration required by prompt_guard.protocol (http_chat/http_classify).
+func findGuardrailExternalModel(routerCfg *config.RouterConfig) (*config.ExternalModelConfig, error) {
+	externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleGuardrail)
+	if externalCfg == nil {
+		return nil, fmt.Errorf("external model with model_role='%s' is required for this prompt_guard.protocol", config.ModelRoleGuardrail)
+	}
+	if externalCfg.ModelEndpoint.Address == "" {
+		return nil, fmt.Errorf("external guardrail model endpoint address is required")
+	}
+	if externalCfg.ModelName == "" {
+		return nil, fmt.Errorf("external guardrail model name is required")
+	}
+	return externalCfg, nil
 }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content.
 type JailbreakDetection struct {
-	Content       string  `json:"content"`
-	IsJailbreak   bool    `json:"is_jailbreak"`
-	JailbreakType string  `json:"jailbreak_type"`
-	Confidence    float32 `json:"confidence"`
-	ContentIndex  int     `json:"content_index"`
+	Content       string               `json:"content"`
+	IsJailbreak   bool                 `json:"is_jailbreak"`
+	JailbreakType string               `json:"jailbreak_type"`
+	Confidence    *float32             `json:"confidence,omitempty"`
+	Decision      *tasks.LabelDecision `json:"decision,omitempty"`
+	ContentIndex  int                  `json:"content_index"`
 }

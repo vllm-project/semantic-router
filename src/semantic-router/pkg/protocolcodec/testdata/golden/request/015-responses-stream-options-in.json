@@ -1,0 +1,8 @@
+{
+  "model": "client-model",
+  "input": "stream this",
+  "stream": true,
+  "stream_options": {
+    "include_obfuscation": false
+  }
+}

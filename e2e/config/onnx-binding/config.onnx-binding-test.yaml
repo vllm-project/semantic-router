@@ -2,16 +2,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen2.5:3b
   models:
   - name: qwen2.5:3b
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     backend_refs:
     - name: ollama
       endpoint: 127.0.0.1:11434
+      provider: ollama
       weight: 1
 routing:
   decisions:
@@ -35,12 +34,20 @@ routing:
       description: Technical questions
   modelCards:
   - name: qwen2.5:3b
+  model_bindings:
+    embedding:
+      deployment: embedding-onnx
+      contract: embedding.v1
+      adapter: mmbert
+      head: onnx/model.onnx
 global:
   model_catalog:
     embeddings:
       semantic:
         use_cpu: true
-        mmbert_model_path: onnx-binding/mmbert-32k-yarn-onnx
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+        embedding_config:
+          model_type: mmbert
     modules:
       classifier:
         domain:
@@ -53,6 +60,15 @@ global:
         enabled: false
       feedback_detector:
         enabled: false
+    deployments:
+      embedding-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
   router: {}
   services:
     response_api:
@@ -65,7 +81,7 @@ global:
       ttl_seconds: 2592000
       async_writes: true
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.85
@@ -77,6 +93,4 @@ global:
     tools:
       enabled: true
       tools_db_path: config/runtime/tools/tools_db.json
-      model_type: mmbert
-      target_dim: 0
       similarity_threshold: 0.7

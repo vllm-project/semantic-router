@@ -1,0 +1,11 @@
+plugin:
+  type: response_cache
+  configuration:
+    enabled: true
+    mode: exact_then_semantic
+    scope: user
+    semantic:
+      similarity_threshold: 0.8
+    ttl_seconds: 3600
+    personalized:
+      mode: disabled

@@ -1,75 +1,66 @@
-# 贡献指南
+---
+title: 贡献
+translation:
+  source_commit: "867155c924b6527d6a412e1412ce712a9e5cc9b8"
+  source_file: "docs/community/overview.md"
+  outdated: false
+---
 
-:::info[权威来源]
-本页内容生成自 [CONTRIBUTING.md](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md)，以代码仓库中的文件为准。
-:::
+# 贡献
 
-## 快速开始
+欢迎向 Router、CLI、控制面板、部署资产、文档和评测工具贡献。仓库的
+[CONTRIBUTING.md](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md)
+是权威工作流；本页只给出多数贡献者需要的检查路径。
+
+## 开始之前
+
+- 开新工作前先搜索已有 issue 和 pull request，避免重复。
+- 改带本地规则的模块前，先读最近的 `AGENTS.md`。
+- 一个 pull request 只聚焦一个行为或文档结果。
+- 变更影响可观察行为时，补充或更新测试。
+
+## 本地工作流
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
 cd semantic-router
-make download-models  # 从 HuggingFace 下载 ML 模型
-make build            # 构建 Rust + Go 组件
-make test             # 运行所有测试
+
+make harness-bootstrap
+make impact ENV=cpu CHANGED_FILES="path/to/changed-file"
 ```
 
-## 工作流程
+`impact` 会报告所有权、最低检查，以及变更路径对应的候选 CI 或 E2E。它不会替你选开发流程。只有 ROCm 相关行为才用 `ENV=amd`。
 
-### 创建分支
+默认本地镜像流程：
 
 ```bash
-git checkout -b feature/your-feature-name
+make vllm-sr-dev
+vllm-sr serve --image-pull-policy never
 ```
 
-### 本地构建和测试
+针对性测试和运行时命令见[开发指南](./development)。
+
+## 提交 pull request 之前
+
+运行你这次变更对应的检查。范围匹配时，这些仓库级入口很有用：
 
 ```bash
-make clean && make build && make test
+make check CHANGED_FILES="path/to/changed-file"
+make ci-full  # 高风险变更或完整本地 PR 对齐
 ```
 
-### 运行端到端测试
+pull request 中的每个提交都必须带 Developer Certificate of Origin 签名：
 
 ```bash
-make run-envoy &
-make run-router &
-python e2e/testing/run_all_tests.py
+git commit -s -m "describe the change"
 ```
 
-### 运行 Pre-commit 检查
+在 pull request 里说明问题、用户可见结果，以及你跑过的验证。只有帮助评审视觉变更时才附截图。
 
-```bash
-pre-commit run --all-files
-```
+## 贡献者指南
 
-如未安装：`pip install pre-commit && pre-commit install`
-
-### 使用 DCO 签名提交
-
-所有提交**必须**签名（DCO 要求）。不使用 `-s` 参数，CI 将**拒绝**你的 PR。
-
-```bash
-git commit -s -m "feat: add something"
-```
-
-### 提交 PR
-
-- 目标分支：`main`
-- 包含：描述 + 关联 issue 链接 + 测试结果
-- `make test` 和端到端测试必须通过
-
-## 调试
-
-| 组件 | 调试方法 |
-|------|----------|
-| Envoy | 查看 `make run-envoy` 终端的请求/响应日志 |
-| Router | 查看 `make run-router` 终端的路由决策 |
-| Rust | `RUST_LOG=debug`（级别：trace/debug/info/warn/error） |
-| Go | `SR_LOG_LEVEL=debug` |
-
-## 相关指南
-
-- **[开发指南](./development)**：环境要求、构建、运行测试
-- **[文档指南](./documentation)**：如何编写和翻译文档
-- **[AI 翻译指南](./translation-guide)**：AI 翻译 Prompt 和术语表
-- **[代码规范](./code-style)**：格式化、lint、pre-commit hooks
+- [模型与提供商 Day-0 支持](./model-provider-day-0-support)
+- [开发指南](./development)
+- [文档指南](./documentation)
+- [代码风格与质量](./code-style)
+- [架构概览](/zh-Hans/docs/overview/semantic-router-overview)

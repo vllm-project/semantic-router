@@ -1,7 +1,9 @@
 package services
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -10,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -26,6 +29,32 @@ type ClassificationService struct {
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
 	configMutex       sync.RWMutex // Protects config access
+	// Router generations already lease this service. These locks additionally
+	// drain model calls for standalone compatibility-service replacement.
+	runtimeMutex sync.RWMutex
+	reloadMutex  sync.Mutex
+	runtimeOwner io.Closer // nil when classifiers are borrowed from the router
+	modelPool    *binding.Pool
+	closed       bool
+	evalSelector EvalModelSelector
+}
+
+func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
+	if s == nil {
+		return
+	}
+	s.configMutex.Lock()
+	s.evalSelector = selector
+	s.configMutex.Unlock()
+}
+
+func (s *ClassificationService) evalModelSelectorSnapshot() EvalModelSelector {
+	if s == nil {
+		return nil
+	}
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	return s.evalSelector
 }
 
 // NewRecipeClassificationService creates a model-aware service backed by
@@ -38,6 +67,7 @@ func NewRecipeClassificationService(classifiers *classification.RecipeClassifier
 	}
 	return &ClassificationService{
 		classifier:        defaultClassifier,
+		unifiedClassifier: classification.NewUnifiedClassifierFromRecipe(defaultClassifier),
 		recipeClassifiers: classifiers,
 		config:            routerConfig,
 	}
@@ -47,13 +77,16 @@ func NewRecipeClassificationService(classifiers *classification.RecipeClassifier
 func NewClassificationService(classifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
 	return &ClassificationService{
 		classifier:        classifier,
-		unifiedClassifier: nil, // Will be initialized separately
+		unifiedClassifier: classification.NewUnifiedClassifierFromRecipe(classifier),
 		config:            config,
 	}
 }
 
 // NewUnifiedClassificationService creates a new service with unified classifier
 func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedClassifier, legacyClassifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
+	if unifiedClassifier == nil {
+		unifiedClassifier = classification.NewUnifiedClassifierFromRecipe(legacyClassifier)
+	}
 	return &ClassificationService{
 		classifier:        legacyClassifier,
 		unifiedClassifier: unifiedClassifier,
@@ -104,7 +137,11 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 	if unifiedClassifier == nil && legacyClassifier == nil {
 		logging.Warnf("No classifier initialized. Using placeholder service.")
 	}
-	return NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config), nil
+	service := NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config)
+	if legacyClassifier != nil {
+		service.runtimeOwner = legacyClassifier
+	}
+	return service, nil
 }
 
 // GetGlobalClassificationService returns the global classification service instance
@@ -142,7 +179,9 @@ func NewPlaceholderClassificationService() *ClassificationService {
 }
 
 // ClassifyIntent performs intent classification using signal-driven architecture
-func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentResponse, error) {
+func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRequest) (*IntentResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	input, err := req.resolveSignalInput()
@@ -161,18 +200,16 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		processingTime := time.Since(start).Milliseconds()
 		return &IntentResponse{
 			Classification: Classification{
-				Category:         "general",
-				Confidence:       0.5,
-				ProcessingTimeMs: processingTime,
+				Category:            "general",
+				ConfidenceAvailable: confidenceAvailability(false),
+				ProcessingTimeMs:    processingTime,
 			},
 			RecommendedModel: "general-model",
 			RoutingDecision:  "placeholder_response",
 		}, nil
 	}
 
-	// Use signal-driven architecture: evaluate all signals first
-	// Check if we should force evaluate all signals (for eval scenarios)
-	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
+	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
@@ -180,7 +217,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		input.priorUserMessages,
 		input.nonUserMessages,
 		input.hasAssistantReply,
-		forceEvaluateAll,
+		false,
 		"",
 		nil,
 		input.conversationFacts,
@@ -194,29 +231,27 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	if classifier.Config != nil && len(classifier.Config.Decisions) > 0 {
 		decisionResult, err = classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
-			// Log error but continue with classification
-			// Note: "no decisions configured" error is expected when decisions list is empty
 			if !strings.Contains(err.Error(), "no decisions configured") {
-				logging.Warnf("Decision evaluation failed, continuing with classification: %v", err)
+				return nil, err
 			}
 		}
 	}
 
-	category, confidence := resolveIntentCategory(
+	category := resolveIntentCategory(
+		ctx,
 		classifier,
 		decisionResult,
+		signals,
 		input.evaluationText,
 	)
 
-	processingTime := time.Since(start).Milliseconds()
+	category.ProcessingTimeMs = time.Since(start).Milliseconds()
 
 	// Build response from signals and decision
 	response := s.buildIntentResponseFromSignals(
 		signals,
 		decisionResult,
 		category,
-		confidence,
-		processingTime,
 		req,
 		classifier,
 		runtimeConfig,

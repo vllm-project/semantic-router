@@ -11,6 +11,10 @@ data:
   TARGET_ROUTER_API_URL: "http://semantic-router:8080"
   TARGET_ROUTER_METRICS_URL: "http://semantic-router:9190/metrics"
   ROUTER_CONFIG_PATH: "/app/config/config.yaml"
+  # ConfigMaps are immutable runtime inputs. The canonical Dashboard image
+  # starts under OpenShift's arbitrary UID with mutation capabilities disabled.
+  DASHBOARD_RUNTIME_CONFIG_WRITABLE: "false"
+  DASHBOARD_RECIPE_STORE_WRITABLE: "false"
   # ML service sidecar: connect to localhost since it's in the same pod
   ML_SERVICE_URL: "http://localhost:8686"
   ML_PIPELINE_ENABLED: "true"

@@ -1,191 +1,100 @@
-# ML Binding for Semantic Router
+# Traditional ML native binding
 
-This directory contains Rust-based traditional ML algorithm implementations using [Linfa](https://github.com/rust-ml/linfa) for CPU-based inference.
+`ml-binding` loads model-selection artifacts and runs KNN, K-Means, or SVM
+inference behind a Rust/CGo boundary. Training happens in
+[`src/training/model_selection/ml_model_selection`](../src/training/model_selection/ml_model_selection/README.md);
+this module only serves trained JSON artifacts.
 
-> **Note:** This package provides **inference only**. Training is done in Python. See `src/training/model_selection/ml_model_selection/`.
+| Selector | Runtime behavior |
+| --- | --- |
+| KNN | Chooses a model from nearby training samples. |
+| K-Means | Maps the query to the nearest learned cluster. |
+| SVM | Applies the serialized multi-class decision function. |
 
-## Algorithms
+## Build and test
 
-| Algorithm | Backend | GPU Support | Status |
-|-----------|---------|-------------|--------|
-| **KNN** (K-Nearest Neighbors) | Linfa (`linfa-nn`) | CPU only | ✅ Inference |
-| **KMeans** (Clustering) | Linfa (`linfa-clustering`) | CPU only | ✅ Inference |
-| **SVM** (Support Vector Machine) | Linfa (`linfa-svm`) | CPU only | ✅ Inference |
-
-> Reference: [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540).
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    TRAINING (Python)                             │
-├─────────────────────────────────────────────────────────────────┤
-│  src/training/model_selection/ml_model_selection/                               │
-│  ├── train.py          # Train models (scikit-learn, PyTorch)   │
-│  ├── upload_model.py   # Upload to HuggingFace                  │
-│  └── download_model.py # Download from HuggingFace              │
-│                                                                  │
-│  Output: knn/kmeans/svm_model.json                               │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    INFERENCE (Rust/Go)                           │
-├─────────────────────────────────────────────────────────────────┤
-│  ml-binding/                      (Traditional ML - Linfa)       │
-│  ├── src/knn.rs    # Load JSON, select using Linfa Ball Tree    │
-│  ├── src/kmeans.rs # Load JSON, select using cluster centroids  │
-│  ├── src/svm.rs    # Load JSON, select using decision function  │
-│  └── ml_binding.go # Go bindings via CGO                        │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Directory Structure
-
-```
-ml-binding/
-├── Cargo.toml           # Rust dependencies (Linfa only)
-├── go.mod               # Go module
-├── ml_binding.go        # Go wrapper with CGO bindings
-├── README.md            # This file
-└── src/
-    ├── lib.rs           # Library entry point
-    ├── knn.rs           # KNN inference implementation
-    ├── kmeans.rs        # KMeans inference implementation
-    ├── svm.rs           # SVM inference implementation
-    └── ffi.rs           # C FFI exports for Go (inference only)
-```
-
-> **Note:** Requires Linux/macOS/WSL with Rust and CGO. Windows native is not supported.
-
-## Building
-
-### Prerequisites
-
-- Rust 1.70+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
-- Go 1.22+
-
-### Build the Rust Library
+You need Go 1.24.1 or newer, Rust, Cargo, CGo, and a C compiler. Native Windows
+is not supported; use Linux, macOS, or WSL.
 
 ```bash
 cd ml-binding
-
-# Build release version
 cargo build --release
-
-# The library will be at:
-# - Linux: target/release/libml_semantic_router.so
-# - macOS: target/release/libml_semantic_router.dylib
-```
-
-### Set Library Path
-
-```bash
-# Linux
-export LD_LIBRARY_PATH=$(pwd)/target/release:$LD_LIBRARY_PATH
-
-# macOS
-export DYLD_LIBRARY_PATH=$(pwd)/target/release:$DYLD_LIBRARY_PATH
-```
-
-### Run Tests
-
-```bash
-# Rust tests
 cargo test
 
-# Go tests (after building Rust library)
-go test -v ./...
+export LD_LIBRARY_PATH="$PWD/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+go test ./...
 ```
 
-## Usage in Go
+On macOS, set `DYLD_LIBRARY_PATH` instead. From the repository root,
+`make test-binding-minimal` runs the maintained cross-binding check.
 
-### Loading Pretrained Models
+## Use from Go
+
+Load the artifact that matches the selector, call `Select`, and close the
+selector when it is no longer needed:
 
 ```go
-package main
-
-import (
-    ml "github.com/vllm-project/semantic-router/ml-binding"
-    "os"
-)
-
-func main() {
-    // Load pretrained KNN model from JSON
-    jsonData, _ := os.ReadFile("models/knn_model.json")
-    knn, _ := ml.KNNFromJSON(string(jsonData))
-    defer knn.Close()
-
-    // Run inference
-    query := []float64{0.9, 0.1, 0.0, /* ... 1038 dims total (1024 embedding + 14 category) */}
-    selected, _ := knn.Select(query)
-    // selected == "llama-3.2-3b" (or whichever model the KNN selects)
-
-    // Same pattern for KMeans and SVM
-    kmeansData, _ := os.ReadFile("models/kmeans_model.json")
-    kmeans, _ := ml.KMeansFromJSON(string(kmeansData))
-    
-    svmData, _ := os.ReadFile("models/svm_model.json")
-    svm, _ := ml.SVMFromJSON(string(svmData))
+data, err := os.ReadFile("models/knn_model.json")
+if err != nil {
+    return err
 }
+
+selector, err := ml.KNNFromJSON(string(data))
+if err != nil {
+    return err
+}
+defer selector.Close()
+
+model, err := selector.Select(features)
 ```
 
-### Available Functions
+`KMeansFromJSON` and `SVMFromJSON` follow the same lifecycle. The feature vector
+must have the same shape and ordering used during training; the binding does not
+repair an incompatible artifact.
 
-| Function | Description |
-|----------|-------------|
-| `KNNFromJSON(json)` | Load KNN model from JSON |
-| `KMeansFromJSON(json)` | Load KMeans model from JSON |
-| `SVMFromJSON(json)` | Load SVM model from JSON |
-| `*.Select(embedding)` | Select best model for query |
-| `*.IsTrained()` | Check if model is loaded |
-| `*.ToJSON()` | Serialize model to JSON |
-| `*.Close()` | Release resources |
+See [`ml_binding.go`](ml_binding.go) for the complete public Go API and
+[`Cargo.toml`](Cargo.toml) for pinned Rust dependencies.
 
-## Training Models
+## Artifact compatibility and prediction rules
 
-Training is done in Python using scikit-learn. See `src/training/model_selection/ml_model_selection/`:
+New Python exports use `format_version: 2`. Upgrade the native runtime together
+with the training tools before serving these artifacts; older runtimes do not
+understand the version 2 SVM parameters.
+
+- SVM stores the exact fitted SVC support vectors, signed dual coefficients,
+  intercepts, and per-class support counts in `svc`. Linear and RBF inference
+  use the training feature scale (`input_normalization: "none"`) and libsvm
+  one-vs-one voting, including binary sign conventions and first-class vote
+  ties. Runtime inference does not normalize the input again.
+- Existing unversioned Python SVM exports contain those exact parameters at
+  the top level. The loader uses them in preference to the old approximate
+  per-model classifiers, so these files do not need retraining. Unversioned
+  native-only `linear_classifiers` / `rbf_classifiers` artifacts retain their
+  original normalized-input, one-vs-rest behavior. They cannot recover a
+  missing fitted SVC; re-export the trained model to adopt version 2.
+- KNN uses Euclidean distance on L2-normalized feature vectors (cosine ordering
+  for nonzero vectors). A zero vector remains zero. Neighbors sort by distance
+  and then artifact sample index; equal model totals select the
+  lexicographically first model name. Voting is
+  `0.9 * quality + 0.1 / (1 + latency_ns / 10_000_000_000)`.
+  Unversioned KNN files use these corrected rules too. Revalidate held-out
+  routing results when upgrading: old Rust used raw Euclidean distance and
+  dataset-relative latency scaling, which disagreed with Python training.
+
+The KNN/SVM loaders reject malformed feature shapes, nonfinite values, and
+inconsistent sample or support counts. Their request feature-dimension
+mismatches return an inference error through the Go/C ABI instead of reaching
+a matrix-operation panic.
+
+`cargo test` includes checked-in fixtures generated by sklearn. For a fresh
+training/export/C ABI comparison (including binary and multiclass SVM, both
+kernels, KNN ties, old Python artifacts, and Python reload), run from the
+repository root:
 
 ```bash
-# Install dependencies
-cd src/training/model_selection/ml_model_selection
-pip install -r requirements.txt
-
-# Train all models
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/
-
-# Or download pretrained from HuggingFace
-python download_model.py --output-dir models/
+python -m pip install numpy scikit-learn pytest
+python -m pytest src/training/model_selection/ml_model_selection/tests/test_native_parity.py -q
 ```
 
-## Why Linfa for Inference?
-
-1. **Performance**: Native Rust speed for inference
-2. **Consistency**: Same FFI pattern as candle-binding
-3. **Memory safety**: Rust guarantees
-4. **No Python dependency**: Production inference without Python runtime
-
-## Algorithm Details
-
-### KNN (K-Nearest Neighbors)
-
-- Uses Linfa Ball Tree for O(log n) neighbor search
-- Quality-weighted voting: `score = 0.9 * quality + 0.1 * speed`
-- Loads embeddings and metadata from JSON
-
-### KMeans
-
-- Loads cluster centroids from JSON
-- Assigns queries to nearest centroid
-- Each cluster maps to best model (by quality+speed)
-
-### SVM (Support Vector Machine)
-
-- Supports Linear and RBF kernels
-- Loads support vectors from JSON
-- One-vs-All classification for multi-model selection
-
-## License
-
-Apache-2.0 (same as semantic-router)
+The test builds the current checkout's native library with Cargo. It does not
+require Torch, model downloads, or a GPU.

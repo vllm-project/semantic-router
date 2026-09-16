@@ -1,0 +1,32 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "resp_failed",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "error": {
+          "code": "provider_error",
+          "message": "failed after generation",
+          "param": null,
+          "type": "server_error"
+        }
+      }
+    }
+  ]
+}

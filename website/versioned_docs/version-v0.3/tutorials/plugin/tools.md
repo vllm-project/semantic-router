@@ -4,7 +4,7 @@
 
 `tools` is a route-local plugin for tool filtering and semantic tool selection.
 
-It aligns to `config/plugin/tools/semantic-select.yaml`.
+It aligns to `config/fragments/plugin/tools/semantic-select.yaml`.
 
 ## Key Advantages
 

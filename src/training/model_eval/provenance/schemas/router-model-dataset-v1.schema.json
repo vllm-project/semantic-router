@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-project.github.io/semantic-router/schemas/router-model-dataset-v1.schema.json",
+  "title": "Router Model dataset manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "id",
+    "task",
+    "source",
+    "license",
+    "splits",
+    "preprocessing",
+    "label_mapping"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v1"
+    },
+    "kind": {
+      "const": "dataset"
+    },
+    "id": {
+      "$ref": "router-model-common-v1.schema.json#/$defs/manifestId"
+    },
+    "task": {
+      "$ref": "router-model-common-v1.schema.json#/$defs/task"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "locator",
+        "revision"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "huggingface",
+            "url",
+            "composite"
+          ]
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "$ref": "router-model-common-v1.schema.json#/$defs/revision"
+        },
+        "components": {
+          "description": "Upstream datasets a composite mixture draws from. Each stays pinned.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "locator",
+              "revision"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "huggingface",
+                  "url",
+                  "in-repo"
+                ]
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revision": {
+                "$ref": "router-model-common-v1.schema.json#/$defs/revision"
+              },
+              "config": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "composite"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "components"
+            ],
+            "description": "A composite mixture must pin every upstream it samples from."
+          }
+        }
+      ]
+    },
+    "license": {
+      "description": "SPDX identifier, or an explicit unknown marker so the gap is visible.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "splits": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "rows",
+          "digest"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "$ref": "router-model-common-v1.schema.json#/$defs/digest"
+          },
+          "label_counts": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "preprocessing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text_field",
+        "label_field",
+        "steps"
+      ],
+      "properties": {
+        "text_field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label_field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "steps": {
+          "description": "Ordered, human-readable preprocessing steps. Empty means none were applied.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "label_mapping": {
+      "$ref": "router-model-common-v1.schema.json#/$defs/labelMapping"
+    }
+  }
+}

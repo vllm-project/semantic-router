@@ -17,7 +17,8 @@ spec:
     # KServe InferenceService in RHOAI
     - name: my-llama-model
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b  # Name of InferenceService in same namespace
@@ -40,7 +41,7 @@ spec:
   # Semantic router configuration
   config:
     # Semantic cache for better latency/token efficiency
-    semantic_cache:
+    response_cache:
       enabled: true
       similarity_threshold: "0.85"
       max_entries: 1000

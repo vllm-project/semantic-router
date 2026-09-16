@@ -34,13 +34,11 @@ func TestSmokeModelTransitionLog(t *testing.T) {
 
 	// ── Build RequestContext ──────────────────────────────────────────────
 	ctx := &RequestContext{
-		RequestModel:  "deepseek-r1",
-		SessionID:     "sess_123",
-		TurnIndex:     4,
-		PreviousModel: "deepseek-v3",
-		ResponseAPICtx: &ResponseAPIContext{
-			PreviousResponseID: "resp_abc",
-		},
+		RequestModel:       "deepseek-r1",
+		SessionID:          "sess_123",
+		TurnIndex:          4,
+		PreviousModel:      "deepseek-v3",
+		PreviousResponseID: "resp_abc",
 	}
 
 	// Write CacheWarmthEstimate as the TTFT path does, then emit the event.

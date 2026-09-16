@@ -54,3 +54,19 @@ func TestRunWithRetryStopsWhenContextIsCanceled(t *testing.T) {
 		t.Fatalf("expected 1 attempt, got %d", attempts)
 	}
 }
+
+func TestIsTransientHelmInstallFailure(t *testing.T) {
+	for _, output := range []string{
+		`failed to perform "Fetch": response status code 500`,
+		"TLS handshake timeout",
+		"read: connection reset by peer",
+		"unexpected EOF",
+	} {
+		if !isTransientHelmInstallFailure(output) {
+			t.Errorf("expected transient Helm failure for %q", output)
+		}
+	}
+	if isTransientHelmInstallFailure("template: values.yaml: field is required") {
+		t.Fatal("configuration failures must not be retried")
+	}
+}

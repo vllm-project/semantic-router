@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -13,7 +14,11 @@ import ChatComposerAddMenu from './ChatComposerAddMenu'
 import ChatComposerModelSelect from './ChatComposerModelSelect'
 import { useSpeechDictation } from '../hooks/useSpeechDictation'
 import type { RouterModelOption } from '../utils/routerModelSelection'
-import { formatPlaygroundFileSize, type PlaygroundAttachment } from './playgroundFileAttachments'
+import {
+  formatPlaygroundFileSize,
+  isPlaygroundImageAttachment,
+  type PlaygroundAttachment,
+} from './playgroundFileAttachments'
 
 interface ChatComponentInputBarProps {
   attachments: PlaygroundAttachment[]
@@ -29,6 +34,7 @@ interface ChatComponentInputBarProps {
   modelSelectDisabled: boolean
   selectedModel: string
   voiceInputDisabled: boolean
+  webSearchDisabled?: boolean
   onAttachFiles: (files: FileList | File[]) => void
   onChangeInput: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
@@ -58,6 +64,7 @@ export default function ChatComponentInputBar({
   modelSelectDisabled,
   selectedModel,
   voiceInputDisabled,
+  webSearchDisabled = false,
   onAttachFiles,
   onChangeInput,
   onKeyDown,
@@ -73,6 +80,7 @@ export default function ChatComponentInputBar({
   showClawRoom,
 }: ChatComponentInputBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const canSend = Boolean(inputValue.trim()) || attachments.length > 0
   const [isComposing, setIsComposing] = useState(false)
   const {
@@ -87,6 +95,26 @@ export default function ChatComponentInputBar({
       stopListening()
     }
   }, [isListening, stopListening, voiceInputDisabled])
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    textarea.style.height = 'auto'
+    const maxHeight = 220
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight)
+    textarea.style.height = `${Math.max(nextHeight, 36)}px`
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+  }, [inputValue])
+
+  const setTextareaRef = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      textareaRef.current = node
+      if (typeof inputRef === 'function') inputRef(node)
+      else if (inputRef) (inputRef as { current: HTMLTextAreaElement | null }).current = node
+    },
+    [inputRef],
+  )
 
   const handleChangeInput = useCallback(
     (value: string) => {
@@ -134,33 +162,56 @@ export default function ChatComponentInputBar({
       <div className={`${styles.inputWrapper} ${canSend ? styles.hasContent : ''}`}>
         {attachments.length > 0 ? (
           <div className={styles.attachmentList} data-testid="playground-attachment-list">
-            {attachments.map((attachment) => (
-              <div
-                key={attachment.id}
-                className={styles.attachmentChip}
-                data-testid={`playground-attachment-${attachment.id}`}
-              >
-                <span className={styles.attachmentChipName} title={attachment.fileName}>
-                  {attachment.fileName}
-                </span>
-                <span className={styles.attachmentChipSize}>
-                  {formatPlaygroundFileSize(attachment.sizeBytes)}
-                </span>
-                <button
-                  type="button"
-                  className={styles.attachmentChipRemove}
-                  onClick={() => onRemoveAttachment(attachment.id)}
-                  aria-label={`Remove attachment ${attachment.fileName}`}
-                  data-testid={`playground-attachment-remove-${attachment.id}`}
+            {attachments.map((attachment) =>
+              isPlaygroundImageAttachment(attachment) ? (
+                <figure
+                  key={attachment.id}
+                  className={styles.attachmentImagePreview}
+                  data-testid={`playground-image-preview-${attachment.id}`}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <img src={attachment.content} alt={`Preview of ${attachment.fileName}`} />
+                  <figcaption title={attachment.fileName}>
+                    <span>{attachment.fileName}</span>
+                    <small>{formatPlaygroundFileSize(attachment.sizeBytes)}</small>
+                  </figcaption>
+                  <button
+                    type="button"
+                    className={styles.attachmentImageRemove}
+                    onClick={() => onRemoveAttachment(attachment.id)}
+                    aria-label={`Remove image ${attachment.fileName}`}
+                    data-testid={`playground-attachment-remove-${attachment.id}`}
+                  >
+                    ×
+                  </button>
+                </figure>
+              ) : (
+                <div
+                  key={attachment.id}
+                  className={styles.attachmentChip}
+                  data-testid={`playground-attachment-${attachment.id}`}
+                >
+                  <span className={styles.attachmentChipName} title={attachment.fileName}>
+                    {attachment.fileName}
+                  </span>
+                  <span className={styles.attachmentChipSize}>
+                    {formatPlaygroundFileSize(attachment.sizeBytes)}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.attachmentChipRemove}
+                    onClick={() => onRemoveAttachment(attachment.id)}
+                    aria-label={`Remove attachment ${attachment.fileName}`}
+                    data-testid={`playground-attachment-remove-${attachment.id}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ),
+            )}
           </div>
         ) : null}
         <textarea
-          ref={inputRef}
+          ref={setTextareaRef}
           value={inputValue}
           onChange={(event) => handleChangeInput(event.target.value)}
           onCompositionStart={() => setIsComposing(true)}
@@ -176,6 +227,7 @@ export default function ChatComponentInputBar({
               ref={fileInputRef}
               type="file"
               multiple
+              accept="text/*,.json,.md,.yaml,.yml,.csv,.tsv,image/gif,image/jpeg,image/png,image/webp"
               className={styles.attachmentFileInput}
               onChange={handleFileInputChange}
               aria-hidden="true"
@@ -198,7 +250,7 @@ export default function ChatComponentInputBar({
               onAttachFiles={handleAttachClick}
               onToggleClawMode={onToggleClawMode}
               onToggleWebSearch={onToggleWebSearch}
-              webSearchDisabled={isLoading || isTogglingClawMode}
+              webSearchDisabled={webSearchDisabled || isLoading || isTogglingClawMode}
               webSearchEnabled={enableWebSearch}
             />
             <ChatComposerModelSelect

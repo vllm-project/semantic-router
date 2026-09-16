@@ -66,3 +66,25 @@ func TestEvaluateDecisionsWithSignals_EmitsMetricsExactlyOnce(t *testing.T) {
 		t.Fatalf("DecisionMatchTotal{decision_name=\"catch-all\"} delta = %v, want 1 (double-counting bug?)", got)
 	}
 }
+
+func TestEvaluateDecisionsRecordsUnknownPolicy(t *testing.T) {
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "guarded", Rules: config.RuleNode{
+		Type:      config.SignalTypeClassifier,
+		Name:      "risk",
+		Label:     "RISKY",
+		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
+		OnUnknown: config.RuleOnUnknownNoMatch,
+	}}}, config.RoutingStrategyPriority)
+	counter := metrics.DecisionUnknownTotal.WithLabelValues("guarded", string(config.RuleOnUnknownNoMatch))
+	before := testutil.ToFloat64(counter)
+
+	if _, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := testutil.ToFloat64(counter) - before; got != 1 {
+		t.Fatalf("DecisionUnknownTotal delta = %v, want 1", got)
+	}
+}

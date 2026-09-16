@@ -6,12 +6,13 @@ listeners:
     timeout: 300s
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - name: llm_katan
+          provider: vllm
           weight: 1
           endpoint: host.docker.internal:8000
           protocol: http
@@ -51,7 +52,7 @@ routing:
             enabled: false
 
     # Triggered by THRESHOLD_MARKER keyword. Memory enabled with similarity_threshold=0.99
-    # (near-impossible to match), overriding the global default of 0.45.
+    # (near-impossible to match), overriding the integration default of 0.10.
     - name: custom_threshold_route
       description: Route with high similarity threshold for per-decision testing
       priority: 150
@@ -93,7 +94,7 @@ routing:
           configuration:
             enabled: true
             retrieval_limit: 5
-            similarity_threshold: 0.45
+            similarity_threshold: 0.10
             auto_store: true
 global:
   services:
@@ -108,11 +109,11 @@ global:
       milvus:
         address: host.docker.internal:19530
         collection: memory_test_ci
-        dimension: 384
+        dimension: 768
       embedding_model: mmbert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.45
-    semantic_cache:
+      default_similarity_threshold: 0.10
+    response_cache:
       enabled: false
       embedding_model: mmbert
     vector_store:
@@ -122,10 +123,10 @@ global:
       semantic:
         qwen3_model_path: ""
         gemma_model_path: ""
-        mmbert_model_path: /app/models/mmbert-embed-32k-2d-matryoshka
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: ""
         bert_model_path: ""
         use_cpu: true
         embedding_config:
           model_type: mmbert
-          target_dimension: 384
+          target_dimension: 768

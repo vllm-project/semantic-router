@@ -1,20 +1,22 @@
+/* color-scheme declared in tokens.css. Cross-fade here since body background is a gradient. */
 html {
   background: var(--site-bg);
   color: var(--site-text);
-  color-scheme: light;
   scroll-behavior: smooth;
+  transition:
+    background-color var(--site-transition-medium),
+    color var(--site-transition-fast);
 }
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at top, rgba(15, 23, 42, 0.035), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
+  background: var(--site-body-wash);
   color: var(--site-text);
   font-family: var(--ifm-font-family-base);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: color var(--site-transition-fast);
 }
 
 body,
@@ -27,7 +29,7 @@ body,
 .site-page--home .main-wrapper,
 html[data-page-key='home'],
 body[data-page-key='home'] {
-  background: #030303;
+  background: #09090b;
 }
 
 * {
@@ -42,6 +44,7 @@ a:hover {
   text-decoration: none;
 }
 
+/* Typography owned by typography.css. */
 h1,
 h2,
 h3,
@@ -49,8 +52,6 @@ h4,
 h5,
 h6 {
   color: var(--site-text-strong);
-  font-weight: 400;
-  letter-spacing: -0.03em;
 }
 
 p,
@@ -66,7 +67,8 @@ kbd {
 
 pre {
   border: 1px solid var(--site-border);
-  border-radius: 1.1rem;
+  border-radius: var(--radius-lg);
+  background: var(--site-code-bg);
 }
 
 table {
@@ -77,13 +79,18 @@ img {
   max-width: 100%;
 }
 
+/* Shared page container: --page-max + gutters. Padding allows full-bleed children to opt out. */
 .site-shell-container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
-  margin: 0 auto;
+  width: 100%;
+  max-width: calc(var(--page-max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
 }
 
-@media (max-width: 768px) {
-  .site-shell-container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    transition: none;
+    scroll-behavior: auto;
   }
 }

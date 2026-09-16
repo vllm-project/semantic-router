@@ -1,298 +1,141 @@
-# Semantic Router Observability on Kubernetes
+# Kubernetes observability example
 
-This guide adds a production-ready Prometheus + Grafana stack to the existing Semantic Router Kubernetes deployment. It includes manifests for collectors, dashboards, data sources, RBAC, and ingress so you can monitor routing performance in any cluster.
+This Kustomize package runs Prometheus, Grafana, and the Semantic Router
+Dashboard in `vllm-semantic-router-system`. It is a self-contained example for
+development clusters. It is not a substitute for a platform-managed monitoring
+stack, identity provider, backup policy, or alert-routing service.
 
-> **Namespace** – All manifests default to the `vllm-semantic-router-system` namespace to match the core deployment. Override it with Kustomize if you use a different namespace.
+| Component | What the manifests configure |
+| --- | --- |
+| Prometheus | Kubernetes endpoint discovery for `semantic-router-metrics`, 15-day retention, a PVC, and Router alert rules. |
+| Grafana | A Prometheus datasource, the bundled Router dashboard, a PVC, and local admin credentials. |
+| Dashboard | Router config and tools data plus links to the monitoring services. |
+| Ingress | Example hosts and TLS Secret names for all three UIs. |
 
-## What Gets Installed
+## Review before applying
 
-| Component              | Purpose                                                                                              | Key Files                                                                                     |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Prometheus             | Scrapes Semantic Router metrics and stores them with persistent retention                            | `prometheus/` (`rbac.yaml`, `configmap.yaml`, `deployment.yaml`, `pvc.yaml`, `service.yaml`)  |
-| Prometheus rules       | Loads conservative Semantic Router alert rules                                                       | `prometheus/rules.yaml`                                                                       |
-| Grafana                | Visualizes metrics using the bundled LLM Router dashboard and a pre-configured Prometheus datasource | `grafana/` (`secret.yaml`, `configmap-*.yaml`, `deployment.yaml`, `pvc.yaml`, `service.yaml`) |
-| Dashboard              | Unified UI that links Router, Prometheus, and embeds Grafana; reads Router config                    | `dashboard/` (`configmap.yaml`, `deployment.yaml`, `service.yaml`)                            |
-| Ingress (optional)     | Exposes the UIs outside the cluster                                                                  | `ingress.yaml`                                                                                |
-| Dashboard provisioning | Automatically loads `deploy/llm-router-dashboard.json` into Grafana                                  | `grafana/configmap-dashboard.yaml`                                                            |
+The checked-in values are intentionally easy to inspect, not secure defaults
+for a shared cluster:
 
-Prometheus is configured to discover the `semantic-router-metrics` service (port `9190`) automatically. Grafana provisions the same LLM Router dashboard that ships with the Docker Compose stack.
+- [`grafana/secret.yaml`](grafana/secret.yaml) contains `admin` / `admin`.
+- [`ingress.yaml`](ingress.yaml) contains example hostnames and TLS Secret
+  names.
+- Prometheus has cluster-scoped discovery RBAC and persistent local retention.
+- Dashboard state and config mutation require explicit storage and access
+  decisions.
 
-## 1. Prerequisites
+Replace the Grafana Secret through your secret manager, patch or remove the
+Ingress resources, choose storage classes, and review resource limits before
+deployment. See the
+[security hardening guide](../../../website/docs/installation/security-hardening.md)
+for the Dashboard and inference boundary.
 
-- Deployed Semantic Router workload via `deploy/kubernetes/`
-- A Kubernetes cluster (managed, on-prem, or kind)
-- `kubectl` v1.23+
-- Optional: an ingress controller (NGINX, ALB, etc.) if you want external access
+Render the final resources first:
 
-## 2. Directory Layout
-
-```
-deploy/kubernetes/observability/
-├── README.md
-├── kustomization.yaml          # Assembles all observability components
-├── ingress.yaml                # Optional HTTPS ingress examples
-├── prometheus/
-│   ├── configmap.yaml          # Scrape config (Kubernetes SD)
-│   ├── rules.yaml              # Semantic Router alert rule ConfigMap
-│   ├── deployment.yaml
-│   ├── pvc.yaml
-│   ├── rbac.yaml               # SA + ClusterRole + binding
-│   └── service.yaml
-├── grafana/
-│   ├── configmap-dashboard.yaml    # Bundled LLM router dashboard
-│   ├── configmap-provisioning.yaml # Datasource + provider config
-│   ├── deployment.yaml
-│   ├── pvc.yaml
-│   ├── secret.yaml                 # Admin credentials (override in prod)
-│   └── service.yaml
-├── dashboard/
-│   ├── configmap.yaml              # TARGET_* URLs for dashboard backend
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   ├── config.yaml                 # Router config copied locally for CM
-│   └── tools_db.json               # Tools DB copied locally for CM
+```bash
+kubectl kustomize deploy/kubernetes/observability/
 ```
 
-## 3. Prometheus Configuration Highlights
+## Deploy
 
-- Uses `kubernetes_sd_configs` to enumerate endpoints in `vllm-semantic-router-system`
-- Loads alert rules from `/etc/prometheus/rules/*.yml`
-- Keeps 15 days of metrics by default (`--storage.tsdb.retention.time=15d`)
-- Stores metrics in a `PersistentVolumeClaim` named `prometheus-data`
-- RBAC rules grant read-only access to Services, Endpoints, Pods, Nodes, and EndpointSlices
+The Router metrics Service must exist in the same namespace and expose a port
+named `metrics`:
 
-### Scrape configuration snippet
-
-```yaml
-scrape_configs:
-  - job_name: semantic-router
-    kubernetes_sd_configs:
-      - role: endpoints
-        namespaces:
-          names:
-            - vllm-semantic-router-system
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_service_name]
-        regex: semantic-router-metrics
-        action: keep
-      - source_labels: [__meta_kubernetes_endpoint_port_name]
-        regex: metrics
-        action: keep
+```bash
+kubectl get service semantic-router-metrics \
+  --namespace vllm-semantic-router-system
 ```
 
-Modify the namespace or service name if you changed them in your primary deployment.
+After applying your security and storage overlays:
 
-## 4. Grafana Configuration Highlights
+```bash
+kubectl apply -k deploy/kubernetes/observability/
+kubectl rollout status deployment/prometheus \
+  --namespace vllm-semantic-router-system
+kubectl rollout status deployment/grafana \
+  --namespace vllm-semantic-router-system
+kubectl rollout status deployment/semantic-router-dashboard \
+  --namespace vllm-semantic-router-system
+```
 
-- Stateful deployment backed by the `grafana-storage` PVC
-- Datasource provisioned automatically pointing to `http://prometheus:9090`
-- Dashboard provider watches `/var/lib/grafana-dashboards`
-- Bundled `llm-router-dashboard.json` is identical to `deploy/llm-router-dashboard.json`
-- Admin credentials pulled from the `grafana-admin` secret (default `admin/admin` – **change this!)**
-
-### Updating credentials
+For a disposable cluster, you can replace the demo Grafana credential before
+use:
 
 ```bash
 kubectl create secret generic grafana-admin \
   --namespace vllm-semantic-router-system \
   --from-literal=admin-user=monitor \
-  --from-literal=admin-password='pick-a-strong-password' \
+  --from-literal=admin-password="$GRAFANA_ADMIN_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment/grafana \
+  --namespace vllm-semantic-router-system
 ```
 
-Remove or overwrite the committed `secret.yaml` when you adopt a different secret management approach.
+Avoid putting the password directly in a committed overlay.
 
-## 5. Deployment Steps
+## Access without public ingress
 
-### 5.1. Create the Kustomization
-
-Create `deploy/kubernetes/observability/kustomization.yaml` (see below) to assemble all manifests. This guide assumes you keep Prometheus & Grafana in the same namespace as the router.
-
-### 5.2. Apply manifests
+Use separate terminals for the services you need:
 
 ```bash
-kubectl apply -k deploy/kubernetes/observability/
+kubectl port-forward --namespace vllm-semantic-router-system \
+  service/prometheus 9090:9090
 ```
-
-Verify pods:
 
 ```bash
-kubectl get pods -n vllm-semantic-router-system
+kubectl port-forward --namespace vllm-semantic-router-system \
+  service/grafana 3000:3000
 ```
-
-You should see `prometheus-...`, `grafana-...`, and `semantic-router-dashboard-...` pods in `Running` state.
-
-### 5.3. Integration with the core deployment
-
-1. Deploy or update Semantic Router (`kubectl apply -k deploy/kubernetes/`).
-2. Deploy observability stack (`kubectl apply -k deploy/kubernetes/observability/`).
-3. Confirm the metrics service (`semantic-router-metrics`) has endpoints:
-
-   ```bash
-   kubectl get endpoints semantic-router-metrics -n vllm-semantic-router-system
-   ```
-
-4. Prometheus target should transition to **UP** within ~15 seconds.
-
-### 5.4. Accessing the UIs
-
-> **Optional Ingress** – If you prefer to keep the stack private, delete `ingress.yaml` from `kustomization.yaml` before applying.
-
-- **Port-forward (quick check)**
-
-  ```bash
-  kubectl port-forward svc/prometheus 9090:9090 -n vllm-semantic-router-system
-  kubectl port-forward svc/grafana 3000:3000 -n vllm-semantic-router-system
-  kubectl port-forward svc/semantic-router-dashboard 8700:80 -n vllm-semantic-router-system
-  ```
-
-  Prometheus → http://localhost:9090, Grafana → http://localhost:3000, Dashboard → http://localhost:8700, Open WebUI → http://localhost:3001, Chat UI → http://localhost:3002
-
-### 5.5. Ingress (production)
-
-Use Ingress to expose the UIs on real domains with TLS.
-
-1. Install an Ingress Controller (example: NGINX)
 
 ```bash
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo update
-helm upgrade -i ingress-nginx ingress-nginx/ingress-nginx \
-  -n ingress-nginx --create-namespace
+kubectl port-forward --namespace vllm-semantic-router-system \
+  service/semantic-router-dashboard 8700:80
 ```
 
-2. Set your ingress class and hostnames
+Prometheus is at `http://127.0.0.1:9090`, Grafana at
+`http://127.0.0.1:3000`, and the Dashboard at `http://127.0.0.1:8700`.
 
-- Edit `deploy/kubernetes/observability/ingress.yaml` and replace `grafana.example.com`, `prometheus.example.com`, `dashboard.example.com` with your domains.
-- Prefer using `spec.ingressClassName: nginx` instead of the deprecated annotation. You can add it via Kustomize for all Ingresses:
+## Verify data
 
-```yaml
-patches:
-  - target:
-      kind: Ingress
-    patch: |-
-      - op: add
-        path: /spec/ingressClassName
-        value: nginx
-```
+1. Open Prometheus **Status > Targets** and find the `semantic-router` job.
+2. Send inference traffic through Envoy.
+3. Query a metric that the current Router emits, such as
+   `llm_model_requests_total`.
+4. Open the provisioned Grafana Router dashboard and confirm its time range
+   includes the traffic.
 
-3. Provide TLS certificates
-
-- Option A (manual secrets):
+If the target is missing, check service discovery before changing dashboards:
 
 ```bash
-kubectl create secret tls grafana-tls --cert=/path/to/grafana.crt --key=/path/to/grafana.key -n vllm-semantic-router-system
-kubectl create secret tls prometheus-tls --cert=/path/to/prometheus.crt --key=/path/to/prometheus.key -n vllm-semantic-router-system
-kubectl create secret tls dashboard-tls --cert=/path/to/dashboard.crt --key=/path/to/dashboard.key -n vllm-semantic-router-system
+kubectl get endpoints semantic-router-metrics \
+  --namespace vllm-semantic-router-system
+kubectl logs deployment/prometheus \
+  --namespace vllm-semantic-router-system
 ```
 
-- Option B (recommended): use cert-manager; reference your `ClusterIssuer` via annotations in `ingress.yaml`.
+## Alert rules
 
-4. Apply and verify
+[`prometheus/rules.yaml`](prometheus/rules.yaml) defines thresholds for request
+errors, completion latency, TTFT, TPOT, routing latency, in-flight requests, and
+cache hit rate. Treat these as starting points. Tune them from an observed
+baseline and route them through your existing Alertmanager or incident system;
+this package does not install notification delivery.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Prometheus target is down | Service endpoints, port name `metrics`, namespace, and Prometheus RBAC. |
+| Grafana panels are empty | Prometheus datasource health, query metric names, dashboard time range, and actual traffic. |
+| PVC is pending | `kubectl describe pvc` and the cluster storage class. |
+| Ingress returns 404 or TLS errors | Ingress class, patched hostnames, DNS, and referenced TLS Secrets. |
+| Dashboard cannot update config | The config mount, writable flags, and persistent state described in [`dashboard/README.md`](../../../dashboard/README.md). |
+
+To remove the example:
 
 ```bash
-kubectl apply -k deploy/kubernetes/observability/
-kubectl get ingress -n vllm-semantic-router-system
+kubectl delete -k deploy/kubernetes/observability/
 ```
 
-5. Configure DNS
-
-- Point DNS A/AAAA records to the Ingress LoadBalancer address.
-- For local testing, you can add temporary entries to `/etc/hosts`.
-
-Dev tip: to run HTTP without TLS, remove the `tls:` blocks and set `nginx.ingress.kubernetes.io/ssl-redirect: "false"` in `ingress.yaml`.
-
-## 6. Verifying Metrics Collection
-
-1. Open Prometheus (port-forward or ingress) → **Status ▸ Targets** → ensure `semantic-router` job is green.
-2. Query `rate(llm_model_completion_tokens_total[5m])` – should return data after traffic.
-3. Open Grafana, log in with the admin credentials, and confirm the **LLM Router Metrics** dashboard exists under the _Semantic Router_ folder.
-4. Generate traffic to Semantic Router (classification or routing requests). Key panels should start populating:
-   - Routing and model selection latency
-   - In-flight requests by model
-   - Windowed latency, errors, queue depth, and utilization
-   - Session model transitions and cache warmth
-   - Token usage rate per model
-   - Routing modifications between models
-   - Latency histograms (TTFT, completion p95)
-
-## 7. Alerts and Runbook
-
-The Kubernetes and OpenShift observability stacks load the bundled
-`semantic-router-alert-rules` ConfigMap by default. Helm users can render a
-Prometheus Operator rule by setting:
-
-```yaml
-observability:
-  alerts:
-    enabled: true
-```
-
-| Alert | Query | Common causes | First check | Dashboard panel |
-|-------|-------|---------------|-------------|-----------------|
-| `HighRequestErrorRate` | `sum(rate(llm_request_errors_total[5m])) / clamp_min(sum(rate(llm_model_requests_total[5m])), 1)` | Upstream outage, timeout, policy rejection, malformed request | `kubectl logs deploy/semantic-router -n vllm-semantic-router-system --tail=200` | Request Errors by Reason |
-| `HighCompletionLatencyP95` | `histogram_quantile(0.95, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le))` | Slow backend, overload, long prompts, network latency | `kubectl get pods,endpoints -n vllm-semantic-router-system` | Request Latency (P50/P95/P99) |
-| `HighTTFTP95` | `histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le))` | Backend queueing, cold model, streaming startup delay | `kubectl logs deploy/semantic-router -n vllm-semantic-router-system --tail=200` | TTFT (Time to First Token) by Model - P95 |
-| `HighTPOTP95` | `histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le))` | Slow generation, GPU saturation, long output pressure | `kubectl top pods -n vllm-semantic-router-system` | TPOT (Time per Output Token) by Model - P95 |
-| `HighRoutingLatencyP95` | `histogram_quantile(0.95, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le))` | Expensive selection, slow signal evaluation, config/model cache pressure | `kubectl logs deploy/semantic-router -n vllm-semantic-router-system --tail=200 \| grep -i routing` | Router Routing Latency (P50/P95/P99) |
-| `HighInflightRequests` | `sum(llm_model_inflight_requests) by (model)` | Hot model imbalance, backend saturation, stuck streams | `kubectl get endpoints semantic-router-metrics -n vllm-semantic-router-system` | Inflight Requests by Model |
-| `LowCacheHitRate` | `sum(rate(llm_cache_plugin_hits_total[15m])) / (sum(rate(llm_cache_plugin_hits_total[15m])) + sum(rate(llm_cache_plugin_misses_total[15m])))` | Cold cache, changed prompts, TTL too low, disabled cache writes | `kubectl logs deploy/semantic-router -n vllm-semantic-router-system --tail=200 \| grep -i cache` | Cache Hit Rate by Decision |
-
-`LowCacheHitRate` only fires after hit or miss metrics are present, so an
-unused or disabled cache does not alert.
-
-## 8. Playground UIs
-
-- Chat UI is configured with `OPENAI_BASE_URL` pointing at Envoy's OpenAI-compatible endpoint and uses Mongo for persistence (development default). For production, switch Mongo to a managed service.
-
-## 9. Dashboard Customization
-
-- Duplicate the provisioned dashboard inside Grafana to make changes while keeping the original as a template.
-- Update Grafana provisioning (`grafana/configmap-provisioning.yaml`) to point to alternate folders or add new providers.
-- Add additional dashboards by extending `grafana/configmap-dashboard.yaml` or mounting a different ConfigMap.
-- Incorporate Kubernetes cluster metrics (CPU/memory) by adding another datasource or deploying kube-state-metrics + node exporters.
-
-## 10. Best Practices
-
-### Resource Sizing
-
-- Prometheus: increase CPU/memory with higher scrape cardinality or retention > 15 days.
-- Grafana: start with `500m` CPU / `1Gi` RAM; scale replicas horizontally when concurrent viewers exceed a few dozen.
-
-### Storage
-
-- Use SSD-backed storage classes for Prometheus when retention/window is large.
-- Increase `prometheus/pvc.yaml` (default 20Gi) and `grafana/pvc.yaml` (default 10Gi) to match retention requirements.
-- Enable volume snapshots or backups for dashboards and alert history.
-
-### Security
-
-- Replace the demo `grafana-admin` secret with credentials stored in your preferred secret manager.
-- Restrict ingress access with network policies, OAuth proxies, or SSO integrations.
-- Enable Grafana role-based access control and API keys for automation.
-- Scope Prometheus RBAC to only the namespaces you need. If metrics run in multiple namespaces, list them in the scrape config.
-
-### Maintenance
-
-- Monitor Prometheus disk usage; prune retention or scale PVC before it fills up.
-- Back up Grafana dashboards or store them in Git (already done through this ConfigMap).
-- Roll upgrades separately: update Prometheus and Grafana images via `kustomization.yaml` patches.
-- Consider adopting the Prometheus Operator (`ServiceMonitor` + `PodMonitor`) if you already run kube-prometheus-stack. A sample `ServiceMonitor` is in `website/docs/tutorials/observability/observability.md`.
-
-## 11. Troubleshooting
-
-| Symptom                    | Checks                                                                         | Fix                                                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Prometheus target **DOWN** | `kubectl get endpoints semantic-router-metrics -n vllm-semantic-router-system` | Ensure the Semantic Router deployment is running and the service labels match `app=semantic-router`, `service=metrics` |
-| Grafana dashboard empty    | **Configuration → Data Sources**                                               | Confirm Prometheus datasource URL resolves and the Prometheus service is reachable                                     |
-| Login fails                | `kubectl get secret grafana-admin -o yaml`                                     | Update the secret to match the credentials you expect                                                                  |
-| PVC Pending                | `kubectl describe pvc prometheus-data`                                         | Provide a storage class via `storageClassName`, or provision storage manually                                          |
-| Ingress 404                | `kubectl describe ingress grafana`                                             | Update hostnames, TLS secrets, and ensure ingress controller is installed                                              |
-
-## 12. Next Steps
-
-- Wire Alertmanager routing for the bundled Prometheus alert rules
-- Add log aggregation (Loki, Elasticsearch, or Cloud-native logging)
-- Automate stack deployment through CI/CD pipelines using `kubectl apply -k`
-
-With this observability stack in place, you can track Semantic Router health, routing accuracy, latency distributions, and usage trends across any Kubernetes environment.
+PVC deletion and retention behavior depends on the cluster and storage class;
+confirm it before removing data you may need.

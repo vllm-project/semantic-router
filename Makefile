@@ -20,6 +20,7 @@ _run:
 		-f tools/make/valkey.mk \
 		-f tools/make/llama-stack.mk \
 		-f tools/make/models.mk \
+		-f tools/make/model-catalog.mk \
 		-f tools/make/pre-commit.mk \
 		-f tools/make/security.mk \
 		-f tools/make/docker.mk \
@@ -29,8 +30,10 @@ _run:
 		-f tools/make/kube.mk \
 		-f tools/make/helm.mk \
 		-f tools/make/openshift.mk \
+		-f tools/make/recipe-conformance.mk \
 		-f tools/make/e2e.mk \
 		-f tools/make/performance.mk \
+		-f tools/make/soak.mk \
 		$(MAKECMDGOALS)
 
 .PHONY: _run

@@ -1,6 +1,5 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import type { ConfigSection } from '../components/ConfigNav'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
 import AuthTransitionPage from '../pages/AuthTransitionPage'
@@ -10,26 +9,22 @@ import AuthenticatedShell from './AuthenticatedShell'
 import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import SetupStatusPage from './SetupStatusPage'
-import { loadLandingPage, loadLoginPage } from './routeLoaders'
+import ProductLoadingState from '../components/ProductLoadingState'
+import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
+import { useReadonly } from '../contexts/ReadonlyContext'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
   const { user } = useAuth()
-  const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
+  const {
+    isLoading: settingsLoading,
+    evaluationAvailable,
+    evaluationUnavailableReason,
+  } = useReadonly()
   const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
-    return (
-      <SetupStatusPage
-        title="Loading setup state"
-        description="The dashboard is checking whether this workspace is already activated or still in first-run setup mode."
-        actionLabel="Refresh"
-        variant="loading"
-        onAction={() => {
-          window.location.reload()
-        }}
-      />
-    )
+    return <ProductLoadingState label="Opening your workspace" />
   }
 
   if (error) {
@@ -58,16 +53,21 @@ const AppRouter: React.FC = () => {
           path="/login"
           element={<RecoverableLazyRoute loader={loadLoginPage} routeLabel="Login" />}
         />
+        <Route
+          path="/invite/:token"
+          element={<RecoverableLazyRoute loader={loadInviteAcceptPage} routeLabel="Invitation" />}
+        />
         <Route path="/auth/transition" element={<AuthTransitionPage />} />
 
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
             {renderAuthenticatedAppRoutes({
-              configSection,
-              setConfigSection,
               canUseMLSetup,
               user,
               setupMode,
+              settingsLoading,
+              evaluationAvailable,
+              evaluationUnavailableReason,
             })}
           </Route>
         </Route>

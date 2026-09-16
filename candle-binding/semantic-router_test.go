@@ -458,6 +458,55 @@ func TestBERTClassifiers(t *testing.T) {
 
 		t.Logf("BERT jailbreak classification: Class=%d, Confidence=%.4f", result.Class, result.Confidence)
 	})
+
+	t.Run("BERTJailbreakClassifierWithProbs", func(t *testing.T) {
+		// ClassifyJailbreakTextWithProbs must agree with ClassifyJailbreakText's
+		// top-1 prediction and return a full, normalized distribution.
+		numClasses := 2
+		err := InitJailbreakClassifier(JailbreakClassifierModelPath, numClasses, true)
+		if err != nil {
+			if isModelInitializationError(err) {
+				t.Skipf("Skipping BERT jailbreak with-probs test due to model initialization error: %v", err)
+			}
+			t.Skipf("BERT jailbreak classifier not available: %v", err)
+		}
+
+		top1, err := ClassifyJailbreakText(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with BERT: %v", err)
+		}
+
+		withProbs, err := ClassifyJailbreakTextWithProbs(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with probabilities: %v", err)
+		}
+
+		if withProbs.Class != top1.Class {
+			t.Errorf("argmax class mismatch: ClassifyJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+		}
+		if withProbs.Confidence != top1.Confidence {
+			t.Errorf("confidence mismatch: ClassifyJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+		}
+		if withProbs.NumClasses != numClasses || len(withProbs.Probabilities) != numClasses {
+			t.Errorf("expected %d probabilities, got NumClasses=%d len=%d", numClasses, withProbs.NumClasses, len(withProbs.Probabilities))
+		}
+
+		var sum float32
+		for _, p := range withProbs.Probabilities {
+			sum += p
+		}
+		if sum < 0.99 || sum > 1.01 {
+			t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+		}
+		if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+			if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+				t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+			}
+		}
+
+		t.Logf("BERT jailbreak with-probs classification: Class=%d, Confidence=%.4f, Probabilities=%v",
+			withProbs.Class, withProbs.Confidence, withProbs.Probabilities)
+	})
 }
 
 func TestBertClassifier_ConcurrentClassificationSafety(t *testing.T) {
@@ -1860,6 +1909,10 @@ func TestEmbeddingConsistency(t *testing.T) {
 		// Check that embeddings are identical (or very close)
 		maxDiff := 0.0
 		for i := range embedding1 {
+			if math.IsNaN(float64(embedding1[i])) || math.IsInf(float64(embedding1[i]), 0) ||
+				math.IsNaN(float64(embedding2[i])) || math.IsInf(float64(embedding2[i]), 0) {
+				t.Fatalf("Invalid embedding value at index %d: %f, %f", i, embedding1[i], embedding2[i])
+			}
 			diff := math.Abs(float64(embedding1[i] - embedding2[i]))
 			if diff > maxDiff {
 				maxDiff = diff
@@ -1873,8 +1926,8 @@ func TestEmbeddingConsistency(t *testing.T) {
 		}
 	})
 
-	t.Run("DifferentDimensionsSharePrefix", func(t *testing.T) {
-		// Test that Matryoshka embeddings are prefixes of full embeddings
+	t.Run("DifferentDimensionsShareNormalizedPrefix", func(t *testing.T) {
+		// Matryoshka truncation preserves the prefix direction and restores unit norm.
 		full768, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
 		if err != nil {
 			t.Fatalf("Failed to get 768-dim embedding: %v", err)
@@ -1885,19 +1938,49 @@ func TestEmbeddingConsistency(t *testing.T) {
 			t.Fatalf("Failed to get 256-dim embedding: %v", err)
 		}
 
-		// Check that first 256 values match
+		for _, embedding := range []struct {
+			values    []float32
+			dimension int
+		}{
+			{full768, 768},
+			{mat256, 256},
+		} {
+			if len(embedding.values) != embedding.dimension {
+				t.Fatalf("Expected %d-dim embedding, got %d", embedding.dimension, len(embedding.values))
+			}
+			normSquared := 0.0
+			for i, value := range embedding.values {
+				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+					t.Fatalf("Invalid %d-dim embedding value at index %d: %f", embedding.dimension, i, value)
+				}
+				normSquared += float64(value) * float64(value)
+			}
+			if norm := math.Sqrt(normSquared); math.Abs(norm-1) > TestEpsilon {
+				t.Fatalf("Expected unit-norm %d-dim embedding, got norm %e", embedding.dimension, norm)
+			}
+		}
+
+		prefixNormSquared := 0.0
+		for _, value := range full768[:len(mat256)] {
+			prefixNormSquared += float64(value) * float64(value)
+		}
+		prefixNorm := math.Sqrt(prefixNormSquared)
+		if prefixNorm <= 0 || math.IsNaN(prefixNorm) || math.IsInf(prefixNorm, 0) {
+			t.Fatalf("Cannot normalize embedding prefix with norm %e", prefixNorm)
+		}
+
 		maxDiff := 0.0
-		for i := 0; i < 256; i++ {
-			diff := math.Abs(float64(full768[i] - mat256[i]))
+		for i, value := range mat256 {
+			diff := math.Abs(float64(full768[i])/prefixNorm - float64(value))
 			if diff > maxDiff {
 				maxDiff = diff
 			}
 		}
 
 		if maxDiff > TestEpsilon {
-			t.Errorf("Matryoshka prefix differs from full embedding: max diff = %e", maxDiff)
+			t.Errorf("Matryoshka embedding differs from normalized prefix: max diff = %e", maxDiff)
 		} else {
-			t.Logf("Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
+			t.Logf("Matryoshka 256 matches normalized prefix of 768 (max diff: %e)", maxDiff)
 		}
 	})
 }
@@ -3372,6 +3455,54 @@ func TestDebertaComparison(t *testing.T) {
 	}
 }
 
+// TestModernBertJailbreakClassifierWithProbs verifies that
+// ClassifyModernBertJailbreakTextWithProbs agrees with
+// ClassifyModernBertJailbreakText's top-1 prediction and returns a full,
+// normalized distribution.
+func TestModernBertJailbreakClassifierWithProbs(t *testing.T) {
+	numClasses := 2
+	err := InitModernBertJailbreakClassifier(JailbreakClassifierModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping ModernBERT jailbreak with-probs test due to model initialization error: %v", err)
+		}
+		t.Skipf("ModernBERT jailbreak classifier not available: %v", err)
+	}
+
+	top1, err := ClassifyModernBertJailbreakText(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with ModernBERT: %v", err)
+	}
+
+	withProbs, err := ClassifyModernBertJailbreakTextWithProbs(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with probabilities using ModernBERT: %v", err)
+	}
+
+	if withProbs.Class != top1.Class {
+		t.Errorf("argmax class mismatch: ClassifyModernBertJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+	}
+	if withProbs.Confidence != top1.Confidence {
+		t.Errorf("confidence mismatch: ClassifyModernBertJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+	}
+	if len(withProbs.Probabilities) != numClasses {
+		t.Errorf("expected %d probabilities, got %d", numClasses, len(withProbs.Probabilities))
+	}
+
+	var sum float32
+	for _, p := range withProbs.Probabilities {
+		sum += p
+	}
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+	}
+	if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+		if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+			t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+		}
+	}
+}
+
 // BenchmarkDebertaJailbreakClassifier benchmarks DeBERTa v3 classification performance
 func BenchmarkDebertaJailbreakClassifier(b *testing.B) {
 	err := InitDebertaJailbreakClassifier(DebertaJailbreakModelPath, true)
@@ -4725,4 +4856,27 @@ func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
 	}
 	t.Run("modality", func(t *testing.T) { runModalityLongPrompt(t, longText) })
 	t.Run("pii_tokens", func(t *testing.T) { runPIILongPrompt(t, longText) })
+}
+
+// TestSupportsBatchedEmbedding verifies that only qwen3 reports batched support;
+// all other model types (including the default mmbert) use the single-text path.
+func TestSupportsBatchedEmbedding(t *testing.T) {
+	cases := []struct {
+		modelType string
+		want      bool
+	}{
+		{"qwen3", true},
+		{"Qwen3", true},
+		{"  qwen3  ", true},
+		{"mmbert", false},
+		{"gemma", false},
+		{"bert", false},
+		{"modernbert", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := SupportsBatchedEmbedding(tc.modelType); got != tc.want {
+			t.Errorf("SupportsBatchedEmbedding(%q) = %v, want %v", tc.modelType, got, tc.want)
+		}
+	}
 }

@@ -67,8 +67,16 @@ func (c *Compiler) compilePromptAlgo(
 
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
+	if minimum, ok := getIntField(spec.Fields, "minimum_candidates"); ok {
+		algo.MinimumCandidates = minimum
+	}
 	c.populateAlgorithmSubConfig(algo, spec)
 	c.setAlgorithmTopLevelOnError(algo, spec.Fields)
+	if algo.ReMoM != nil {
+		if err := config.ValidateReMoMAlgorithmConfig(algo.ReMoM); err != nil {
+			c.addError(spec.Pos, "invalid remom algorithm: %v", err)
+		}
+	}
 	return algo
 }
 
@@ -117,6 +125,9 @@ func (c *Compiler) compileConfidenceAlgo(fields map[string]Value) *config.Confid
 	}
 	if v, ok := getIntField(fields, "verifier_timeout_seconds"); ok {
 		cfg.VerifierTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "max_response_bytes"); ok {
+		cfg.MaxResponseBytes = int64(v)
 	}
 	cfg.HybridWeights = parseHybridWeights(fields)
 	return cfg
@@ -187,6 +198,9 @@ func fillReMoMRuntimeFields(cfg *config.ReMoMAlgorithmConfig, fields map[string]
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
 	}
+	if v, ok := getIntField(fields, "max_completion_tokens"); ok {
+		cfg.MaxCompletionTokens = &v
+	}
 	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
 		cfg.RoundTimeoutSeconds = v
 	}
@@ -229,6 +243,9 @@ func fillFusionModelFields(cfg *config.FusionAlgorithmConfig, fields map[string]
 }
 
 func fillFusionRuntimeFields(cfg *config.FusionAlgorithmConfig, fields map[string]Value) {
+	if v, ok := getStringField(fields, "analysis_mode"); ok {
+		cfg.AnalysisMode = v
+	}
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
 	}
@@ -300,6 +317,9 @@ func compileWorkflowPlanner(fields map[string]Value, cfg *config.WorkflowsAlgori
 	if planner, ok := fields["planner"].(ObjectValue); ok {
 		if v, ok := getStringField(planner.Fields, "model"); ok {
 			cfg.Planner.Model = v
+		}
+		if v, ok := getIntField(planner.Fields, "max_completion_tokens"); ok {
+			cfg.Planner.MaxCompletionTokens = v
 		}
 	}
 	if v, ok := getStringField(fields, "planner.model"); ok {
@@ -458,56 +478,9 @@ func (c *Compiler) compileLatencyAwareAlgo(fields map[string]Value) *config.Late
 }
 
 func (c *Compiler) compileMultiFactorAlgo(fields map[string]Value) *config.MultiFactorSelectionConfig {
-	cfg := &config.MultiFactorSelectionConfig{}
-	cfg.Weights = parseMultiFactorWeights(fields)
-	cfg.SLO = parseMultiFactorSLO(fields)
-	if v, ok := getIntField(fields, "latency_percentile"); ok {
-		cfg.LatencyPercentile = v
-	}
-	if v, ok := getStringField(fields, "on_no_candidates"); ok {
-		cfg.OnNoCandidates = v
-	}
-	return cfg
-}
-
-func parseMultiFactorWeights(fields map[string]Value) *config.MultiFactorWeightsConfig {
-	weights, ok := fields["weights"].(ObjectValue)
-	if !ok {
-		return nil
-	}
-	cfg := &config.MultiFactorWeightsConfig{}
-	if v, ok := getFloat64Field(weights.Fields, "quality"); ok {
-		cfg.Quality = v
-	}
-	if v, ok := getFloat64Field(weights.Fields, "latency"); ok {
-		cfg.Latency = v
-	}
-	if v, ok := getFloat64Field(weights.Fields, "cost"); ok {
-		cfg.Cost = v
-	}
-	if v, ok := getFloat64Field(weights.Fields, "load"); ok {
-		cfg.Load = v
-	}
-	return cfg
-}
-
-func parseMultiFactorSLO(fields map[string]Value) *config.MultiFactorSLOConfig {
-	slo, ok := fields["slo"].(ObjectValue)
-	if !ok {
-		return nil
-	}
-	cfg := &config.MultiFactorSLOConfig{}
-	if v, ok := getFloat64Field(slo.Fields, "max_tpot_ms"); ok {
-		cfg.MaxTPOTMs = v
-	}
-	if v, ok := getFloat64Field(slo.Fields, "max_ttft_ms"); ok {
-		cfg.MaxTTFTMs = v
-	}
-	if v, ok := getFloat64Field(slo.Fields, "max_cost_per_1m"); ok {
-		cfg.MaxCostPer1M = v
-	}
-	if v, ok := getIntField(slo.Fields, "max_inflight"); ok {
-		cfg.MaxInflight = v
+	cfg, err := decodeMultiFactorFields(fields)
+	if err != nil {
+		c.errors = append(c.errors, err)
 	}
 	return cfg
 }

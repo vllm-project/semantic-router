@@ -10,19 +10,20 @@ import (
 type typedPluginConfigEmitter func(*strings.Builder, *config.DecisionPlugin)
 
 var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
-	"system_prompt":      emitSystemPromptPluginConfig,
-	"semantic-cache":     emitSemanticCachePluginConfig,
-	"router_replay":      emitRouterReplayPluginConfig,
-	"memory":             emitMemoryPluginConfig,
-	"hallucination":      emitHallucinationPluginConfig,
-	"image_gen":          emitImageGenPluginConfig,
-	"fast_response":      emitFastResponsePluginConfig,
-	"request_params":     emitRequestParamsPluginConfig,
-	"tool_selection":     emitToolSelectionPluginConfig,
-	"tools":              emitToolsPluginConfig,
-	"rag":                emitRAGPluginConfig,
-	"header_mutation":    emitHeaderMutationPluginConfig,
-	"response_jailbreak": emitResponseJailbreakPluginConfig,
+	"system_prompt":       emitSystemPromptPluginConfig,
+	"response_cache":      emitResponseCachePluginConfig,
+	"context_compression": emitStructuredPluginConfig,
+	"router_replay":       emitRouterReplayPluginConfig,
+	"shadow_dispatch":     emitStructuredPluginConfig,
+	"memory":              emitMemoryPluginConfig,
+	"hallucination":       emitHallucinationPluginConfig,
+	"fast_response":       emitFastResponsePluginConfig,
+	"request_params":      emitRequestParamsPluginConfig,
+	"tool_selection":      emitToolSelectionPluginConfig,
+	"tools":               emitToolsPluginConfig,
+	"rag":                 emitRAGPluginConfig,
+	"header_mutation":     emitHeaderMutationPluginConfig,
+	"response_jailbreak":  emitResponseJailbreakPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {
@@ -38,7 +39,7 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 }
 
 func emitTypedPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	if fn, ok := typedPluginConfigEmitters[p.Type]; ok {
+	if fn, ok := typedPluginConfigEmitters[config.NormalizeDecisionPluginType(p.Type)]; ok {
 		fn(sb, p)
 	}
 }
@@ -59,20 +60,16 @@ func emitSystemPromptPluginConfig(sb *strings.Builder, p *config.DecisionPlugin)
 	}
 }
 
-func emitSemanticCachePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+func emitResponseCachePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
+	emitStructuredPluginConfig(sb, p)
+}
+
+func emitStructuredPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
+	raw, ok := normalizePluginConfigMap(p.Configuration)
 	if !ok {
 		return
 	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.TTLSeconds != nil {
-		fmt.Fprintf(sb, "    ttl_seconds: %d\n", *cfg.TTLSeconds)
-	}
+	writePluginConfigMap(sb, raw, "    ")
 }
 
 func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
@@ -144,19 +141,6 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 }
 
-func emitImageGenPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Backend != "" {
-		fmt.Fprintf(sb, "    backend: %q\n", cfg.Backend)
-	}
-}
-
 func emitFastResponsePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
 	if !ok {
@@ -174,6 +158,9 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if len(cfg.BlockedParams) > 0 {
 		fmt.Fprintf(sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
+	}
+	if cfg.DefaultMaxTokens != nil {
+		fmt.Fprintf(sb, "    default_max_tokens: %d\n", *cfg.DefaultMaxTokens)
 	}
 	if cfg.MaxTokensLimit != nil {
 		fmt.Fprintf(sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)
@@ -243,6 +230,9 @@ func emitToolsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	if len(cfg.BlockTools) > 0 {
 		fmt.Fprintf(sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
 	}
+	if cfg.StripToolHistory {
+		fmt.Fprintf(sb, "    strip_tool_history: true\n")
+	}
 	if cfg.DynamicRetrieval != nil {
 		fmt.Fprintf(sb, "    dynamic_retrieval: %s\n", formatPluginConfigValue(dynamicRetrievalConfigMap(cfg.DynamicRetrieval)))
 	}
@@ -280,6 +270,13 @@ func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
 }
 
 func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
+	if cfg.Rerank != nil {
+		if cfg.Rerank.TopK == nil {
+			fmt.Fprint(sb, "    rerank: {}\n")
+		} else {
+			fmt.Fprintf(sb, "    rerank: { top_k: %d }\n", *cfg.Rerank.TopK)
+		}
+	}
 	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
 		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
 	}

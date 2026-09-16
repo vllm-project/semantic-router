@@ -5,20 +5,6 @@
 
 package candle_binding
 
-import (
-	"encoding/base64"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"regexp"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
-	"unsafe"
-)
-
 /*
 #cgo LDFLAGS: -L${SRCDIR}/target/release -lcandle_semantic_router -ldl -lm
 #include <stdlib.h>
@@ -164,6 +150,13 @@ typedef struct {
     bool error;
 } TokenizationResult;
 
+// Byte ranges of an input that each fit the embedding window
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+
 // Classification result structure
 typedef struct {
     int class;
@@ -246,6 +239,9 @@ extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
+extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
 
@@ -269,6 +265,7 @@ extern ClassificationResultWithProbs classify_text_with_probabilities(const char
 extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
@@ -276,15 +273,18 @@ extern ModernBertClassificationResultWithProbs classify_mmbert_32k_jailbreak_wit
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_modernbert_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_feedback_text_with_probabilities(const char* text);
 
 // mmBERT-32K classification functions (32K context, YaRN RoPE scaling)
 extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
+extern ModernBertClassificationResultWithProbs classify_mmbert_32k_feedback_with_probabilities(const char* text);
 extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_modality(const char* text);
 
@@ -455,6 +455,20 @@ extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
+import (
+	"encoding/base64"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"regexp"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+	"unsafe"
+)
+
 var (
 	initOnce                              sync.Once
 	initErr                               error
@@ -517,8 +531,8 @@ type ClassResultWithProbs struct {
 // TokenEntity represents a single detected entity in token classification
 type TokenEntity struct {
 	EntityType string  // Type of entity (e.g., "PERSON", "EMAIL", "PHONE")
-	Start      int     // Start character position in original text
-	End        int     // End character position in original text
+	Start      int     // Start byte offset in original text (UTF-8 bytes, not characters)
+	End        int     // End byte offset in original text (exclusive)
 	Text       string  // Actual entity text
 	Confidence float32 // Confidence score (0.0 to 1.0)
 }
@@ -651,6 +665,60 @@ func TokenizeText(text string, maxLength int) (TokenizeResult, error) {
 // TokenizeTextDefault tokenizes text with default max length (512)
 func TokenizeTextDefault(text string) (TokenizeResult, error) {
 	return TokenizeText(text, 512)
+}
+
+// EmbeddingTextExceedsWindow reports whether text tokenizes past the context
+// window of the loaded embedding model, so its embedding would be truncated.
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	switch C.embedding_text_exceeds_window(cText, cModelType) {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("embedding model %q not loaded", modelType)
+	}
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns the byte ranges a text has to be split into for the whole
+// of it to be embedded. A text that already fits comes back as one range, and
+// consecutive ranges overlap by half a window.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	if !modelInitialized {
+		return nil, fmt.Errorf("BERT model not initialized")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+
+	if bool(result.error) {
+		return nil, fmt.Errorf("failed to window text")
+	}
+
+	count := int(result.window_count)
+	if count == 0 || result.offsets == nil {
+		return nil, nil
+	}
+	offsets := (*[1 << 28]C.int)(unsafe.Pointer(result.offsets))[: count*2 : count*2]
+	windows := make([]TextWindow, count)
+	for i := 0; i < count; i++ {
+		windows[i] = TextWindow{Start: int(offsets[i*2]), End: int(offsets[i*2+1])}
+	}
+	return windows, nil
 }
 
 // GetEmbedding gets the embedding vector for a text
@@ -839,6 +907,14 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 		SequenceLength:   int(result.sequence_length),
 		ProcessingTimeMs: float32(result.processing_time_ms),
 	}, nil
+}
+
+// SupportsBatchedEmbedding reports whether the given modelType can use the
+// continuous-batching FFI (GetEmbeddingBatched / init_embedding_models_batched).
+// Only "qwen3" has a batched implementation; all other model types must use
+// the single-text path (GetEmbeddingWithModelType).
+func SupportsBatchedEmbedding(modelType string) bool {
+	return strings.ToLower(strings.TrimSpace(modelType)) == "qwen3"
 }
 
 // InitEmbeddingModels initializes Qwen3, Gemma, and/or mmBERT embedding models (standard version).
@@ -2125,6 +2201,40 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	}, nil
 }
 
+// ClassifyJailbreakTextWithProbs classifies text for jailbreak detection (LoRA
+// auto-detection, falling back to Traditional BERT) and returns the predicted
+// class, confidence, and full probability distribution. This allows callers to
+// read the probability of the jailbreak class itself rather than the
+// confidence of whichever class wins argmax.
+func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_jailbreak_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak text with probabilities")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
+	}, nil
+}
+
 // InitModernBertClassifier initializes the ModernBERT classifier with the specified model path
 // Number of classes is automatically inferred from the model weights
 func InitModernBertClassifier(modelPath string, useCPU bool) error {
@@ -2543,6 +2653,38 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	}, nil
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text using the mmBERT-32K feedback
+// detector and returns the probability of every class, not only the winning one.
+// Returns: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_feedback_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify feedback with probabilities using mmBERT-32K")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
+	}, nil
+}
+
 // InitMmBert32KPIIClassifier initializes the mmBERT-32K PII detector
 // This model detects 17 types of PII entities using BIO tagging.
 // Reference: https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora
@@ -2580,6 +2722,10 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 		entities:     (*C.ModernBertTokenEntity)(unsafe.Pointer(result.entities)),
 		num_entities: result.num_entities,
 	})
+
+	if result.num_entities < 0 || (result.num_entities > 0 && result.entities == nil) {
+		return nil, fmt.Errorf("mmBERT-32K PII token classification failed")
+	}
 
 	if result.num_entities == 0 {
 		return []TokenEntity{}, nil
@@ -2752,6 +2898,38 @@ func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyFeedbackTextWithProbs classifies the provided text and returns the
+// probability of every class, not only the winning one.
+// Returns: 0=SAT (satisfied), 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_feedback_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify feedback text with probabilities")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 
@@ -3134,6 +3312,40 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyModernBertJailbreakTextWithProbs classifies text for jailbreak
+// detection using ModernBERT and returns the predicted class, confidence, and
+// full probability distribution. This allows callers to read the probability
+// of the jailbreak class itself rather than the confidence of whichever class
+// wins argmax.
+func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_modernbert_jailbreak_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak text with probabilities using ModernBERT")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 

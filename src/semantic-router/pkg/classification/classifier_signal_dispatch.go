@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -25,10 +26,61 @@ func (c *Classifier) buildSignalDispatchers(
 	imgArg string,
 	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
 	convFacts ConversationFacts,
+	requestCtx context.Context,
 	requestFacts RequestFacts,
 	usedSignals map[string]bool,
 ) []signalDispatch {
-	dispatchers := []signalDispatch{
+	dispatchers := c.buildPrimarySignalDispatchers(
+		requestFacts.Context,
+		results,
+		mu,
+		textForSignal,
+		currentUserText,
+		priorUserMessages,
+		hasPriorAssistantReply,
+		imgArg,
+		imgCache,
+		requestCtx,
+	)
+	dispatchers = append(dispatchers, c.buildRequestFactSignalDispatchers(
+		results,
+		mu,
+		textForSignal,
+		contextText,
+		currentUserText,
+		imgArg,
+		imgCache,
+		requestFacts,
+		requestCtx,
+	)...)
+	return append(
+		dispatchers,
+		c.buildPolicySignalDispatchers(
+			results,
+			mu,
+			textForSignal,
+			priorUserMessages,
+			nonUserMessages,
+			convFacts,
+			requestFacts,
+			usedSignals,
+		)...,
+	)
+}
+
+func (c *Classifier) buildPrimarySignalDispatchers(
+	ctx context.Context,
+	results *SignalResults,
+	mu *sync.Mutex,
+	textForSignal func(string) string,
+	currentUserText string,
+	priorUserMessages []string,
+	hasPriorAssistantReply bool,
+	imgArg string,
+	imgCache *requestImageEmbeddingCache,
+	requestCtx context.Context,
+) []signalDispatch {
+	return []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
 			func() { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
@@ -36,21 +88,22 @@ func (c *Classifier) buildSignalDispatchers(
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
-				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
+				c.evaluateEmbeddingSignal(requestCtx, results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
 			},
 		},
 		{
 			config.SignalTypeDomain, "Domain",
-			func() { c.evaluateDomainSignal(results, mu, textForSignal(config.SignalTypeDomain)) },
+			func() { c.evaluateDomainSignal(requestCtx, results, mu, textForSignal(config.SignalTypeDomain)) },
 		},
 		{
 			config.SignalTypeFactCheck, "Fact-check",
-			func() { c.evaluateFactCheckSignal(results, mu, textForSignal(config.SignalTypeFactCheck)) },
+			func() { c.evaluateFactCheckSignal(requestCtx, results, mu, textForSignal(config.SignalTypeFactCheck)) },
 		},
 		{
 			config.SignalTypeUserFeedback, "User feedback",
 			func() {
 				c.evaluateUserFeedbackSignal(
+					requestCtx,
 					results,
 					mu,
 					textForSignal(config.SignalTypeUserFeedback),
@@ -70,9 +123,31 @@ func (c *Classifier) buildSignalDispatchers(
 			config.SignalTypeLanguage, "Language",
 			func() { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
 		},
+	}
+}
+
+func (c *Classifier) buildRequestFactSignalDispatchers(
+	results *SignalResults,
+	mu *sync.Mutex,
+	textForSignal func(string) string,
+	contextText string,
+	currentUserText string,
+	imgArg string,
+	imgCache *requestImageEmbeddingCache,
+	requestFacts RequestFacts,
+	requestCtx context.Context,
+) []signalDispatch {
+	return []signalDispatch{
 		{
 			config.SignalTypeContext, "Context",
-			func() { c.evaluateContextSignal(results, mu, contextText) },
+			func() {
+				c.evaluateContextSignal(
+					results,
+					mu,
+					contextText,
+					requestFacts.ContextTokenFloor,
+				)
+			},
 		},
 		{
 			config.SignalTypeStructure, "Structure",
@@ -88,27 +163,14 @@ func (c *Classifier) buildSignalDispatchers(
 		{
 			config.SignalTypeComplexity, "Complexity",
 			func() {
-				c.evaluateComplexitySignal(results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
+				c.evaluateComplexitySignal(requestCtx, results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
 			},
 		},
 		{
 			config.SignalTypeModality, "Modality",
-			func() { c.evaluateModalitySignal(results, mu, textForSignal(config.SignalTypeModality)) },
+			func() { c.evaluateModalitySignal(requestCtx, results, mu, textForSignal(config.SignalTypeModality)) },
 		},
 	}
-	return append(
-		dispatchers,
-		c.buildPolicySignalDispatchers(
-			results,
-			mu,
-			textForSignal,
-			priorUserMessages,
-			nonUserMessages,
-			convFacts,
-			requestFacts,
-			usedSignals,
-		)...,
-	)
 }
 
 func (c *Classifier) evaluateBoundedReaskSignal(

@@ -139,6 +139,9 @@ func validateReMoMPositiveControls(cfg *ReMoMAlgorithmConfig) error {
 	if cfg.MaxConcurrent < 0 {
 		return fmt.Errorf("max_concurrent must be >= 1 when set")
 	}
+	if cfg.MaxCompletionTokens != nil && *cfg.MaxCompletionTokens < 1 {
+		return fmt.Errorf("max_completion_tokens must be >= 1 when set")
+	}
 	if cfg.RoundTimeoutSeconds < 0 {
 		return fmt.Errorf("round_timeout_seconds must be >= 1 when set")
 	}

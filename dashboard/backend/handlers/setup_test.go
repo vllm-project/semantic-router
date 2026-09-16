@@ -6,12 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func createBootstrapSetupConfig(t *testing.T, dir string) string {
@@ -44,11 +45,105 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
+// Config transport tests own temporary files, never the host's running stack.
+// Lifecycle behavior is exercised separately with explicitly seeded containers.
+func isolateConfigMutationRuntime(t *testing.T) {
+	t.Helper()
+	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
+	for _, key := range []string{"TEST_ROUTER_CONTAINER", "TEST_ENVOY_CONTAINER", "TEST_DASHBOARD_CONTAINER"} {
+		t.Setenv(key, "")
+	}
+	t.Cleanup(func() {
+		calls, err := os.ReadFile(fakeDocker.logPath)
+		if err != nil && !os.IsNotExist(err) {
+			t.Errorf("read isolated runtime calls: %v", err)
+		}
+		for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+			if call != "" && !strings.HasPrefix(call, "inspect ") {
+				t.Errorf("config transport attempted to mutate an unconfigured runtime: %s", call)
+			}
+		}
+	})
+}
+
+func TestSummarizeSetupConfigIncludesRecipeOwnedSignalsAndDecisions(t *testing.T) {
+	var config setupConfigFile
+	err := yaml.Unmarshal([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: shared-model
+routing:
+  modelCards:
+    - name: shared-model
+  decisions: []
+entrypoints:
+  - model_names: [vllm-sr/balanced]
+    recipe: balanced
+recipes:
+  - name: balanced
+    routing:
+      signals:
+        keywords:
+          - name: balanced-keyword
+            operator: OR
+            keywords: [balanced]
+      decisions:
+        - name: balanced-route
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: balanced-keyword
+          modelRefs:
+            - model: shared-model
+              use_reasoning: false
+  - name: private
+    routing:
+      signals:
+        pii:
+          - name: private-pii
+            threshold: 0.8
+      decisions:
+        - name: private-route
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: pii
+                name: private-pii
+          modelRefs:
+            - model: shared-model
+              use_reasoning: false
+`), &config)
+	if err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+
+	summary := summarizeSetupConfig(&config.CanonicalConfig)
+
+	if summary.Models != 1 || summary.Decisions != 2 || summary.Signals != 2 {
+		t.Fatalf("summary = %+v, want models=1 decisions=2 signals=2", summary)
+	}
+
+	merged := mergeSetupCanonicalConfig(setupConfigFile{}.CanonicalConfig, config.CanonicalConfig)
+	if len(merged.Entrypoints) != 1 || len(merged.Recipes) != 2 {
+		t.Fatalf(
+			"setup merge dropped scoped routing: entrypoints=%d recipes=%d",
+			len(merged.Entrypoints),
+			len(merged.Recipes),
+		)
+	}
+}
+
 func createValidSetupPatch() map[string]interface{} {
 	return map[string]interface{}{
 		"providers": map[string]interface{}{
 			"defaults": map[string]interface{}{
-				"default_model": "test-model",
+				"model": "test-model",
 			},
 			"models": []map[string]interface{}{
 				{
@@ -56,6 +151,7 @@ func createValidSetupPatch() map[string]interface{} {
 					"backend_refs": []map[string]interface{}{
 						{
 							"name":     "primary",
+							"provider": "vllm",
 							"endpoint": "host.docker.internal:8000",
 							"protocol": "http",
 							"weight":   1,
@@ -133,7 +229,7 @@ func TestSetupStateHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/setup/state", nil)
 	w := httptest.NewRecorder()
 
-	SetupStateHandler(configPath)(w, req)
+	SetupStateHandler(configPath, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", w.Code)
@@ -167,7 +263,7 @@ func TestSetupValidateHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupValidateHandler(configPath)(w, req)
+	SetupValidateHandler(configPath, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -242,7 +338,7 @@ func TestSetupValidateHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupValidateHandler(configPath)(w, req)
+	SetupValidateHandler(configPath, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -259,11 +355,12 @@ func TestSetupImportRemoteHandler(t *testing.T) {
 version: v0.3
 providers:
   defaults:
-    default_model: remote-model
+    model: remote-model
   models:
     - name: remote-model
       backend_refs:
         - name: primary
+          provider: openai-compatible
           endpoint: remote.example.com
           protocol: https
           weight: 100
@@ -299,7 +396,7 @@ routing:
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupImportRemoteHandler(configPath)(w, req)
+	SetupImportRemoteHandler(configPath, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -325,8 +422,8 @@ routing:
 	}
 	if providers, ok := importedConfig["providers"].(map[string]interface{}); !ok {
 		t.Fatalf("expected imported config providers map, got %#v", importedConfig["providers"])
-	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["default_model"] != "remote-model" {
-		t.Fatalf("expected imported config providers.defaults.default_model=remote-model, got %#v", importedConfig["providers"])
+	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["model"] != "remote-model" {
+		t.Fatalf("expected imported config providers.defaults.model=remote-model, got %#v", importedConfig["providers"])
 	}
 	if routing, ok := importedConfig["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
 		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", importedConfig["routing"])
@@ -358,11 +455,12 @@ func TestSetupImportRemoteHandlerUsesConfigDirectoryForRelativeKBAssets(t *testi
 version: v0.3
 providers:
   defaults:
-    default_model: remote-model
+    model: remote-model
   models:
     - name: remote-model
       backend_refs:
         - name: primary
+          provider: openai-compatible
           endpoint: remote.example.com
           protocol: https
           weight: 100
@@ -400,7 +498,7 @@ global:
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupImportRemoteHandler(configPath)(w, req)
+	SetupImportRemoteHandler(configPath, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -408,6 +506,7 @@ global:
 }
 
 func TestSetupActivateHandler(t *testing.T) {
+	isolateConfigMutationRuntime(t)
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
@@ -419,7 +518,7 @@ func TestSetupActivateHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupActivateHandler(configPath, false, tempDir)(w, req)
+	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -456,7 +555,7 @@ func TestSetupActivateHandler(t *testing.T) {
 		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
 	}
 	// Mirrors pkg/config/canonical_defaults global.model_catalog.embeddings.semantic.mmbert_model_path
-	if semantic["mmbert_model_path"] != "models/mmbert-embed-32k-2d-matryoshka" {
+	if semantic["mmbert_model_path"] != "models/Vela-1.0-Encoder-307M-Embedding" {
 		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
 	}
 
@@ -469,6 +568,7 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	configureSetupRuntimeCLI(t)
 
 	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
 	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
@@ -495,7 +595,7 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupActivateHandler(configPath, false, tempDir)(w, req)
+	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -545,16 +645,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
 	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
-	pythonBinary := "python3"
-	if _, err := exec.LookPath(pythonBinary); err != nil {
-		pythonBinary = "python"
-	}
-	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
-	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
-	}
-	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
+	configureSetupRuntimeCLI(t)
 
 	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
 		t.Fatalf("failed to seed router status: %v", writeErr)
@@ -571,7 +662,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupActivateHandler(configPath, false, tempDir)(w, req)
+	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -588,7 +679,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 	if !strings.Contains(envoyConfigText, "host.docker.internal") {
 		t.Fatalf("expected refreshed envoy config to include activated backend endpoint, got:\n%s", envoyConfigText)
 	}
-	if !strings.Contains(envoyConfigText, "test_model_cluster") {
+	if !strings.Contains(envoyConfigText, "model_test_2dmodel_cluster") {
 		t.Fatalf("expected refreshed envoy config to include activated model cluster, got:\n%s", envoyConfigText)
 	}
 }

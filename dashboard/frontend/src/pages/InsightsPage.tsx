@@ -3,13 +3,19 @@ import { useNavigate } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
+import ProductLoadingState from '../components/ProductLoadingState'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
+import InsightsEmptyState from './InsightsEmptyState'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
-import { createInsightsTableColumns, getInsightsRecordPath } from './insightsPageSupport'
+import {
+  createInsightsTableColumns,
+  formatInsightsDecisionName,
+  getInsightsRecordPath,
+} from './insightsPageSupport'
 import type {
   InsightsAggregateResponse,
   InsightsFilterType,
@@ -115,12 +121,12 @@ export default function InsightsPage() {
     try {
       const [listResponse, aggregateResponse] = await Promise.all([
         fetchAbortableInsightsJSON<InsightsListResponse>(
-          `/api/router/v1/router_replay${listQuery}`,
+          `/api/router/api/v1/observability/replays${listQuery}`,
           'insight records',
           abortController.signal,
         ),
         fetchAbortableInsightsJSON<InsightsAggregateResponse>(
-          `/api/router/v1/router_replay/aggregate${aggregateQuery}`,
+          `/api/router/api/v1/observability/replays/aggregate${aggregateQuery}`,
           'insight aggregates',
           abortController.signal,
         ),
@@ -239,12 +245,7 @@ export default function InsightsPage() {
   )
 
   if (loading && !hasReplayData && records.length === 0) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner} />
-        <p>Loading insight records...</p>
-      </div>
-    )
+    return <ProductLoadingState label="Loading insights" />
   }
 
   return (
@@ -252,15 +253,6 @@ export default function InsightsPage() {
       eyebrow="Insights"
       title="Insights"
       description="See what the router picked, what signals fired, and how much it saved."
-      configArea="Analysis"
-      scope="Filtered replay intelligence"
-      panelTitle="Semantic Router Insights"
-      panelDescription="Decisions, model picks, token usage, and savings in one view."
-      pills={[
-        { label: 'Cost Savings', active: true },
-        { label: 'Selections' },
-        { label: 'Signals' },
-      ]}
     >
       {error ? (
         <div className={styles.error}>
@@ -335,7 +327,7 @@ export default function InsightsPage() {
               <option value="all">All Decisions</option>
               {availableDecisions.map((decision) => (
                 <option key={decision} value={decision}>
-                  {decision}
+                  {formatInsightsDecisionName(decision)}
                 </option>
               ))}
             </select>
@@ -368,51 +360,7 @@ export default function InsightsPage() {
           </div>
 
           {!hasReplayData && !loading ? (
-            <div className={styles.emptyState}>
-              {replayUnavailable ? (
-                <div className={styles.emptyHint}>
-                  <p>
-                    Insights stay empty until router replay is enabled and requests flow through the
-                    router.
-                  </p>
-                  <p className={styles.emptySubtext}>
-                    Enable `global.services.router_replay.enabled`, or override a specific decision
-                    with `router_replay.enabled: true`. Use `enabled: false` on a decision only when
-                    you need to turn replay off for that route.
-                  </p>
-                </div>
-              ) : error ? (
-                <div className={styles.emptyHint}>
-                  <p>
-                    Unable to load insights. If replay is disabled, enable router replay globally or
-                    on the affected decision, then send traffic through the router.
-                  </p>
-                  <pre className={styles.configHint}>{`global:
-  services:
-    router_replay:
-      enabled: true
-      store_backend: memory  # or redis, postgres, milvus
-
-routing:
-  decisions:
-    - name: some-route
-      plugins:
-        - type: router_replay
-          configuration:
-            enabled: false  # optional per-decision opt-out`}</pre>
-                  <p className={styles.emptySubtext}>
-                    Then restart the router and send some requests.
-                  </p>
-                </div>
-              ) : (
-                <div className={styles.emptyHint}>
-                  <p>Insights records will appear here once requests are processed.</p>
-                  <p className={styles.emptySubtext}>
-                    Send chat completion traffic through the router to populate this view.
-                  </p>
-                </div>
-              )}
-            </div>
+            <InsightsEmptyState replayUnavailable={replayUnavailable} hasError={Boolean(error)} />
           ) : (
             <DataTable
               columns={tableColumns}

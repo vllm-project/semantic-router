@@ -13,11 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // BenchmarkConfig defines the parameters for a benchmark run
 type BenchmarkConfig struct {
+	EmbeddingProvider embedding.Provider
 	CacheSize         int     // Number of entries to pre-populate
 	ConcurrencyLevels []int   // Different concurrency levels to test
 	RequestsPerLevel  int     // Number of requests per concurrency level
@@ -142,7 +143,7 @@ func populateCache(cache *InMemoryCache, size int) error {
 			query := queries[idx]
 			responseBody := []byte(fmt.Sprintf("Response for: %s", query))
 
-			err := cache.AddEntry(requestID,
+			err := cache.AddEntry(context.Background(), requestID,
 				"test-model", query, []byte(query), responseBody, -1)
 			if err != nil {
 				errors <- fmt.Errorf("failed to add entry %d: %w", idx, err)
@@ -182,6 +183,8 @@ func cosineSimilarity(a, b []float32) float32 {
 
 // measureSearchLatency performs a search and measures component latencies
 // IMPORTANT: Separates embedding generation time from pure search time
+//
+//nolint:nestif // Pre-existing HNSW/linear search split; #2473 only threads context through it.
 func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeasurement {
 	measurement := latencyMeasurement{}
 
@@ -189,7 +192,7 @@ func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeas
 
 	// Measure embedding generation time ONCE
 	startEmbed := time.Now()
-	queryEmbedding, err := cache.generateEmbedding(query)
+	queryEmbedding, err := cache.generateEmbedding(context.Background(), query)
 	measurement.EmbeddingTime = time.Since(startEmbed)
 
 	if err != nil {
@@ -240,6 +243,19 @@ func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeas
 	return measurement
 }
 
+// resolveUseHNSW lets USE_HNSW override the configured index choice, so one
+// scenario can be re-run both ways without editing the config.
+func resolveUseHNSW(configured bool) bool {
+	switch os.Getenv("USE_HNSW") {
+	case "true", "1":
+		return true
+	case "false", "0":
+		return false
+	default:
+		return configured
+	}
+}
+
 // runBenchmarkScenario executes a single benchmark scenario
 func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResult {
 	result := BenchmarkResult{
@@ -253,17 +269,7 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 		embeddingModel = "qwen3"
 	}
 
-	// Check if HNSW should be overridden by environment variable
-	useHNSW := config.UseHNSW
-	hnswEnv := os.Getenv("USE_HNSW")
-	if hnswEnv != "" {
-		switch hnswEnv {
-		case "true", "1":
-			useHNSW = true
-		case "false", "0":
-			useHNSW = false
-		}
-	}
+	useHNSW := resolveUseHNSW(config.UseHNSW)
 
 	// Create cache with specified configuration
 	cache := NewInMemoryCache(InMemoryCacheOptions{
@@ -277,6 +283,7 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 		HNSWEfConstruction:  200,
 		HNSWEfSearch:        50,
 		EmbeddingModel:      embeddingModel,
+		EmbeddingProvider:   config.EmbeddingProvider,
 	})
 	defer cache.Close()
 
@@ -298,19 +305,38 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 	diversity := 1.0 - config.HitRatio // Lower diversity = higher hit ratio
 	testQueries := generateTestQueries(queryCount, diversity)
 
-	// Storage for measurements
-	measurements := make([]latencyMeasurement, queryCount)
-	var errorCount int64
-
 	// Run benchmark with specified concurrency
 	fmt.Printf("Running %d requests with concurrency %d...\n", queryCount, concurrency)
+
+	measurements, errorCount, duration := runConcurrentQueries(cache, testQueries, concurrency)
+
+	// Calculate statistics
+	result.TotalRequests = queryCount
+	result.Duration = duration
+	result.Throughput = float64(queryCount) / duration.Seconds()
+	result.ErrorCount = errorCount
+
+	summarizeMeasurements(&result, measurements)
+
+	return result
+}
+
+// runConcurrentQueries measures every query against the cache with at most
+// `concurrency` lookups in flight, and reports how long the whole batch took.
+func runConcurrentQueries(
+	cache *InMemoryCache,
+	queries []string,
+	concurrency int,
+) ([]latencyMeasurement, int64, time.Duration) {
+	measurements := make([]latencyMeasurement, len(queries))
+	var errorCount int64
 
 	startTime := time.Now()
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, concurrency)
 
-	for i := 0; i < queryCount; i++ {
+	for i := range queries {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -319,8 +345,7 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			query := testQueries[idx]
-			measurement := measureSearchLatency(cache, "test-model", query)
+			measurement := measureSearchLatency(cache, "test-model", queries[idx])
 			measurements[idx] = measurement
 
 			if measurement.Error != nil {
@@ -330,56 +355,55 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 	}
 
 	wg.Wait()
-	duration := time.Since(startTime)
 
-	// Calculate statistics
-	result.TotalRequests = queryCount
-	result.Duration = duration
-	result.Throughput = float64(queryCount) / duration.Seconds()
-	result.ErrorCount = errorCount
+	return measurements, errorCount, time.Since(startTime)
+}
 
-	// Extract latency data
-	totalLatencies := make([]float64, 0, queryCount)
-	embeddingLatencies := make([]float64, 0, queryCount)
-	searchLatencies := make([]float64, 0, queryCount)
+// summarizeMeasurements fills the latency percentiles and hit rates of result
+// from the successful measurements. Failed measurements are excluded so a
+// backend error cannot masquerade as a fast lookup.
+func summarizeMeasurements(result *BenchmarkResult, measurements []latencyMeasurement) {
+	totalLatencies := make([]float64, 0, len(measurements))
+	embeddingLatencies := make([]float64, 0, len(measurements))
+	searchLatencies := make([]float64, 0, len(measurements))
 
 	hitCount := 0
 	for _, m := range measurements {
-		if m.Error == nil {
-			totalLatencies = append(totalLatencies, float64(m.TotalTime.Microseconds())/1000.0)
-			embeddingLatencies = append(embeddingLatencies, float64(m.EmbeddingTime.Microseconds())/1000.0)
-			searchLatencies = append(searchLatencies, float64(m.SearchTime.Microseconds())/1000.0)
+		if m.Error != nil {
+			continue
+		}
+		totalLatencies = append(totalLatencies, float64(m.TotalTime.Microseconds())/1000.0)
+		embeddingLatencies = append(embeddingLatencies, float64(m.EmbeddingTime.Microseconds())/1000.0)
+		searchLatencies = append(searchLatencies, float64(m.SearchTime.Microseconds())/1000.0)
 
-			if m.CacheHit {
-				hitCount++
-			}
+		if m.CacheHit {
+			hitCount++
 		}
 	}
 
-	// Calculate percentiles
-	if len(totalLatencies) > 0 {
-		result.OverallP50 = percentile(totalLatencies, 50)
-		result.OverallP90 = percentile(totalLatencies, 90)
-		result.OverallP95 = percentile(totalLatencies, 95)
-		result.OverallP99 = percentile(totalLatencies, 99)
-		result.OverallMax = percentile(totalLatencies, 100)
-		result.OverallMean = mean(totalLatencies)
-
-		result.EmbeddingP50 = percentile(embeddingLatencies, 50)
-		result.EmbeddingP90 = percentile(embeddingLatencies, 90)
-		result.EmbeddingP95 = percentile(embeddingLatencies, 95)
-		result.EmbeddingP99 = percentile(embeddingLatencies, 99)
-
-		result.SearchP50 = percentile(searchLatencies, 50)
-		result.SearchP90 = percentile(searchLatencies, 90)
-		result.SearchP95 = percentile(searchLatencies, 95)
-		result.SearchP99 = percentile(searchLatencies, 99)
-
-		result.CacheHitRate = float64(hitCount) / float64(len(totalLatencies))
-		result.CacheMissRate = 1.0 - result.CacheHitRate
+	if len(totalLatencies) == 0 {
+		return
 	}
 
-	return result
+	result.OverallP50 = percentile(totalLatencies, 50)
+	result.OverallP90 = percentile(totalLatencies, 90)
+	result.OverallP95 = percentile(totalLatencies, 95)
+	result.OverallP99 = percentile(totalLatencies, 99)
+	result.OverallMax = percentile(totalLatencies, 100)
+	result.OverallMean = mean(totalLatencies)
+
+	result.EmbeddingP50 = percentile(embeddingLatencies, 50)
+	result.EmbeddingP90 = percentile(embeddingLatencies, 90)
+	result.EmbeddingP95 = percentile(embeddingLatencies, 95)
+	result.EmbeddingP99 = percentile(embeddingLatencies, 99)
+
+	result.SearchP50 = percentile(searchLatencies, 50)
+	result.SearchP90 = percentile(searchLatencies, 90)
+	result.SearchP95 = percentile(searchLatencies, 95)
+	result.SearchP99 = percentile(searchLatencies, 99)
+
+	result.CacheHitRate = float64(hitCount) / float64(len(totalLatencies))
+	result.CacheMissRate = 1.0 - result.CacheHitRate
 }
 
 // percentile calculates the Nth percentile of a sorted slice
@@ -456,104 +480,7 @@ func printResults(results []BenchmarkResult) {
 	}
 }
 
-var (
-	// Ensure thread-safe single initialization using sync.Once
-	modelsInitOnce sync.Once
-	modelsInitErr  error
-)
-
-// InitEmbeddingModels initializes the embedding models needed for benchmarks
-// This should be called once before running any benchmarks
-// It initializes Qwen3 which has continuous batching support for better performance
-//
-// Thread-safe: Multiple concurrent calls will only initialize once
-//
-// Environment Variables:
-//
-//	QWEN3_MODEL_PATH - Path to Qwen3 embedding model (optional)
-//	GEMMA_MODEL_PATH - Path to Gemma embedding model (optional)
-//	USE_GPU - Set to "true" or "1" to use GPU instead of CPU (default: CPU)
-//	USE_HNSW - Set to "true" or "1" to enable HNSW indexing, "false" or "0" to disable (default: read from config)
-//
-// Example:
-//
-//	export QWEN3_MODEL_PATH=/path/to/Qwen3-Embedding-0.6B
-//	export USE_GPU=true
-//	export USE_HNSW=true
-func InitEmbeddingModels() error {
-	// Thread-safe initialization - only executes once regardless of concurrent calls
-	modelsInitOnce.Do(func() {
-		modelsInitErr = initEmbeddingModelsOnce()
-	})
-	return modelsInitErr
-}
-
-// initEmbeddingModelsOnce performs the actual initialization (called by sync.Once)
-func initEmbeddingModelsOnce() error {
-	// Check if GPU should be used
-	useGPU := false
-	useGPUEnv := os.Getenv("USE_GPU")
-	if useGPUEnv == "true" || useGPUEnv == "1" {
-		useGPU = true
-	}
-
-	deviceType := "CPU"
-	if useGPU {
-		deviceType = "GPU"
-	}
-
-	fmt.Printf("Initializing Qwen3 embedding model with FIXED continuous batching on %s...\n", deviceType)
-
-	// Check for environment variable first
-	qwen3Path := os.Getenv("QWEN3_MODEL_PATH")
-
-	// If environment variable not set, try common paths
-	var qwen3Paths []string
-	if qwen3Path != "" {
-		fmt.Printf("Using Qwen3 model path from QWEN3_MODEL_PATH: %s\n", qwen3Path)
-		qwen3Paths = []string{qwen3Path}
-	} else {
-		fmt.Println("QWEN3_MODEL_PATH not set, trying default paths...")
-		qwen3Paths = []string{
-			"./models/mom-embedding-pro",
-			"./candle-binding/models/mom-embedding-pro",
-			"../models/mom-embedding-pro",
-			"models/mom-embedding-pro",
-		}
-	}
-
-	// Continuous batching configuration
-	maxBatchSize := 64      // Batch up to 64 requests together
-	maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
-
-	var lastErr error
-	useCPU := !useGPU
-	for i, path := range qwen3Paths {
-		fmt.Printf("  Attempt %d/%d: Trying %s (device: %s)\n", i+1, len(qwen3Paths), path, deviceType)
-
-		// Use InitEmbeddingModelsBatched with FIXED scheduler (returns Vec instead of Tensor!)
-		err := candle_binding.InitEmbeddingModelsBatched(path, maxBatchSize, maxWaitMs, useCPU)
-		if err == nil {
-			fmt.Printf("Qwen3 embedding model initialized from: %s\n", path)
-			fmt.Printf("  Device: %s\n", deviceType)
-			fmt.Printf("  TRUE Continuous batching: ENABLED ✨ (FIXED - no CUDA context errors!)\n")
-			fmt.Printf("    - Max batch size: %d requests\n", maxBatchSize)
-			fmt.Printf("    - Max wait time: %dms\n", maxWaitMs)
-			fmt.Printf("    - Expected throughput: 10-15x improvement with concurrency!\n")
-			if useGPU {
-				fmt.Printf("  GPU acceleration: ENABLED\n")
-			}
-			return nil
-		}
-		lastErr = err
-	}
-
-	return fmt.Errorf("failed to initialize Qwen3 model on %s with continuous batching (tried %d paths): %w", deviceType, len(qwen3Paths), lastErr)
-}
-
-// RunStandaloneBenchmark runs a standalone benchmark (not as a test)
-// This function is exported so it can be called from the standalone benchmark tool
-// Note: Models should be initialized once before calling this function
+// RunStandaloneBenchmark executes using the provider supplied in BenchmarkConfig.
 func RunStandaloneBenchmark(ctx context.Context, config BenchmarkConfig) []BenchmarkResult {
 	var results []BenchmarkResult
 

@@ -22,7 +22,7 @@ func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map
 	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
-	c.expandProjectionDependencies(usedSignals)
+	c.expandTransitiveSignalDependencies(usedSignals)
 
 	return usedSignals
 }
@@ -53,20 +53,56 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeModality, c.Config.ModalityRules, func(r config.ModalityRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeAuthz, c.Config.GetRoleBindings(), func(rb config.RoleBinding) string { return rb.Role })
 	collectSignalKeys(allSignals, config.SignalTypeJailbreak, c.Config.JailbreakRules, func(r config.JailbreakRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeSafety, c.Config.SafetyRules, func(r config.SafetyRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeEvent, c.Config.EventRules, func(r config.EventRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeMetadata, c.Config.MetadataRules, func(r config.MetadataRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeClassifier, c.Config.ClassifierRules, func(r config.ClassifierSignalRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeInputModality, c.Config.InputModalityRules, func(r config.InputModalityRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
 		}
 	}
-	c.expandProjectionDependencies(allSignals)
+	c.expandTransitiveSignalDependencies(allSignals)
 
 	return allSignals
+}
+
+func (c *Classifier) expandTransitiveSignalDependencies(usedSignals map[string]bool) {
+	for {
+		before := len(usedSignals)
+		c.expandProjectionDependencies(usedSignals)
+		c.expandComplexityComposerDependencies(usedSignals)
+		if len(usedSignals) == before {
+			return
+		}
+	}
+}
+
+func (c *Classifier) expandComplexityComposerDependencies(usedSignals map[string]bool) {
+	for _, rule := range c.Config.ComplexityRules {
+		key := strings.ToLower(config.SignalTypeComplexity + ":" + rule.Name)
+		if !signalKeyOrLabelUsed(usedSignals, key) || rule.Composer == nil {
+			continue
+		}
+		c.analyzeRuleCombination(*rule.Composer, usedSignals)
+	}
+}
+
+func signalKeyOrLabelUsed(usedSignals map[string]bool, key string) bool {
+	if usedSignals[key] {
+		return true
+	}
+	prefix := key + ":"
+	for usedKey := range usedSignals {
+		if strings.HasPrefix(usedKey, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.

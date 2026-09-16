@@ -1,0 +1,91 @@
+{
+  "frames": [
+    {
+      "event": "response.created",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "resp_failed",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 0,
+        "type": "response.created"
+      }
+    },
+    {
+      "event": "response.in_progress",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": null,
+          "id": "resp_failed",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "in_progress",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
+        },
+        "sequence_number": 1,
+        "type": "response.in_progress"
+      }
+    },
+    {
+      "event": "response.failed",
+      "data": {
+        "response": {
+          "created_at": 0,
+          "error": {
+            "code": "provider_error",
+            "message": "failed after generation"
+          },
+          "id": "resp_failed",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "public-model",
+          "object": "response",
+          "output": [],
+          "parallel_tool_calls": true,
+          "status": "failed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null,
+          "usage": {
+            "input_tokens": 4,
+            "input_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 1
+            },
+            "output_tokens": 2,
+            "output_tokens_details": {
+              "reasoning_tokens": 1
+            },
+            "total_tokens": 6
+          }
+        },
+        "sequence_number": 2,
+        "type": "response.failed"
+      }
+    }
+  ]
+}

@@ -54,11 +54,12 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: file-model
+    model: file-model
   models:
     - name: file-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: file-model

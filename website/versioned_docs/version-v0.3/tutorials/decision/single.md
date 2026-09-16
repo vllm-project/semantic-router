@@ -2,7 +2,7 @@
 
 ## Overview
 
-Use `config/decision/single/` when one signal is enough to pick a route.
+Use `config/fragments/decision/single/` when one signal is enough to pick a route.
 
 This is the cleanest entry point for a route that has one authoritative detector.
 
@@ -29,7 +29,7 @@ Use `single/` when:
 
 ## Configuration
 
-Source fragment: `config/decision/single/domain-business.yaml`
+Source fragment: `config/fragments/decision/single/domain-business.yaml`
 
 ```yaml
 routing:

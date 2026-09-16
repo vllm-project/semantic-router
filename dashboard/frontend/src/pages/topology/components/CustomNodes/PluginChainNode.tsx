@@ -20,7 +20,7 @@ interface PluginChainNodeData {
 
 // Check if plugin overrides global config
 function getPluginOverrideInfo(plugin: PluginConfig, data: PluginChainNodeData): string | null {
-  if (plugin.type === 'semantic-cache') {
+  if (plugin.type === 'response_cache') {
     const config = plugin.configuration as { similarity_threshold?: number; enabled?: boolean } | undefined
     if (config?.enabled === false) {
       return '(disabled)'

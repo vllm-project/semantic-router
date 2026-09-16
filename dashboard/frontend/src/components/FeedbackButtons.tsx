@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import styles from './FeedbackButtons.module.css'
 
-const OUTCOMES_API = '/api/router/v1/router/outcomes'
+const OUTCOMES_API = '/api/router/api/v1/observability/outcomes'
 
 export interface FeedbackSubmitParams {
   modelId: string
@@ -99,7 +99,10 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
 
       const res = await fetch(OUTCOMES_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
         body: JSON.stringify(body),
       })
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Use `config/decision/and/` when multiple signals must all match before the route is valid.
+Use `config/fragments/decision/and/` when multiple signals must all match before the route is valid.
 
 `AND` is the standard shape for narrow, high-confidence routes.
 
@@ -29,7 +29,7 @@ Use `and/` when:
 
 ## Configuration
 
-Source fragment: `config/decision/and/urgent-business.yaml`
+Source fragment: `config/fragments/decision/and/urgent-business.yaml`
 
 ```yaml
 routing:

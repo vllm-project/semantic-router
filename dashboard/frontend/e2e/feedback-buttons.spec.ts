@@ -63,9 +63,11 @@ test.describe('FeedbackButtons', () => {
 
   test('thumbs up sends correct feedback payload', async ({ page }) => {
     let feedbackPayload: Record<string, unknown> | null = null
+    let idempotencyKey: string | null = null
 
-    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+    await page.route('**/api/router/api/v1/observability/outcomes', async (route) => {
       feedbackPayload = route.request().postDataJSON()
+      idempotencyKey = route.request().headers()['idempotency-key'] ?? null
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -84,6 +86,7 @@ test.describe('FeedbackButtons', () => {
     await thumbsUp.click()
 
     expect(feedbackPayload).not.toBeNull()
+    expect(idempotencyKey).toBeTruthy()
     expect(feedbackPayload!.replay_id).toBe(MOCK_REPLAY_ID)
     expect(feedbackPayload!.source).toBe('user')
     expect(feedbackPayload!.target).toBe('model')
@@ -107,7 +110,7 @@ test.describe('FeedbackButtons', () => {
   })
 
   test('handles feedback API error gracefully', async ({ page }) => {
-    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+    await page.route('**/api/router/api/v1/observability/outcomes', async (route) => {
       await route.fulfill({
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -129,9 +132,11 @@ test.describe('FeedbackButtons', () => {
 
   test('thumbs down sends underpowered outcome', async ({ page }) => {
     let feedbackPayload: Record<string, unknown> | null = null
+    let idempotencyKey: string | null = null
 
-    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+    await page.route('**/api/router/api/v1/observability/outcomes', async (route) => {
       feedbackPayload = route.request().postDataJSON()
+      idempotencyKey = route.request().headers()['idempotency-key'] ?? null
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -150,6 +155,7 @@ test.describe('FeedbackButtons', () => {
 
     await expect(thumbsDown).toHaveAttribute('aria-pressed', 'true')
     expect(feedbackPayload).not.toBeNull()
+    expect(idempotencyKey).toBeTruthy()
     expect(feedbackPayload!.replay_id).toBe(MOCK_REPLAY_ID)
     expect(feedbackPayload!.target_ref).toBe(MOCK_MODEL)
     expect(feedbackPayload!.verdict).toBe('underpowered')
@@ -159,7 +165,7 @@ test.describe('FeedbackButtons', () => {
   test('can toggle from up to down (only submits once)', async ({ page }) => {
     let feedbackCallCount = 0
 
-    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+    await page.route('**/api/router/api/v1/observability/outcomes', async (route) => {
       feedbackCallCount++
       await route.fulfill({
         status: 200,
@@ -196,7 +202,7 @@ test.describe('FeedbackButtons', () => {
   })
 
   test('buttons disabled during loading', async ({ page }) => {
-    await page.route('**/api/router/v1/router/outcomes', async (route) => {
+    await page.route('**/api/router/api/v1/observability/outcomes', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 1000))
       await route.fulfill({
         status: 200,

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Use `config/decision/not/` when a route should match only if a risky or disallowed signal is absent.
+Use `config/fragments/decision/not/` when a route should match only if a risky or disallowed signal is absent.
 
 `NOT` is the simplest exclusion rule in the decision catalog.
 
@@ -29,7 +29,7 @@ Use `not/` when:
 
 ## Configuration
 
-Source fragment: `config/decision/not/exclude-jailbreak.yaml`
+Source fragment: `config/fragments/decision/not/exclude-jailbreak.yaml`
 
 ```yaml
 routing:

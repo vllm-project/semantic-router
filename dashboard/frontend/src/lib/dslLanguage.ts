@@ -11,6 +11,7 @@
 
 import type * as monacoNs from 'monaco-editor'
 import type { Diagnostic, SymbolTable } from '@/types/dsl'
+import { ROUTER_CONFIG_EXTENSION, SIGNAL_TYPES } from '../generated/routerConfigContract'
 
 export const DSL_LANGUAGE_ID = 'signal-dsl'
 
@@ -75,36 +76,16 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   operators: ['AND', 'OR', 'NOT'],
 
-  signalTypes: [
-    'keyword',
-    'embedding',
-    'domain',
-    'fact_check',
-    'user_feedback',
-    'reask',
-    'preference',
-    'language',
-    'context',
-    'structure',
-    'complexity',
-    'modality',
-    'authz',
-    'jailbreak',
-    'pii',
-    'kb',
-    'conversation',
-    'event',
-  ],
+  signalTypes: [...SIGNAL_TYPES],
 
   pluginTypes: [
-    'semantic_cache',
+    'response_cache',
     'memory',
     'system_prompt',
     'header_mutation',
     'hallucination',
     'router_replay',
     'rag',
-    'image_gen',
     'tools',
     'fast_response',
     'request_params',
@@ -157,14 +138,11 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
       [/\b(AND|OR|NOT)\b/, 'keyword.operator'],
 
       // Signal types (after SIGNAL keyword)
-      [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
-        'type',
-      ],
+      [new RegExp(`\\b(${SIGNAL_TYPES.join('|')})\\b`), 'type'],
 
       // Plugin types
       [
-        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
+        /\b(response_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
         'type.plugin',
       ],
 
@@ -309,36 +287,19 @@ const KEYWORD_SUGGESTIONS = [
   { label: 'NOT', insertText: 'NOT', detail: 'Boolean NOT' },
 ]
 
-const SIGNAL_TYPE_SUGGESTIONS = [
-  { label: 'keyword', detail: 'Keyword matching signal' },
-  { label: 'embedding', detail: 'Embedding similarity signal' },
-  { label: 'domain', detail: 'Domain classification signal' },
-  { label: 'fact_check', detail: 'Fact-checking signal' },
-  { label: 'user_feedback', detail: 'User feedback signal' },
-  { label: 'reask', detail: 'Repeated-question dissatisfaction signal' },
-  { label: 'preference', detail: 'User preference signal' },
-  { label: 'language', detail: 'Language detection signal' },
-  { label: 'context', detail: 'Context length signal' },
-  { label: 'structure', detail: 'Request-shape and structural heuristic signal' },
-  { label: 'complexity', detail: 'Query complexity signal' },
-  { label: 'modality', detail: 'Input modality signal' },
-  { label: 'authz', detail: 'Authorization signal' },
-  { label: 'jailbreak', detail: 'Jailbreak detection signal' },
-  { label: 'pii', detail: 'PII detection signal' },
-  { label: 'kb', detail: 'Knowledge base signal' },
-  { label: 'conversation', detail: 'Conversation-shape signal' },
-  { label: 'event', detail: 'Structured event metadata signal' },
-]
+const SIGNAL_TYPE_SUGGESTIONS = ROUTER_CONFIG_EXTENSION.signals.map((surface) => ({
+  label: surface.type,
+  detail: `${surface.display_name} signal`,
+}))
 
 const PLUGIN_TYPE_SUGGESTIONS = [
-  { label: 'semantic_cache', detail: 'Semantic caching plugin' },
+  { label: 'response_cache', detail: 'Response caching plugin' },
   { label: 'memory', detail: 'Conversation memory plugin' },
   { label: 'system_prompt', detail: 'System prompt injection plugin' },
   { label: 'header_mutation', detail: 'HTTP header mutation plugin' },
   { label: 'hallucination', detail: 'Hallucination detection plugin' },
   { label: 'router_replay', detail: 'Request replay plugin' },
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
-  { label: 'image_gen', detail: 'Image generation plugin' },
   { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
   { label: 'tool_selection', detail: 'Semantic tool add/filter plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },

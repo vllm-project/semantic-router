@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -32,7 +33,7 @@ var _ = Describe("Consumer fail-closed behavior with an unavailable backend", fu
 		It("should not report a benign verdict when every item fails with an unavailable backend", func() {
 			mockModel.classifyError = fmt.Errorf("jailbreak classification failed: %w", candle_binding.ErrBackendUnavailable)
 
-			hasJailbreak, detections, err := classifier.AnalyzeContentForJailbreak([]string{"prompt one", "prompt two"})
+			hasJailbreak, detections, err := classifier.AnalyzeContentForJailbreak(context.Background(), []string{"prompt one", "prompt two"})
 
 			Expect(err).To(HaveOccurred(), "an unavailable backend must not yield a successful safety decision")
 			Expect(errors.Is(err, candle_binding.ErrBackendUnavailable)).To(BeTrue(),
@@ -45,7 +46,7 @@ var _ = Describe("Consumer fail-closed behavior with an unavailable backend", fu
 			mockModel.setMockResponse("bad", 0, 0.9, candle_binding.ErrBackendUnavailable)
 			mockModel.setMockResponse("good", 1, 0.9, nil)
 
-			hasJailbreak, detections, err := classifier.AnalyzeContentForJailbreak([]string{"bad", "good"})
+			hasJailbreak, detections, err := classifier.AnalyzeContentForJailbreak(context.Background(), []string{"bad", "good"})
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(hasJailbreak).To(BeFalse())
@@ -54,7 +55,7 @@ var _ = Describe("Consumer fail-closed behavior with an unavailable backend", fu
 		})
 
 		It("should remain successful when only empty content is supplied", func() {
-			hasJailbreak, detections, err := classifier.AnalyzeContentForJailbreak([]string{"", ""})
+			hasJailbreak, detections, err := classifier.AnalyzeContentForJailbreak(context.Background(), []string{"", ""})
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(hasJailbreak).To(BeFalse())
@@ -75,7 +76,7 @@ var _ = Describe("Consumer fail-closed behavior with an unavailable backend", fu
 		It("should not report a clean verdict when every item fails with an unavailable backend", func() {
 			mockModel.classifyTokensError = fmt.Errorf("pii classification failed: %w", candle_binding.ErrBackendUnavailable)
 
-			hasPII, results, err := classifier.AnalyzeContentForPII([]string{"my ssn is 123-45-6789", "call 555-1234"})
+			hasPII, results, err := classifier.AnalyzeContentForPII(context.Background(), []string{"my ssn is 123-45-6789", "call 555-1234"})
 
 			Expect(err).To(HaveOccurred(), "an unavailable backend must not yield a successful PII decision")
 			Expect(errors.Is(err, candle_binding.ErrBackendUnavailable)).To(BeTrue(),
@@ -88,7 +89,7 @@ var _ = Describe("Consumer fail-closed behavior with an unavailable backend", fu
 			mockModel.setMockResponse("bad", nil, candle_binding.ErrBackendUnavailable)
 			mockModel.setMockResponse("clean", nil, nil)
 
-			hasPII, results, err := classifier.AnalyzeContentForPII([]string{"bad", "clean"})
+			hasPII, results, err := classifier.AnalyzeContentForPII(context.Background(), []string{"bad", "clean"})
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(hasPII).To(BeFalse())
@@ -97,7 +98,7 @@ var _ = Describe("Consumer fail-closed behavior with an unavailable backend", fu
 		})
 
 		It("should remain successful when only empty content is supplied", func() {
-			hasPII, results, err := classifier.AnalyzeContentForPII([]string{"", ""})
+			hasPII, results, err := classifier.AnalyzeContentForPII(context.Background(), []string{"", ""})
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(hasPII).To(BeFalse())

@@ -32,6 +32,9 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 }
 
 func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if err := applyOperatorModelDeployments(canonical, spec); err != nil {
+		return err
+	}
 	if spec.EmbeddingModels != nil {
 		embeddings, err := convertToTypedConfig[routerconfig.EmbeddingModels](r, spec.EmbeddingModels)
 		if err != nil {
@@ -45,6 +48,18 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		if err != nil {
 			return fmt.Errorf("config.prompt_guard: %w", err)
 		}
+		// Variant/Protocol are mutually exclusive and, unlike the CRD's other
+		// PromptGuardConfig fields, deliberately carry no kubebuilder default
+		// for Variant (a per-field CRD default would be injected even when
+		// only Protocol is set, tripping mutual-exclusion validation). Apply
+		// the "neither set" default here instead, once both fields are read.
+		if promptGuard.Variant == "" && promptGuard.Protocol == "" && promptGuard.Backend == nil {
+			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
+		}
+		if promptGuard.Enabled && promptGuard.JailbreakMappingPath == "" {
+			promptGuard.JailbreakMappingPath = routerconfig.DefaultCanonicalGlobal().
+				ModelCatalog.Modules.PromptGuard.JailbreakMappingPath
+		}
 		canonical.Global.ModelCatalog.Modules.PromptGuard = promptGuard
 	}
 
@@ -55,16 +70,30 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		}
 		canonical.Global.ModelCatalog.Modules.Classifier = classifier
 	}
-	return nil
+	if len(spec.ExternalModels) > 0 {
+		// The CRD block mirrors the router's external catalog entry field for
+		// field, so the generic typed conversion is enough; backend blocks
+		// resolve their model against this list at router config load.
+		external, err := convertToTypedConfig[[]routerconfig.ExternalModelConfig](r, spec.ExternalModels)
+		if err != nil {
+			return fmt.Errorf("config.external_models: %w", err)
+		}
+		canonical.Global.ModelCatalog.External = external
+	}
+	return r.applyOperatorComplexityModel(canonical, spec)
 }
 
 func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
-	if spec.SemanticCache != nil {
-		semanticCache, err := convertToTypedConfig[routerconfig.SemanticCache](r, spec.SemanticCache)
+	responseCache, err := operatorResponseCacheConfig(spec)
+	if err != nil {
+		return err
+	}
+	if responseCache != nil {
+		typedCache, err := convertToTypedConfig[routerconfig.ResponseCacheStoreConfig](r, responseCache)
 		if err != nil {
-			return fmt.Errorf("config.semantic_cache: %w", err)
+			return fmt.Errorf("config.response_cache: %w", err)
 		}
-		canonical.Global.Stores.SemanticCache = semanticCache
+		canonical.Global.Stores.ResponseCache = typedCache
 	}
 	if spec.Tools != nil {
 		tools, err := convertToTypedConfig[routerconfig.ToolsConfig](r, spec.Tools)
@@ -76,12 +105,21 @@ func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical 
 	return nil
 }
 
-func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
-	if spec.ReasoningFamilies != nil {
-		canonical.Providers.Defaults.ReasoningFamilies = convertReasoningFamilies(spec.ReasoningFamilies)
+func operatorResponseCacheConfig(
+	spec vllmv1alpha1.ConfigSpec,
+) (*vllmv1alpha1.SemanticCacheConfig, error) {
+	if spec.ResponseCache != nil && spec.SemanticCache != nil {
+		return nil, fmt.Errorf("config.response_cache conflicts with deprecated config.semantic_cache")
 	}
-	if spec.DefaultReasoningEffort != "" {
-		canonical.Providers.Defaults.DefaultReasoningEffort = spec.DefaultReasoningEffort
+	if spec.ResponseCache != nil {
+		return spec.ResponseCache, nil
+	}
+	return spec.SemanticCache, nil
+}
+
+func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if spec.ReasoningEffort != "" {
+		canonical.Providers.Defaults.DefaultReasoningEffort = spec.ReasoningEffort
 	}
 	return nil
 }
@@ -134,7 +172,7 @@ func (r *SemanticRouterReconciler) convertClassifierModule(spec *vllmv1alpha1.Cl
 		return routerconfig.CanonicalClassifierModule{}, nil
 	}
 
-	var classifier routerconfig.CanonicalClassifierModule
+	classifier := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules.Classifier
 
 	if spec.CategoryModel != nil {
 		domain, err := convertToTypedConfig[routerconfig.CanonicalCategoryModule](r, spec.CategoryModel)
@@ -180,20 +218,6 @@ func convertCompositionConditions(conditions []vllmv1alpha1.CompositionCondition
 			Type: condition.Type,
 			Name: condition.Name,
 		})
-	}
-	return result
-}
-
-func convertReasoningFamilies(spec map[string]vllmv1alpha1.ReasoningFamily) map[string]routerconfig.ReasoningFamilyConfig {
-	if len(spec) == 0 {
-		return nil
-	}
-	result := make(map[string]routerconfig.ReasoningFamilyConfig, len(spec))
-	for name, family := range spec {
-		result[name] = routerconfig.ReasoningFamilyConfig{
-			Type:      family.Type,
-			Parameter: family.Parameter,
-		}
 	}
 	return result
 }

@@ -3,11 +3,44 @@ package dsl
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+const builtInRecipeCatalogDirectory = "built-in"
+
+func TestBuiltinRecipeDSLMergePreservesLearningDefaults(t *testing.T) {
+	directory := filepath.Join("..", "..", "..", "..", "config", "recipes", "built-in", "latest", "mom-v1")
+	yamlPath, dslPath := filepath.Join(directory, "config.yaml"), filepath.Join(directory, "recipe.dsl")
+	runtimeConfig, err := config.Parse(yamlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dslBytes, err := os.ReadFile(dslPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsl := string(dslBytes)
+	diagnostics, parseErrors := Validate(dsl)
+	if len(parseErrors) > 0 {
+		t.Fatal(parseErrors)
+	}
+	// Portable bundles intentionally leave models unassigned and can report
+	// overlap advisories. Unlike deployed recipes, they need not be warning-free.
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Level != DiagWarning {
+			t.Fatal(diagnostic.String())
+		}
+	}
+	assertCanonicalRuntimeDSL(t, yamlPath, dslPath, dsl, runtimeConfig)
+	compiled := compileStableRecipeDSL(t, dslPath, dsl)
+	assertMergedRecipeDSL(t, yamlPath, dslPath, dsl, runtimeConfig, compiled)
+}
 
 func TestMaintainedRecipeDSLMatchesEveryRuntimeConfig(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "config", "recipes")
@@ -17,6 +50,9 @@ func TestMaintainedRecipeDSLMatchesEveryRuntimeConfig(t *testing.T) {
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
+			continue
+		}
+		if entry.Name() == builtInRecipeCatalogDirectory {
 			continue
 		}
 		t.Run(entry.Name(), func(t *testing.T) {
@@ -42,7 +78,7 @@ func assertRecipeDSLContract(t *testing.T, directory string) {
 	assertRecipeDSLValid(t, dslPath, dsl)
 	assertCanonicalRuntimeDSL(t, yamlPath, dslPath, dsl, runtimeConfig)
 	compiled := compileStableRecipeDSL(t, dslPath, dsl)
-	assertMergedRecipeDSL(t, yamlPath, dslPath, dsl, compiled)
+	assertMergedRecipeDSL(t, yamlPath, dslPath, dsl, runtimeConfig, compiled)
 }
 
 func assertRecipeDSLValid(t *testing.T, dslPath, dsl string) {
@@ -73,7 +109,7 @@ func assertCanonicalRuntimeDSL(
 		t.Fatalf("decompile %s: %v", yamlPath, err)
 	}
 	if canonicalDSL != dsl {
-		t.Fatalf("%s is not the canonical DSL generated from %s", dslPath, yamlPath)
+		t.Fatalf("%s is not the canonical DSL generated from %s (-file +generated):\n%s", dslPath, yamlPath, cmp.Diff(dsl, canonicalDSL))
 	}
 }
 
@@ -99,6 +135,7 @@ func assertMergedRecipeDSL(
 	yamlPath string,
 	dslPath string,
 	dsl string,
+	baseConfig *config.RouterConfig,
 	compiled *config.RouterConfig,
 ) {
 	t.Helper()
@@ -120,5 +157,44 @@ func assertMergedRecipeDSL(
 	}
 	if mergedDSL != dsl {
 		t.Fatalf("%s changes after compile, base merge, and runtime parse", dslPath)
+	}
+	if !reflect.DeepEqual(mergedConfig.RouterLearning, baseConfig.RouterLearning) {
+		t.Fatalf("%s changed global learning settings after DSL merge", yamlPath)
+	}
+	assertDecisionAdaptationsPreserved(t, yamlPath, baseConfig.Decisions, mergedConfig.Decisions)
+	for _, recipe := range baseConfig.Recipes {
+		mergedRecipe, ok := mergedConfig.RecipeByName(recipe.Name)
+		if !ok {
+			t.Fatalf("%s lost recipe %q", yamlPath, recipe.Name)
+		}
+		assertDecisionAdaptationsPreserved(t, yamlPath+" recipe "+string(recipe.Name), recipe.Profile.Decisions, mergedRecipe.Profile.Decisions)
+	}
+}
+
+func assertDecisionAdaptationsPreserved(
+	t *testing.T,
+	yamlPath string,
+	baseDecisions []config.Decision,
+	mergedDecisions []config.Decision,
+) {
+	t.Helper()
+	mergedByName := make(map[string]config.Decision, len(mergedDecisions))
+	for _, decision := range mergedDecisions {
+		mergedByName[decision.Name] = decision
+	}
+	for _, decision := range baseDecisions {
+		merged, ok := mergedByName[decision.Name]
+		if !ok {
+			t.Fatalf("%s lost decision %q while merging DSL", yamlPath, decision.Name)
+		}
+		if !reflect.DeepEqual(merged.Adaptations, decision.Adaptations) {
+			t.Fatalf(
+				"%s decision %q adaptations changed after DSL merge: got %#v want %#v",
+				yamlPath,
+				decision.Name,
+				merged.Adaptations,
+				decision.Adaptations,
+			)
+		}
 	}
 }

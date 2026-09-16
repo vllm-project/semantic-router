@@ -1,0 +1,7 @@
+{
+  "status": "error",
+  "error": {
+    "category": "invalid_request",
+    "code": "conflicting_conversation_state"
+  }
+}

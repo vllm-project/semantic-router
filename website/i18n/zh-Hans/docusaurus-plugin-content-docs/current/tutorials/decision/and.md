@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "043cee97"
+  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/decision/and.md"
   outdated: false
 ---
@@ -9,34 +9,30 @@ translation:
 
 ## 概览
 
-在多个信号**必须全部匹配**路由才成立时使用 `config/decision/and/`。
-
-`AND` 是收窄、高置信路由的标准形态。
+`AND` 决策仅在每个子条件都匹配时才匹配。把它用于需要多个独立事实的窄路由。
 
 ## 主要优势
 
-- 要求多个检测器同时命中，降低误报。
-- 适合升级与高端路由。
-- 复合条件显式，而不是藏在一个信号里。
-- 路由边界可预测。
+- 通过要求多个检测器来降低误报。
+- 适合升级和高级路由。
+- 让复合要求保持显式，而不是藏在一个信号里。
+- 产生可预测的路由边界。
 
 ## 解决什么问题？
 
-单一信号往往匹配过宽。仅有领域可能不够，还需要紧急度、安全或复杂度上下文。
+单个信号常常匹配过宽。仅有领域往往不够，还需要紧急度、安全或复杂度上下文。
 
-`AND` 要求所有必要条件一致后再允许该路由生效。
+`AND` 通过要求所有必需信号一致后，路由才有资格，从而解决这个问题。
 
 ## 何时使用
 
-在以下情况使用 `and/`：
+在以下情况使用 `AND`：
 
-- 领域与紧急用语必须同时出现
-- 领域与安全许可必须同时通过
-- 偏好与复杂度在升级前应协同满足
+- 领域和紧急度必须同时存在
+- 领域和安全放行必须同时通过
+- 偏好和复杂度应在升级前协作
 
 ## 配置
-
-源片段：`config/decision/and/urgent-business.yaml`
 
 ```yaml
 routing:
@@ -56,4 +52,7 @@ routing:
           use_reasoning: false
 ```
 
-当模型应仅在**窄而高置信**的流量片段上激活时使用 `AND`。
+当模型只应为一小段高置信度流量激活时，使用 `AND`。
+
+每个引用的信号都必须在同一配方中声明。`AND` 会减少过宽匹配，但不会让概率信号变成权威判定。完整示例见：
+[`config/fragments/decision/and/urgent-business.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/and/urgent-business.yaml)。

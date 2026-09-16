@@ -60,9 +60,8 @@
   transform: rotate(-90deg);
 }
 
-.thinkingIcon {
+.thinkingOrb {
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.5);
 }
 
 .title {
@@ -70,19 +69,6 @@
   font-weight: 500;
   color: rgba(255, 255, 255, 0.8);
   letter-spacing: -0.01em;
-}
-
-.titleStreaming {
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
 }
 
 .time {
@@ -104,36 +90,6 @@
 
 .header:hover .expandIcon {
   opacity: 1;
-}
-
-.progressBar {
-  height: 2px;
-  background-color: rgba(255, 255, 255, 0.04);
-  overflow: hidden;
-  position: relative;
-  border-radius: 999px;
-  margin-bottom: 0.6rem;
-}
-
-.progressFill {
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(96, 165, 250, 0.5) 50%,
-    transparent 100%
-  );
-  animation: shimmer 2s infinite;
-  width: 100%;
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
 }
 
 .content {
@@ -189,4 +145,15 @@
 .content :global(.markdown) code {
   background-color: rgba(255, 255, 255, 0.05) !important;
   color: rgba(255, 255, 255, 0.6) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon,
+  .expandIcon,
+  .content,
+  .thinkingOrb,
+  .thinkingOrb * {
+    animation: none !important;
+    transition: none !important;
+  }
 }

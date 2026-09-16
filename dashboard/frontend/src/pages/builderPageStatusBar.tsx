@@ -11,6 +11,8 @@ interface BuilderStatusBarProps {
   signalCount: number;
   routeCount: number;
   pluginCount: number;
+  recipeCount: number;
+  entrypointCount: number;
   lineCount: number;
   mode: EditorMode;
 }
@@ -22,6 +24,8 @@ const BuilderStatusBar: React.FC<BuilderStatusBarProps> = ({
   signalCount,
   routeCount,
   pluginCount,
+  recipeCount,
+  entrypointCount,
   lineCount,
   mode,
 }) => {
@@ -65,6 +69,10 @@ const BuilderStatusBar: React.FC<BuilderStatusBarProps> = ({
       <div className={styles.statusItem}>Signals: {signalCount}</div>
       <div className={styles.statusItem}>Routes: {routeCount}</div>
       <div className={styles.statusItem}>Plugins: {pluginCount}</div>
+      {recipeCount > 0 && <div className={styles.statusItem}>Recipes: {recipeCount}</div>}
+      {entrypointCount > 0 && (
+        <div className={styles.statusItem}>Entrypoints: {entrypointCount}</div>
+      )}
       {mode === "dsl" && <div className={styles.statusItem}>Lines: {lineCount}</div>}
       <div className={styles.statusItem}>
         Mode: {mode === "visual" ? "Visual" : mode === "dsl" ? "DSL" : "NL"}

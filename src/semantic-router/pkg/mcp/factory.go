@@ -140,7 +140,7 @@ func NewLoggingClientWrapper(client MCPClient, name string) *LoggingClientWrappe
 
 	// Set up enhanced logging
 	client.SetLogHandler(func(level LoggingLevel, message string) {
-		log.Printf("[%s] %s: %s", level, name, message)
+		log.Print(mcpClientEventLogMessage(level, message))
 	})
 
 	return wrapper
@@ -148,24 +148,28 @@ func NewLoggingClientWrapper(client MCPClient, name string) *LoggingClientWrappe
 
 // Connect wraps the connection with additional logging
 func (w *LoggingClientWrapper) Connect() error {
-	log.Printf("Connecting client: %s", w.name)
+	log.Print("Connecting MCP client")
 	err := w.MCPClient.Connect()
 	if err != nil {
-		log.Printf("Failed to connect client %s: %v", w.name, err)
+		log.Printf("Failed to connect MCP client: error_class=%T", err)
 	} else {
-		log.Printf("Successfully connected client: %s", w.name)
+		log.Print("Successfully connected MCP client")
 	}
 	return err
 }
 
 // Close wraps the close with additional logging
 func (w *LoggingClientWrapper) Close() error {
-	log.Printf("Closing client: %s", w.name)
+	log.Print("Closing MCP client")
 	err := w.MCPClient.Close()
 	if err != nil {
-		log.Printf("Error closing client %s: %v", w.name, err)
+		log.Printf("Error closing MCP client: error_class=%T", err)
 	} else {
-		log.Printf("Successfully closed client: %s", w.name)
+		log.Print("Successfully closed MCP client")
 	}
 	return err
+}
+
+func mcpClientEventLogMessage(level LoggingLevel, _ string) string {
+	return fmt.Sprintf("[%s] MCP client event", level)
 }

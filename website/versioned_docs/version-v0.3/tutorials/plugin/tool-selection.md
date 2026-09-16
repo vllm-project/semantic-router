@@ -8,7 +8,7 @@ It supports two modes:
 - `add`: retrieve tools from a tools database
 - `filter`: filter tools that are already present in the incoming request
 
-It aligns to fragments under `config/plugin/tool-selection/`.
+It aligns to fragments under `config/fragments/plugin/tool-selection/`.
 
 ## Key Advantages
 

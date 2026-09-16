@@ -3,26 +3,15 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: vllm-llama3-8b-instruct
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: vllm-llama3-8b-instruct
+      reasoning_effort: high
     models:
       - name: vllm-llama3-8b-instruct
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         backend_refs:
           - name: aibrix-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -97,9 +86,10 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.92
           - type: system_prompt
             configuration:
@@ -169,9 +159,10 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.75
           - type: system_prompt
             configuration:
@@ -190,9 +181,10 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.95
           - type: system_prompt
             configuration:
@@ -424,7 +416,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

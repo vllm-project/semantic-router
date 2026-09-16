@@ -36,15 +36,15 @@ The management API validates and normalizes a candidate config without writing
 it:
 
 ```http
-POST /config/router/validate
+POST /api/v1/config/validate
 Content-Type: application/json
 
 {"yaml":"version: v0.3\n..."}
 ```
 
 Successful responses include `valid: true` and the normalized canonical YAML.
-Validation uses the same parser and semantic checks as `PATCH /config/router`
-and `PUT /config/router`, but preserves `${ENV_VAR}` references verbatim rather
+Validation uses the same parser and semantic checks as `PATCH /api/v1/config`
+and `PUT /api/v1/config`, but preserves `${ENV_VAR}` references verbatim rather
 than reading process secrets. The endpoint requires `config.read`; plaintext
 secret viewing is not implied.
 
@@ -54,8 +54,36 @@ secret viewing is not implied.
 global:
   services:
     api:
-      enabled: true
+      routing_preview:
+        request_timeout_seconds: 120
+        max_concurrency: 16
+      batch_classification:
+        max_batch_size: 100
 ```
+
+`max_batch_size` bounds `texts` per `/api/v1/diagnostics/classify/batch` request. Larger
+batches return `400 INVALID_INPUT`.
+
+`routing_preview` applies to `POST /api/v1/routing/preview`. Its inference
+deadline starts after the request body is decoded and defaults to 120 seconds.
+Set `request_timeout_seconds` between 1 and 3600 using measured inference times
+for the intended input lengths and deployment hardware. This setting can be
+updated through config hot reload;
+other HTTP routes keep their existing timeouts.
+
+A deadline returns `504 REQUEST_TIMEOUT` and cancels queued or cancellable
+inference. Native inference already running may finish later. Its model resources
+and admission slot remain held until it finishes, including during shutdown.
+`max_concurrency` is a positive worker limit, defaults to 16, and has no wait
+queue: when all slots are occupied, new previews return `429 OVERLOADED`.
+Changing this limit requires a deployment restart; hot reload rejects the change.
+
+The response writer has five additional seconds to send the result or timeout
+response. Dashboard Topology uses the configured Preview budget plus this
+allowance and propagates client cancellation. Recipe probes retain their own
+`evaluation.request_timeout_seconds` caller budget in `probes.yaml`; configure
+it for the intended run, and allow at least five extra seconds in external HTTP
+clients or proxies when they need to receive the Router's timeout response.
 
 ### Response API
 
@@ -110,10 +138,55 @@ Common Prometheus metric families:
 | Tokens and cost | `llm_model_tokens_total`, `llm_model_prompt_tokens_total`, `llm_model_completion_tokens_total`, `llm_model_cost_total` |
 | Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
+| Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
+| Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
+| Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
+| Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
+
+Looper metric labels are restricted to bounded algorithm, stage, status,
+reason, token-type, and currency values. Request IDs, trace IDs, ordinals,
+decision names, model names, scores, and thresholds are available through
+traces or detailed Router Replay rather than Prometheus labels. Detailed
+attempt metrics currently cover the Confidence algorithm.
+
+### Profiling
+
+The Router can expose Go `pprof` endpoints on a dedicated listener for CPU,
+heap, goroutine, and execution-trace investigations.
+
+```yaml
+global:
+  services:
+    observability:
+      profiling:
+        enabled: false        # default; opt in only while investigating
+        port: 6060            # default
+        bind: 127.0.0.1       # default; loopback only
+```
+
+Profiling is disabled by default. When enabled it binds `127.0.0.1:6060`, so
+profiles stay reachable from the Router container or host and are never
+published on a routable interface without an explicit `bind` change.
+
+```bash
+go tool pprof http://127.0.0.1:6060/debug/pprof/heap
+```
+
+Notes:
+
+- `bind` must be an IP address or `localhost`. An empty or hostname value is
+  rejected and the profiling listener is skipped.
+- An explicit `port: 0` requests an ephemeral port; the effective address is
+  reported in the `profiling_server_starting` startup log line.
+- The port must not collide with the ExtProc, metrics, or management API port.
+  A conflicting or unbindable listener is logged and skipped; it does not abort
+  Router startup.
+- This switch is read once at startup. Changing it requires a Router restart;
+  config hot reload does not take over the profiling listener.
 
 ### Skip Processing Header
 
@@ -153,24 +226,45 @@ interop pattern that motivates this gate lives in
 global:
   services:
     router_replay:
-      store_backend: postgres     # default; SQL-queryable audit storage
       enabled: true
+      store_backend: postgres     # explicit durable, SQL-queryable audit storage
       async_writes: true
       postgres:
         host: postgres
         port: 5432
         database: vsr
         user: router
-        password: router-secret
+        password: ${ROUTER_REPLAY_POSTGRES_PASSWORD}
 ```
 
-`global.services.router_replay.enabled` is the router-wide default. When it is on, a decision captures replay unless that decision adds a route-local `router_replay` plugin with `enabled: false`.
+Router replay is disabled by default. Set `global.services.router_replay.enabled`
+to enable it router-wide; when it is on, a decision captures replay unless that
+decision adds a route-local `router_replay` plugin with `enabled: false`. A
+decision may also opt in explicitly. If no durable backend is configured, the
+default in-memory store is process-local and is lost on restart.
 
 The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
 
 | Backend | Durability | Use case |
 |---------|-----------|----------|
-| `postgres` | Full SQL queryability, long-term audit retention | Production (default) |
+| `postgres` | Full SQL queryability, long-term audit retention | Production audit storage |
 | `redis` | Survives router restart, shared across replicas | Lightweight deployments already running Redis |
 | `milvus` | Vector-searchable replay records | Semantic replay search |
+| `qdrant` | Vector-searchable replay records | Semantic replay search in a Qdrant deployment |
 | `memory` | Lost on router restart | Local development only |
+
+## Data and Security
+
+- Response API and Router Replay may persist prompts, responses, routing
+  outcomes, and tool traces. Set TTLs, capture limits, tenant/user scope, and
+  read permissions before enabling them.
+- Bind the management API to a private interface or enable its role-based token
+  authentication before remote exposure.
+- Traces and metric labels should carry bounded identifiers, not raw request
+  content or secrets.
+- `pprof` endpoints expose command-line arguments, goroutine stacks, and heap
+  contents. Keep profiling disabled outside an investigation, and keep its
+  `bind` on loopback unless a reachable listener is deliberately fronted by
+  authenticated access controls.
+- See the complete service configuration in
+  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

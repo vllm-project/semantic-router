@@ -1,16 +1,16 @@
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.6rem;
   margin-top: 1.1rem;
 }
 
 .metric {
   position: relative;
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 0.75rem;
+  align-items: center;
   min-width: 0;
   padding: 0.55rem 0.75rem 0.55rem 0.9rem;
   border: 1px solid var(--site-border);
@@ -22,47 +22,46 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  background: #111111;
+  background: var(--site-gradient-brand-bar);
   content: "";
 }
 
 .metric span {
-  overflow: hidden;
+  min-width: 0;
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.63rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.1em;
-  text-overflow: ellipsis;
+  line-height: 1.35;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .metric strong {
-  overflow: hidden;
-  margin-left: auto;
   color: var(--site-text-strong);
   font-size: clamp(1.05rem, 2vw, 1.4rem);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
   line-height: 1.05;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .podiumSection {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.6rem;
   margin-top: 1.8rem;
 }
 
 .podiumCard {
+  position: relative;
   display: flex;
-  flex: 1 1 12rem;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.55rem;
   min-width: 0;
-  padding: 0.65rem 0.85rem;
+  min-height: 5rem;
+  padding: 1.35rem 0.65rem 0.65rem;
   border: 1px solid var(--site-border);
   background: var(--site-surface);
   transition:
@@ -71,16 +70,18 @@
 }
 
 .podiumCard:hover {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
 }
 
 .podiumRank {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 0.38rem;
+  left: 0.55rem;
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .podiumIdentity {
@@ -94,7 +95,7 @@
   overflow: hidden;
   color: var(--site-text);
   font-size: 0.82rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -112,17 +113,32 @@
 }
 
 .podiumIdentity a:hover {
-  color: var(--site-text);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 
-.podiumCommits {
+.podiumActivity {
+  display: grid;
   flex: 0 0 auto;
+  gap: 0.08rem;
+  justify-items: end;
+}
+
+.podiumActivity strong {
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   font-variant-numeric: tabular-nums;
+}
+
+.podiumActivity span {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.58rem;
+  font-weight: var(--site-font-weight-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 .leaderboardSection {
@@ -133,15 +149,21 @@
 
 .sectionHeader {
   display: flex;
+  width: 100%;
   gap: 1rem;
   align-items: end;
   justify-content: space-between;
 }
 
+.sectionHeader > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .sectionHeader h2 {
   margin: 0;
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  font-weight: 550;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-medium);
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -153,10 +175,22 @@
   line-height: 1.6;
 }
 
+.sectionHeader .methodNote {
+  max-width: 44rem;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .sectionControls {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 0 0 17rem;
   gap: 0.85rem;
-  flex-wrap: wrap;
+  align-items: end;
+  width: 100%;
+  max-width: 17rem;
+  margin-left: auto;
 }
 
 .rangeSelectLabel {
@@ -169,8 +203,9 @@
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.1em;
+  text-align: right;
   text-transform: uppercase;
 }
 
@@ -181,14 +216,14 @@
   border: 1px solid var(--site-border-strong);
   border-radius: 0;
   background:
-    linear-gradient(45deg, transparent 50%, #111111 50%) calc(100% - 1rem) 1.12rem / 0.38rem 0.38rem no-repeat,
-    linear-gradient(135deg, #111111 50%, transparent 50%) calc(100% - 0.76rem) 1.12rem / 0.38rem 0.38rem no-repeat,
-    repeating-linear-gradient(0deg, rgba(15, 23, 42, 0.035) 0 1px, transparent 1px 10px),
-    #ffffff;
+    linear-gradient(45deg, transparent 50%, var(--site-text) 50%) calc(100% - 1rem) 1.12rem / 0.38rem 0.38rem no-repeat,
+    linear-gradient(135deg, var(--site-text) 50%, transparent 50%) calc(100% - 0.76rem) 1.12rem / 0.38rem 0.38rem no-repeat,
+    var(--site-surface);
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
+  text-align: right;
   text-transform: uppercase;
   appearance: none;
   cursor: pointer;
@@ -207,11 +242,11 @@
   padding: 0.62rem 1rem;
   border: 1px solid var(--site-border);
   border-bottom: 0;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--site-surface);
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -220,7 +255,7 @@
   display: grid;
   gap: 0;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--site-surface);
 }
 
 .rankItem {
@@ -234,9 +269,7 @@
   border: 0;
   border-top: 1px solid var(--site-border);
   border-radius: 0;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(247, 249, 252, 0.9)),
-    #ffffff;
+  background: var(--site-surface);
   box-shadow: none;
   transition:
     background 170ms ease,
@@ -251,18 +284,15 @@
 
 .rankItem:hover {
   z-index: 1;
-  background:
-    repeating-linear-gradient(0deg, rgba(15, 23, 42, 0.04) 0 1px, transparent 1px 12px),
-    #ffffff;
-  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.095);
+  background: var(--site-hover-row-bg);
+  box-shadow: var(--site-shadow-soft);
   transform: translateX(2px);
 }
 
 .rankItemNew {
   background:
-    linear-gradient(90deg, rgba(15, 108, 189, 0.08), transparent 22%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.97), rgba(247, 249, 252, 0.9)),
-    #ffffff;
+    linear-gradient(90deg, var(--site-accent-soft), transparent 22%),
+    var(--site-surface);
 }
 
 .rankItemNew::before {
@@ -278,12 +308,12 @@
   place-items: center;
   width: 3rem;
   height: 2rem;
-  border: 1px solid rgba(15, 23, 42, 0.13);
+  border: 1px solid var(--site-border);
   border-radius: 0;
   color: var(--site-muted-bright);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .contributor {
@@ -297,13 +327,14 @@
 .avatar {
   width: 2.8rem;
   height: 2.8rem;
-  border: 1px solid rgba(15, 23, 42, 0.16);
-  border-radius: 999px;
+  border: 1px solid var(--site-border-strong);
+  border-radius: var(--radius-full);
   object-fit: cover;
   background: var(--site-surface-alt);
 }
 
 .podiumCard .avatar {
+  flex-shrink: 0;
   width: 2rem;
   height: 2rem;
 }
@@ -325,7 +356,7 @@
   overflow: hidden;
   color: var(--site-text-strong);
   font-size: 1.02rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -344,7 +375,7 @@
   color: #ffffff;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.62rem;
-  font-weight: 900;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.08em;
   line-height: 1;
   box-shadow:
@@ -356,7 +387,7 @@
 .newContributorPill::before {
   width: 0.36rem;
   height: 0.36rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: #35d399;
   box-shadow: 0 0 10px rgba(53, 211, 153, 0.55);
   content: "";
@@ -378,7 +409,7 @@
 }
 
 .githubLink:hover {
-  color: var(--site-text);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 
@@ -397,7 +428,7 @@
   display: none;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.64rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -407,7 +438,7 @@
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.98rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -425,7 +456,7 @@
 }
 
 .share > span {
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .shareTrack {
@@ -433,7 +464,7 @@
   overflow: hidden;
   height: 0.42rem;
   border-radius: 0;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--site-surface-soft);
 }
 
 .shareFill {
@@ -466,12 +497,20 @@
 
 @media (max-width: 996px) {
   .metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .podiumSection {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
   .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .podiumSection {
     grid-template-columns: 1fr;
   }
 
@@ -487,6 +526,9 @@
 
   .sectionControls {
     width: 100%;
+    max-width: none;
+    margin-left: 0;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .rankListHeader {

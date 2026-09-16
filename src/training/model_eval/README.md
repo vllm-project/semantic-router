@@ -1,129 +1,164 @@
-# MoM Collection Evaluation
+# Classifier Model Evaluation
 
-**Multi-lingual Mixture of Models (MoM) Evaluation Script**
+`mom_collection_eval.py` defaults to the Router's served classifier collection:
+Vela Feedback (five classes), FactCheck, Domain (`intent` CLI key), PII,
+and Guard (`jailbreak` key). Vela native
+snapshots are pinned to the immutable revisions in the Router registry.
 
-A clean, unified Python script to evaluate the **10 multi-lingual Mixture of Models (MoM)**  
-from the `llm-semantic-router` collection on Hugging Face , both merged models and LoRA adapters.
+`--collection legacy-mom` explicitly selects the previous five mmBERT-32K
+models and their legacy adapter entries. The filename remains compatible.
+Loading preserves each artifact's tokenizer, context configuration, pooling and
+complete classification head. Wrong label orders or missing head parameters
+fail before scoring. The generic `--use_lora` path supports only the explicit
+legacy collection.
 
-Supports:
+The default datasets are **historical source diagnostics**, not independent
+Vela release benchmarks. In particular, the old Feedback dataset has no
+NO_FEEDBACK gold examples. Results retain all five classes, their support,
+unsupported labels, and full-contract macro F1; zero support does not establish
+quality for that class. Use a separately held-out custom dataset for five-class
+coverage. FactCheck predicts whether external factual knowledge is needed,
+not factual truth.
 
-- **Text Classification** (feedback, jailbreak, fact-check, intent)
-- **Token Classification** (PII detection)
-- Merged models + LoRA variants
-- Custom datasets, language filtering, batch size control, parallel evaluation and more !!!
+Guard detects instruction attacks. Its `benign`/`jailbreak` class names do not
+make the previous mixed toxicity/jailbreak dataset compatible. Served Guard
+therefore requires `--custom_dataset`: a JSON array or CSV with complete `text`
+and independently reviewed `label` values (`benign`/`jailbreak`, or 0/1 in that
+order). Unknown annotations must be resolved or excluded before evaluation;
+they are never silently converted to benign. `safe`/`unsafe` aliases remain
+exclusive to the legacy collection. No default Guard quality score is emitted
+without compatible data.
 
-## Features
-
-- Evaluate **all 10 models** with one script
-- Comprehensive metrics: **Accuracy, Precision, Recall, F1, Confusion Matrix, Latency (avg / p50 / p99)**
-- Special handling for **MMLU-Pro** (intent) and **Presidio** (PII) datasets
-- Works on **GPU** and **CPU**
-- Saves results as **JSON** + **confusion matrix PNG** (for text classification)
-- Robust error handling (missing columns, OOM, network issues, etc.)
-- Supports **custom local datasets** (.json / .csv)
-- Language filtering for multilingual evaluation
-
-## Models Supported
-
-| Model Name | Task Type            | Merged Model ID                                        | LoRA Model ID                                        |
-| ---------- | -------------------- | ------------------------------------------------------ | ---------------------------------------------------- |
-| feedback   | Text Classification  | `llm-semantic-router/mmbert-feedback-detector-merged`  | `llm-semantic-router/mmbert-feedback-detector-lora`  |
-| jailbreak  | Text Classification  | `llm-semantic-router/mmbert-jailbreak-detector-merged` | `llm-semantic-router/mmbert-jailbreak-detector-lora` |
-| fact-check | Text Classification  | `llm-semantic-router/mmbert-fact-check-merged`         | `llm-semantic-router/mmbert-fact-check-lora`         |
-| intent     | Text Classification  | `llm-semantic-router/mmbert-intent-classifier-merged`  | `llm-semantic-router/mmbert-intent-classifier-lora`  |
-| pii        | Token Classification | `llm-semantic-router/mmbert-pii-detector-merged`       | `llm-semantic-router/mmbert-pii-detector-lora`       |
-
-## Installation
-
-1. Clone the repository:
+## Install
 
 ```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-routegit clone https://github.com/vllm-project/semantic-router.git
-cd semantic-route
-```
-
-1. Install dependencies:
-
-```bash
+cd src/training/model_eval
 pip install -r requirements.txt
 ```
 
-### Usage Examples
+## Run
 
-**1. Evaluate one model (GPU recommended)**
-
-```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback --device cuda
-```
-
-**2. Evaluate LoRA version**
+Evaluate one merged model:
 
 ```bash
-python src/training/model_eval/mom_collection_eval.py --model fact-check --use_lora --device cuda
+python mom_collection_eval.py --model feedback --device cpu --limit 100
+
+python mom_collection_eval.py --model jailbreak --device cpu \
+  --custom_dataset reviewed-attacks.json
 ```
 
-**3. Evaluate multiple models at once**
+Evaluate several models or their LoRA variants:
 
 ```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback jailbreak fact-check intent pii --device cuda
+python mom_collection_eval.py \
+  --collection legacy-mom \
+  --model feedback jailbreak fact-check intent pii \
+  --use_lora \
+  --device cuda
 ```
 
-**4. Quick test with few sample**
+Useful options:
 
-```bash
-python src/training/model_eval/mom_collection_eval.py --model pii --limit 100 --device cpu
+| Option | Purpose |
+|---|---|
+| `--collection` | `served` (default) or explicit `legacy-mom` |
+| `--revision` | explicit revision for an override or legacy artifact |
+| `--dtype` | native loading precision; default `float32`, without autocast |
+| `--max_length` | full-input token budget (default 32768); over-budget input fails |
+| `--model_id` | override the registered checkpoint for a single-model run |
+| `--custom_dataset` | use a local JSON or CSV dataset |
+| `--language` | filter rows when the dataset exposes a supported language field |
+| `--batch_size` | control inference memory use |
+| `--limit` | run a small smoke sample |
+| `--parallel` | evaluate multiple models concurrently |
+| `--output_dir` | choose the result directory |
+
+Use underscores in option names, as shown by
+`python mom_collection_eval.py --help`.
+
+Download evaluation native snapshots with `make download-eval-models`. Production
+`make download-models` continues to use the Router's downloader, including its
+runtime artifact validation. Existing `download-mmbert-*` targets remain legacy
+utilities; they do not download Vela. Legacy adapters must declare an available
+base and save every newly initialized task-head parameter; otherwise evaluation
+rejects them instead of scoring a random head.
+
+## Results
+
+This evaluator uses native full-input argmax inference; it does not reproduce
+Router Guard/PII scanning windows or FactCheck threshold decisions. The loaded
+precision, pooling, model revision and token budget are recorded in each result.
+
+The default output directory is `src/training/model_eval/results/`. JSON files
+contain the metrics and run metadata; text-classification tasks also produce a
+confusion-matrix image.
+
+Before comparing models, verify that they used the same dataset revision,
+split, label mapping, sample limit, preprocessing, device policy, and batch
+size. A small `--limit` run is a functional smoke test, not a quality result.
+
+`result_to_config.py` can convert supported evaluation summaries into router
+configuration fragments. Review the generated thresholds and model references
+before deployment; generation does not prove that the fragment is suitable for
+your workload.
+
+## Quality baseline
+
+`quality_baseline.py` measures the artifact a maintained configuration actually
+loads, resolved from `config/config.yaml` rather than from `constants.py`. It
+uses the same immutable pins for published Vela models and takes the class order
+from the artifact's own mapping, reports calibration and
+threshold behaviour alongside accuracy, and writes provenance manifests next to
+the result.
+
+```
+python src/training/model_eval/quality_baseline.py \
+    --task fact-check --device cuda --output-dir baseline/fact-check
+
+# From src/training/model_eval. The served artifacts predate the training-run
+# manifests, so this reports one missing run_ref per artifact until a run
+# publishes one. Everything else has to pass.
+python -m provenance.cli validate baseline/fact-check/manifests
+
+python src/training/model_eval/gap_report.py \
+    --baseline baseline/*/*_baseline.json --output baseline/gap-report.md
 ```
 
-**5. Use a custom local dataset**
+`--artifact-repo` measures a candidate instead of the served artifact, and
+`--artifact-dir` with `--artifact-manifest` measures a locally trained artifact
+before anything is published. Both are recorded in the result, so a candidate
+number is never mistaken for the baseline.
 
-```bash
-python src/training/model_eval/mom_collection_eval.py --model intent --custom_dataset ./my_test_data.json
-```
+The baseline runner's historical `jailbreak` dataset is restricted to the
+explicit original mmBERT merged/adapter artifacts. It rejects current Guard
+before accessing that dataset. Use the custom-data collection evaluator above
+for reviewed instruction-attack annotations.
 
-**6.  Run models in parallel**
+A referenced manifest supplies the identity every number is published under, so
+it also selects the bytes: the run downloads the repository and revision the
+manifest names, and re-hashes the files it lists, whether they came from the Hub
+or from `--artifact-dir`. A directory that does not hash to the manifest, or an
+`--artifact-repo` the manifest does not describe, fails before scoring starts.
 
-```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback jailbreak intent --parallel --device cuda
-```
+The inventory identifies known task bindings and reports other classifier
+artifacts as coverage gaps. A generic `classifiers` signal is not assumed to be
+Guard merely because it uses a classification head. Complexity scores embedding
+prototypes against candidate phrases rather than loading a classifier, so there
+is no artifact to measure until #2568 adds a trained-classifier mode.
 
-**7.  Smaller batch size**
+Where a task declares `positive_labels`, the router thresholds the probability
+mass on those classes rather than taking an argmax, so the baseline reports what
+that gate does. `operating_points` gives recall and false-positive rate at each
+threshold, and `discrimination` gives AUC and recall at a false-positive budget,
+which fix no threshold and so compare two artifacts built to different threshold
+conventions.
 
-```bash
-python src/training/model_eval/mom_collection_eval.py --model pii --batch_size 8 --device cuda
-```
+`gap_report.py` sorts findings by who has to act on them. `identity`, `runtime`
+and `coverage` are fixed in the config, the registry or the harness.
+`calibration` and `threshold` are fixed by recalibrating or by moving the
+configured threshold, so they are integration gaps too. Only `quality` says the
+artifact itself is the problem and asks for a retrain or a different checkpoint.
+That is the split #3194 wants, and it means a gap can be routed without
+rereading the numbers.
 
-**8. Filter by language (multilingual evaluation)**
-
-```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback --language es --device cuda
-```
-
-### Output
-
-Results are saved in:
-
-```context
-src/training/model_eval/results/
-```
-
-You will get files like:
-
-- `feedback_results.json`
-- `feedback_cm.png` (confusion matrix heatmap which is only for text classification)
-- ...and similar files for each evaluated model
-
-#### Common Commands
-
-<style type="text/css"></style>
-
-| Goal                            | Command Example                 |
-| ------------------------------- | ------------------------------- |
-| Quick test on CPU               | `--limit 50 --device cpu`       |
-| Fast evaluation on GPU          | `--device cuda --batch_size 64` |
-| Single model                    | `--model jailbreak`             |
-| Use LoRA instead of merged      | `--use_lora`                    |
-| Custom dataset                  | `--custom_dataset ./test.json`  |
-| Run multiple models in parallel | `--parallel`                    |
-| Evaluate only English samples   | `--language en`                 |
-| Debug with very few samples     | `--limit 10`                    |
+See `provenance/README.md` for the manifest contract and what fails validation.

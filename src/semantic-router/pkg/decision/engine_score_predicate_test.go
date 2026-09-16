@@ -34,8 +34,9 @@ func TestScorePredicateUsesRawSignalValueWithoutBooleanMatch(t *testing.T) {
 }
 
 func TestSignalConfidencePreservesZero(t *testing.T) {
-	if got := signalConfidence(map[string]float64{"embedding:risk": 0}, "embedding", "risk"); got != 0 {
-		t.Fatalf("signalConfidence() = %v, want 0", got)
+	got, reported := signalConfidence(map[string]float64{"embedding:risk": 0}, "embedding", "risk")
+	if got != 0 || !reported {
+		t.Fatalf("signalConfidence() = (%v, %v), want (0, true)", got, reported)
 	}
 }
 
@@ -152,7 +153,7 @@ func TestORPreservesZeroConfidenceMatchedRule(t *testing.T) {
 		SignalConfidences: map[string]float64{"keyword:zero": 0},
 	}
 
-	result, traces := engine.EvaluateDecisionsWithTrace(signals)
+	result, traces, _, _ := engine.EvaluateDecisionsWithTraceAndDiagnostics(signals)
 	if result == nil || len(result.MatchedRules) != 1 ||
 		result.MatchedRules[0] != "keyword:zero" {
 		t.Fatalf("result = %#v", result)

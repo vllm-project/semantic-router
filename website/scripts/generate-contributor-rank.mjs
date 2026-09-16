@@ -3,10 +3,28 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findUnresolvedIdentities } from './lib/identity-audit.mjs'
+import { assertGeneratedSource, generatedSourceDigest, withGeneratedSource } from './lib/generated-source.mjs'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(scriptDir, '..', '..')
 const outputPath = resolve(repoRoot, 'website', 'src', 'data', 'contributorRank.generated.ts')
+const sourceDigest = generatedSourceDigest(repoRoot, [
+  'website/scripts/generate-contributor-rank.mjs',
+  'website/scripts/lib/generated-source.mjs',
+  'website/scripts/lib/identity-audit.mjs',
+])
+const regenerateCommand = 'npm run contributors:rank'
+const args = process.argv.slice(2)
+if (args.length > 1 || args.some(argument => argument !== '--check-source')) {
+  console.error('Usage: node scripts/generate-contributor-rank.mjs [--check-source]')
+  process.exit(2)
+}
+if (args.includes('--check-source')) {
+  assertGeneratedSource(outputPath, sourceDigest, regenerateCommand)
+  console.log('Contributor rank snapshot source is up to date.')
+  process.exit(0)
+}
+
 const githubRepo = 'vllm-project/semantic-router'
 const releaseTags = {
   v01: 'v0.1.0',
@@ -52,6 +70,7 @@ function runGh(args, options = {}) {
         cwd: repoRoot,
         encoding: 'utf8',
         maxBuffer,
+        timeout: args.includes('--paginate') ? 120_000 : 30_000,
         stdio: ['ignore', 'pipe', 'pipe'],
       }).trim()
     }
@@ -387,10 +406,14 @@ try {
   )
 
   mkdirSync(dirname(outputPath), { recursive: true })
-  writeFileSync(outputPath, renderTypeScript(generatedAt, snapshots, newContributorsSinceRelease))
+  writeFileSync(outputPath, withGeneratedSource(
+    renderTypeScript(generatedAt, snapshots, newContributorsSinceRelease),
+    sourceDigest,
+  ))
 }
 catch (error) {
   if (existsSync(outputPath)) {
+    assertGeneratedSource(outputPath, sourceDigest, regenerateCommand)
     console.warn(`Skipping contributor rank refresh: ${error.message}`)
     process.exit(0)
   }
@@ -402,7 +425,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
   return [
     {
       id: 'v03ToNow',
-      label: 'v0.3 -> Now',
+      label: 'v0.3 → Now',
       startTagName: releaseTimeline.v03.tagName,
       endTagName: null,
       startDate: releaseTimeline.v03.publishedAt.slice(0, 10),
@@ -411,7 +434,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
     },
     {
       id: 'v02ToV03',
-      label: 'v0.2 -> v0.3',
+      label: 'v0.2 → v0.3',
       startTagName: releaseTimeline.v02.tagName,
       endTagName: releaseTimeline.v03.tagName,
       startDate: releaseTimeline.v02.publishedAt.slice(0, 10),
@@ -420,7 +443,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
     },
     {
       id: 'v01ToV02',
-      label: 'v0.1 -> v0.2',
+      label: 'v0.1 → v0.2',
       startTagName: releaseTimeline.v01.tagName,
       endTagName: releaseTimeline.v02.tagName,
       startDate: releaseTimeline.v01.publishedAt.slice(0, 10),
@@ -429,7 +452,7 @@ function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
     },
     {
       id: 'v0ToV01',
-      label: 'v0 -> v0.1',
+      label: 'v0 → v0.1',
       startTagName: null,
       endTagName: releaseTimeline.v01.tagName,
       startDate: null,

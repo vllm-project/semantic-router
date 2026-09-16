@@ -11,7 +11,7 @@ translation:
 
 `response_jailbreak` 是路由局部插件：在返回前筛查模型响应。
 
-对应 `config/plugin/response-jailbreak/strict.yaml`。
+对应 `config/fragments/plugin/response-jailbreak/strict.yaml`。
 
 ## 主要优势
 

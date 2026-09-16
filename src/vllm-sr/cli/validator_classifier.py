@@ -1,8 +1,18 @@
 """Cross-object classifier signal validation."""
 
-from cli.config_contract import iter_condition_leaves, iter_routing_profiles
+from cli.config_contract import (
+    CLASSIFIER_TYPE_LLM,
+    CLASSIFIER_TYPE_LOCAL,
+    CLASSIFIER_TYPE_SEQUENCE,
+    iter_condition_leaves,
+)
+from cli.model_runtime_defaults import (
+    effective_model_deployments,
+    iter_effective_routing_profiles,
+)
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
+from cli.validator_model_runtime import project_classifier_rule
 
 LOCAL_CLASSIFIER_MIN_CONFIDENCE = 0.5
 MAX_NETWORK_PORT = 65535
@@ -13,29 +23,22 @@ def validate_classifier_contracts(
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     external_models = _external_models(config)
-    runtime_signature: tuple[str, bool, tuple[str, ...]] | None = None
-    for profile_name, routing in iter_routing_profiles(config):
+    deployments = effective_model_deployments(config)
+    for profile_name, routing in iter_effective_routing_profiles(config):
         profile_field = (
             "routing"
             if profile_name == "default"
             else f"recipes.{profile_name}.routing"
         )
         rules = {rule.name: rule for rule in routing.signals.classifiers or []}
-        local_rules = [rule for rule in rules.values() if rule.type == "local"]
-        if local_rules:
-            signature = _local_classifier_signature(local_rules[0])
-            if runtime_signature is None:
-                runtime_signature = signature
-            elif runtime_signature != signature:
-                errors.append(
-                    ValidationError(
-                        "recipe-local classifiers must use identical model_path, labels, and use_cpu across the process",
-                        field=f"{profile_field}.signals.classifiers",
-                    )
-                )
         errors.extend(
             _validate_profile_classifier_rules(
-                rules,
+                {
+                    name: project_classifier_rule(
+                        rule, routing.model_bindings, deployments
+                    )
+                    for name, rule in rules.items()
+                },
                 external_models,
                 profile_field,
             )
@@ -45,17 +48,10 @@ def validate_classifier_contracts(
                 routing.decisions,
                 rules,
                 profile_field,
+                routing.model_bindings,
             )
         )
     return errors
-
-
-def _local_classifier_signature(rule) -> tuple[str, bool, tuple[str, ...]]:
-    return (
-        rule.model_path or "",
-        bool(rule.use_cpu),
-        tuple(rule.labels),
-    )
 
 
 def _validate_profile_classifier_rules(
@@ -64,30 +60,25 @@ def _validate_profile_classifier_rules(
     profile_field: str,
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
-    local_rules = [rule for rule in rules.values() if rule.type == "local"]
-    if len(local_rules) > 1:
-        errors.append(
-            ValidationError(
-                "only one local classifier signal is supported per recipe",
-                field=f"{profile_field}.signals.classifiers",
-            )
-        )
     for rule in rules.values():
-        if rule.type != "llm":
+        if rule.type not in {CLASSIFIER_TYPE_LLM, CLASSIFIER_TYPE_SEQUENCE}:
             continue
+        classifier_kind = (
+            "LLM" if rule.type == CLASSIFIER_TYPE_LLM else "Sequence classifier"
+        )
         external = external_models.get(rule.model or "")
         field = f"{profile_field}.signals.classifiers.{rule.name}.model"
         if external is None:
             errors.append(
                 ValidationError(
-                    f"LLM classifier '{rule.name}' references unknown external model '{rule.model}'",
+                    f"{classifier_kind} '{rule.name}' references unknown external model '{rule.model}'",
                     field=field,
                 )
             )
         elif external.get("model_role") != "classification":
             errors.append(
                 ValidationError(
-                    f"LLM classifier '{rule.name}' model must have model_role=classification",
+                    f"{classifier_kind} '{rule.name}' model must have model_role=classification",
                     field=field,
                 )
             )
@@ -97,6 +88,8 @@ def _validate_profile_classifier_rules(
                     rule.name,
                     external,
                     field,
+                    classifier_kind=classifier_kind,
+                    require_model_name=rule.type == CLASSIFIER_TYPE_LLM,
                 )
             )
     return errors
@@ -106,6 +99,7 @@ def _validate_profile_classifier_decisions(
     decisions,
     rules: dict,
     profile_field: str,
+    bindings=None,
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for decision in decisions:
@@ -123,7 +117,24 @@ def _validate_profile_classifier_decisions(
                         field=field,
                     )
                 )
-            if rule.type == "local" and not _valid_local_predicate(condition.predicate):
+            bound = (bindings or {}).get(f"classifier.{rule.name}")
+            if (
+                bound
+                and bound.operating_point is not None
+                and bound.contract == "label_scores.v1"
+            ):
+                continue
+            if condition.predicate is None:
+                errors.append(
+                    ValidationError(
+                        "Classifier condition requires a score predicate or a bound operating_point",
+                        field=field,
+                    )
+                )
+                continue
+            if rule.type == CLASSIFIER_TYPE_LOCAL and not _valid_local_predicate(
+                condition.predicate
+            ):
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' local classifier condition supports only predicate.gte >= 0.5",
@@ -147,13 +158,25 @@ def _external_model_endpoint_errors(
     rule_name: str,
     external: dict,
     field: str,
+    *,
+    classifier_kind: str,
+    require_model_name: bool,
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     endpoint = external.get("llm_endpoint") or {}
-    if not str(external.get("llm_model_name") or "").strip():
+    if require_model_name and not str(external.get("llm_model_name") or "").strip():
         errors.append(
             ValidationError(
-                f"LLM classifier '{rule_name}' external model requires llm_model_name",
+                f"{classifier_kind} '{rule_name}' external model requires llm_model_name",
+                field=field,
+            )
+        )
+    if require_model_name and str(
+        external.get("parser_type") or ""
+    ).strip().lower() not in {"", "json"}:
+        errors.append(
+            ValidationError(
+                f"{classifier_kind} '{rule_name}' external model parser_type must be json",
                 field=field,
             )
         )
@@ -162,7 +185,7 @@ def _external_model_endpoint_errors(
     if not address or not isinstance(port, int) or not 1 <= port <= MAX_NETWORK_PORT:
         errors.append(
             ValidationError(
-                f"LLM classifier '{rule_name}' external model requires a valid llm_endpoint address and port",
+                f"{classifier_kind} '{rule_name}' external model requires a valid llm_endpoint address and port",
                 field=field,
             )
         )
@@ -170,7 +193,7 @@ def _external_model_endpoint_errors(
     if protocol not in {"", "http", "https"}:
         errors.append(
             ValidationError(
-                f"LLM classifier '{rule_name}' llm_endpoint.protocol must be http or https",
+                f"{classifier_kind} '{rule_name}' llm_endpoint.protocol must be http or https",
                 field=field,
             )
         )

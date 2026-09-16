@@ -1,0 +1,39 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "before",
+          "type": "input_text"
+        }
+      ],
+      "id": "item_6a32e29c376158d871e9638e",
+      "role": "user",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "policy update",
+          "type": "input_text"
+        }
+      ],
+      "id": "item_6a32e29c376158d871e9638e",
+      "role": "system",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "after",
+          "type": "input_text"
+        }
+      ],
+      "id": "item_6a32e29c376158d871e9638e",
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 32,
+  "model": "routed-model"
+}

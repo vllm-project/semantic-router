@@ -11,7 +11,7 @@ translation:
 
 `system_prompt` 是路由局部插件：在已匹配流量上插入或修改 system prompt。
 
-对应 `config/plugin/system-prompt/expert.yaml`。
+对应 `config/fragments/plugin/system-prompt/expert.yaml`。
 
 ## 主要优势
 

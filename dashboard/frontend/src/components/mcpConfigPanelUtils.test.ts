@@ -8,6 +8,7 @@ import {
   filterAndSortServers,
   filterAndSortUnifiedTools,
   getMCPVisibleRange,
+  hiddenArgumentsBlockCommandChange,
   paginateMCPItems,
   type ServerFormValues,
 } from './mcpConfigPanelUtils'
@@ -19,6 +20,7 @@ const baseFormValues: ServerFormValues = {
   enabled: true,
   command: 'npx',
   args: [],
+  preserveArguments: false,
   url: '',
   headers: {},
   timeout: '30000',
@@ -85,6 +87,46 @@ describe('MCP configuration support', () => {
       url: 'https://mcp.example.test',
       headers: { Authorization: 'Bearer token:with:colons' },
     })
+
+    const clearedHeaders = buildServerConfig({
+      ...baseFormValues,
+      transport: 'streamable-http',
+      command: '',
+      url: 'https://mcp.example.test',
+      headers: {},
+    })
+    expect(clearedHeaders.connection).toEqual({
+      url: 'https://mcp.example.test',
+      headers: {},
+    })
+  })
+
+  it('distinguishes preserving hidden arguments from explicitly clearing them', () => {
+    const preserved = buildServerConfig({
+      ...baseFormValues,
+      preserveArguments: true,
+    })
+    expect(preserved.connection).toEqual({ command: 'npx', args: undefined })
+
+    const cleared = buildServerConfig({
+      ...baseFormValues,
+      preserveArguments: false,
+      args: [],
+    })
+    expect(cleared.connection).toEqual({ command: 'npx', args: [] })
+  })
+
+  it('requires hidden arguments to be resolved before changing a stdio command', () => {
+    const server: MCPServerState['config'] = {
+      id: 'filesystem',
+      name: 'Filesystem',
+      transport: 'stdio',
+      enabled: true,
+      connection: { command: 'npx' },
+    }
+    expect(hiddenArgumentsBlockCommandChange(server, 'new-command', true)).toBe(true)
+    expect(hiddenArgumentsBlockCommandChange(server, 'new-command', false)).toBe(false)
+    expect(hiddenArgumentsBlockCommandChange(server, 'npx', true)).toBe(false)
   })
 
   it('searches, filters, sorts, and bounds a large tools catalog', () => {

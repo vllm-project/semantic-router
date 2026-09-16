@@ -14,6 +14,7 @@
 #![allow(clippy::doc_overindented_list_items)]
 
 use crate::core::UnifiedError;
+use crate::ffi::generic_classifier::GenericClassifier;
 use crate::ffi::memory::{
     allocate_bert_token_entity_array, allocate_c_float_array, allocate_c_string,
     allocate_lora_intent_array, allocate_lora_pii_array, allocate_lora_security_array,
@@ -29,14 +30,13 @@ use crate::model_architectures::traditional::modernbert::{
     TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER, TRADITIONAL_MODERNBERT_PII_CLASSIFIER,
     TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
 };
-use crate::BertClassifier;
 use std::ffi::CString;
 use std::ffi::{c_char, CStr};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use crate::ffi::init::{
-    FEEDBACK_DETECTOR_CLASSIFIER, LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER,
-    PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
+    BERT_CLASSIFIER, BERT_JAILBREAK_CLASSIFIER, BERT_PII_CLASSIFIER, FEEDBACK_DETECTOR_CLASSIFIER,
+    LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
 };
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
@@ -54,10 +54,6 @@ const SECURITY_THREAT_CLASS_STR: &str = "1";
 
 /// Keywords used to identify security threats in category names
 const SECURITY_THREAT_KEYWORDS: &[&str] = &["jailbreak", "unsafe", "threat"];
-
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 
 /// Load id2label mapping from model config.json file
 /// Returns HashMap mapping class index (as string) to label name
@@ -87,9 +83,10 @@ pub extern "C" fn init_generic_classifier(
         }
     };
     if num_classes < 2 {
+        eprintln!("Number of classes must be at least 2, got {num_classes}");
         return false;
     }
-    match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
+    match GenericClassifier::new(model_id, num_classes as usize, use_cpu) {
         Ok(classifier) => BERT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
         Err(error) => {
             eprintln!("Failed to initialize generic classifier: {error}");
@@ -159,12 +156,10 @@ pub extern "C" fn classify_text_with_probabilities(
 
     if let Some(classifier) = BERT_CLASSIFIER.get() {
         let classifier = classifier.clone();
-        match classifier.classify_text(text) {
-            Ok((class_idx, confidence)) => {
-                // For now, we don't have probabilities from the new BERT implementation
-                // Return empty probabilities array
-                let prob_len = 0;
-                let prob_ptr = std::ptr::null_mut();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_idx, confidence, probabilities)) => {
+                let prob_len = probabilities.len();
+                let prob_ptr = Box::into_raw(probabilities.into_boxed_slice()).cast::<f32>();
 
                 ClassificationResultWithProbs {
                     predicted_class: class_idx as i32,
@@ -276,6 +271,90 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
             },
             Err(e) => {
                 eprintln!("Error classifying jailbreak text: {e}");
+                default_result
+            }
+        }
+    } else {
+        eprintln!("No jailbreak classifier initialized - call init_jailbreak_classifier first");
+        default_result
+    }
+}
+
+/// Classify text for jailbreak detection with LoRA auto-detection and return
+/// the full softmax probability distribution alongside the top-1 prediction.
+///
+/// This lets callers report the probability of the jailbreak class itself
+/// rather than the confidence of whichever class wins argmax. Tries LoRA
+/// first (preferred for higher accuracy), falls back to Traditional BERT.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs` with `class`/`confidence` for the
+/// top prediction plus the full `probabilities` array (`class` = -1 on error).
+/// The `probabilities` array is heap-allocated and must be freed with
+/// `free_modernbert_probabilities`.
+#[no_mangle]
+pub extern "C" fn classify_jailbreak_text_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    // Try LoRA jailbreak classifier first (preferred for higher accuracy)
+    if let Some(classifier) = LORA_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_with_index_and_probabilities(text) {
+            Ok((class_idx, confidence, _label, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                return ModernBertClassificationResultWithProbs {
+                    class: class_idx as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                };
+            }
+            Err(e) => {
+                eprintln!(
+                    "LoRA jailbreak classifier error: {}, falling back to Traditional BERT",
+                    e
+                );
+                // Don't return - fall through to Traditional BERT classifier
+            }
+        }
+    }
+
+    // Fallback to Traditional BERT classifier
+    if let Some(classifier) = BERT_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_idx, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_idx as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!("Error classifying jailbreak text with probabilities: {e}");
                 default_result
             }
         }
@@ -1194,6 +1273,64 @@ pub extern "C" fn classify_modernbert_jailbreak_text(
     }
 }
 
+/// Classify ModernBERT jailbreak text and return the full softmax probability
+/// distribution alongside the top-1 prediction. This lets callers report the
+/// probability of the jailbreak class itself rather than the confidence of
+/// whichever class wins argmax.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs` with `class`/`confidence` for the
+/// top prediction plus the full `probabilities` array (`class` = -1 on error).
+/// The `probabilities` array is heap-allocated and must be freed with
+/// `free_modernbert_probabilities`.
+#[no_mangle]
+pub extern "C" fn classify_modernbert_jailbreak_text_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    if let Some(classifier) = TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_id as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                println!(
+                    "ModernBERT jailbreak classification (with probs) failed: {}",
+                    e
+                );
+                default_result
+            }
+        }
+    } else {
+        println!("TraditionalModernBertJailbreakClassifier not initialized - call init_modernbert_jailbreak_classifier first");
+        default_result
+    }
+}
+
 /// Classify text for jailbreak/prompt injection detection using DeBERTa v3
 ///
 /// This function uses the ProtectAI DeBERTa v3 Base Prompt Injection model
@@ -1383,6 +1520,63 @@ pub extern "C" fn classify_feedback_text(text: *const c_char) -> ModernBertClass
     }
 }
 
+/// Classify feedback text, returning every class probability
+///
+/// The argmax variant reports only the winning class, which leaves a caller that
+/// needs the probability of a specific class with no way to read it.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs`; `probabilities` is freed by the
+/// caller with `free_modernbert_probabilities`.
+#[no_mangle]
+pub extern "C" fn classify_feedback_text_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = FEEDBACK_DETECTOR_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_id as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!("Feedback detection (with probs) failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("Feedback detector not initialized - call init_feedback_detector first");
+        default_result
+    }
+}
+
 /// Classify ModernBERT PII tokens
 ///
 /// # Safety
@@ -1555,18 +1749,28 @@ pub extern "C" fn detect_hallucinations(
     // Hallucination detector expects context and answer as separate segments
     // Format: context [SEP] answer (the tokenizer will add [CLS] and final [SEP])
     // We need to include question in context if provided
-    let full_context = if question.is_empty() {
-        context.to_string()
+    // ModernBERT tokenizer uses [SEP] token (id 50282) to separate segments
+    let tail = if question.is_empty() {
+        format!(" [SEP] {}", answer)
     } else {
-        format!("{} Question: {}", context, question)
+        format!(" Question: {} [SEP] {}", question, answer)
     };
 
-    // Combine context and answer with separator
-    // ModernBERT tokenizer uses [SEP] token (id 50282) to separate segments
-    let formatted_input = format!("{} [SEP] {}", full_context, answer);
+    // Window the context so the answer always survives right truncation
+    let context = match classifier.fit_prefix_to_window(context, &tail) {
+        Ok(windowed) => windowed,
+        Err(e) => {
+            return HallucinationDetectionResult {
+                error: true,
+                error_message: unsafe { allocate_c_string(&format!("Tokenization failed: {}", e)) },
+                ..Default::default()
+            }
+        }
+    };
+    let formatted_input = format!("{}{}", context, tail);
 
     // Find where answer starts (after [SEP])
-    let answer_char_start = full_context.len() + " [SEP] ".len();
+    let answer_char_start = formatted_input.len() - answer.len();
 
     // Classify tokens
     match classifier.classify_tokens(&formatted_input) {
@@ -1798,7 +2002,19 @@ pub extern "C" fn classify_nli(premise: *const c_char, hypothesis: *const c_char
 
     // Format input for NLI: premise [SEP] hypothesis
     // ModernBERT NLI models use [SEP] token (id 50282) to separate segments
-    let nli_input = format!("{} [SEP] {}", premise, hypothesis);
+    // Window the premise so the hypothesis always survives right truncation
+    let tail = format!(" [SEP] {}", hypothesis);
+    let premise = match classifier.fit_prefix_to_window(premise, &tail) {
+        Ok(windowed) => windowed,
+        Err(e) => {
+            return NLIResult {
+                error: true,
+                error_message: unsafe { allocate_c_string(&format!("Tokenization failed: {}", e)) },
+                ..Default::default()
+            }
+        }
+    };
+    let nli_input = format!("{}{}", premise, tail);
 
     // Classify, returning the FULL softmax distribution. The previous
     // implementation used only the argmax class + its confidence and
@@ -2285,7 +2501,8 @@ pub extern "C" fn classify_mmbert_32k_jailbreak_with_probabilities(
 ///
 /// # Returns
 /// `ModernBertClassificationResult` with:
-/// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
+/// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT;
+///   Vela adds 4=NO_FEEDBACK. A value of -1 indicates an error.
 /// - `confidence`: confidence score (0.0-1.0)
 #[no_mangle]
 pub extern "C" fn classify_mmbert_32k_feedback(
@@ -2323,23 +2540,29 @@ pub extern "C" fn classify_mmbert_32k_feedback(
     }
 }
 
-/// Classify tokens for PII detection using mmBERT-32K
+/// Classify text using mmBERT-32K feedback detector, returning every class probability
 ///
-/// Detects 17 types of PII entities using BIO tagging.
+/// The argmax variant reports only the winning class, which leaves a caller that
+/// needs the probability of a specific class with no way to read it.
 ///
 /// # Safety
 /// - `text` must be a valid null-terminated C string
-/// - `model_config_path` must be a valid null-terminated C string or null
 ///
 /// # Returns
-/// `ModernBertTokenClassificationResult` with detected PII entities
+/// `ModernBertClassificationResultWithProbs` with:
+/// - `class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT;
+///   Vela adds 4=NO_FEEDBACK. A value of -1 indicates an error.
+/// - `confidence`: confidence score of the predicted class (0.0-1.0)
+/// - `probabilities`: caller frees with `free_modernbert_probabilities`
 #[no_mangle]
-pub extern "C" fn classify_mmbert_32k_pii_tokens(
+pub extern "C" fn classify_mmbert_32k_feedback_with_probabilities(
     text: *const c_char,
-) -> ModernBertTokenClassificationResult {
-    let default_result = ModernBertTokenClassificationResult {
-        entities: std::ptr::null_mut(),
-        num_entities: 0,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
     };
 
     let text = unsafe {
@@ -2352,12 +2575,76 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
         }
     };
 
+    if let Some(classifier) = MMBERT_32K_FEEDBACK_CLASSIFIER.get() {
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_id as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "mmBERT-32K feedback classification (with probs) failed: {}",
+                    e
+                );
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K feedback classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify tokens for PII detection using mmBERT-32K
+///
+/// Detects 17 types of PII entities using BIO tagging.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+/// - `model_config_path` must be a valid null-terminated C string or null
+///
+/// # Returns
+/// Detected PII entities, or `num_entities = -1` on inference/input failure.
+/// A successful scan with no detected PII returns `num_entities = 0`.
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_pii_tokens(
+    text: *const c_char,
+) -> ModernBertTokenClassificationResult {
+    let error_result = ModernBertTokenClassificationResult {
+        entities: std::ptr::null_mut(),
+        num_entities: -1,
+    };
+
+    if text.is_null() {
+        return error_result;
+    }
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return error_result;
+            }
+        }
+    };
+
     if let Some(classifier) = MMBERT_32K_PII_CLASSIFIER.get() {
         match classifier.classify_tokens(text) {
             Ok(entities) => {
                 let num_entities = entities.len() as i32;
                 if num_entities == 0 {
-                    return default_result;
+                    return ModernBertTokenClassificationResult {
+                        entities: std::ptr::null_mut(),
+                        num_entities: 0,
+                    };
                 }
 
                 // Allocate memory for entities
@@ -2399,12 +2686,12 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
             }
             Err(e) => {
                 eprintln!("mmBERT-32K PII classification failed: {}", e);
-                default_result
+                error_result
             }
         }
     } else {
         eprintln!("mmBERT-32K PII classifier not initialized");
-        default_result
+        error_result
     }
 }
 

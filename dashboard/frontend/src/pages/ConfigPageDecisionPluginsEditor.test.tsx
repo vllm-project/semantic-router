@@ -11,7 +11,7 @@ describe('decision plugin configuration editor', () => {
       createElement(ConfigPageDecisionPluginsEditor, {
         value: [
           {
-            type: 'semantic-cache',
+            type: 'response_cache',
             configuration: { enabled: true, similarity_threshold: 0.91 },
           },
         ],
@@ -35,12 +35,13 @@ describe('decision plugin configuration editor', () => {
     expect(source).not.toContain("placeholder='Configuration JSON")
   })
 
-  it('uses the canonical semantic-cache plugin identifier', () => {
+  it('uses the canonical response_cache plugin identifier', () => {
     const source = readFileSync(
       new URL('./ConfigPageDecisionPluginsEditor.tsx', import.meta.url),
       'utf8',
     )
-    expect(source).toContain("type: 'semantic-cache'")
+    expect(source).toContain("type: 'response_cache'")
+    expect(source).not.toContain("type: 'semantic-cache'")
     expect(source).not.toContain("type: 'semantic_cache'")
   })
 })

@@ -21,16 +21,13 @@ listeners:
     port: 8801
 providers:
   defaults:
-    default_model: test-model
-    reasoning_families:
-      qwen3:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: test-model
   models:
     - name: test-model
       provider_model_id: test-model
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
 routing:
@@ -77,7 +74,7 @@ global:
 	if !strings.Contains(body, "router:") || !strings.Contains(body, "response_api:") {
 		t.Fatalf("raw global response missing expected sections, got:\n%s", body)
 	}
-	if !strings.Contains(body, "stores:") || !strings.Contains(body, "semantic_cache:") {
+	if !strings.Contains(body, "stores:") || !strings.Contains(body, "response_cache:") {
 		t.Fatalf("raw global response should include effective router defaults, got:\n%s", body)
 	}
 }
@@ -102,7 +99,7 @@ func TestGlobalConfigYAMLHandler_ReturnsDefaultsWhenGlobalMissing(t *testing.T) 
 		"stores:",
 		"model_catalog:",
 		"response_api:",
-		"semantic_cache:",
+		"response_cache:",
 	} {
 		if !strings.Contains(body, fragment) {
 			t.Fatalf("effective global response missing %q:\n%s", fragment, body)
@@ -122,16 +119,13 @@ listeners:
     port: 8801
 providers:
   defaults:
-    default_model: test-model
-    reasoning_families:
-      qwen3:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: test-model
   models:
     - name: test-model
       provider_model_id: test-model
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
 routing:
@@ -202,16 +196,13 @@ listeners:
     port: 8801
 providers:
   defaults:
-    default_model: test-model
-    reasoning_families:
-      qwen3:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: test-model
   models:
     - name: test-model
       provider_model_id: test-model
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
 routing:

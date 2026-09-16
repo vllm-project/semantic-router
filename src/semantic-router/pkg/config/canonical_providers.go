@@ -9,34 +9,65 @@ type CanonicalProviders struct {
 // CanonicalProviderDefaults groups provider-wide defaults separately from
 // per-model access bindings.
 type CanonicalProviderDefaults struct {
-	DefaultModel           string                           `yaml:"default_model,omitempty"`
-	ReasoningFamilies      map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
-	DefaultReasoningEffort string                           `yaml:"default_reasoning_effort,omitempty"`
+	DefaultModel           string `yaml:"model,omitempty"`
+	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
 }
 
 // CanonicalProviderModel binds a logical routing model to concrete access
 // details without mixing those access details into provider-wide defaults.
 type CanonicalProviderModel struct {
 	Name             string                `yaml:"name"`
-	ReasoningFamily  string                `yaml:"reasoning_family,omitempty"`
+	Catalog          string                `yaml:"catalog,omitempty"`
+	Reasoning        *CanonicalReasoning   `yaml:"reasoning,omitempty"`
 	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
 	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
 	Pricing          ModelPricing          `yaml:"pricing,omitempty"`
+	Reliability      ProviderReliability   `yaml:"reliability,omitempty"`
 	APIFormat        string                `yaml:"api_format,omitempty"`
 	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
 }
 
+// CanonicalReasoning either references one built-in family or defines the
+// request projection for a private/custom model inline. Family is mutually
+// exclusive with the inline fields.
+type CanonicalReasoning struct {
+	Family              string            `yaml:"family,omitempty"`
+	Type                string            `yaml:"type,omitempty"`
+	Parameter           string            `yaml:"parameter,omitempty"`
+	ActivationParameter string            `yaml:"activation_parameter,omitempty"`
+	EffortFlags         map[string]string `yaml:"effort_flags,omitempty"`
+	Levels              []string          `yaml:"levels,omitempty"`
+	Default             string            `yaml:"default,omitempty"`
+	Modes               []string          `yaml:"modes,omitempty"`
+	DefaultMode         string            `yaml:"default_mode,omitempty"`
+	Disabled            string            `yaml:"disabled,omitempty"`
+}
+
+// ProviderReliability controls generated data-plane load balancing and retry behavior.
+type ProviderReliability struct {
+	LBPolicy            string `yaml:"lb_policy,omitempty"`
+	RetryCount          int    `yaml:"retry_count,omitempty"`
+	RetryOn             string `yaml:"retry_on,omitempty"`
+	Consecutive5xx      int    `yaml:"consecutive_5xx,omitempty"`
+	BaseEjectionTime    string `yaml:"base_ejection_time,omitempty"`
+	MaxEjectionPercent  int    `yaml:"max_ejection_percent,omitempty"`
+	HealthCheckPath     string `yaml:"health_check_path,omitempty"`
+	HealthCheckInterval string `yaml:"health_check_interval,omitempty"`
+	HealthCheckTimeout  string `yaml:"health_check_timeout,omitempty"`
+}
+
 // CanonicalBackendRef defines one physical backend target for a provider model.
 type CanonicalBackendRef struct {
-	Name         string            `yaml:"name,omitempty"`
-	Endpoint     string            `yaml:"endpoint,omitempty"`
-	Protocol     string            `yaml:"protocol,omitempty"`
-	Weight       int               `yaml:"weight,omitempty"`
-	Type         string            `yaml:"type,omitempty"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	Provider     string            `yaml:"provider,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
+	Name       string `yaml:"name,omitempty"`
+	Endpoint   string `yaml:"endpoint,omitempty"`
+	Protocol   string `yaml:"protocol,omitempty"`
+	Weight     int    `yaml:"weight,omitempty"`
+	BaseURL    string `yaml:"base_url,omitempty"`
+	Provider   string `yaml:"provider,omitempty"`
+	AuthHeader string `yaml:"auth_header,omitempty"`
+	// AuthPrefix is presence-aware so an explicit empty string can disable a
+	// catalog provider's default prefix (for example, a raw x-api-key value).
+	AuthPrefix   *string           `yaml:"auth_prefix,omitempty"`
 	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion   string            `yaml:"api_version,omitempty"`
 	ChatPath     string            `yaml:"chat_path,omitempty"`

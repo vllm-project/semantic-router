@@ -11,12 +11,14 @@ package classification
 import "C"
 
 var nativeBackendCapabilities = NativeBackendCapabilities{
-	Name:                       "onnx",
-	UnifiedBatchClassification: false,
-	LoRABatchClassification:    false,
-	BatchedEmbedding:           true,
-	MultimodalEmbedding:        false,
-	ModalityRouting:            false,
-	MLPSelector:                false,
-	ExplicitReset:              false,
+	Name:                        "onnx",
+	UnifiedBatchClassification:  false,
+	LoRABatchClassification:     false,
+	BatchedEmbedding:            true,
+	MultimodalEmbedding:         false,
+	ModalityRouting:             false,
+	MLPSelector:                 false,
+	LocalHallucinationDetection: false,
+	LocalHallucinationNLI:       false,
+	ExplicitReset:               false,
 }

@@ -1,411 +1,160 @@
 ---
+title: 协议中立编解码矩阵
+description: 定义 Router 数据面使用的协议中立请求、响应、错误和流式边界。
+created: 2026-02-18
+status: Implemented
 translation:
-  source_commit: "15da5536"
+  source_commit: "e5da889c843d6dba90bd749e7a59ae146a4e672e"
   source_file: "docs/proposals/multi-protocol-adaptor.md"
   outdated: false
 ---
 
-# 设计文档：多协议适配器架构
+> **状态：** 已实现 · **创建日期：** 2026-02-18
 
-**作者：** vLLM Semantic Router 团队  
-**状态：** 待实现  
-**创建：** 2026 年 2 月  
-**最后更新：** 2026 年 2 月
+## 结果 {#outcome}
 
-## 概述
+无论客户端或所选后端线格式如何，Router 都评估一份协议中立的语义请求。线 JSON 在入站解码一次，在提供商边界编码一次。响应体和流式事件沿相反路径返回给客户端。
 
-本文描述 vLLM Semantic Router 的多协议适配器架构设计与实现思路，在 Envoy ExtProc 之外抽象 API 层，以支持多种前端协议。
+Envoy 仍是生产传输。它拥有监听器、上游集群、连接生命周期、重试和请求转发。ExtProc 服务拥有语义模型选择以及请求或响应策略。编解码层只在线契约与 Router 的中立类型之间映射。
 
-## 背景
-
-Semantic Router 曾通过 gRPC 与 Envoy External Processor（ExtProc）紧耦合。这虽能与 Envoy 深度集成，但对以下用户形成门槛：
-
-- 希望在不部署 Envoy 的情况下使用路由器
-- 偏好直接 HTTP/REST 集成
-- 使用 Nginx 或其他反向代理
-- 在开发或测试时需要更简化的部署拓扑
-
-### 动机
-
-- **灵活性**：无需 Envoy 基础设施即可获得直连 HTTP API
-- **测试**：无需完整 Envoy 部署即可轻量测试
-- **可扩展性**：支持 nginx、原生 gRPC 与自定义协议
-- **可复用性**：所有协议共享同一路由引擎
-- **部署形态**：支持 serverless、边缘与简化部署
-
-## 目标
-
-### 主要目标
-
-1. **协议抽象**：将路由逻辑与协议相关代码分离
-2. **多协议支持**：允许多种协议同时工作
-3. **向后兼容**：保留现有 ExtProc 能力
-4. **共享状态**：缓存、重放与路由决策的单一事实来源
-5. **易于扩展**：新增协议适配器的固定模式
-
-### 非目标
-
-1. 替换或弃用 Envoy ExtProc
-2. 改变路由决策算法或分类逻辑
-3. 除适配器相关节外修改配置格式
-4. 支持破坏抽象层的协议专属特性
-
-## 设计原则
-
-### 1. 单一路由流水线
-
-**关键约束：** 所有路由逻辑**必须**流经 `RouterEngine.Route()`，无一例外。
-
-- 适配器将协议翻译为 `RouteRequest` → 调用 `RouterEngine.Route()`
-- `RouterEngine.Route()` 返回 `RouteResponse` → 适配器再翻译回协议
-- 适配器**不得**重复实现分类、安全、缓存、重放逻辑
-- 适配器**不得**直接调用分类器、缓存或重放记录器
-
-### 2. 薄适配器层
-
-适配器**仅做协议翻译**：
-
-- 解析协议专属请求格式
-- 转换为 `RouteRequest`
-- 调用 `RouterEngine.Route()`
-- 将 `RouteResponse` 转换为协议格式
-- 返回给客户端
-
-### 3. RouterEngine 拥有全部路由
-
-`RouterEngine.Route()` 是**唯一**发生以下行为之处：
-
-- 分类
-- PII/越狱检测
-- 缓存读/写
-- 工具选择
-- 重放记录
-- 后端选择
-- 代理（或返回代理信息）
-
-## 设计
-
-### 架构概览
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                    Application Layer                       │
-│                                                            │
-│  ┌───────────────────────────────────────────────────┐     │
-│  │                Adapter Manager                    │     │
-│  │  - Reads adapter config                           │     │
-│  │  - Creates protocol adapters                      │     │
-│  │  - Manages lifecycle                              │     │
-│  └──────┬────────┬────────┬───────────┬──────────────┘     │
-│         │        │        │           │                    │
-│  ┌──────▼──┐ ┌───▼─── ┐ ┌─▼──────┐ ┌──▼─────┐              │
-│  │ ExtProc │ │ HTTP   │ │ gRPC   │ │ Nginx  │              │
-│  │ Adapter │ │Adapter │ │Adapter │ │Adapter │              │
-│  │ ┌─────┐ │ │ ┌─────┐│ │ ┌─────┐│ │ ┌─────┐│              │
-│  │ │Parse│ │ │ │Parse││ │ │Parse││ │ │Parse││              │
-│  │ │ExtP │ │ │ │HTTP ││ │ │gRPC ││ │ │NJS  ││              │
-│  │ └──┬──┘ │ │ └─┬───┘│ │ └─┬───┘│ │ └──┬──┘│              │
-│  │    │Conv│ │   │Con │ │   │Con │ │    │Con│              │
-│  │    ▼    │ │   ▼    │ │   ▼    │ │    ▼   │              │
-│  │ ┌─────┐ │ │ ┌────┐ │ │ ┌────┐ │ │ ┌─────┐│              │
-│  │ │Req  │ │ │ │Req │ │ │ │Req │ │ │ │Req  ││              │
-│  │ └──┬──┘ │ │ └─┬──┘ │ │ └─┬──┘ │ │ └──┬──┘│              │
-│  └────┼────┘ └───┼────┘ └───┼────┘ └────┼───┘              │
-│       │          │          │          │                   │
-│       └──────────┴──────────┴──────────┘                   │
-│                    Single Entry Point                      │
-│                             │                              │
-│                             ▼                              │
-│        ┌──────────────────────────────────────────┐        │
-│        │           RouterEngine.Route()           │        │
-│        │  1. Classify request                     │        │
-│        │  2. Check PII / jailbreak                │        │
-│        │  3. Check cache                          │        │
-│        │  4. Select tools                         │        │
-│        │  5. Select model/backend                 │        │
-│        │  6. Record replay                        │        │
-│        │  7. Proxy to backend (via Backend Layer) │        │
-│        │  8. Update cache                         │        │
-│        └──────────────┬───────────────────────────┘        │
-│                       │                                    │
-│                       ▼                                    │
-│                  RouteResponse                             │
-│                       │                                    │
-│        ┌──────────────┼──────────────┬───────────┐         │
-│        │              │              │           │         │
-│  ┌─────▼─────┐ ┌──────▼────┐ ┌───────▼───┐ ┌─────▼─────┐   │
-│  │ ExtProc   │ │ HTTP      │ │ gRPC      │ │ Nginx     │   │
-│  │ Adapter   │ │ Adapter   │ │ Adapter   │ │ Adapter   │   │
-│  │ ┌───────┐ │ │ ┌───────┐ │ │ ┌───────┐ │ │ ┌───────┐ │   │
-│  │ │Convert│ │ │ │Convert│ │ │ │Convert│ │ │ │Convert│ │   │
-│  │ │to gRPC│ │ │ │to HTTP│ │ │ │gRPC   │ │ │ │to NJS │ │   │
-│  │ └───────┘ │ │ └───────┘ │ │ └───────┘ │ │ └───────┘ │   │
-│  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘   │
-│        │             │             │             │         │
-└────────┼─────────────┼─────────────┼─────────────┼─────────┘
-         │             │             │             │
-         └─────────────┴─────────────┴─────────────┘
-                            │
-                            ▼
-         ┌─────────────────────────────────────────┐
-         │      Backend Abstraction Layer          │
-         └──────┬──────────────────┬───────────────┘
-                │                  │
-       ┌────────▼────────┐  ┌──────▼──────────┐
-       │ Envoy Proxy     │  │ Direct Proxy    │
-       │ (ExtProc mode)  │  │ (HTTP/gRPC)     │
-       │ - Dynamic fwd   │  │ - HTTP client   │
-       │ - Headers only  │  │ - Full response │
-       └────────┬────────┘  └──────┬──────────┘
-                │                  │
-                └──────────┬───────┘
-                           ▼
-             ┌────────────────────────────┐
-             │      Inference Backends    │
-             │  ┌────────┐  ┌────────┐    │
-             │  │ vLLM   │  │Ollama  │    │
-             │  │Server  │  │Server  │    │
-             │  └────────┘  └────────┘    │
-             └────────────────────────────┘
+```mermaid
+flowchart LR
+  Client["Client wire format"] --> Ingress["Ingress codec"]
+  Ingress --> Request["Neutral request"]
+  Request --> Router["Signals, decisions, algorithms, plugins"]
+  Router --> Provider["Provider codec"]
+  Provider --> Envoy["Envoy upstream transport"]
+  Envoy --> ProviderResponse["Provider response codec"]
+  ProviderResponse --> Response["Neutral response or event stream"]
+  Response --> ClientResponse["Client response codec"]
 ```
 
-**要点：** 适配器是**薄翻译层**，智能全部在 RouterEngine。
+## 中立契约 {#neutral-contract}
 
-### 组件设计
+`pkg/llmprotocol` 是编解码器和 Router 策略共享的唯一语义契约。它表示：
 
-#### 1. RouterEngine（核心）
+- 有序指令、消息和多模态内容块；
+- 工具定义、工具调用、工具结果、托管图像生成控制，以及工具选择；
+- 采样和结构化输出约束；
+- 推理控制和推理内容；
+- 响应备选和停止原因；
+- 提供商请求身份和类型化传输错误；
+- 带来源的 token 用量，覆盖标准输入、缓存读取、缓存写入、推理输出、其他输出和总计；以及
+- 编解码器不能从客户端输入填充的可信传输元数据。
 
-**位置：** `pkg/router/engine/`
+原始线对象不进入语义路由。信封可以保留有界的同格式表示细节，但它不是路由状态，也不能用于绕过校验。
 
-**职责：**
+## 编解码契约 {#codec-contracts}
 
-- 与协议无关的路由逻辑
-- 请求分类与决策求值
-- 语义缓存操作
-- 工具选择与嵌入
-- 路由器重放记录
-- PII 与越狱检测
-- 模型选择
+每个已注册编解码器是无状态的，并安全用于并发。它声明其线格式和能力，并实现四项缓冲操作：
 
-**主要方法：**（与英文原文一致，见代码块）
+1. 将请求解码为中立请求；
+2. 为后端编码中立请求；
+3. 将响应解码为中立响应；以及
+4. 为客户端编码中立响应。
 
-```go
-type RouterEngine struct {
-    Config               *config.RouterConfig
-    Classifier           *classification.Classifier
-    PIIChecker           *pii.PolicyChecker
-    Cache                cache.CacheBackend
-    ToolsDatabase        *tools.ToolsDatabase
-    ModelSelector        *selection.Registry
-    ReplayRecorders      map[string]*routerreplay.Recorder
-}
+传输错误使用单独的类型化契约，因为 HTTP 错误不是失败的模型响应资源。流式编解码器创建请求范围的解码器和编码器，交换中立事件。注册表中不存储可变流状态。
 
-func (e *RouterEngine) Route(ctx context.Context, req *RouteRequest) (*RouteResponse, error)
-func (e *RouterEngine) ClassifyRequest(ctx context.Context, messages []Message) (*ClassificationResult, error)
-func (e *RouterEngine) CheckCache(ctx context.Context, model, query, decisionName string) (string, bool, error)
-func (e *RouterEngine) UpdateCache(ctx context.Context, model, query, response, decisionName string) error
-func (e *RouterEngine) SelectTools(ctx context.Context, query string, topK int) ([]openai.ChatCompletionToolParam, error)
-func (e *RouterEngine) RecordReplay(ctx context.Context, decisionName string, record *routerreplay.RoutingRecord) error
+注册表在构造后不可变。添加线格式需要一个缓冲编解码器、一个流式编解码器、已声明能力和矩阵测试。添加编解码器时，Router 策略不会获得协议分支。
+
+## 支持的矩阵 {#supported-matrix}
+
+| 线格式 | 缓冲请求 | 缓冲响应 | 流式 | 工具 | 图像 | 结构化输出 | 用量 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| OpenAI Chat Completions | 解码与编码 | 解码与编码 | SSE 解码与编码 | 是 | 输入 | JSON 对象和 schema | 存在时为权威 |
+| OpenAI Responses | 解码与编码 | 解码与编码 | 事件解码与编码 | 是 | 输入加托管图像生成生命周期 | JSON schema | 存在时为权威 |
+| Anthropic Messages | 解码与编码 | 解码与编码 | 事件解码与编码 | 是 | 输入 | 支持的 schema 子集 | 存在时为权威 |
+
+完整的成对请求、响应、传输错误和流式矩阵已经过测试。请求可以以任何受支持的客户端格式进入，并以所选提供商模型声明的格式离开。响应以原始客户端格式返回。
+
+顶层请求和响应清单也对照已发布的 OpenAI OpenAPI schema 和生成的 Anthropic Messages 类型封闭。新发布的字段不能通过无类型 JSON 桶透传：它必须映射到中立契约、作为显式不支持功能失败，或记录为有意从客户端表示中省略的有界提供商元数据。
+
+## 验证契约 {#verification-contract}
+
+schema 契约固定到已发布的上游修订。测试将每个顶层字段、嵌套对象字段和已发布联合判别器对照显式语义、仅传输、扩展或不支持处置封闭。当前固定为 OpenAI OpenAPI `690521b1753dce0c6d6b275f583d22537679cff9` 和 Anthropic SDK `d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa`。
+
+E2E 提供商模拟器是同一契约的一部分。它们的原生 Chat、Responses 和 Messages 边界使用修订固定的封闭清单，用提供商原生错误拒绝未知顶层字段，并在没有无类型归一化步骤的情况下保留嵌套线对象。Go 一致性测试将这些模拟器清单直接与编解码器请求、响应和用量线清单比较。模拟器测试重放每一个已发布的顶层请求字段，而编解码器黄金文件封闭嵌套字段和联合判别器。这防止宽松的 mock 隐藏 ExtProc 丢弃或发明的字段。
+
+人类可读夹具使用稳定的输入/输出约定：
+
+```text
+NNN-{client-protocol}-{case}-in.json
+NNN-{client-protocol}-{case}-{backend-protocol}-out.json
 ```
 
-**设计决策：**
+每个请求、响应、传输错误、流、能力边界和类型化拒绝输入，对每个内置目标协议都恰好有一个预期输出。流夹具保留精确 SSE 转录，并再按逐字节重放，以证明传输分块边界不改变语义。语料包括畸形和截断 JSON、重复字段、无效联合和枚举、有序多模态内容、工具和工具结果、结构化输出、推理、用量、取消、超时、不完整流、流中失败、身份变更、序列违规、托管图像生成和资源限制。图像生成夹具保留每一个已发布选项，区分 `null` 结果与空载荷，并覆盖有序进度、连续部分图像索引、终端成功或失败、畸形 base64，以及目标能力拒绝。
 
-- 所有适配器共享单实例
-- 有状态（维护缓存、重放记录器）
-- 无协议专属逻辑
-- 返回与协议无关的数据结构
+部署级覆盖是必需的 18 单元矩阵：
 
-#### 2. 适配器接口
-
-**位置：** `pkg/adapter/manager.go`
-
-```go
-type Adapter interface {
-    Start() error                      // Start the adapter (blocks)
-    Stop() error                       // Graceful shutdown
-    GetEngine() *engine.RouterEngine  // Access to shared engine
-}
+```text
+3 client protocols x 3 native backend protocols x 2 modes = 18 E2E cells
 ```
 
-**设计决策：** 接口最小化以保留灵活性；各适配器自管生命周期；接口中无协议专属方法；适配器在独立 goroutine 中运行。
+每个单元遍历 Envoy 和 ExtProc，校验客户端原生缓冲信封或 SSE 生命周期，要求翻译输出中有确定性后端标记，并拒绝泄漏的后端线形态。额外 E2E 契约覆盖结构化输出、缓冲提供商错误、工具调用延续、不完整流，以及每个后端协议在部分输出后的错误。
 
-#### 3. Adapter Manager
+## 翻译规则 {#translation-rules}
 
-**位置：** `pkg/adapter/manager.go`
+翻译是语义的，不是逐字段复制：
 
-**职责：** 解析适配器配置、按配置实例化、在独立 goroutine 中启动、协调优雅关闭。
+- 具有等价中立含义的字段被保留；
+- 目标不支持的字段以类型化 `unsupported_feature` 错误失败；
+- 未知字段只能在未修改的同格式缓冲往返中存活；
+- 跨格式翻译和语义改写拒绝未知字段，而不是悄悄丢弃它们；
+- 语义改写后，请求和响应世代前进；
+- 诊断有界，并通过现有 Router 可观测性契约返回；以及
+- 编解码器从不获取 URL、解析文件、认证调用方或调用提供商。
 
-**主要方法：**
+能力检查发生在编码之前。这使不支持的工具、媒体、多个候选、严格 schema、推理或流式行为显式且可测试。
 
-```go
-func (m *Manager) CreateAdapters(cfg *config.RouterConfig, eng *engine.RouterEngine, configPath string) error
-func (m *Manager) StartAll() error
-func (m *Manager) StopAll() error
-func (m *Manager) Wait()
-```
+## 流式 {#streaming}
 
-#### 4. ExtProc 适配器
+每个提供商事件在策略或客户端编码之前先解码为中立事件。流引擎强制顺序、终端状态唯一性、有界诊断和最终用量结算。拆分的网络帧由线解码器缓冲；Router 策略从不解析部分 JSON 或 SSE 记录。
 
-**位置：** `pkg/adapter/extproc/`
+托管图像生成遵循同一流引擎。输出项从 `in_progress` 开始，进度可以经过 `generating` 和有序部分图像推进，并且该项恰好一次以 `completed` 或 `failed` 结束。反向转换、稀疏部分索引、冲突终端状态，以及进度事件上的结果数据，会在客户端成功终端发布之前失败。
 
-包装现有 Envoy ExtProc 实现，保持向后兼容，处理 gRPC/Envoy 细节，支持 TLS。
+Router 产生的响应直接使用中立事件编码器。它们不创建中间的提供商形态流。取消和反压留在 Envoy 和 ExtProc 的请求生命周期中。
 
-#### 5. HTTP 适配器
+## 用量与成本 {#usage-and-cost}
 
-**位置：** `pkg/adapter/http/`
+token 计数保留来源，以便账务可以区分权威提供商用量与派生、估计或不可用值。流终止时，最终提供商用量替换中间估计。
 
-提供 OpenAI 兼容 REST API，无需 Envoy，处理 CORS、请求头等 HTTP 关注点。
-
-**端点：** `POST /v1/chat/completions`、`POST /v1/completions`（未来）、`GET /v1/models`、`POST /v1/classify`、`POST /v1/route`、`GET /v1/router_replay`、`GET /v1/router_replay/{id}`、`GET /health`、`GET /ready`。
-
-#### 6. gRPC 适配器
-
-**位置：** `pkg/adapter/grpc/`
-
-提供原生 gRPC API，较 ExtProc 直连 gRPC 客户端更高效，支持流式与一元 RPC。
-
-**服务定义示例：**
-
-```protobuf
-service SemanticRouter {
-  rpc Route(RouteRequest) returns (RouteResponse);
-  rpc Classify(ClassifyRequest) returns (ClassifyResponse);
-  rpc StreamRoute(stream RouteRequest) returns (stream RouteResponse);
-}
-```
-
-#### 7. Nginx 适配器
-
-**位置：** `pkg/adapter/nginx/`
-
-通过 NJS（JavaScript）模块与 Nginx 集成，支持 OpenResty Lua，基于头的路由类似 ExtProc。
-
-**集成方式：** NJS 模块、Lua/OpenResty、HTTP 子请求（内部调用 HTTP 适配器）、共享内存 IPC。
-
-### 配置设计
+定价是部署元数据，仍位于每个提供商模型上：
 
 ```yaml
-adapters:
-  - type: "envoy" # ExtProc adapter
-    enabled: true
-    port: 50051
-    tls:
-      enabled: true
-      cert_file: "/path/to/cert.pem"
-      key_file: "/path/to/key.pem"
-
-  - type: "http" # HTTP REST API
-    enabled: true
-    port: 9000
-
-  - type: "grpc" # Native gRPC API
-    enabled: true
-    port: 50052
-    tls:
-      enabled: true
-      cert_file: "/path/to/cert.pem"
-      key_file: "/path/to/key.pem"
-
-  - type: "nginx" # Nginx integration
-    enabled: true
-    port: 9001
-    mode: "njs" # Options: njs, lua, http
-    config:
-      upstream_variable: "backend_upstream"
-      header_prefix: "x-vsr-"
+providers:
+  models:
+    - name: local/fast
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.20
+        cached_input_per_1m: 0.02
+        cache_write_per_1m: 0.25
+        completion_per_1m: 0.80
 ```
 
-### 数据流（HTTP 适配器示例）
+`routing.modelCards` 描述语义能力；它不拥有连接或定价数据。货币可选，省略时账务解析为 USD。配置费率必须有限且非负，显式零表示免费费率。
 
-1. 客户端请求 → 2. HTTP 适配器接收 `POST /v1/chat/completions` → 3. 解析 OpenAI 请求 → 4. `RouterEngine.Route` → 5. 分类、缓存、工具、重放等 → 6. 返回 `RouteResponse` → 7. 代理到选定后端 → 8. 返回客户端。
+## 安全边界 {#security-boundary}
 
-**共享状态：** 多适配器共享同一缓存条目、重放记录器、分类决策与模型选择状态。
+客户端控制的头和体元数据不受信任。只有 ExtProc 边界可以在传输确立之后填充可信身份、会话、任务和关联字段。编解码器不能把线元数据提升为可信元数据。
 
-## 实现细节
+公开推理监听器和管理监听器保持分开。本设计不添加直接的 Router HTTP 代理、智能体服务、产品管理面或第二套上游传输。
 
-### 初始化顺序
+## 扩展清单 {#extension-checklist}
 
-1. 加载配置 → 2. 初始化嵌入模型 → 3. 创建 RouterEngine → 4. 创建 Adapter Manager → 5. `CreateAdapters` → 6. `StartAll` → 7. `Wait()` 阻塞。
+新编解码器仅在提供以下内容时才完整：
 
-### 错误处理
+- 稳定的线格式标识符；
+- 显式能力声明；
+- 严格的缓冲请求、响应和传输错误编解码器；
+- 请求范围的流解码和编码；
+- 畸形输入和不支持功能测试；
+- 对照每个内置格式的成对矩阵覆盖；
+- 权威用量和终端事件测试；以及
+- 证明路由行为未变的 ExtProc 回归覆盖。
 
-- 适配器创建失败：致命，进程退出
-- 适配器启动失败：致命，进程退出
-- 运行时错误：记录日志，适配器在可能情况下继续
-- RouterEngine 错误：返回适配器做协议相关处理
+## 参考资料 {#references}
 
-### 并发模型
-
-- **RouterEngine：** 线程安全，多适配器可并发调用
-- **Cache：** 由后端处理并发
-- **Replay Recorders：** 线程安全 map + 按决策加锁
-- **Adapters：** 独立 goroutine，无共享适配器状态
-
-## 权衡与替代方案
-
-### 选用共享 RouterEngine 而非每适配器一实例
-
-**理由：** 跨协议决策一致、共享缓存提高命中率、重放记录单一来源、内存更小。  
-**代价：** 潜在热点（通过线程安全设计缓解）。
-
-### 适配器接口：选用最小接口（见上文），而非富接口（含 HandleRequest、GetMetrics 等）。
-
-**理由：** 不同协议的请求/响应模型差异极大，最小接口最灵活。
-
-### 配置：选用单一配置文件中的 `adapters` 节，而非每适配器独立文件或纯环境变量。
-
-## 已知局限
-
-1. 抽象层难以做协议专属优化  
-2. 适配器之间不能直接通信（有意设计）  
-3. 若 RouterEngine 非线程安全则共享状态存在竞态风险  
-4. 用户可配置项增多  
-
-## 测试策略
-
-- **单元测试：** RouterEngine 方法、各适配器逻辑、配置解析  
-- **集成测试：** 多适配器同时运行、跨适配器缓存一致性、双协议重放  
-- **E2E：** Envoy ExtProc 8801、直连 HTTP 9000，验证相同路由决策与重放可见性  
-
-## 后续工作
-
-### 短期
-
-优雅关闭、适配器指标（QPS、延迟直方图、错误率）、增强 Nginx 集成（OpenResty、Nginx Plus、共享内存 IPC）。
-
-### 长期
-
-gRPC 双向流、WebSocket 适配器、插件化动态加载适配器、每适配器限流/认证/中间件。
-
-## 迁移指南
-
-**以前：** `extproc.NewServer(...); server.Start()`
-
-**以后：** `NewRouterEngine` → `adapter.NewManager` → `CreateAdapters` → `StartAll` → `Wait()`，并在 `config.yaml` 中增加 `adapters` 节（见英文原文示例）。
-
-### 新增适配器步骤
-
-1. 新建 `pkg/adapter/myprotocol/`  
-2. 实现 `Adapter` 接口（见英文原文 `MyAdapter` 示例）  
-3. 在 `manager.go` 中 `case "myprotocol":` 注册  
-4. 增加 YAML 配置  
-
-## 参考
-
-- [OpenAI API Specification](https://platform.openai.com/docs/api-reference)
-- [Envoy ExtProc Documentation](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter)
-- [vLLM Semantic Router Documentation](https://vllm-sr.ai)
-
-## 附录
-
-### 性能
-
-RouterEngine 单实例省内存但可能成为瓶颈；缓存后端选型关键；重放建议异步写；适配器开销主要来自序列化。
-
-### 安全
-
-每适配器 TLS；认证在适配器层（未来可抽象外部鉴权）；PII/越狱检测跨适配器共享。
-
-### 监控
-
-每适配器与 RouterEngine 指标、分布式追踪跨适配器 span、结构化日志、每适配器健康检查端点。
+- [Router API](../api/router)
+- [Semantic Router 系统概览](../overview/semantic-router-overview)
+- [网关部署选项](../installation/k8s/gateways)

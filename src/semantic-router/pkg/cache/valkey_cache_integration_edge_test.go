@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -19,7 +20,7 @@ func TestValkeyCacheIntegration_EmptyQuery(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
 
-	err := cache.AddEntry("req_empty", "gpt-4", "", []byte("{}"), []byte("{}"), 300)
+	err := cache.AddEntry(context.Background(), "req_empty", "gpt-4", "", []byte("{}"), []byte("{}"), 300)
 	assert.NoError(t, err, "AddEntry with empty query should not error")
 
 	_, hit, err := cache.FindSimilar("gpt-4", "")
@@ -36,7 +37,7 @@ func TestValkeyCacheIntegration_LargeResponseBody(t *testing.T) {
 		largeResponse[i] = byte('A' + (i % 26))
 	}
 
-	err := cache.AddEntry("req_large", "gpt-4", "large response test", []byte("{}"), largeResponse, 300)
+	err := cache.AddEntry(context.Background(), "req_large", "gpt-4", "large response test", []byte("{}"), largeResponse, 300)
 	assert.NoError(t, err, "AddEntry with large response should succeed")
 
 	time.Sleep(200 * time.Millisecond)
@@ -66,7 +67,7 @@ func TestValkeyCacheIntegration_SpecialCharactersInQuery(t *testing.T) {
 
 	for i, query := range specialQueries {
 		requestID := fmt.Sprintf("req_special_%d", i)
-		err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"query":"%d"}`, i)), 300)
+		err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"query":"%d"}`, i)), 300)
 		assert.NoError(t, err, "AddEntry should handle special characters: %s", query)
 	}
 
@@ -85,7 +86,7 @@ func TestValkeyCacheIntegration_StatsAccuracy(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		requestID := fmt.Sprintf("req_stats_acc_%d", i)
 		query := fmt.Sprintf("stats test query %d", i)
-		err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, i)), 300)
+		err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, i)), 300)
 		require.NoError(t, err)
 	}
 
@@ -129,9 +130,10 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 		valkeyConfig.Development.AutoCreateIndex = true
 
 		_, err := NewValkeyCache(ValkeyCacheOptions{
-			Enabled:        true,
-			Config:         valkeyConfig,
-			EmbeddingModel: "bert",
+			EmbeddingProvider: cacheTestEmbeddingProvider(),
+			Enabled:           true,
+			Config:            valkeyConfig,
+			EmbeddingModel:    "bert",
 		})
 		assert.Error(t, err, "Should fail to connect to invalid host")
 	})
@@ -163,9 +165,10 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 		valkeyConfig.Development.AutoCreateIndex = false
 
 		_, err := NewValkeyCache(ValkeyCacheOptions{
-			Enabled:        true,
-			Config:         valkeyConfig,
-			EmbeddingModel: "bert",
+			EmbeddingProvider: cacheTestEmbeddingProvider(),
+			Enabled:           true,
+			Config:            valkeyConfig,
+			EmbeddingModel:    "bert",
 		})
 		assert.Error(t, err, "Should fail when index doesn't exist and auto-creation is disabled")
 		assert.Contains(t, err.Error(), "does not exist", "Error should mention index doesn't exist")

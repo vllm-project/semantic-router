@@ -15,6 +15,29 @@ func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
 	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection); err != nil {
 		return err
 	}
+	return validateRouterLearningStateStoreConfig(cfg.RouterLearning.StateStore)
+}
+
+func validateRouterLearningStateStoreConfig(cfg RouterLearningStateStoreConfig) error {
+	switch strings.TrimSpace(cfg.Backend) {
+	case "", "local":
+	case "redis":
+		if strings.TrimSpace(cfg.Redis.Address) == "" {
+			return fmt.Errorf("global.router.learning.state_store.redis.address is required for redis backend")
+		}
+	default:
+		return fmt.Errorf(
+			"global.router.learning.state_store.backend must be %q or %q",
+			"local",
+			"redis",
+		)
+	}
+	if cfg.TTLSeconds < 0 {
+		return fmt.Errorf("global.router.learning.state_store.ttl_seconds cannot be negative")
+	}
+	if cfg.TimeoutMS < 0 {
+		return fmt.Errorf("global.router.learning.state_store.timeout_ms cannot be negative")
+	}
 	return nil
 }
 
@@ -22,8 +45,21 @@ func validateDecisionRouterLearningConfig(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	for _, decision := range cfg.Decisions {
-		if err := validateDecisionAdaptationsConfig(decision.Name, decision.Adaptations); err != nil {
+	for _, ref := range cfg.RoutingDecisionRefs() {
+		if ref.Decision == nil {
+			continue
+		}
+		if ref.Decision.Tier < 0 {
+			return fmt.Errorf(
+				"recipe %q decision %q: tier cannot be negative",
+				ref.Recipe,
+				ref.Decision.Name,
+			)
+		}
+		if err := validateDecisionAdaptationsConfig(
+			ref.Decision.Name,
+			ref.Decision.Adaptations,
+		); err != nil {
 			return err
 		}
 	}

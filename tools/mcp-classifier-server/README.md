@@ -1,89 +1,79 @@
-# MCP Classification Server
+# MCP Classifier Examples
 
-Example MCP servers that provide text classification with intelligent routing for the semantic router.
+This directory contains three standalone MCP servers that implement the domain
+classifier contract used by semantic-router. They are examples for local
+development and integration testing, not prequalified production services.
 
-## 📦 Three Implementations
+Each server exposes:
 
-This directory contains **three MCP classification servers**:
+- `list_categories`, which returns category names and optional descriptions and
+  system prompts;
+- `classify_text`, which returns a class index, confidence, and optional routing
+  hints.
 
-### 1. **Regex-Based Server** (`server_keyword.py`)
+All three support stdio and streamable HTTP. The HTTP endpoint is `/mcp`; the
+health endpoint is `/health`.
 
-- ✅ **Simple & Fast** - Pattern matching with regex
-- ✅ **Lightweight** - ~10MB memory, <5ms per query
-- ✅ **No Dependencies** - Just MCP SDK
-- 📝 **Best For**: Prototyping, simple rules, low-latency requirements
+## Choose an Example
 
-### 2. **Embedding-Based Server** (`server_embedding.py`)
+| Server | Method | Extra state | Good for |
+|---|---|---|---|
+| `server_keyword.py` | regular-expression rules | none | verifying the MCP contract and deterministic rules |
+| `server_embedding.py` | nearest examples using Qwen3 embeddings | `training_data.csv` and a Milvus Lite file | experimenting with example-based semantic classification |
+| `server_generative.py` | fine-tuned Qwen3 classifier | a local or Hugging Face LoRA checkpoint | evaluating a trained generative classifier |
 
-- ✅ **High Accuracy** - Semantic understanding with Qwen3-Embedding-0.6B
-- ✅ **RAG-Style** - Milvus vector database with similarity search
-- ✅ **Flexible** - Handles paraphrases, synonyms, variations
-- 📝 **Best For**: Production use when you have good training examples
+Choose with measured workload results. The implementation type alone does not
+establish accuracy, latency, or memory use.
 
-### 3. **Generative Model Server** (`server_generative.py`) 🆕
-
-- ✅ **Highest Accuracy** - Fine-tuned Qwen3 generative model
-- ✅ **True Probabilities** - Softmax-based probability distributions
-- ✅ **Better Generalization** - Learns category patterns, not just examples
-- ✅ **Entropy Calculation** - Shannon entropy for uncertainty quantification
-- ✅ **HuggingFace Support** - Load models from HuggingFace Hub or local paths
-- 📝 **Best For**: Production use with fine-tuned models (70-85% accuracy)
-
-**Choose based on your needs:**
-
-- **Quick start / Testing?** → Use `server_keyword.py` (regex-based)
-- **Production with training examples?** → Use `server_embedding.py` (embedding-based)
-- **Production with fine-tuned model?** → Use `server_generative.py` (generative model)
-
----
-
-## Regex-Based Server (`server_keyword.py`)
-
-### Features
-
-- **Dynamic Categories**: Loaded from MCP server at runtime via `list_categories`
-- **Per-Category System Prompts**: Each category has its own specialized system prompt for LLM context
-- **Intelligent Routing**: Returns `model` and `use_reasoning` in classification response  
-- **Regex-Based**: Simple pattern matching (fast but limited)
-- **Dual Transport**: Supports both HTTP and stdio
-
-## Categories
-
-| Index | Category | Example Keywords |
-|-------|----------|------------------|
-| 0 | math | calculate, equation, formula, integral |
-| 1 | science | physics, chemistry, biology, atom, DNA |
-| 2 | technology | computer, programming, AI, cloud |
-| 3 | history | ancient, war, empire, civilization |
-| 4 | general | Catch-all for other queries |
-
-## Quick Start
+## Keyword Server
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# HTTP mode (for semantic router)
 python server_keyword.py --http --port 8090
-
-# Stdio mode (for MCP clients)
-python server_keyword.py
+curl http://localhost:8090/health
 ```
 
-**Test the server:**
+Edit `CATEGORIES` in `server_keyword.py` for local rules. `routing_policy.py`
+owns the optional backend-model and reasoning hints returned with a class.
+
+## Embedding Server
 
 ```bash
-curl http://localhost:8090/health
-# → {"status": "ok", "categories": ["math", "science", "technology", "history", "general"]}
+pip install -r requirements_embedding.txt
+python server_embedding.py \
+  --http \
+  --port 8091 \
+  --device cpu \
+  --milvus-uri ./milvus_data.db
 ```
 
-## Configuration
+The server loads `training_data.csv` beside the script and materializes its
+embeddings in Milvus Lite. Review the examples, category balance, and database
+path before use. Delete or rebuild the database when changing an incompatible
+embedding model or training set.
 
-**Router config (`config-mcp-classifier.yaml`):**
+## Generative Server
+
+```bash
+pip install -r requirements_generative.txt
+python server_generative.py \
+  --http \
+  --port 8092 \
+  --model-path ORGANIZATION/CLASSIFIER_ADAPTER \
+  --base-model Qwen/Qwen3-0.6B \
+  --device auto
+```
+
+`--model-path` accepts a local adapter directory or Hugging Face model ID. The
+base model must match the adapter. Validate the label mapping and held-out
+metrics supplied with that artifact.
+
+## Connect Semantic Router
+
+Disable the local domain classifier when MCP should be the domain source, then
+configure the MCP module:
 
 ```yaml
-version: v0.3
-
 providers:
   defaults:
     default_model: openai/gpt-oss-20b
@@ -101,228 +91,40 @@ routing:
   modelCards:
     - name: openai/gpt-oss-20b
   signals:
-    domains: []  # Loaded dynamically from MCP categories
+    domains: []
   decisions: []
 
 global:
   model_catalog:
     modules:
       classifier:
+        domain:
+          enabled: false
         mcp:
           enabled: true
-          transport_type: "http"
-          url: "http://localhost:8090/mcp"
-          # tool_name: optional - auto-discovers classification tool if not specified
+          transport_type: streamable-http
+          url: http://localhost:8090/mcp
+          tool_name: classify_text
           threshold: 0.6
           timeout_seconds: 30
 ```
 
-**Tool Auto-Discovery:**
-The router automatically discovers classification tools from the MCP server by:
+Configure providers, model cards, routing signals, and decisions in the normal
+router config. The MCP server supplies classification; it does not replace the
+rest of the routing policy. See the
+[domain signal guide](../../website/docs/tutorials/signal/learned/domain.md)
+for the user-facing configuration model.
 
-1. Listing available tools on connection
-2. Looking for common names: `classify_text`, `classify`, `categorize`, `categorize_text`
-3. Pattern matching for tools containing "classif" in name/description
-4. Optionally specify `tool_name` to use a specific tool
+## Validate
 
-## Protocol API
+At minimum, check:
 
-This server implements the MCP classification protocol defined in:
+- `/health` and MCP initialization;
+- category ordering returned by `list_categories`;
+- `classify_text` output for positive, negative, ambiguous, and empty inputs;
+- timeout and unavailable-server behavior in the router;
+- threshold behavior against a labelled, held-out set.
 
-```
-github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp/api
-```
-
-**Required Tools:**
-
-1. **`list_categories`** - Returns `ListCategoriesResponse`:
-
-   ```json
-   {
-     "categories": ["math", "science", "technology", "history", "general"],
-     "category_system_prompts": {
-       "math": "You are a mathematics expert. When answering math questions...",
-       "science": "You are a science expert. When answering science questions...",
-       "technology": "You are a technology expert. When answering tech questions..."
-     },
-     "category_descriptions": {
-       "math": "Mathematical and computational queries",
-       "science": "Scientific concepts and queries"
-     }
-   }
-   ```
-
-   The `category_system_prompts` and `category_descriptions` fields are optional but recommended.
-   Per-category system prompts allow the MCP server to provide specialized instructions for each
-   category that the router can inject when processing queries in that specific category.
-
-2. **`classify_text`** - Returns `ClassifyResponse`:
-
-   ```json
-   {
-     "class": 1,
-     "confidence": 0.85,
-     "model": "openai/gpt-oss-20b",
-     "use_reasoning": true
-   }
-   ```
-
-See the `api` package for full type definitions and documentation.
-
-## How It Works
-
-**Intelligent Routing Rules:**
-
-- Long query (>20 words) + complex words (`why`, `how`, `explain`) → `use_reasoning: true`
-- Math + short query → `use_reasoning: false`  
-- High confidence (>0.9) → `use_reasoning: false`
-- Low confidence (<0.6) → `use_reasoning: true`
-- Default → `use_reasoning: true`
-
-## Customization
-
-**Edit `CATEGORIES` to add categories with per-category system prompts:**
-
-```python
-CATEGORIES = {
-    "your_category": {
-        "patterns": [r"\b(keyword1|keyword2)\b"],
-        "description": "Your description",
-        "system_prompt": """You are an expert in your_category. When answering:
-- Provide specific guidance
-- Use domain-specific terminology
-- Follow best practices for this domain"""
-    }
-}
-```
-
-Each category can have its own specialized system prompt tailored to that domain.
-
-**Edit the shared `routing_policy.py` for custom routing logic:**
-
-```python
-def decide_routing(text, category, confidence):
-    if category == "math":
-        return "deepseek/deepseek-math", False
-    return "openai/gpt-oss-20b", True
-```
-
-**Using Per-Category System Prompts in the Router:**
-
-The router stores per-category system prompts when loading categories. To use them:
-
-```go
-// After classifying a query, get the category-specific system prompt
-category := "math"  // from classification result
-if systemPrompt, ok := classifier.GetCategorySystemPrompt(category); ok {
-    // Inject the category-specific system prompt when making LLM requests
-    // Each category gets its own specialized instructions
-}
-```
-
----
-
-## Embedding-Based Server (`server_embedding.py`)
-
-For **production use with high accuracy**, see the embedding-based server:
-
-### Quick Start
-
-```bash
-# Install dependencies
-pip install -r requirements_embedding.txt
-
-# Start server (HTTP mode on port 8090)
-python3 server_embedding.py --http --port 8090
-```
-
-### Features
-
-- **Qwen3-Embedding-0.6B** model with 1024-dimensional embeddings
-- **Milvus vector database** for fast similarity search
-- **RAG-style classification** using 95 training examples
-- **Same MCP protocol** as regex server (drop-in replacement)
-- **Higher accuracy** - Understands semantic meaning, not just patterns
-
-### Comparison
-
-| Feature | Regex (`server_keyword.py`) | Embedding (`server_embedding.py`) | Generative (`server_generative.py`) |
-|---------|---------------------|-----------------------------------|-------------------------------------|
-| **Accuracy** | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **Speed** | ~1-5ms | ~50-100ms | ~100-200ms (GPU) |
-| **Memory** | ~10MB | ~600MB | ~2GB (GPU) / ~4GB (CPU) |
-| **Setup** | Simple | CSV + embeddings | Fine-tuned model required |
-| **Probabilities** | Rule-based | Similarity scores | Softmax (true) |
-| **Entropy** | No | Manual calculation | Built-in (Shannon) |
-| **Best For** | Prototyping | Examples-based production | Model-based production |
-
----
-
-## Generative Model Server (`server_generative.py`)
-
-For **production use with a fine-tuned model and highest accuracy**, see the generative model server.
-
-### Quick Start
-
-**Option 1: Use Pre-trained HuggingFace Model** (Easiest)
-
-```bash
-# Server automatically downloads from HuggingFace Hub
-python server_generative.py --http --port 8092 --model-path llm-semantic-router/qwen3_generative_classifier_r16
-```
-
-**Option 2: Train Your Own Model**
-
-Step 1: Train the model
-
-```bash
-cd ../../../src/training/training_lora/classifier_model_fine_tuning_lora/
-python ft_qwen3_generative_lora.py --mode train --epochs 8 --lora-rank 16
-# Creates: qwen3_generative_classifier_r16/
-```
-
-Step 2: Start the server
-
-```bash
-cd -  # Back to examples/mcp-classifier-server/
-python server_generative.py --http --port 8092 --model-path ../../../src/training/training_lora/classifier_model_fine_tuning_lora/qwen3_generative_classifier_r16
-```
-
-### Features
-
-- **Fine-tuned Qwen3-0.6B** generative model with LoRA
-- **Softmax probabilities** from model logits (true probability distribution)
-- **Shannon entropy** for uncertainty quantification
-- **14 MMLU-Pro categories** (biology, business, chemistry, CS, economics, engineering, health, history, law, math, other, philosophy, physics, psychology)
-- **Same MCP protocol** as other servers (drop-in replacement)
-- **Highest accuracy** - 70-85% on validation set
-
-### Why Use Generative Server?
-
-**Advantages over Embedding Server:**
-
-- ✅ True probability distributions (softmax-based, not similarity-based)
-- ✅ Better generalization beyond training examples
-- ✅ More accurate classification (70-85% vs ~60-70%)
-- ✅ Built-in entropy calculation for uncertainty
-- ✅ Fine-tuned on task-specific data
-
-**When to Use:**
-
-- You have training data to fine-tune a model
-- Need highest accuracy for production
-- Want true probability distributions
-- Need uncertainty quantification (entropy)
-- Can afford 2-4GB memory footprint
-
-### Testing
-
-Test the generative server with sample queries:
-
-```bash
-python test_generative.py --model-path qwen3_generative_classifier_r16
-```
-
-### Documentation
-
-For detailed documentation, see [README_GENERATIVE.md](README_GENERATIVE.md).
+Do not expose these example servers to an untrusted network without adding the
+authentication, transport security, resource controls, and observability
+required by your environment.

@@ -1,0 +1,138 @@
+.decision {
+  display: grid;
+  min-width: 0;
+  gap: 0;
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.decisionHero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.decisionHero h3,
+.sectionHeader h4 {
+  margin: 0.25rem 0 0;
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
+}
+
+.decisionHero h3:focus {
+  outline: none;
+}
+
+.decisionHero p,
+.sectionHeader p {
+  max-width: 56rem;
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.decisionHeroActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.decisionMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.decisionMeta > div {
+  min-width: 0;
+  padding: 0.8rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.decisionMeta > div:first-child {
+  border-left: 0;
+}
+
+.decisionMeta dt {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.decisionMeta dd {
+  margin: 0.15rem 0 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decisionSection {
+  min-width: 0;
+  margin: 0;
+  padding: 1.1rem 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.sectionHeader h4 {
+  font-size: 1rem;
+}
+
+.sectionMeta {
+  flex: 0 0 auto;
+  padding-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .decisionHero,
+  .sectionHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .decisionHero,
+  .decisionSection {
+    padding: 0.9rem 0;
+  }
+
+  .decisionMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .decisionMeta > div {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .decisionMeta > div:first-child {
+    border-top: 0;
+  }
+}

@@ -11,7 +11,7 @@ translation:
 
 `knn` 用于**最近邻**模型选择的选择算法。
 
-对应 `config/algorithm/selection/knn.yaml`。
+对应 `config/fragments/algorithm/selection/knn.yaml`。
 
 ## 主要优势
 

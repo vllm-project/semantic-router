@@ -11,7 +11,7 @@ translation:
 
 `header_mutation` 是路由局部插件：添加、更新或删除下游请求头。
 
-对应 `config/plugin/header-mutation/tenant-routing.yaml`。
+对应 `config/fragments/plugin/header-mutation/tenant-routing.yaml`。
 
 ## 主要优势
 

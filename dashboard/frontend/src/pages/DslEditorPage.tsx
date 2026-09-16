@@ -9,6 +9,7 @@ import {
   diagnosticsToMarkers,
 } from '@/lib/dslLanguage'
 import { DslImportModal } from './DslImportModal'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './DslEditorPage.module.css'
 
 type OutputTab = 'yaml' | 'crd'
@@ -81,7 +82,9 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
   const monacoRef = useRef<Monaco | null>(null)
 
   // Keep ref in sync with state
-  useEffect(() => { diagHeightRef.current = diagHeight }, [diagHeight])
+  useEffect(() => {
+    diagHeightRef.current = diagHeight
+  }, [diagHeight])
 
   // Drag to resize diagnostics panel
   const onDiagDragStart = useCallback((e: React.MouseEvent) => {
@@ -232,32 +235,37 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     editor.focus()
   }, [])
 
-  const handleApplyFix = useCallback((line: number, column: number, newText: string) => {
-    const editor = editorRef.current
-    if (!editor) return
-    const model = editor.getModel()
-    if (!model) return
+  const handleApplyFix = useCallback(
+    (line: number, column: number, newText: string) => {
+      const editor = editorRef.current
+      if (!editor) return
+      const model = editor.getModel()
+      if (!model) return
 
-    // Find the word/token at the diagnostic position to replace
-    const lineContent = model.getLineContent(line)
-    let startCol = column
-    let endCol = column
-    while (startCol > 1 && /[\w\-.]/.test(lineContent[startCol - 2])) startCol--
-    while (endCol <= lineContent.length && /[\w\-.]/.test(lineContent[endCol - 1])) endCol++
+      // Find the word/token at the diagnostic position to replace
+      const lineContent = model.getLineContent(line)
+      let startCol = column
+      let endCol = column
+      while (startCol > 1 && /[\w\-.]/.test(lineContent[startCol - 2])) startCol--
+      while (endCol <= lineContent.length && /[\w\-.]/.test(lineContent[endCol - 1])) endCol++
 
-    editor.executeEdits('quick-fix', [{
-      range: {
-        startLineNumber: line,
-        startColumn: startCol,
-        endLineNumber: line,
-        endColumn: endCol,
-      },
-      text: newText,
-    }])
-    // Trigger re-validation
-    const src = model.getValue()
-    setDslSource(src)
-  }, [setDslSource])
+      editor.executeEdits('quick-fix', [
+        {
+          range: {
+            startLineNumber: line,
+            startColumn: startCol,
+            endLineNumber: line,
+            endColumn: endCol,
+          },
+          text: newText,
+        },
+      ])
+      // Trigger re-validation
+      const src = model.getValue()
+      setDslSource(src)
+    },
+    [setDslSource],
+  )
 
   const handleOpenImport = useCallback(() => {
     setImportText('')
@@ -280,7 +288,9 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
       setImportText('')
       setImportError(null)
     } catch {
-      setImportError('Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.')
+      setImportError(
+        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
+      )
     }
   }, [importText, importYaml])
 
@@ -302,11 +312,15 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
 
   const handleImportUrl = useCallback(async () => {
     const url = importUrl.trim()
-    if (!url) { setImportError('Please enter a URL'); return }
+    if (!url) {
+      setImportError('Please enter a URL')
+      return
+    }
     try {
       new URL(url)
     } catch {
-      setImportError('Invalid URL format'); return
+      setImportError('Invalid URL format')
+      return
     }
     setImportUrlLoading(true)
     setImportError(null)
@@ -347,97 +361,133 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     <div className={`${styles.page} ${embedded ? styles.embedded : ''}`}>
       {/* Toolbar — hidden when embedded in BuilderPage (parent provides toolbar) */}
       {!embedded && (
-      <div className={styles.toolbar}>
-        <div className={styles.toolbarTitle}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M2 3h12M2 8h8M2 13h10" strokeLinecap="round" />
-          </svg>
-          DSL Editor
-          {dirty && <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(unsaved)</span>}
+        <div className={styles.toolbar}>
+          <div className={styles.toolbarTitle}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M2 3h12M2 8h8M2 13h10" strokeLinecap="round" />
+            </svg>
+            DSL Editor
+            {dirty && (
+              <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(unsaved)</span>
+            )}
+          </div>
+
+          {/* WASM status */}
+          {wasmError ? (
+            <span className={styles.statusError}>
+              <span className={styles.dot} /> WASM Error
+            </span>
+          ) : wasmReady ? (
+            <span className={styles.statusReady}>
+              <span className={styles.dot} /> Ready
+            </span>
+          ) : (
+            <span className={styles.statusLoading}>
+              <span className={styles.dotPulse} /> Loading WASM…
+            </span>
+          )}
+
+          <span className={styles.divider} />
+
+          <button
+            className={styles.toolbarBtn}
+            onClick={handleOpenImport}
+            disabled={!wasmReady}
+            title="Import routing from YAML config"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" strokeLinecap="round" />
+            </svg>
+            Import YAML
+          </button>
+
+          <button
+            className={styles.toolbarBtn}
+            onClick={format}
+            disabled={!wasmReady || !dslSource.trim()}
+            title="Format (Ctrl+Shift+F)"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M2 4h12M2 8h8M2 12h10" strokeLinecap="round" />
+            </svg>
+            Format
+          </button>
+
+          <button
+            className={styles.toolbarBtn}
+            onClick={validate}
+            disabled={!wasmReady || !dslSource.trim()}
+            title="Validate DSL"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Validate
+          </button>
+
+          <button
+            className={styles.toolbarBtnPrimary}
+            onClick={compile}
+            disabled={!wasmReady || !dslSource.trim() || loading}
+            title="Compile (Ctrl+Enter)"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M4 2l8 6-8 6V2z" fill="currentColor" />
+            </svg>
+            {loading ? 'Compiling…' : 'Compile'}
+          </button>
+
+          <span className={styles.divider} />
+
+          <button className={styles.toolbarBtnDanger} onClick={reset} title="Reset editor">
+            Reset
+          </button>
         </div>
-
-        {/* WASM status */}
-        {wasmError ? (
-          <span className={styles.statusError}>
-            <span className={styles.dot} /> WASM Error
-          </span>
-        ) : wasmReady ? (
-          <span className={styles.statusReady}>
-            <span className={styles.dot} /> Ready
-          </span>
-        ) : (
-          <span className={styles.statusLoading}>
-            <span className={styles.dotPulse} /> Loading WASM…
-          </span>
-        )}
-
-        <span className={styles.divider} />
-
-        <button
-          className={styles.toolbarBtn}
-          onClick={handleOpenImport}
-          disabled={!wasmReady}
-          title="Import routing from YAML config"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" strokeLinecap="round" />
-          </svg>
-          Import YAML
-        </button>
-
-        <button
-          className={styles.toolbarBtn}
-          onClick={format}
-          disabled={!wasmReady || !dslSource.trim()}
-          title="Format (Ctrl+Shift+F)"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M2 4h12M2 8h8M2 12h10" strokeLinecap="round" />
-          </svg>
-          Format
-        </button>
-
-        <button
-          className={styles.toolbarBtn}
-          onClick={validate}
-          disabled={!wasmReady || !dslSource.trim()}
-          title="Validate DSL"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Validate
-        </button>
-
-        <button
-          className={styles.toolbarBtnPrimary}
-          onClick={compile}
-          disabled={!wasmReady || !dslSource.trim() || loading}
-          title="Compile (Ctrl+Enter)"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M4 2l8 6-8 6V2z" fill="currentColor" />
-          </svg>
-          {loading ? 'Compiling…' : 'Compile'}
-        </button>
-
-        <span className={styles.divider} />
-
-        <button
-          className={styles.toolbarBtnDanger}
-          onClick={reset}
-          title="Reset editor"
-        >
-          Reset
-        </button>
-      </div>
       )}
 
       {/* Split panes */}
       <div className={styles.splitContainer}>
         {/* Left: Editor */}
-        <div className={styles.editorPane} style={{ position: 'relative', ...(hideOutput ? { borderRight: 'none' } : {}) }}>
+        <div
+          className={styles.editorPane}
+          style={{ position: 'relative', ...(hideOutput ? { borderRight: 'none' } : {}) }}
+        >
           <div className={styles.paneHeader}>
             <span className={styles.paneTitle}>Source</span>
           </div>
@@ -445,8 +495,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
           {/* WASM loading overlay */}
           {!wasmReady && !wasmError && (
             <div className={styles.wasmOverlay}>
-              <div className={styles.spinner} />
-              Loading Signal Compiler…
+              <ProductLoadingState label="Loading compiler" compact />
             </div>
           )}
 
@@ -487,17 +536,23 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
             <div className={styles.diagnosticsHeader}>
               <span className={styles.diagnosticsTitle}>Problems</span>
               {errorCount > 0 ? (
-                <span className={styles.diagCountError}>{errorCount} error{errorCount !== 1 ? 's' : ''}</span>
+                <span className={styles.diagCountError}>
+                  {errorCount} error{errorCount !== 1 ? 's' : ''}
+                </span>
               ) : (
                 <span className={styles.diagCountOk}>0 errors</span>
               )}
               {warnCount > 0 ? (
-                <span className={styles.diagCountWarn}>{warnCount} warning{warnCount !== 1 ? 's' : ''}</span>
+                <span className={styles.diagCountWarn}>
+                  {warnCount} warning{warnCount !== 1 ? 's' : ''}
+                </span>
               ) : (
                 <span className={styles.diagCountOk}>0 warnings</span>
               )}
               {constraintCount > 0 ? (
-                <span className={styles.diagCountConstraint}>{constraintCount} constraint{constraintCount !== 1 ? 's' : ''}</span>
+                <span className={styles.diagCountConstraint}>
+                  {constraintCount} constraint{constraintCount !== 1 ? 's' : ''}
+                </span>
               ) : (
                 <span className={styles.diagCountOk}>0 constraints</span>
               )}
@@ -513,17 +568,36 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
                     {d.level === 'error' ? (
                       <svg className={styles.diagIconError} viewBox="0 0 16 16" fill="currentColor">
                         <circle cx="8" cy="8" r="7" />
-                        <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+                        <path
+                          d="M5.5 5.5l5 5M10.5 5.5l-5 5"
+                          stroke="#fff"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
                       </svg>
                     ) : d.level === 'warning' ? (
                       <svg className={styles.diagIconWarn} viewBox="0 0 16 16" fill="currentColor">
                         <path d="M8 1l7 13H1L8 1z" />
-                        <path d="M8 6v3M8 11v1" stroke="#000" strokeWidth="1.5" strokeLinecap="round" />
+                        <path
+                          d="M8 6v3M8 11v1"
+                          stroke="#000"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
                       </svg>
                     ) : (
-                      <svg className={styles.diagIconConstraint} viewBox="0 0 16 16" fill="currentColor">
+                      <svg
+                        className={styles.diagIconConstraint}
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                      >
                         <circle cx="8" cy="8" r="7" />
-                        <path d="M8 5v4M8 11v1" stroke="#000" strokeWidth="1.5" strokeLinecap="round" />
+                        <path
+                          d="M8 5v4M8 11v1"
+                          stroke="#000"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
                       </svg>
                     )}
                     <span className={styles.diagMessage}>
@@ -532,14 +606,19 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
                         <button
                           key={fi}
                           className={styles.diagFixBtn}
-                          onClick={(e) => { e.stopPropagation(); handleApplyFix(d.line, d.column, fix.newText) }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleApplyFix(d.line, d.column, fix.newText)
+                          }}
                           title={fix.description}
                         >
                           Fix
                         </button>
                       ))}
                     </span>
-                    <span className={styles.diagLocation}>Ln {d.line}, Col {d.column}</span>
+                    <span className={styles.diagLocation}>
+                      Ln {d.line}, Col {d.column}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -549,87 +628,135 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
 
         {/* Right: Output (hidden when parent provides output panel) */}
         {!hideOutput && (
-        <div className={styles.outputPane}>
-          <div className={styles.outputTabs}>
-            <button
-              className={outputTab === 'yaml' ? styles.outputTabActive : styles.outputTab}
-              onClick={() => setOutputTab('yaml')}
-            >
-              YAML Output
-            </button>
-            <button
-              className={outputTab === 'crd' ? styles.outputTabActive : styles.outputTab}
-              onClick={() => setOutputTab('crd')}
-            >
-              CRD Output
-            </button>
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingRight: 'var(--spacing-sm)' }}>
-              {(outputTab === 'yaml' ? yamlOutput : crdOutput) && (
-                <button className={styles.toolbarBtn} onClick={handleCopyOutput} title="Copy to clipboard">
-                  {copied ? (
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--color-success)" strokeWidth="2">
-                      <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+          <div className={styles.outputPane}>
+            <div className={styles.outputTabs}>
+              <button
+                className={outputTab === 'yaml' ? styles.outputTabActive : styles.outputTab}
+                onClick={() => setOutputTab('yaml')}
+              >
+                YAML Output
+              </button>
+              <button
+                className={outputTab === 'crd' ? styles.outputTabActive : styles.outputTab}
+                onClick={() => setOutputTab('crd')}
+              >
+                CRD Output
+              </button>
+              <div
+                style={{
+                  marginLeft: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingRight: 'var(--spacing-sm)',
+                }}
+              >
+                {(outputTab === 'yaml' ? yamlOutput : crdOutput) && (
+                  <button
+                    className={styles.toolbarBtn}
+                    onClick={handleCopyOutput}
+                    title="Copy to clipboard"
+                  >
+                    {copied ? (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="var(--color-success)"
+                        strokeWidth="2"
+                      >
+                        <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <rect x="5" y="5" width="9" height="9" rx="1" />
+                        <path d="M2 11V2h9" strokeLinecap="round" />
+                      </svg>
+                    )}
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.outputContent}>
+              {compileError && (
+                <div
+                  style={{
+                    padding: 'var(--spacing-md)',
+                    color: 'var(--color-danger)',
+                    fontSize: 'var(--text-xs)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {compileError}
+                </div>
+              )}
+
+              {outputTab === 'yaml' && yamlOutput ? (
+                <pre className={styles.outputCode}>{yamlOutput}</pre>
+              ) : outputTab === 'crd' && crdOutput ? (
+                <pre className={styles.outputCode}>{crdOutput}</pre>
+              ) : (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon} aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M13 2L5 14h6l-1 8 9-13h-6V2Z" strokeLinejoin="round" />
                     </svg>
-                  ) : (
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="5" y="5" width="9" height="9" rx="1" />
-                      <path d="M2 11V2h9" strokeLinecap="round" />
-                    </svg>
-                  )}
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
+                  </div>
+                  <div>
+                    Write DSL and press <strong>Compile</strong> to see output
+                  </div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                    Ctrl+Enter to compile · Ctrl+Shift+F to format
+                  </div>
+                </div>
               )}
             </div>
           </div>
-
-          <div className={styles.outputContent}>
-            {compileError && (
-              <div style={{ padding: 'var(--spacing-md)', color: 'var(--color-danger)', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
-                {compileError}
-              </div>
-            )}
-
-            {outputTab === 'yaml' && yamlOutput ? (
-              <pre className={styles.outputCode}>{yamlOutput}</pre>
-            ) : outputTab === 'crd' && crdOutput ? (
-              <pre className={styles.outputCode}>{crdOutput}</pre>
-            ) : (
-              <div className={styles.emptyState}>
-                <div className={styles.emptyIcon} aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M13 2L5 14h6l-1 8 9-13h-6V2Z" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div>Write DSL and press <strong>Compile</strong> to see output</div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                  Ctrl+Enter to compile · Ctrl+Shift+F to format
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
         )}
       </div>
 
       {/* Status Bar — hidden when embedded in BuilderPage (parent provides status bar) */}
       {!embedded && (
-      <div className={styles.statusBar}>
-        <div className={`${styles.statusItem} ${isValid ? styles.statusValid : styles.statusInvalid}`}>
-          {isValid ? (
-            <svg className={styles.statusCheckmark} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          ) : (
-            <svg className={styles.statusCheckmark} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-          {isValid ? 'Config valid' : `${errorCount} error${errorCount !== 1 ? 's' : ''}`}
+        <div className={styles.statusBar}>
+          <div
+            className={`${styles.statusItem} ${isValid ? styles.statusValid : styles.statusInvalid}`}
+          >
+            {isValid ? (
+              <svg
+                className={styles.statusCheckmark}
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg
+                className={styles.statusCheckmark}
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            {isValid ? 'Config valid' : `${errorCount} error${errorCount !== 1 ? 's' : ''}`}
+          </div>
+          <div className={styles.statusItem}>Signals: {signalCount}</div>
+          <div className={styles.statusItem}>Routes: {routeCount}</div>
+          <div className={styles.statusItem}>Lines: {lineCount}</div>
         </div>
-        <div className={styles.statusItem}>Signals: {signalCount}</div>
-        <div className={styles.statusItem}>Routes: {routeCount}</div>
-        <div className={styles.statusItem}>Lines: {lineCount}</div>
-      </div>
       )}
 
       {/* Hidden file input for YAML import */}

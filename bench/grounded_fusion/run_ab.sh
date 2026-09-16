@@ -35,7 +35,7 @@ start_router() {  # $1 = config path
 ensure_envoy() {
   if lsof -nP -iTCP:8801 -sTCP:LISTEN >/dev/null 2>&1; then return; fi
   echo "Preparing + starting Envoy on :8801..."
-  sed '80,89d' deploy/local/envoy.yaml | sed 's/300s/1800s/g' > /tmp/envoy-bench.yaml
+  sed 's/300s/1800s/g' deploy/local/envoy.yaml > /tmp/envoy-bench.yaml
   nohup tools/bin/func-e run --config-path /tmp/envoy-bench.yaml > /tmp/envoy.log 2>&1 &
   sleep 12
 }

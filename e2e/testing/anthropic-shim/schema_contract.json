@@ -1,0 +1,53 @@
+{
+  "protocols": {
+    "anthropic_messages": {
+      "schema_revision": "d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa",
+      "official_request_fields": [
+        "cache_control",
+        "container",
+        "inference_geo",
+        "max_tokens",
+        "messages",
+        "metadata",
+        "model",
+        "output_config",
+        "service_tier",
+        "stop_sequences",
+        "stream",
+        "system",
+        "temperature",
+        "thinking",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p"
+      ],
+      "extension_request_fields": [],
+      "required_request_fields": ["max_tokens", "messages", "model"],
+      "official_response_fields": [
+        "container",
+        "content",
+        "id",
+        "model",
+        "role",
+        "stop_details",
+        "stop_reason",
+        "stop_sequence",
+        "type",
+        "usage"
+      ],
+      "extension_response_fields": ["error"],
+      "official_usage_fields": [
+        "cache_creation",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+        "inference_geo",
+        "input_tokens",
+        "output_tokens",
+        "output_tokens_details",
+        "server_tool_use",
+        "service_tier"
+      ]
+    }
+  }
+}

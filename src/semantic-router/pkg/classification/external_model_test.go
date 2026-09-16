@@ -6,92 +6,193 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// twoClassJailbreakMapping is a standard safe/jailbreak mapping shared by
+// VLLMJailbreakInference constructor tests.
+func twoClassJailbreakMapping() *JailbreakMapping {
+	return &JailbreakMapping{
+		LabelToIdx: map[string]int{"safe": 0, "jailbreak": 1},
+		IdxToLabel: map[string]string{"0": "safe", "1": "jailbreak"},
+	}
+}
+
+// newVLLMJailbreakInferenceTestCase is one NewVLLMJailbreakInference table
+// entry. Kept as a package-level type/var (not inlined in the test function)
+// so this test data doesn't count against the per-function line limit.
+type newVLLMJailbreakInferenceTestCase struct {
+	name             string
+	externalCfg      *config.ExternalModelConfig
+	defaultThreshold float32
+	mapping          *JailbreakMapping
+	positiveLabels   []string
+	expectedThresh   float32
+	expectedParser   string
+	expectedTimeout  int
+	expectError      bool
+}
+
+var newVLLMJailbreakInferenceTestCases = []newVLLMJailbreakInferenceTestCase{
+	{
+		name: "full config with all fields",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName:      "qwen_guard",
+			Threshold:      0.8,
+			ParserType:     "qwen3guard",
+			TimeoutSeconds: 60,
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		expectedThresh:   0.8,          // From external config
+		expectedParser:   "qwen3guard", // From external config
+		expectedTimeout:  60,           // From external config
+		expectError:      false,
+	},
+	{
+		name: "config without threshold - use default",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName:  "qwen_guard",
+			ParserType: "qwen3guard",
+			// Threshold not set - should use default
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		expectedThresh:   0.7,          // From default
+		expectedParser:   "qwen3guard", // From external config
+		expectedTimeout:  30,           // Default timeout
+		expectError:      false,
+	},
+	{
+		name: "config without parser type - use auto",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName: "qwen_guard",
+			// ParserType not set - should use "auto"
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		expectedThresh:   0.7,
+		expectedParser:   "auto", // Default parser
+		expectedTimeout:  30,     // Default timeout
+		expectError:      false,
+	},
+	{
+		name: "missing endpoint address - should error",
+		externalCfg: &config.ExternalModelConfig{
+			ModelName: "qwen_guard",
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		expectError:      true,
+	},
+	{
+		name: "missing model name - should error",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		expectError:      true,
+	},
+	{
+		name: "missing mapping - should error",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName: "qwen_guard",
+		},
+		defaultThreshold: 0.7,
+		mapping:          nil,
+		expectError:      true,
+	},
+	{
+		name: "mapping with more than two classes - should error",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName: "qwen_guard",
+		},
+		defaultThreshold: 0.7,
+		mapping: &JailbreakMapping{
+			LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1, "INJECTION": 2},
+			IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak", "2": "INJECTION"},
+		},
+		expectError: true,
+	},
+	{
+		name: "configured positive label not in mapping - should error",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName: "qwen_guard",
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		positiveLabels:   []string{"malicious"},
+		expectError:      true,
+	},
+	{
+		// A 2-class mapping only has room for one positive index; treating
+		// both classes as positive is a real contradiction for a backend
+		// that only ever produces a single binary verdict, not a benign
+		// "use the first one" case.
+		name: "positive labels resolve to conflicting class indices - should error",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName: "qwen_guard",
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		positiveLabels:   []string{"safe", "jailbreak"},
+		expectError:      true,
+	},
+	{
+		// Repeating the same label (or an unmatched label alongside a real
+		// one) isn't a conflict - only genuinely different indices are.
+		name: "duplicate positive label entries are not a conflict",
+		externalCfg: &config.ExternalModelConfig{
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address: "192.168.1.100",
+				Port:    8080,
+			},
+			ModelName: "qwen_guard",
+		},
+		defaultThreshold: 0.7,
+		mapping:          twoClassJailbreakMapping(),
+		positiveLabels:   []string{"jailbreak", "jailbreak", "unmatched-label"},
+		expectedThresh:   0.7,
+		expectedParser:   "auto",
+		expectedTimeout:  30,
+		expectError:      false,
+	},
+}
+
 // TestNewVLLMJailbreakInference tests creating vLLM inference with external config
 func TestNewVLLMJailbreakInference(t *testing.T) {
-	tests := []struct {
-		name             string
-		externalCfg      *config.ExternalModelConfig
-		defaultThreshold float32
-		expectedThresh   float32
-		expectedParser   string
-		expectedTimeout  int
-		expectError      bool
-	}{
-		{
-			name: "full config with all fields",
-			externalCfg: &config.ExternalModelConfig{
-				ModelEndpoint: config.ClassifierVLLMEndpoint{
-					Address: "192.168.1.100",
-					Port:    8080,
-				},
-				ModelName:      "qwen_guard",
-				Threshold:      0.8,
-				ParserType:     "qwen3guard",
-				TimeoutSeconds: 60,
-			},
-			defaultThreshold: 0.7,
-			expectedThresh:   0.8,          // From external config
-			expectedParser:   "qwen3guard", // From external config
-			expectedTimeout:  60,           // From external config
-			expectError:      false,
-		},
-		{
-			name: "config without threshold - use default",
-			externalCfg: &config.ExternalModelConfig{
-				ModelEndpoint: config.ClassifierVLLMEndpoint{
-					Address: "192.168.1.100",
-					Port:    8080,
-				},
-				ModelName:  "qwen_guard",
-				ParserType: "qwen3guard",
-				// Threshold not set - should use default
-			},
-			defaultThreshold: 0.7,
-			expectedThresh:   0.7,          // From default
-			expectedParser:   "qwen3guard", // From external config
-			expectedTimeout:  30,           // Default timeout
-			expectError:      false,
-		},
-		{
-			name: "config without parser type - use auto",
-			externalCfg: &config.ExternalModelConfig{
-				ModelEndpoint: config.ClassifierVLLMEndpoint{
-					Address: "192.168.1.100",
-					Port:    8080,
-				},
-				ModelName: "qwen_guard",
-				// ParserType not set - should use "auto"
-			},
-			defaultThreshold: 0.7,
-			expectedThresh:   0.7,
-			expectedParser:   "auto", // Default parser
-			expectedTimeout:  30,     // Default timeout
-			expectError:      false,
-		},
-		{
-			name: "missing endpoint address - should error",
-			externalCfg: &config.ExternalModelConfig{
-				ModelName: "qwen_guard",
-			},
-			defaultThreshold: 0.7,
-			expectError:      true,
-		},
-		{
-			name: "missing model name - should error",
-			externalCfg: &config.ExternalModelConfig{
-				ModelEndpoint: config.ClassifierVLLMEndpoint{
-					Address: "192.168.1.100",
-					Port:    8080,
-				},
-			},
-			defaultThreshold: 0.7,
-			expectError:      true,
-		},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range newVLLMJailbreakInferenceTestCases {
 		t.Run(tt.name, func(t *testing.T) {
-			inference, err := NewVLLMJailbreakInference(tt.externalCfg, tt.defaultThreshold)
+			inference, err := NewVLLMJailbreakInference(tt.externalCfg, tt.defaultThreshold, tt.mapping, tt.positiveLabels)
 
 			if tt.expectError {
 				if err == nil {
@@ -170,16 +271,20 @@ func TestFindExternalModelByRole(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := cfg.FindExternalModelByRole(tt.role)
-			if tt.shouldFind {
-				if result == nil {
-					t.Errorf("expected to find model with role %s, but got nil", tt.role)
-				} else if result.ModelName != tt.expectedModel {
-					t.Errorf("expected model name %s, got %s", tt.expectedModel, result.ModelName)
-				}
-			} else {
+
+			if !tt.shouldFind {
 				if result != nil {
 					t.Errorf("expected not to find model with role %s, but got %v", tt.role, result)
 				}
+				return
+			}
+
+			if result == nil {
+				t.Errorf("expected to find model with role %s, but got nil", tt.role)
+				return
+			}
+			if result.ModelName != tt.expectedModel {
+				t.Errorf("expected model name %s, got %s", tt.expectedModel, result.ModelName)
 			}
 		})
 	}

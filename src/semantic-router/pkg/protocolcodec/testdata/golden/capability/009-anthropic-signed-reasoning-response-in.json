@@ -1,0 +1,16 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "message_1",
+    "type": "message",
+    "role": "assistant",
+    "model": "provider-model",
+    "content": [
+      {"type": "thinking", "thinking": "private reasoning", "signature": "signed-block"},
+      {"type": "text", "text": "final answer"}
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {"input_tokens": 4, "output_tokens": 3}
+  }
+}

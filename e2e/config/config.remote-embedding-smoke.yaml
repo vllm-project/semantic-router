@@ -20,12 +20,13 @@ listeners:
 
 providers:
   defaults:
-    default_model: "default-model"
+    model: "default-model"
   models:
     - name: "billing-model"
       provider_model_id: "billing-model"
       backend_refs:
         - name: "primary"
+          provider: vllm
           weight: 100
           endpoint: "host.docker.internal:18000/v1"
           protocol: "http"
@@ -33,6 +34,7 @@ providers:
       provider_model_id: "default-model"
       backend_refs:
         - name: "primary"
+          provider: vllm
           weight: 100
           endpoint: "host.docker.internal:18001/v1"
           protocol: "http"
@@ -82,7 +84,7 @@ global:
     startup_status:
       store_backend: file
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
   model_catalog:
     embeddings:
@@ -111,7 +113,6 @@ global:
         model_ref: ""
         model_id: ""
         jailbreak_mapping_path: ""
-        use_mmbert_32k: false
       classifier:
         domain:
           model_ref: ""

@@ -5,43 +5,52 @@ import (
 	"fmt"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// VLLMJailbreakInference implements JailbreakInference using vLLM REST API
+// VLLMJailbreakInference implements SequenceClassifierBackend using vLLM REST API
 type VLLMJailbreakInference struct {
-	client     *VLLMClient
-	modelName  string
-	threshold  float32
-	timeout    time.Duration
-	parserType string // Parser type: "qwen3guard", "json", "simple", "auto"
+	client         *VLLMClient
+	modelName      string
+	threshold      float32
+	timeout        time.Duration
+	parserType     string // Parser type: "qwen3guard", "json", "simple", "auto"
+	mapping        *JailbreakMapping
+	positiveLabels []string
+	positiveIdx    int
+	negativeIdx    int
 }
 
-// NewVLLMJailbreakInference creates a new vLLM-based jailbreak inference instance
-// Takes ExternalModelConfig directly
-func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold float32) (*VLLMJailbreakInference, error) {
+// NewVLLMJailbreakInference prepares a categorical guard. Its binary mapping
+// maps unsafe to the configured positive label; safe and controversial retain
+// their original SourceLabel and use the negative policy label.
+func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold float32, mapping *JailbreakMapping, positiveLabels []string) (*VLLMJailbreakInference, error) {
 	if cfg.ModelEndpoint.Address == "" {
 		return nil, fmt.Errorf("vLLM endpoint address is required for guardrail")
 	}
 	if cfg.ModelName == "" {
 		return nil, fmt.Errorf("vLLM model name is required for guardrail")
 	}
+	if mapping == nil {
+		return nil, fmt.Errorf("jailbreak mapping is required for http_chat")
+	}
+	if mapping.GetJailbreakTypeCount() != 2 {
+		return nil, fmt.Errorf("http_chat requires a 2-class (safe/jailbreak) jailbreak_mapping, got %d classes", mapping.GetJailbreakTypeCount())
+	}
+	positiveIdx, err := resolveSinglePositiveIndex(mapping, positiveLabels)
+	if err != nil {
+		return nil, err
+	}
 
-	// Create client with or without access key
-	var client *VLLMClient
-	if cfg.AccessKey != "" {
-		client = NewVLLMClientWithAuth(&cfg.ModelEndpoint, cfg.AccessKey)
-	} else {
-		client = NewVLLMClient(&cfg.ModelEndpoint)
+	client := newVLLMClientFromConfig(cfg)
+	if client.initErr != nil {
+		return nil, fmt.Errorf("guard connector preparation failed: %w", client.initErr)
 	}
 
 	// Use timeout from config, default to 30 seconds
-	timeout := 30 * time.Second
-	if cfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
-	}
+	timeout := cfg.GetTimeout()
 
 	// Use threshold from config, fallback to default
 	threshold := defaultThreshold
@@ -56,17 +65,26 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 	}
 
 	return &VLLMJailbreakInference{
-		client:     client,
-		modelName:  cfg.ModelName,
-		threshold:  threshold,
-		timeout:    timeout,
-		parserType: parserType,
+		client:         client,
+		modelName:      cfg.ModelName,
+		threshold:      threshold,
+		timeout:        timeout,
+		parserType:     parserType,
+		mapping:        mapping,
+		positiveLabels: positiveLabels,
+		positiveIdx:    positiveIdx,
+		negativeIdx:    1 - positiveIdx,
 	}, nil
 }
 
-// Classify implements the JailbreakInference interface
-func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), v.timeout)
+// Classify explicitly reports that this generative backend has no probabilities.
+func (v *VLLMJailbreakInference) Classify(context.Context, string) (SequenceClassificationResult, error) {
+	return SequenceClassificationResult{}, tasks.ErrProbabilitiesUnavailable
+}
+
+// Decide preserves the model's actual safety verdict without invented scores.
+func (v *VLLMJailbreakInference) Decide(ctx context.Context, text string) (tasks.LabelDecision, error) {
+	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 
 	// Format prompt - flexible to support different models
@@ -80,37 +98,31 @@ func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResu
 		Temperature: 0.0, // Deterministic for safety checks
 	})
 	if err != nil {
-		return candle_binding.ClassResult{}, fmt.Errorf("vLLM API call failed: %w", err)
+		return tasks.LabelDecision{}, fmt.Errorf("vLLM API call failed: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return candle_binding.ClassResult{}, fmt.Errorf("no choices in vLLM response")
+		return tasks.LabelDecision{}, fmt.Errorf("no choices in vLLM response")
 	}
 
 	// Parse model output - flexible to support multiple formats
 	output := resp.Choices[0].Message.Content
 	logging.Debugf("vLLM jailbreak detection response: %s", logging.ContentDescriptor(output))
-	isJailbreak, confidence, categories := v.parseSafetyOutput(output)
-	logging.Debugf("Parsed result: isJailbreak=%v, confidence=%.3f, categories=%v",
-		isJailbreak, confidence, categories)
-
-	// Map to ClassResult format
-	// Class: 0 = safe, 1 = jailbreak/unsafe
-	class := 0
-	if isJailbreak {
-		class = 1
+	decision, err := v.parseSafetyOutput(output)
+	if err != nil {
+		return tasks.LabelDecision{}, err
 	}
-
-	result := candle_binding.ClassResult{
-		Class:      class,
-		Confidence: confidence,
+	idx := v.negativeIdx
+	if decision.Label == "unsafe" {
+		idx = v.positiveIdx
 	}
-
-	// Only populate categories when content is unsafe or controversial
-	// (empty slice for safe content or when categories not available)
-	if isJailbreak && len(categories) > 0 {
-		result.Categories = categories
+	label, ok := v.mapping.GetJailbreakTypeFromIndex(idx)
+	if !ok {
+		return tasks.LabelDecision{}, fmt.Errorf("unknown guard mapping index %d", idx)
 	}
-
-	return result, nil
+	decision.SourceLabel = decision.Label
+	decision.Label = label
+	return decision, nil
 }
+
+func (v *VLLMJailbreakInference) Close() error { return v.client.Close() }

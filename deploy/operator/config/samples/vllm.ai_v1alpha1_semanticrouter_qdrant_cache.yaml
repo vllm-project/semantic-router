@@ -14,7 +14,8 @@ spec:
   vllmEndpoints:
     - name: llama-model
       model: llama3-70b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: service
         service:
@@ -38,11 +39,11 @@ spec:
   # Semantic router configuration
   config:
     embedding_models:
-      mmbert_model_path: "models/mom-embedding-ultra"
+      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
       use_cpu: true
 
     # Semantic cache with Qdrant backend
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: qdrant
       similarity_threshold: "0.90"

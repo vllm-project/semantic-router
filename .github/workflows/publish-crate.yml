@@ -1,123 +1,80 @@
-name: Publish Rust Crate
+name: Candle Crate Publisher
 
 on:
-  push:
-    tags:
-      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
-  workflow_dispatch:  # Allow manual triggering
+  workflow_call:
+    inputs:
+      version:
+        description: Stable version without a leading v.
+        required: true
+        type: string
+      tag:
+        description: Stable tag with a leading v.
+        required: true
+        type: string
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
   publish:
-    if: github.repository == 'vllm-project/semantic-router'
+    name: Publish candle-semantic-router
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-    - name: Check out the repo
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Extract tag name and validate
-      id: extract_tag
-      run: |
-        echo "GITHUB_REF: $GITHUB_REF"
-        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          TAG_VERSION=${GITHUB_REF#refs/tags/v}
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
-          echo "Valid version tag detected: $TAG_NAME (version: $TAG_VERSION)"
-        elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-          echo "Manual workflow dispatch - skipping version check"
-          echo "tag=manual" >> $GITHUB_OUTPUT
-          echo "version=manual" >> $GITHUB_OUTPUT
-        else
-          echo "::error::This workflow should only run on version tags (v*.*.*) or manual dispatch"
-          echo "::error::Current ref: $GITHUB_REF"
-          exit 1
-        fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90"
 
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: 1.90
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make build-essential pkg-config
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          make \
-          build-essential \
-          pkg-config
+      - name: Verify crate version
+        working-directory: candle-binding
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          CRATE_VERSION="$(
+            cargo metadata --no-deps --format-version 1 |
+              jq -r '.packages[] | select(.name == "candle-semantic-router") | .version'
+          )"
+          if [[ "$CRATE_VERSION" != "$RELEASE_VERSION" ]] ||
+             [[ "$RELEASE_TAG" != "v${RELEASE_VERSION}" ]]; then
+            echo "::error::Crate, version, and tag inputs do not match"
+            exit 1
+          fi
 
-    - name: Cache Rust dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          candle-binding/target/
-        key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+      - name: Test crate
+        run: make test-rust-ci
 
-    - name: Verify crate version matches tag
-      if: steps.extract_tag.outputs.version != 'manual'
-      working-directory: candle-binding
-      run: |
-        CRATE_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-        TAG_VERSION="${{ steps.extract_tag.outputs.version }}"
-        echo "Crate version: $CRATE_VERSION"
-        echo "Tag version: $TAG_VERSION"
-        if [ "$CRATE_VERSION" != "$TAG_VERSION" ]; then
-          echo "::error::Crate version ($CRATE_VERSION) does not match tag version ($TAG_VERSION)"
-          exit 1
-        fi
+      - name: Run CPU API smoke tests
+        working-directory: candle-binding
+        run: |
+          cargo test --no-default-features \
+            --test qwen3_classification_api_test \
+            --test classification_output_demo \
+            --verbose
 
-    - name: Run Rust lib unit tests (CPU-only, no model assets)
-      run: make test-rust-ci
+      - name: Check, build, and dry-run publish
+        working-directory: candle-binding
+        run: |
+          cargo check --no-default-features --verbose
+          cargo build --release --no-default-features --verbose
+          cargo publish --dry-run --no-default-features --verbose
 
-    - name: Run API smoke tests (CPU-only, no CUDA)
-      working-directory: candle-binding
-      run: |
-        cargo test --no-default-features \
-          --test qwen3_classification_api_test \
-          --test classification_output_demo \
-          --verbose
+      - name: Publish crate
+        working-directory: candle-binding
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish --no-default-features --verbose
 
-    - name: Check crate (CPU-only, no CUDA)
-      working-directory: candle-binding
-      run: cargo check --no-default-features --verbose
-
-    - name: Build crate (CPU-only, no CUDA)
-      working-directory: candle-binding
-      run: cargo build --release --no-default-features --verbose
-
-    - name: Dry run publish
-      working-directory: candle-binding
-      run: cargo publish --dry-run --no-default-features --verbose
-
-    - name: Publish to crates.io
-      working-directory: candle-binding
-      run: cargo publish --no-default-features --verbose
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
-
-    # Attach compiled Rust artifacts to the GitHub Release that release.yml creates.
-    # Body/generate_release_notes omitted intentionally — release.yml owns the body.
-    - name: Attach artifacts to GitHub Release
-      if: steps.extract_tag.outputs.version != 'manual'
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ steps.extract_tag.outputs.tag }}
-        draft: false
-        prerelease: false
-        files: |
-          candle-binding/target/release/libcandle_semantic_router.a
-          candle-binding/target/release/libcandle_semantic_router.so
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candle-release-libraries
+          path: |
+            candle-binding/target/release/libcandle_semantic_router.a
+            candle-binding/target/release/libcandle_semantic_router.so
+          retention-days: 7

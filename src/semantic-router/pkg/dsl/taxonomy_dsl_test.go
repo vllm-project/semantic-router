@@ -202,7 +202,7 @@ func TestCompileToolsPlugin(t *testing.T) {
 	input := `
 ROUTE security_containment {
   PRIORITY 300
-  PLUGIN tools { enabled: true, mode: "none", semantic_selection: false }
+  PLUGIN tools { enabled: true, mode: "none", semantic_selection: false, strip_tool_history: true }
   MODEL "local-guard"
 }
 
@@ -244,6 +244,9 @@ ROUTE local_standard {
 		}
 	}
 	assertToolsMode(0, config.ToolsPluginModeNone)
+	if toolsCfg := cfg.Decisions[0].GetToolsConfig(); toolsCfg == nil || !toolsCfg.StripToolHistory {
+		t.Fatal("security_containment strip_tool_history was not compiled")
+	}
 	assertToolsMode(1, config.ToolsPluginModePassthrough)
 	assertToolsMode(2, config.ToolsPluginModeFiltered)
 	assertToolsMode(3, config.ToolsPluginModePassthrough)

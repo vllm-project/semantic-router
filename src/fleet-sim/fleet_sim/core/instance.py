@@ -52,6 +52,7 @@ class _Event:
 
     time: float
     req: Request
+    epoch: int  # req.admission_epoch at push time; stale if it no longer matches
 
     def __lt__(self, other: _Event) -> bool:
         return self.time < other.time
@@ -189,9 +190,10 @@ class Instance:
                 while self._events and self._events[0].time <= self._now:
                     ev = heapq.heappop(self._events)
                     req = ev.req
-                    if req.preempted:
-                        # This completion event belongs to a preempted request;
-                        # the slot/blocks were already released at preemption time.
+                    if ev.epoch != req.admission_epoch:
+                        # Stale: req was preempted and/or re-admitted since this
+                        # event was scheduled, so its slot/blocks belong to a
+                        # later admission (or none, if still preempted).
                         continue
                     req.end_time = self._now
                     req.state = RequestState.DONE
@@ -221,33 +223,39 @@ class Instance:
         exceeded, preempts the longest currently-active request instead of
         admitting the new one.
         """
-        req = self._queue[0]  # peek; may not admit
+        req = self._queue.popleft()
         req_blocks = math.ceil((req.l_in + req.l_out) / self.gpu.blk_size)
 
         # ── Preempt longest active request if KV budget is tight ──────────
+        n_evicted = 0
         while (
             self._used_kv_blocks + req_blocks > self._total_kv_blocks
             and self._active_reqs
         ):
             victim = max(self._active_reqs, key=lambda r: r.l_in + r.l_out)
             victim_blocks = math.ceil((victim.l_in + victim.l_out) / self.gpu.blk_size)
-            # Invalidate the victim's pending completion event via the preempted flag
+            # Bump the epoch so the victim's in-flight event reads as stale
+            # even once it is later re-admitted and preempted resets to False.
             victim.preempted = True
+            victim.admission_epoch += 1
             self._active_reqs.remove(victim)
             self._active_slots -= 1
             self._used_kv_blocks -= victim_blocks
             # Re-queue the victim at head so it is retried first
             self._queue.appendleft(victim)
+            n_evicted += 1
             self.total_preempted += 1
 
-        # If still no room (budget too small for even 1 req), skip for now
+        # If still no room (budget too small for even 1 req), put req back
+        # after the victims just re-queued and skip for now.
         if self._used_kv_blocks + req_blocks > self._total_kv_blocks:
+            self._queue.insert(n_evicted, req)
             return
 
-        self._queue.popleft()
         req.start_time = now
         req.state = RequestState.PREFILLING
         req.preempted = False  # reset preemption flag on re-admission
+        req.admission_epoch += 1
         self._active_slots += 1
         self._used_kv_blocks += req_blocks
         self._active_reqs.append(req)
@@ -297,7 +305,7 @@ class Instance:
         s_eff = s_raw_full / self.n_slots
 
         completion_time = now + s_eff
-        heapq.heappush(self._events, _Event(completion_time, req))
+        heapq.heappush(self._events, _Event(completion_time, req, req.admission_epoch))
 
     def next_event_time(self) -> float:
         """Time of the next completion event (or now if queue can be served)."""

@@ -4,7 +4,7 @@
 
 `kmeans` is a selection algorithm that uses **cluster-based routing** to assign queries to candidate models. It partitions the query embedding space into clusters and maps each cluster to the best-performing model.
 
-It aligns to `config/algorithm/selection/kmeans.yaml`.
+It aligns to `config/fragments/algorithm/selection/kmeans.yaml`.
 
 **Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-clustering`).
 

@@ -1,0 +1,15 @@
+{
+  "status": "ok",
+  "body": {
+    "frequency_penalty": 0.25,
+    "messages": [
+      {
+        "content": "Sample deterministically.",
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "presence_penalty": -0.25,
+    "seed": 7
+  }
+}

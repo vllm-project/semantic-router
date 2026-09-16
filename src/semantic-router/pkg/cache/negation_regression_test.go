@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,17 +115,19 @@ func runNegationRegressionPairs(t *testing.T) int {
 			t.Fatalf("AddEntry(%q): %v", cached, err)
 		}
 
-		body, hit, err := c.FindSimilarWithThreshold("model-x", incoming, negationRegressionThreshold)
+		result, err := c.LookupSimilarWithThreshold(
+			context.Background(), "model-x", incoming, negationRegressionThreshold,
+		)
 		if err != nil {
-			t.Fatalf("FindSimilarWithThreshold(%q): %v", incoming, err)
+			t.Fatalf("LookupSimilarWithThreshold(%q): %v", incoming, err)
 		}
-		sim := float64(c.LastSimilarity())
+		sim := float64(result.Similarity)
 
 		if sim >= negationRegressionThreshold {
 			guardExercised++
-			if hit {
+			if result.Found {
 				t.Errorf("negation false-hit: incoming %q matched cached %q at sim=%.4f >= %.2f and returned %q; polarity guard should have rejected it",
-					incoming, cached, sim, negationRegressionThreshold, string(body))
+					incoming, cached, sim, negationRegressionThreshold, string(result.ResponseBody))
 			}
 		} else {
 			t.Logf("below-threshold genuine miss (guard N/A): %q vs %q sim=%.4f", incoming, cached, sim)
@@ -143,18 +146,20 @@ func runParaphraseControlPairs(t *testing.T) int {
 		if err := c.AddEntry("para", "model-x", cached, []byte("req"), []byte("PARAPHRASE-ANSWER"), 3600); err != nil {
 			t.Fatalf("AddEntry(%q): %v", cached, err)
 		}
-		body, hit, err := c.FindSimilarWithThreshold("model-x", incoming, negationRegressionThreshold)
+		result, err := c.LookupSimilarWithThreshold(
+			context.Background(), "model-x", incoming, negationRegressionThreshold,
+		)
 		if err != nil {
-			t.Fatalf("FindSimilarWithThreshold(%q): %v", incoming, err)
+			t.Fatalf("LookupSimilarWithThreshold(%q): %v", incoming, err)
 		}
-		sim := float64(c.LastSimilarity())
+		sim := float64(result.Similarity)
 		if sim >= negationRegressionThreshold {
 			paraphraseExercised++
-			if !hit {
+			if !result.Found {
 				t.Errorf("paraphrase regression: %q vs %q sim=%.4f >= %.2f but was rejected; genuine recall lost (body=%q)",
-					incoming, cached, sim, negationRegressionThreshold, string(body))
-			} else if !strings.Contains(string(body), "PARAPHRASE-ANSWER") {
-				t.Errorf("paraphrase %q returned unexpected body %q", incoming, string(body))
+					incoming, cached, sim, negationRegressionThreshold, string(result.ResponseBody))
+			} else if !strings.Contains(string(result.ResponseBody), "PARAPHRASE-ANSWER") {
+				t.Errorf("paraphrase %q returned unexpected body %q", incoming, string(result.ResponseBody))
 			}
 		} else {
 			t.Logf("paraphrase below threshold (control N/A): %q vs %q sim=%.4f", incoming, cached, sim)

@@ -1,0 +1,33 @@
+{
+  "max_tokens": 32,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "before",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "policy update",
+          "type": "text"
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "content": [
+        {
+          "text": "after",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "routed-model"
+}

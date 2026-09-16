@@ -23,6 +23,11 @@ SIGNAL context accuracy_long_context {
   max_tokens: "1M"
 }
 
+SIGNAL conversation accuracy_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 # =============================================================================
 # MODELS
 # =============================================================================
@@ -32,17 +37,20 @@ MODEL gemini31-worker {
   description: "OpenRouter worker for broad reasoning and coding."
   capabilities: ["chat", "code", "reasoning", "long-context"]
   tags: ["deployment:openrouter", "role:worker"]
-  quality_score: 0.93
   modality: "text"
 }
 
 MODEL gpt55-worker {
   context_window_size: 1048576
-  description: "OpenRouter worker for frontier synthesis."
-  capabilities: ["chat", "code", "reasoning", "long-context"]
-  tags: ["deployment:openrouter", "role:worker"]
-  quality_score: 0.94
+  description: "OpenRouter worker for long-context planning and frontier synthesis."
+  capabilities: ["chat", "code", "reasoning", "long-context", "planning", "synthesis"]
+  tags: ["deployment:openrouter", "role:worker", "role:planner"]
   modality: "text"
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL opus48-worker {
@@ -50,7 +58,6 @@ MODEL opus48-worker {
   description: "OpenRouter worker for long-horizon agentic work."
   capabilities: ["chat", "code", "reasoning", "long-context"]
   tags: ["deployment:openrouter", "role:worker"]
-  quality_score: 0.95
   modality: "text"
 }
 
@@ -59,13 +66,19 @@ MODEL qwen-coordinator {
   description: "Local planner and synthesis model for Router Flow dynamic plans."
   capabilities: ["chat", "planning", "synthesis", "code"]
   tags: ["deployment:self_hosted", "role:planner"]
-  quality_score: 0.88
   modality: "text"
 }
 
 # =============================================================================
 # ROUTES
 # =============================================================================
+
+ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
+  PRIORITY 200
+  WHEN conversation("accuracy_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
+}
 
 ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.") {
   PRIORITY 100
@@ -78,9 +91,10 @@ ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-he
     max_completion_tokens: 8192
     max_parallel: 3
     max_steps: 4
+    min_successful_responses: 2
     mode: "dynamic"
     on_error: "skip"
-    planner: { model: "qwen-coordinator" }
+    planner: { max_completion_tokens: 2048, model: "gpt55-worker" }
     template: "micro_agent"
   }
 }
@@ -97,11 +111,14 @@ ROUTE accuracy_deliberation (description = "Use independent frontier perspective
   WHEN keyword("accuracy_deliberation_request") AND NOT keyword("accuracy_direct_request")
   MODEL "opus48-worker" (reasoning = true, effort = "medium"),
         "gemini31-worker" (reasoning = true, effort = "medium"),
-        "gpt55-worker" (reasoning = true, effort = "medium")
+        "gpt55-worker" (reasoning = true, effort = "medium"),
+        "qwen-coordinator" (reasoning = false)
   ALGORITHM fusion {
+    analysis_models: ["opus48-worker", "gemini31-worker", "gpt55-worker"]
     include_analysis: true
     include_intermediate_responses: true
     max_concurrent: 3
+    min_successful_responses: 2
     model: "qwen-coordinator"
     on_error: "skip"
   }

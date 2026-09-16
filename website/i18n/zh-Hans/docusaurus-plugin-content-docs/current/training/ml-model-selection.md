@@ -1,728 +1,188 @@
 ---
+title: 基于 ML 的模型选择
+sidebar_label: ML 模型选择
 translation:
-  source_commit: "a2b965a"
+  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/training/ml-model-selection.md"
-  outdated: true
+  outdated: false
 ---
 
-# 基于 ML 的模型选择
+# 基于 ML 的模型选择 {#ml-based-model-selection}
 
-本文说明 Semantic Router 中基于 ML 的模型选择配置与实验数据。
+基于 ML 的选择学习决策候选池中哪个模型最适合某个请求。当历史评测数据比固定优先级顺序或少量手写规则携带更多信息时，它很有用。
 
-## 概述
+选择器在路由决策匹配之后运行。它只能从该决策的 `modelRefs` 中选择；它不会发现、部署或认证 provider 模型。
 
-基于 ML 的路由模型通过算法分析查询特征和历史性能数据，匹配最佳 LLM。基准测试显示，其质量分数比随机选择高出 13%-45%。
+## 可用选择器 {#available-selectors}
 
-### 支持的算法
+| 选择器 | 如何选择 | 在以下情况考虑 |
+|----------|----------------|------------------|
+| [KNN](/zh-Hans/docs/tutorials/algorithm/selection/knn) | 在相似查询上组合记录的质量和速度 | 相似请求往往偏好同一模型，且可追溯性很重要 |
+| [KMeans](/zh-Hans/docs/tutorials/algorithm/selection/kmeans) | 将请求映射到已学习的簇 | 工作负载形成稳定簇，且查找成本很重要 |
+| [SVM](/zh-Hans/docs/tutorials/algorithm/selection/svm) | 使用已学习的决策边界 | 候选模型在特征空间中干净分离 |
+| [MLP](/zh-Hans/docs/tutorials/algorithm/selection/mlp) | 用神经网络为候选打分 | 你有足够数据训练非线性选择器，并能运维其运行时依赖 |
 
-| 算法 | 描述 | 适用场景 |
-|------|------|---------|
-| **KNN**（K-Nearest Neighbors，K 近邻） | 基于相似查询的质量加权投票 | 高精度，多样化查询类型 |
-| **KMeans** | 基于聚类的路由，优化效率 | 快速推理，均衡负载 |
-| **SVM**（Support Vector Machine，支持向量机） | RBF 核决策边界 | 领域边界清晰的场景 |
-| **MLP**（Multi-Layer Perceptron，多层感知机） | GPU 加速神经网络 | 高吞吐量、GPU 可用环境 |
+没有普遍最好的选择器。将每个候选与简单基线比较，例如固定默认、随机选择，以及同一留出数据集上的最佳单模型。
 
-### 参考论文
+## 训练前准备 {#before-you-train}
 
-- [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540) — 基于 LLM 路由器的查询级融合
-- [Avengers-Pro (arXiv:2508.12631)](https://arxiv.org/abs/2508.12631) — 性能-效率优化路由
+你需要：
 
-## Dashboard GUI 设置
+- 两个或更多 OpenAI 兼容模型端点
+- 代表性查询和标准答案，或其他可辩护的评分方法
+- 足够的重复覆盖，以便在重要工作负载切片上评测每个候选模型
+- 训练和在线推理时相同的嵌入模型
+- 密钥、速率限制、成本以及模型响应保留计划
 
-**Semantic Router Dashboard** 提供图形化的三步配置向导。这是推荐的入门方式，完全免除 CLI 操作。
+基准测试将每个所选查询发送到多个 provider 端点，并存储其响应、质量分数和延迟。当提示词或响应包含用户数据时，将输出视为敏感。
 
-### 打开向导
+## 控制面板工作流 {#dashboard-workflow}
 
-访问 `http://localhost:8700/ml-setup`（或您的 Dashboard 地址）。
+在控制面板中打开 `/ml-setup` 以运行引导工作流：
 
-### 第一步：基准测试
+1. 上传模型端点 YAML 文件和查询 JSONL 文件。
+2. 对候选模型做基准测试。
+3. 训练一个或多个选择器。
+4. 定义决策并下载配置片段。
 
-上传您的 **models YAML**（列出 LLM 端点）和 **queries JSONL** 文件（含 ground truth 的测试查询）。配置并发数和最大 token 数，点击 **Run Benchmark**。进度实时流式显示，精确到每条查询。
+Benchmark 和 Train 步骤会在控制面板的 ML 数据目录下产生数据和模型产物。
 
-### 第二步：训练
+:::caution 当前配置导出
 
-选择一个或多个算法：
+生成的 `ml-model-selection-values.yaml` 是迁移片段，不是独立的规范 Router 配置。其 `config.model_selection`、`config.strategy` 和 `config.decisions` 字段必须经过评审，并映射到完整配置中的 `global.router.model_selection`、`global.router.strategy` 和 `routing.decisions`。添加所需的 listeners 和 providers，然后在部署前运行 `vllm-sr config validate --config ...`。
 
-| 算法 | 是否需要 GPU | 说明 |
-|------|:-----------:|------|
-| KNN | 否 | 仅 CPU（scikit-learn） |
-| K-Means | 否 | 仅 CPU（scikit-learn） |
-| SVM | 否 | 仅 CPU（scikit-learn） |
-| MLP | 可选 | PyTorch — 选中后出现 Device 选择器（CPU/CUDA） |
+:::
 
-通过 **高级设置** 面板调整超参数，点击 **Train Models**。训练好的模型文件（`knn_model.json`、`kmeans_model.json` 等）保存到固定目录 `ml-train/`。
+## 命令行工作流 {#command-line-workflow}
 
-### 第三步：生成配置
+### 1. 安装训练依赖 {#1-install-the-training-dependencies}
 
-定义路由决策——每个决策包含名称、优先级、算法、领域条件和目标模型名称。点击 **Generate Config** 即可生成可直接部署的 `ml-model-selection-values.yaml`。
+```bash
+cd src/training/model_selection/ml_model_selection
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-生成的 YAML 遵循 semantic-router 配置 schema。将 `model_selection` 和 `decisions` 部分合并到主 `config.yaml`，或直接作为独立配置文件供路由器使用。
+### 2. 准备评测查询 {#2-prepare-evaluation-queries}
 
-### 示例生成配置
+每行使用一个 JSON 对象。`ground_truth` 是为模型输出打分所必需的；`category` 可选，但对切片评测有用。
+
+```jsonl
+{"query":"What is the derivative of x^2?","ground_truth":"2x","category":"math","metric":"MATH"}
+{"query":"Which city is the capital of France?","ground_truth":"B","category":"other","metric":"em_mc","choices":"A) London B) Paris C) Berlin D) Rome"}
+```
+
+选择与任务匹配的指标。基准支持精确/包含匹配、选择题提取、GSM8K 和 MATH 答案提取、文本 F1 以及代码评测。检查基准输出，而不是假设一个指标适合每个领域。
+
+### 3. 描述候选端点 {#3-describe-the-candidate-endpoints}
+
+将凭据放在环境变量中。不要把字面 API 密钥写进 YAML 文件。
 
 ```yaml
-config:
-  model_selection:
-    enabled: true
-    ml:
-      models_path: /data/ml-pipeline/ml-train
-      embedding_dim: 1024
-      knn:
-        k: 5
-        pretrained_path: /data/ml-pipeline/ml-train/knn_model.json
-  strategy: priority
+models:
+  - name: local-small
+    endpoint: http://localhost:8000/v1
+  - name: hosted-model
+    endpoint: https://provider.example/v1
+    api_key: ${PROVIDER_API_KEY}
+```
+
+### 4. 对每个候选做基准测试 {#4-benchmark-every-candidate}
+
+```bash
+python benchmark.py \
+  --queries queries.jsonl \
+  --model-config models.yaml \
+  --output benchmark-output.jsonl \
+  --concurrency 4
+```
+
+从低并发开始。仅在确认每个端点都能维持请求速率，且 provider 速率限制没有扭曲延迟测量后，再提高并发。
+
+### 5. 训练选择器 {#5-train-selectors}
+
+```bash
+python train.py \
+  --data-file benchmark-output.jsonl \
+  --output-dir models
+```
+
+默认情况下脚本训练 KNN、KMeans、SVM 和 MLP 产物。使用 `--algorithm knn|kmeans|svm|mlp` 训练单个选择器，或在 PyTorch 依赖不可用时使用 `--skip-mlp`。训练接受 `cpu`、`cuda` 或 `mps`。当前 Router 决策工厂在 CPU 上运行已加载的 MLP 产物；其 `device` 字段为兼容性接受，但未接到选择上。
+
+输出目录包含 `knn_model.json`、`kmeans_model.json`、`svm_model.json` 和 `mlp_model.json` 等 JSON 产物。其内容特定于被基准测试的模型名、嵌入模型和特征布局。
+
+### 6. 配置 Router {#6-configure-the-router}
+
+将选择器设置合并进完整规范配置。此示例是片段；完整文件仍需要 listeners、providers 以及决策使用的任何信号。
+
+```yaml
+global:
+  router:
+    model_selection:
+      ml:
+        models_path: /models/selection
+        model_type: qwen3
+        embedding_dim: 1024
+        knn:
+          k: 5
+          pretrained_path: /models/selection/knn_model.json
+
+routing:
   decisions:
-    - name: math-decision
+    - name: math
+      description: Route math requests with the trained KNN selector.
       priority: 100
       rules:
-        operator: OR
+        operator: AND
         conditions:
           - type: domain
             name: math
       algorithm:
         type: knn
       modelRefs:
-        - model: llama3.2:3b
-          use_reasoning: false
+        - model: local-small
+        - model: hosted-model
 ```
 
-## 配置
-
-### 基础配置
-
-在 `config.yaml` 中启用基于 ML 的模型选择：
-
-```yaml
-# 启用 ML 模型选择
-model_selection:
-  ml:
-    enabled: true
-    models_path: ".cache/ml-models"  # 训练好的模型文件路径
-
-# 查询表示的嵌入模型
-embedding_models:
-  qwen3_model_path: "models/mom-embedding-pro"  # Qwen3-Embedding-0.6B
-```
-
-### 按决策类型配置算法
-
-为不同的决策类型配置不同的算法：
-
-```yaml
-decisions:
-  # 数学查询 - 使用 KNN 进行质量加权选择
-  - name: "math_decision"
-    description: "Mathematics and quantitative reasoning"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "math"
-    algorithm:
-      type: "knn"
-      knn:
-        k: 5
-    modelRefs:
-      - model: "llama-3.2-1b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
-
-  # 编程查询 - 使用 SVM 实现清晰边界
-  - name: "code_decision"
-    description: "Programming and software development"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "computer science"
-    algorithm:
-      type: "svm"
-      svm:
-        kernel: "rbf"
-        gamma: 1.0
-    modelRefs:
-      - model: "codellama-7b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
-
-  # 通用查询 - 使用 KMeans 追求效率
-  - name: "general_decision"
-    description: "General knowledge queries"
-    priority: 50
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "other"
-    algorithm:
-      type: "kmeans"
-      kmeans:
-        num_clusters: 8
-    modelRefs:
-      - model: "llama-3.2-1b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
-
-  # 高吞吐量查询 - 使用 MLP GPU 加速
-  - name: "gpu_accelerated_decision"
-    description: "High-volume inference with GPU"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "engineering"
-    algorithm:
-      type: "mlp"
-      mlp:
-        device: "cuda"  # 或 "cpu", "metal"
-    modelRefs:
-      - model: "llama-3.2-1b"
-      - model: "llama-3.2-3b"
-      - model: "mistral-7b"
-      - model: "codellama-7b"
-```
-
-### 算法参数
-
-#### KNN 参数
-
-```yaml
-algorithm:
-  type: "knn"
-  knn:
-    k: 5  # 邻居数量（默认：5）
-```
-
-#### KMeans 参数
-
-```yaml
-algorithm:
-  type: "kmeans"
-  kmeans:
-    num_clusters: 8  # 聚类数量（默认：8）
-```
-
-#### SVM 参数
-
-```yaml
-algorithm:
-  type: "svm"
-  svm:
-    kernel: "rbf"   # 核函数类型：rbf、linear（默认：rbf）
-    gamma: 1.0      # RBF 核的 gamma 值（默认：1.0）
-```
-
-#### MLP 参数
-
-```yaml
-algorithm:
-  type: "mlp"
-  mlp:
-    device: "cuda"  # 设备：cpu、cuda、metal（默认：cpu）
-```
-
-MLP（多层感知机）通过 [Candle](https://github.com/huggingface/candle) Rust 框架实现 GPU 加速推理。专为具备 GPU 资源的生产环境设计，提供极高的吞吐量。
-
-**设备选项：**
-
-| 设备 | 描述 | 要求 |
-|------|------|------|
-| `cpu` | CPU 推理（默认） | 无特殊硬件要求 |
-| `cuda` | NVIDIA GPU 加速 | 支持 CUDA 的 GPU + CUDA 工具包 |
-| `metal` | Apple Silicon GPU | 搭载 M1/M2/M3 芯片的 macOS |
-
-## 实验结果
-
-### 基准测试设置
-
-- **测试查询**：109 条跨多个领域的查询
-- **评估模型**：4 个 LLM（codellama-7b、llama-3.2-1b、llama-3.2-3b、mistral-7b）
-- **嵌入模型**：Qwen3-Embedding-0.6B（1024 维）
-- **验证数据**：带有真实性能评分的基准查询
-
-### 性能对比
-
-| 策略 | 平均质量 | 平均延迟 | 最佳模型命中率 |
-|------|---------|---------|--------------|
-| **Oracle（理论最优）** | 0.495 | 10.57s | 100.0% |
-| **KMEANS 选择** | 0.252 | 20.23s | 23.9% |
-| 始终使用 llama-3.2-3b | 0.242 | 25.08s | 15.6% |
-| **SVM 选择** | 0.233 | 25.83s | 14.7% |
-| 始终使用 mistral-7b | 0.215 | 70.08s | 13.8% |
-| 始终使用 llama-3.2-1b | 0.212 | 3.65s | 26.6% |
-| **KNN 选择** | 0.196 | 36.62s | 13.8% |
-| 随机选择 | 0.174 | 40.12s | 9.2% |
-| 始终使用 codellama-7b | 0.161 | 53.78s | 4.6% |
-
-### ML 路由相对随机选择的提升
-
-| 算法 | 质量提升 | 最佳模型选择率 |
-|------|---------|--------------|
-| **KMEANS** | **+45.5%** | 提高 2.6 倍 |
-| **SVM** | **+34.4%** | 提高 1.6 倍 |
-| **KNN** | **+13.1%** | 提高 1.5 倍 |
-
-### 关键发现
-
-1. **所有 ML 方法均优于随机挑选**
-2. **KMEANS 提升最显著**（+45%）
-3. **SVM 决策边界清晰**
-4. **KNN 提供多样化的高质量匹配**
-5. **MLP 独占 GPU 加速能力**
-
-### MLP GPU 加速
-
-MLP 算法利用 [Candle](https://github.com/huggingface/candle) Rust 框架进行 GPU 加速推理：
-
-| 设备 | 推理延迟 | 吞吐量 |
-|------|---------|--------|
-| CPU | ~5-10ms | ~100-200 QPS |
-| CUDA（NVIDIA） | ~0.5-1ms | ~1000+ QPS |
-| Metal（Apple） | ~1-2ms | ~500+ QPS |
-
-**适用场景：**
-
-- 拥有 GPU 资源的高吞吐量生产环境
-- 对延迟敏感、需要亚毫秒推理的应用
-- 需要最小化模型选择开销的场景
-
-## 架构
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                         在线推理                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  请求 (model="auto")                                                │
-│       ↓                                                             │
-│  生成查询 embedding (Qwen3, 1024 维)                                       │
-│       ↓                                                             │
-│  添加类别 One-Hot (14 维) → 1038 维特征向量                            │
-│       ↓                                                             │
-│  决策引擎 → 按领域匹配决策                                             │
-│       ↓                                                             │
-│  加载 ML 选择器 (从 JSON 加载 KNN/KMeans/SVM/MLP)                      │
-│       ↓                                                             │
-│  执行推理 → 选择最佳模型                                               │
-│       ↓                                                             │
-│  路由到选中的 LLM 端点                                                │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## 训练自有模型
-
-**离线训练与在线推理：**
-
-- **离线训练**：使用 **Python** + scikit-learn 完成 KNN、KMeans 和 SVM 的训练，使用 PyTorch 完成 MLP 的训练
-- **在线推理**：KNN/KMeans/SVM 使用 **Rust** 中的 [Linfa](https://github.com/rust-ml/linfa)（通过 `ml-binding`），MLP 使用 [Candle](https://github.com/huggingface/candle)（通过 `candle-binding`）
-
-离线训练使用 Python (繁荣生态)；在线推理使用 Rust (低延迟核心)。
-
-### 前置条件
+配置的 `model_type` 和 `embedding_dim` 选择 ML 选择器使用的嵌入特征空间，必须与训练产物匹配。其他选择算法和嵌入消费者继续使用默认语义嵌入配置。若省略 `model_type`，ML 选择器也为向后兼容使用该默认值。`modelRefs` 中的模型名必须与基准数据中记录的名称以及已配置的 provider 别名匹配。
 
 ```bash
-cd src/training/model_selection/ml_model_selection
-pip install -r requirements.txt
+vllm-sr config validate --config config.yaml
 ```
 
-### 方式 1：下载预训练模型
+## 上线前评测 {#evaluate-before-rollout}
 
-```bash
-python download_model.py \
-  --output-dir ../../../.cache/ml-models \
-  --repo-id abdallah1008/semantic-router-ml-models
-```
+使用未用于拟合或调优选择器的留出数据集。报告：
 
-### 方式 2：使用 HuggingFace 上的预基准测试数据进行训练
+- 按工作负载切片的回答质量指标
+- 所选模型分布
+- 端到端延迟和 provider 成本
+- 相对选择最佳已评测响应的 oracle 的 regret
+- 与固定默认、最佳单模型和随机基线的比较
+- 失败、超时和排除的样本
 
-我们在 HuggingFace 上提供了可直接使用的基准测试数据：
+将数据集修订、源提交、模型修订、嵌入模型、硬件、命令和原始报告与任何头条结果一起发布。没有这些来源的百分比或 QPS 不能描述预期生产性能。
 
-**HuggingFace 数据集：** [abdallah1008/ml-selection-benchmark-data](https://huggingface.co/datasets/abdallah1008/ml-selection-benchmark-data)
+## 常见问题 {#common-problems}
 
-| 文件 | 描述 |
-|------|------|
-| `benchmark_training_data.jsonl` | 4 个模型（codellama-7b、llama-3.2-1b、llama-3.2-3b、mistral-7b）的预基准测试数据 |
-| `validation_benchmark_with_gt.jsonl` | 带真实值的验证数据，用于测试 |
+### 找不到产物 {#artifact-not-found}
 
-```bash
-# 下载基准测试数据
-huggingface-cli download abdallah1008/ml-selection-benchmark-data \
-  --repo-type dataset \
-  --local-dir .cache/ml-models
+从 Router 运行时内部检查 `models_path` 和每个 `pretrained_path`，而不仅仅在主机上。按配置使用的同一路径挂载或打包文件。
 
-# 使用预基准测试数据直接训练
-python train.py \
-  --data-file .cache/ml-models/benchmark_training_data.jsonl \
-  --output-dir models/
-```
+### 嵌入维度不匹配 {#embedding-dimension-mismatch}
 
-这是最快的入门方式，不用自己跑 LLM 基准测试。
+训练和推理使用同一嵌入模型和特征布局，并将 `embedding_dim` 设为导出产物的维度。
 
-### 方式 3：使用自有数据训练
+### 留出质量差 {#poor-held-out-quality}
 
-#### 步骤 1：准备输入数据（JSONL 格式）
+确认模型名和标签匹配，检查类别和领域覆盖，查找训练/测试泄漏，并与简单基线比较。更复杂的选择器无法补偿不具代表性的基准数据。
 
-创建一个包含查询的 JSONL 文件，每行必须包含 `query` 和 `category` 字段：
+## 参考 {#references}
 
-```jsonl
-{"query": "What is the derivative of x^2?", "category": "math", "ground_truth": "2x"}
-{"query": "Write a Python function to sort a list", "category": "computer science", "ground_truth": "def sort(lst): return sorted(lst)"}
-{"query": "Explain photosynthesis", "category": "biology", "ground_truth": "Process where plants convert sunlight to energy"}
-{"query": "What are the legal requirements for a contract?", "category": "law"}
-```
-
-**必填字段：**
-
-| 字段 | 类型 | 描述 |
-|------|------|------|
-| `query` | string | 输入的查询文本 |
-| `category` | string | 领域类别（参见 [VSR 类别](#vsr-categories)） |
-| `ground_truth` | string | 期望的答案（用于计算性能/质量分数） |
-
-**推荐字段（用于准确的性能评分）：**
-
-| 字段 | 类型 | 描述 |
-|------|------|------|
-| `metric` | string | 评估方法 — 决定性能的计算方式 |
-| `choices` | string | 用于多选题 — 触发多选题评估 |
-
-**可选字段：**
-
-| 字段 | 类型 | 描述 |
-|------|------|------|
-| `task_name` | string | 任务标识符，用于日志和追踪（如 "mmlu"、"gsm8k"） |
-
-**关于 Metric 字段**
-
-如果不指定 `metric`，基准测试默认使用 **CEM（条件精确匹配）**，这可能无法准确评分：
-
-- 数学问题（使用 `metric: "GSM8K"` 或 `metric: "MATH"`）
-- 多选题（使用 `metric: "em_mc"` 或包含 `choices`）
-- 代码生成（使用 `metric: "code_eval"`）
-
-为获得最佳结果，请始终为问题类型指定合适的 `metric`。
-
-**多选题**
-
-对于多选题，包含 `choices`（选项内容的字符串）并将 `ground_truth` 设为正确答案字母：
-
-```jsonl
-{"query": "What is the capital of France?\nA) London\nB) Paris\nC) Berlin\nD) Rome", "category": "other", "ground_truth": "B", "choices": "London,Paris,Berlin,Rome"}
-```
-
-基准测试脚本会：
-
-1. 通过 `choices` 字段或 `metric: "em_mc"` 检测多选题
-2. 从模型响应中提取答案字母（A/B/C/D）
-3. 与 `ground_truth`（正确字母）比对
-
-**评估指标**
-
-`metric` 字段控制性能的计算方式：
-
-| 指标 | 描述 | ground_truth 示例 |
-|------|------|-------------------|
-| `em_mc` | 多选题 — 提取字母 | `"B"` |
-| `GSM8K` | 数学 — 提取 `####` 后的数字 | `"explanation #### 42"` |
-| `MATH` | LaTeX 数学 — 从 `\boxed{}` 中提取 | `"\\boxed{2x+1}"` |
-| `f1_score` | 文本重叠 F1 分数 | `"Paris is the capital"` |
-| `code_eval` | 运行代码断言 | `"['assert func(1)==2']"` |
-| （默认） | CEM — 包含匹配 | `"Paris"` |
-
-**训练必须包含 Ground Truth**
-
-训练数据必须提供 `ground_truth` 字段。系统依靠比对模型给出的响应与 `ground_truth` 来计算性能得分。
-
-#### 步骤 2：配置 LLM 端点（models.yaml）
-
-创建 `models.yaml` 文件来配置 LLM 端点及认证信息：
-
-```yaml
-models:
-  # 本地 Ollama 模型（无需认证）
-  - name: llama-3.2-1b
-    endpoint: http://localhost:11434/v1
-
-  - name: llama-3.2-3b
-    endpoint: http://localhost:11434/v1
-
-  # OpenAI，使用环境变量中的 API 密钥
-  - name: gpt-4
-    endpoint: https://api.openai.com/v1
-    api_key: ${OPENAI_API_KEY}
-    max_tokens: 2048
-    temperature: 0.0
-
-  # HuggingFace，使用 Token
-  - name: mistral-7b-hf
-    endpoint: https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2
-    api_key: ${HF_TOKEN}
-    headers:
-      Authorization: "Bearer ${HF_TOKEN}"
-
-  # 自定义 API，使用 Bearer Token
-  - name: custom-llm
-    endpoint: https://api.custom.com/v1
-    api_key: ${CUSTOM_API_KEY}
-    headers:
-      Authorization: "Bearer ${CUSTOM_API_KEY}"
-      X-Custom-Header: "value"
-    max_tokens: 1024
-    temperature: 0.1
-
-  # vLLM 自托管
-  - name: codellama-7b
-    endpoint: http://vllm-server:8000/v1
-    # 本地 vLLM 无需认证
-```
-
-#### 步骤 3：运行基准测试
-
-基准测试脚本会将每个查询发送到所有已配置的 LLM 并测量：
-
-**性能（质量分数 0-1）：**
-
-| 查询类型 | 评分方法 |
-|---------|---------|
-| **多选题**（A/B/C/D） | 选项与 `ground_truth` 精确匹配 |
-| **数值/数学** | 解析并比较数字（基于容差） |
-| **文本/代码** | 模型响应与 `ground_truth` 之间的 F1 分数 |
-| **精确匹配** | 精确匹配为 1.0，否则为 0.0 |
-
-**延迟（响应时间）：**
-
-- 从请求发送到响应接收的时间（秒）
-- 包含网络延迟 + 模型推理时间
-- 用于效率加权：`speed_factor = 1 / (1 + latency)`
-
-**输出格式：**
-
-基准测试为每个（查询，模型）对生成一条 JSONL 记录：
-
-```jsonl
-{"query": "What is 2+2?", "category": "math", "model_name": "llama-3.2-1b", "response": "4", "ground_truth": "4", "performance": 1.0, "response_time": 0.523}
-{"query": "What is 2+2?", "category": "math", "model_name": "llama-3.2-3b", "response": "The answer is 4", "ground_truth": "4", "performance": 0.85, "response_time": 1.234}
-{"query": "What is 2+2?", "category": "math", "model_name": "mistral-7b", "response": "2+2=4", "ground_truth": "4", "performance": 0.92, "response_time": 2.156}
-```
-
-**运行基准测试：**
-
-```bash
-# 使用模型配置文件（推荐）
-python benchmark.py \
-  --queries your_queries.jsonl \
-  --model-config models.yaml \
-  --output benchmark_output.jsonl \
-  --concurrency 4 \
-  --limit 500  # 可选：限制查询数量用于测试
-
-# 或使用简单模型列表（所有模型同一端点）
-python benchmark.py \
-  --queries your_queries.jsonl \
-  --models llama-3.2-1b,llama-3.2-3b,mistral-7b \
-  --endpoint http://localhost:11434/v1 \
-  --output benchmark_output.jsonl
-```
-
-**benchmark.py 参数：**
-
-| 参数 | 默认值 | 描述 |
-|------|-------|------|
-| `--queries` | （必填） | 输入 JSONL 文件路径 |
-| `--model-config` | None | models.yaml 的路径 |
-| `--models` | None | 逗号分隔的模型名称（替代 --model-config） |
-| `--endpoint` | `http://localhost:8000/v1` | API 端点（配合 --models 使用） |
-| `--output` | `benchmark_output.jsonl` | 输出文件路径 |
-| `--concurrency` | `4` | 并行请求 LLM 的数量 |
-| `--limit` | None | 限制处理的查询数量 |
-| `--max-tokens` | `1024` | LLM 响应的最大 token 数 |
-| `--temperature` | `0.0` | 生成温度（0.0 = 确定性输出） |
-
-**并发参数**
-
-`--concurrency` 参数控制并行发送到 LLM 的请求数：
-
-- **较高值**（8-16）：基准测试更快，但可能压垮本地模型
-- **较低值**（1-2）：较慢但对资源受限环境更安全
-- **推荐值**：从 4 开始，如果 LLM 服务器能承受再增加
-
-对于单 GPU 上的 Ollama，使用 `--concurrency 2-4`。对于云 API（OpenAI、HuggingFace），可以使用 `--concurrency 8-16`。
-
-#### 步骤 4：训练 ML 模型
-
-```bash
-python train.py \
-  --data-file benchmark_output.jsonl \
-  --output-dir models/
-```
-
-### train.py 参数
-
-| 参数 | 默认值 | 描述 |
-|------|-------|------|
-| `--data-file` | （必填） | JSONL 基准测试数据路径 |
-| `--output-dir` | `models/` | 训练好的模型 JSON 文件保存目录 |
-| `--embedding-model` | `qwen3` | 嵌入模型：`qwen3`、`gte`、`mpnet`、`e5`、`bge` |
-| `--cache-dir` | `.cache/` | 嵌入缓存目录 |
-| `--knn-k` | `5` | KNN 邻居数 |
-| `--kmeans-clusters` | `8` | KMeans 聚类数 |
-| `--svm-kernel` | `rbf` | SVM 核函数：`rbf`、`linear` |
-| `--svm-gamma` | `1.0` | RBF 核的 gamma 值 |
-| `--mlp-hidden-dims` | `512,256` | MLP 隐藏层维度 |
-| `--mlp-dropout` | `0.1` | MLP dropout 比率 |
-| `--mlp-epochs` | `100` | MLP 训练轮数 |
-| `--mlp-lr` | `0.001` | MLP 学习率 |
-| `--quality-weight` | `0.9` | 质量与速度权重（0=速度优先，1=质量优先） |
-| `--batch-size` | `32` | 嵌入生成的批大小 |
-| `--device` | `cpu` | 设备：`cpu`、`cuda`、`mps` |
-| `--limit` | None | 限制训练样本数 |
-
-**示例：**
-
-```bash
-# 使用自定义 KNN k 值训练
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --knn-k 7
-
-# 使用少量样本训练（用于测试）
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --limit 1000
-
-# 使用 GPU 加速训练
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --device cuda \
-  --batch-size 64
-
-# 使用自定义 MLP 架构训练
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --mlp-hidden-dims 1024,512,256 \
-  --mlp-dropout 0.2 \
-  --mlp-epochs 150 \
-  --mlp-lr 0.0005 \
-  --device cuda
-
-# 使用自定义算法参数训练
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --knn-k 10 \
-  --kmeans-clusters 12 \
-  --svm-kernel rbf \
-  --svm-gamma 0.5 \
-  --quality-weight 0.85
-```
-
-### VSR 类别 {#vsr-categories}
-
-系统支持 14 个领域类别，使用精确名称（带空格，不用下划线）：
-
-```text
-biology, business, chemistry, computer science, economics, engineering,
-health, history, law, math, other, philosophy, physics, psychology
-```
-
-### 验证训练好的模型
-
-运行 Go 验证脚本以确认 ML 路由的收益：
-
-```bash
-cd src/training/model_selection/ml_model_selection
-
-# 设置库路径（WSL/Linux）
-export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH
-
-# 运行验证
-go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
-```
-
-## 模型文件
-
-训练好的模型以 JSON 文件存储：
-
-| 文件 | 算法 | 大小 |
-|------|------|------|
-| `knn_model.json` | K 近邻 | ~2-10 MB |
-| `kmeans_model.json` | KMeans 聚类 | ~50 KB |
-| `svm_model.json` | 支持向量机 | ~1-5 MB |
-| `mlp_model.json` | 多层感知机 | ~1-10 MB |
-
-这些文件从 HuggingFace 下载或在训练过程中生成：
-
-- **模型**：[abdallah1008/semantic-router-ml-models](https://huggingface.co/abdallah1008/semantic-router-ml-models)
-- **基准测试数据**：[abdallah1008/ml-selection-benchmark-data](https://huggingface.co/datasets/abdallah1008/ml-selection-benchmark-data)
-
-## 最佳实践
-
-### 算法选择指南
-
-| 场景 | 推荐算法 | 原因 |
-|------|---------|------|
-| **质量优先任务** | KNN (k=5) | 质量加权投票能提供最高精度 |
-| **高吞吐系统** | KMeans | 聚类查找速度快，延迟低 |
-| **领域特定路由** | SVM | 领域之间的决策边界清晰 |
-| **GPU 可用环境** | MLP | 通过 CUDA/Metal 加速的神经网络推理 |
-| **通用场景** | KMEANS | 质量和速度的最佳平衡 |
-
-### 超参数调优
-
-1. **KNN k 值**：从 k=5 开始，增大可使决策更平滑
-2. **KMeans 聚类数**：匹配不同查询模式的数量（通常 8-16）
-3. **SVM gamma**：对归一化嵌入使用 1.0，根据数据分布调整
-4. **MLP 架构**：从 512,256 隐藏层维度开始，复杂数据集可适当增大
-
-### 特征向量组成
-
-ML 模型使用 1038 维特征向量：
-
-- **1024 维**：Qwen3 语义 embedding
-- **14 维**：类别 One-Hot 编码（VSR 领域类别）
-
-```text
-特征向量 = [embedding(1024)] ⊕ [category_one_hot(14)]
-```
-
-## 故障排查
-
-### 模型加载失败
-
-```text
-Error: pretrained model not found
-```
-
-从 HuggingFace 下载模型：
-
-```bash
-cd src/training/model_selection/ml_model_selection
-python download_model.py --output-dir ../../../.cache/ml-models
-```
-
-### 选择精度低
-
-1. 确保嵌入模型与训练时一致（Qwen3-Embedding-0.6B）
-2. 检查类别分类是否正常工作
-3. 确认配置中的模型名称与训练数据一致
-
-### 维度不匹配
-
-```text
-Error: embedding dimension mismatch
-```
-
-确保训练和推理使用相同的嵌入模型（Qwen3 输出 1024 维）。
-
-## 后续步骤
-
-- [训练概览](/docs/training/training-overview) — 通用训练文档
-- [模型性能评估](/docs/training/model-performance-eval) — 详细性能指标
+- [模型训练概览](./training-overview)
+- [当前模型目录](./model-catalog)
+- [模型性能评测](./model-performance-eval)
+- [训练源和完整 CLI 选项](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_selection/ml_model_selection)
+- [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540)
+- [Avengers-Pro (arXiv:2508.12631)](https://arxiv.org/abs/2508.12631)

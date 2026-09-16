@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "body": {
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Transcribe this.",
+            "type": "text"
+          },
+          {
+            "input_audio": {
+              "data": "UklGRg==",
+              "format": "wav"
+            },
+            "type": "input_audio"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "routed-model"
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`structure` detects request-shape facts such as many explicit questions, ordered workflow markers, or dense constraint phrasing. It maps to `config/signal/structure/` and is declared under `routing.signals.structure`.
+`structure` detects request-shape facts such as many explicit questions, ordered workflow markers, or dense constraint phrasing. It maps to `config/fragments/signal/structure/` and is declared under `routing.signals.structure`.
 
 This family is heuristic: it stays rule-based, but unlike `keyword` it can count, normalize, and compare typed structural features before emitting a named signal.
 
@@ -30,7 +30,7 @@ Use `structure` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/structure/`
+Source fragment family: `config/fragments/signal/structure/`
 
 ```yaml
 routing:

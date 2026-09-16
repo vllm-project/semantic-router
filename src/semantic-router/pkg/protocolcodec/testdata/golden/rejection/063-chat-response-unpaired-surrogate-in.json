@@ -1,0 +1,4 @@
+{
+  "operation": "response",
+  "body_json": "{\"id\":\"chat_1\",\"object\":\"chat.completion\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\\ud800\"},\"finish_reason\":\"stop\"}]}"
+}

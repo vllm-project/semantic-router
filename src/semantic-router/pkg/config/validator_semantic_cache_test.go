@@ -70,3 +70,42 @@ func TestValidateSemanticCacheNilConfig(t *testing.T) {
 		t.Fatalf("nil config must be valid, got: %v", err)
 	}
 }
+
+func TestValidateSemanticCacheMode(t *testing.T) {
+	for _, mode := range []string{
+		"",
+		SemanticCacheModeSemantic,
+		SemanticCacheModeExact,
+		SemanticCacheModeExactThenSemantic,
+	} {
+		cfg := &RouterConfig{}
+		cfg.Decisions = []Decision{{
+			Name: "route",
+			Plugins: []DecisionPlugin{{
+				Type: "semantic-cache",
+				Configuration: MustStructuredPayload(map[string]interface{}{
+					"enabled": true,
+					"mode":    mode,
+				}),
+			}},
+		}}
+		if err := validateSemanticCacheContracts(cfg); err != nil {
+			t.Fatalf("valid mode %q rejected: %v", mode, err)
+		}
+	}
+
+	cfg := &RouterConfig{}
+	cfg.Decisions = []Decision{{
+		Name: "route",
+		Plugins: []DecisionPlugin{{
+			Type: "semantic-cache",
+			Configuration: MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"mode":    "unsafe",
+			}),
+		}},
+	}}
+	if err := validateSemanticCacheContracts(cfg); err == nil {
+		t.Fatal("unknown semantic-cache mode must be rejected")
+	}
+}

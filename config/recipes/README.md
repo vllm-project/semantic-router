@@ -1,68 +1,103 @@
-# Maintained routing recipes
+# Maintained Routing Recipes
 
-`config/recipes/` contains complete, executable use-case deliveries. Directory
-names describe the user outcome; implementation names such as Router Flow,
-SAARS, or MMLU belong inside the recipe documentation rather than in the
-catalog taxonomy.
+## Overview
 
-## Delivery contract
+This directory contains complete routing examples for common deployment goals.
+Each recipe is documented as a Model Card: it explains the intended use,
+request-facing behavior, backend requirements, safety properties, evaluation
+scope, and limitations.
 
-Every child directory has the same four files:
+A recipe selects among configured provider models. It does not install or
+start those inference backends.
 
-- `config.yaml` — canonical v0.3 runtime configuration.
-- `recipe.dsl` — reviewable routing policy that compiles back into the same
-  dynamic routing surface.
-- `probes.yaml` — backend-independent `/api/v1/eval` correctness probes.
-- `README.md` — intended use, routing policy, tradeoffs, and validation steps.
+## Model Cards
 
-The repository contract tests reject incomplete directories, invalid YAML or
-DSL, and YAML/DSL drift.
-
-## Catalog
-
-| Use case | Purpose |
+| Recipe | Best for |
 | --- | --- |
-| [`accuracy`](accuracy/README.md) | Spend bounded multi-model orchestration only where it has an expected quality benefit; keep long context single-model. |
-| [`agent`](agent/README.md) | Route agent, coding, specialist, privacy, and security work across local and frontier lanes. |
-| [`balance`](balance/README.md) | General-purpose quality, latency, and cost balance for a single default routing profile. |
-| [`feedback`](feedback/README.md) | Recover from corrections, repeated dissatisfaction, failed code, and verification requests. |
-| [`knowledge`](knowledge/README.md) | Use KB evidence to decide whether a knowledge-domain question merits frontier escalation. |
-| [`multi-objective`](multi-objective/README.md) | Expose isolated balanced, speed, cost, accuracy, and privacy recipes as request-facing entrypoints. |
-| [`privacy`](privacy/README.md) | Keep sensitive, suspicious, and private-context traffic on policy-compatible models. |
+| [Accuracy](accuracy/README.md) | Direct answers by default, with bounded workflow or fusion when accuracy benefits from orchestration. |
+| [Agent](agent/README.md) | Coding, research, specialist, privacy, and security work across local and frontier lanes. |
+| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs. |
+| [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
+| [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
+| [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
+| [Vela AMD](vela-amd/README.md) | Explicit AMD execution of all ten Vela task models, with semantic routing and document reranking. |
+| [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
-`bounded-candidate-iteration.dsl` and other syntax-only demonstrations are not
-deployable recipes. Their behavior is covered by DSL unit tests instead of
-being mixed into this catalog.
+The [built-in virtual model catalog](built-in/README.md) is a separate
+distribution surface. Its [MoM V1 Model
+Card](built-in/latest/mom-v1/README.md) describes the virtual models bundled
+with `vllm-sr`.
 
-## Validate a recipe
+## Use a recipe
 
-From the repository root:
-
-```bash
-vllm-sr validate --config config/recipes/<use-case>/config.yaml
-
-(cd src/semantic-router && \
-  go run ./cmd/dsl validate ../../config/recipes/<use-case>/recipe.dsl)
-
-(cd src/semantic-router && \
-  go run ./cmd/dsl compile \
-    --base ../../config/recipes/<use-case>/config.yaml \
-    -o /tmp/<use-case>.yaml \
-    ../../config/recipes/<use-case>/recipe.dsl)
-```
-
-Run the backend-independent calibration suite against a live router:
+Read the Model Card first, start the required provider backends, then validate
+and serve the recipe's config:
 
 ```bash
-python tools/agent/scripts/router_calibration_loop.py \
-  eval \
-  --router-url http://127.0.0.1:8080 \
-  --probes config/recipes/<use-case>/probes.yaml
+vllm-sr config validate --config config/recipes/<name>/config.yaml
+vllm-sr serve --config config/recipes/<name>/config.yaml
 ```
 
-The multi-objective profile additionally checks requested model, selected
-recipe, decision, algorithm, plugins, signal evidence, multilingual variants,
-multi-turn/tool shapes, and long-context boundaries. Every maintained manifest
-also declares bounded concurrency, so the same report records end-to-end p50,
-p95, and p99 Eval latency, throughput, and transport errors alongside routing
-accuracy.
+Single-profile recipes use their configured automatic entrypoint, such as
+`vllm-sr/auto` or the Vela AMD recipe's `vela-auto`.
+Multi-profile recipes expose named virtual model IDs through top-level
+`entrypoints`.
+
+## Use a built-in Recipe
+
+Start `vllm-sr serve`, then open **Build → Mixture-of-Models → Recipes** in
+Dashboard. Choose a built-in Recipe, assign connected Models to its decisions,
+and publish the resulting Mixture-of-Model. The Recipe contains routing policy;
+it does not start physical model engines or embed their credentials.
+
+For a reviewed YAML deployment, copy the built-in source into a user-owned
+configuration, validate it, and serve that complete file with
+`vllm-sr serve --config mom-custom.yaml`.
+
+See the [built-in catalog guide](built-in/README.md) for the packaged inventory
+and contributor contract.
+
+## Custom recipes and Dashboard
+
+Keep credentials out of recipe files. Reference environment variables from the
+config and authorize each required name when serving:
+
+```bash
+export PROVIDER_API_KEY=...
+vllm-sr serve --config path/to/recipe/config.yaml \
+  --recipe-env PROVIDER_API_KEY
+```
+
+`vllm-sr recipe pack` is available for teams that need to transport a custom
+recipe as an archive. Treat the archive as public source: the packer rejects
+literal credentials and unsafe package shapes, but it does not turn the recipe
+into a built-in model or provision its runtime dependencies.
+
+When a managed recipe is mounted, Dashboard shows its Model Card and probe
+catalog. **Run** sends a probe to Playground, **Edit** prepares an editable
+request, and **Validate** evaluates routing without generating a model answer.
+See [Models and Recipes](../../website/docs/installation/models-and-recipes.md)
+for the user workflow.
+
+## For contributors
+
+Every maintained recipe contains:
+
+- `metadata.yaml` for identity and licensing;
+- `config.yaml` for runtime configuration;
+- `recipe.dsl` for the reviewable routing projection;
+- `probes.yaml` for backend-independent routing scenarios; and
+- `README.md` for the Model Card.
+
+The conformance tools discover recipe directories automatically and generate
+current coverage results. Do not copy probe inventories, pass counts, or CI
+receipts into Model Cards.
+
+Start with [Recipe authoring and conformance](CONFORMANCE.md):
+
+```bash
+make recipe-conformance-static
+```
+
+Syntax-only DSL examples such as `bounded-candidate-iteration.dsl` are not
+deployable recipes and do not belong in the Model Card index.

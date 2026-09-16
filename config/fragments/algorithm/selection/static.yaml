@@ -1,0 +1,3 @@
+algorithm:
+  type: static
+  minimum_candidates: 1

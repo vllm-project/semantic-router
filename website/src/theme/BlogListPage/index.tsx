@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import Link from '@docusaurus/Link'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import {
@@ -8,13 +8,15 @@ import {
 } from '@docusaurus/theme-common'
 import SearchMetadata from '@theme/SearchMetadata'
 import BlogLayout from '@theme/BlogLayout'
+import PageHeader from '@site/src/components/site/PageHeader'
 import BlogListPaginator from '@theme/BlogListPaginator'
 import BlogListPageStructuredData from '@theme/BlogListPage/StructuredData'
 import type { Props } from '@theme/BlogListPage'
+import type { BlogSearchIndexEntry } from '../../plugins/blogSearchIndex'
 
 interface BlogCardProps {
   featured?: boolean
-  item: Props['items'][number]
+  entry: BlogSearchIndexEntry
 }
 
 interface TagSummary {
@@ -38,6 +40,21 @@ function readingTimeLabel(readingTime: number | undefined): string | null {
   }
 
   return `${Math.ceil(readingTime)} min read`
+}
+
+/** Normalizes a post into the card shape shared by featured and grid cards. */
+function toEntry(item: Props['items'][number]): BlogSearchIndexEntry {
+  const { frontMatter, metadata } = item.content
+
+  return {
+    permalink: metadata.permalink,
+    title: metadata.title,
+    date: metadata.date,
+    description: metadata.description ?? '',
+    image: typeof frontMatter.image === 'string' ? frontMatter.image : undefined,
+    readingTime: metadata.readingTime,
+    tags: metadata.tags.map(tag => tag.label),
+  }
 }
 
 function BlogPostImage({
@@ -73,20 +90,10 @@ function BlogPostImage({
   )
 }
 
-function BlogCard({ featured = false, item }: BlogCardProps): React.ReactNode {
-  const { content: BlogPostContent } = item
-  const { frontMatter, metadata } = BlogPostContent
-  const {
-    date,
-    description,
-    permalink,
-    readingTime,
-    title,
-  } = metadata
-  const image = typeof frontMatter.image === 'string'
-    ? frontMatter.image
-    : undefined
+function BlogCard({ featured = false, entry }: BlogCardProps): React.ReactNode {
+  const { date, description, image, permalink, readingTime, tags, title } = entry
   const readTime = readingTimeLabel(readingTime)
+  const chip = featured ? 'Featured' : tags[0]
 
   return (
     <article
@@ -104,7 +111,7 @@ function BlogCard({ featured = false, item }: BlogCardProps): React.ReactNode {
         <BlogPostImage alt="" image={image} />
       </Link>
       <div className="site-blog-card__body">
-        {featured && <span className="site-blog-card__eyebrow">Featured</span>}
+        {chip && <span className="site-blog-card__eyebrow">{chip}</span>}
         <h2 className="site-blog-card__title">
           <Link to={permalink}>{title}</Link>
         </h2>
@@ -142,27 +149,8 @@ function BlogListPageMetadata({ metadata }: Props): React.ReactNode {
 
 export default function BlogListPage(props: Props): React.ReactNode {
   const { items, metadata } = props
-  const [query, setQuery] = useState('')
-  const normalizedQuery = query.trim().toLowerCase()
 
-  const filteredItems = useMemo(() => {
-    if (!normalizedQuery) {
-      return items
-    }
-
-    return items.filter(({ content: BlogPostContent }) => {
-      const { frontMatter, metadata: postMetadata } = BlogPostContent
-      const tags = postMetadata.tags.map(tag => tag.label).join(' ')
-      const searchableText = [
-        postMetadata.title,
-        postMetadata.description,
-        frontMatter.description,
-        tags,
-      ].join(' ').toLowerCase()
-
-      return searchableText.includes(normalizedQuery)
-    })
-  }, [items, normalizedQuery])
+  const pageEntries = useMemo(() => items.map(toEntry), [items])
 
   const tagSummaries = useMemo(() => {
     const counts = new Map<string, TagSummary>()
@@ -183,7 +171,7 @@ export default function BlogListPage(props: Props): React.ReactNode {
       .slice(0, 8)
   }, [items])
 
-  const [featuredItem, ...remainingItems] = filteredItems
+  const [featuredEntry, ...remainingEntries] = pageEntries
 
   return (
     <HtmlClassNameProvider
@@ -193,52 +181,15 @@ export default function BlogListPage(props: Props): React.ReactNode {
       <BlogListPageStructuredData {...props} />
       <BlogLayout>
         <div className="site-blog-index">
-          <header className="site-blog-index__header">
-            <h1>Blog</h1>
-            <label className="site-blog-search">
-              <span aria-hidden="true" className="site-blog-search__icon">⌕</span>
-              <input
-                aria-label="Search blog posts"
-                onChange={event => setQuery(event.target.value)}
-                placeholder="Search blog posts..."
-                type="search"
-                value={query}
-              />
-            </label>
-            <p>
-              Deep dives into model routing, inference engineering, performance
-              breakthroughs, and the latest from the vLLM Semantic Router
-              community.
-            </p>
-          </header>
+          <div className="site-blog-index__header">
+            <PageHeader
+              description="Deep dives into model routing, inference engineering, performance breakthroughs, and the latest from the vLLM Semantic Router community."
+              eyebrow="Blog"
+              title="Engineering notes"
+            />
+          </div>
 
           <div className="site-blog-index__columns">
-            <section aria-live="polite" className="site-blog-index__feed">
-              {featuredItem
-                ? (
-                    <>
-                      <BlogCard featured item={featuredItem} />
-                      {remainingItems.length > 0 && (
-                        <div className="site-blog-card-grid">
-                          {remainingItems.map(item => (
-                            <BlogCard
-                              item={item}
-                              key={item.content.metadata.permalink}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )
-                : (
-                    <div className="site-blog-empty">
-                      <h2>No posts found</h2>
-                      <p>Try a different title, topic, or tag.</p>
-                    </div>
-                  )}
-              {!normalizedQuery && <BlogListPaginator metadata={metadata} />}
-            </section>
-
             <aside className="site-blog-index__rail">
               <section>
                 <h2>Recent</h2>
@@ -275,6 +226,29 @@ export default function BlogListPage(props: Props): React.ReactNode {
                 </section>
               )}
             </aside>
+
+            <section aria-live="polite" className="site-blog-index__feed">
+              {featuredEntry
+                ? (
+                    <>
+                      <BlogCard featured entry={featuredEntry} />
+                      {remainingEntries.length > 0 && (
+                        <div className="site-blog-card-grid">
+                          {remainingEntries.map(entry => (
+                            <BlogCard entry={entry} key={entry.permalink} />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                : (
+                    <div className="site-blog-empty">
+                      <h2>No posts found</h2>
+                      <p>Check back soon for new engineering notes.</p>
+                    </div>
+                  )}
+              <BlogListPaginator metadata={metadata} />
+            </section>
           </div>
         </div>
       </BlogLayout>

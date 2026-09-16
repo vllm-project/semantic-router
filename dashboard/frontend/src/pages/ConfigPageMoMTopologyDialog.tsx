@@ -1,4 +1,5 @@
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import {
   collectDecisionTargetModels,
   collectRecipeTargetModels,
@@ -39,7 +40,7 @@ export default function ConfigPageMoMTopologyDialog({
           <div>
             <span>Mixture topology</span>
             <h2>{entrypoint.model_names.join(', ')}</h2>
-            <p>How the public model resolves into routing decisions and AMD model pools.</p>
+            <p>How the public model resolves into routing decisions and provider model pools.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close topology">
             ×
@@ -77,7 +78,9 @@ export default function ConfigPageMoMTopologyDialog({
             <div className={styles.nodeList}>
               {decisions.map((decision) => (
                 <div key={decision.name} className={`${styles.node} ${styles.decisionNode}`}>
-                  <strong>{decision.name}</strong>
+                  <strong>
+                    {formatRoutingMetadataValue('x-vsr-selected-decision', decision.name)}
+                  </strong>
                   <small>P{decision.priority}</small>
                   <div className={styles.decisionTargets}>
                     {collectDecisionTargetModels(decision).map((model) => (

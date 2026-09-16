@@ -2,26 +2,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: qwen3
+    reasoning_effort: high
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
 routing:
@@ -191,9 +180,10 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a helpful and knowledgeable assistant.
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
+            scope: global
             similarity_threshold: 0.75
   signals:
     keywords:
@@ -253,7 +243,6 @@ routing:
           - neural networks
           - AI algorithms
         aggregation_method: max
-        model: auto
       - name: data_science
         threshold: 0.7
         candidates:
@@ -262,7 +251,6 @@ routing:
           - predictive analytics
           - data visualization
         aggregation_method: mean
-        model: auto
       - name: programming
         threshold: 0.72
         candidates:
@@ -272,7 +260,6 @@ routing:
           - code snippet
           - programming task
         aggregation_method: max
-        model: auto
     domains:
       - name: urgent_request
         description: Urgent and time-sensitive requests
@@ -366,7 +353,7 @@ global:
           service_version: v0.1.0
           deployment_environment: development
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8

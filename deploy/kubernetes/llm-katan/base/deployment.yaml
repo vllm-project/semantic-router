@@ -69,7 +69,7 @@ spec:
 
       containers:
         - name: llm-katan
-          image: ghcr.io/vllm-project/semantic-router/llm-katan:latest
+          image: ghcr.io/vllm-project/semantic-router/llm-katan:nightly
           imagePullPolicy: IfNotPresent
 
           # Command is set via environment variables

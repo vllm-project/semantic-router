@@ -257,6 +257,6 @@ Interested? Reach out to us:
 
 - [AMD ROCm™ Software](https://www.amd.com/en/products/software/rocm.html)
 - [vLLM Semantic Router GitHub Repo](https://github.com/vllm-project/semantic-router)
-- [vLLM Semantic Router Documentation](https://vllm-semantic-router.com)
+- [vLLM Semantic Router Documentation](https://vllm-sr.ai)
 
 **Join the discussion**: Share your use cases and feedback in #semantic-router channel on [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN)

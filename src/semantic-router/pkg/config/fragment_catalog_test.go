@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,15 +14,16 @@ import (
 func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	configRoot := filepath.Join(root, "config")
+	fragmentsRoot := filepath.Join(configRoot, "fragments")
 
 	for _, signalType := range SupportedSignalTypes() {
-		dir := filepath.Join(configRoot, "signal", fragmentDirName(signalType))
+		dir := filepath.Join(fragmentsRoot, "signal", fragmentDirName(signalType))
 		requireYAMLFilesInDir(t, dir)
 	}
 
 	requiredDecisionCategories := []string{"single", "and", "or", "not", "composite"}
 	for _, category := range requiredDecisionCategories {
-		dir := filepath.Join(configRoot, "decision", category)
+		dir := filepath.Join(fragmentsRoot, "decision", category)
 		requireYAMLFilesInDir(t, dir)
 	}
 
@@ -48,20 +50,38 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		if !ok {
 			t.Fatalf("missing fragment mapping for algorithm type %q", algorithmType)
 		}
-		requireYAMLFile(t, filepath.Join(configRoot, "algorithm", relPath))
+		requireYAMLFile(t, filepath.Join(fragmentsRoot, "algorithm", relPath))
 	}
 
 	for _, pluginType := range SupportedDecisionPluginTypes() {
-		dir := filepath.Join(configRoot, "plugin", fragmentDirName(pluginType))
+		dir := filepath.Join(fragmentsRoot, "plugin", fragmentDirName(pluginType))
 		requireYAMLFilesInDir(t, dir)
+	}
+}
+
+func TestConfigFragmentsStayUnderUnifiedDirectory(t *testing.T) {
+	root := repoRootFromTestFile(t)
+	configRoot := filepath.Join(root, "config")
+	fragmentsRoot := filepath.Join(configRoot, "fragments")
+
+	for _, category := range []string{"signal", "decision", "algorithm", "plugin"} {
+		requireDirectory(t, filepath.Join(fragmentsRoot, category))
+		if _, err := os.Stat(filepath.Join(configRoot, category)); !os.IsNotExist(err) {
+			t.Fatalf("legacy fragment directory config/%s must not exist", category)
+		}
 	}
 }
 
 func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	root := repoRootFromTestFile(t)
-	configRoot := filepath.Join(root, "config")
+	configRoot := filepath.Join(root, "config", "fragments")
 
-	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(configRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -69,7 +89,7 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -84,11 +104,45 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	}
 }
 
+func TestClassifierFragmentsCoverRemoteBackendTypes(t *testing.T) {
+	root := repoRootFromTestFile(t)
+	fragments := map[string]string{
+		ClassifierSignalTypeLLM:                "label-score.yaml",
+		ClassifierSignalTypeSequenceClassifier: "sequence-label-score.yaml",
+	}
+	for classifierType, filename := range fragments {
+		path := filepath.Join(root, "config", "fragments", "signal", "classifier", filename)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read classifier fragment %s: %v", path, err)
+		}
+		var fragment struct {
+			Routing struct {
+				Signals struct {
+					Classifiers []ClassifierSignalRule `yaml:"classifiers"`
+				} `yaml:"signals"`
+			} `yaml:"routing"`
+		}
+		if err := yaml.Unmarshal(data, &fragment); err != nil {
+			t.Fatalf("failed to parse classifier fragment %s: %v", path, err)
+		}
+		if len(fragment.Routing.Signals.Classifiers) != 1 ||
+			fragment.Routing.Signals.Classifiers[0].Type != classifierType {
+			t.Fatalf("classifier fragment %s must contain exactly one %q rule", path, classifierType)
+		}
+	}
+}
+
 func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 	root := repoRootFromTestFile(t)
-	configRoot := filepath.Join(root, "config")
+	configRoot := filepath.Join(root, "config", "fragments")
 
-	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(configRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -96,7 +150,7 @@ func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -147,6 +201,17 @@ func requireYAMLFile(t *testing.T, path string) {
 	}
 	if info.IsDir() {
 		t.Fatalf("expected fragment file %s, found directory", path)
+	}
+}
+
+func requireDirectory(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("expected directory %s: %v", path, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected directory %s, found file", path)
 	}
 }
 

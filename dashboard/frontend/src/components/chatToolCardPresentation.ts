@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<ToolCall['status'], string> = {
   running: 'Running',
   completed: 'Done',
   failed: 'Failed',
+  skipped: 'Not executed',
 }
 
 function readStringField(args: Record<string, unknown> | null, key: string) {
@@ -38,7 +39,11 @@ export function getToolStatusLabel(status: ToolCall['status']) {
   return STATUS_LABELS[status]
 }
 
-export function getToolSummary(toolName: string, args: Record<string, unknown> | null, isClawTool: boolean) {
+export function getToolSummary(
+  toolName: string,
+  args: Record<string, unknown> | null,
+  isClawTool: boolean,
+) {
   const name = readStringField(args, 'name')
   const role = readStringField(args, 'role')
   const team = readStringField(args, 'team_name') || readStringField(args, 'team')

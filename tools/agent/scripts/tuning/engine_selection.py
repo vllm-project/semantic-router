@@ -1,9 +1,8 @@
 """Fix selection, conflict analysis, and config mutation for the DSL tuning engine.
 
-Split from engine.py to satisfy the structural line-count limit.  This module
-contains the higher-level orchestration that sits on top of the core analytical
-primitives (trace walking, decomposition, score computation, regression checking)
-which remain in engine.py.
+This module owns higher-level mutation orchestration. The core analytical
+primitives (trace walking, decomposition, score computation, and regression
+checking) remain in ``engine.py``.
 """
 
 from __future__ import annotations

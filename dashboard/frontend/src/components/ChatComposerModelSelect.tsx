@@ -22,7 +22,6 @@ export default function ChatComposerModelSelect({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const listboxId = useId()
-  const selected = models.find((model) => model.id === value)
   const filteredModels = models.filter((model) => {
     const normalized = query.trim().toLowerCase()
     return (
@@ -88,6 +87,7 @@ export default function ChatComposerModelSelect({
         aria-expanded={open}
         aria-controls={listboxId}
         aria-haspopup="listbox"
+        aria-label={`Model: ${value || 'Choose model'}`}
         disabled={disabled || models.length === 0}
         onClick={() => {
           setQuery('')
@@ -95,9 +95,8 @@ export default function ChatComposerModelSelect({
           else setOpen(true)
         }}
         data-testid="playground-composer-model-select"
-        title={selected?.description || value || 'Choose model'}
+        title={value || 'Choose model'}
       >
-        <span className={styles.brandMark}>MoM</span>
         <span className={styles.triggerLabel}>{value || 'Choose model'}</span>
         <svg className={styles.chevron} viewBox="0 0 16 16" aria-hidden="true">
           <path d="m4 10 4-4 4 4" />
@@ -107,10 +106,7 @@ export default function ChatComposerModelSelect({
       {open ? (
         <div className={styles.menu}>
           <div className={styles.menuHeader}>
-            <div>
-              <span>Choose a model</span>
-              <small>Mixture-of-Models</small>
-            </div>
+            <span>Choose a model</span>
             <small>{models.length} models</small>
           </div>
           <input
@@ -134,7 +130,7 @@ export default function ChatComposerModelSelect({
             }}
             autoFocus
           />
-          <div id={listboxId} role="listbox" aria-label="Select Mixture-of-Models profile">
+          <div id={listboxId} role="listbox" aria-label="Select routing model">
             {filteredModels.map((model, index) => {
               const active = model.id === value
               return (
@@ -154,12 +150,11 @@ export default function ChatComposerModelSelect({
                   }}
                 >
                   <span className={styles.optionIdentity}>
-                    <code>{model.id}</code>
-                    {model.recipe ? <small>recipe: {model.recipe}</small> : null}
+                    <span className={styles.optionModelId}>{model.id}</span>
+                    {model.recipe ? (
+                      <span className={styles.objectiveChip}>{model.recipe}</span>
+                    ) : null}
                   </span>
-                  {model.description ? (
-                    <span className={styles.optionDescription}>{model.description}</span>
-                  ) : null}
                   {active ? <span className={styles.activeMark}>✓</span> : null}
                 </button>
               )

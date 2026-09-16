@@ -13,6 +13,7 @@ const postgresRecordSelectColumns = `
 	original_model, selected_model, reasoning_mode,
 	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 	request_body, response_body, response_status,
+	lifecycle_state, ended_at, duration_ms, terminal_reason,
 	from_cache, streaming, request_body_truncated, response_body_truncated,
 	guardrails_enabled, jailbreak_enabled, pii_enabled,
 	prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
@@ -21,7 +22,7 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count, hallucination_span_details
+	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata
 `
 
 type postgresRowScanner interface {
@@ -29,6 +30,8 @@ type postgresRowScanner interface {
 }
 
 type postgresInsertRecord struct {
+	routingMetadataJSON          []byte
+	safetyEvidenceJSON           []byte
 	record                       Record
 	signalsJSON                  []byte
 	projectionsJSON              []byte
@@ -46,6 +49,8 @@ type postgresInsertRecord struct {
 }
 
 type postgresRecordRow struct {
+	routingMetadataJSON          []byte
+	safetyEvidenceJSON           []byte
 	record                       Record
 	signalsJSON                  []byte
 	projectionsJSON              []byte
@@ -74,6 +79,9 @@ type postgresRecordRow struct {
 	turnIndex                    sql.NullInt64
 	previousResponseID           sql.NullString
 	conversationID               sql.NullString
+	recipe                       sql.NullString
+	endedAt                      sql.NullTime
+	terminalReason               sql.NullString
 }
 
 func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
@@ -95,6 +103,8 @@ func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
 		target  *[]byte
 		marshal func() ([]byte, error)
 	}{
+		{"safety evidence", &out.safetyEvidenceJSON, func() ([]byte, error) { return marshalPostgresSafety(record) }},
+		{"routing metadata", &out.routingMetadataJSON, func() ([]byte, error) { return marshalPostgresRoutingMetadata(record) }},
 		{"signals", &out.signalsJSON, func() ([]byte, error) { return json.Marshal(record.Signals) }},
 		{"projections", &out.projectionsJSON, func() ([]byte, error) { return json.Marshal(record.Projections) }},
 		{"projection scores", &out.projectionScoresJSON, func() ([]byte, error) { return json.Marshal(record.ProjectionScores) }},
@@ -130,6 +140,9 @@ func preparePostgresInsertRecord(record Record) (Record, error) {
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
 	}
+	if record.LifecycleState == "" {
+		record.LifecycleState = LifecycleInProgress
+	}
 	return record, nil
 }
 
@@ -159,6 +172,10 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.RequestBody,
 		record.record.ResponseBody,
 		record.record.ResponseStatus,
+		record.record.LifecycleState,
+		record.record.EndedAt,
+		record.record.DurationMS,
+		record.record.TerminalReason,
 		record.record.FromCache,
 		record.record.Streaming,
 		record.record.RequestBodyTruncated,
@@ -195,6 +212,9 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.CacheSimilarity,
 		record.record.ContextTokenCount,
 		record.hallucinationSpanDetailsJSON,
+		emptyStringSQL(record.record.Recipe),
+		record.safetyEvidenceJSON,
+		record.routingMetadataJSON,
 	}
 }
 
@@ -251,6 +271,10 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.RequestBody,
 		&row.record.ResponseBody,
 		&row.record.ResponseStatus,
+		&row.record.LifecycleState,
+		&row.endedAt,
+		&row.record.DurationMS,
+		&row.terminalReason,
 		&row.record.FromCache,
 		&row.record.Streaming,
 		&row.record.RequestBodyTruncated,
@@ -287,10 +311,19 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.CacheSimilarity,
 		&row.record.ContextTokenCount,
 		&row.hallucinationSpanDetailsJSON,
+		&row.recipe,
+		&row.safetyEvidenceJSON,
+		&row.routingMetadataJSON,
 	}
 }
 
 func (row *postgresRecordRow) decode() (Record, error) {
+	if err := unmarshalPostgresSafety(row.safetyEvidenceJSON, &row.record); err != nil {
+		return Record{}, err
+	}
+	if err := unmarshalPostgresRoutingMetadata(row.routingMetadataJSON, &row.record); err != nil {
+		return Record{}, err
+	}
 	if err := row.unmarshalDecodedJSON(); err != nil {
 		return Record{}, err
 	}
@@ -314,6 +347,13 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		row.baselineModel,
 	)
 	row.assignReplaySessionIdentifiers()
+	row.assignReplayRecipe()
+	if row.endedAt.Valid {
+		row.record.EndedAt = cloneTimePtr(&row.endedAt.Time)
+	}
+	if row.terminalReason.Valid {
+		row.record.TerminalReason = row.terminalReason.String
+	}
 	return row.record, nil
 }
 
@@ -366,5 +406,13 @@ func (row *postgresRecordRow) assignReplaySessionIdentifiers() {
 	}
 	if row.conversationID.Valid {
 		row.record.ConversationID = row.conversationID.String
+	}
+}
+
+// assignReplayRecipe restores routing recipe identity. Rows written before the
+// recipe column existed scan as NULL and leave Record.Recipe empty.
+func (row *postgresRecordRow) assignReplayRecipe() {
+	if row.recipe.Valid {
+		row.record.Recipe = row.recipe.String
 	}
 }

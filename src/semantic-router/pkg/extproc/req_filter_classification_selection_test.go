@@ -26,6 +26,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -201,6 +202,36 @@ func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
 	}
 }
 
+func TestSelectModelFromCandidatesPreservesFailClosedPolicy(t *testing.T) {
+	registry := selection.NewRegistry()
+	policyErr := fmt.Errorf("%w: test policy", selection.ErrNoEligibleCandidates)
+	registry.Register(
+		selection.MethodStatic,
+		selectionResultSelector{err: policyErr},
+	)
+	router := &OpenAIRouter{ModelSelector: registry}
+	requestContext := &RequestContext{}
+
+	selected, _, err := router.selectModelFromCandidates(
+		&selection.SelectionContext{
+			DecisionName:    "strict",
+			CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		},
+		nil,
+		requestContext,
+	)
+
+	if !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("error = %v, want ErrNoEligibleCandidates", err)
+	}
+	if selected != nil {
+		t.Fatalf("fail-closed selection returned fallback %#v", selected)
+	}
+	if requestContext.VSRSelectionReasoning != "" {
+		t.Fatalf("fail-closed selection recorded fallback diagnostics %q", requestContext.VSRSelectionReasoning)
+	}
+}
+
 func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
@@ -216,8 +247,8 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 	if selected == nil || selected.Model != "model-a" {
 		t.Fatalf("expected model-a, got %#v", selected)
 	}
-	if method != "single" {
-		t.Fatalf("expected single method, got %q", method)
+	if method != string(selection.MethodStatic) {
+		t.Fatalf("expected static method, got %q", method)
 	}
 
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("single-candidate-session", time.Now())
@@ -226,6 +257,27 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 	}
 	if snapshot.CurrentModel != "model-a" {
 		t.Fatalf("expected current model model-a, got %q", snapshot.CurrentModel)
+	}
+}
+
+func TestSelectModelFromCandidatesPreservesConfiguredAlgorithmForSingleCandidate(t *testing.T) {
+	router := &OpenAIRouter{}
+	selected, method, err := router.selectModelFromCandidates(
+		&selection.SelectionContext{
+			DecisionName:    "only-choice",
+			CandidateModels: []config.ModelRef{{Model: "model-a"}},
+		},
+		&config.AlgorithmConfig{Type: config.DecisionAlgorithmMultiFactor},
+		&RequestContext{},
+	)
+	if err != nil {
+		t.Fatalf("selectModelFromCandidates() error = %v", err)
+	}
+	if selected == nil || selected.Model != "model-a" {
+		t.Fatalf("expected model-a, got %#v", selected)
+	}
+	if method != string(selection.MethodMultiFactor) {
+		t.Fatalf("expected multi_factor method, got %q", method)
 	}
 }
 
@@ -239,7 +291,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 	modelSelectionCfg := buildModelSelectionConfig(&cfg)
 	registry := selection.NewFactory(modelSelectionCfg).
 		WithModelConfig(cfg.BackendModels.ModelConfig).
-		WithEmbeddingFunc(func(text string) ([]float32, error) {
+		WithEmbeddingFunc(func(text string, _ selection.EmbeddingConfig) ([]float32, error) {
 			lower := strings.ToLower(text)
 			switch {
 			case strings.Contains(lower, "coding"):
@@ -249,7 +301,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 			default:
 				return []float32{0.5, 0.5}, nil
 			}
-		}).
+		}, selection.EmbeddingConfig{}).
 		CreateAll()
 
 	router := &OpenAIRouter{
@@ -294,14 +346,12 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *tes
 	}
 	cfg := config.DefaultGlobalConfig()
 	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
-		"premium": {
-			QualityScore: 0.9,
-			Pricing:      config.ModelPricing{PromptPer1M: 10},
-		},
-		"economy": {
-			QualityScore: 0.1,
-			Pricing:      config.ModelPricing{PromptPer1M: 1},
-		},
+		"premium": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 10},
+		}, 0.9),
+		"economy": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 1},
+		}, 0.1),
 	}
 	cfg.Decisions = []config.Decision{
 		{Name: "quality", Algorithm: qualityPolicy},
@@ -347,8 +397,11 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 		TurnIndex:            2,
 		HistoryTokenCount:    1024,
 		VSRContextTokenCount: 2048,
-		SessionIdleSeconds:   12,
-		SessionIdleKnown:     true,
+		SemanticRequest: &llmprotocol.Request{
+			Sampling: llmprotocol.Sampling{MaxOutputTokens: llmprotocol.Int64(512)},
+		},
+		SessionIdleSeconds: 12,
+		SessionIdleKnown:   true,
 		VSRConversationFacts: classification.ConversationFacts{
 			AssistantToolCallCount: 1,
 			ToolResultCount:        1,
@@ -375,6 +428,13 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 	}
 	if got := selCtx.AgenticSession.ModelContextWindows["model-a"]; got != 8192 {
 		t.Fatalf("expected model context window 8192, got %d", got)
+	}
+	if selCtx.InputTokens != 2048 || selCtx.ExpectedOutputTokens != 512 {
+		t.Fatalf(
+			"expected request token budget 2048+512, got %d+%d",
+			selCtx.InputTokens,
+			selCtx.ExpectedOutputTokens,
+		)
 	}
 }
 

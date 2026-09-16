@@ -2,7 +2,7 @@
 
 ## Overview
 
-`preference` infers user response-style preferences from examples and classifier settings. It maps to `config/signal/preference/` and is declared under `routing.signals.preferences`.
+`preference` infers user response-style preferences from examples and classifier settings. It maps to `config/fragments/signal/preference/` and is declared under `routing.signals.preferences`.
 
 This family is learned: it uses the preference-classification path under `global.model_catalog.modules.classifier.preference`.
 
@@ -32,7 +32,7 @@ Use `preference` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/preference/`
+Source fragment family: `config/fragments/signal/preference/`
 
 ```yaml
 routing:

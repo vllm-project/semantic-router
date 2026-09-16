@@ -52,6 +52,14 @@ log = get_logger(__name__)
     help="Config file used to resolve listener host port (Docker default only).",
 )
 @click.option(
+    "--base-url",
+    default=None,
+    help=(
+        "Explicit routed listener origin or OpenAI /v1 base URL for a remote "
+        "or port-forwarded stack."
+    ),
+)
+@click.option(
     "--json",
     "json_output",
     is_flag=True,
@@ -78,6 +86,7 @@ def chat(
     model: str,
     system_prompt: str | None,
     config: str,
+    base_url: str | None,
     json_output: bool,
     timeout: float,
     temperature: float | None,
@@ -91,22 +100,26 @@ def chat(
 
     Examples:
 
-        vllm-sr chat "hello"
+        vllm-sr request chat "hello"
 
-        vllm-sr chat --model vllm-sr/auto --prompt "Explain mixture of models"
+        vllm-sr request chat --model vllm-sr/auto --prompt "Explain mixture of models"
 
-        vllm-sr chat --json "hello"
+        vllm-sr request chat --json "hello"
     """
     user_text = (prompt or "").strip() or " ".join(message).strip()
     if not user_text:
         raise click.UsageError("Provide a prompt as arguments or use --prompt.")
 
     try:
-        base = resolve_chat_base_url(config_path=config, target=target)
+        base = resolve_chat_base_url(
+            config_path=config,
+            target=target,
+            base_url=base_url,
+        )
     except (OSError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
-    if resolve_target(target) == "docker":
+    if base_url is None and resolve_target(target) == "docker":
         logging.getLogger("cli.container_runtime").setLevel(logging.WARNING)
         backend = ContainerBackend()
         if not backend.is_running():

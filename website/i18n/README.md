@@ -67,6 +67,20 @@ The audit uses two signals:
 
 The audit is read-only and returns nonzero while translation or metadata work remains.
 
+Current-document coverage is tracked as an exact, reviewable path inventory in
+`translation-coverage-baseline.txt`. Deleting a recorded locale override fails
+the audit while its English source still exists. New overrides and intentional
+page moves or retirements require an explicit baseline refresh:
+
+```bash
+make docs-update-translation-baseline
+```
+
+Review the baseline diff with the documentation change. Versioned documentation
+is not included in this inventory. The lightweight PR gate runs
+`make docs-check-translation-coverage`, which checks this inventory without
+turning existing source-drift or metadata work into a coverage failure.
+
 To update only unambiguous `translation.outdated` flags, run:
 
 ```bash
@@ -111,7 +125,10 @@ make docs-check-translations || true
 
 ## CI Automation
 
-A daily GitHub Action ([check-translation-staleness.yml](../../.github/workflows/check-translation-staleness.yml)) automatically manages the `outdated` status:
+A weekly maintenance job
+([maintenance.yml](../../.github/workflows/maintenance.yml), using the reusable
+`check-translation-staleness.yml` workflow) automatically manages the
+`outdated` status:
 
 | Condition | Action |
 | --------- | ------ |

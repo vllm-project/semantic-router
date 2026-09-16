@@ -1,7 +1,7 @@
 import React from 'react'
 import Link from '@docusaurus/Link'
 import Translate, { translate } from '@docusaurus/Translate'
-import { PillLink } from '@site/src/components/site/Chrome'
+import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import shared from './homepageShared.module.css'
 import styles from './CompatibilityBand.module.css'
@@ -45,15 +45,15 @@ export default function CompatibilityBand(): JSX.Element {
     <section className={shared.bandSection} aria-labelledby="compatibility-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={shared.sectionHeader}>
-            <span className={shared.eyebrow}>
-              <Translate id="homepage.compat.label">Universal compatibility</Translate>
-            </span>
+          <header className={`site-section-intro ${shared.sectionHeader}`}>
+            <SectionLabel>
+              <Translate id="homepage.compat.label">Deployment options</Translate>
+            </SectionLabel>
             <h2 id="compatibility-title" className={shared.sectionTitle}>
-              <Translate id="homepage.compat.title">One router, any deployment</Translate>
+              <Translate id="homepage.compat.title">One router, supported deployment paths</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.compat.subtitle">Run on gateways, Kubernetes, or locally — with 16 signal families for every request.</Translate>
+              <Translate id="homepage.compat.subtitle">Run behind Envoy, with supported Kubernetes integrations, or locally — and compose up to 20 signal families in a recipe.</Translate>
             </p>
           </header>
         </ScrollReveal>
@@ -68,7 +68,7 @@ export default function CompatibilityBand(): JSX.Element {
                   </h3>
                   <p>
                     <Translate id="homepage.compat.deploy.subtitle">
-                      Same router, any infrastructure
+                      Choose a supported integration
                     </Translate>
                   </p>
                 </div>
@@ -88,7 +88,7 @@ export default function CompatibilityBand(): JSX.Element {
               </div>
               <div className={`${shared.surfaceCardFooter} ${styles.columnCta}`}>
                 <PillLink to="/docs/installation" muted>
-                  <Translate id="homepage.compat.deploy.cta">View all install paths</Translate>
+                  <Translate id="homepage.compat.deploy.cta">View install paths</Translate>
                 </PillLink>
               </div>
             </div>
@@ -103,7 +103,7 @@ export default function CompatibilityBand(): JSX.Element {
                   </h3>
                   <p>
                     <Translate id="homepage.compat.signals.subtitle">
-                      16 heuristic and learned detectors
+                      20 request, safety, intent, preference, and system signals
                     </Translate>
                   </p>
                 </div>
@@ -118,8 +118,8 @@ export default function CompatibilityBand(): JSX.Element {
                         {signal}
                       </Link>
                     ))}
-                    <span className={styles.signalChipMore} title="16 signal families total">
-                      +8 more
+                    <span className={styles.signalChipMore} title="20 signal families total">
+                      +12 more
                     </span>
                   </div>
                 </div>

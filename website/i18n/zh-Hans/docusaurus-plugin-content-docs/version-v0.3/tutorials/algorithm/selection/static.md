@@ -11,7 +11,7 @@ translation:
 
 `static` 是最简单的选择算法：路由保留候选列表，选择策略固定。
 
-对应 `config/algorithm/selection/static.yaml`。
+对应 `config/fragments/algorithm/selection/static.yaml`。
 
 ## 主要优势
 

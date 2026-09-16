@@ -2,25 +2,168 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+const (
+	ResponseCacheModeSemantic          = "semantic"
+	ResponseCacheModeExact             = "exact"
+	ResponseCacheModeExactThenSemantic = "exact_then_semantic"
+
+	// Deprecated compatibility names.
+	SemanticCacheModeSemantic          = ResponseCacheModeSemantic
+	SemanticCacheModeExact             = ResponseCacheModeExact
+	SemanticCacheModeExactThenSemantic = ResponseCacheModeExactThenSemantic
 )
 
 // DecisionPlugin represents a plugin configuration for a decision.
 // Type is the plugin identifier; the authoritative supported set is registered in
 // routing_surface_catalog (and DSL/compiler surfaces), not duplicated here.
 type DecisionPlugin struct {
-	Type string `yaml:"type" json:"type"`
+	Type string `yaml:"type" json:"type" jsonschema:"required"`
 
 	// Configuration stores the plugin payload as normalized structured bytes.
-	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty"`
+	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty" jsonschema:"required"`
 }
 
-// SemanticCachePluginConfig represents configuration for semantic-cache plugin.
-type SemanticCachePluginConfig struct {
-	Enabled             bool     `json:"enabled" yaml:"enabled"`
+// ResponseCacheSemanticConfig controls the semantic lookup tier.
+type ResponseCacheSemanticConfig struct {
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
-	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+}
+
+// ResponseCacheRequestControlsConfig authorizes bounded request-level cache directives.
+type ResponseCacheRequestControlsConfig struct {
+	Enabled       bool     `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Header        string   `json:"header,omitempty" yaml:"header,omitempty"`
+	Allowed       []string `json:"allowed,omitempty" yaml:"allowed,omitempty"`
+	MaxTTLSeconds *int     `json:"max_ttl_seconds,omitempty" yaml:"max_ttl_seconds,omitempty"`
+}
+
+// ResponseCachePersonalizedConfig controls post-enrichment response caching.
+type ResponseCachePersonalizedConfig struct {
+	Mode string `json:"mode,omitempty" yaml:"mode,omitempty"`
+}
+
+type ResponseCacheRevisionConfig struct {
+	CacheEpoch     string `json:"cache_epoch,omitempty" yaml:"cache_epoch,omitempty"`
+	ModelRevision  string `json:"model_revision,omitempty" yaml:"model_revision,omitempty"`
+	PromptRevision string `json:"prompt_revision,omitempty" yaml:"prompt_revision,omitempty"`
+	PolicyRevision string `json:"policy_revision,omitempty" yaml:"policy_revision,omitempty"`
+}
+
+// ResponseCachePluginConfig represents route-local response reuse policy.
+type ResponseCachePluginConfig struct {
+	Enabled         bool                                `json:"enabled" yaml:"enabled"`
+	Mode            string                              `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Scope           string                              `json:"scope,omitempty" yaml:"scope,omitempty"`
+	Semantic        *ResponseCacheSemanticConfig        `json:"semantic,omitempty" yaml:"semantic,omitempty"`
+	RequestControls *ResponseCacheRequestControlsConfig `json:"request_controls,omitempty" yaml:"request_controls,omitempty"`
+	Personalized    *ResponseCachePersonalizedConfig    `json:"personalized,omitempty" yaml:"personalized,omitempty"`
+	Revision        *ResponseCacheRevisionConfig        `json:"revision,omitempty" yaml:"revision,omitempty"`
+	// Deprecated flat compatibility fields. New config should use semantic and
+	// request_controls.
+	AllowRequestControls bool     `json:"allow_request_controls,omitempty" yaml:"allow_request_controls,omitempty"`
+	ControlHeader        string   `json:"control_header,omitempty" yaml:"control_header,omitempty"`
+	SimilarityThreshold  *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+	TTLSeconds           *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+}
+
+// SemanticCachePluginConfig is retained for source compatibility.
+type SemanticCachePluginConfig = ResponseCachePluginConfig
+
+func (c *ResponseCachePluginConfig) EffectiveSimilarityThreshold() *float32 {
+	if c == nil {
+		return nil
+	}
+	if c.Semantic != nil && c.Semantic.SimilarityThreshold != nil {
+		return c.Semantic.SimilarityThreshold
+	}
+	return c.SimilarityThreshold
+}
+
+func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequestControlsConfig {
+	if c == nil {
+		return ResponseCacheRequestControlsConfig{}
+	}
+	if c.RequestControls != nil {
+		return *c.RequestControls
+	}
+	return ResponseCacheRequestControlsConfig{
+		Enabled: c.AllowRequestControls,
+		Header:  c.ControlHeader,
+	}
+}
+
+// ContextCompressionPluginConfig controls route-local provider-bound context compression.
+type ContextCompressionPluginConfig struct {
+	Enabled         bool                                     `json:"enabled" yaml:"enabled"`
+	Mode            string                                   `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Budget          *ContextCompressionBudgetConfig          `json:"budget,omitempty" yaml:"budget,omitempty"`
+	Targets         *ContextCompressionTargetsConfig         `json:"targets,omitempty" yaml:"targets,omitempty"`
+	Scoring         *ContextCompressionScoringConfig         `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	Recovery        *ContextCompressionRecoveryConfig        `json:"recovery,omitempty" yaml:"recovery,omitempty"`
+	RequestControls *ContextCompressionRequestControlsConfig `json:"request_controls,omitempty" yaml:"request_controls,omitempty"`
+	FailureMode     string                                   `json:"failure_mode,omitempty" yaml:"failure_mode,omitempty"`
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveMode() string {
+	if c == nil || strings.TrimSpace(c.Mode) == "" {
+		return ContextCompressionModeAuto
+	}
+	return strings.TrimSpace(c.Mode)
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveToolOutputTarget() ContextCompressionTargetConfig {
+	result := ContextCompressionTargetConfig{
+		Mode:         ContextCompressionTargetExtractive,
+		MinTokens:    2000,
+		TargetTokens: 1000,
+	}
+	if c == nil {
+		return result
+	}
+	if c.Targets != nil {
+		target := c.Targets.ToolOutputs
+		if strings.TrimSpace(target.Mode) != "" {
+			result.Mode = strings.TrimSpace(target.Mode)
+		}
+		if target.MinTokens != 0 {
+			result.MinTokens = target.MinTokens
+		}
+		if target.TargetTokens != 0 {
+			result.TargetTokens = target.TargetTokens
+		}
+	}
+	return result
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveTargetMode(
+	target ContextCompressionTargetConfig,
+) string {
+	if strings.TrimSpace(target.Mode) == "" {
+		return ContextCompressionTargetPreserve
+	}
+	return strings.TrimSpace(target.Mode)
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveScoring() ContextCompressionScoringConfig {
+	if c == nil || c.Scoring == nil {
+		return ContextCompressionScoringConfig{Method: ContextCompressionScoringBM25}
+	}
+	result := *c.Scoring
+	if strings.TrimSpace(result.Method) == "" {
+		result.Method = ContextCompressionScoringBM25
+	}
+	return result
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveFailureMode() string {
+	if c == nil || strings.TrimSpace(c.FailureMode) == "" {
+		return ContextCompressionFailureOpen
+	}
+	return strings.TrimSpace(c.FailureMode)
 }
 
 // MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
@@ -42,6 +185,8 @@ type FastResponsePluginConfig struct {
 // RequestParamsPluginConfig represents configuration for request_params plugin.
 // This plugin validates and strips request body parameters per decision.
 type RequestParamsPluginConfig struct {
+	// DefaultMaxTokens supplies an output bound only when the caller omits it.
+	DefaultMaxTokens *int `json:"default_max_tokens,omitempty" yaml:"default_max_tokens,omitempty" jsonschema:"minimum=1"`
 	// BlockedParams is a list of parameters that should be blocked/stripped.
 	BlockedParams []string `json:"blocked_params,omitempty" yaml:"blocked_params,omitempty"`
 	// MaxTokensLimit sets the maximum allowed value for max_tokens.
@@ -57,6 +202,24 @@ type SystemPromptPluginConfig struct {
 	Enabled      *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
 	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"`
+}
+
+// IsEnabled preserves the implicit activation of a nonempty system prompt.
+func (c *SystemPromptPluginConfig) IsEnabled() bool {
+	if c == nil {
+		return false
+	}
+	if c.Enabled != nil {
+		return *c.Enabled
+	}
+	return c.SystemPrompt != ""
+}
+
+func (c *SystemPromptPluginConfig) EffectiveMode() string {
+	if c == nil || c.Mode == "" {
+		return "insert"
+	}
+	return c.Mode
 }
 
 // HeaderMutationPluginConfig represents configuration for header_mutation plugin.
@@ -109,6 +272,51 @@ type RouterReplayPluginConfig struct {
 	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
 }
 
+// ShadowDispatchPluginConfig represents configuration for the shadow_dispatch
+// plugin. A shadow dispatch sends a bounded, sampled copy of the approved
+// provider-bound request to a secondary configured model after the primary
+// dispatch has been finalized. The primary response never waits on, or
+// changes because of, the shadow call.
+type ShadowDispatchPluginConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// Model is the configured logical model that receives the shadow copy.
+	Model string `json:"model" yaml:"model"`
+	// SampleRate is the fraction of eligible requests that are shadowed, in
+	// [0, 1]. nil means every eligible request; 0 disables dispatch while
+	// keeping the plugin declared.
+	SampleRate *float64 `json:"sample_rate,omitempty" yaml:"sample_rate,omitempty"`
+	// MaxConcurrency bounds in-flight shadow calls for this decision.
+	MaxConcurrency int `json:"max_concurrency,omitempty" yaml:"max_concurrency,omitempty"`
+	// MaxQueueDepth bounds shadow calls waiting for an in-flight slot. Calls
+	// beyond the depth are dropped with a queue_full reason.
+	MaxQueueDepth int `json:"max_queue_depth,omitempty" yaml:"max_queue_depth,omitempty"`
+	// TimeoutSeconds bounds queue wait plus execution for one shadow call.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+	// MaxResponseBytes bounds the shadow response body read from the backend.
+	MaxResponseBytes int `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
+	// MaxRetries bounds additional attempts on transport errors or retryable
+	// upstream statuses. All attempts share the same deadline.
+	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
+	// CaptureResponseBody stores a bounded excerpt of the shadow output text
+	// in the replay outcome. Off by default: only hashes and sizes are kept.
+	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	// MaxCaptureBytes bounds the stored excerpt when CaptureResponseBody is on.
+	MaxCaptureBytes int `json:"max_capture_bytes,omitempty" yaml:"max_capture_bytes,omitempty"`
+	// TLSSkipVerify disables certificate verification for an https shadow
+	// backend. The primary path reaches backends through Envoy, which does not
+	// verify upstream certificates, so this matches that posture for internal
+	// CAs. Off by default.
+	TLSSkipVerify bool `json:"tls_skip_verify,omitempty" yaml:"tls_skip_verify,omitempty"`
+	// ForwardHeaders names the decision header_mutation headers a shadow copy
+	// may carry. Nothing a decision sets for the primary backend is forwarded
+	// unless listed here, so a custom credential such as X-Internal-Token
+	// stays on the primary path. Known credential carriers (Authorization,
+	// Proxy-Authorization, Cookie, x-api-key, api-key, x-goog-api-key, the
+	// x-user-*-key headers) cannot be listed. Names match case-insensitively.
+	// Empty by default.
+	ForwardHeaders []string `json:"forward_headers,omitempty" yaml:"forward_headers,omitempty"`
+}
+
 // GetPlugin returns the plugin entry for a specific plugin type.
 func (d *Decision) GetPlugin(pluginType string) *DecisionPlugin {
 	normalizedTarget := NormalizeDecisionPluginType(pluginType)
@@ -133,10 +341,23 @@ func UnmarshalPluginConfig(config *StructuredPayload, target interface{}) error 
 	return config.DecodeInto(target)
 }
 
-// GetSemanticCacheConfig returns the semantic-cache plugin configuration.
+// GetResponseCacheConfig returns route-local response cache settings.
+func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
+	result := &ResponseCachePluginConfig{}
+	return decodeDecisionPlugin(d, DecisionPluginResponseCache, result)
+}
+
+// GetSemanticCacheConfig is retained for source compatibility.
+//
+// Deprecated: use GetResponseCacheConfig.
 func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
-	result := &SemanticCachePluginConfig{}
-	return decodeDecisionPlugin(d, "semantic-cache", result)
+	return d.GetResponseCacheConfig()
+}
+
+// GetContextCompressionConfig returns route-local tool-output compression settings.
+func (d *Decision) GetContextCompressionConfig() *ContextCompressionPluginConfig {
+	result := &ContextCompressionPluginConfig{}
+	return decodeDecisionPlugin(d, "context_compression", result)
 }
 
 // GetSystemPromptConfig returns the system_prompt plugin configuration.
@@ -167,6 +388,12 @@ func (d *Decision) GetResponseJailbreakConfig() *ResponseJailbreakPluginConfig {
 func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 	result := &RouterReplayPluginConfig{}
 	return decodeDecisionPlugin(d, "router_replay", result)
+}
+
+// GetShadowDispatchConfig returns the shadow_dispatch plugin configuration.
+func (d *Decision) GetShadowDispatchConfig() *ShadowDispatchPluginConfig {
+	result := &ShadowDispatchPluginConfig{}
+	return decodeDecisionPlugin(d, DecisionPluginShadowDispatch, result)
 }
 
 // GetMemoryConfig returns the memory plugin config, or nil to use global config.

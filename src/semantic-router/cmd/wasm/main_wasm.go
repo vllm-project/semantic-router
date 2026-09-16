@@ -198,7 +198,8 @@ func validate(_ js.Value, args []js.Value) interface{} {
 }
 
 // decompile implements signalDecompile(yamlSource: string) → string (JSON).
-// Converts a full router config YAML or routing fragment YAML back to routing-only DSL text.
+// Converts a full router config YAML or routing fragment YAML back to the
+// complete DSL-owned surface, including entrypoints and recipes.
 func decompile(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(DecompileResult{Error: "signalDecompile requires 1 argument: yamlSource"})
@@ -210,7 +211,7 @@ func decompile(_ js.Value, args []js.Value) interface{} {
 		return marshalJSON(DecompileResult{Error: "YAML parse error: " + err.Error()})
 	}
 
-	dslText, err := dsl.DecompileRouting(cfg)
+	dslText, err := dsl.Decompile(cfg)
 	if err != nil {
 		return marshalJSON(DecompileResult{Error: err.Error()})
 	}

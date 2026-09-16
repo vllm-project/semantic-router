@@ -1,74 +1,76 @@
 ---
 translation:
-  source_commit: "baa07413"
+  source_commit: "b2db276cf1b5057c31f2ab2bddbd181e5692dbb6"
   source_file: "docs/tutorials/plugin/overview.md"
-  outdated: true
+  outdated: false
 ---
 
-# 插件（Plugin）
+# 插件
 
 ## 概览
 
-在已匹配决策在模型选择之后仍需要**额外路由局部行为**时使用插件。
+插件在决策匹配后添加路由局部行为。它们可以改写请求、检索上下文、短路生成、检查响应，或控制保留哪些运维数据。
 
-在规范 v0.3 YAML 中，插件位于 `routing.decisions[].plugins`。
+共享服务和存储属于 `global:`；决策插件只为一条路由启用并调优该行为。
 
 ## 主要优势
 
-- 将路由局部行为挂在需要它的路由上。
-- 避免把所有行为推入 `global:` 默认。
-- 单条路由可选用缓存、变更、检索或安全控制而不影响其他路由。
-- 直接映射 `config/plugin/` 片段树，每个插件或插件包一页教程。
+- 把行为附着在需要它的路由上。
+- 复用共享存储和服务，而不重复其配置。
+- 让请求改写、检索和响应检查可审计。
 
 ## 解决什么问题？
 
-并非每条路由都需要相同的后选行为。有的需要语义缓存，有的需要 system prompt 变更，有的需要路由局部安全执行。
-
-插件使路由局部处理显式，而非过载全局运行时设置。
+即使共享同一 Router，各路由也常常需要不同行为。插件把这些差异放在决策旁边，而不是藏进应用中间件或全局启用。
 
 ## 何时使用
 
-在以下情况使用 `plugin/`：
-
-- 仅一条路由或路由族需要额外处理
-- 行为应在路由匹配之后发生
-- 共享后端在 `global:`，但每路由行为必须保持局部
-- 希望在 `config/plugin/` 下复用路由局部片段
+当行为应仅在特定路由匹配后生效时，使用插件。当每条路由共享同一服务或后台存储时，改用 `global:`。插件条目位于 `routing.decisions[].plugins` 下。
 
 ## 配置
-
-规范位置：
 
 ```yaml
 routing:
   decisions:
-    - name: cached_support
+    - name: cached-support
+      description: Reuse cached responses for support requests.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: support-model
       plugins:
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
+            ttl_seconds: 3600
 ```
 
-插件文档与 `config/plugin/` 一一对应。
+## 插件清单 {#plugin-inventory}
 
-### 响应与变更
+| 类型 | 目标 | 共享依赖 | 指南 |
+|---|---|---|---|
+| `fast_response` | 不调用模型即返回配置的响应 | 无 | [快速响应](./fast-response) |
+| `system_prompt` | 插入、替换或追加路由专用指令 | 无 | [系统提示词](./system-prompt) |
+| `header_mutation` | 添加、更新或删除下游请求头 | 无 | [请求头修改](./header-mutation) |
+| `request_params` | 强制请求参数限制 | 无 | [请求参数](./request-params) |
+| `tools` | 允许、阻止、过滤或移除工具和工具历史 | 可选的全局工具目录 | [工具](./tools) |
+| `tool_selection` | 从目录添加工具，或按语义过滤调用方工具 | 嵌入运行时；`add` 模式需要工具数据库 | [工具选择](./tool-selection) |
+| `context_compression` | 缩减绑定提供商的大型工具输出或历史 | 可选的嵌入运行时和恢复存储 | [上下文压缩](./context-compression) |
+| `response_cache` | 复用兼容的先前响应 | `global.stores.response_cache` | [响应缓存](./response-cache) |
+| `memory` | 检索并可选存储对话记忆 | `global.stores.memory` | [记忆](./memory) |
+| `rag` | 在生成前检索文档 | 已配置的 RAG/向量后端 | [RAG](./rag) |
+| `router_replay` | 覆盖单条路由的回放采集 | `global.services.router_replay` | [路由回放](./router-replay) |
+| `shadow_dispatch` | 在采样流量上观察次要模型，且不触碰线上响应 | 用于结果采集的回放记录（`router_replay`） | [Shadow Dispatch](./shadow-dispatch) |
+| `hallucination` | 检查响应中的事实依据 | 按配置的幻觉/NLI 模块 | [幻觉检测](./hallucination) |
+| `response_jailbreak` | 筛查生成响应中的越狱内容 | Prompt-guard 运行时 | [响应越狱](./response-jailbreak) |
 
-- [Fast Response](./fast-response)
-- [Header Mutation](./header-mutation)
-- [Image Generation](./image-gen)
-- [Request Parameters](./request-params)
-- [System Prompt](./system-prompt)
-- [Tools](./tools)
+[内容安全](./content-safety) 打包了三个受支持插件，而不是额外的插件类型。
 
-### 检索与记忆
+## 运维边界 {#operational-boundaries}
 
-- [Memory](./memory)
-- [RAG](./rag)
-- [Router Replay](./router-replay)
-- [Semantic Cache](./semantic-cache)
-
-### 安全与生成
-
-- [Content Safety](./content-safety)
-- [Hallucination](./hallucination)
-- [Response Jailbreak](./response-jailbreak)
+- 当多个插件改写绑定提供商的请求或响应时，它们会相互作用。Router 管道固定其执行顺序；在 YAML 中重排条目不会改变该顺序。
+- 检索、memory、缓存和回放可能持久化从请求派生的内容。为所选后端配置保留策略、租户/用户范围、认证和加密。
+- 请求头和提示词改写可能跨越信任边界。不要把不受信任的调用方元数据复制到特权请求头或系统指令中。
+- 部署前校验完整配方，以便不支持的插件名或不兼容设置在流量到达 Router 之前失败。

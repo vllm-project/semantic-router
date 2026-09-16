@@ -90,15 +90,47 @@ func (s *Stack) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	return s.Verify(ctx, opts)
 }
 
-// Teardown removes gateway resources, prerequisites, and shared Helm releases.
+// Teardown step names, in the order Teardown runs them.
+const (
+	teardownStepResources     = "resources"
+	teardownStepCoreReleases  = "core releases"
+	teardownStepPrerequisites = "prerequisites"
+)
+
+// teardownStep is one named, best-effort teardown action.
+type teardownStep struct {
+	name string
+	run  func(context.Context, *framework.TeardownOptions) error
+}
+
+// teardownSteps returns the teardown actions in order. It mirrors setup in
+// reverse - resources, then the Helm releases, then the prerequisites those
+// releases were installed on top of.
+//
+// Prerequisites have to go last. A profile may create the release's own
+// namespace there (jailbreak-onerror does, so its mapping ConfigMap exists
+// before an install that blocks on --wait), and deleting that namespace before
+// `helm uninstall` deletes the release secret with it: the uninstall then fails
+// with "release: not found", which is swallowed as best-effort, leaving the
+// chart's cluster-scoped RBAC orphaned.
+func (s *Stack) teardownSteps() []teardownStep {
+	return []teardownStep{
+		{name: teardownStepResources, run: s.CleanupResources},
+		{name: teardownStepCoreReleases, run: func(ctx context.Context, opts *framework.TeardownOptions) error {
+			s.UninstallCore(ctx, opts)
+			return nil
+		}},
+		{name: teardownStepPrerequisites, run: s.CleanupPrerequisites},
+	}
+}
+
+// Teardown removes gateway resources, shared Helm releases, and prerequisites.
 func (s *Stack) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
-	if err := s.CleanupResources(ctx, opts); err != nil {
-		s.log(opts.Verbose, "Warning: failed to cleanup resources: %v", err)
+	for _, step := range s.teardownSteps() {
+		if err := step.run(ctx, opts); err != nil {
+			s.log(opts.Verbose, "Warning: failed to cleanup %s: %v", step.name, err)
+		}
 	}
-	if err := s.CleanupPrerequisites(ctx, opts); err != nil {
-		s.log(opts.Verbose, "Warning: failed to cleanup prerequisites: %v", err)
-	}
-	s.UninstallCore(ctx, opts)
 	return nil
 }
 

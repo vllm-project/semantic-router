@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,78 +17,99 @@ func repoRel(parts ...string) string {
 	return filepath.Join(parts...)
 }
 
+// These stay unfenced so the assertion survives the page moving an endpoint between
+// prose and a table, which is what broke it in #2773.
+var apiserverDocNeedles = []string{
+	"http://localhost:8080",
+	"/openapi.json",
+	"/api/v1/config",
+}
+
 var configContractRequiredDocs = []docNeedles{
 	{
 		path: "config/README.md",
 		needles: []string{
 			"`config/config.yaml`",
 			"exhaustive canonical reference config",
-			"`config/signal/`",
+			"`config/fragments/signal/`",
 			"`tutorials/signal/heuristic/`",
 			"`tutorials/signal/learned/`",
-			"`config/decision/`",
-			"`config/algorithm/`",
-			"`config/plugin/`",
+			"`config/fragments/decision/`",
+			"`config/fragments/algorithm/`",
+			"`config/fragments/plugin/`",
 			"`tutorials/global/`",
 			"`go test ./pkg/config/...`",
-			"`make agent-lint`",
+			"`make check`",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
-			"`version/listeners/providers/routing/global`",
-			"`routing.modelCards`",
-			"`routing.modelCards[].loras`",
-			"`providers.defaults`",
-			"`providers.models[*]`",
-			"`global.router`",
-			"`global.router.config_source`",
-			"`global.services`",
-			"`global.stores`",
-			"`global.integrations`",
-			"`global.model_catalog`",
-			"`global.model_catalog.modules`",
-			"`config/algorithm/`",
-			"`tutorials/global/`",
-			"`tutorials/signal/heuristic/`",
-			"`tutorials/signal/learned/`",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"`providers.defaults.model`",
+			"vllm-sr config validate --config config.yaml",
+			"Environment references and secrets",
+			"Entrypoints and recipes",
+			"exhaustive canonical example",
+			"`config/fragments/`",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "installation", "configuration-workflows.md"),
+		needles: []string{
+			"Choose one primary source of truth",
+			"vllm-sr serve --target k8s --config config.yaml",
+			"`spec.config.routing`",
+			"Routing DSL",
+			"Avoid split ownership",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "tutorials", "global", "models-entrypoints-serving.md"),
+		needles: []string{
+			"Build → Models",
+			"Build → Mixture-of-Models → Recipes",
+			"vllm-sr serve --config my-models.yaml",
+			"vllm-sr status",
+			"vllm-sr logs router",
+			"vllm-sr stop",
+			"curl -sS http://localhost:8899/v1/models",
+			"vllm-sr recipe pack",
 			"vllm-sr config migrate --config old-config.yaml",
-			"v0.3. The steady-state file is `config.yaml`",
-			"`lora_name`",
-			"`make agent-lint`",
-			"exhaustive canonical reference config",
-			"`global.router.config_source: kubernetes`",
+			"--recipe-env PROVIDER_API_KEY",
+			"Mixture-of-Model",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nrouting:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
 			"`routing.modelCards`",
 			"`routing.modelCards[].loras`",
-			"`config/algorithm/`",
+			"`config/fragments/algorithm/`",
 			"`providers.defaults`",
 			"`providers.models[].backend_refs[]`",
 			"`lora_name`",
 			"`global.router.config_source`",
 			"vllm-sr init",
 			"exhaustive canonical reference config",
-			"`make agent-lint`",
+			"`make check`",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "installation", "milvus.md"),
 		needles: []string{
-			"global:\n  stores:\n    semantic_cache:",
+			"global:\n  stores:\n    response_cache:",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "overview", "mom-model-family.md"),
 		needles: []string{
-			"`global.model_catalog`",
-			"`global.model_catalog.modules`",
-			"model_ref",
+			"Mixture of Experts",
+			"**Provider model**",
+			"**Virtual model**",
+			"**Router system model**",
+			"`vllm-sr/mom-v1-blend`",
 		},
 	},
 	{
@@ -116,14 +138,6 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "hallucination-mitigation-milestone.md"),
-		needles: []string{
-			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
-			"routing:\n  decisions:",
-			"hallucination_action:",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "api", "router.md"),
 		needles: []string{
 			"providers:\n  models:",
@@ -132,20 +146,20 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "api", "apiserver.md"),
-		needles: []string{
-			"`http://localhost:8080`",
-			"`GET /openapi.json`",
-			"`GET /config/router`",
-		},
+		path:    repoRel("website", "docs", "api", "apiserver.md"),
+		needles: apiserverDocNeedles,
+	},
+	{
+		path:    repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
+		needles: apiserverDocNeedles,
 	},
 	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
 		needles: []string{
 			"backend_refs:",
-			"`10.0.0.1:8000`",
+			"endpoint: 10.0.0.1:8000",
 			"[config/config.yaml]",
-			"global:\n  stores:\n    semantic_cache:",
+			"global:\n  stores:\n    response_cache:",
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
 			"routing:\n  decisions:",
 		},
@@ -153,15 +167,11 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "overview", "semantic-router-overview.md"),
 		needles: []string{
-			"routing:\n  decisions:",
-			"      plugins:",
-		},
-	},
-	{
-		path: repoRel("website", "docs", "overview", "collective-intelligence.md"),
-		needles: []string{
-			"routing:\n  decisions:",
-			"      plugins:",
+			"Envoy presents the request to the Router.",
+			"**Entrypoint**",
+			"**Recipe**",
+			"direct selection",
+			"configured default provider model",
 		},
 	},
 	{
@@ -177,10 +187,9 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"`vsr_canonical_patch.yaml`",
 			"`vsr_canonical_patch_recommendation.json`",
-			"providers:\n  defaults:\n    reasoning_families:",
-			"routing:\n  modelCards:",
+			"providers:\n  defaults:\n    reasoning_effort:",
+			"reasoning:\n        family: qwen3",
 			"routing:\n  decisions:",
-			"default_reasoning_effort: medium",
 		},
 	},
 	{
@@ -209,29 +218,26 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
-		needles: []string{
-			"`http://localhost:8080`",
-			"`GET /openapi.json`",
-			"`GET /config/router`",
-		},
-	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "nvidia-dynamo-integration.md"),
-		needles: []string{
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
 		needles: []string{
-			"providers:\n      defaults:",
-			"global:\n      model_catalog:",
-			"      stores:",
-			"        modules:",
-			"      services:",
-			"loras:",
+			"kind: SemanticRouter",
+			"`spec.config.routing`",
+			"`spec.vllmEndpoints[]`",
+			"| `service` |",
+			"| `kserve` |",
+			"| `llamastack` |",
+			"does not create an `HTTPRoute`",
+			"secretKeyRef:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "api", "semantic-router-crd.md"),
+		needles: []string{
+			"kind: SemanticRouter",
+			"kubectl explain semanticrouter.spec --recursive",
+			"`vllmEndpoints`",
+			"`config.routing`",
+			"`status.observedGeneration`",
 		},
 	},
 	{
@@ -308,22 +314,6 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "hallucination-mitigation-milestone.md"),
-		needles: []string{
-			"\nhallucination:\n",
-			"\n  - name: \"medical_assistant\"\n",
-		},
-	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "training-overview.md"),
-		needles: []string{
-			"\nvllm_endpoints:\n",
-			"\nmodel_config:\n",
-			"\nprovider_profiles:\n",
-			"router-defaults.yaml",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "api", "router.md"),
 		needles: []string{
 			"\nmodel_config:\n",
@@ -355,12 +345,6 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "overview", "collective-intelligence.md"),
-		needles: []string{
-			"\nplugins:\n",
-		},
-	},
-	{
 		path: repoRel("src", "vllm-sr", "README.md"),
 		needles: []string{
 			"\nplugins:\n",
@@ -377,6 +361,7 @@ var configContractForbiddenDocs = []docNeedles{
 			"config.yaml model_config section",
 			"preferred_endpoints:",
 			"\ndefault_reasoning_effort:",
+			"\n    reasoning_families:\n",
 			"\ncategories:\n",
 		},
 	},
@@ -396,21 +381,6 @@ var configContractForbiddenDocs = []docNeedles{
 	},
 	{
 		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
-		needles: []string{
-			"\nclassifier:\n",
-			"\nprompt_guard:\n",
-		},
-	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
-		needles: []string{
-			"\nclassifier:\n",
-			"\ncategories:\n",
-			"\ndecisions:\n",
-		},
-	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "nvidia-dynamo-integration.md"),
 		needles: []string{
 			"\nclassifier:\n",
 			"\nprompt_guard:\n",
@@ -475,25 +445,13 @@ var configContractForbiddenDocs = []docNeedles{
 			"computer_science",
 		},
 	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "training-overview.md"),
-		needles: []string{
-			"computer_science",
-		},
-	},
-	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "vsr-headers.md"),
-		needles: []string{
-			"computer_science",
-		},
-	},
 }
 
 var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
 		needles: []string{
-			"`config/signal/`",
+			"Signals turn request facts into names",
 			"### Heuristic Signals",
 			"### Learned Signals",
 			"[Keyword](./heuristic/keyword)",
@@ -503,7 +461,8 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
 		needles: []string{
-			"`config/decision/`",
+			"Signals tell the Router what it detected",
+			"`routing.decisions`",
 			"`decision.algorithm`",
 			"`decision.plugins`",
 		},
@@ -511,7 +470,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 		needles: []string{
-			"`config/algorithm/`",
+			"An algorithm runs after a decision matches",
 			"### Selection Algorithms",
 			"### Looper Algorithms",
 			"[Static](./selection/static)",
@@ -521,18 +480,38 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
 		needles: []string{
-			"`config/plugin/`",
+			"Plugins add route-local behavior after a decision matches",
 			"`routing.decisions[].plugins`",
 			"[Fast Response](./fast-response)",
-			"[Semantic Cache](./semantic-cache)",
+			"[Response Cache](./response-cache)",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "tutorials", "global", "overview.md"),
 		needles: []string{
 			"`global:`",
-			"`signal/`",
+			"`global.services`",
+			"`global.stores`",
 		},
+	},
+}
+
+var latestTutorialOverviewForbidden = []docNeedles{
+	{
+		path:    repoRel("website", "docs", "tutorials", "signal", "overview.md"),
+		needles: []string{"`config/fragments/signal/`"},
+	},
+	{
+		path:    repoRel("website", "docs", "tutorials", "decision", "overview.md"),
+		needles: []string{"`config/fragments/decision/`"},
+	},
+	{
+		path:    repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
+		needles: []string{"`config/fragments/algorithm/`"},
+	},
+	{
+		path:    repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
+		needles: []string{"`config/fragments/plugin/`"},
 	},
 }
 
@@ -548,11 +527,16 @@ var latestTutorialSidebarRequired = []string{
 	"label: 'Response and Mutation'",
 	"label: 'Retrieval and Memory'",
 	"label: 'Safety and Generation'",
-	"label: 'Global'",
+	"label: 'Entrypoints'",
+	"label: 'Shared Services'",
 	"'tutorials/signal/overview'",
 	"'tutorials/decision/overview'",
 	"'tutorials/algorithm/overview'",
 	"'tutorials/plugin/overview'",
+	"'tutorials/global/entrypoints-and-recipes'",
+	"'tutorials/global/models-entrypoints-serving'",
+	"'tutorials/global/entrypoints'",
+	"'tutorials/global/recipes'",
 	"'tutorials/global/overview'",
 }
 
@@ -581,7 +565,6 @@ var proposalSidebarRequired = []string{
 
 var latestTutorialRequiredSections = []string{
 	"## Overview",
-	"## Key Advantages",
 	"## What Problem Does It Solve?",
 	"## When to Use",
 	"## Configuration",
@@ -597,12 +580,12 @@ var latestTutorialAllowedDirectories = map[string]bool{
 	"projection": true,
 }
 
-var retiredCurrentTranslationOverrides = []string{
+// Retired cookbook overrides must not shadow the current tutorial hierarchy.
+// Current translated API, training and troubleshooting pages remain supported.
+var retiredCookbookTranslationDocs = []string{
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "classifier-tuning.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "pii-policy.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "vllm-endpoints.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "model-performance-eval.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "common-errors.md"),
 }
 
 func TestConfigContractDocsStayAligned(t *testing.T) {
@@ -625,12 +608,13 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 
 	assertTutorialSidebarTaxonomy(t, root)
 	assertDocsContainAll(t, root, latestTutorialOverviewDocs)
+	assertDocsDoNotContainAny(t, root, latestTutorialOverviewForbidden)
 	assertTutorialFilesContainRequiredSections(t, root)
 	assertTutorialRootDirectories(t, root)
 	assertSignalTutorialDocsMatchConfigHierarchy(t, root)
 	assertAlgorithmTutorialDocsMatchConfigHierarchy(t, root)
 	assertPluginTutorialDocsMatchConfigHierarchy(t, root)
-	assertPathsDoNotExist(t, root, retiredCurrentTranslationOverrides)
+	assertPathsDoNotExist(t, root, retiredCookbookTranslationDocs)
 }
 
 func TestConfigProposalIsReachableFromSidebar(t *testing.T) {
@@ -669,14 +653,19 @@ func assertTutorialSidebarTaxonomy(t *testing.T, root string) {
 func assertTutorialFilesContainRequiredSections(t *testing.T, root string) {
 	t.Helper()
 	tutorialRoot := filepath.Join(root, repoRel("website", "docs", "tutorials"))
-	err := filepath.Walk(tutorialRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(tutorialRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -716,14 +705,19 @@ func assertMarkdownTreeDoesNotContainAny(t *testing.T, root string, forbidden []
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return
 	}
-	err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(root)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}

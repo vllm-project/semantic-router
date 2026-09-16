@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,18 +24,20 @@ SIGNAL classifier "risk" {
   use_cpu: true
 }
 
-ROUTE "policy-route" {
+ROUTE "policy-route" (on_unknown = "fail_request") {
   PRIORITY 100
   WHEN metadata("canary") AND classifier(
     "risk",
     label: "RISKY",
-    predicate: { gte: 0.8 },
-    on_error: "match"
+    predicate: { gte: 0.8 }
   )
   MODEL "model-a"
 }`
 	cfg := mustCompilePolicyDSL(t, input)
 	assertPolicySignals(t, cfg)
+	if cfg.Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("on_unknown = %q", cfg.Decisions[0].Rules.OnUnknown)
+	}
 	assertPolicyClassifierLeaf(t, cfg.Decisions[0].Rules.Conditions[1])
 
 	source, err := Decompile(cfg)
@@ -43,6 +46,9 @@ ROUTE "policy-route" {
 	}
 	assertPolicyDSLSource(t, source)
 	roundTrip := mustCompilePolicyDSL(t, source)
+	if roundTrip.Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("round-trip on_unknown = %q", roundTrip.Decisions[0].Rules.OnUnknown)
+	}
 	assertPolicyClassifierLeaf(
 		t,
 		roundTrip.Decisions[0].Rules.Conditions[1],
@@ -154,9 +160,33 @@ func assertPolicyClassifierLeaf(
 		classifierLeaf.Predicate == nil ||
 		classifierLeaf.Predicate.GTE == nil ||
 		*classifierLeaf.Predicate.GTE != 0.8 ||
-		classifierLeaf.OnError != "match" {
+		classifierLeaf.OnError != "" {
 		t.Fatalf("classifier leaf = %#v", classifierLeaf)
 	}
+}
+
+func TestValidateFlagsInvalidRouteOnUnknown(t *testing.T) {
+	input := `
+SIGNAL keyword "hack" {
+  operator: "contains"
+  values: ["hack"]
+}
+
+ROUTE "x" (on_unknown = "allow") {
+  PRIORITY 100
+  WHEN keyword("hack")
+  MODEL "m"
+}`
+	diagnostics, errs := Validate(input)
+	if len(errs) != 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	for _, diagnostic := range diagnostics {
+		if strings.Contains(diagnostic.Message, "on_unknown") {
+			return
+		}
+	}
+	t.Fatalf("no diagnostic mentions on_unknown: %#v", diagnostics)
 }
 
 func assertPolicyDSLSource(t *testing.T, source string) {
@@ -166,10 +196,34 @@ func assertPolicyDSLSource(t *testing.T, source string) {
 		`SIGNAL classifier risk`,
 		`label: "RISKY"`,
 		`predicate: { gte: 0.8 }`,
-		`on_error: "match"`,
+		`on_unknown = "fail_request"`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("decompiled source missing %q:\n%s", expected, source)
 		}
+	}
+}
+
+func TestRouteOptionsAcceptCanonicalCommaAndLegacyWhitespace(t *testing.T) {
+	for _, separator := range []string{", ", " "} {
+		t.Run(fmt.Sprintf("separator_%q", separator), func(t *testing.T) {
+			source := fmt.Sprintf(`
+SIGNAL metadata cohort { key: "cohort" predicate: { equals: "test" } }
+ROUTE route (description = "Inspect cohort"%son_unknown = "fail_request") {
+ PRIORITY 100
+ WHEN metadata("cohort")
+ MODEL "model-a"
+}`, separator)
+			cfg := mustCompilePolicyDSL(t, source)
+			canonical, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			roundTrip := mustCompilePolicyDSL(t, canonical)
+			if roundTrip.Decisions[0].Description != "Inspect cohort" ||
+				roundTrip.Decisions[0].Rules.OnUnknown != "fail_request" {
+				t.Fatalf("header options changed: %#v", roundTrip.Decisions[0])
+			}
+		})
 	}
 }

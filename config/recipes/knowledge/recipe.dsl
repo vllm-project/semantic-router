@@ -12,6 +12,11 @@ SIGNAL keyword local_domain_override {
   keywords: ["blood cells", "transporting oxygen", "contract law", "legal consideration", "ideal transformer", "measured in joules", "share electron pairs"]
 }
 
+SIGNAL conversation knowledge_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 SIGNAL kb best_biology {
   kb: "mmlu_kb"
   target: { kind: "label", value: "biology" }
@@ -115,6 +120,11 @@ MODEL cloud/frontier-72b {
   context_window_size: 262144
 }
 
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
+}
+
 MODEL local/small-7b {
   context_window_size: 131072
 }
@@ -122,6 +132,13 @@ MODEL local/small-7b {
 # =============================================================================
 # ROUTES
 # =============================================================================
+
+ROUTE omni (description = "Understand image-bearing knowledge requests with the dedicated visual-language model.") {
+  PRIORITY 300
+  WHEN conversation("knowledge_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
+}
 
 ROUTE escalate_72b (description = "Escalate high-uplift MMLU domains to the frontier 72B lane.") {
   PRIORITY 200

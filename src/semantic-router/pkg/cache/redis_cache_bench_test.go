@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -88,6 +89,7 @@ func setupRedisCacheBench(b *testing.B) *RedisCache {
 	redisConfig.Development.AutoCreateIndex = true
 
 	cache, err := NewRedisCache(RedisCacheOptions{
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
 		// Gate at raw cosine >= 0.8 to match the in-memory backend, so
 		// BenchmarkCacheComparison compares equivalent hit paths. Redis reports
 		// COSINE distance and maps it to similarity = (1 + cos) / 2
@@ -101,7 +103,7 @@ func setupRedisCacheBench(b *testing.B) *RedisCache {
 	if err != nil {
 		unavailable("redis server not available: %v", err)
 	}
-	if err := cache.CheckConnection(); err != nil {
+	if err := cache.CheckConnection(context.Background()); err != nil {
 		unavailable("redis connection check failed: %v", err)
 	}
 	return cache

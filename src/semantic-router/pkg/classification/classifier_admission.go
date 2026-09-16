@@ -1,0 +1,186 @@
+package classification
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+)
+
+const (
+	admissionDeploymentPromptGuard            = "prompt_guard"
+	admissionDeploymentDomainClassifier       = "domain_classifier"
+	admissionDeploymentPIIClassifier          = "pii_classifier"
+	admissionDeploymentFactCheckClassifier    = "fact_check_classifier"
+	admissionDeploymentHallucinationDetector  = "hallucination_detector"
+	admissionDeploymentHallucinationExplainer = "hallucination_explainer"
+	admissionDeploymentFeedbackDetector       = "feedback_detector"
+)
+
+func buildAdmissionRegistry(cfg *config.RouterConfig) *admission.Registry {
+	if cfg == nil || len(cfg.ModelAdmission) == 0 {
+		return admission.NewRegistry(nil)
+	}
+	gates := make(map[string]admission.Admissioner, len(cfg.ModelAdmission))
+	for deployment, admissionCfg := range cfg.ModelAdmission {
+		gates[deployment] = admission.NewSemaphore(
+			admissionCfg.MaxConcurrency,
+			admissionCfg.MaxQueue,
+			time.Duration(admissionCfg.QueueTimeoutMs)*time.Millisecond,
+			admission.Overflow(admissionCfg.OnOverflow),
+		)
+	}
+	return admission.NewRegistry(gates)
+}
+
+func admitModelInference[T any](
+	ctx context.Context,
+	gate admission.Admissioner,
+	deployment string,
+	fn func() (T, error),
+) (T, error) {
+	if gate == nil {
+		gate = admission.Noop{}
+	}
+	start := time.Now()
+	ticket, err := gate.Acquire(ctx)
+	wait := time.Since(start).Seconds()
+	if err != nil {
+		outcome := "canceled"
+		if errors.Is(err, admission.ErrQueueFull) {
+			outcome = "shed"
+		}
+		metrics.RecordModelAdmission(deployment, outcome, wait)
+		var zero T
+		return zero, err
+	}
+	defer ticket()
+	metrics.RecordModelAdmission(deployment, "admitted", wait)
+	return fn()
+}
+
+func isAdmissionError(err error) bool {
+	return errors.Is(err, admission.ErrQueueFull) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+type admittedSequenceClassifier struct {
+	backend    SequenceClassifierBackend
+	gate       admission.Admissioner
+	deployment string
+}
+
+func (a admittedSequenceClassifier) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (SequenceClassificationResult, error) {
+		return a.backend.Classify(ctx, text)
+	})
+}
+
+func (a admittedSequenceClassifier) Close() error {
+	if closer, ok := a.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+type admittedCategoryInference struct {
+	backend    CategoryInference
+	gate       admission.Admissioner
+	deployment string
+}
+
+func (a admittedCategoryInference) Classify(ctx context.Context, text string) (tasks.ClassResult, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (tasks.ClassResult, error) {
+		return a.backend.Classify(ctx, text)
+	})
+}
+
+func (a admittedCategoryInference) ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (tasks.ClassResultWithProbs, error) {
+		return a.backend.ClassifyWithProbabilities(ctx, text)
+	})
+}
+
+func (a admittedCategoryInference) Close() error {
+	if closer, ok := a.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+func (a admittedCategoryInference) fallbackToTop1OnProbabilityError() bool {
+	return categoryProbabilityFallbackAllowed(a.backend)
+}
+
+type admittedPIIInference struct {
+	backend    PIIInference
+	gate       admission.Admissioner
+	deployment string
+}
+
+func (a admittedPIIInference) ClassifyTokens(ctx context.Context, text string) (tasks.TokenClassificationResult, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (tasks.TokenClassificationResult, error) {
+		return a.backend.ClassifyTokens(ctx, text)
+	})
+}
+
+// Close forwards to the wrapped backend, as the other admission wrappers do,
+// so a remote PII backend releases its connector when the classifier is
+// retired on reload.
+func (a admittedPIIInference) Close() error {
+	if closer, ok := a.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+func withAdmissionRegistry(registry *admission.Registry) option {
+	return func(c *Classifier) {
+		c.admissionRegistry = registry
+	}
+}
+
+func (c *Classifier) applyAdmissionGates() {
+	registry := c.admissionRegistry
+	if registry == nil {
+		registry = buildAdmissionRegistry(c.Config)
+		c.admissionRegistry = registry
+	}
+	if c.jailbreakInference != nil && !ownsModelAdmission(c.jailbreakInference) {
+		c.jailbreakInference = admittedSequenceClassifier{
+			backend:    c.jailbreakInference,
+			gate:       registry.For(admissionDeploymentPromptGuard),
+			deployment: admissionDeploymentPromptGuard,
+		}
+	}
+	if c.categoryInference != nil && !ownsModelAdmission(c.categoryInference) {
+		c.categoryInference = admittedCategoryInference{
+			backend:    c.categoryInference,
+			gate:       registry.For(admissionDeploymentDomainClassifier),
+			deployment: admissionDeploymentDomainClassifier,
+		}
+	}
+	if c.piiInference != nil && !ownsModelAdmission(c.piiInference) {
+		c.piiInference = admittedPIIInference{
+			backend:    c.piiInference,
+			gate:       registry.For(admissionDeploymentPIIClassifier),
+			deployment: admissionDeploymentPIIClassifier,
+		}
+	}
+}
+
+// Owned handles admit at the physical resource so aliases cannot multiply its budget.
+func ownsModelAdmission(backend interface{}) bool {
+	if owned, ok := backend.(interface{ ownsAdmission() bool }); ok {
+		return owned.ownsAdmission()
+	}
+	switch backend.(type) {
+	case *ownedSequenceBackend, ownedCategoryBackend, *ownedTokenBackend, *ownedRemoteGuardDistribution, *ownedRemoteGuardDecision:
+		return true
+	default:
+		return false
+	}
+}

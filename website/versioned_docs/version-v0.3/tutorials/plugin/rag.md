@@ -4,7 +4,7 @@
 
 `rag` is a route-local plugin for retrieval-augmented generation.
 
-It aligns to `config/plugin/rag/milvus.yaml` (Milvus) and `config/plugin/rag/qdrant.yaml` (Qdrant).
+It aligns to `config/fragments/plugin/rag/milvus.yaml` (Milvus) and `config/fragments/plugin/rag/qdrant.yaml` (Qdrant).
 
 ## Key Advantages
 

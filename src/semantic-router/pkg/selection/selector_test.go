@@ -332,6 +332,48 @@ func TestStaticSelector_Select(t *testing.T) {
 	}
 }
 
+func TestStaticSelectorScoresByMatchedDomain(t *testing.T) {
+	selector := NewStaticSelector(DefaultStaticConfig())
+	selector.InitializeFromConfig([]config.Category{
+		{
+			CategoryMetadata: config.CategoryMetadata{Name: "business"},
+			ModelScores: []config.ModelScore{
+				{Model: "small", Score: 0.2},
+				{Model: "large", Score: 0.9},
+			},
+		},
+		{CategoryMetadata: config.CategoryMetadata{Name: "unscored"}},
+	})
+
+	tests := []struct {
+		name         string
+		decisionName string
+		categoryName string
+		want         string
+	}{
+		{name: "decision named differently from the matched domain", decisionName: "business_route", categoryName: "business", want: "large"},
+		{name: "decision named after the domain without a category", decisionName: "business", want: "large"},
+		{name: "matched domain without scores falls back to the decision", decisionName: "business", categoryName: "unscored", want: "large"},
+		{name: "no scores for decision or domain", decisionName: "other_route", categoryName: "unscored", want: "small"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := selector.Select(context.Background(), &SelectionContext{
+				DecisionName:    tt.decisionName,
+				CategoryName:    tt.categoryName,
+				CandidateModels: createCandidateModels("small", "large"),
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.SelectedModel != tt.want {
+				t.Errorf("expected %s, got %s (scores %v)", tt.want, result.SelectedModel, result.AllScores)
+			}
+		})
+	}
+}
+
 func TestRegistry(t *testing.T) {
 	registry := NewRegistry()
 
@@ -582,6 +624,38 @@ func TestMLSelectorAdapter_GetMLSelector(t *testing.T) {
 
 	if mlSelector.Name() != "knn" {
 		t.Errorf("expected name 'knn', got '%s'", mlSelector.Name())
+	}
+}
+
+func TestFactoryPassesSelectorEmbeddingConfigToRuntime(t *testing.T) {
+	cfg := DefaultModelSelectionConfig()
+	cfg.ML = DefaultMLSelectorConfig()
+	cfg.ML.ModelType = "qwen3"
+	cfg.ML.EmbeddingDim = 1024
+	embed := func(_ string, cfg EmbeddingConfig) ([]float32, error) {
+		return []float32{float32(cfg.TargetDimension)}, nil
+	}
+
+	registry := NewFactory(cfg).
+		WithEmbeddingFunc(embed, EmbeddingConfig{ModelType: "mmbert", TargetDimension: 768}).
+		CreateAll()
+
+	routerDCSelector, ok := registry.selectors[MethodRouterDC].(*RouterDCSelector)
+	if !ok {
+		t.Fatal("RouterDC selector was not registered")
+	}
+	routerDCResult, err := routerDCSelector.embeddingFunc("query")
+	if err != nil || len(routerDCResult) != 1 || routerDCResult[0] != 768 {
+		t.Fatalf("RouterDC embedding = %v, err = %v; want default embedding request", routerDCResult, err)
+	}
+
+	mlSelector, ok := registry.selectors[MethodKNN].(*MLSelectorAdapter)
+	if !ok {
+		t.Fatal("KNN ML selector was not registered")
+	}
+	mlResult, err := mlSelector.embeddingFunc("query")
+	if err != nil || len(mlResult) != 1 || mlResult[0] != 1024 {
+		t.Fatalf("ML selector embedding = %v, err = %v; want configured ML embedding request", mlResult, err)
 	}
 }
 

@@ -6,11 +6,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
 // RouterClassifierProxyHandler forwards knowledge-base management traffic
 // to the router apiserver while keeping dashboard readonly enforcement intact.
-func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool) http.HandlerFunc {
+func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -20,7 +23,12 @@ func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool) http.H
 			http.Error(w, "Router API URL is not configured", http.StatusBadGateway)
 			return
 		}
-		if readonlyMode && r.Method != http.MethodGet {
+		policy, allowed := routercontract.LookupManagement(r.Method, r.URL.Path)
+		if !allowed {
+			http.Error(w, "Router management route is not exposed by the Dashboard", http.StatusForbidden)
+			return
+		}
+		if readonlyMode && policy.Mutation {
 			http.Error(w, "Dashboard is in read-only mode. Configuration editing is disabled.", http.StatusForbidden)
 			return
 		}
@@ -42,6 +50,14 @@ func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool) http.H
 			return
 		}
 		copyProxyHeaders(proxyReq.Header, r.Header)
+		var provider routerauth.CredentialProvider
+		if len(credentialProvider) > 0 {
+			provider = credentialProvider[0]
+		}
+		if authErr := routerauth.RewriteAuthorization(proxyReq, provider); authErr != nil {
+			http.Error(w, "Router management credential is unavailable", http.StatusServiceUnavailable)
+			return
+		}
 
 		resp, err := http.DefaultClient.Do(proxyReq)
 		if err != nil {

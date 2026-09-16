@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream10
+FROM quay.io/centos/centos:stream10-development@sha256:556c6f559c63a24e52843778ed7ee0887be572f7df4219a971d2b2820bbb6675
 
 RUN dnf -y update && \
     dnf -y install epel-release && \

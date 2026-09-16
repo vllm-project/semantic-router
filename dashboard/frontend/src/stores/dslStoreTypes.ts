@@ -1,9 +1,6 @@
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
   ASTProgram,
-  BuilderNLGenerateRequest,
-  BuilderNLProgressEvent,
-  BuilderNLStagedDraft,
   ConfigVersion,
   DeployResult,
   DeployStep,
@@ -16,6 +13,9 @@ import type {
 interface DSLState {
   // --- Editor content ---
   dslSource: string
+  /** Full canonical YAML rendered from the imported base plus compiled DSL-owned scopes. */
+  renderedYamlOutput: string
+  /** DSL compiler fragment used as the deploy payload. */
   yamlOutput: string
   crdOutput: string
   diagnostics: Diagnostic[]
@@ -47,12 +47,6 @@ interface DSLState {
   deployPreviewMerged: string
   deployPreviewLoading: boolean
   deployPreviewError: string | null
-
-  // --- Natural Language Builder ---
-  nlGenerating: boolean
-  nlGenerateError: string | null
-  nlStagedDraft: BuilderNLStagedDraft | null
-  nlProgressEvents: BuilderNLProgressEvent[]
 }
 
 interface DSLActions {
@@ -71,7 +65,7 @@ interface DSLActions {
   /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
   parseAST(): void
 
-  /** Decompile YAML → routing-only DSL (for import from existing config). */
+  /** Decompile YAML → DSL-owned models, routing, entrypoints, and recipes. */
   decompile(yaml: string): string | null
 
   /** Format the current DSL source. */
@@ -86,10 +80,10 @@ interface DSLActions {
   /** Load DSL source without preserving an imported full-config deploy base. */
   loadDsl(source: string): void
 
-  /** Load YAML and decompile only its routing section to DSL. */
+  /** Load YAML and decompile its complete DSL-owned surface. */
   importYaml(yaml: string): void
 
-  /** Fetch current router config YAML and decompile only its routing section to DSL. */
+  /** Fetch current router YAML and decompile its complete DSL-owned surface. */
   loadFromRouter(): Promise<void>
 
   /** Update a model's fields in DSL source text, then re-parse AST. */
@@ -169,15 +163,6 @@ interface DSLActions {
 
   /** Fetch available config versions. */
   fetchVersions(): Promise<void>
-
-  /** Generate DSL from a natural-language request and optional custom model connection. */
-  generateFromNaturalLanguage(input: BuilderNLGenerateRequest): Promise<void>
-
-  /** Apply the staged NL draft into the live Builder editor while preserving the current deploy base YAML. */
-  applyNaturalLanguageDraft(): void
-
-  /** Clear the staged NL draft and any related review state. */
-  discardNaturalLanguageDraft(): void
 }
 
 type DSLStore = DSLState & DSLActions

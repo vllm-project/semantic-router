@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`user-feedback` 从对话中检测纠正、不满或升级反馈。映射到 `config/signal/user-feedback/`，在 `routing.signals.user_feedbacks` 中声明。
+`user-feedback` 从对话中检测纠正、不满或升级反馈。映射到 `config/fragments/signal/user-feedback/`，在 `routing.signals.user_feedbacks` 中声明。
 
 该族为学习型：依赖 `global.model_catalog.modules.feedback_detector` 配置的反馈检测器。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/user-feedback/`
+源片段族：`config/fragments/signal/user-feedback/`
 
 ```yaml
 routing:
@@ -50,3 +50,7 @@ routing:
 ```
 
 定义决策将消费的反馈标签，再由学习检测器决定每轮匹配哪一条。
+
+当可达的路由决策依赖此信号时，配置的模型必须成功初始化，否则 Router 启动失败。仅由独立诊断 API 使用的模型仍允许初始化失败，不会因此阻止无关路由启动。
+
+标签映射包含 `NO_FEEDBACK` 的模型可以识别普通后续任务；该结果不会匹配四种反馈规则。对于这些模型，低于配置 `threshold` 的预测表示不确定，遵循决策的 `on_unknown` 策略。独立分类 API 保留预测标签和概率，并返回 `abstained: true`。原有四分类模型继续保留其低置信度回退到 `satisfied` 的行为。

@@ -1,0 +1,8 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": [{"role": "user", "content": "Think briefly."}],
+    "reasoning_budget_tokens": 512
+  }
+}

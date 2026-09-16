@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`language` 检测请求语言并暴露为路由信号。映射到 `config/signal/language/`，在 `routing.signals.language` 中声明。
+`language` 检测请求语言并暴露为路由信号。映射到 `config/fragments/signal/language/`，在 `routing.signals.language` 中声明。
 
 在本教程分类中属启发式：使用轻量语言检测器，而非路由器自有分类模型。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/language/`
+源片段族：`config/fragments/signal/language/`
 
 ```yaml
 routing:

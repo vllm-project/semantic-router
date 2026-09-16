@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-# ANSI color codes
-COLOR_RESET = "\033[0m"
-COLOR_WHITE = "\033[97m"
-COLOR_MUTED = "\033[38;2;145;158;171m"
+from cli.terminal import brand
 
 
 def build_vllm_logo_lines() -> list[str]:
@@ -13,18 +10,16 @@ def build_vllm_logo_lines() -> list[str]:
 
     return [
         "",
-        f"{COLOR_WHITE}       █     █     █▄   ▄█{COLOR_RESET}",
-        f"{COLOR_WHITE} ▄▄ ▄█ █     █     █ ▀▄▀ █{COLOR_RESET}",
-        f"{COLOR_WHITE}  █▄█▀ █     █     █     █{COLOR_RESET}",
-        f"{COLOR_WHITE}   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀{COLOR_RESET}",
-        f"{COLOR_WHITE}  Semantic Router{COLOR_RESET}",
-        f"{COLOR_MUTED}  Intelligent Routing for Mixture-of-Models{COLOR_RESET}",
+        "       █     █     █▄   ▄█",
+        " ▄▄ ▄█ █     █     █ ▀▄▀ █",
+        "  █▄█▀ █     █     █     █",
+        "   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀",
+        "  Semantic Router",
+        "  Intelligent Routing for Mixture-of-Models",
         "",
     ]
 
 
 def print_vllm_logo() -> None:
     """Print the vLLM Semantic Router serve banner."""
-
-    for line in build_vllm_logo_lines():
-        print(line)
+    brand("\n".join(build_vllm_logo_lines()))

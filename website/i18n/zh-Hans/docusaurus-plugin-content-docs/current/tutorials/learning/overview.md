@@ -1,45 +1,61 @@
 ---
 translation:
-  source_commit: "ad233487"
+  source_commit: "68519cf498b94c947cf4c7cd9a2800a41276dea6"
   source_file: "docs/tutorials/learning/overview.md"
   outdated: false
 ---
 
-# Router Learning
+# 路由学习
 
 ## 概览
 
-Router Learning 是实现跨请求路由智能的路由器层。它会调整语义 decision 所提出的模型，但不会让在线状态成为 `decision.algorithm` 的一部分。
+路由学习是跨请求路由智能的路由器层。它调整语义决策提议的模型，而不把在线状态变成 `decision.algorithm` 的一部分。
 
-公开概念包括：
+公开概念是：
 
 - `global.router.learning.adaptation`：在线模型选择学习。
-- `global.router.learning.protection`：session 和 conversation 稳定性。
-- `routing.decisions[].adaptations`：按 decision 配置 apply、observe 或 bypass 控制。
-- Router Replay：用于离线配方学习的持久诊断与结果。
+- `global.router.learning.protection`：会话和对话稳定性。
+- `routing.decisions[].adaptations`：按决策的应用、观察或绕过控制。
+- 路由回放：可选诊断和结果，用于离线配方学习；持久化需要耐用的回放后端。
 
-当 decision 应保持语义化，但重复请求需要考虑当前模型、工具循环状态、prefix cache 证据、handoff 成本、切换历史或运行时结果时，请使用 Router Learning。
+当决策应保持语义，但重复请求应考虑当前模型、工具循环状态、前缀缓存证据、交接成本、切换历史或运行时结果时，使用路由学习。
 
 ## 主要优势
 
-- 保持语义 decision 清晰易读，并且只依赖当前请求。
-- 让在线模型选择学习和稳定性保护共享同一条运行时流水线。
-- 允许硬策略 decision 绕过学习，而无需更改路由规则。
-- 记录紧凑的响应 header 和详细的 Router Replay 诊断。
-- 为离线 agent 循环提供数据，以发现路由问题并提出配方补丁。
+- 让语义决策保持可读且请求局部。
+- 为在线模型选择学习和稳定性防护提供一条共享运行时管道。
+- 让硬策略决策在不更改路由规则的情况下绕过学习。
+- 记录紧凑的响应头，并在启用回放时记录详细的路由回放诊断。
+- 支持离线分析，可在部署前识别路由问题并评估配方变更。
 
 ## 解决什么问题？
 
-语义 decision 擅长匹配当前请求，但不会记住模型在类似 agent 流程中是否配置过高、能力不足、不稳定或成本过高。Router Learning 增加有界在线状态和与 replay 关联的结果，使路由器能在配方保持控制权的同时改进模型选择。
+语义决策擅长匹配当前请求，但它们不记得某个模型在类似智能体流程中是否过度配置、能力不足、不稳定或昂贵。路由学习增加有界在线状态和与回放关联的结果，使路由器可以改进模型选择，同时仍由配方掌控。
 
 ## 何时使用
 
-- 配方包含多个候选模型，并且运行时证据应改进模型选择。
-- Agent session 需要在工具循环、prefix cache 或提供商状态变化时保持稳定。
-- 敏感 decision 需要显式绕过在线学习。
-- 希望使用 replay 和结果驱动离线配方实验。
+- 你的配方有多个候选模型，且运行时证据应改进选择。
+- 智能体会话需要在工具循环、前缀缓存或提供商状态之间保持稳定。
+- 敏感决策需要显式绕过在线学习。
+- 希望用显式配置的回放和结果驱动离线配方实验。
 
 ## 配置
+
+配置省略相关设置时，默认值如下：
+
+| 设置 | 默认值 |
+| --- | --- |
+| `global.router.learning.enabled` | `false`；需要显式开启总开关。 |
+| `adaptation.enabled` 和 `protection.enabled` | `true`，但受总开关控制。 |
+| `adaptation.candidate_set` | `decision` |
+| `protection.scope` | `conversation` |
+| 防护身份请求头 | `x-session-id` 和 `x-conversation-id` |
+
+使用 `vllm-sr recipe builtin init` 初始化内置配方时，会开启 conversation protection，并关闭在线 adaptation；基础配置中已有的设置优先。显式的 `false`、自定义身份请求头和调优参数都会保留。这些默认值作用于整份配置，decision 级别的 `bypass` 仍然有效。
+
+客户端需要提供稳定的 session 和 conversation 标识，防护才能保持模型。缺少标识时，路由不会获得会话防护，并会记录诊断。详见[会话标识](../../api/session-identification)。
+
+参考配置 `config/config.yaml` 启用了两个组件。若还需要开启在线 adaptation，并在多个副本间共享防护状态，可以配置：
 
 ```yaml
 global:
@@ -61,16 +77,26 @@ global:
           idle_timeout_seconds: 300
           switch_margin: 0.05
           stability_weight: 1.0
+      state_store:
+        backend: redis
+        ttl_seconds: 86400
+        timeout_ms: 50
+        redis:
+          address: redis:6379
+          database: 2
+          key_prefix: "vsr:router-session:v1:"
 ```
 
-Decision 局部控制是稀疏配置。大多数 decision 会继承全局行为：
+共享存储是可选的。请求时读取使用严格超时，并失败开放到有界本地存储。响应侧更新会把同一快照写入 Redis，以便另一副本恢复对话防护状态。
+
+决策局部控制应保持稀疏。大多数决策继承全局行为：
 
 ```yaml
 adaptations:
   mode: bypass
 ```
 
-隐私、安全、仅本地、合规或任何其他硬策略路由应使用 `bypass`。当某个组件需要独立 observe 或 bypass 时，请使用组件级控制：
+对隐私、安全、仅本地、合规或其他硬策略路由使用 `bypass`。当某个组件应独立观察或绕过时，使用组件级控制：
 
 ```yaml
 adaptations:
@@ -81,7 +107,7 @@ adaptations:
     stability_weight: 1.5
 ```
 
-## 运行时流程
+## 运行时流程 {#runtime-flow}
 
 ```text
 base selector
@@ -91,11 +117,11 @@ base selector
   -> final model
 ```
 
-Adaptation 根据经验判断哪个模型表现更好。Protection 则判断当前进行探索或切换是否安全。
+自适应回答根据经验哪个模型看起来更好。防护回答当前探索或切换是否安全。
 
-## Header 与 Replay
+## 请求头与回放 {#header-and-replay}
 
-`x-vsr-learning-*` header 族有意保持紧凑：
+`x-vsr-learning-*` 请求头族有意保持紧凑：
 
 ```http
 x-vsr-learning-methods: adaptation,protection
@@ -104,24 +130,26 @@ x-vsr-learning-scopes: protection=conversation
 x-vsr-learning-reasons: adaptation=sampled_win,protection=switch_allowed
 ```
 
-Base model、proposal model、final model、cache warmth、switch cost、candidate score、sampling value 和经过哈希处理的 identity 诊断等详细字段应存放在 Router Replay 中，并以 `x-vsr-replay-id` 为键。
+启用路由回放时，基础模型、提案模型、最终模型、缓存热度、切换成本、候选分数、采样值和哈希身份诊断等详细字段会存储在那里，并以 `x-vsr-replay-id` 为键。
 
-## 相关页面
+## 相关页面 {#related-pages}
 
-- [Adaptation](./adaptations) 介绍 `routing_sampling` 和候选集。
-- [Protection](./protection) 介绍 conversation 和 session 稳定性。
-- [Decision Adaptations](./decision-adaptations) 介绍 decision 局部控制。
-- [Memory And Replay](./memory-and-replay) 介绍诊断与结果。
+- [自适应](./adaptations) 解释 `routing_sampling` 和候选集。
+- [防护](./protection) 解释对话和会话稳定性。
+- [决策自适应](./decision-adaptations) 解释决策局部控制。
+- [记忆与回放](./memory-and-replay) 解释诊断和结果。
 
-## 离线配方学习
+## 离线评估配方变更 {#evaluate-recipe-changes-offline}
 
-Router Learning 不会在请求路径上重写已部署的配方。请使用离线配方学习命令，将 replay 和结果转化为发现、指标、候选配方变体、实验估算、配方补丁建议以及经验 seed pack：
+路由学习不会在请求路径上改写已部署的配方。使用离线配方学习命令，将回放和结果转化为发现、指标、候选变体、实验估计、建议变更和经验种子包：
 
 ```bash
-vllm-sr eval recipe-learning \
+vllm-sr optimize recipe-learning \
   --endpoint http://localhost:8080 \
   --recipe-file config.yaml \
   --output-dir ./router-learning-report
 ```
 
-对于隔离网络或 CI 工作流，请先导出 replay JSON，再通过 `--replay-file` 传入。当评估用例包含预期 decision 或模型时，请添加 `--cases-file`。
+`--endpoint` 指向 Router 管理 API，绝不是公开推理监听器。启用管理 bearer 认证时，请先导出 `VSR_MGMT_TOKEN`。
+
+对于隔离或 CI 工作流，先导出回放 JSON，再用 `--replay-file` 传入。当评估用例包含预期决策或模型时，添加 `--cases-file`。
