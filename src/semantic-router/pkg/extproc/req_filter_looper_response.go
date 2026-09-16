@@ -45,7 +45,14 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	var semantic *llmprotocol.Response
 	var body []byte
 	contentType := "application/json"
-	if strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream") {
+	streaming := strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream")
+	if streaming && target == llmprotocol.OpenAIChatV1 && len(resp.BufferedBody) > 0 {
+		semantic, body, err = prepareNativeLooperStream(engine, resp, reqCtx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		contentType = "text/event-stream"
+	} else if streaming {
 		stream, streamErr := engine.NewStream(
 			llmprotocol.OpenAIChatV1,
 			target,
@@ -201,6 +208,7 @@ func appendLooperSignalHeaders(
 	appendJoinedHeader(setHeaders, headers.VSRMatchedModality, reqCtx.VSRMatchedModality)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedAuthz, reqCtx.VSRMatchedAuthz)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedJailbreak, reqCtx.VSRMatchedJailbreak)
+	appendJoinedHeader(setHeaders, headers.VSRMatchedSafety, reqCtx.VSRMatchedSafety)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedPII, reqCtx.VSRMatchedPII)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedKB, reqCtx.VSRMatchedKB)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedConversation, reqCtx.VSRMatchedConversation)
@@ -242,7 +250,7 @@ func appendLooperRoutingFacts(
 	appendOptionalHeader(setHeaders, headers.VSRSelectedModel, selectedModel)
 	appendOptionalHeader(setHeaders, headers.VSRSelectedRecipe, string(reqCtx.Routing.RecipeName()))
 	appendOptionalHeader(setHeaders, headers.VSRSelectedDecision, reqCtx.VSRSelectedDecisionName)
-	if reqCtx.VSRSelectedDecisionName != "" && reqCtx.VSRSelectedDecisionConfidence >= 0 {
+	if reqCtx.VSRSelectedDecisionName != "" && reqCtx.VSRSelectedDecisionConfidenceScored && reqCtx.VSRSelectedDecisionConfidence >= 0 {
 		appendOptionalHeader(
 			setHeaders,
 			headers.VSRSelectedConfidence,

@@ -36,6 +36,9 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 		return nil, "", nil
 	}
 	method := r.getSelectionMethod(algorithm)
+	if err := r.validateProtectedCandidateOwnership(selCtx, ctx); err != nil {
+		return nil, string(method), err
+	}
 	if err := selection.ValidateSelectionContext(selCtx); err != nil {
 		logging.Warnf("[ModelSelection] Invalid selection context: %v, using default candidate", err)
 		selected := r.recordSelectionFallback(
@@ -49,7 +52,9 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 		)
 		return selected, string(method), nil
 	}
-	if len(selCtx.CandidateModels) == 1 {
+	// multi_factor applies eligibility policy as well as ranking. A sole
+	// candidate must still satisfy the configured SLO and quality constraints.
+	if len(selCtx.CandidateModels) == 1 && method != selection.MethodMultiFactor {
 		return r.selectSingleCandidateModel(selCtx, method, defaultCandidate, ctx)
 	}
 
@@ -111,8 +116,8 @@ func (r *OpenAIRouter) selectWithSelector(
 		)
 		return selected, string(method), nil
 	}
-	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", err)
+	if validationErr := selection.ValidateSelectionResult(selCtx, result); validationErr != nil {
+		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", validationErr)
 		selected := r.recordSelectionFallback(
 			method,
 			selectionFallbackInvalidResult,
@@ -138,6 +143,13 @@ func (r *OpenAIRouter) selectWithSelector(
 			ctx,
 		)
 		return selected, string(method), nil
+	}
+	selCtx, err = applySelectionEligibility(selCtx, result, ctx)
+	if err != nil {
+		return nil, string(method), err
+	}
+	if err := r.validateProtectedCandidateOwnership(selCtx, ctx); err != nil {
+		return nil, string(method), err
 	}
 	recordCtx, result, selectedModel, learningApplied := r.applyRouterLearning(
 		selCtx,

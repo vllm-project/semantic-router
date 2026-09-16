@@ -14,6 +14,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configschema"
 )
 
+func TestKnowledgeBaseOpenAPIDocumentsPendingPublication(t *testing.T) {
+	spec := (&ClassificationAPIServer{}).generateOpenAPISpec()
+	collection := spec.Paths[apiStorageKnowledgeBasesPath]
+	item := spec.Paths[apiStorageKnowledgeBasesPath+"/{name}"]
+	for _, operation := range []*OpenAPIOperation{collection.Post, item.Put, item.Delete} {
+		if operation == nil {
+			t.Fatal("missing knowledge-base mutation operation")
+		}
+		pending, ok := operation.Responses["202"]
+		if !ok || pending.Content["application/json"].Schema.Properties["generated_runtime_hash"].Type != "string" {
+			t.Fatalf("pending response missing exact candidate hash: %+v", operation.Responses)
+		}
+		if !strings.Contains(operation.Responses["409"].Description, "CONFIG_ACTIVATION_PENDING") {
+			t.Fatal("pending mutation conflict was not documented")
+		}
+	}
+	if _, ok := collection.Post.Responses["201"]; !ok {
+		t.Fatal("create success status was not documented")
+	}
+	if _, ok := collection.Get.Responses["202"]; ok {
+		t.Fatal("read operation incorrectly documents candidate persistence")
+	}
+}
+
 func TestOpenAPISpecUsesRouteBodyMetadata(t *testing.T) {
 	apiServer := &ClassificationAPIServer{}
 	spec := apiServer.generateOpenAPISpec()
@@ -118,6 +142,11 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 	spec := server.generateOpenAPISpec()
 
 	eval := spec.Paths["/api/v1/routing/preview"].Post
+	for _, status := range []string{"429", "503", "504"} {
+		if _, ok := eval.Responses[status]; !ok {
+			t.Fatalf("Preview response %s is undocumented", status)
+		}
+	}
 	requireOpenAPIParameter(t, eval.Parameters, "trace", "query", false, "boolean")
 	if eval.RequestBody == nil || eval.RequestBody.Content["application/json"].Schema == nil {
 		t.Fatal("routing preview request schema is missing")

@@ -8,10 +8,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -35,9 +39,12 @@ func (e *imageEncodeError) Error() string {
 func (e *imageEncodeError) Unwrap() error { return e.err }
 
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
-// error code, and client message. Input-caused image-encode failures are 400
-// INVALID_IMAGE; every other failure is a genuine 500.
+// error code, and client message. Model input limits and input-caused image
+// failures are client errors; other inference failures remain internal errors.
 func classifyEmbeddingError(err error) (int, string, string) {
+	if errors.Is(err, binding.ErrInputLimit) {
+		return http.StatusBadRequest, "INVALID_INPUT", err.Error()
+	}
 	var imgErr *imageEncodeError
 	if errors.As(err, &imgErr) {
 		return http.StatusBadRequest, "INVALID_IMAGE",
@@ -70,12 +77,22 @@ func validatePriority(name string, value float32) (string, string, bool) {
 
 // handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
-	req, ok := s.parseEmbeddingRequest(w, r)
+	var request EmbeddingRequest
+	if err := s.parseJSONRequest(r, &request); err != nil {
+		s.writeJSONRequestError(w, err)
+		return
+	}
+	_, prepared, release, prepareErr := s.acquireEmbeddingRuntimeForRecipe(request.Recipe)
+	defer release()
+	req, ok := s.prepareEmbeddingRequest(w, request, prepared)
 	if !ok {
 		return
 	}
-
-	results, totalProcessingTime, err := buildEmbeddingResults(req)
+	if prepareErr != nil {
+		s.writeEmbeddingRuntimeError(w, prepareErr)
+		return
+	}
+	results, totalProcessingTime, err := buildOwnedEmbeddingResults(r.Context(), prepared, req)
 	if err != nil {
 		status, code, message := classifyEmbeddingError(err)
 		s.writeErrorResponse(w, status, code, message)
@@ -84,6 +101,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 
 	avgProcessingTime := averageEmbeddingProcessingTime(totalProcessingTime, req)
 	response := EmbeddingResponse{
+		Recipe:                diagnosticRecipeName(req.Recipe),
 		Embeddings:            results,
 		TotalCount:            len(results),
 		TotalProcessingTimeMs: totalProcessingTime,
@@ -96,24 +114,28 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r *http.Request) (EmbeddingRequest, bool) {
+func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r *http.Request, prepared *embedding.Set) (EmbeddingRequest, bool) {
 	var req EmbeddingRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return EmbeddingRequest{}, false
 	}
+	return s.prepareEmbeddingRequest(w, req, prepared)
+}
 
+func (s *ClassificationAPIServer) prepareEmbeddingRequest(w http.ResponseWriter, req EmbeddingRequest, prepared *embedding.Set) (EmbeddingRequest, bool) {
 	applyEmbeddingDefaults(&req)
-	mmbertPath := ""
-	if cfg := s.currentConfig(); cfg != nil {
-		mmbertPath = cfg.EmbeddingModels.MmBertModelPath
+	var availableLayers []int
+	for _, model := range prepared.Models() {
+		if model.Name == "mmbert" {
+			availableLayers = model.Layers
+			break
+		}
 	}
-	availableLayers := config.MmBertAvailableLayers(mmbertPath)
 	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
 		return EmbeddingRequest{}, false
 	}
-
 	return req, true
 }
 
@@ -251,27 +273,40 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Calculate similarity
-	result, err := candle_binding.CalculateEmbeddingSimilarity(
-		req.Text1,
-		req.Text2,
-		req.Model,
-		req.Dimension,
-	)
+	prepared, release, err := s.acquireEmbeddingsForRecipe(req.Recipe)
 	if err != nil {
+		s.writeEmbeddingRuntimeError(w, err)
+		return
+	}
+	defer release()
+	start := time.Now()
+	request := EmbeddingRequest{Model: req.Model, Dimension: req.Dimension, TargetLayer: req.TargetLayer, QualityPriority: req.QualityPriority, LatencyPriority: req.LatencyPriority}
+	first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
+	request.Model = first.ModelUsed
+	var score float32
+	if err == nil {
+		second, otherErr := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text2)
+		err = otherErr
+		if err == nil {
+			score, err = embeddingCosine(first.Embedding, second.Embedding)
+		}
+	}
+	result := SimilarityResponse{Recipe: diagnosticRecipeName(req.Recipe), Similarity: score, ModelUsed: first.ModelUsed, ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000}
+
+	if err != nil {
+		if errors.Is(err, binding.ErrInputLimit) {
+			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
 			fmt.Sprintf("failed to calculate similarity: %v", err))
 		return
 	}
 
-	response := SimilarityResponse{
-		Similarity:       result.Similarity,
-		ModelUsed:        result.ModelType,
-		ProcessingTimeMs: result.ProcessingTimeMs,
-	}
+	response := result
 
 	logging.Infof("Calculated similarity: %.4f (model: %s, took: %.2fms)",
-		result.Similarity, result.ModelType, result.ProcessingTimeMs)
+		result.Similarity, result.ModelUsed, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -312,35 +347,25 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
-	// Calculate batch similarity
-	result, err := candle_binding.CalculateSimilarityBatch(
-		req.Query,
-		req.Candidates,
-		req.TopK,
-		req.Model,
-		req.Dimension,
-	)
+	prepared, release, err := s.acquireEmbeddingsForRecipe(req.Recipe)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
-			fmt.Sprintf("failed to calculate batch similarity: %v", err))
+		s.writeEmbeddingRuntimeError(w, err)
 		return
 	}
-
-	matches, err := buildBatchSimilarityMatches(result, req.Candidates)
+	defer release()
+	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
+	response.Recipe = diagnosticRecipeName(req.Recipe)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_INVALID_RESULT", err.Error())
+		if errors.Is(err, binding.ErrInputLimit) {
+			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED", err.Error())
 		return
-	}
-
-	response := BatchSimilarityResponse{
-		Matches:          matches,
-		TotalCandidates:  len(req.Candidates),
-		ModelUsed:        result.ModelType,
-		ProcessingTimeMs: result.ProcessingTimeMs,
 	}
 
 	logging.Infof("Calculated batch similarity: query=%s, %d candidates, top-%d matches (model: %s, took: %.2fms)",
-		logging.ContentDescriptor(req.Query), len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
+		logging.ContentDescriptor(req.Query), len(req.Candidates), len(response.Matches), response.ModelUsed, response.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -444,4 +469,12 @@ func formatLayerList(layers []int) string {
 		parts[i] = strconv.Itoa(l)
 	}
 	return strings.Join(parts, ", ")
+}
+
+func (s *ClassificationAPIServer) writeEmbeddingRuntimeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, services.ErrUnknownDiagnosticRecipe) {
+		s.writeClassificationError(w, err)
+		return
+	}
+	s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
 }

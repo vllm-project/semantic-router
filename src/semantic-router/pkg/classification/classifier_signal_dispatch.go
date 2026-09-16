@@ -88,7 +88,7 @@ func (c *Classifier) buildPrimarySignalDispatchers(
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
-				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
+				c.evaluateEmbeddingSignal(requestCtx, results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
 			},
 		},
 		{
@@ -168,7 +168,7 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 		},
 		{
 			config.SignalTypeModality, "Modality",
-			func() { c.evaluateModalitySignal(results, mu, textForSignal(config.SignalTypeModality)) },
+			func() { c.evaluateModalitySignal(requestCtx, results, mu, textForSignal(config.SignalTypeModality)) },
 		},
 	}
 }

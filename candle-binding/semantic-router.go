@@ -5,20 +5,6 @@
 
 package candle_binding
 
-import (
-	"encoding/base64"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"regexp"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
-	"unsafe"
-)
-
 /*
 #cgo LDFLAGS: -L${SRCDIR}/target/release -lcandle_semantic_router -ldl -lm
 #include <stdlib.h>
@@ -469,6 +455,20 @@ extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
+import (
+	"encoding/base64"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"regexp"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+	"unsafe"
+)
+
 var (
 	initOnce                              sync.Once
 	initErr                               error
@@ -531,8 +531,8 @@ type ClassResultWithProbs struct {
 // TokenEntity represents a single detected entity in token classification
 type TokenEntity struct {
 	EntityType string  // Type of entity (e.g., "PERSON", "EMAIL", "PHONE")
-	Start      int     // Start character position in original text
-	End        int     // End character position in original text
+	Start      int     // Start byte offset in original text (UTF-8 bytes, not characters)
+	End        int     // End byte offset in original text (exclusive)
 	Text       string  // Actual entity text
 	Confidence float32 // Confidence score (0.0 to 1.0)
 }
@@ -2722,6 +2722,10 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 		entities:     (*C.ModernBertTokenEntity)(unsafe.Pointer(result.entities)),
 		num_entities: result.num_entities,
 	})
+
+	if result.num_entities < 0 || (result.num_entities > 0 && result.entities == nil) {
+		return nil, fmt.Errorf("mmBERT-32K PII token classification failed")
+	}
 
 	if result.num_entities == 0 {
 		return []TokenEntity{}, nil

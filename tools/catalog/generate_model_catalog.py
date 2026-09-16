@@ -446,9 +446,9 @@ def _validate_virtual_model_role(raw_role: Any, path: str) -> None:
         {"name", "required", "minimum_candidates", "traits", "recommended_pool"},
         path,
     )
-    pool = _sequence(role.get("recommended_pool"), f"{path}.recommended_pool")
+    _sequence(role.get("recommended_pool", []), f"{path}.recommended_pool")
     minimum = role.get("minimum_candidates")
-    if not isinstance(minimum, int) or minimum < 1 or minimum > len(pool):
+    if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 1:
         raise CatalogBuildError(f"{path}.minimum_candidates is invalid")
 
 
@@ -584,6 +584,8 @@ def _generated_models(
         model = json.loads(json.dumps(source))
         if model.get("kind") == "virtual":
             model["verification"]["asset_sha256"] = digest_by_asset[model["asset"]]
+            for role in model["roles"]:
+                role.setdefault("recommended_pool", [])
         generated.append(model)
     return generated
 

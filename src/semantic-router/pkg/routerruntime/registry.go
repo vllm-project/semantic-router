@@ -7,7 +7,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -15,6 +17,8 @@ import (
 // Registry is the narrow runtime-owned dependency seam shared by startup,
 // reload, extproc, and the API server.
 type Registry struct {
+	modelPool             *binding.Pool
+	configPublicationMu   sync.Mutex
 	mu                    sync.RWMutex
 	config                *config.RouterConfig
 	classificationService *services.ClassificationService
@@ -27,6 +31,8 @@ type Registry struct {
 	responseCache         *cache.ResponseCacheService
 	contextCompression    *contextcompression.Service
 	compressionRecovery   contextcompression.RecoveryStore
+	plugins               pluginruntime.Capabilities
+	configActivation      ConfigActivation
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -49,6 +55,7 @@ type RouterRuntimeSnapshot struct {
 	ResponseCache         *cache.ResponseCacheService
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
+	Plugins               pluginruntime.Capabilities
 }
 
 func (r *Registry) ContextCompression() (
@@ -136,7 +143,7 @@ type LearningRuntime interface {
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
-	return &Registry{config: cfg}
+	return &Registry{config: cfg, modelPool: binding.NewPool()}
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {
@@ -411,6 +418,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.responseCache = snapshot.ResponseCache
 	r.contextCompression = snapshot.ContextCompression
 	r.compressionRecovery = snapshot.CompressionRecovery
+	r.plugins = snapshot.Plugins
 	r.mu.Unlock()
 }
 
@@ -428,4 +436,18 @@ func (r *Registry) RefreshRuntimeConfig(newCfg *config.RouterConfig) {
 		}
 	}
 	r.UpdateConfig(newCfg)
+}
+
+// ModelPool shares immutable resources between service-owned consumers and
+// router generations. References, rather than the registry, own their close.
+func (r *Registry) ModelPool() *binding.Pool {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.modelPool == nil {
+		r.modelPool = binding.NewPool()
+	}
+	return r.modelPool
 }

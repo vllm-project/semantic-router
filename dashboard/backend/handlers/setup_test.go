@@ -45,6 +45,29 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
+// Config transport tests own temporary files, never the host's running stack.
+// Lifecycle behavior is exercised separately with explicitly seeded containers.
+func isolateConfigMutationRuntime(t *testing.T) {
+	t.Helper()
+	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
+	for _, key := range []string{"TEST_ROUTER_CONTAINER", "TEST_ENVOY_CONTAINER", "TEST_DASHBOARD_CONTAINER"} {
+		t.Setenv(key, "")
+	}
+	t.Cleanup(func() {
+		calls, err := os.ReadFile(fakeDocker.logPath)
+		if err != nil && !os.IsNotExist(err) {
+			t.Errorf("read isolated runtime calls: %v", err)
+		}
+		for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+			if call != "" && !strings.HasPrefix(call, "inspect ") {
+				t.Errorf("config transport attempted to mutate an unconfigured runtime: %s", call)
+			}
+		}
+	})
+}
+
 func TestSummarizeSetupConfigIncludesRecipeOwnedSignalsAndDecisions(t *testing.T) {
 	var config setupConfigFile
 	err := yaml.Unmarshal([]byte(`
@@ -483,6 +506,7 @@ global:
 }
 
 func TestSetupActivateHandler(t *testing.T) {
+	isolateConfigMutationRuntime(t)
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
@@ -531,7 +555,7 @@ func TestSetupActivateHandler(t *testing.T) {
 		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
 	}
 	// Mirrors pkg/config/canonical_defaults global.model_catalog.embeddings.semantic.mmbert_model_path
-	if semantic["mmbert_model_path"] != "models/mmbert-embed-32k-2d-matryoshka" {
+	if semantic["mmbert_model_path"] != "models/Vela-1.0-Encoder-307M-Embedding" {
 		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
 	}
 
@@ -544,6 +568,7 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	configureSetupRuntimeCLI(t)
 
 	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
 	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
@@ -620,12 +645,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
 	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
-	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
-	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
-	}
-	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
+	configureSetupRuntimeCLI(t)
 
 	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
 		t.Fatalf("failed to seed router status: %v", writeErr)
@@ -659,7 +679,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 	if !strings.Contains(envoyConfigText, "host.docker.internal") {
 		t.Fatalf("expected refreshed envoy config to include activated backend endpoint, got:\n%s", envoyConfigText)
 	}
-	if !strings.Contains(envoyConfigText, "test_model_cluster") {
+	if !strings.Contains(envoyConfigText, "model_test_2dmodel_cluster") {
 		t.Fatalf("expected refreshed envoy config to include activated model cluster, got:\n%s", envoyConfigText)
 	}
 }

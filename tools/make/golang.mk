@@ -55,14 +55,17 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 			exit 1; \
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
-	@echo "Checking src/semantic-router ONNX module..."
-	@cd src/semantic-router && go mod tidy -modfile=go.onnx.mod && \
-		if ! git diff --exit-code go.onnx.mod go.sum; then \
-			echo "ERROR: go.onnx.mod or the shared go.sum file is not tidy in src/semantic-router. Please run 'go mod tidy -modfile=go.onnx.mod' in src/semantic-router and commit the changes."; \
-			git diff go.onnx.mod go.sum; \
+	@echo "Checking perf..."
+	@cd perf && go mod tidy && \
+		if ! git diff --exit-code go.mod go.sum; then \
+			echo "ERROR: go.mod or go.sum files are not tidy in perf. Please run 'go mod tidy' in perf directory and commit the changes."; \
+			git diff go.mod go.sum; \
 			exit 1; \
 		fi
-	@echo "src/semantic-router ONNX go mod tidy check passed"
+	@echo "perf go mod tidy check passed"
+	@echo "Checking shared ONNX module compatibility links..."
+	@test "$$(readlink src/semantic-router/go.onnx.mod)" = go.mod
+	@test "$$(readlink src/semantic-router/go.onnx.sum)" = go.sum
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
@@ -91,5 +94,25 @@ generate-deepcopy: install-controller-gen ## Generate deepcopy methods using con
 
 generate-api: generate-deepcopy generate-crd ## Generate all API artifacts (deepcopy, CRDs)
 	@echo "Generated all API artifacts"
+
+.PHONY: generate-api-check
+generate-api-check: install-controller-gen ## Check generated Kubernetes API code and CRD mirrors without rewriting
+	@set -eu; \
+	tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
+	cd src/semantic-router; \
+	PATH="$$(go env GOPATH)/bin:$$PATH" controller-gen \
+		crd:crdVersions=v1,allowDangerousTypes=true \
+		object:headerFile=./hack/boilerplate.go.txt \
+		paths=./pkg/apis/vllm.ai/v1alpha1 \
+		output:crd:dir="$$tmp_dir/crds" \
+		output:object:dir="$$tmp_dir/code"; \
+	cd ../..; \
+	if ! diff -u src/semantic-router/pkg/apis/vllm.ai/v1alpha1/zz_generated.deepcopy.go "$$tmp_dir/code/zz_generated.deepcopy.go" || \
+		! diff -ru deploy/kubernetes/crds "$$tmp_dir/crds" || \
+		! diff -ru deploy/helm/semantic-router/crds "$$tmp_dir/crds"; then \
+		echo "Generated Kubernetes API artifacts are stale. Run 'make generate-api' and commit the results." >&2; \
+		exit 1; \
+	fi
 
 .PHONY: config-schema-generate config-schema-check

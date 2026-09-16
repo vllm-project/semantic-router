@@ -23,6 +23,7 @@ from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
 from cli.validator_classifier import validate_classifier_contracts
+from cli.validator_safety import validate_safety_contracts
 from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
 )
@@ -41,6 +42,8 @@ from cli.validator_workflows import (
 )
 from cli.validator_signal_references import validate_signal_references
 from cli.validator_models import validate_model_references
+from cli.validator_reasoning import validate_reasoning_controls
+from cli.validator_model_runtime import validate_model_runtime_references
 from cli.config_schema import routing_surface_catalog
 
 log = get_logger(__name__)
@@ -439,15 +442,6 @@ def _workflow_configuration_errors(
 
     errors: List[ValidationError] = []
     mode = workflows_cfg.mode or "static"
-    planner = workflows_cfg.planner
-    planner_model = getattr(planner, "model", None) if planner is not None else None
-    if mode == "dynamic" and not planner_model:
-        errors.append(
-            ValidationError(
-                f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
-                field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
-            )
-        )
     if mode == "dynamic" and workflows_cfg.roles:
         errors.append(
             ValidationError(
@@ -561,7 +555,10 @@ def validate_user_config(
 
     # Validate model references
     errors.extend(validate_model_references(config))
+    errors.extend(validate_reasoning_controls(config))
+    errors.extend(validate_model_runtime_references(config))
     errors.extend(validate_classifier_contracts(config))
+    errors.extend(validate_safety_contracts(config))
 
     # Validate plugin configurations
     errors.extend(validate_plugin_configurations(config))

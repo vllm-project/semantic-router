@@ -57,6 +57,7 @@ var _ = Describe("Cache Package", func() {
 			Context("with memory backend", func() {
 				It("should create in-memory cache backend successfully", func() {
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         InMemoryCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
@@ -73,6 +74,7 @@ var _ = Describe("Cache Package", func() {
 
 				It("should create disabled cache when enabled is false", func() {
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         InMemoryCacheType,
 						Enabled:             false,
 						SimilarityThreshold: 0.8,
@@ -89,6 +91,7 @@ var _ = Describe("Cache Package", func() {
 
 				It("should default to memory backend when backend_type is empty", func() {
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         "", // Empty should default to memory
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
@@ -107,6 +110,7 @@ var _ = Describe("Cache Package", func() {
 			Context("with hybrid backend option plumbing", func() {
 				It("should preserve embedding model when deriving hybrid cache options", func() {
 					cacheConfig := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         HybridCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
@@ -172,6 +176,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.85,
@@ -203,6 +208,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         MilvusCacheType,
 						Enabled:             false,
 						SimilarityThreshold: 0.8,
@@ -258,6 +264,7 @@ development:
 
 				It("should create Milvus cache backend successfully with valid config", func() {
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.85,
@@ -329,6 +336,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         RedisCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
@@ -358,6 +366,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         RedisCacheType,
 						Enabled:             false,
 						SimilarityThreshold: 0.8,
@@ -419,6 +428,7 @@ development:
 
 				It("should create Redis cache backend successfully with valid config", func() {
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         RedisCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
@@ -465,6 +475,7 @@ connection:
 					go func() {
 						defer GinkgoRecover()
 						_, cacheErr = NewMilvusCache(MilvusCacheOptions{
+							EmbeddingProvider:   cacheTestEmbeddingProvider(),
 							Enabled:             true,
 							SimilarityThreshold: 0.85,
 							TTLSeconds:          60,
@@ -530,6 +541,7 @@ development:
 			Context("with unsupported backend type", func() {
 				It("should return error for unsupported backend type", func() {
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         "unsupported_type", // Unsupported
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
@@ -547,6 +559,7 @@ development:
 			Context("with invalid config but valid backend type", func() {
 				It("should return error due to validation when config has invalid values", func() {
 					config := CacheConfig{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						BackendType:         InMemoryCacheType, // valid backend type
 						Enabled:             true,
 						SimilarityThreshold: -0.8, // invalid
@@ -567,6 +580,7 @@ development:
 		Describe("ValidateCacheConfig", func() {
 			It("should validate enabled memory backend configuration", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
@@ -582,6 +596,7 @@ development:
 
 			It("should validate disabled cache configuration", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             false,
 					SimilarityThreshold: 2.0, // Invalid, but should be ignored for disabled cache
@@ -594,6 +609,7 @@ development:
 
 			It("should return error for invalid similarity threshold", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 1.5, // Invalid: > 1.0
@@ -609,6 +625,7 @@ development:
 
 			It("should return error for negative similarity threshold", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: -0.1, // Invalid: < 0.0
@@ -624,6 +641,7 @@ development:
 
 			It("should return error for negative TTL", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
@@ -639,6 +657,7 @@ development:
 
 			It("should return error for negative max entries in memory backend", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
@@ -654,6 +673,7 @@ development:
 
 			It("should return error for unsupported eviction_policy value in memory backend", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
@@ -670,6 +690,7 @@ development:
 
 			It("should return error for Milvus backend without inline config", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         MilvusCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
@@ -684,6 +705,7 @@ development:
 
 			It("should return error for Redis backend without inline config", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         RedisCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
@@ -698,6 +720,7 @@ development:
 
 			It("should return error for hybrid backend without inline Milvus config", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         HybridCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
@@ -712,6 +735,7 @@ development:
 
 			It("should validate edge case values", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 0.0, // Valid: minimum threshold
@@ -725,6 +749,7 @@ development:
 
 			It("should validate maximum threshold value", func() {
 				config := CacheConfig{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					BackendType:         InMemoryCacheType,
 					Enabled:             true,
 					SimilarityThreshold: 1.0, // Valid: maximum threshold
@@ -796,6 +821,7 @@ development:
 
 		BeforeEach(func() {
 			options := InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
@@ -823,6 +849,7 @@ development:
 
 			// Create disabled cache
 			disabledOptions := InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             false,
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
@@ -892,6 +919,7 @@ development:
 
 			Expect(inMemoryCache.Close()).NotTo(HaveOccurred())
 			inMemoryCache = NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
@@ -916,6 +944,7 @@ development:
 		It("should respect similarity threshold", func() {
 			// Add entry with a very high similarity threshold
 			highThresholdOptions := InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.99, // Very high threshold
 				MaxEntries:          100,
@@ -967,6 +996,7 @@ development:
 
 		It("should skip expired entries during similarity search", func() {
 			ttlCache := NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.1,
 				MaxEntries:          10,
@@ -1007,6 +1037,7 @@ development:
 
 		It("should handle disabled cache operations gracefully", func() {
 			disabledOptions := InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             false,
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
@@ -1041,6 +1072,7 @@ development:
 
 		It("should keep existing HNSW nodes searchable after eviction", func() {
 			cacheWithHNSW := NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.1,
 				MaxEntries:          2,
@@ -1088,6 +1120,7 @@ development:
 	Describe("Cache Configuration Types", func() {
 		It("should support all required configuration fields", func() {
 			config := CacheConfig{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				BackendType:         MilvusCacheType,
 				Enabled:             true,
 				SimilarityThreshold: 0.9,
@@ -1330,6 +1363,7 @@ func BenchmarkComprehensive(b *testing.B) {
 			// Benchmark Linear Search
 			b.Run(fmt.Sprintf("%s/Linear/%s/%dEntries", hardware, contentLen.String(), cacheSize), func(b *testing.B) {
 				cache := NewInMemoryCache(InMemoryCacheOptions{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					MaxEntries:          cacheSize * 2,
 					SimilarityThreshold: 0.85,
@@ -1368,6 +1402,7 @@ func BenchmarkComprehensive(b *testing.B) {
 			for _, hnswCfg := range hnswConfigs {
 				b.Run(fmt.Sprintf("%s/HNSW_%s/%s/%dEntries", hardware, hnswCfg.name, contentLen.String(), cacheSize), func(b *testing.B) {
 					cache := NewInMemoryCache(InMemoryCacheOptions{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						MaxEntries:          cacheSize * 2,
 						SimilarityThreshold: 0.85,
@@ -1430,6 +1465,7 @@ func BenchmarkIndexConstruction(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					b.StopTimer()
 					cache := NewInMemoryCache(InMemoryCacheOptions{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						MaxEntries:          cacheSize * 2,
 						SimilarityThreshold: 0.85,
@@ -1709,6 +1745,7 @@ func TestExpirationHeapOperations(t *testing.T) {
 // TestInMemoryCacheEviction tests cache eviction with O(1) policies
 func TestInMemoryCacheEviction(t *testing.T) {
 	cache := NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		MaxEntries:          3,
 		TTLSeconds:          3600,
@@ -1755,7 +1792,8 @@ func TestInMemoryCacheEviction(t *testing.T) {
 // TestHybridCacheDisabled tests that disabled hybrid cache returns immediately
 func TestHybridCacheDisabled(t *testing.T) {
 	cache, err := NewHybridCache(HybridCacheOptions{
-		Enabled: false,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           false,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create disabled cache: %v", err)
@@ -1783,6 +1821,7 @@ func TestHybridCacheDisabled(t *testing.T) {
 
 func TestMilvusCacheOptionsFromHybridOptionsPreservesEmbeddingModel(t *testing.T) {
 	options := milvusCacheOptionsFromHybridOptions(HybridCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -1838,7 +1877,7 @@ func waitForHybridCacheHit(t *testing.T, cache *HybridCache, model, query string
 	}
 }
 
-func TestHybridCacheGenerateEmbeddingUsesMilvusEmbeddingModel(t *testing.T) {
+func TestHybridCacheGenerateEmbeddingRequiresPreparedProvider(t *testing.T) {
 	cache := &HybridCache{
 		milvusCache: &MilvusCache{
 			embeddingModel: "unsupported",
@@ -1847,9 +1886,9 @@ func TestHybridCacheGenerateEmbeddingUsesMilvusEmbeddingModel(t *testing.T) {
 
 	_, err := cache.generateEmbedding(context.Background(), "test")
 	if err == nil {
-		t.Fatal("expected unsupported embedding model error")
+		t.Fatal("expected unprepared embedding provider error")
 	}
-	if !strings.Contains(err.Error(), "unsupported embedding model: unsupported") {
+	if !strings.Contains(err.Error(), "cache embedding provider was not prepared") {
 		t.Fatalf("expected unsupported model error, got %v", err)
 	}
 }
@@ -1871,6 +1910,7 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	defer cleanup()
 
 	cache, err := NewHybridCache(HybridCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -1968,6 +2008,7 @@ func TestHybridCacheEviction(t *testing.T) {
 
 	// Create cache with very small memory limit
 	cache, err := NewHybridCache(HybridCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -2032,6 +2073,7 @@ func TestHybridCacheLocalCacheHit(t *testing.T) {
 	defer cleanup()
 
 	cache, err := NewHybridCache(HybridCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -2201,6 +2243,7 @@ milvus:
 	defer os.Remove(milvusConfig)
 
 	cache, err := NewHybridCache(HybridCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -2245,6 +2288,7 @@ milvus:
 	defer os.Remove(milvusConfig)
 
 	cache, err := NewHybridCache(HybridCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -2510,6 +2554,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 				b.Logf("\n=== Testing Pure Milvus Cache ===")
 
 				milvusCache, err := NewMilvusCache(MilvusCacheOptions{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.80,
 					TTLSeconds:          3600,
@@ -2667,6 +2712,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 				b.Logf("\n=== Testing Hybrid Cache ===")
 
 				hybridCache, err := NewHybridCache(HybridCacheOptions{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.80,
 					TTLSeconds:          3600,
@@ -2874,6 +2920,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 	b.Run("HNSWSearch", func(b *testing.B) {
 		// Build HNSW index
 		cache := NewInMemoryCache(InMemoryCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			SimilarityThreshold: 0.80,
 			MaxEntries:          cacheSize,
@@ -2904,6 +2951,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 
 	b.Run("MilvusVectorSearch", func(b *testing.B) {
 		milvusCache, err := NewMilvusCache(MilvusCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			SimilarityThreshold: 0.80,
 			TTLSeconds:          3600,
@@ -2962,6 +3010,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 	for _, concurrency := range concurrencyLevels {
 		b.Run(fmt.Sprintf("Milvus_Concurrency_%d", concurrency), func(b *testing.B) {
 			milvusCache, err := NewMilvusCache(MilvusCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.80,
 				TTLSeconds:          3600,
@@ -3001,6 +3050,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Hybrid_Concurrency_%d", concurrency), func(b *testing.B) {
 			hybridCache, err := NewHybridCache(HybridCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.80,
 				TTLSeconds:          3600,
@@ -3116,6 +3166,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 	// Test Milvus cache
 	t.Run("Milvus", func(t *testing.T) {
 		cache, err := NewMilvusCache(MilvusCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			SimilarityThreshold: 0.85,
 			TTLSeconds:          3600,
@@ -3154,6 +3205,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 	// Test Hybrid cache
 	t.Run("Hybrid", func(t *testing.T) {
 		cache, err := NewHybridCache(HybridCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			SimilarityThreshold: 0.85,
 			TTLSeconds:          3600,
@@ -3200,6 +3252,7 @@ func TestInMemoryCacheIntegration(t *testing.T) {
 	}
 
 	cache := NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		MaxEntries:          2,
 		SimilarityThreshold: 0.9,
@@ -3289,9 +3342,10 @@ func TestInMemoryCachePendingRequestWorkflow(t *testing.T) {
 	}
 
 	cache := NewInMemoryCache(InMemoryCacheOptions{
-		Enabled:        true,
-		MaxEntries:     2,
-		EvictionPolicy: "lru",
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+		Enabled:           true,
+		MaxEntries:        2,
+		EvictionPolicy:    "lru",
 	})
 
 	t.Run("PendingRequestFlow", func(t *testing.T) {
@@ -3347,7 +3401,8 @@ func TestEvictionPolicySelection(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("Policy_%s", tc.policy), func(t *testing.T) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
-				EvictionPolicy: EvictionPolicyType(tc.policy),
+				EmbeddingProvider: cacheTestEmbeddingProvider(),
+				EvictionPolicy:    EvictionPolicyType(tc.policy),
 			})
 
 			policyType := fmt.Sprintf("%T", cache.evictionPolicy)
@@ -3366,6 +3421,7 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 
 	// Test with HNSW enabled
 	cacheHNSW := NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		MaxEntries:          100,
 		SimilarityThreshold: 0.85,
@@ -3377,6 +3433,7 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 
 	// Test without HNSW (linear search)
 	cacheLinear := NewInMemoryCache(InMemoryCacheOptions{
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		MaxEntries:          100,
 		SimilarityThreshold: 0.85,
@@ -3453,6 +3510,7 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 	t.Run("HNSW_Rebuild_After_Cleanup", func(t *testing.T) {
 		// Create cache with short TTL
 		cacheTTL := NewInMemoryCache(InMemoryCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			MaxEntries:          100,
 			SimilarityThreshold: 0.85,
@@ -3509,6 +3567,7 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 		// Benchmark Linear Search
 		b.Run(fmt.Sprintf("LinearSearch_%d_entries", size), func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          size * 2,
 				SimilarityThreshold: 0.85,
@@ -3533,6 +3592,7 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 		// Benchmark HNSW Search
 		b.Run(fmt.Sprintf("HNSWSearch_%d_entries", size), func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          size * 2,
 				SimilarityThreshold: 0.85,
@@ -3578,6 +3638,7 @@ func BenchmarkHNSWIndexConstruction(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
 				cache := NewInMemoryCache(InMemoryCacheOptions{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					MaxEntries:          count * 2,
 					SimilarityThreshold: 0.85,
@@ -3629,6 +3690,7 @@ func BenchmarkHNSWParameters(b *testing.B) {
 	for _, config := range testConfigs {
 		b.Run(config.name, func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          cacheSize * 2,
 				SimilarityThreshold: 0.85,
@@ -3662,6 +3724,7 @@ func BenchmarkCacheOperations(b *testing.B) {
 
 	b.Run("LinearSearch_AddAndFind", func(b *testing.B) {
 		cache := NewInMemoryCache(InMemoryCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			MaxEntries:          10000,
 			SimilarityThreshold: 0.85,
@@ -3684,6 +3747,7 @@ func BenchmarkCacheOperations(b *testing.B) {
 
 	b.Run("HNSWSearch_AddAndFind", func(b *testing.B) {
 		cache := NewInMemoryCache(InMemoryCacheOptions{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			MaxEntries:          10000,
 			SimilarityThreshold: 0.85,
@@ -3719,6 +3783,7 @@ func BenchmarkHNSWRebuild(b *testing.B) {
 		b.Run(fmt.Sprintf("Rebuild_%d_entries", size), func(b *testing.B) {
 			// Create and populate cache
 			cache := NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          size * 2,
 				SimilarityThreshold: 0.85,
@@ -4113,6 +4178,7 @@ func BenchmarkLargeScale(b *testing.B) {
 			b.Run("Linear", func(b *testing.B) {
 				b.Logf("=== Testing Linear Search with %d entries ===", cacheSize)
 				cache := NewInMemoryCache(InMemoryCacheOptions{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					MaxEntries:          cacheSize,
@@ -4179,6 +4245,7 @@ func BenchmarkLargeScale(b *testing.B) {
 					b.Logf("=== Testing %s with %d entries (M=%d, ef=%d) ===",
 						config.name, cacheSize, config.m, config.ef)
 					cache := NewInMemoryCache(InMemoryCacheOptions{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						MaxEntries:          cacheSize,
@@ -4312,6 +4379,7 @@ func BenchmarkScalability(b *testing.B) {
 			if testLinear {
 				b.Run("Linear", func(b *testing.B) {
 					cache := NewInMemoryCache(InMemoryCacheOptions{
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						MaxEntries:          cacheSize,
@@ -4353,6 +4421,7 @@ func BenchmarkScalability(b *testing.B) {
 
 			b.Run("HNSW", func(b *testing.B) {
 				cache := NewInMemoryCache(InMemoryCacheOptions{
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					MaxEntries:          cacheSize,
@@ -4470,6 +4539,7 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 	for _, config := range configs {
 		b.Run(config.name, func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.8,
 				MaxEntries:          cacheSize,

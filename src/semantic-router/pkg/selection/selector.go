@@ -203,6 +203,11 @@ type SelectionContext struct {
 	// Used to track within-session model performance
 	SessionID string
 
+	// SessionStateKey is the canonical recipe-scoped router memory key. It is
+	// separate from SessionID so client identity text cannot be mistaken for an
+	// encoded session/conversation tuple. An empty key uses the raw SessionID.
+	SessionStateKey string
+
 	// AgenticSession carries request-time session facts used by
 	// session_aware selection. The flat SessionID remains the shared
 	// correlation key for selectors that do not need richer session facts.
@@ -258,6 +263,12 @@ type SelectionResult struct {
 
 	// Reasoning provides human-readable explanation for the selection
 	Reasoning string
+
+	// EligibleModels is the selector's explicit policy envelope. Nil means the
+	// selector only ranks candidates; a non-nil set contains every model still
+	// allowed after hard filters (or the explicitly configured fallback).
+	// Later learning and provider rerouting must not expand this set.
+	EligibleModels []config.ModelRef
 
 	// AllScores maps each candidate model to its computed score
 	AllScores map[string]float64

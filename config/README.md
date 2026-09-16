@@ -53,6 +53,10 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
+The [Vela model guide](../website/docs/tutorials/global/vela-models.md) explains
+the built-in model defaults, explicit older models, and opt-in long-context
+deployment settings. Model migration preserves the existing input budgets.
+
 `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json` is the one
 checked-in schema generated from the Go configuration types and routing
 registries. Do not edit it directly. See the
@@ -157,6 +161,15 @@ runtime dependency; they do not define routing behavior by themselves.
   winning label is the verdict. `threshold` stays the symmetric shorthand for
   the local signed margin, and the `hard`/`easy` candidate lists are unread
   once a backend supplies the score.
+- PII attaches the same block at
+  `global.model_catalog.modules.classifier.pii.backend`. It reads one contract,
+  `token_spans.v1`, so `contract` may be omitted; the remote model returns
+  entity spans as code-point offsets into the exact request string, and its
+  labels must be in the configured `pii_mapping_path`. `on_error` beside the
+  backend selects what a backend failure, or a provider-declared truncation,
+  does to the rule that consumed it: `allow` (default) treats the content as
+  not matching, `block` matches it as `classification_error`. A backend is
+  mutually exclusive with the local `use_mmbert_32k` selector.
 - External LLM classifiers use `max_response_bytes` on their
   `global.model_catalog.external[]` entry. The MCP classifier uses the same key
   under `global.model_catalog.modules.classifier.mcp`.

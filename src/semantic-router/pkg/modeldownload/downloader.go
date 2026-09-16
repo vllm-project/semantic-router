@@ -78,6 +78,15 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 }
 
 func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, config DownloadConfig) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := validateArtifactDownload(spec); err != nil {
+		return err
+	}
+	if err := invalidateModelRevision(spec); err != nil {
+		return fmt.Errorf("invalidate model revision: %w", err)
+	}
 	logging.Infof("Downloading model: %s", spec.LocalPath)
 
 	args := buildDownloadArgs(spec)
@@ -111,7 +120,10 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if IsGatedModelError(err, spec.RepoID, config.HFToken) {
+		if immutableModelRevision(spec) {
+			return fmt.Errorf("failed to download pinned model %s: %w", spec.RepoID, err)
+		}
+		if !spec.Strict && IsGatedModelError(err, spec.RepoID, config.HFToken) {
 			logging.Warnf("⚠️  Skipping model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
 			logging.Warnf("   This is expected if HF_TOKEN is not available (e.g., PRs from forks)")
 			logging.Warnf("   To download gated models, set HF_TOKEN environment variable")
@@ -120,6 +132,18 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
 	}
 
+	if spec.Strict {
+		complete, err := isSpecComplete(spec)
+		if err != nil {
+			return fmt.Errorf("verify downloaded artifact %s: %w", spec.LocalPath, err)
+		}
+		if !complete {
+			return fmt.Errorf("downloaded artifact %s is missing required provider files", spec.LocalPath)
+		}
+	}
+	if err := recordDownloadedModelRevision(spec); err != nil {
+		return fmt.Errorf("record downloaded model revision: %w", err)
+	}
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
 
 	return nil

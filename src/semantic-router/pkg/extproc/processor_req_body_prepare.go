@@ -25,6 +25,14 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil, status.Error(codes.InvalidArgument, "neutral inference request is unavailable")
 	}
+	// Resolve retained history before any signal, context estimate, or plugin
+	// consumes the neutral request. Provider dispatch is idempotent and must not
+	// later reintroduce history removed by the selected decision's tool policy.
+	if changed, err := r.materializeResponseObjectContext(ctx.SemanticRequest, ctx); err != nil {
+		return nil, err
+	} else if changed {
+		ctx.SemanticRequest.Generation++
+	}
 	captureOriginalContextHistory(ctx)
 	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest)
 	captureOriginalRequestDemand(ctx, ctx.SemanticRequest, snapshot)
@@ -72,11 +80,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		}
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
-	metrics.RecordModelRequest(selectedModel)
-	ctx.InflightToken = inflight.Begin(selectedModel)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
-		ctx.InflightToken = 0
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
 		r.attachRouterReplayResponse(
@@ -87,6 +91,8 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 		return requestDecisionState{}, resp
 	}
+	metrics.RecordModelRequest(selectedModel)
+	ctx.InflightToken = inflight.Begin(selectedModel)
 	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
 		inflight.End(selectedModel, ctx.InflightToken)
 		ctx.InflightToken = 0
@@ -140,7 +146,7 @@ func (r *OpenAIRouter) respondRoutingRejected(
 ) *ext_proc.ProcessingResponse {
 	resp := r.createErrorResponse(503, routingErr.Error())
 	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
-		ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(nil)
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, nil)
 	}
 	r.startRouterReplay(ctx, originalModel, "", "")
 	r.updateRouterReplayStatus(ctx, 503, false)
