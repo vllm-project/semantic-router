@@ -131,24 +131,29 @@ crosses protocols, inspect `x-vsr-client-protocol`,
 
 ## Request budget errors
 
-When `candidate_requirements.context` is `known_limits`, the Router checks the
-estimated input plus the effective output limit against each candidate's configured
-limits. If every candidate fails only this budget check, the request returns HTTP
-`400` with `context_length_exceeded` or `max_output_tokens_exceeded`. Unknown model
-limits, missing capabilities, unavailable selection evidence, and mixed failures
-remain selection failures; they are not reported as a caller budget error.
+With `candidate_requirements.context: known_limits`, the Router checks estimated
+input plus the effective output allowance against the candidates' configured
+limits. If all candidates fail only the budget check, it returns HTTP 400:
 
-Input accounting is an estimate, not the selected model's tokenizer. A backend
-may still reject a request that passed this check. Valid backend errors retain
-their HTTP status and meaningful message. vLLM's integer HTTP error codes are
-normalized to strings; for example, its `BadRequestError` with `code: 400` becomes
-an `invalid_request_error` with `code: "400"` in OpenAI-compatible output.
+| Error code | Meaning |
+| --- | --- |
+| `context_length_exceeded` | The prepared input and requested output do not fit. |
+| `max_output_tokens_exceeded` | The requested output exceeds the configured model limit. |
 
-A request with `stream: true` that is rejected before generation receives the
-same non-2xx JSON error rather than a successful SSE stream. When Replay is
-enabled, these errors are retained as failed requests with the observed status;
-Router budget rejections use the terminal reason `request_budget_exceeded`.
-These checks do not themselves truncate the provider-bound conversation.
+Missing capabilities, unknown limits, unavailable selection evidence, and mixed
+failures retain their existing selection-error behavior. Budget checks do not
+truncate requests by themselves; opt into
+[context compression](../tutorials/plugin/context-compression.md) when appropriate.
+
+These counts are estimates. A backend can still reject a request; its valid
+HTTP status and meaningful message are retained. vLLM integer codes are exposed
+as strings in OpenAI-compatible errors: `BadRequestError` with `code: 400`
+becomes `invalid_request_error` with `code: "400"`.
+
+A streaming request rejected before generation receives the same non-2xx JSON
+error, not a successful SSE stream. When Replay is enabled, it records the
+failed status and body; Router budget rejections use
+`terminal_reason: request_budget_exceeded`.
 
 ## Router Replay
 
