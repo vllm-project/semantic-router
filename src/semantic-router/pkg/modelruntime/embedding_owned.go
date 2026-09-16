@@ -62,22 +62,7 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 	}
 	needed := embeddingNeedsForScope(cfg, primary, sharedServices)
 	requirements := config.EmbeddingRequirements(cfg, primary, sharedServices)
-	if cfg.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendOpenVINO && !hasExplicit {
-		// Legacy OpenVINO recipe classifiers initialize their own primary.
-		// Independent service providers still belong to this owned snapshot.
-		delete(needed, primary)
-		ownedRequirements := requirements[:0]
-		for _, requirement := range requirements {
-			if requirement.Model == primary && !requirement.SharedService {
-				continue
-			}
-			ownedRequirements = append(ownedRequirements, requirement)
-			if requirement.SharedService {
-				needed[requirement.Model] = true
-			}
-		}
-		requirements = ownedRequirements
-	}
+
 	if len(needed) == 0 {
 		return embedding.NewSet(providers, primary), nil
 	}
@@ -178,6 +163,13 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 
 func embeddingCatalogSpec(cfg *config.RouterConfig, recipe config.RecipeName, model, path string) config.ResolvedModelBinding {
 	provider, device := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
+	primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
+	if primary == "" {
+		primary = "qwen3"
+	}
+	if model == primary {
+		provider, device = config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
+	}
 	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: model}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: "truncate"}}, Admission: cfg.ModelAdmission["embedding:"+model]}
 }
 

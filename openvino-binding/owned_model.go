@@ -18,8 +18,10 @@ import (
 	"unsafe"
 )
 
-var ErrClosed = errors.New("OpenVINO model is closed")
-var ErrInputTooLong = errors.New("OpenVINO input exceeds the configured token budget")
+var (
+	ErrClosed       = errors.New("OpenVINO model is closed")
+	ErrInputTooLong = errors.New("OpenVINO input exceeds the configured token budget")
+)
 
 type ModelOptions struct {
 	ModelPath string
