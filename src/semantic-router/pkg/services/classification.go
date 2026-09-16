@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // Global classification service instance
@@ -102,46 +101,23 @@ func SetGlobalClassificationService(service *ClassificationService) {
 	globalClassificationMu.Unlock()
 }
 
-// NewClassificationServiceWithAutoDiscovery creates a service with auto-discovery
-func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
-	// Debug: Check current working directory
-	wd, _ := os.Getwd()
-	logging.Debugf("Debug: Current working directory: %s", wd)
-	logging.Debugf("Debug: Attempting to discover models in: ./models")
-
-	// Always try to auto-discover and initialize unified classifier for batch processing
-	// Use model path from config, fallback to "./models" if not specified
-	modelsPath := "./models"
-	if config != nil && config.CategoryModel.ModelID != "" {
-		// Extract the models directory from the model path
-		// e.g., "models/mom-domain-classifier" -> "models"
-		if idx := strings.Index(config.CategoryModel.ModelID, "/"); idx > 0 {
-			modelsPath = config.CategoryModel.ModelID[:idx]
-		}
-	}
-
-	// Pass mom_registry to auto-discovery for LoRA detection
-	var modelRegistry map[string]string
-	if config != nil {
-		modelRegistry = config.MoMRegistry
-	}
-	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifierWithRegistry(modelsPath, modelRegistry)
-	if ucErr != nil {
-		logging.Infof("Unified classifier auto-discovery failed: %v", ucErr)
-	}
-	// create legacy classifier
-	legacyClassifier, lcErr := classification.NewLegacyClassifierFromConfig(config)
-	if lcErr != nil {
-		logging.Warnf("Legacy classifier initialization failed: %v", lcErr)
-	}
-	if unifiedClassifier == nil && legacyClassifier == nil {
-		logging.Warnf("No classifier initialized. Using placeholder service.")
-	}
-	service := NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config)
-	if legacyClassifier != nil {
-		service.runtimeOwner = legacyClassifier
+// NewClassificationServiceFromConfig owns a canonical recipe graph and a pool
+// from its first generation, so reload reuses compatible physical resources.
+func NewClassificationServiceFromConfig(cfg *config.RouterConfig) (*ClassificationService, error) {
+	pool := binding.NewPool()
+	service := &ClassificationService{modelPool: pool}
+	if err := service.refreshRecipeClassifiers(cfg, nil, classification.RecipeRuntimeOptions{Runtime: native.New(pool)}); err != nil {
+		return nil, err
 	}
 	return service, nil
+}
+
+// NewClassificationServiceWithAutoDiscovery is retained for source compatibility.
+//
+// Deprecated: use NewClassificationServiceFromConfig. Model discovery is never
+// a substitute for the declared canonical configuration.
+func NewClassificationServiceWithAutoDiscovery(cfg *config.RouterConfig) (*ClassificationService, error) {
+	return NewClassificationServiceFromConfig(cfg)
 }
 
 // GetGlobalClassificationService returns the global classification service instance
