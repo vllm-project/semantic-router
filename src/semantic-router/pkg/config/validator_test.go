@@ -101,7 +101,7 @@ func registerValidateConfigStructureCoreSpecs() {
 }
 
 func registerValidateConfigStructureCoreDispatchSpecs() {
-	It("skips everything in k8s mode", func() {
+	It("skips routing-profile validation in k8s mode, since decisions arrive from CRD conversion", func() {
 		cfg := &RouterConfig{
 			ConfigSource: ConfigSourceKubernetes,
 			IntelligentRouting: IntelligentRouting{

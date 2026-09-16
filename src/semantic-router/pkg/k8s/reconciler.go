@@ -293,13 +293,20 @@ func (r *Reconciler) reportConflict(ctx context.Context, pools []v1alpha1.Intell
 }
 
 // validateAndUpdate validates CRDs and updates configuration
+// failValidation marks pool and route ValidationFailed and returns err
+// unchanged, so every config-validation failure in validateAndUpdate reports
+// through the CRDs' Ready condition the same way, regardless of which
+// validation step caught it.
+func (r *Reconciler) failValidation(ctx context.Context, pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute, err error) error {
+	r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
+	r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
+	return err
+}
+
 func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute) error {
 	// Validate
 	if err := r.validate(pool, route); err != nil {
-		// Update status to Invalid
-		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		return err
+		return r.failValidation(ctx, pool, route, err)
 	}
 
 	canonicalBase := config.CanonicalStaticConfigFromRouterConfig(r.staticConfig)
@@ -313,20 +320,25 @@ func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.Intel
 		return fmt.Errorf("failed to marshal canonical config: %w", err)
 	}
 
+	// ParseYAMLBytes runs the shared static-config validators as part of
+	// normalizing this document (issue #3758): a bad setting that does not
+	// depend on CRD-supplied routing state, such as an out-of-range static
+	// field, is rejected here rather than only after the merge below. That
+	// makes this the same class of failure as the explicit K8s-contract
+	// check further down, so both report ValidationFailed the same way.
 	newConfig, err := config.ParseYAMLBytes(canonicalBytes)
 	if err != nil {
-		return fmt.Errorf("failed to normalize canonical config: %w", err)
+		return r.failValidation(ctx, pool, route, fmt.Errorf("kubernetes config validation failed: %w", err))
 	}
 	newConfig.ConfigSource = config.ConfigSourceKubernetes
 
-	// The initial Kubernetes static-config parse is intentionally tolerant
-	// because routing state comes from CRDs. Once pool and route have been
-	// converted, run the shared K8s-safe validator dispatch so reconcile holds
-	// CRD-loaded config to the same family contracts as file-loaded config.
+	// The initial Kubernetes static-config parse is intentionally tolerant of
+	// missing routing state because that comes from CRDs. Once pool and route
+	// have been converted, run the shared K8s-safe validator dispatch so
+	// reconcile holds CRD-loaded config to the same family contracts as
+	// file-loaded config.
 	if err := config.ValidateKubernetesConfigContracts(newConfig); err != nil {
-		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		return fmt.Errorf("kubernetes config validation failed: %w", err)
+		return r.failValidation(ctx, pool, route, fmt.Errorf("kubernetes config validation failed: %w", err))
 	}
 
 	// Call update callback

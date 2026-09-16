@@ -9,6 +9,27 @@ import (
 
 type configContractValidator func(*RouterConfig) error
 
+// globalConfigValidatorEntry is one row of globalConfigValidatorRegistry.
+type globalConfigValidatorEntry struct {
+	validate             configContractValidator
+	requiresRoutingState bool
+}
+
+// globalConfigValidators returns the registered global validators, in
+// registration order. With includeRoutingStateDependent false it filters out
+// the entries requiresRoutingState marks, giving the subset safe to run
+// before Kubernetes CRD conversion has populated provider and routing state.
+func globalConfigValidators(includeRoutingStateDependent bool) []configContractValidator {
+	out := make([]configContractValidator, 0, len(globalConfigValidatorRegistry))
+	for _, entry := range globalConfigValidatorRegistry {
+		if entry.requiresRoutingState && !includeRoutingStateDependent {
+			continue
+		}
+		out = append(out, entry.validate)
+	}
+	return out
+}
+
 var (
 	// Pre-compiled regular expressions for better performance
 	protocolRegex = regexp.MustCompile(`^https?://`)
@@ -18,29 +39,54 @@ var (
 	// Pattern to match IPv6 address followed by port number [::1]:8080
 	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
 
-	globalConfigContractValidators = []configContractValidator{
-		validateRoutingPreviewConfig,
-		validateModelPricingContracts,
-		validateReasoningFamilyContracts,
-		validateGlobalSemanticCacheContracts,
-		validateGlobalMemoryContracts,
-		validateEmbeddingModelContracts,
-		validateGlobalModalityContracts,
-		validateModelSelectionConfig,
-		validateCategoryModelBackendContracts,
-		validateComplexityModelBackendContracts,
-		validatePIIModelBackendContracts,
-		validateGlobalClassifierRuntimeContracts,
-		validateGlobalRouterLearningConfig,
-		validateReMoMContracts,
-		validateFusionContracts,
-		validateFlowContracts,
-		validateAdvancedToolFilteringConfig,
-		validatePromptCompressionContracts,
-		validateHallucinationContracts,
-		validateModelAdmissionContracts,
-		validateModelDeploymentContracts,
+	// globalConfigValidatorRegistry is the one place a global contract
+	// validator is registered. requiresRoutingState marks a validator that
+	// reads provider or routing state (Providers.Models, Recipes,
+	// RoutingScope, decision refs) the Kubernetes source populates only
+	// after CRD conversion; validateConfigStructure defers those for that
+	// source instead of running them against a document that has not been
+	// merged with its CRDs yet. See issue #3758.
+	globalConfigValidatorRegistry = []globalConfigValidatorEntry{
+		// Reads only cfg.API.RoutingPreview, a static field: safe to run
+		// before CRD conversion.
+		{validate: validateRoutingPreviewConfig},
+		{validate: validateModelPricingContracts},
+		{validate: validateReasoningFamilyContracts},
+		{validate: validateGlobalSemanticCacheContracts},
+		{validate: validateGlobalMemoryContracts},
+		{validate: validateEmbeddingModelContracts},
+		{validate: validateGlobalModalityContracts},
+		// validateModelSelectionConfig, validateCategoryModelBackendContracts
+		// and validatePIIModelBackendContracts resolve a remote backend's
+		// model name against ExternalModels, a static document field the
+		// Kubernetes CRD conversion never touches (only Providers.Models,
+		// Routing.Decisions, and Routing.Signals are CRD-populated); see
+		// validator_kubernetes_startup_test.go for the case proving this.
+		{validate: validateModelSelectionConfig},
+		{validate: validateCategoryModelBackendContracts},
+		// validateComplexityModelBackendContracts also runs
+		// ValidateComplexityRuleBoundaries, which checks rules "that exist
+		// only inside a recipe, since routing.signals is replaced wholesale
+		// per recipe" (its own doc comment) - genuinely routing-state
+		// dependent, unlike the two above.
+		{validate: validateComplexityModelBackendContracts, requiresRoutingState: true},
+		{validate: validatePIIModelBackendContracts},
+		{validate: validateGlobalClassifierRuntimeContracts, requiresRoutingState: true},
+		{validate: validateGlobalRouterLearningConfig, requiresRoutingState: true},
+		{validate: validateReMoMContracts},
+		{validate: validateFusionContracts},
+		{validate: validateFlowContracts},
+		{validate: validateAdvancedToolFilteringConfig},
+		{validate: validatePromptCompressionContracts},
+		{validate: validateHallucinationContracts},
+		{validate: validateModelAdmissionContracts},
+		{validate: validateModelDeploymentContracts, requiresRoutingState: true},
 	}
+
+	// globalConfigContractValidators is every registered global validator, in
+	// registration order. Kept as a plain slice for existing callers and
+	// tests; globalConfigValidators(false) is the filtered view.
+	globalConfigContractValidators = globalConfigValidators(true)
 
 	routingProfileContractValidators = []configContractValidator{
 		validateRuleOperatorContracts,
@@ -142,10 +188,15 @@ func getIPAddressType(address string) string {
 
 // validateConfigStructure performs additional validation on the parsed config.
 func validateConfigStructure(cfg *RouterConfig) error {
-	// In Kubernetes mode, decisions and model_config will be loaded from CRDs
-	// Skip validation for these fields during initial config parse
 	if cfg.ConfigSource == ConfigSourceKubernetes {
-		return nil
+		// Routing state (decisions, recipes) and CRD-supplied provider models
+		// are not populated yet: they arrive from CRD conversion after this
+		// parse. Run the global validators that do not depend on that state
+		// now, so a bad static setting fails at load instead of surfacing
+		// later; skip the routing-profile validators and the global ones
+		// requiresRoutingState marks. ValidateKubernetesConfigContracts runs
+		// the full set, including those, once the reconciler has merged CRDs.
+		return runConfigContractValidators(cfg, globalConfigValidators(false))
 	}
 	return validateConfigContracts(cfg)
 }
