@@ -62,11 +62,23 @@ func compressCandidateText(model string, counter TokenCounter, candidate planned
 	// The extractive engine estimates tokens internally; adapt its item budget
 	// to the request counter, then verify the result using that same counter.
 	original, source := counter.CountText(model, text)
-	if source != "utf8_byte_upper_bound" {
-		return CompressToolOutput(text, candidate.plan.Query, candidate.plan.OriginalTokens, target)
+	minimum := candidate.plan.OriginalTokens
+	if source == "utf8_byte_upper_bound" {
+		target = max(1, int(float64(target)*float64(EstimateTokens(text))/float64(max(1, original))))
+		minimum = EstimateTokens(text)
 	}
-	targetEstimate := int(float64(target) * float64(EstimateTokens(text)) / float64(max(1, original)))
-	return CompressToolOutput(text, candidate.plan.Query, EstimateTokens(text), max(1, targetEstimate))
+	if candidate.plan.Kind == TargetHistory && !json.Valid([]byte(text)) {
+		// History prose can start with a bracketed heading. Tool output keeps
+		// its conservative malformed-JSON guard; valid history JSON still uses
+		// the existing structure-preserving string-leaf compressor below.
+		estimated := EstimateTokens(text)
+		minimum, target = normalizeTokenBudget(minimum, target)
+		if estimated < minimum || target <= 0 || target >= estimated {
+			return unchangedResult(text, estimated)
+		}
+		return compressText(text, candidate.plan.Query, estimated, target)
+	}
+	return CompressToolOutput(text, candidate.plan.Query, minimum, target)
 }
 
 func truncateCurrentUser(model string, counter TokenCounter, text string, target int) Result {

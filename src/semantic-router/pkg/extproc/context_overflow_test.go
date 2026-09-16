@@ -119,6 +119,79 @@ func TestContextOverflowPreservesSystemToolsAndLatestInstruction(t *testing.T) {
 	}
 }
 
+func TestContextOverflowRecompressesBracketHistoryForToolFollowups(t *testing.T) {
+	for _, heading := range []string{"[Request heading]", "{Request heading}"} {
+		t.Run(heading, func(t *testing.T) {
+			original := heading + "\nHeader MAPLE731\n" + strings.Repeat("Unrelated archival paragraph. ", 15000) + "\nReturn MAPLE731:42."
+			firstRouter, firstContext := overflowFixture(t, original)
+			first := encodedOverflowDispatch(t, firstRouter, firstContext, original)
+			if first.Messages[0].Content[0].Text == original {
+				t.Fatal("first turn did not reduce current-user text")
+			}
+			// Playground retains the original user text, not the first dispatch's
+			// lossy view, when it constructs the next turn and tool continuation.
+			for _, continuation := range []bool{false, true} {
+				latest := "Use calculator to compute 997*991."
+				r, ctx := overflowFixture(t, latest)
+				request := ctx.SemanticRequest
+				request.Instructions = []llmprotocol.InstructionBlock{{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Use tools accurately."}}}}
+				request.Tools = []llmprotocol.Tool{{Name: "calculator", InputSchema: json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"}}}`)}}
+				request.Messages = append([]llmprotocol.Message{
+					{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: original}}},
+					{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "MAPLE731:42"}}},
+				}, request.Messages...)
+				if continuation {
+					request.Messages = append(request.Messages,
+						llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_calculator", Name: "calculator", Arguments: `{"expression":"997*991"}`}}}},
+						llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_calculator", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "988027"}}}}}})
+				}
+				before, err := selection.EffectiveCandidateRequest(request, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				outbound := encodedOverflowDispatch(t, r, ctx, latest)
+				if got := outbound.Messages[0].Content[0].Text; got == original || !strings.Contains(got, "context omitted by route compression") {
+					t.Fatal("old bracket-heading history was not compressed")
+				}
+				if !reflect.DeepEqual(request.Instructions, before.Instructions) || !reflect.DeepEqual(request.Tools, before.Tools) || !reflect.DeepEqual(request.Messages[1:], before.Messages[1:]) {
+					t.Fatal("history compression changed instructions, schema, latest user or tool exchange")
+				}
+				if !ctx.ContextCompressionApplied || ctx.ContextCompressionAfter >= ctx.ContextCompressionBefore {
+					t.Fatal("missing history compression receipt")
+				}
+			}
+		})
+	}
+}
+
+func encodedOverflowDispatch(t *testing.T, router *OpenAIRouter, ctx *RequestContext, input string) llmprotocol.Request {
+	t.Helper()
+	d := ctx.VSRSelectedDecision
+	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", input, ctx)
+	if err != nil || model == "" {
+		t.Fatalf("selection: model=%q err=%v", model, err)
+	}
+	if _, response, err := router.prepareRequestForModelRouting(ctx.SemanticRequest, input, ctx); err != nil || response != nil {
+		t.Fatalf("plugin preparation: %v response=%v", err, response != nil)
+	}
+	if dispatch, err := router.prepareProviderDispatch(ctx.SemanticRequest, model, d.Name, false, ctx); err != nil || dispatch == nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	body, _, err := (protocolcodec.OpenAIChatCodec{}).EncodeRequest(*ctx.SemanticRequest, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	outbound, _, _, err := (protocolcodec.OpenAIChatCodec{}).DecodeRequest(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _ := (overflowTokenCounter{}).CountRequest(model, &contextcompression.RequestIR{Semantic: &outbound})
+	if bound+int(*outbound.Sampling.MaxOutputTokens) > 32768 {
+		t.Fatalf("dispatch exceeds context: input bound=%d", bound)
+	}
+	return outbound
+}
+
 func TestContextOverflowRejectsUntrimmableBudgetWithoutMutation(t *testing.T) {
 	for _, kind := range []string{"system", "schema", "json", "tool_result", "multimodal", "authorization"} {
 		t.Run(kind, func(t *testing.T) {
