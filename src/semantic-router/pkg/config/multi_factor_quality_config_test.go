@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+func TestValidateMultiFactorLatencyMetric(t *testing.T) {
+	for _, metric := range []string{"", "ttft", "tpot", "mixed", "TTFT"} {
+		err := validateDecisionMultiFactorAlgorithm("interactive", &MultiFactorSelectionConfig{LatencyMetric: metric})
+		wantError := metric == "mixed" || metric == "TTFT"
+		if (err != nil) != wantError {
+			t.Fatalf("metric=%q: err=%v, wantError=%t", metric, err, wantError)
+		}
+	}
+}
+
 func TestValidateDecisionMultiFactorQualityEvidence(t *testing.T) {
 	qualityFloor := 40.0
 	nan := math.NaN()

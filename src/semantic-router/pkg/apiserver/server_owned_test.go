@@ -80,6 +80,41 @@ func TestOwnedAPIResourceClosesOnListenFailure(t *testing.T) {
 	}
 }
 
+func TestAPIWorkerDrainAlsoRunsWithBorrowedServices(t *testing.T) {
+	finish := make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(finish) }) }
+	t.Cleanup(unblock)
+	httpServer := &http.Server{Addr: "127.0.0.1:0", ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		done, ok := retainAPIWorker(r.Context())
+		if !ok {
+			t.Error("worker was rejected before drain")
+			return
+		}
+		go func() { <-finish; done() }()
+		w.WriteHeader(http.StatusNoContent)
+	})}
+	server, err := startHTTPServer(httpServer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { unblock(); _ = server.Shutdown(context.Background()) })
+	response, err := http.Get("http://" + httpServer.Addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	if err := server.Shutdown(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("shutdown skipped borrowed-service worker drain: %v", err)
+	}
+	unblock()
+	if err := server.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAPIStartupBorrowsExistingRouterAndGlobalService(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	service := services.NewPlaceholderClassificationService()

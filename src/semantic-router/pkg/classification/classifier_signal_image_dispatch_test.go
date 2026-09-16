@@ -56,7 +56,7 @@ func TestEvaluateEmbeddingSignal_TextOnly_PreservesExistingBehavior(t *testing.T
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "", nil)
+	classifier.evaluateEmbeddingSignal(context.Background(), results, &mu, "TensorFlow pipeline", "", nil)
 
 	if len(results.MatchedEmbeddingRules) == 0 {
 		t.Fatalf("expected at least one matched rule on text-only path, got 0")
@@ -87,7 +87,7 @@ func TestEvaluateEmbeddingSignal_ImageProvidedActivatesImageRules(t *testing.T) 
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(context.Background(), results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
 
 	// The text rule should match the text query.
 	hasText := false
@@ -140,7 +140,7 @@ func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 
 	// Despite the text-FFI error, the image classification should still run
 	// and surface the chip-fab image rule.
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(context.Background(), results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
 
 	hasImage := false
 	for _, name := range results.MatchedEmbeddingRules {
@@ -182,7 +182,7 @@ func TestEvaluateEmbeddingSignal_ImageOnlyContent_SkipsTextFFI(t *testing.T) {
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(context.Background(), results, &mu, "", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
 
 	if got := atomic.LoadInt32(&textCalls); got != 0 {
 		t.Errorf("text-FFI must not be invoked when text is empty, got %d calls", got)
@@ -278,7 +278,7 @@ func TestEvaluateAllSignals_DedupsImageFFIAcrossDispatchers(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", imageURL, cache)
+		classifier.evaluateEmbeddingSignal(context.Background(), results, &mu, "wafer photo query", imageURL, cache)
 	}()
 	go func() {
 		defer wg.Done()
@@ -352,7 +352,7 @@ func TestEvaluateEmbeddingSignal_ImageURLWithNoImageRules_GracefulNoOp(t *testin
 	// the multimodal image FFI (that's the point of the no-rules early-return
 	// in ClassifyDetailedMultimodal), and should produce the same matches as
 	// the no-image case.
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "data:image/png;base64,IGNORED_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(context.Background(), results, &mu, "TensorFlow pipeline", "data:image/png;base64,IGNORED_BYTES", nil)
 
 	if len(results.MatchedEmbeddingRules) == 0 {
 		t.Fatalf("expected text rule to still match when image URL is present but no image rules exist, got 0 matches")

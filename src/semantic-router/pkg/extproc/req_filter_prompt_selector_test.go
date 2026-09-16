@@ -213,7 +213,7 @@ func TestFastResponseDecisionSkipsPromptHelper(t *testing.T) {
 		t.Fatalf("selectDecisionRuntimeModel() error = %v", err)
 	}
 
-	if selected != "model-a" ||
+	if selected != "" || requestContext.VSRSelectedModel != "" ||
 		requestContext.VSRSelectionMethod != "fast_response" {
 		t.Fatalf(
 			"selected=%q method=%q",

@@ -8,6 +8,7 @@ import json
 import sys
 from pathlib import Path
 
+from router_calibration_evaluation import EVALUATION_SCOPES
 from router_calibration_manifest import (
     load_probe_manifest,
     report_safe_probe_manifest,
@@ -42,6 +43,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         probes,
         manifest,
         selected_probe_ids=getattr(args, "probe_ids", None),
+        scope=getattr(args, "scope", "deployment"),
     )
     report = {
         "manifest": report_safe_probe_manifest(manifest),
@@ -120,7 +122,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     snapshot_before = fetch_router_snapshot(args.router_url)
     write_json(report_dir / "snapshot-before.json", snapshot_before)
 
-    pre_eval = evaluate_probes(args.router_url, probes, manifest)
+    pre_eval = evaluate_probes(
+        args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
+    )
     write_json(report_dir / "eval-before.json", pre_eval)
 
     validate_result = None
@@ -158,7 +162,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     snapshot_after = fetch_router_snapshot(args.router_url)
     write_json(report_dir / "snapshot-after.json", snapshot_after)
 
-    post_eval = evaluate_probes(args.router_url, probes, manifest)
+    post_eval = evaluate_probes(
+        args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
+    )
     write_json(report_dir / "eval-after.json", post_eval)
 
     summary = render_markdown_summary(
@@ -223,6 +229,7 @@ def add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     eval_parser.add_argument("--output", help="Optional JSON output path")
+    add_scope_argument(eval_parser)
     eval_parser.set_defaults(func=cmd_eval)
 
 
@@ -299,6 +306,16 @@ def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Polling interval in seconds for GET /ready after deploy",
     )
     run.set_defaults(func=cmd_run)
+    add_scope_argument(run)
+
+
+def add_scope_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--scope",
+        choices=EVALUATION_SCOPES,
+        default="deployment",
+        help="Policy checks real routing evidence; deployment also requires the expected live model selection.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

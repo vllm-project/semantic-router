@@ -17,7 +17,7 @@ import numpy as np
 import transformers
 from artifact_inventory import REGISTRY_ALIASES, ServedArtifact
 from baseline_artifact import BaselineError
-from constants import MODEL_REGISTRY
+from constants import LEGACY_MODEL_REGISTRY, MODEL_REGISTRY
 from datasets import load_dataset
 from peft import PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -43,6 +43,20 @@ class TaskSpec:
     text_field: str
     label_field: str
     split_rule: str = "predefined"
+    compatible_artifact_repos: tuple[str, ...] = ()
+
+    def validate_artifact(self, repo: str) -> None:
+        """Refuse source labels that describe a different classification task."""
+        if (
+            self.compatible_artifact_repos
+            and repo not in self.compatible_artifact_repos
+        ):
+            raise BaselineError(
+                f"{self.dataset_repo} is a legacy toxicity/jailbreak diagnostic, "
+                f"not an instruction-attack benchmark for {repo}. Use "
+                "mom_collection_eval.py --custom_dataset with attack-reviewed "
+                "benign/jailbreak gold for Guard."
+            )
 
 
 # Only text-classification tasks with a published held-out split are wired up.
@@ -54,6 +68,12 @@ TASK_SPECS: dict[str, TaskSpec] = {
         split="test",
         text_field="text",
         label_field="label",
+        compatible_artifact_repos=(
+            LEGACY_MODEL_REGISTRY["jailbreak"]["id"],
+            LEGACY_MODEL_REGISTRY["jailbreak"]["lora_id"],
+            "llm-semantic-router/mmbert-jailbreak-detector-merged",
+            "llm-semantic-router/mmbert-jailbreak-detector-lora",
+        ),
     ),
     "fact-check": TaskSpec(
         dataset_repo="llm-semantic-router/fact-check-classification-dataset",

@@ -25,6 +25,14 @@ var ErrUnknownRoutingModel = errors.New("unknown routing model")
 // from a genuine runtime/inference failure (500).
 var ErrModelNotReady = errors.New("model not ready")
 
+// ErrClassifierUnavailable is returned when the signal classifier has not
+// been prepared for evaluation yet.
+var ErrClassifierUnavailable = errors.New("signal classifier is unavailable")
+
+// ErrInvalidRequestFacts is returned when metadata or request-envelope facts
+// exceed the bounded classification API contract.
+var ErrInvalidRequestFacts = errors.New("invalid request facts")
+
 // blankText reports whether s is empty or whitespace-only.
 func blankText(s string) bool {
 	return strings.TrimSpace(s) == ""
