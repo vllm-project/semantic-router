@@ -207,6 +207,15 @@ complete weights, tokenizer, configuration, task labels, and any ONNX external
 tensor files. LoRA deployments need merged weights. An architecture name such
 as `modernbert` identifies the adapter; a compatible task head is still required.
 
+Keep locally rewritten graphs in a separate artifact directory, with their
+compatible tokenizer, configuration, and label mappings. Record the source
+revision, export settings, precision changes, and file hashes alongside the local
+artifact. Omit the deployment's upstream `revision` pin for these locally
+derived bytes; that pin verifies the published snapshot, including the selected
+head. Keep the original pinned directory unchanged. Complete unregistered local
+artifacts are validated when the provider prepares them, without a registry
+download.
+
 For ONNX classifiers, use `provider: ort`, select the device, and set the
 binding's `head` to the graph path, such as `onnx/model.onnx`. For GPU-specific
 graphs, follow the model's runtime configuration. The Router rejects unavailable
