@@ -257,7 +257,7 @@ global:
         precision: native
         input:
           max_tokens: 32768
-          overflow: reject
+          overflow: truncate
       factcheck-amd:
         artifact: models/Vela-1.0-Encoder-307M-FactCheck
         revision: 99ede1aba1563e59e416f744d25b3f6b7e9d8274
@@ -266,11 +266,16 @@ global:
         precision: native
         input:
           max_tokens: 32768
-          overflow: reject
+          overflow: truncate
 ```
 
 Validate and serve the edited file with the same commands above. Each binding
 always uses its selected graph; it does not switch graphs by request length.
+Here, `truncate` processes the first 32,768 tokens, including special tokens,
+when the encoder input exceeds its budget. Use `reject` if complete input is
+required. This policy affects the encoder view only; it does not shorten the
+chat request or change the generation model's context window. See
+[encoder input budgets](runtime/in-process.md#choose-an-input-budget).
 The fixed graph pads even short inputs to 32,768 tokens, increasing their
 latency and memory cost. Keep the default 8K MIGraphX deployments when that
 budget fits your workload.

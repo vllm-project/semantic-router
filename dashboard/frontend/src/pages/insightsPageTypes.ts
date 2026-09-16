@@ -218,6 +218,14 @@ export interface InsightsListResponse {
 
 export type InsightsFilterType = 'all' | 'cached' | 'streamed'
 
+export interface InsightsCurrencyCostSummary {
+  totalSaved: number
+  baselineSpend: number
+  actualSpend: number
+  currency: string
+  costRecordCount: number
+}
+
 export interface InsightsCostSummary {
   totalSaved: number
   baselineSpend: number
@@ -225,11 +233,20 @@ export interface InsightsCostSummary {
   currency?: string
   costRecordCount: number
   excludedRecordCount: number
+  byCurrency?: InsightsCurrencyCostSummary[]
 }
 
 export interface InsightsAggregateValue {
   name: string
   value: number
+}
+
+export interface InsightsAggregateCurrencySummary {
+  total_saved: number
+  baseline_spend: number
+  actual_spend: number
+  currency: string
+  cost_record_count: number
 }
 
 export interface InsightsAggregateSummary {
@@ -239,6 +256,7 @@ export interface InsightsAggregateSummary {
   currency?: string
   cost_record_count: number
   excluded_record_count: number
+  by_currency?: InsightsAggregateCurrencySummary[]
 }
 
 export interface InsightsAggregateTokenVolume {

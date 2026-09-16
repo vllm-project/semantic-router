@@ -66,6 +66,7 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
+	Bindings    map[string]ModelBinding    `yaml:"bindings,omitempty"`
 	Deployments map[string]ModelDeployment `yaml:"deployments,omitempty"`
 	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
 	System      CanonicalSystemModels      `yaml:"system"`
@@ -383,6 +384,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
+	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
 	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
 	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), modelCatalog.KBs...)

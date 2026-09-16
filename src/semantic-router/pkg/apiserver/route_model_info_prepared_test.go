@@ -76,6 +76,9 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 		t.Fatalf("incomplete prepared task inventory: %+v", response)
 	}
 	for _, model := range response.Models {
+		if len(model.Metadata["resource_id"]) != 64 {
+			t.Fatalf("missing opaque physical resource identity: %+v", model)
+		}
 		if !model.Loaded || model.State != "ready" || model.Recipe != "vela" || model.Metadata["device"] != "migraphx:0" || model.Metadata["max_sequence_length"] != "512" {
 			t.Fatalf("lost runtime evidence: %+v", model)
 		}
