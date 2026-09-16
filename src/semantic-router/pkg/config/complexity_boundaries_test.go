@@ -297,3 +297,48 @@ func TestComplexityRule_ZeroThresholdIsNotWrittenBack(t *testing.T) {
 		t.Fatalf("a pair rule must survive a marshal round trip: %v", err)
 	}
 }
+
+// The other half of the omitempty bargain: a zero that was written is
+// serialised, so a document the loader refuses does not become one it
+// accepts after a marshal round trip. A lone written zero keeps its meaning
+// as the shorthand on the way back in.
+func TestComplexityRule_WrittenZeroThresholdSurvivesMarshal(t *testing.T) {
+	cases := map[string]struct {
+		rule    ComplexityRule
+		refused bool
+	}{
+		"beside a pair": {
+			rule:    ComplexityRule{Name: "r", ThresholdSet: true, HardAbove: floatPtr(0.85), EasyBelow: floatPtr(0.60)},
+			refused: true,
+		},
+		"alone": {
+			rule:    ComplexityRule{Name: "r", ThresholdSet: true},
+			refused: false,
+		},
+	}
+
+	for name, tc := range cases {
+		out, err := yaml.Marshal(tc.rule)
+		if err != nil {
+			t.Fatalf("%s: marshal: %v", name, err)
+		}
+		if !strings.Contains(string(out), "threshold: 0") {
+			t.Fatalf("%s: a written zero must be serialised, got:\n%s", name, out)
+		}
+
+		var reloaded ComplexityRule
+		if err := yaml.Unmarshal(out, &reloaded); err != nil {
+			t.Fatalf("%s: unmarshal: %v", name, err)
+		}
+		if !reloaded.ThresholdSet {
+			t.Errorf("%s: presence must survive the round trip", name)
+		}
+		_, err = reloaded.EffectiveBoundaries()
+		if tc.refused && (err == nil || !strings.Contains(err.Error(), "keep one")) {
+			t.Errorf("%s: expected the reloaded rule to be refused, got %v", name, err)
+		}
+		if !tc.refused && err != nil {
+			t.Errorf("%s: a lone written zero must still resolve: %v", name, err)
+		}
+	}
+}
