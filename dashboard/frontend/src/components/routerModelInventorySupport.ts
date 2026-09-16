@@ -1,4 +1,5 @@
 import { getRouterModelState, type RouterModelInfo } from '../utils/routerRuntime'
+import { getRouterModelDisplayName } from './routerModelPresentation'
 
 export type ModelInventoryStateFilter = 'all' | 'ready' | 'loading' | 'not_loaded'
 export type ModelInventorySort = 'state' | 'name' | 'type'
@@ -8,6 +9,7 @@ const LOADING_STATES = new Set(['downloading', 'pending', 'initializing'])
 function modelSearchText(model: RouterModelInfo): string {
   return [
     model.name,
+    getRouterModelDisplayName(model),
     model.recipe,
     model.type,
     model.model_path,
@@ -47,7 +49,8 @@ export function filterAndSortRouterModels(
   )
 
   return [...filtered].sort((left, right) => {
-    if (sort === 'name') return left.name.localeCompare(right.name)
+    if (sort === 'name')
+      return getRouterModelDisplayName(left).localeCompare(getRouterModelDisplayName(right))
     if (sort === 'type') {
       const byType = (left.registry?.purpose || left.type).localeCompare(
         right.registry?.purpose || right.type,

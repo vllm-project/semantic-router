@@ -247,8 +247,8 @@
 .previewModelId {
   margin: 0;
   color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: 0.84rem;
+  font-size: 0.95rem;
+  font-weight: 600;
   line-height: 1.55;
   word-break: break-word;
   display: -webkit-box;
@@ -511,4 +511,19 @@
   .resultCount {
     justify-self: start;
   }
+}
+
+.previewContext {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.deviceMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
 }

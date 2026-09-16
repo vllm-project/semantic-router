@@ -50,6 +50,7 @@ export interface StatusHistory {
 export interface RouterModelRegistryInfo {
   local_path?: string
   repo_id?: string
+  revision?: string
   purpose?: string
   description?: string
   parameter_size?: string
