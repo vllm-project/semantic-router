@@ -95,4 +95,24 @@ generate-deepcopy: install-controller-gen ## Generate deepcopy methods using con
 generate-api: generate-deepcopy generate-crd ## Generate all API artifacts (deepcopy, CRDs)
 	@echo "Generated all API artifacts"
 
+.PHONY: generate-api-check
+generate-api-check: install-controller-gen ## Check generated Kubernetes API code and CRD mirrors without rewriting
+	@set -eu; \
+	tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
+	cd src/semantic-router; \
+	PATH="$$(go env GOPATH)/bin:$$PATH" controller-gen \
+		crd:crdVersions=v1,allowDangerousTypes=true \
+		object:headerFile=./hack/boilerplate.go.txt \
+		paths=./pkg/apis/vllm.ai/v1alpha1 \
+		output:crd:dir="$$tmp_dir/crds" \
+		output:object:dir="$$tmp_dir/code"; \
+	cd ../..; \
+	if ! diff -u src/semantic-router/pkg/apis/vllm.ai/v1alpha1/zz_generated.deepcopy.go "$$tmp_dir/code/zz_generated.deepcopy.go" || \
+		! diff -ru deploy/kubernetes/crds "$$tmp_dir/crds" || \
+		! diff -ru deploy/helm/semantic-router/crds "$$tmp_dir/crds"; then \
+		echo "Generated Kubernetes API artifacts are stale. Run 'make generate-api' and commit the results." >&2; \
+		exit 1; \
+	fi
+
 .PHONY: config-schema-generate config-schema-check

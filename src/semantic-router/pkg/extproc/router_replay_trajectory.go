@@ -12,36 +12,13 @@ import (
 
 const routerReplayTrajectoryPath = routerReplayAPIBasePath + "/trajectory"
 
-type trajectoryFunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
+type trajectoryFunctionCall = routerreplay.TrajectoryFunctionCall
 
-type trajectoryToolCall struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`
-	Function trajectoryFunctionCall `json:"function"`
-}
+type trajectoryToolCall = routerreplay.TrajectoryToolCall
 
-type trajectoryMessage struct {
-	ConversationID string               `json:"conversation_id,omitempty"`
-	Role           string               `json:"role"`
-	Content        string               `json:"content,omitempty"`
-	ToolCalls      []trajectoryToolCall `json:"tool_calls,omitempty"`
-	ToolCallID     string               `json:"tool_call_id,omitempty"`
-	ToolName       string               `json:"tool_name,omitempty"`
-	TurnIndex      int                  `json:"turn_index"`
-}
+type trajectoryMessage = routerreplay.TrajectoryMessage
 
-type routerReplayTrajectoryResponse struct {
-	Object      string              `json:"object"`
-	SessionID   string              `json:"session_id"`
-	Recipe      string              `json:"recipe"`
-	RecordCount int                 `json:"record_count"`
-	TurnCount   int                 `json:"turn_count"`
-	Messages    []trajectoryMessage `json:"messages"`
-	Routes      []trajectoryRoute   `json:"routes"`
-}
+type routerReplayTrajectoryResponse = routerreplay.TrajectoryResponse
 
 // handleRouterReplayTrajectoryAPI serves GET /api/v1/observability/replays/trajectory?session_id={id}.
 // It converts stored ToolTrace steps into a flat OpenAI Chat Completions message list.

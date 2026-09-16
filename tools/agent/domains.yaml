@@ -83,6 +83,69 @@ domains:
     checks: [make docs-check-translation-coverage]
     ci_jobs: []
 
+  generated-model-catalog:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - config/catalog/**
+      - config/recipes/built-in/**
+      - src/vllm-sr/cli/model_bundle.py
+      - src/semantic-router/pkg/catalog/zz_generated_catalog.go
+      - website/static/model-catalog/**
+      - tools/catalog/**
+      - tools/make/model-catalog.mk
+    checks: [make model-catalog-generated-check]
+    ci_jobs: []
+
+  generated-cli-reference:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - src/vllm-sr/cli/**/*.py
+      - tools/docs/**
+      - website/docs/api/cli.md
+      - website/scripts/check-generated.mjs
+      - website/requirements.txt
+    checks: [make docs-cli-check, make docs-cli-test]
+    ci_jobs: []
+
+  generated-configuration-reference:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - config/fragments/**
+      - website/docs/tutorials/**
+      - website/docs/installation/configuration.md
+      - website/scripts/generate-configuration-catalog.mjs
+      - website/scripts/lib/configuration-catalog.mjs
+    checks: [make docs-config-check]
+    ci_jobs: []
+
+  generated-crd-reference:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - deploy/operator/api/**
+      - tools/crd/**
+      - website/docs/api/crd-reference.md
+    checks: [make docs-crd-check]
+    ci_jobs: []
+
+  generated-community-snapshots:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - website/scripts/generate-contributor-rank.mjs
+      - website/scripts/generate-committer-activity.mjs
+      - website/scripts/lib/generated-source.mjs
+      - website/scripts/lib/generated-source.test.mjs
+      - website/scripts/lib/identity-audit.mjs
+      - website/src/data/teamMembers.tsx
+      - website/src/data/contributorRank.generated.ts
+      - website/src/data/committerActivity.generated.ts
+    checks: [make docs-community-check, make docs-community-test]
+    ci_jobs: []
+
   generated-api-contract:
     owner: router-core
     documentation_check: true
@@ -187,7 +250,9 @@ domains:
       - deploy/operator/**
       - deploy/kubernetes/crds/**
       - src/semantic-router/pkg/apis/**
-    checks: [make generate-crd]
+      - src/semantic-router/hack/boilerplate.go.txt
+      - deploy/helm/semantic-router/crds/**
+    checks: [make generate-api-check]
     ci_jobs: [operator]
 
   helm:
