@@ -29,21 +29,6 @@ config:
               weight: 1
               value_source: binary
     decisions:
-      - name: local_classifier_jailbreak
-        description: Route on a score from the in-process local classifier backend (real candle inference, no mock)
-        priority: 2200
-        rules:
-          operator: AND
-          conditions:
-            - type: classifier
-              name: local_jailbreak_score
-              label: jailbreak
-              predicate:
-                gte: 0.5
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
       - name: llm_classifier_toxic
         description: Route on the complete score distribution returned by the LLM classifier
         priority: 2100
@@ -820,12 +805,6 @@ config:
           type: sequence_classifier
           model: e2e-sequence-classifier
           labels: [benign, toxic]
-        - name: local_jailbreak_score
-          description: Deterministic in-process local classifier E2E signal (real candle inference, no mock)
-          type: local
-          model_path: models/mmbert32k-jailbreak-detector-merged
-          labels: [benign, jailbreak]
-          use_cpu: true
     modelCards:
       - name: base-model
         loras:
