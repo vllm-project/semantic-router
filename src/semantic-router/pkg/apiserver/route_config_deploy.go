@@ -55,19 +55,21 @@ type routerConfigRollbackRequest struct {
 
 // RouterConfigUpdateResponse is the JSON response for a router config mutation.
 type RouterConfigUpdateResponse struct {
-	Status               string `json:"status"`
-	Version              string `json:"version"`
-	ETag                 string `json:"etag,omitempty"`
-	ActivationStatus     string `json:"activation_status,omitempty"`
-	GeneratedRuntimeHash string `json:"generated_runtime_hash,omitempty"`
-	Message              string `json:"message,omitempty"`
+	Status               string                    `json:"status"`
+	Version              string                    `json:"version"`
+	ETag                 string                    `json:"etag,omitempty"`
+	ActivationStatus     string                    `json:"activation_status,omitempty"`
+	GeneratedRuntimeHash string                    `json:"generated_runtime_hash,omitempty"`
+	Message              string                    `json:"message,omitempty"`
+	Activation           *configActivationResponse `json:"activation,omitempty"`
 }
 
 type configHashResponse struct {
-	SourceConfigHash     string `json:"source_config_hash"`
-	GeneratedRuntimeHash string `json:"generated_runtime_hash"`
-	ActiveRuntimeHash    string `json:"active_runtime_hash,omitempty"`
-	ActivationStatus     string `json:"activation_status"`
+	SourceConfigHash     string                    `json:"source_config_hash"`
+	GeneratedRuntimeHash string                    `json:"generated_runtime_hash"`
+	ActiveRuntimeHash    string                    `json:"active_runtime_hash,omitempty"`
+	ActivationStatus     string                    `json:"activation_status"`
+	Activation           *configActivationResponse `json:"activation,omitempty"`
 }
 
 // RouterConfigVersionEntry represents a backup version entry.
@@ -124,6 +126,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	// Back up current config before rollback.
 	recordConfigBackup(backupDir, nextConfigVersion(backupDir, time.Now()), existingData, configVersionSourceRollback)
 
+	afterAttempt := s.configActivationAttempt()
 	if !s.writeRouterConfigFiles(w, paths, existingData, backupData) {
 		return
 	}
@@ -135,7 +138,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 		paths.runtimePath,
 	)
 
-	s.writeRollbackSuccess(w, version, backupData, paths.runtimePath, backupDir)
+	s.writeRollbackSuccess(w, version, backupData, paths.runtimePath, backupDir, afterAttempt)
 }
 
 func (s *ClassificationAPIServer) loadRollbackBackup(
@@ -212,9 +215,10 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 	backupData []byte,
 	runtimePath string,
 	backupDir string,
+	afterAttempt uint64,
 ) {
 	etag := configDocumentETag(backupData)
-	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(runtimePath)
+	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(runtimePath, afterAttempt)
 	statusCode := http.StatusOK
 	status := "success"
 	message := fmt.Sprintf("Rolled back to version %s. Router reload is active.", version)
@@ -222,6 +226,12 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 		statusCode = http.StatusAccepted
 		status = "accepted"
 		message = fmt.Sprintf("Rolled back to version %s on disk; runtime activation is pending. Poll /api/v1/config/hash until activation_status is active.", version)
+	} else if runtimeStatus == "failed" {
+		statusCode = http.StatusServiceUnavailable
+		status = "activation_failed"
+		message = "The rollback is persisted, but runtime activation failed. Inspect activation and correct or roll back the persisted configuration."
+	} else if runtimeStatus == "unknown" {
+		message = "The rollback is persisted; runtime activation could not be observed."
 	}
 	w.Header().Set("ETag", etag)
 	configCleanupBackups(backupDir)
@@ -232,6 +242,7 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 		ActivationStatus:     runtimeStatus,
 		GeneratedRuntimeHash: runtimeHash,
 		Message:              message,
+		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
 	})
 }
 
@@ -463,16 +474,12 @@ func (s *ClassificationAPIServer) handleConfigHash(w http.ResponseWriter, _ *htt
 		return
 	}
 	activeHash := s.activeConfigDocumentHash()
-	status := "pending"
-	if activeHash != "" && activeHash == runtimeHash {
-		status = "active"
-	} else if activeHash == "" {
-		status = "unknown"
-	}
+	status := s.configActivationStatus(runtimeHash, activeHash)
 	s.writeJSONResponse(w, http.StatusOK, configHashResponse{
 		SourceConfigHash:     hex.EncodeToString(hash[:]),
 		GeneratedRuntimeHash: runtimeHash,
 		ActiveRuntimeHash:    activeHash,
 		ActivationStatus:     status,
+		Activation:           s.configActivation(runtimeHash),
 	})
 }

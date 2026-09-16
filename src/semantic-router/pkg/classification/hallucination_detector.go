@@ -22,6 +22,23 @@ type HallucinationResult struct {
 	ScoreKind             string   `json:"score_kind,omitempty"`
 	UnsupportedSpans      []string `json:"unsupported_spans,omitempty"`
 	SupportedSpans        []string `json:"supported_spans,omitempty"`
+	// Spans carries the same detections as UnsupportedSpans with their
+	// byte offsets into the answer, label and score, so a consumer can point
+	// at the text instead of searching for it. UnsupportedSpans stays for the
+	// grounding and looper paths that only need the text.
+	Spans []HallucinationSpan `json:"spans,omitempty"`
+}
+
+// HallucinationSpan is one detected span with its position in the answer.
+// Offsets are bytes into the exact answer string, the same unit every
+// TokenEntity carries inside the router.
+type HallucinationSpan struct {
+	Text           string  `json:"text"`
+	Start          int     `json:"start"`
+	End            int     `json:"end"`
+	Label          string  `json:"label,omitempty"`
+	Confidence     float32 `json:"confidence,omitempty"`
+	ScoreAvailable bool    `json:"score_available"`
 }
 
 const (
@@ -167,6 +184,7 @@ func (d *HallucinationDetector) Detect(ctx context.Context, contextText, questio
 	for _, span := range spans.Entities {
 		if d.acceptSpan(span.Text, span.Confidence, spans.HasScores()) {
 			result.UnsupportedSpans = append(result.UnsupportedSpans, span.Text)
+			result.Spans = append(result.Spans, HallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, Label: span.EntityType, Confidence: span.Confidence, ScoreAvailable: spans.HasScores()})
 		}
 	}
 	if len(result.UnsupportedSpans) == 0 {

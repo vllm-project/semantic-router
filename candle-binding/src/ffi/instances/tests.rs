@@ -327,6 +327,7 @@ fn owned_embedding_descriptor_uses_instance_and_existing_ffi_lifecycle() {
 }
 
 mod generative_tests;
+mod generic_classifier_tests;
 
 #[test]
 fn embedding_windows_use_owned_tokenizer_and_bound_every_window() {

@@ -8,6 +8,7 @@ const LOADING_STATES = new Set(['downloading', 'pending', 'initializing'])
 function modelSearchText(model: RouterModelInfo): string {
   return [
     model.name,
+    model.recipe,
     model.type,
     model.model_path,
     model.resolved_model_path,

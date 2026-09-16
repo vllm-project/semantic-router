@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -47,6 +48,20 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, runtime *native.Runtime
 		return nil, err
 	}
 	return models, nil
+}
+
+// Match registry aliases and equivalent local paths without treating an
+// unrelated directory with the same basename as the default artifact.
+func isDefaultModelArtifact(selected, defaultPath string) bool {
+	if model := config.GetModelByPath(filepath.Clean(selected)); model != nil {
+		return model.LocalPath == defaultPath
+	}
+	selectedPath, err := filepath.Abs(selected)
+	if err != nil {
+		return false
+	}
+	registeredPath, err := filepath.Abs(defaultPath)
+	return err == nil && selectedPath == registeredPath
 }
 
 // localSpec materializes the existing canonical module default when no recipe

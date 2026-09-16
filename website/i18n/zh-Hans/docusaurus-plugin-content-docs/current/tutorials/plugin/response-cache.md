@@ -72,7 +72,7 @@ plugins:
 
 ## 运维 {#operations}
 
-管理 API 在 `/api/v1/response-cache/*` 下暴露经过脱敏的健康、能力、统计、候选配置测试、限定范围失效、基于 epoch 的清空，以及哈希链式审计视图。失效默认是 dry-run。清空需要显式确认短语 `flush response cache`，并且永不调用后端范围的 `FLUSHALL`。
+管理 API 在 `/api/v1/storage/response-cache/*` 下暴露经过脱敏的健康、能力、统计、候选配置测试、限定范围失效、基于 epoch 的清空。统一哈希链审计位于 `/api/v1/observability/audit`，需要 `audit.read` 权限。`/api/v1/plugins/response_cache` 提供插件发现与操作链接。失效默认是 dry-run。清空需要显式确认短语 `flush response cache`，并且永不调用后端范围的 `FLUSHALL`。
 
 内存后端可以在返回语义命中之前，对照相反含义的查询进行校验（`global.stores.response_cache.polarity_guard`；见[存储与工具](../global/stores-and-tools.md#negation-guard)）。启用可选 NLI 层级时，被拒绝的候选会记录为带 `tier: nli` 的 `cache_negation_reject`，报告为未命中，其相似度仍出现在 `x-vsr-cache-similarity` 上，以便接近阈值的拒绝可被诊断。
 
