@@ -29,6 +29,7 @@ import (
 
 type routerComponents struct {
 	embeddings            *embedding.Set
+	serviceEmbeddings     *embedding.Set
 	cacheEmbeddings       *embedding.Set
 	modelRuntime          *native.Runtime
 	rerankers             map[config.RecipeName]modelruntime.PairScorer
@@ -204,6 +205,17 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	}
 	components.embeddings = embeddings
 	components.resources.add(embeddings.Close)
+	components.serviceEmbeddings = embeddings
+	if cfg.GlobalModelBindings["embedding"].Deployment != "" {
+		servicesConfig := *cfg
+		// Ingestion owns an independent handle for its longer worker lifetime.
+		servicesConfig.VectorStore = nil
+		components.serviceEmbeddings, err = modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), &servicesConfig, components.modelRuntime)
+		if err != nil {
+			return nil, rollbackResources(components.resources, err)
+		}
+		components.resources.add(components.serviceEmbeddings.Close)
+	}
 	components.cacheEmbeddings = embeddings
 	if cfg.NeedsSemanticResponseCache() && cfg.GlobalModelBindings["embedding"].Deployment != "" {
 		components.cacheEmbeddings, err = modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, components.modelRuntime)
@@ -259,7 +271,7 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg, components.embeddings)
+	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg, components.serviceEmbeddings)
 	if components.memoryStore != nil {
 		components.resources.add(components.memoryStore.Close)
 	}
@@ -292,7 +304,7 @@ func (components *routerComponents) buildEarlyResources() error {
 		components.resources.add(components.semanticCache.Close)
 	}
 
-	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.embeddings)
+	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.serviceEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}

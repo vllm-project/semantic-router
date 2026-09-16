@@ -38,7 +38,7 @@ func PrepareOwnedResponseCacheEmbeddings(ctx context.Context, cfg *config.Router
 	}
 	// An empty routing profile carries service settings without routing signals,
 	// selectors, KBs, or recipe overrides. Prepare only the response-cache demand.
-	scoped := cfg.ConfigForRecipe(&config.RoutingRecipe{Name: config.GlobalModelScope})
+	scoped := cfg.ConfigForGlobalModelServices()
 	scoped.Tools.Enabled = false
 	scoped.Memory.Enabled = false
 	scoped.VectorStore = nil

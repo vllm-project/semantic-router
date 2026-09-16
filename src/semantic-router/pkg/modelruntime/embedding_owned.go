@@ -17,9 +17,7 @@ import (
 // Failure releases only the candidate's independent resource references.
 func PrepareOwnedEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
 	if cfg != nil && cfg.GlobalModelBindings["embedding"].Deployment != "" {
-		copy := *cfg
-		copy.SemanticCache.Enabled = false
-		cfg = &copy
+		return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
 	}
 	return prepareEmbeddings(ctx, cfg, runtime, true, embedding.Options{})
 }
@@ -58,7 +56,7 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 	explicit, hasExplicit := plan.Lookup(recipe, "embedding")
 	if recipe == config.GlobalModelScope {
 		explicit, hasExplicit = plan.LookupGlobal("embedding")
-		explicit.Name = "response_cache.embedding"
+		explicit.Name = globalEmbeddingConsumerName(cfg, primary, primary)
 	}
 
 	if hasExplicit && view == (embedding.Options{}) && cfg.GlobalModelBindings["embedding"].Deployment != "" && primary == "mmbert" {
@@ -128,7 +126,11 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 		if path == "" {
 			return fail(fmt.Errorf("required embedding model %q has no artifact path", model))
 		}
-		provider, err := runtime.Embedding(ctx, embeddingCatalogSpec(cfg, recipe, model, path), 0, 0)
+		spec := embeddingCatalogSpec(cfg, recipe, model, path)
+		if recipe == config.GlobalModelScope {
+			spec.Name = globalEmbeddingConsumerName(cfg, model, primary)
+		}
+		provider, err := runtime.Embedding(ctx, spec, 0, 0)
 		if err != nil {
 			return fail(fmt.Errorf("prepare %s embedding: %w", model, err))
 		}

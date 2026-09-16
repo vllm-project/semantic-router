@@ -139,7 +139,8 @@ global:
 
 Recipes inherit these serving defaults. An explicit recipe binding overrides
 only that recipe's consumer; the top-level `routing.model_bindings` belongs to
-the default recipe. The response cache resolves the global catalog independently.
+the default recipe. Shared response-cache, tool, memory, and vector-store
+consumers resolve the global catalog independently of recipe overrides.
 Rule-named classifier and safety bindings apply only where the matching rule
 exists. A catalog declaration alone does not load a model.
 
@@ -164,7 +165,9 @@ multiple materialized layer sessions; sharing the resource does not imply a
 single ONNX session. Model inventory exposes `metadata.resource_id` from the
 actual resource pool and retains every consumer's metadata, including its
 layer and dimension. The `@global` inventory scope is reserved for shared
-model services.
+model services. Tool and memory consumers share a service-owned handle when
+they use the same model. Vector-store ingestion owns an independent handle
+until its workers drain; that handle can share the same physical resource.
 
 ## Run Vela on AMD
 

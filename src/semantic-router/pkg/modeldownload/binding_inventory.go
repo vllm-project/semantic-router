@@ -26,14 +26,15 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	defaultScope := *cfg.ModelConsumerScope()
 	defaultScope.Recipes, defaultScope.Entrypoints = nil, nil
 	defaultScope.SemanticCache.Enabled = cfg.NeedsSemanticResponseCache()
-	if spec, ok := plan.LookupGlobal("embedding"); ok && cfg.NeedsSemanticResponseCache() {
-		defaultScope.SemanticCache.Enabled = false
-		if spec.Deployment.Provider != "http" {
-			serviceScope := *cfg
-			serviceScope.RoutingScope = config.GlobalModelScope
-			if err := inventory.addDeployment(&serviceScope, spec); err != nil {
-				return nil, err
-			}
+	if _, ok := plan.LookupGlobal("embedding"); ok {
+		defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
+		defaultScope.VectorStore = nil
+		serviceScope := cfg.ConfigForGlobalModelServices()
+		// The NLI verifier still belongs to the classification/API owner.
+		// This additional scope owns only service embedding requirements.
+		serviceScope.SemanticCache.PolarityGuard = nil
+		if err := inventory.addScope(serviceScope, plan); err != nil {
+			return nil, err
 		}
 	}
 	scopes = append(scopes, &defaultScope)
@@ -73,11 +74,16 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	if primary == "" {
 		primary = "qwen3"
 	}
-	needed := config.EmbeddingModelsNeeded(cfg, primary, cfg.RoutingScope == config.DefaultRecipeName)
+	global := cfg.RoutingScope == config.GlobalModelScope
+	sharedServices := global || (cfg.RoutingScope == config.DefaultRecipeName && cfg.GlobalModelBindings["embedding"].Deployment == "")
+	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
 	scoped := *cfg
 	scoped.Recipes, scoped.Entrypoints = nil, nil
 	paths := map[string]*string{"qwen3": &scoped.Qwen3ModelPath, "gemma": &scoped.GemmaModelPath, "mmbert": &scoped.MmBertModelPath, "multimodal": &scoped.MultiModalModelPath, "bert": &scoped.BertModelPath}
 	explicitEmbedding, hasEmbedding := plan.Lookup(cfg.RoutingScope, "embedding")
+	if global {
+		explicitEmbedding, hasEmbedding = plan.LookupGlobal("embedding")
+	}
 	for model, path := range paths {
 		if !needed[model] || (cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() && !hasEmbedding) || (hasEmbedding && model == primary) {
 			*path = ""
@@ -156,6 +162,9 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	}
 	for name := range cfg.ModelBindings {
 		spec, ok := plan.Lookup(cfg.RoutingScope, name)
+		if global {
+			spec, ok = plan.LookupGlobal(name)
+		}
 		if !ok || !active[name] {
 			continue
 		}
@@ -239,7 +248,8 @@ func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.Res
 				// single-graph export remains supported by the provider.
 				groups = append(groups, []string{"model.onnx", "onnx/model.onnx", "onnx/layer-22/model.onnx"})
 				layers := []int{cfg.EmbeddingConfig.TargetLayer}
-				if (cfg.RoutingScope == config.DefaultRecipeName || cfg.RoutingScope == config.GlobalModelScope) && cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == "mmbert" {
+				ownsCache := cfg.RoutingScope == config.GlobalModelScope || (cfg.RoutingScope == config.DefaultRecipeName && cfg.GlobalModelBindings["embedding"].Deployment == "")
+				if ownsCache && cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == "mmbert" {
 					layers = append(layers, 6)
 				}
 				for _, layer := range layers {

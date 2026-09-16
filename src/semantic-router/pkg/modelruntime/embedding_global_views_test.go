@@ -43,6 +43,7 @@ func TestGlobalEmbeddingViewDoesNotChangeOtherModelFamilies(t *testing.T) {
 	cfg.EmbeddingConfig.ModelType, cfg.EmbeddingConfig.TargetLayer, cfg.EmbeddingConfig.TargetDimension = "mmbert", 2, 3
 	cfg.Qwen3ModelPath = fixture // This complete graph has no layer-2 view.
 	cfg.Tools.Enabled = true
+	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "primary", Candidates: []string{"hello"}}}
 	cfg.ModelSelection.ML.ModelsPath, cfg.ModelSelection.ML.ModelType = "selectors", "qwen3"
 	cfg.Decisions = []config.Decision{{Algorithm: &config.AlgorithmConfig{Type: "knn"}}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Artifact: primary, Provider: "ort", Device: "cpu", Input: config.ModelInputBudget{MaxTokens: 8, Overflow: "reject"}}}
@@ -53,6 +54,20 @@ func TestGlobalEmbeddingViewDoesNotChangeOtherModelFamilies(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer prepared.Close()
+	services, serviceErr := PrepareOwnedGlobalServiceEmbeddings(context.Background(), cfg, runtime)
+	if serviceErr != nil {
+		t.Fatal(serviceErr)
+	}
+	defer services.Close()
+	primaryResources := map[string]string{}
+	for _, entry := range runtime.PreparedBindings() {
+		if entry.Identity.Adapter == "mmbert" {
+			primaryResources[entry.Identity.Recipe] = entry.ResourceID
+		}
+	}
+	if primaryResources["@global"] == "" || primaryResources["@global"] != primaryResources["default"] {
+		t.Fatalf("tools loaded a second primary engine: %v", primaryResources)
+	}
 	for _, family := range []string{"mmbert", "qwen3"} {
 		provider, err := prepared.Get(family, 0, 0)
 		if err != nil {
