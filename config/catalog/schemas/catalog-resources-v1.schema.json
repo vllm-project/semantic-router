@@ -379,7 +379,7 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["name", "required", "minimum_candidates", "traits", "recommended_pool"],
+              "required": ["name", "required", "minimum_candidates", "traits"],
               "properties": {
                 "name": {"$ref": "#/$defs/slug"},
                 "required": {"type": "boolean"},
@@ -387,7 +387,6 @@
                 "traits": {"$ref": "#/$defs/stringSet"},
                 "recommended_pool": {
                   "type": "array",
-                  "minItems": 1,
                   "uniqueItems": true,
                   "items": {"$ref": "#/$defs/modelID"}
                 }

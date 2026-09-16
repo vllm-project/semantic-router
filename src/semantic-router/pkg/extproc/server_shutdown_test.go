@@ -103,6 +103,7 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 		return nil
 	}
 	configPath := filepath.Join(t.TempDir(), "router.yaml")
+	writeReloadTestDocument(t, configPath, "candidate", candidateCfg)
 	loop := configFileReloadLoop{server: server, watcher: watcher, cfgFile: configPath}
 	go func() {
 		defer watcherDone()

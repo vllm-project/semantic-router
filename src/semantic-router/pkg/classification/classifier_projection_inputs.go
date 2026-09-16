@@ -24,6 +24,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeModality:      func(results *SignalResults) []string { return results.MatchedModalityRules },
 	config.SignalTypeAuthz:         func(results *SignalResults) []string { return results.MatchedAuthzRules },
 	config.SignalTypeJailbreak:     func(results *SignalResults) []string { return results.MatchedJailbreakRules },
+	config.SignalTypeSafety:        func(results *SignalResults) []string { return results.MatchedSafetyRules },
 	config.SignalTypePII:           func(results *SignalResults) []string { return results.MatchedPIIRules },
 	config.SignalTypeKB:            func(results *SignalResults) []string { return results.MatchedKBRules },
 	config.SignalTypeConversation:  func(results *SignalResults) []string { return results.MatchedConversationRules },
@@ -35,9 +36,25 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 func projectionScoreValue(score config.ProjectionScore, results *SignalResults) float64 {
 	total := 0.0
 	for _, input := range score.Inputs {
+		if input.Weight == 0 {
+			continue
+		}
 		total += input.Weight * projectionInputValue(input, results)
 	}
 	return total
+}
+
+func projectionScoreHasFailedInput(score config.ProjectionScore, results *SignalResults) bool {
+	for _, input := range score.Inputs {
+		if input.Weight == 0 {
+			continue
+		}
+		key := signalConfidenceKey(strings.ToLower(strings.TrimSpace(input.Type)), input.Name)
+		if _, failed := results.SignalErrors[key]; failed {
+			return true
+		}
+	}
+	return false
 }
 
 func projectionInputValue(input config.ProjectionScoreInput, results *SignalResults) float64 {

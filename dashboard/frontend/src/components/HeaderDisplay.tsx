@@ -125,6 +125,10 @@ const HEADER_INFO: Record<
     label: 'Jailbreak Signal',
     type: 'danger',
   },
+  'x-vsr-matched-safety': {
+    label: 'Safety Signal',
+    type: 'warning',
+  },
   'x-vsr-matched-hallucination': {
     label: 'Hallucination Signal',
     type: 'warning',

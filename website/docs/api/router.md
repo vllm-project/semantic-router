@@ -161,12 +161,32 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays` | List and filter records |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one record |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate routing and cost metadata |
-| `GET` | `/api/v1/observability/replays/trajectory?session_id=...` | Reconstruct one session trajectory |
+| `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
 `model`, `session_id`, `cache_status`, and `search`. Pagination uses `limit`
 and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
 fields, so use it only when those fields are needed.
+
+Trajectory queries use the exact recipe name. Omitting `recipe` is supported
+only when the session's records belong to one recipe; an ambiguous session
+returns `400`. An explicit empty `recipe=` selects older, unscoped records.
+The response includes each request's route, latency, and lifecycle, including
+multiple requests at the same turn index.
+
+Records, trajectory routes, and messages include `conversation_id` when an
+explicit conversation identity is available. Messages are grouped by conversation
+and turn, so separate conversations in one session can each start at turn zero.
+Insights shows their boundaries and complete IDs.
+
+Dashboard Insights shows these routes alongside recorded signals, projections,
+candidate scores, and session-switch reasons. In `observe` mode, candidate and
+hold explanations describe what protection would have done; the selected model
+and route history still describe actual dispatch. Protection's `candidate_models`
+lists eligible models independently of their scores; an unrecorded score appears
+as `—`, while a recorded zero remains zero. Missing identity or evidence
+is displayed explicitly. A recipe's `data_policy.replay: false` prevents its
+requests from appearing in Replay, including rejected requests.
 
 When bearer authentication is enabled, replay callers need `replay.read`.
 Prompt, response, tool, and other sensitive details remain redacted unless the

@@ -22,7 +22,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-const processShutdownTimeout = 30 * time.Second
+const (
+	processShutdownTimeout      = 30 * time.Second
+	processResourceDrainReserve = 5 * time.Second
+)
 
 func main() {
 	logo.PrintVLLMLogo()
@@ -97,7 +100,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	metricsServer = startMetricsServerIfEnabled(cfg, opts.metricsPort)
 	startProfilingServerIfEnabled(cfg, opts, &shutdownHooks)
 
-	embeddingRuntime, err := initializeRuntimeDependencies(ctx, cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	_, err = initializeRuntimeDependencies(ctx, cfg, startupWriter, &shutdownHooks, runtimeRegistry)
 	if err != nil {
 		return recordStartupError(startupWriter, "initialize runtime dependencies", err)
 	}
@@ -106,7 +109,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return recordStartupError(startupWriter, "create ExtProc server", err)
 	}
 
-	embeddingRuntime = routerServer.EmbeddingRuntimeState()
+	embeddingRuntime := routerServer.EmbeddingRuntimeState()
 	if err = warmupRouterRuntime(ctx, routerServer, embeddingRuntime); err != nil {
 		return recordStartupError(startupWriter, "warm up router runtime", err)
 	}
@@ -138,13 +141,11 @@ func shutdownRouterProcess(
 	if servingLifecycle != nil {
 		routerResourceShutdown := resourceShutdown
 		resourceShutdown = func(ctx context.Context) error {
-			if err := servingLifecycle.Shutdown(ctx); err != nil {
-				return err
-			}
+			lifecycleErr := servingLifecycle.Shutdown(ctx)
 			if routerResourceShutdown != nil {
-				return routerResourceShutdown(ctx)
+				return errors.Join(lifecycleErr, routerResourceShutdown(ctx))
 			}
-			return nil
+			return lifecycleErr
 		}
 	}
 	if metricsServer != nil {
@@ -168,31 +169,57 @@ func shutdownRouterComponents(
 	shutdownTracing func(context.Context) error,
 	servingShutdowns ...func(context.Context) error,
 ) error {
+	drainCtx, cancelDrain := processServingDrainContext(ctx)
+	defer cancelDrain()
 	managementDone := make(chan error, 1)
 	go func() {
 		if managementShutdown == nil {
 			managementDone <- nil
 			return
 		}
-		managementDone <- managementShutdown(ctx)
+		managementDone <- managementShutdown(drainCtx)
 	}()
 
-	servingErr := shutdownConcurrently(ctx, servingShutdowns...)
+	servingErr := shutdownConcurrently(drainCtx, servingShutdowns...)
 	managementErr := <-managementDone
 	shutdownErr := errors.Join(managementErr, servingErr)
-	if errors.Is(managementErr, context.Canceled) || errors.Is(managementErr, context.DeadlineExceeded) {
-		return shutdownErr
-	}
+	// Retirement rejects new leases, then waits for active consumers before
+	// closing their owners. Initiate it even when the HTTP drain timed out.
 	if resourceShutdown != nil {
+		logging.ComponentEvent("router", "runtime_retirement_started", nil)
 		resourceErr := resourceShutdown(ctx)
+		if resourceErr == nil {
+			logging.ComponentEvent("router", "runtime_retirement_completed", nil)
+		} else {
+			logging.ComponentErrorEvent("router", "runtime_retirement_failed", map[string]interface{}{"error": resourceErr.Error()})
+		}
 		shutdownErr = errors.Join(shutdownErr, resourceErr)
 		if errors.Is(resourceErr, context.Canceled) || errors.Is(resourceErr, context.DeadlineExceeded) {
 			return shutdownErr
 		}
 	}
+	if errors.Is(managementErr, context.Canceled) || errors.Is(managementErr, context.DeadlineExceeded) {
+		// Shutdown is idempotent. Confirm API-owned workers have finished before
+		// closing global dependencies that are not protected by router leases.
+		if ctx.Err() != nil {
+			return errors.Join(shutdownErr, ctx.Err())
+		}
+		if drainErr := managementShutdown(ctx); drainErr != nil {
+			return errors.Join(shutdownErr, drainErr)
+		}
+	}
 	shutdownErr = errors.Join(shutdownErr, runShutdownHooks(ctx, shutdownHooks))
 	shutdownErr = errors.Join(shutdownErr, shutdownTracing(ctx))
 	return shutdownErr
+}
+
+func processServingDrainContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := max(time.Until(deadline), 0)
+		reserve := min(processResourceDrainReserve, remaining/2)
+		return context.WithDeadline(ctx, deadline.Add(-reserve))
+	}
+	return context.WithCancel(ctx)
 }
 
 func recordStartupError(writer startupstatus.StatusWriter, operation string, cause error) error {
