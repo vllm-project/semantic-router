@@ -107,8 +107,9 @@ responds immediately and needs no model assignment.
 
 Models must declare their capabilities, context window, and maximum output
 limit. Images and long inputs use the same decisions as other work; candidate
-checks enforce their requirements. Missing metadata or an insufficient eligible
-pool produces an explicit error.
+checks enforce their requirements after routing signals complete. Vault's
+triage budget applies before these candidate checks. Missing metadata or an
+insufficient eligible pool produces an explicit error.
 
 Single-model decisions compare the catalog's versioned `general`, `reasoning`,
 or `agentic` quality index at the assigned reasoning effort. Custom models need
@@ -126,6 +127,18 @@ It loads only when used. Override that deployment for qualified accelerator
 execution while retaining the model's `operating_point.json`. Verify the sensitive
 pool on help-seeking, benign analysis, and harmful requests; a general quality
 score does not certify responsible answers.
+
+The default Vela Guard, PII, and Hazard tasks each accept at most 32,768 input
+tokens for triage, including the conversation text evaluated by that task.
+Their tokenizers can differ from the backend's tokenizer. Exceeding a triage
+budget fails closed before backend context checks or dispatch; assigning a
+backend with a larger context window does not raise this limit. Preview returns
+HTTP 503 with `signal_errors` and no selected model. The maintained Vault
+long-input probes stay within this budget and retain their routing assertions.
+
+The default Hazard deployment runs on CPU. Long inputs can make triage slow
+even within the supported budget; measure Preview latency for your traffic and
+qualify an accelerated Hazard deployment when needed.
 
 ## Data handling and safety
 
