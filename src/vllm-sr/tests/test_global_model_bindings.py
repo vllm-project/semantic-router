@@ -3,8 +3,6 @@
 from copy import deepcopy
 
 import pytest
-from pydantic import ValidationError
-
 from cli.config_schema.validation import validate_config_structure
 from cli.model_runtime_defaults import effective_model_bindings
 from cli.models import UserConfig
@@ -12,6 +10,7 @@ from cli.validator_classifier import validate_classifier_contracts
 from cli.validator_model_runtime import validate_model_runtime_references
 from cli.validator_recipe_contracts import _recipe_name_contract
 from cli.validator_safety import validate_safety_contracts
+from pydantic import ValidationError
 
 
 def document():

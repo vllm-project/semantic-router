@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 
+from cli.config_contract import iter_routing_profiles
 from cli.config_schema import schema_document
 from cli.models import ModelBinding, UserConfig
 
@@ -47,8 +48,6 @@ def effective_model_bindings(config: UserConfig, profile) -> dict[str, ModelBind
 
 def iter_effective_routing_profiles(config: UserConfig):
     """Yield private validation views; the authored profile remains unchanged."""
-    from cli.config_contract import iter_routing_profiles
-
     for name, profile in iter_routing_profiles(config):
         yield (
             name,
