@@ -19,6 +19,7 @@ import type {
   InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
 import styles from './InsightsCharts.module.css'
+import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 
 interface InsightsChartsProps {
   aggregate: InsightsAggregateResponse
@@ -66,24 +67,6 @@ const renderCustomLabel = ({ cx, cy, midAngle, outerRadius, percent, name }: Pie
 
 const generateBarColors = (count: number): string[] => {
   return Array.from({ length: count }, (_, index) => CHART_COLORS[index % CHART_COLORS.length])
-}
-
-const formatCurrency = (value: number, currency?: string) => {
-  if (!currency) {
-    return 'N/A'
-  }
-
-  try {
-    const minimumFractionDigits = Math.abs(value) >= 0.01 ? 2 : 4
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits,
-      maximumFractionDigits: 4,
-    }).format(value)
-  } catch {
-    return `${value.toFixed(4)} ${currency}`
-  }
 }
 
 const formatTokenCount = (value: number) =>

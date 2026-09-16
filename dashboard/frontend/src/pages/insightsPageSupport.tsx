@@ -3,6 +3,7 @@ import CollapsibleSection from '../components/CollapsibleSection'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDateTime } from '../utils/dateTime'
+import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 
@@ -730,26 +731,8 @@ function formatJson(jsonStr: string | undefined) {
   }
 }
 
-function formatCurrency(value: number, currency?: string) {
-  if (!currency) {
-    return 'N/A'
-  }
-
-  try {
-    const minimumFractionDigits = Math.abs(value) >= 0.01 ? 2 : 4
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits,
-      maximumFractionDigits: 4,
-    }).format(value)
-  } catch {
-    return `${value.toFixed(4)} ${currency}`
-  }
-}
-
 function formatCurrencyOrNA(value?: number, currency?: string) {
-  return typeof value === 'number' && currency ? formatCurrency(value, currency) : 'N/A'
+  return formatCurrency(value, currency)
 }
 
 function formatTokenValue(value?: number) {

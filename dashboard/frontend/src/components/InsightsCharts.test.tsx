@@ -30,6 +30,21 @@ const aggregate: InsightsAggregateResponse = {
 }
 
 describe('Insights cost charts', () => {
+  it('distinguishes tiny savings from an exact zero model cost', () => {
+    const summary = {
+      ...aggregate.summary,
+      currency: 'USD',
+      cost_record_count: 1,
+      excluded_record_count: 0,
+      total_saved: 0.000001,
+      baseline_spend: 0.000001,
+      actual_spend: 0,
+    }
+    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
+    expect(html).toContain('&lt;$0.0001')
+    expect(html).toContain('>$0.0000<')
+  })
+
   it('keeps missing pricing unknown and states the estimate and lifecycle scope', () => {
     const html = renderToStaticMarkup(<InsightsCharts aggregate={aggregate} />)
     expect(html).toContain('Estimated Model Cost')

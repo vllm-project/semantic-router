@@ -9,6 +9,7 @@ import {
   hasCompleteCostData,
 } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
+import { formatInsightsCost } from '../utils/insightsCost'
 
 const complete: InsightsRecord = {
   id: 'cost-record',
@@ -27,6 +28,27 @@ const complete: InsightsRecord = {
 }
 
 describe('Insights configured-rate estimates', () => {
+  it('distinguishes tiny amounts, exact zero and unavailable data in each currency', () => {
+    expect(formatInsightsCost(0.000001, 'USD')).toBe('<$0.0001')
+    expect(formatInsightsCost(0.000075, 'USD')).toBe('<$0.0001')
+    expect(formatInsightsCost(0.0001, 'USD')).toBe('$0.0001')
+    expect(formatInsightsCost(-0.000001, 'USD')).toBe('>-$0.0001')
+    expect(formatInsightsCost(0.000001, 'EUR')).toBe('<€0.0001')
+    expect(formatInsightsCost(0, 'USD')).toBe('$0.0000')
+    expect(formatInsightsCost(undefined, 'USD')).toBe('N/A')
+    expect(formatInsightsCost(Number.NaN, 'USD')).toBe('N/A')
+  })
+
+  it('preserves tiny amounts in record cells and details', () => {
+    const record = { ...complete, actual_cost: 0.000001 }
+    const column = createInsightsTableColumns().find((item) => item.key === 'actual_cost')!
+    expect(renderToStaticMarkup(<>{column.render!(record)}</>)).toContain('&lt;$0.0001')
+    const usage = buildInsightsRecordSections(record, { isReadonly: false }).find(
+      (section) => section.title === 'Usage & Cost',
+    )
+    expect(usage?.fields).toContainEqual({ label: 'Estimated model cost', value: '<$0.0001' })
+  })
+
   it('distinguishes incomplete requests, missing usage, pricing and baseline', () => {
     expect(getInsightsCostUnavailableReason({ ...complete, lifecycle_state: 'in_progress' })).toBe(
       'Request not completed',
