@@ -205,15 +205,17 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
         <details className={styles.estimateDetails}>
           <summary>How estimates work</summary>
           <p>
-            New records use the highest estimate among the decision’s configured candidates in the
-            same currency as baseline, using the same recorded tokens. Direct requests use the
-            selected model as baseline. Older records retain their captured baseline.
+            New records use the highest estimate in the recipe’s complete model pool across all
+            decisions, in the same currency, as baseline using the same recorded tokens. Direct
+            requests use the selected model as baseline. Older records retain their captured
+            baseline.
           </p>
           <p>
             Infrastructure charges and invoice adjustments are excluded. Currencies are shown
             separately; no exchange-rate conversion is applied. Requests that are not completed or
             lack token usage, model pricing, or baseline data are excluded. Missing data is shown as
-            N/A, with the reason in record details.
+            an explicit reason in each record. Historical requests without captured prices remain
+            “Price not recorded”; current model rates do not backfill them.
           </p>
         </details>
       </div>
@@ -240,8 +242,8 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
       {summary.excluded_record_count > 0 ? (
         <p className={styles.summaryHint}>
           {summary.excluded_record_count} filtered record
-          {summary.excluded_record_count === 1 ? '' : 's'} excluded from estimates; see record
-          details for the reason.
+          {summary.excluded_record_count === 1 ? '' : 's'} excluded from estimates. Each row
+          explains what was not recorded. Historical rows without captured prices are not repriced.
         </p>
       ) : null}
 

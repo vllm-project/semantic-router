@@ -57,13 +57,13 @@ describe('Insights configured-rate estimates', () => {
       'Request not completed',
     )
     expect(getInsightsCostUnavailableReason({ ...complete, total_tokens: undefined })).toBe(
-      'Token usage unavailable',
+      'Token usage was not recorded for this request',
     )
     expect(getInsightsCostUnavailableReason({ ...complete, actual_cost: undefined })).toBe(
-      'Model pricing estimate unavailable',
+      'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
     )
     expect(getInsightsCostUnavailableReason({ ...complete, baseline_cost: undefined })).toBe(
-      'Baseline estimate unavailable',
+      'Baseline estimate was not recorded for this request',
     )
     expect(getInsightsCostUnavailableReason(complete)).toBeUndefined()
   })
@@ -122,8 +122,31 @@ describe('Insights configured-rate estimates', () => {
     const row = { ...complete, actual_cost: undefined }
     const value = columns.find((c) => c.key === 'actual_cost')!.render!(row)
     const markup = renderToStaticMarkup(<>{value}</>)
-    expect(markup).toContain('N/A')
-    expect(markup).toContain('Model pricing estimate unavailable')
+    expect(markup).toContain('Price not recorded')
+    expect(markup).toContain('Historical records are not repriced')
     expect(markup).not.toContain('$0')
+  })
+
+  it('explains historical missing prices in both cost cells without mutating the record', () => {
+    const historical = {
+      ...complete,
+      actual_cost: undefined,
+      baseline_cost: undefined,
+      cost_savings: undefined,
+      currency: undefined,
+      baseline_model: undefined,
+    }
+    const before = { ...historical }
+    const columns = createInsightsTableColumns()
+    for (const key of ['actual_cost', 'cost_savings']) {
+      const cell = columns.find((column) => column.key === key)!
+      const markup = renderToStaticMarkup(<>{cell.render!(historical)}</>)
+      expect(markup).toContain('Price not recorded')
+      expect(markup).toContain('current model rates')
+      expect(markup).not.toContain('>N/A<')
+      expect(markup).not.toContain('$0')
+    }
+    expect(historical).toEqual(before)
+    expect(buildInsightsSummary([historical]).costRecordCount).toBe(0)
   })
 })

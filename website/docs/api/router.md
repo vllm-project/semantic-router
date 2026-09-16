@@ -193,17 +193,28 @@ requests from appearing in Replay, including rejected requests.
 Insights estimates model costs from recorded token usage and the selected model's
 configured input, cached-input, cache-write, and output rates. These estimates
 exclude infrastructure charges and invoice adjustments. Missing usage or pricing
-stays unknown (`N/A`); an explicitly configured free rate remains zero.
+stays unknown; record cells explain whether usage, price, or a baseline was not
+recorded. An explicitly configured free rate remains zero.
 
-For each new record, the baseline is the highest estimated cost among the selected
-decision's configured model candidates and the selected model, using the same
-recorded usage and currency. Unpriced candidates and other currencies are ignored;
+For each new routed record, the baseline is the highest estimated cost in the
+selected recipe's complete model pool across all its decisions, including models
+outside the matched decision. This includes decision model references, explicit
+candidate-iteration models, and route-action destinations. The router default is
+included only when a recipe decision with no model references permits that
+fallback; strict candidate requirements, minimum-candidate constraints, immediate
+responses, and route actions do not implicitly admit the default. Auxiliary
+planner and judge models do not expand the pool.
+The comparison uses the same recorded usage and currency.
+Other recipes, unpriced models, and other currencies are ignored;
 no exchange-rate conversion is performed. Equal-cost candidates use model-name
-order for a stable baseline. A direct model request without a decision compares
-against itself. Candidate eligibility and tokenization on an alternative model
+order for a stable baseline. A direct model request without a selected recipe compares
+against itself. If the recipe has no priced model in the same currency, its baseline
+remains unavailable. Candidate eligibility and tokenization on an alternative model
 are not re-evaluated: this is a configured-rate comparison, not a second inference.
 Cache hits record zero additional model-inference cost; storage and lookup costs
-are outside this estimate. Existing records retain their captured baseline.
+are outside this estimate. Existing records retain their captured baseline and
+prices. Historical records without a captured price show **Price not recorded**;
+adding or changing today's configured rates does not backfill their costs.
 
 The aggregate response's `summary.by_currency` contains a sorted array of
 `currency`, `total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count`

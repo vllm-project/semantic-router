@@ -3,7 +3,9 @@ package extproc
 import (
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseUsageMetrics) routerreplay.UsageCost {
@@ -31,42 +33,82 @@ func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseU
 
 	actualCost := costForResponseUsage(usage, selectedPricing)
 	currency := normalizeReplayCurrency(selectedPricing.Currency)
+	snapshot.ActualCost = replayFloat64Ptr(actualCost)
+	snapshot.Currency = replayStringPtr(currency)
 	baselineModel, baselineCost := r.replayBaselineCost(ctx, usage, currency, actualCost)
+	if baselineModel == "" {
+		return snapshot
+	}
 	costSavings := baselineCost - actualCost
 
-	snapshot.ActualCost = replayFloat64Ptr(actualCost)
 	snapshot.BaselineCost = replayFloat64Ptr(baselineCost)
 	snapshot.CostSavings = replayFloat64Ptr(costSavings)
-	snapshot.Currency = replayStringPtr(currency)
 	snapshot.BaselineModel = replayStringPtr(baselineModel)
 
 	return snapshot
 }
 
 // replayBaselineCost compares this request's recorded usage at the configured
-// rates of its decision candidates. Other recipes and currencies cannot inflate
-// savings. A passthrough request has only its selected model as a baseline.
+// rates of the selected recipe's complete model pool across all decisions.
+// Other recipes and currencies cannot inflate savings. A passthrough request
+// has only its selected model as a baseline.
 func (r *OpenAIRouter) replayBaselineCost(
 	ctx *RequestContext,
 	usage responseUsageMetrics,
 	currency string,
 	selectedCost float64,
 ) (string, float64) {
-	model, cost := ctx.RequestModel, selectedCost
-	if ctx.VSRSelectedDecision == nil {
-		return model, cost
+	recipe := ctx.Routing.SelectedRecipe()
+	if recipe == nil {
+		return ctx.RequestModel, selectedCost
 	}
-	for _, candidate := range ctx.VSRSelectedDecision.ModelRefs {
-		pricing, ok := r.Config.GetFullModelPricing(candidate.Model)
+	model, cost := "", 0.0
+	for candidate := range replayRecipeModelPool(recipe, r.Config.DefaultModel) {
+		pricing, ok := r.Config.GetFullModelPricing(candidate)
 		if !ok || normalizeReplayCurrency(pricing.Currency) != currency {
 			continue
 		}
 		candidateCost := costForResponseUsage(usage, pricing)
-		if candidateCost > cost || (candidateCost == cost && candidate.Model < model) {
-			model, cost = candidate.Model, candidateCost
+		if model == "" || candidateCost > cost || (candidateCost == cost && candidate < model) {
+			model, cost = candidate, candidateCost
 		}
 	}
 	return model, cost
+}
+
+func replayRecipeModelPool(recipe *config.RoutingRecipe, defaultModel string) map[string]struct{} {
+	models := make(map[string]struct{})
+	add := func(model string) {
+		if model = strings.TrimSpace(model); model != "" {
+			models[model] = struct{}{}
+		}
+	}
+	for _, decision := range recipe.Profile.Decisions {
+		for _, ref := range decision.ModelRefs {
+			add(ref.Model)
+		}
+		for _, iteration := range decision.CandidateIterations {
+			if iteration.Source == "models" {
+				for _, ref := range iteration.Models {
+					add(ref.Model)
+				}
+			}
+		}
+		if decision.Action != nil && decision.Action.Type == config.DecisionActionRoute {
+			add(decision.Action.Destination)
+			continue
+		}
+		// Only an empty candidate decision can make the router default part of
+		// this recipe's declared generation pool. Strict requirements disable
+		// that fallback; fast responses do not invoke a model at all.
+		if len(decision.ModelRefs) == 0 && decision.GetFastResponseConfig() == nil &&
+			(decision.Algorithm == nil || decision.Algorithm.MinimumCandidates == 0) &&
+			!selection.CandidateRequirementsEnabled(recipe.Profile.CandidateRequirements) {
+			add(defaultModel)
+		}
+	}
+	// Planner and judge models are auxiliary calls, not generation candidates.
+	return models
 }
 
 func normalizeReplayCurrency(currency string) string {

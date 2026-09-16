@@ -230,13 +230,9 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '160px',
       sortable: true,
       render: (row) =>
-        hasCompleteCostData(row) ? (
-          renderCostValue(row.actual_cost, row.currency)
-        ) : (
-          <span className={styles.costValueMuted} title={getInsightsCostUnavailableReason(row)}>
-            N/A
-          </span>
-        ),
+        hasCompleteCostData(row)
+          ? renderCostValue(row.actual_cost, row.currency)
+          : renderUnavailableCost(row),
     },
     {
       key: 'cost_savings',
@@ -245,11 +241,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       sortable: true,
       render: (row) => {
         if (!hasCompleteCostData(row)) {
-          return (
-            <span className={styles.costValueMuted} title={getInsightsCostUnavailableReason(row)}>
-              N/A
-            </span>
-          )
+          return renderUnavailableCost(row)
         }
 
         return (
@@ -377,7 +369,7 @@ export function buildInsightsRecordSections(
       {
         label: 'Baseline basis',
         value:
-          'New records compare the decision’s configured candidates in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+          'New records compare the recipe’s complete model pool across all decisions in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
       },
       {
         label: 'Estimated model cost',
@@ -450,19 +442,43 @@ export function collectSignals(signals: Signal): string[] {
 }
 
 export function getInsightsCostUnavailableReason(record: InsightsRecord): string | undefined {
-  if (record.lifecycle_state !== 'completed') return 'Request not completed'
-  if (!Number.isFinite(record.total_tokens)) return 'Token usage unavailable'
+  return getUnavailableCost(record)?.reason
+}
+
+function getUnavailableCost(record: InsightsRecord) {
+  if (record.lifecycle_state !== 'completed') {
+    return { label: 'Not completed', reason: 'Request not completed' }
+  }
+  if (!Number.isFinite(record.total_tokens)) {
+    return { label: 'Usage not recorded', reason: 'Token usage was not recorded for this request' }
+  }
   if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
-    return 'Model pricing estimate unavailable'
+    return {
+      label: 'Price not recorded',
+      reason:
+        'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
+    }
   }
   if (
     !Number.isFinite(record.baseline_cost) ||
     !Number.isFinite(record.cost_savings) ||
     !record.baseline_model
   ) {
-    return 'Baseline estimate unavailable'
+    return {
+      label: 'Baseline not recorded',
+      reason: 'Baseline estimate was not recorded for this request',
+    }
   }
   return undefined
+}
+
+function renderUnavailableCost(record: InsightsRecord) {
+  const unavailable = getUnavailableCost(record)
+  return (
+    <span className={styles.costValueMuted} title={unavailable?.reason}>
+      {unavailable?.label || 'N/A'}
+    </span>
+  )
 }
 
 export function hasCompleteCostData(record: InsightsRecord) {
