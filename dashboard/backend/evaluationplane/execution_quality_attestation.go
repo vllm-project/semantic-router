@@ -152,11 +152,38 @@ func serverObservedAnswerQuality(entry executionAttestationEntry, grading gradin
 	if !entry.Success || grading.ExpectedAnswer == nil || entry.ResponseContentDigest == nil {
 		return nil
 	}
+	// Legacy attestations did not distinguish final answers from observed
+	// reasoning. New observations must prove completion before exact grading.
+	if entry.FinalAnswerComplete != nil && !*entry.FinalAnswerComplete {
+		return nil
+	}
 	value := 0.0
 	if digestString(normalizedAnswer(*grading.ExpectedAnswer)) == *entry.ResponseContentDigest {
 		value = 1
 	}
 	return &value
+}
+
+func brokerFinalAnswerComplete(payload map[string]any) bool {
+	choices, ok := payload["choices"].([]any)
+	if !ok || len(choices) == 0 {
+		return false
+	}
+	for _, raw := range choices {
+		choice, ok := raw.(map[string]any)
+		if !ok || choice["finish_reason"] != "stop" {
+			return false
+		}
+		message, ok := choice["message"].(map[string]any)
+		if !ok || message["role"] != "assistant" {
+			return false
+		}
+		content, ok := message["content"].(string)
+		if !ok || strings.TrimSpace(content) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func brokerResponseContent(payload map[string]any) *string {

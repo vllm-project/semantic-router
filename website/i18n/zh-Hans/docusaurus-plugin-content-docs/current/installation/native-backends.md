@@ -1,13 +1,13 @@
 ---
-title: Router Runtime
+title: 路由器运行时
 description: 配置路由分类、安全检查和嵌入模型。
 translation:
-  source_commit: "dc7f402642a8b8ecec8218e2086a4c6f186ea406"
+  source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/installation/native-backends.md"
   outdated: false
 ---
 
-Router Runtime 运行路由所需的分类、嵌入和安全检查模型。负责回答用户的 LLM 在[模型配置](/zh-Hans/docs/installation/model-configuration)中单独设置。
+Router Runtime 运行 Vela 分类、嵌入、重排序和安全检查模型。默认设置见 [Vela 模型](../tutorials/global/vela-models.md)。负责回答用户的 LLM 在[模型配置](/zh-Hans/docs/installation/model-configuration)中单独设置。
 
 ## 选择运行方式 {#choose-a-running-mode}
 
@@ -22,6 +22,7 @@ Router Runtime 运行路由所需的分类、嵌入和安全检查模型。负�
 ## 按用途配置 {#configure-a-use-case}
 
 - [嵌入模型](runtime/embeddings.md)：语义匹配、缓存和向量存储。
-- [安全模型](runtime/safety.md)：提示词防护、PII 和幻觉检测。
+- [安全模型](runtime/safety.md)：Guard、Safety、Hazard、PII 和依据检查。
+- [重排序](../tutorials/plugin/rag.md#neural-reranking)：在生成答案前，为检索候选评分。
 
 启动失败、并发限制和配置重载的处理方法见[运维与故障排查](runtime/lifecycle-diagnostics.md)。

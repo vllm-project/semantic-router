@@ -40,18 +40,20 @@ func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *Re
 	if embedder == nil {
 		return "", fmt.Errorf("embedder not initialized for vectorstore RAG")
 	}
+	manager := r.currentVectorStoreManager()
+	if manager == nil {
+		return "", fmt.Errorf("vector store manager not initialized")
+	}
+	if err = manager.CheckEmbeddingCompatibility(params.storeID); err != nil {
+		return "", err
+	}
 
 	queryEmbedding, err := embedder.Embed(traceCtx, params.query)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate query embedding: %w", err)
 	}
 
-	manager := r.currentVectorStoreManager()
-	if manager == nil {
-		return "", fmt.Errorf("vector store manager not initialized")
-	}
-
-	results, err := manager.Backend().Search(
+	results, err := manager.Search(
 		traceCtx,
 		params.storeID,
 		queryEmbedding,
@@ -63,6 +65,10 @@ func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("vectorstore search failed: %w", err)
 	}
 
+	results, err = r.rerankVectorStoreResults(traceCtx, ctx, ragConfig, params.query, results)
+	if err != nil {
+		return "", err
+	}
 	retrievedContext, bestScore, found := formatVectorStoreRetrievalResults(results)
 	if !found {
 		logging.Debugf("RAG vectorstore: no results found for query in store %s", params.storeID)
@@ -147,9 +153,13 @@ func formatVectorStoreRetrievalResults(results []vectorstore.SearchResult) (stri
 	}
 
 	parts := make([]string, 0, len(results))
+	bestScore := results[0].Score
 	for _, result := range results {
 		parts = append(parts, result.Content)
+		if result.Score > bestScore {
+			bestScore = result.Score
+		}
 	}
 
-	return strings.Join(parts, "\n\n---\n\n"), float32(results[0].Score), true
+	return strings.Join(parts, "\n\n---\n\n"), float32(bestScore), true
 }

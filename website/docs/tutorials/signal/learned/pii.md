@@ -46,6 +46,44 @@ routing:
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
 
+## Complete local scans
+
+The implicit local Vela PII default scans each text item up to 32,768 tokens,
+including special tokens. Each forward uses at most 512 tokens, with 255 content
+tokens of overlap. The model tokenizer defines the windows; character estimates
+and text re-tokenization at window boundaries do not determine coverage.
+
+Native Candle and ORT preserve original UTF-8 offsets, choose one observation per
+token by its surrounding context, then decode BIO entities once. Overlap does not
+double-count input usage or entity confidence. This guarantees coverage of admitted
+tokens, not detection accuracy or the quality of a single 32K forward.
+
+An explicit module budget, backend, window, or recipe binding keeps its own
+policy. For example, a deployment with `input: {max_tokens: 8192, overflow: reject}`
+still rejects an oversized input. To request windows explicitly, use:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          use_mmbert_32k: true
+          max_sequence_length: 32768  # Complete text budget, including special tokens.
+          window: {size: 512, overlap: 255}
+```
+
+With a named binding, declare `input.overflow: window` and a positive
+`input.max_tokens` on its deployment; that limit replaces the module budget.
+The same `window` block supplies the geometry. Unsupported adapters, missing
+window geometry, and limits beyond the loaded model's capacity are errors.
+Window size includes the tokenizer's special tokens; overlap counts content only.
+
+A text beyond the document limit or a failed window produces a classifier error,
+not a successful partial scan. Existing `on_error` and decision `rules.on_unknown`
+policies determine its routing effect. Remote backends and explicitly selected
+truncation retain the partial-result behavior described below.
+
 ## Remote backend (token_spans.v1)
 
 With no `backend`, PII detection keeps its local model. A remote PII classifier

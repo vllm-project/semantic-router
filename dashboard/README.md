@@ -131,6 +131,13 @@ Feature controls:
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
+Deployment registries support Linux and macOS through descriptor-relative reads
+that reject symlinks in the registry path and its files. Use a canonical registry
+directory; macOS also requires read permission on its directory components.
+Other platforms reject a configured registry. Leaving `EVALUATION_DEPLOYMENTS_DIR`
+unset retains the single-runtime target. Evaluation workers require Linux for
+their sandbox.
+
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
 `DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
 Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as

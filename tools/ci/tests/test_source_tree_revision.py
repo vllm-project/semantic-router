@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -60,6 +61,49 @@ class SourceTreeRevisionTests(unittest.TestCase):
         before = self.revision()
         (self.repo / "ignored.txt").write_text("local cache\n", encoding="utf-8")
         self.assertEqual(self.revision(), before)
+
+
+class SourceRevisionMakeEvaluationTests(unittest.TestCase):
+    def run_target(self, consume_build_arguments: bool) -> tuple[bool, str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / "source-hashed"
+            probe = root / "probe.mk"
+            recipe = (
+                "@printf '%s\\n' '$(VLLM_SR_DASHBOARD_BUILD_ARGS)'"
+                if consume_build_arguments
+                else "@printf '%s\\n' 'ordinary-check'"
+            )
+            probe.write_text(
+                "VLLM_SR_SOURCE_REVISION = "
+                f"$(shell printf hashed > {shlex.quote(str(marker))})test-revision\n"
+                f"include {REPO_ROOT / 'tools/make/docker.mk'}\n"
+                "revision-probe:\n\t" + recipe + "\n",
+                encoding="utf-8",
+            )
+            output = run(
+                "make",
+                "--no-print-directory",
+                "-f",
+                str(probe),
+                "revision-probe",
+                "CONTAINER_RUNTIME=docker",
+                "IMAGE_REGISTRY=docker.io/",
+                "VLLM_SR_DASHBOARD_VERSION=test-version",
+                cwd=REPO_ROOT,
+            )
+            return marker.exists(), output
+
+    def test_non_build_target_does_not_hash_the_source_tree(self) -> None:
+        hashed, output = self.run_target(False)
+        self.assertFalse(hashed)
+        self.assertEqual(output, "ordinary-check")
+
+    def test_build_arguments_resolve_the_source_revision_when_consumed(self) -> None:
+        hashed, output = self.run_target(True)
+        self.assertTrue(hashed)
+        self.assertIn("--build-arg VLLM_SR_SOURCE_REVISION=test-revision", output)
+        self.assertIn("--build-arg DASHBOARD_VERSION=test-version", output)
 
 
 if __name__ == "__main__":

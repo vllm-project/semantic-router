@@ -221,6 +221,18 @@ func SetupActivateHandler(
 		}
 		defer release()
 
+		// The candidate was validated before acquiring the shared config lock.
+		// A concurrent activation may have completed while this request waited.
+		if _, setupErr := loadBootstrapConfig(configPath, setupResolver); setupErr != nil {
+			http.Error(w, "Setup is no longer active; reload the current configuration", http.StatusConflict)
+			return
+		}
+		previousData, err := os.ReadFile(configPath)
+		if err != nil {
+			http.Error(w, "Failed to read the current setup configuration", http.StatusInternalServerError)
+			return
+		}
+
 		yamlData, err := marshalYAMLBytes(candidate.canonicalTransport())
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to convert config to YAML: %v", err), http.StatusInternalServerError)
@@ -231,16 +243,9 @@ func SetupActivateHandler(
 			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
 		}
 
-		tmpConfigFile := configPath + ".tmp"
-		if writeErr := os.WriteFile(tmpConfigFile, yamlData, 0o644); writeErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
+		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
+			http.Error(w, "Failed to write the setup configuration", http.StatusInternalServerError)
 			return
-		}
-		if renameErr := os.Rename(tmpConfigFile, configPath); renameErr != nil {
-			if fallbackWriteErr := os.WriteFile(configPath, yamlData, 0o644); fallbackWriteErr != nil {
-				http.Error(w, fmt.Sprintf("Failed to write config: %v", fallbackWriteErr), http.StatusInternalServerError)
-				return
-			}
 		}
 
 		// The config no longer declares setup mode. Drop the cached resolution
@@ -250,18 +255,19 @@ func SetupActivateHandler(
 		setupResolver.Invalidate()
 
 		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
+			failSetupActivation(w, configPath, previousData, setupResolver, "config_validation")
 			return
 		}
 
 		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to sync runtime config: %v", err), http.StatusInternalServerError)
+			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_config_sync")
 			return
 		}
 
 		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
-			log.Printf("Warning: failed to restart router/envoy after activation: %v", err)
+			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_start")
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -391,7 +397,7 @@ func buildSetupCandidateConfig(
 		return nil, fmt.Errorf("config is required")
 	}
 
-	requestConfig, err := decodeYAMLTaggedBytes[canonicalConfigTransport](req.Config)
+	requestConfig, err := decodeStrictSetupConfig(req.Config)
 	if err != nil {
 		return nil, fmt.Errorf("invalid config payload: %w", err)
 	}
@@ -442,7 +448,7 @@ func normalizeRemoteConfigURL(rawValue string) (string, error) {
 }
 
 func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
-	parsed, err := decodeYAMLTaggedBytes[setupConfigFile](raw)
+	parsed, err := decodeStrictSetupConfig(raw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse remote config: %w", err)
 	}

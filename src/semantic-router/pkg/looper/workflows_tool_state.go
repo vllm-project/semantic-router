@@ -671,6 +671,11 @@ func (l *WorkflowsLooper) resumeWorkflowToolCallWithState(
 	workerModels []string,
 	state *workflowPendingToolState,
 ) (*Response, bool, error) {
+	var err error
+	cfg, err = resolvedWorkflowPlannerForResume(cfg, state, workerModels)
+	if err != nil {
+		return nil, false, err
+	}
 	state.Streaming = req.IsStreaming
 	resumeCtx := newWorkflowResumeRequestContext(req, state)
 	if validateErr := validateWorkflowResumeState(state, workerModels, cfg, req.DecisionName); validateErr != nil {

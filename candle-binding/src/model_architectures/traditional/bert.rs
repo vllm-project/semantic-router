@@ -127,7 +127,7 @@ impl TraditionalBertClassifier {
     }
 
     /// Resolve model files (HuggingFace Hub or local)
-    fn resolve_model_files(model_id: &str) -> Result<(String, String, String, bool)> {
+    pub(crate) fn resolve_model_files(model_id: &str) -> Result<(String, String, String, bool)> {
         if Path::new(model_id).exists() {
             // Local model path
             let config_path = Path::new(model_id).join("config.json");

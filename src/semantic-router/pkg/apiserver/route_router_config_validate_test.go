@@ -435,6 +435,21 @@ func TestValidateHotReloadCompatibilityAllowsRouterPolicyChange(t *testing.T) {
 	}
 }
 
+func TestPreviewTimeoutReloadKeepsListenerAdmissionBound(t *testing.T) {
+	current := minimalDeployTestConfig("route")
+	next := minimalDeployTestConfig("route")
+	timeout, limit := 600, 8
+	next.API.RoutingPreview.RequestTimeoutSeconds = &timeout
+	if err := validateParsedHotReloadCompatibility(current, next); err != nil {
+		t.Fatalf("timeout-only reload rejected: %v", err)
+	}
+	next.API.RoutingPreview.MaxConcurrency = &limit
+	err := validateParsedHotReloadCompatibility(current, next)
+	if err == nil || !strings.Contains(err.Error(), "deployment workflow") {
+		t.Fatalf("listener admission change was not rejected: %v", err)
+	}
+}
+
 func localClassifierReloadConfig(modelPath string) string {
 	return `
 version: v0.3

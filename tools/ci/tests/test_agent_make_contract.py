@@ -63,6 +63,28 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertNotIn("run-python-lint", HARNESS_MAKE)
         self.assertNotIn("agent-changed-files-lint", HARNESS_MAKE)
 
+    def test_ci_checks_all_generated_public_contracts(self) -> None:
+        docs_make = (REPO_ROOT / "tools/make/docs.mk").read_text()
+        check = target_block("generated-contract-check", docs_make)
+        for dependency in (
+            "config-schema-check",
+            "api-docs-check",
+            "agent-skill-check",
+        ):
+            self.assertIn(dependency, check)
+        generate = target_block("generated-contract-generate", docs_make)
+        self.assertIn("config-schema-generate", generate)
+        self.assertLess(
+            generate.index("api-docs-generate"), generate.index("agent-skill-sync")
+        )
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text()
+        )
+        steps = workflow["jobs"]["test-and-build"]["steps"]
+        self.assertTrue(
+            any(step.get("run") == "make generated-contract-check" for step in steps)
+        )
+
     def test_verify_requires_explicit_domain_or_profile(self) -> None:
         verify = target_block("verify")
 
@@ -103,6 +125,22 @@ class HarnessMakeContractTests(unittest.TestCase):
         for binding in ("candle-binding", "onnx-binding", "ml-binding", "nlp-binding"):
             self.assertIn(f"-v /app/{binding}/target \\", PRECOMMIT_MAKE)
         self.assertIn("$$CONTAINER_CMD run --rm", PRECOMMIT_MAKE)
+
+    def test_dashboard_checks_keep_lockfiles_frozen(self) -> None:
+        for target in (
+            "dashboard-lint",
+            "dashboard-lint-fix",
+            "dashboard-type-check",
+            "dashboard-test-frontend",
+            "dashboard-test-e2e-evaluation",
+        ):
+            with self.subTest(target=target):
+                block = target_block(target, DASHBOARD_MAKE)
+                self.assertIn("npm ci", block)
+                self.assertNotIn("npm install", block)
+                for line in block.splitlines():
+                    if "npm " in line:
+                        self.assertNotIn("2>/dev/null", line)
 
     def test_dashboard_workers_use_the_installed_cli_environment_by_default(
         self,
