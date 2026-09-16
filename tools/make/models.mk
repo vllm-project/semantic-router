@@ -140,8 +140,7 @@ qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Ca
 	@$(MAKE) rust-ci
 	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
 	@cd src/semantic-router && \
-		CGO_LDFLAGS="-L$(CURDIR)/candle-binding/target/release" \
-		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release" \
+		$(NATIVE_ENV) \
 		go run ./cmd/modelcompat qualify-candle-cpu \
 			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
 			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
