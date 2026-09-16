@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:d3347f367d177f9e3ace5eb34599755046fb0878dd314b592f1629abd84cacb6"
+const builtInCatalogDigest = "sha256:a1041d992ef59b419689b7f03f85f0c880c5352eee41d7db25f59301f8a60e4a"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -95237,6 +95237,79 @@ const builtInCatalogJSON = `{
       "description": "Open models through a hosted API.",
       "display_name": "Together AI",
       "id": "together",
+      "models": [
+        {
+          "catalog": "minimax/minimax-m3",
+          "id": "MiniMaxAI/MiniMax-M3",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.06,
+            "completion_per_1m": 1.2,
+            "currency": "USD",
+            "prompt_per_1m": 0.3
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "context_window_size": 524288,
+            "quantization": "FP4"
+          },
+          "verification": {
+            "source": "https://docs.together.ai/docs/serverless/models",
+            "status": "claimed",
+            "verified_at": "2026-09-16"
+          }
+        },
+        {
+          "catalog": "moonshot/kimi-k3",
+          "id": "moonshotai/Kimi-K3",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.3,
+            "completion_per_1m": 15.0,
+            "currency": "USD",
+            "prompt_per_1m": 3.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "context_window_size": 1048576
+          },
+          "verification": {
+            "source": "https://docs.together.ai/docs/serverless/models",
+            "status": "claimed",
+            "verified_at": "2026-09-16"
+          }
+        },
+        {
+          "catalog": "zai/glm-5.2",
+          "id": "zai-org/GLM-5.2",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.26,
+            "completion_per_1m": 4.4,
+            "currency": "USD",
+            "prompt_per_1m": 1.4
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "context_window_size": 1048575,
+            "quantization": "FP4"
+          },
+          "verification": {
+            "source": "https://docs.together.ai/docs/serverless/models",
+            "status": "claimed",
+            "verified_at": "2026-09-16"
+          }
+        }
+      ],
       "presentation": {
         "featured": true,
         "logo": "package:together",
