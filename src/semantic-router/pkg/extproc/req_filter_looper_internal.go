@@ -124,12 +124,6 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 		looperInternalHeadersForRemoval()...,
 	)
 	setHeaderValue(common.HeaderMutation, headers.VSRSelectedModel, modelName)
-	// The Looper request entered Envoy without x-selected-model and therefore
-	// matched the rewriting fallback route. Re-evaluate after provider dispatch
-	// has supplied the complete path and selected-model routing header.
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
 

@@ -202,11 +202,6 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			return r.imageFileDispatchFailure(err, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
-		// Even when an entrypoint selects an identically named backend, the
-		// provider path is complete and must move off the rewriting fallback.
-		if r.shouldClearRouteCache() {
-			r.setClearRouteCache(response)
-		}
 		r.handleToolSelectionForRequest(request, response, ctx)
 		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 		if err != nil {

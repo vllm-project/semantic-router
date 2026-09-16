@@ -115,7 +115,7 @@ func TestLooperProviderDispatchReevaluatesOntoSelectedRoute(t *testing.T) {
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.LooperRequest = true
 
-	response, err := router.buildLooperBackendDispatchResponse(model, ctx)
+	response, err := router.buildLooperBackendDispatchResponse(model, "", false, ctx)
 	if err != nil {
 		t.Fatalf("buildLooperBackendDispatchResponse: %v", err)
 	}

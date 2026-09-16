@@ -249,6 +249,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         request_path: str = "/v1/chat/completions",
         direct_endpoint: bool = False,
         skip_processing: bool = False,
+        selected_model_header: bool = False,
         model: str = "test-model",
         looper: bool = False,
     ) -> set[str]:
@@ -275,12 +276,15 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
                 "router API did not become healthy",
             )
             with self._running_mock_upstream(mock_container):
+                request_headers = {}
+                if skip_processing:
+                    request_headers["x-vsr-skip-processing"] = "true"
+                if selected_model_header:
+                    request_headers["x-selected-model"] = model
                 self._send_mock_chat_completion(
                     mock_container,
                     request_path=request_path,
-                    request_headers=(
-                        {"x-vsr-skip-processing": "true"} if skip_processing else None
-                    ),
+                    request_headers=request_headers or None,
                     model=model,
                 )
                 return self._mock_upstream_paths(mock_container)
@@ -438,6 +442,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             request_path="/v1/chat/completions?api-version=test",
             direct_endpoint=True,
             skip_processing=True,
+            selected_model_header=True,
         )
         self.assertEqual(
             {"/compatible-mode/v1/chat/completions?api-version=test"},
