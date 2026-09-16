@@ -155,10 +155,16 @@ jobs:
           if-no-files-found: warn
 
       # Recompute all public contracts from their authored sources and reject
-      # drift in config JSON/TypeScript, OpenAPI/index, and skill/references.
+      # drift in schemas, OpenAPI, catalogs, CLI/CRD docs, and skill/references.
       # Runs before the model/service setup so drift fails fast.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
       - name: Check generated public contracts are up to date
-        run: make generated-contract-check
+        run: |
+          python3 -m pip install -r tools/docs/requirements.txt
+          make generated-contract-check
         env:
           CI: true
           CGO_ENABLED: 1

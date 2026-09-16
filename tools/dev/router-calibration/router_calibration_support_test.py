@@ -893,5 +893,135 @@ class SelectionExpectationTest(unittest.TestCase):
         )
 
 
+class FailedProbeDiagnosticsTest(unittest.TestCase):
+    def make_probe(self):
+        return router_calibration_manifest.Probe(
+            decision_id="sample",
+            variant_id="neutral",
+            probe_id="sample:neutral",
+            expected_decision="sample",
+            model="route-example",
+            query="Sort these item names.",
+            expected_recipe="example",
+            expected_algorithm="static",
+        )
+
+    def test_http_failure_preserves_returned_diagnostics_without_passing(self):
+        payload = {
+            "requested_model": "route-example",
+            "recipe": "example",
+            "routing_decision": "sample",
+            "selected_model": "backend-example",
+            "selection_status": "selected",
+            "selection_method": "static",
+            "selection_reason": "Selection completed before a later failure",
+            "recommended_models": ["backend-example"],
+            "signal_errors": {"classifier:example": "classifier_evaluation_failed"},
+            "signal_error_matches": {"classifier:example": True},
+            "signal_confidences": {"keyword:example": 1.0},
+            "signal_values": {"structure:items": 2},
+            "applied_unknown_policies": {"sample": "fail_closed"},
+            "decision_error": "classification was unavailable",
+            "metrics": {"classifier": {"execution_time_ms": 12.5}},
+            "decision_result": {
+                "decision_name": "sample",
+                "algorithm": "static",
+                "plugins": ["header_mutation"],
+                "used_signals": {"classifier": ["example"]},
+                "matched_signals": {"keyword": ["example"]},
+                "unmatched_signals": {"classifier": ["example"]},
+            },
+            "eval_trace": [{"decision_name": "sample", "matched": False}],
+            # A failed response cannot override report status or expectations.
+            "matched": True,
+            "policy_matched": True,
+            "deployment_matched": True,
+            "expected_decision": "untrusted-override",
+        }
+        with mock.patch.object(
+            router_calibration_support, "http_json", return_value=(503, payload)
+        ):
+            report = router_calibration_support.evaluate_probes(
+                "http://router.invalid", [self.make_probe()], scope="policy"
+            )
+        result = report["results"][0]
+        self.assertEqual(result["http_status"], 503)
+        self.assertEqual(result["raw_response"], payload)
+        for field in (
+            "selected_model",
+            "selection_status",
+            "selection_method",
+            "selection_reason",
+            "recommended_models",
+            "signal_errors",
+            "signal_error_matches",
+            "signal_confidences",
+            "signal_values",
+            "applied_unknown_policies",
+            "decision_error",
+            "metrics",
+            "eval_trace",
+        ):
+            self.assertEqual(result[field], payload[field], field)
+        for field, source in (
+            ("actual_model", "requested_model"),
+            ("actual_recipe", "recipe"),
+            ("actual_decision", "routing_decision"),
+        ):
+            self.assertEqual(result[field], payload[source], field)
+        for field, source in (
+            ("actual_algorithm", "algorithm"),
+            ("actual_plugins", "plugins"),
+            ("used_signals", "used_signals"),
+            ("matched_signals", "matched_signals"),
+            ("unmatched_signals", "unmatched_signals"),
+        ):
+            self.assertEqual(result[field], payload["decision_result"][source], field)
+        self.assertEqual(result["expected_decision"], "sample")
+        self.assertIn("status 503", result["error"])
+        self.assertNotIn("before model selection", result["selection_errors"][0])
+        for field in (
+            "matched",
+            "policy_matched",
+            "deployment_matched",
+            "selection_matched",
+        ):
+            self.assertFalse(result[field], field)
+        self.assertEqual(report["matched"], 0)
+        self.assertFalse(report["passed"])
+        self.assertFalse(report["scopes"]["policy"]["passed"])
+        self.assertFalse(report["scopes"]["deployment"]["passed"])
+
+    def test_partial_or_malformed_failure_does_not_invent_diagnostics(self):
+        payloads = (
+            None,
+            "upstream unavailable",
+            ["not an object"],
+            {"signal_errors": [], "selected_model": 17, "decision_result": []},
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                exc = RuntimeError("request failed")
+                exc.raw_response = payload
+                result = router_calibration_support.failed_probe_result(
+                    self.make_probe(), exc
+                )
+                self.assertEqual(result["raw_response"], payload)
+                self.assertEqual(result["signal_errors"], {})
+                self.assertEqual(result["selected_model"], "")
+                self.assertEqual(result["actual_recipe"], "")
+                self.assertEqual(result["actual_decision"], "")
+                self.assertFalse(result["matched"])
+                self.assertNotIn("decision_error", result)
+
+    def test_nested_decision_identity_is_preserved_when_top_level_is_absent(self):
+        exc = RuntimeError("request failed")
+        exc.raw_response = {"decision_result": {"decision_name": "partial"}}
+        result = router_calibration_support.failed_probe_result(self.make_probe(), exc)
+        self.assertEqual(result["actual_decision"], "partial")
+        self.assertEqual(result["selected_model"], "")
+        self.assertFalse(result["matched"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,8 @@ type SessionPolicyTrace struct {
 	SwitchMargin                  float64
 	StayBias                      float64
 
+	// CandidateModels records eligibility independently of sparse selector scores.
+	CandidateModels []string
 	BaseScores      map[string]float64
 	FinalScores     map[string]float64
 	CandidateTraces map[string]SessionCandidateTrace
@@ -121,6 +123,7 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		"cache_warmth_ok":                   t.CacheWarmthOK,
 		"switch_margin":                     t.SwitchMargin,
 		"stay_bias":                         t.StayBias,
+		"candidate_models":                  append([]string(nil), t.CandidateModels...),
 		"base_scores":                       cloneScores(t.BaseScores),
 		"final_scores":                      cloneScores(t.FinalScores),
 	}

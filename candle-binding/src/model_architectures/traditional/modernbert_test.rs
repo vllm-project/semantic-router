@@ -457,17 +457,16 @@ fn test_mmbert_32k_config_detection_by_max_position() {
     println!("mmBERT-32K config detection (max_position) test passed");
 }
 
-/// Test mmBERT-32K config detection via high rope_theta (YaRN indicator)
+/// A high theta alone does not declare a 32K capacity or enable YaRN.
 #[rstest]
-fn test_mmbert_32k_config_detection_by_rope_theta() {
+fn test_mmbert_high_theta_does_not_infer_32k_capacity() {
     use tempfile::TempDir;
 
-    // Create a temporary directory with mmBERT config that has YaRN rope_theta
+    // The directory and sidecar cannot override the model configuration.
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("config.json");
 
-    // Write config with YaRN rope_theta but default max_position_embeddings
-    // This tests detection via rope_theta alone
+    // Write a large direct theta with an explicit 8192-position capacity.
     let mmbert_yarn_config = r#"{
         "vocab_size": 256000,
         "model_type": "modernbert",
@@ -484,13 +483,18 @@ fn test_mmbert_32k_config_detection_by_rope_theta() {
 
     std::fs::write(&config_path, mmbert_yarn_config).expect("Failed to write config");
 
-    // Test variant detection - should be Multilingual32K due to high rope_theta
+    std::fs::write(
+        temp_dir.path().join("training_config.json"),
+        r#"{"max_position_embeddings":32768,"rope_scaling":{"type":"yarn","factor":4.0}}"#,
+    )
+    .unwrap();
+    // Only config.json determines this display variant.
     let variant = ModernBertVariant::detect_from_config(config_path.to_str().unwrap());
     assert!(variant.is_ok());
     assert_eq!(
         variant.unwrap(),
-        ModernBertVariant::Multilingual32K,
-        "Should detect mmBERT-32K from high global_rope_theta (YaRN indicator)"
+        ModernBertVariant::Multilingual,
+        "Large theta and a training sidecar must not override capacity"
     );
 
     println!("mmBERT-32K config detection (rope_theta) test passed");
@@ -570,7 +574,7 @@ fn test_mmbert_32k_expected_config_values() {
         ("position_embedding_type", "sans_pos"),
         ("local_attention", "128"),
         ("global_attn_every_n_layers", "3"),
-        ("global_rope_theta", "160000"), // YaRN-scaled (4x from original)
+        ("global_rope_theta", "160000"), // Legacy direct theta; not a YaRN scaling recipe
         ("local_rope_theta", "160000"),
         ("pad_token_id", "0"),
         ("bos_token_id", "2"),
@@ -598,7 +602,7 @@ fn test_mmbert_32k_expected_config_values() {
     assert_eq!(
         rope_theta.unwrap().1,
         "160000",
-        "global_rope_theta should be 160000 (YaRN)"
+        "global_rope_theta should retain the legacy direct theta"
     );
 
     println!("mmBERT-32K config values test passed");
@@ -1218,8 +1222,8 @@ fn test_mmbert_32k_config_detection_edge_cases() {
     let variant_1 = ModernBertVariant::detect_from_config(config_path_1.to_str().unwrap());
     assert_eq!(
         variant_1.unwrap(),
-        ModernBertVariant::Multilingual32K,
-        "16384 should be detected as 32K variant"
+        ModernBertVariant::Multilingual,
+        "16384 is below the declared 32K display variant"
     );
 
     // Test case 2: max_position_embeddings = 16383 (just below boundary)
@@ -1249,8 +1253,8 @@ fn test_mmbert_32k_config_detection_edge_cases() {
     let variant_3 = ModernBertVariant::detect_from_config(config_path_3.to_str().unwrap());
     assert_eq!(
         variant_3.unwrap(),
-        ModernBertVariant::Multilingual32K,
-        "rope_theta=100000 should be detected as 32K variant"
+        ModernBertVariant::Multilingual,
+        "theta cannot infer capacity"
     );
 
     // Test case 4: global_rope_theta = 99999 (just below boundary)
@@ -1614,6 +1618,27 @@ fn context_test_config(max_length: usize) -> serde_json::Value {
     })
 }
 
+#[test]
+fn test_merged_classifier_pooling_respects_checkpoint_contract() {
+    use super::ClassifierPooling;
+    let parse = TraditionalModernBertClassifier::parse_classifier_pooling;
+    assert!(matches!(
+        parse(r#"{"classifier_pooling":"cls"}"#).unwrap(),
+        ClassifierPooling::CLS
+    ));
+    assert!(matches!(
+        parse(r#"{"classifier_pooling":"mean"}"#).unwrap(),
+        ClassifierPooling::MEAN
+    ));
+    assert!(matches!(parse("{}").unwrap(), ClassifierPooling::MEAN));
+    for invalid in [
+        r#"{"classifier_pooling":"max"}"#,
+        r#"{"classifier_pooling":null}"#,
+    ] {
+        assert!(parse(invalid).is_err());
+    }
+}
+
 fn context_test_tokenizer() -> tokenizers::Tokenizer {
     use tokenizers::models::wordlevel::WordLevel;
     use tokenizers::pre_tokenizers::whitespace::WhitespaceSplit;
@@ -1767,7 +1792,12 @@ fn test_candle_context_config_preserves_separate_rope_theta() {
     assert!(TraditionalModernBertClassifier::parse_model_config(&value.to_string()).is_err());
     let mut value = context_test_config(32768);
     value["rope_scaling"] = serde_json::json!({"type": "yarn", "factor": 4.0});
-    assert!(TraditionalModernBertClassifier::parse_model_config(&value.to_string()).is_err());
+    let parsed = TraditionalModernBertClassifier::parse_model_config(&value.to_string()).unwrap();
+    assert_eq!(parsed.max_position_embeddings, 32768);
+    assert!(matches!(
+        parsed.resolve_rope().unwrap()[0].scaling,
+        crate::model_architectures::modernbert_rope::Scaling::Yarn { .. }
+    ));
     value.as_object_mut().unwrap().remove("rope_scaling");
     value["max_position_embeddings"] = 0.into();
     assert!(TraditionalModernBertClassifier::parse_model_config(&value.to_string()).is_err());
@@ -2155,4 +2185,66 @@ fn test_merge_bio_entities_whitespace_only_span_is_preserved() {
     let entities = merge_bio_entities(text, &tokens);
     assert_eq!(entities.len(), 1);
     assert!(entities[0].start < entities[0].end);
+}
+
+#[test]
+fn traditional_yarn_matches_official_tiny_backbone_in_both_config_formats(
+) -> candle_core::Result<()> {
+    use crate::model_architectures::modernbert_rope::tests::{assert_tiny_fixture, fixture_dir};
+    use crate::model_architectures::traditional::candle_models::modernbert::ModernBert;
+    use candle_core::{DType, Device};
+    use candle_nn::VarBuilder;
+    let mut outputs = Vec::new();
+    for mode in ["tf4", "tf5"] {
+        let raw = std::fs::read_to_string(fixture_dir().join(mode).join("config.json")).unwrap();
+        let config = TraditionalModernBertClassifier::parse_model_config(&raw)?;
+        let vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(
+                &[fixture_dir().join("weights.safetensors.fixture")],
+                DType::F32,
+                &Device::Cpu,
+            )?
+        };
+        let model = ModernBert::load_backbone(vb, &config)?;
+        outputs.push(assert_tiny_fixture(mode, |ids, mask| {
+            model.forward(ids, mask)
+        })?);
+    }
+    assert!(outputs[0]
+        .iter()
+        .zip(&outputs[1])
+        .all(|(a, b)| a.to_bits() == b.to_bits()));
+    Ok(())
+}
+
+#[test]
+fn traditional_official_norm_eps_and_legacy_alias_are_validated() {
+    use crate::model_architectures::modernbert_rope::tests::fixture_dir;
+    let raw = std::fs::read_to_string(fixture_dir().join("tf4/config.json")).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    value.as_object_mut().unwrap().remove("layer_norm_eps");
+    value["norm_eps"] = serde_json::json!(1e-6);
+    let parse = |value: &serde_json::Value| {
+        TraditionalModernBertClassifier::parse_model_config(&value.to_string())
+    };
+    assert_eq!(parse(&value).unwrap().layer_norm_eps, 1e-6);
+    value["layer_norm_eps"] = serde_json::json!(1e-6);
+    assert_eq!(parse(&value).unwrap().layer_norm_eps, 1e-6);
+    value.as_object_mut().unwrap().remove("norm_eps");
+    assert_eq!(parse(&value).unwrap().layer_norm_eps, 1e-6);
+    value["norm_eps"] = serde_json::json!(1e-5);
+    assert!(parse(&value).is_err());
+    value.as_object_mut().unwrap().remove("layer_norm_eps");
+    for invalid in [
+        serde_json::json!(0.0),
+        serde_json::json!(-1.0),
+        serde_json::json!("1e-5"),
+        serde_json::Value::Null,
+    ] {
+        value["norm_eps"] = invalid;
+        assert!(parse(&value).is_err());
+    }
+    for invalid in ["null", "[]", "1"] {
+        assert!(TraditionalModernBertClassifier::parse_model_config(invalid).is_err());
+    }
 }

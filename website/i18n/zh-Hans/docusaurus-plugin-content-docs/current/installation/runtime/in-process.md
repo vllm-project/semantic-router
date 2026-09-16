@@ -1,50 +1,31 @@
 ---
 title: 进程内模型
-description: 选择本地引擎和硬件，配置并运行分类器。
+description: 在本地运行 Vela，选择 CPU 或 GPU 推理，并查看实际路由信号。
 translation:
-  source_commit: "dc7f402642a8b8ecec8218e2086a4c6f186ea406"
+  source_commit: "96399a94b9030d66f46c5d45f9a838defc091153"
   source_file: "docs/installation/runtime/in-process.md"
   outdated: false
 ---
 
-如果希望在本地推理且不另建模型服务，可以在 Router 进程内运行模型。先按照[安装指南](/zh-Hans/docs/installation/)安装 CLI 和匹配的镜像。
+在 Router 内运行 [Vela 模型](../../tutorials/global/vela-models.md)，完成请求分类、嵌入和文档重排。启用相应功能后，CLI 会下载已注册的模型。生成聊天回答仍需要独立的后端。
 
-## 选择引擎和模型 {#choose-an-engine-and-model}
+## 选择硬件 {#choose-your-hardware}
 
-| 引擎 | 硬件 | 模型格式 |
-| --- | --- | --- |
-| Candle | CPU（`cpu`）、NVIDIA（`cuda:0`）、Apple Metal（`metal:0`） | 兼容的模型权重；精度为 `native` 或 `fp32` |
-| ONNX Runtime | CPU（`cpu`） | ONNX 图；使用 `precision: native` |
-| ONNX Runtime with MIGraphX | AMD GPU（`migraphx:N`） | 兼容的 ONNX 图；精度为 `native` 或 `fp16` |
-| ML 和 NLP 引擎 | CPU | 已训练的选择器或关键词匹配配置 |
+按照[安装指南](../installation.md)安装 CLI 和匹配的 Router 镜像。
 
-Candle 支持 GPU 索引 0。BERT、已合并的 BERT LoRA 和 LoRA token 模型不支持 Metal。ORT 接受 CPU 和 MIGraphX 设备；上表中的 NVIDIA 和 Metal 选项使用 Candle。现有 OpenVINO 主嵌入模型集成仍采用单独的平台配置，不提供 deployment provider 或缓存/分窗 API。
+| 硬件 | 运行时 | Vela 模型格式 | 配置入口 |
+| --- | --- | --- | --- |
+| CPU | Candle | 原生权重 | 下方示例 |
+| CPU | ONNX Runtime | ONNX | `provider: ort`、`device: cpu` |
+| AMD GPU | ONNX Runtime ROCm 或 MIGraphX | ONNX | [Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md) |
+| NVIDIA GPU | Candle CUDA 构建 | 原生权重 | `provider: candle`、`device: cuda:0`；在目标 GPU 上验证 |
+| Apple GPU | Candle Metal 构建 | 兼容的原生权重 | `provider: candle`、`device: metal:0`；确认模型兼容性 |
 
-| 模型家族 | 支持的用途 |
-| --- | --- |
-| ModernBERT / mmBERT | 序列分类和 token 分类；mmBERT 文本嵌入 |
-| BERT 和已合并的 BERT LoRA | 序列分类和 token 分类；BERT 文本嵌入 |
-| DeBERTa | 序列分类 |
-| 专用幻觉检测和 NLI 模型 | 使用 Candle 检查内容依据和句对关系 |
-| Qwen3 和 Gemma 嵌入模型 | 使用 Candle 生成文本嵌入 |
-| 兼容的多模态模型 | 模型实际提供的文本、图像和音频编码器 |
-| MLP、KNN、K-means、SVM | 在 CPU 上根据嵌入特征选择模型 |
-| BM25 和 N-gram | 在 CPU 上匹配关键词 |
-| TextRank、TF-IDF 和启发式方法 | 在 Go 中执行提示词压缩和规则 |
+Candle 支持 GPU 索引 `0`；BERT 和 BERT LoRA 模型不支持 Metal。CPU 和 AMD 路径已有运行验证，NVIDIA 和 Apple 部署需要在目标硬件上验证。独立部署的模型见[外部服务](external.md)。
 
-ORT 支持导出的 mmBERT 分类图，以及 mmBERT 或多模态嵌入图。本地分类器最多接受 **512 个 token**，包含特殊 token；嵌入模型的上限由模型决定。分类器需要针对任务训练的分类头和标签，例如领域分类、提示词防护、PII、事实核查、反馈或输出模态。Qwen3/Gemma 嵌入模型不提供本地生成式分类功能。
+## 在 CPU 上运行 Vela 分类器 {#run-a-vela-classifier-on-cpu}
 
-其他本地功能的配置见[嵌入模型](embeddings.md)、[安全模型](safety.md)、[MLP 选择](/zh-Hans/docs/tutorials/algorithm/selection/mlp)和[关键词信号](/zh-Hans/docs/tutorials/signal/heuristic/keyword)。
-
-## 配置分类器 {#configure-a-classifier}
-
-下面的示例在 CPU 上运行自定义邮件分类器。开始前请准备：
-
-- 将完整且兼容的模型文件放到 `models/email-classifier`。
-- 将 `BENIGN` 和 `PHISHING` 替换为模型的标签，并保持训练时的顺序。
-- 将回答模型的地址替换为 Router 可以访问的地址。
-
-**deployment** 指定模型文件和引擎。**binding** 将该部署连接到 `email-risk` 分类规则。将以下内容保存为 `config.yaml`：
+本例使用 Vela Domain 识别编程请求，并由现有后端回答。将 `vllm:8000` 替换为 Router 容器可访问的地址，保存为 `config.yaml`：
 
 ```yaml
 version: v0.3
@@ -59,64 +40,106 @@ providers:
     - name: answer-model
       backend_refs:
         - name: answer
-          endpoint: 127.0.0.1:8000
+          endpoint: vllm:8000
           protocol: http
 routing:
   model_bindings:
-    classifier.email-risk:
-      deployment: email-risk-cpu
+    domain_classifier:
+      deployment: vela-domain
       contract: label_distribution.v1
-      adapter: auto
+      adapter: modernbert
+      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
   signals:
-    classifiers:
-      - name: email-risk
-        type: local
-        labels: [BENIGN, PHISHING]
+    domains:
+      - name: computer science
+        description: Programming and computer science requests.
+        mmlu_categories: [computer science]
   decisions:
-    - name: inspect-email
+    - name: programming
       priority: 100
       rules:
         operator: AND
         on_unknown: fail_request
         conditions:
-          - type: classifier
-            name: email-risk
-            label: PHISHING
-            predicate:
-              gte: 0.8
+          - type: domain
+            name: computer science
       modelRefs:
         - model: answer-model
 global:
   model_catalog:
     deployments:
-      email-risk-cpu:
-        artifact: models/email-classifier
+      vela-domain:
+        artifact: models/Vela-1.0-Encoder-307M-Domain
         provider: candle
         device: cpu
-        precision: native
+        precision: fp32
         input:
           max_tokens: 512
           overflow: reject
 ```
 
-## 启动并测试 {#start-and-test}
+**Deployment** 选择模型、引擎、设备和输入预算；**binding** 将其连接到配方中的功能。本例的 `domain_classifier` 使用 `vela-domain`，匹配与未匹配请求都发送到 `answer-model`。修改决策的后端或插件即可应用你的路由策略。
 
 ```bash
 vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
-curl -sS http://localhost:8899/v1/chat/completions \
-  -H 'content-type: application/json' \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Review this email requesting a password reset."}]}'
+curl -fsS http://localhost:8080/ready
+curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"auto","text":"Help me debug this Python program."}' \
+  | jq '{decision_result, signal_confidences, signal_errors, metrics}'
 ```
 
-当分类器的钓鱼邮件分数达到 0.8 时，这条规则匹配。示例将匹配和不匹配的请求都发送给同一个回答模型；修改决策中的模型或插件，即可执行自己的策略。
+Preview 实际运行分类器，返回决策、信号分数、错误和耗时，但不调用回答后端。通过以下请求测试完整链路：
 
-## 更换引擎或模型 {#change-the-engine-or-model}
+```bash
+curl -fsS http://localhost:8899/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"auto","messages":[{"role":"user","content":"Explain Python tuples briefly."}],"max_tokens":128}'
+```
 
-对于导出的 mmBERT ONNX 模型，将部署改为 `provider: ort`，让 `artifact` 指向完整的 ONNX 目录，并在 binding 中设置 `adapter: mmbert` 和 `head: onnx/model.onnx`。设备从上表中选择。
+## 在 AMD 上运行 Vela {#run-vela-on-amd}
 
-自定义模型目录不需要注册表条目。目录应包含权重或 ONNX 图、分词器、配置、标签以及图引用的外部张量文件。LoRA 模型需要完整的已合并权重，不能只提供 adapter 增量。已注册模型由正常的 serve 流程下载。替换正在使用的模型时，固定 `revision` 并使用新目录。
+[Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)提供全部十个任务模型，包括嵌入和 RAG 重排，并配置好模型版本、ONNX 图、设备及 Preview 示例。
 
-Binding 仅对一个配方生效。将它放入对应配方的 `routing` 块，即可更换该配方的模型而不影响其他配方。完整字段见[配置参考](/zh-Hans/docs/api/configuration-schema)。
+```bash
+curl -fL -o vela-amd.yaml \
+  https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
+vllm-sr config validate --config vela-amd.yaml
+vllm-sr serve --platform amd --config vela-amd.yaml
+```
 
-从源码构建时，先运行 `make vllm-sr-dev`，再为 serve 命令添加 `--image-pull-policy never`。
+发送聊天请求前，连接配方中的 `vela-default` 后端。`--platform amd` 选择镜像和 GPU 访问方式；各模型的位置仍由显式 deployment 决定。首次启动可能需要数分钟编译 MIGraphX 模型，见[启动排查](lifecycle-diagnostics.md#check-startup)。
+
+| AMD 配方组件 | 输入上限 |
+| --- | --- |
+| 完整路由信号链路 | 8,192 tokens |
+| 独立 Embedding 和 Reranker | 32,768 tokens |
+| Hazard | 在 32,768-token 请求中使用 2,048-token 窗口 |
+
+所有上限均包含特殊 token。完整 AMD 链路目前为 8K，即使其中的检索模型单独支持 32K。
+
+## 选择输入预算 {#choose-an-input-budget}
+
+本地分类器默认使用 512 tokens。对于支持更长输入的权重和 ONNX 图，设置 deployment 的 `input.max_tokens` 即可增加预算。例如，原生 Vela CPU 路径可设为 `32768`。`overflow: reject` 会拒绝超长输入。
+
+长输入会显著增加 CPU 推理耗时。选择覆盖实际负载的最小预算，并测量质量与时延。扫描长请求中的局部风险见[安全模型输入策略](safety.md#native-classifier-context)；嵌入信号另有[完整上下文设置](embeddings.md#input-policy)。
+
+## 添加其他模型或任务 {#add-another-model-or-task}
+
+- [嵌入模型](embeddings.md)：语义匹配、记忆、缓存和检索。
+- [安全模型](safety.md)：Guard、Safety、Hazard 和 PII。
+- [神经重排](../../tutorials/plugin/rag.md#neural-reranking)：绑定 `rag.reranker`，启用 RAG 插件的 `rerank`。
+- [分类器信号](../../tutorials/signal/learned/classifier.md)：自定义标签及独立类别分数。
+
+自定义模型可直接使用本地目录，无需注册。目录应包含完整权重、tokenizer、配置、任务标签及 ONNX 外部张量文件。LoRA 部署需要合并后的权重。`modernbert` 等名称选择推理 adapter，模型仍需具备适合该任务的分类头。
+
+ONNX 分类器使用 `provider: ort`，选择设备，并在 binding 中指定 `head`，例如 `onnx/model.onnx`。GPU 专用图应采用模型提供的运行配置。Router 会拒绝不可用的 GPU provider 和 CPU 回退。
+
+Binding 属于配方；放在相应配方的 `routing` 下即可独立更换模型。完整字段见[配置参考](../../api/configuration-schema.mdx)，更新流程见[运行中模型更新](lifecycle-diagnostics.md#update-a-running-model)。
+
+## MIGraphX 高级设置 {#advanced-migraphx-settings}
+
+设置 `compilation_cache_dir` 可在重启后复用已编译的模型。此可选设置要求 `provider: ort`、`migraphx:N` 设备，以及模型目录之外可持久保存且可写的绝对路径目录，默认关闭。
+
+模型、GPU、精度或编译器发生变化时，可能需要重新编译。与部署配置冲突的设置见 [AMD 故障排查](lifecycle-diagnostics.md#amd-startup-problems)。

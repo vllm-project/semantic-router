@@ -1,127 +1,104 @@
 ---
-title: 训练 mmBERT-32K 安全分类器
-sidebar_label: 安全分类器
+title: 训练 Vela Safety 和 Hazard
+sidebar_label: Safety 和 Hazard
 translation:
-  source_commit: "e8c4109fd4151ad0c7c0163c8ead375bef882ddf"
+  source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/training/mmbert-safety-classifier.md"
   outdated: false
 ---
 
-# 训练 mmBERT-32K 安全分类器 {#train-the-mmbert-32k-safety-classifiers}
+# 训练 Vela Safety 和 Hazard {#train-vela-safety-and-hazard}
 
-安全工作流按顺序使用两个分类器：
+根据应用的内容策略适配 Vela Safety 和 Hazard。**Safety** 预测 `safe` 或 `unsafe`；**Hazard** 识别风险类别，帮助选择合适的响应。提示词注入和越狱检测使用独立的 Guard 模型。
+
+直接使用已发布模型，请参阅[安全模型](../installation/runtime/safety.md)。本页介绍训练兼容 checkpoint 的流程。
+
+## 定义输出 {#define-the-outputs}
+
+两个模型均使用 Vela Encoder 基座和序列分类 head。
+
+| 模型 | 输出 | 训练目标 |
+| --- | --- | --- |
+| Safety | 两类 softmax：`safe`、`unsafe` | 交叉熵 |
+| Hazard | 十二个独立 sigmoid 分数 | 带 mask 的二元交叉熵 |
+
+Hazard 使用以下标签顺序：
 
 ```text
-prompt -> Level 1: safe / unsafe
-                    |
-                    +-- safe   -> continue normal routing
-                    +-- unsafe -> Level 2: one of nine hazard outputs
+violence, criminal_activity, sexual_content, child_exploitation,
+hate, harassment_abuse, regulated_substances, weapons,
+self_harm, privacy, specialized_advice, misinformation
 ```
 
-当二元策略决策已足够时使用 Level 1。当不安全请求必须按危害类型路由、记录或不同处理时，添加 Level 2。
-第二个模型不打算在 Level 1 接受为安全的请求上运行。
+一个请求可以具有多个风险，也可以没有风险。Hazard 训练应包含安全负例。某类别尚未经过标注时，将对应 `label_mask` 设置为 0，表示未知，不应当作不存在。
 
-## 已发布产物架构 {#published-artifact-architecture}
+## 准备训练和评测数据 {#prepare-training-and-evaluation-data}
 
-当前集合中的两个产物都是
-[`jhu-clsp/mmBERT-base`](https://huggingface.co/jhu-clsp/mmBERT-base)
-上 `ModernBertForSequenceClassification` 的 PEFT LoRA adapter。它们将输入截断到 512 token，并适配四组注意力/MLP 投影：`attn.Wqkv`、`attn.Wo`、`mlp.Wi` 和 `mlp.Wo`。
+可以从 AEGIS 和 CultureGuard 的[数据构建工具](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_classifier/vela-applications.md#data-preparation)开始，或使用自己的请求标注。按内容策略复核来源标签：提及敏感主题、引用威胁和请求有害行为需要不同判断。
 
-| 任务 | 头 | 已发布产物形态 |
-| --- | --- | --- |
-| Level 1 | 两类序列头 | [`mmbert-safety-binary-merged`](https://huggingface.co/llm-semantic-router/mmbert-safety-binary-merged)，PEFT adapter |
-| Level 2 | 九类序列头 | [`mmbert-safety-binary-hazard`](https://huggingface.co/llm-semantic-router/mmbert-safety-binary-hazard)，PEFT adapter |
+同时包含安全的教育、预防、支持性请求和不安全样本。相关文档、对话和翻译应处于同一分区，分别准备训练集、开发集和最终测试集。
 
-Level 1 名称以 `-merged` 结尾，但其已发布文件包含 `adapter_model.safetensors` 和 `adapter_config.json`，而不是独立基础权重。用其 adapter 配置声明的基础模型加载它。
+各任务需要带标签映射的 `contract.json`。Safety 行包含单个 `label`；Hazard 行包含有序的 `targets` 和 `label_mask` 数组。[配方参考](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_classifier/vela-applications.md)提供完整格式和已复核数据的准入命令。
 
-## 当前 32K 训练架构 {#current-32k-training-architecture}
+## 从 Vela Encoder 训练 {#train-from-vela-encoder}
 
-已核对工作流在
-[`mmbert-32k-yarn`](https://huggingface.co/llm-semantic-router/mmbert-32k-yarn)
-上训练后继产物，同时保留相同的两个头、标签、数据策略、LoRA 目标和 512 token 安全输入上限。它可以为任一级别导出 adapter 和完整合并形态，并在发布前验证其 logits。
+使用独立环境，安装 Transformers 4.57.6 和适合平台的 PyTorch 构建。[训练参考](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_classifier/vela-applications.md#initialization-and-training)列出依赖。ROCm 使用 PyTorch 的 `cuda` 设备 API。
 
-不要把已有的 `mmBERT-base` adapter 接到 32K 基础上。对已有检查点使用产物声明的基础；仅对当前训练契约产生的新运行使用 32K 基础。
+下载固定 revision 的 Vela Encoder 到 `/models/vela-base`，将 `VELA_BASE_REVISION` 设置为该 revision。以下命令假设契约和数据已准备完毕。
 
-## 标签 {#labels}
-
-Level 1 使用 `safe` 和 `unsafe`。Level 2 保留以下九输出兼容契约：
-
-| ID | 含义 |
-| --- | --- |
-| `S1_violent_crimes` | 暴力犯罪 |
-| `S2_nonviolent_crimes` | 非暴力犯罪 |
-| `S3_sex_crimes` | 性相关犯罪 |
-| `S5_weapons_cbrne` | 武器和 CBRNE |
-| `S6_self_harm` | 自残 |
-| `S7_hate` | 仇恨 |
-| `S8_specialized_advice` | 专业建议 |
-| `S9_privacy` | 隐私 |
-| `S13_misinformation` | 虚假信息 |
-
-此顺序版本化为 `legacy-9-v1`。将字符串和数字顺序视为 API：更改任一者都需要迁移 Router 策略和已存储评测数据。
-
-## 数据准备 {#data-preparation}
-
-工作流使用来自 AEGIS 2.0 的提示词标签加上合成安全数据集。
-响应和拒绝变体被排除。准备会为去重规范化文本，移除空或脱敏记录，让留出划分优先于训练数据，并丢弃标签冲突的重复组。
-
-已核对数据契约创建：
-
-- Level 1：每个二元标签 10000 条训练提示词；
-- Level 2：每个危害标签 2000 条训练提示词，仅在某类不足时做确定性过采样。
-
-验证和测试划分保持其自然 AEGIS 分布。对于映射到多个危害的提示词，第一个映射的源类别提供单个训练标签，而所有映射危害仍可用于更严格的评测。
-
-分布式训练前先准备一次数据：
+训练 Safety：
 
 ```bash
-python -m src.training.model_classifier.safety_classifier.data prepare \
-  --contract src/training/model_classifier/safety_classifier/configs/training-v1.json \
-  --output-dir /artifacts/data
+python -m src.training.model_classifier.sequence_repair.train \
+  --method full --fresh-head \
+  --base /models/vela-base --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base-revision "${VELA_BASE_REVISION:?Set the downloaded revision}" \
+  --contract /data/safety/contract.json \
+  --train /data/safety/train.jsonl --dev /data/safety/dev.jsonl \
+  --output /data/safety/run \
+  --steps 600 --batch-size 4 --accumulate 4 \
+  --max-length 32768 --microbatch-token-budget 32768 \
+  --learning-rate 0.00001 --head-learning-rate 0.0001 \
+  --eval-every 200 --evaluation-dtype float32 \
+  --selection binary-fp-budget-recall --positive-label unsafe \
+  --selection-false-positive-budget 0.1
 ```
 
-该命令验证固定的输入修订和文件校验和，并将物化划分写入 `/artifacts/data/level1` 和 `/artifacts/data/level2`。
-
-## 训练方法 {#training-method}
-
-两个任务都使用 LoRA rank 32、alpha 64、dropout 0.1、AdamW、线性调度、10% warmup、权重衰减 `0.01`、BF16、seed 42，以及 patience 为 3 的早停。已核对的 8 进程拓扑对全局 batch 64 使用每设备 batch 8，最多训练 10 个 epoch。
+使用多标签训练器训练 Hazard：
 
 ```bash
-torchrun --standalone --nproc_per_node=8 \
-  -m src.training.model_classifier.safety_classifier.train \
-  --task level1 \
-  --expected-world-size 8 \
-  --data-dir /artifacts/data \
-  --output-dir /artifacts/runs/level1
-
-torchrun --standalone --nproc_per_node=8 \
-  -m src.training.model_classifier.safety_classifier.train \
-  --task level2 \
-  --expected-world-size 8 \
-  --data-dir /artifacts/data \
-  --output-dir /artifacts/runs/level2
+python -m src.training.model_classifier.safety_classifier.train_vela_hazard \
+  --method full --fresh-head \
+  --base /models/vela-base --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base-revision "${VELA_BASE_REVISION:?Set the downloaded revision}" \
+  --contract /data/hazard/contract.json \
+  --train /data/hazard/train.jsonl --dev /data/hazard/dev.jsonl \
+  --output /data/hazard/run \
+  --steps 600 --batch-size 4 --accumulate 4 \
+  --max-length 32768 --microbatch-token-budget 32768 \
+  --learning-rate 0.00001 --head-learning-rate 0.0001 \
+  --eval-every 200 --evaluation-dtype float32 \
+  --selection fp-budget-macro-f1 --selection-false-positive-budget 0.05
 ```
 
-使用 `--max-steps 2` 做短加速器冒烟。覆盖已核对契约的运行仍可用于实验，但应将其解析配置与指标一起记录，而不是将其视为标准发布配方。
+以上预算和学习率仅为示例。在选择 checkpoint 前，先确定应用允许的误报率。完整训练会保存 `best-model` 和 `last-model` 目录。继续兼容的 Vela 任务 checkpoint 时，将其作为 base，并省略 `--fresh-head`。
 
-## 评测与导出 {#evaluate-and-export}
+## 评测风险和长输入 {#evaluate-risks-and-long-inputs}
 
-按 macro F1 选择检查点，并检查每类精确率和召回率。对于 Level 1，应分别报告假阴性和假阳性。对于 Level 2，包含混淆矩阵和严格多危害召回，这样高频类无法掩盖弱危害边界。
+Safety 需要测量不安全请求召回率和安全请求误报率。Hazard 需要测量每类 precision、recall、average precision，以及安全请求触发任意类别的比例。
 
-```bash
-python -m src.training.model_classifier.safety_classifier.evaluate \
-  --task level1 \
-  --model /artifacts/runs/level1/adapter \
-  --artifact-type adapter \
-  --data /artifacts/data/level1/test.jsonl \
-  --output-dir /artifacts/runs/level1/evaluation
+使用开发集选择阈值，再固定阈值完成最终测试。分别报告语言和类别，避免大数据源掩盖弱项。
 
-python -m src.training.model_classifier.safety_classifier.export \
-  --task level1 \
-  --run-root /artifacts/runs/level1 \
-  --merged-dir /artifacts/runs/level1-merged
-```
+同时测试短请求和 8K、16K、32K 文档，将相关内容放在不同位置，并加入正常引用。预算包含特殊 tokens；训练记录超长样本，评测拒绝溢出。完整上下文和窗口扫描向模型提供的上下文不同，需要分别评测。
 
-对危害模型用 `--task level2` 重复。导出在固定样本上比较 adapter 和合并 logits，在配置容差内检查预测同一性，并写入校验和与标签元数据。
+## 导出并接入模型 {#export-and-connect-the-models}
 
-完整 CLI、环境和发布命令见[工作流 README](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/safety_classifier)。
+使用[序列导出工具](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair#freeze-then-evaluate-the-independent-test)，指定 `--method full`、选中的 checkpoint，以及 `--runtime-task safety` 或 `--runtime-task hazard`。它保留标签顺序，输出权重、tokenizer 和 runtime 映射。ONNX 部署需要从同一组权重导出的图。
+
+通过[本地绑定](../installation/runtime/in-process.md)或支持的[外部服务](../installation/runtime/external.md)配置模型。[Safety 信号指南](/docs/tutorials/signal/learned/safety)说明二元风险规则和类别条件。在带类别条件的 Safety 规则中，Safety 达到阈值后才运行 Hazard。
+
+使用[路由预览](../installation/runtime/lifecycle-diagnostics.md)，在实际服务配置下验证分数、决策、错误和延迟。
+
+## 早期 Safety 模型 {#earlier-safety-models}
+
+早期 mmBERT Safety adapter 和九类 Hazard head 保留在[历史训练流程](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/safety_classifier)。其标签契约不同于 Vela 的十二类独立 Hazard 输出。

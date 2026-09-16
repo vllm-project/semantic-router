@@ -29,6 +29,10 @@ func NewRegistry(observers ...Observer) *Registry {
 
 // Event contains execution facts only, never prompts, credentials or results.
 type Event struct {
+	instance      *bindingLifecycle
+	prepared      any
+	Revision      string
+	Artifact      string
 	Identity      Identity
 	Capability    Capability
 	State         string
@@ -153,7 +157,7 @@ func (t *Task[Input, Output]) Resolve(id Identity, capability Capability, resour
 		return nil, fmt.Errorf("prepared task resource and inference function are required")
 	}
 	capability = cloneCapability(capability)
-	bound := &Resolved[Input, Output]{identity: id, capability: capability, resource: resource, task: t, infer: infer}
+	bound := &Resolved[Input, Output]{identity: id, capability: capability, resource: resource, task: t, infer: infer, lifecycle: &bindingLifecycle{}}
 	bound.observe(Event{State: "resolved"})
 	return bound, nil
 }
@@ -168,6 +172,15 @@ type Resolved[Input, Output any] struct {
 	infer      func(context.Context, io.Closer, Input) (Output, error)
 	closeOnce  sync.Once
 	closeErr   error
+	lifecycle  *bindingLifecycle
+}
+
+// Each handle has its own lifecycle even when its task and resource are shared.
+// The inventory uses this identity without retaining the inference handle.
+type bindingLifecycle struct {
+	mu     sync.Mutex
+	ready  bool
+	closed bool
 }
 
 func (b *Resolved[Input, Output]) Identity() Identity { return b.identity }
@@ -177,6 +190,9 @@ func (b *Resolved[Input, Output]) Capability() Capability {
 
 func (b *Resolved[Input, Output]) Close() error {
 	b.closeOnce.Do(func() {
+		b.lifecycle.mu.Lock()
+		defer b.lifecycle.mu.Unlock()
+		b.lifecycle.closed = true
 		b.closeErr = b.resource.Close()
 		b.observe(Event{State: "closed", Error: b.closeErr})
 	})
@@ -188,12 +204,25 @@ func (b *Resolved[Input, Output]) observe(event Event) {
 		return
 	}
 	event.Identity = b.identity
+	event.instance = b.lifecycle
+	event.prepared = b
+	event.Revision = b.resource.identity.Revision
+	if b.capability.Device != "external" {
+		event.Artifact = b.resource.identity.Artifact
+	}
 	event.Capability = b.Capability()
 	b.task.observer(event)
 }
 
 // Ready is called after provider warmup succeeds, before generation publication.
-func (b *Resolved[Input, Output]) Ready() { b.observe(Event{State: "ready"}) }
+func (b *Resolved[Input, Output]) Ready() {
+	b.lifecycle.mu.Lock()
+	defer b.lifecycle.mu.Unlock()
+	if !b.lifecycle.ready && !b.lifecycle.closed {
+		b.lifecycle.ready = true
+		b.observe(Event{State: "ready"})
+	}
+}
 
 func (b *Resolved[Input, Output]) Call(ctx context.Context, recipe string, input Input) (output Output, callErr error) {
 	start := time.Now()

@@ -42,22 +42,23 @@ type OpenAPIPath struct {
 
 // OpenAPIOperation describes an API operation.
 type OpenAPIOperation struct {
-	Summary     string                       `json:"summary"`
-	Description string                       `json:"description,omitempty"`
-	OperationID string                       `json:"operationId,omitempty"`
-	Tags        []string                     `json:"tags,omitempty"`
-	Deprecated  bool                         `json:"deprecated,omitempty"`
-	Parameters  []OpenAPIParameter           `json:"parameters,omitempty"`
-	Security    []OpenAPISecurityRequirement `json:"security,omitempty"`
-	Responses   map[string]OpenAPIResponse   `json:"responses"`
-	RequestBody *OpenAPIRequestBody          `json:"requestBody,omitempty"`
-	Permission  RoutePermission              `json:"x-vllm-sr-permission"`
-	Sensitivity RouteSensitivity             `json:"x-vllm-sr-sensitivity"`
-	AuditAction RouteAuditAction             `json:"x-vllm-sr-audit-action,omitempty"`
-	Plane       APIPlane                     `json:"x-vllm-sr-plane"`
-	Audiences   []APIAudience                `json:"x-vllm-sr-audiences"`
-	Stability   APIStability                 `json:"x-vllm-sr-stability"`
-	Visibility  APIVisibility                `json:"x-vllm-sr-visibility"`
+	Summary          string                       `json:"summary"`
+	Description      string                       `json:"description,omitempty"`
+	OperationID      string                       `json:"operationId,omitempty"`
+	Tags             []string                     `json:"tags,omitempty"`
+	Deprecated       bool                         `json:"deprecated,omitempty"`
+	Parameters       []OpenAPIParameter           `json:"parameters,omitempty"`
+	Security         []OpenAPISecurityRequirement `json:"security,omitempty"`
+	Responses        map[string]OpenAPIResponse   `json:"responses"`
+	RequestBody      *OpenAPIRequestBody          `json:"requestBody,omitempty"`
+	Permission       RoutePermission              `json:"x-vllm-sr-permission"`
+	Sensitivity      RouteSensitivity             `json:"x-vllm-sr-sensitivity"`
+	AuditAction      RouteAuditAction             `json:"x-vllm-sr-audit-action,omitempty"`
+	Plane            APIPlane                     `json:"x-vllm-sr-plane"`
+	Audiences        []APIAudience                `json:"x-vllm-sr-audiences"`
+	Stability        APIStability                 `json:"x-vllm-sr-stability"`
+	PluginOperations []PluginOperationContract    `json:"x-vllm-sr-plugin-operations,omitempty"`
+	Visibility       APIVisibility                `json:"x-vllm-sr-visibility"`
 }
 
 // OpenAPISecurityRequirement names one authentication scheme accepted by an
@@ -76,8 +77,15 @@ type OpenAPIParameter struct {
 
 // OpenAPIResponse describes a response.
 type OpenAPIResponse struct {
-	Description string                  `json:"description"`
-	Content     map[string]OpenAPIMedia `json:"content,omitempty"`
+	Description string                   `json:"description"`
+	Content     map[string]OpenAPIMedia  `json:"content,omitempty"`
+	Headers     map[string]OpenAPIHeader `json:"headers,omitempty"`
+}
+
+// OpenAPIHeader describes a response header.
+type OpenAPIHeader struct {
+	Description string        `json:"description,omitempty"`
+	Schema      OpenAPISchema `json:"schema"`
 }
 
 // OpenAPIRequestBody describes a request body.
@@ -94,6 +102,8 @@ type OpenAPIMedia struct {
 
 // OpenAPISchema describes a schema.
 type OpenAPISchema struct {
+	OneOf                []OpenAPISchema          `json:"oneOf,omitempty"`
+	Nullable             bool                     `json:"nullable,omitempty"`
 	Type                 string                   `json:"type,omitempty"`
 	Format               string                   `json:"format,omitempty"`
 	Description          string                   `json:"description,omitempty"`

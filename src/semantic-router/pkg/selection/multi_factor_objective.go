@@ -49,11 +49,12 @@ func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
 func (s *MultiFactorSelector) chooseCandidate(
 	signals []signalSet,
 	mins, maxs extrema,
-) (int, map[string]float64, float64, float64) {
+) (int, map[string]float64, float64, float64, []int) {
 	if s.config.Objective.Strategy == config.MultiFactorObjectiveLexicographic {
 		return s.chooseLexicographic(signals)
 	}
-	return s.chooseWeighted(signals, mins, maxs)
+	winner, scores, best, second := s.chooseWeighted(signals, mins, maxs)
+	return winner, scores, best, second, nil
 }
 
 func (s *MultiFactorSelector) chooseWeighted(
@@ -80,7 +81,7 @@ func (s *MultiFactorSelector) chooseWeighted(
 
 func (s *MultiFactorSelector) chooseLexicographic(
 	signals []signalSet,
-) (int, map[string]float64, float64, float64) {
+) (int, map[string]float64, float64, float64, []int) {
 	active := make([]int, len(signals))
 	for index := range signals {
 		active[index] = index
@@ -132,7 +133,9 @@ func (s *MultiFactorSelector) chooseLexicographic(
 		}
 		secondBest = math.Max(secondBest, allScores[signal.model])
 	}
-	return winner, allScores, 1, secondBest
+	// Preserve the actual objective survivors for downstream adaptation and
+	// protection. Scores retain eliminated candidates for diagnostics only.
+	return winner, allScores, 1, secondBest, active
 }
 
 func factorValue(signal signalSet, factor string) (float64, bool, bool) {

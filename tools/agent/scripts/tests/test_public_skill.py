@@ -81,7 +81,12 @@ class PublicSkillTests(unittest.TestCase):
         source_refs = list((skill.SOURCE / "references").glob("*.md"))
         self.assertEqual(
             {path.name for path in source_refs},
-            {"configuration-loop.md", "deployment-loop.md", "evaluation-loop.md"},
+            {
+                "configuration-loop.md",
+                "deployment-loop.md",
+                "evaluation-loop.md",
+                "recipe-tuning.md",
+            },
         )
         source_entry = (skill.SOURCE / "SKILL.md").read_text()
         for path in source_refs:

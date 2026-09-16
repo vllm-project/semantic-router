@@ -48,3 +48,34 @@ func preserveBaseDecisionField(compiled, base interface{}, field string) {
 		}
 	}
 }
+
+// preserveBaseRecipeDecisionField matches the recipe before matching a decision.
+// Identically named decisions in different recipes never share base policy.
+func preserveBaseRecipeDecisionField(compiled, base interface{}, field string) {
+	compiledRecipes, ok := compiled.([]interface{})
+	if !ok {
+		return
+	}
+	baseRecipes, ok := base.([]interface{})
+	if !ok {
+		return
+	}
+	baseByName := make(map[string]map[string]interface{}, len(baseRecipes))
+	for _, raw := range baseRecipes {
+		recipe, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if name, _ := recipe["name"].(string); name != "" {
+			baseByName[name] = recipe
+		}
+	}
+	for _, raw := range compiledRecipes {
+		recipe, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := recipe["name"].(string)
+		preserveBaseDecisionField(recipe["routing"], baseByName[name]["routing"], field)
+	}
+}
