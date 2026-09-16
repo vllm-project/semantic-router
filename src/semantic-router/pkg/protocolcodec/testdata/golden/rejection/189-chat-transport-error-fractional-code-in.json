@@ -3,7 +3,7 @@
   "body": {
     "error": {
       "type": "server_error",
-      "code": 500,
+      "code": 500.5,
       "message": "Provider failed."
     }
   }

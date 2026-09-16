@@ -29,3 +29,30 @@ describe('incomplete chat messages', () => {
     expect(markup).not.toContain('Generating response')
   })
 })
+
+describe('long user message previews', () => {
+  const renderMessage = (content: string, role: 'user' | 'assistant' = 'user') =>
+    renderToStaticMarkup(
+      createElement(ChatComponentMessages, {
+        expandedToolCards: new Set<string>(),
+        onToggleToolCard: vi.fn(),
+        messages: [{ id: 'preview', role, content, timestamp: new Date() }],
+      }),
+    )
+
+  it('bounds line-heavy previews and leaves short messages unchanged', () => {
+    const markup = renderMessage(
+      Array.from({ length: 20 }, (_, index) => `Line ${index}`).join('\n'),
+    )
+    expect(markup).toContain('Line 7')
+    expect(markup).not.toContain('Line 8')
+    expect(markup).toContain('Show more')
+    expect(renderMessage('Short message')).not.toContain('Show more')
+  })
+
+  it('does not split a surrogate pair at the preview boundary', () => {
+    const markup = renderMessage('x'.repeat(1199) + '😀' + ' tail')
+    expect(markup).not.toContain('\uD83D')
+    expect(markup).toContain('…')
+  })
+})
