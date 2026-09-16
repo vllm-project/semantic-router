@@ -23,6 +23,7 @@ type providerSimulatorContract struct {
 	OfficialResponseFields  []string            `json:"official_response_fields"`
 	ExtensionResponseFields []string            `json:"extension_response_fields"`
 	OfficialUsageFields     []string            `json:"official_usage_fields"`
+	ExtensionUsageFields    []string            `json:"extension_usage_fields"`
 }
 
 func TestProviderSimulatorContractsTrackCodecInventories(t *testing.T) {
@@ -95,7 +96,7 @@ func TestProviderSimulatorContractsTrackCodecInventories(t *testing.T) {
 			}
 			assertSimulatorFields(t, "request", test.contract.OfficialRequestFields, test.contract.ExtensionRequestFields, jsonFieldNames(reflect.TypeOf(test.requestWire)))
 			assertSimulatorFields(t, "response", test.contract.OfficialResponseFields, test.contract.ExtensionResponseFields, jsonFieldNames(reflect.TypeOf(test.responseWire)))
-			assertSimulatorFields(t, "usage", test.contract.OfficialUsageFields, nil, jsonFieldNames(reflect.TypeOf(test.usageWire)))
+			assertSimulatorFields(t, "usage", test.contract.OfficialUsageFields, test.contract.ExtensionUsageFields, jsonFieldNames(reflect.TypeOf(test.usageWire)))
 			if test.contract.ProviderSchemaRevision != test.providerRevision {
 				t.Fatalf("provider schema revision = %q, want %q", test.contract.ProviderSchemaRevision, test.providerRevision)
 			}

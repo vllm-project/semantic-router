@@ -36,6 +36,7 @@ var (
 		validateHallucinationContracts,
 		validateModelAdmissionContracts,
 		validateModelDeploymentContracts,
+		validateGlobalModelBindingContracts,
 	}
 
 	// These contracts need the complete routing graph, including all recipes.
@@ -97,6 +98,9 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 	if cfg == nil {
 		return fmt.Errorf("router configuration is nil")
 	}
+	effective := *cfg
+	effective.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
+	cfg = &effective
 	if err := runConfigContractValidators(cfg, globalConfigContractValidators); err != nil {
 		return err
 	}

@@ -102,7 +102,11 @@ This setting applies to semantic embedding signals and local embedding-backed
 Complexity. Independent remote Complexity scorers retain their own input policy.
 Prompt compression still applies unless the signal is exempted.
 
-The deployment's `input.max_tokens` still limits the accepted input.
+The deployment's `input.max_tokens` still limits the processed input, including
+special tokens. For ordinary embedding inference, `overflow: truncate` truncates
+oversized input before constructing the embedding; `overflow: reject` rejects
+it. This does not truncate the chat messages forwarded to a generation backend.
+See [encoder input budgets](in-process.md#choose-an-input-budget).
 Increasing that limit does not turn on `full_context`. Choose a budget that
 fits the artifact and your latency target; long-input capacity alone does
 not establish retrieval accuracy.

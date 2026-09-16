@@ -98,6 +98,43 @@ func TestCompressToolOutputPreservesValidJSONStructure(t *testing.T) {
 	}
 }
 
+func TestCompressToolOutputPreservesValidJSONScalars(t *testing.T) {
+	logLine := "2026-09-08T10:15:00Z ERROR worker failed to reconcile shard; retrying. "
+	body, err := json.Marshal(strings.Repeat(logLine, 140))
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	result := CompressToolOutput(string(body), "why did the worker fail", 100, 160)
+
+	if !result.Applied {
+		t.Fatalf("expected the oversized JSON string to be compressed: %#v", result)
+	}
+	var decoded string
+	if err := json.Unmarshal([]byte(result.Content), &decoded); err != nil {
+		t.Fatalf("compressed JSON string is invalid JSON: %v\n%s", err, result.Content)
+	}
+	if !strings.Contains(decoded, "worker failed to reconcile shard") {
+		t.Fatalf("relevant text did not survive compression: %q", decoded)
+	}
+
+	// Numbers, booleans and null carry no chunk structure, so chunking one
+	// could only produce a document that no longer parses.
+	for _, scalar := range []string{
+		strings.Repeat("1", 4000),
+		"true",
+		"null",
+	} {
+		result := CompressToolOutput(scalar, "0", 1, 1)
+		if result.Applied {
+			t.Fatalf("scalar %.16q was compressed: %#v", scalar, result)
+		}
+		if result.Content != scalar {
+			t.Fatalf("scalar %.16q was rewritten: %q", scalar, result.Content)
+		}
+	}
+}
+
 func TestCompressToolOutputRanksCJKQueryTerms(t *testing.T) {
 	content := strings.Join([]string{
 		"开始 元数据 来源",
