@@ -18,6 +18,7 @@ import {
   getRouterModelContext,
   getRouterModelDevice,
   getRouterModelDisplayName,
+  getRouterModelPreviewName,
   isLocalDerivedRouterModel,
 } from './routerModelPresentation'
 import {
@@ -326,20 +327,11 @@ function renderDetailRows(rows: DetailRow[]): JSX.Element {
   )
 }
 
-const DeviceMark: React.FC<{ model: RouterModelInfo; compact?: boolean }> = ({
-  model,
-  compact = false,
-}) => {
+const DeviceMark: React.FC<{ model: RouterModelInfo }> = ({ model }) => {
   const device = getRouterModelDevice(model)
   return (
     <span className={styles.deviceMark}>
-      {device.isAmd && (
-        <img
-          src="/amd-logo.png"
-          alt="AMD GPU"
-          className={`${styles.platformLogo} ${compact ? styles.platformLogoCompact : styles.platformLogoLarge}`}
-        />
-      )}
+      {device.isAmd && <img src="/amd-logo.png" alt="AMD GPU" className={styles.platformLogo} />}
       <span>{device.label}</span>
     </span>
   )
@@ -350,23 +342,26 @@ const PreviewCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModel
   consumers,
 }) => {
   const context = getRouterModelContext(model)
+  const name = getRouterModelPreviewName(model)
   return (
     <>
       <div className={styles.previewTopRow}>
         <span className={styles.previewPurpose}>{getModelKind(model)}</span>
-        <span className={`${styles.stateChip} ${getStateChipClass(model)}`}>
+        <span className={`${styles.previewState} ${getStateChipClass(model)}`}>
           {getRouterModelStateLabel(model)}
         </span>
       </div>
-      <h3 className={styles.previewModelId}>{getRouterModelDisplayName(model)}</h3>
-      {consumers.length > 1 && (
-        <p className={styles.previewContext}>Shared by {consumers.length} consumers</p>
-      )}
-      <p className={styles.previewContext}>
-        {context.source === 'registry' ? 'Registry context' : 'Context window'}: {context.label}
-      </p>
-      <div className={styles.platformFooterCompact}>
-        <DeviceMark model={model} compact />
+      <div className={styles.previewIdentity}>
+        <h3 className={styles.previewModelId}>{name.title}</h3>
+        {name.subtitle && <p className={styles.previewSubtitle}>{name.subtitle}</p>}
+      </div>
+      <div className={styles.previewFooter}>
+        <p className={styles.previewContext}>
+          {context.source === 'registry' ? 'Registry context' : 'Context window'}: {context.label}
+        </p>
+        {consumers.length > 1 && (
+          <p className={styles.previewContext}>Shared by {consumers.length} consumers</p>
+        )}
       </div>
     </>
   )

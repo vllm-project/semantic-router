@@ -15,6 +15,7 @@ import {
   getRouterModelContext,
   getRouterModelDevice,
   getRouterModelDisplayName,
+  getRouterModelPreviewName,
   isLocalDerivedRouterModel,
 } from './routerModelPresentation'
 import { filterAndSortRouterModels } from './routerModelInventorySupport'
@@ -57,11 +58,12 @@ describe('router model presentation', () => {
   it('shows clean Vela names and exact token windows for all four native model cards', () => {
     const markup = render(models)
     expect(headings(markup).sort()).toEqual([
-      'Vela-1.0-Encoder-307M-Domain',
-      'Vela-1.0-Encoder-307M-Embedding',
-      'Vela-1.0-Encoder-307M-FactCheck',
-      'Vela-1.0-Encoder-307M-Feedback',
+      'Vela Domain',
+      'Vela Embedding',
+      'Vela Fact Check',
+      'Vela Feedback',
     ])
+    expect(markup.match(/v1.0 · 307M encoder/g)).toHaveLength(4)
     expect(markup.match(/Context window: 32,768 tokens/g)).toHaveLength(4)
     expect(markup).not.toContain('CK-32K-local')
     expect(markup).not.toContain('0123456789ab')
@@ -109,16 +111,20 @@ describe('router model presentation', () => {
     expect(detail).toContain('Open model card')
   })
 
-  it('labels only models with explicit AMD devices as AMD in mixed inventories', () => {
+  it('keeps device labels in details and off the compact homepage cards', () => {
     const cpu = {
       ...models[3],
       recipe: 'cpu-example',
       metadata: { ...models[3].metadata, device: 'cpu' },
     }
     const markup = render([models[3], cpu])
-    expect(markup.match(/alt="AMD GPU"/g)).toHaveLength(1)
-    expect(markup).toContain('ROCm 0')
-    expect(markup).toContain('CPU')
+    expect(markup).not.toContain('AMD GPU')
+    expect(markup).not.toContain('ROCm 0')
+    expect(markup).not.toContain('CPU')
+    const details = render([models[3], cpu], 'detail')
+    expect(details.match(/alt="AMD GPU"/g)).toHaveLength(1)
+    expect(details).toContain('ROCm 0')
+    expect(details).toContain('CPU')
     expect(render([cpu], 'detail')).not.toContain('amd-logo.png')
     expect(getRouterModelDevice({ ...cpu, metadata: { device: 'migraphx:2' } })).toEqual({
       label: 'MIGraphX 2',
@@ -141,6 +147,10 @@ describe('router model presentation', () => {
     const unrecognized = { ...other, model_path: 'models/Vela-1.0-Encoder-307M-Domain-custom' }
     expect(getRouterModelDisplayName(unrecognized)).toBe('Vela-1.0-Encoder-307M-Domain-custom')
     expect(isLocalDerivedRouterModel(unrecognized)).toBe(false)
+    expect(getRouterModelPreviewName(unrecognized)).toEqual({
+      title: 'Vela-1.0-Encoder-307M-Domain-custom',
+    })
+    expect(headings(render([other]))).toEqual(['custom-export-local-0123456789ab'])
     const resolved = {
       ...models[0],
       resolved_model_path: '/models/Vela-1.0-Encoder-307M-Domain-CK-32768-local-abcdef012345/',
@@ -242,7 +252,7 @@ describe('shared runtime resource inventory', () => {
     const unknown = { ...routing, metadata: { ...routing.metadata, resource_id: '' } }
     expect(getRouterModelResources([unknown, { ...unknown, recipe: 'other' }])).toHaveLength(2)
     expect(getRouterModelConsumers([cache], unknown)).toEqual([unknown])
-    expect(render([cache, cpu]).match(/alt="AMD GPU"/g)).toHaveLength(1)
+    expect(render([cache, cpu], 'detail').match(/alt="AMD GPU"/g)).toHaveLength(1)
   })
 
   it('does not conceal a failed consumer behind a ready consumer or inflate readiness', () => {

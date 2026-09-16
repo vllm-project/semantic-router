@@ -26,6 +26,19 @@ export function getRouterModelDisplayName(model: RouterModelInfo): string {
   return basename(model.registry?.repo_id || '') || artifactName || model.name
 }
 
+export function getRouterModelPreviewName(model: RouterModelInfo): {
+  title: string
+  subtitle?: string
+} {
+  const name = getRouterModelDisplayName(model)
+  const vela = name.match(/^Vela-([\d.]+)-Encoder-(\d+[MB])-(Domain|FactCheck|Feedback|Embedding)$/)
+  if (!vela) return { title: name }
+  return {
+    title: `Vela ${vela[3] === 'FactCheck' ? 'Fact Check' : vela[3]}`,
+    subtitle: `v${vela[1]} · ${vela[2]} encoder`,
+  }
+}
+
 function positiveTokenCount(value: string | number | undefined): number | undefined {
   if (value === undefined || !/^\d+$/.test(String(value))) return undefined
   const count = Number(value)
