@@ -29,11 +29,13 @@ func TestHistoryCompressionAcceptsPlainTextBracketHeadings(t *testing.T) {
 						map[string]interface{}{"role": "user", "content": "Use calculator for 997*991."},
 					}}, Provenance{})
 				}
-				result := NewService().Apply(context.Background(), Request{Request: ir,
+				result := NewService().Apply(context.Background(), Request{
+					Request: ir,
 					Policy: Policy{Mode: ModeAlways, Budget: Budget{TargetTokens: 1000}, Targets: Targets{
 						History:     TargetPolicy{Mode: TargetExtractive, MinTokens: 2000, TargetTokens: 500},
 						CurrentUser: TargetPolicy{Mode: TargetPreserve}, ToolOutputs: TargetPolicy{Mode: TargetPreserve},
-					}}})
+					}},
+				})
 				got := ir.Messages[0].Blocks[0].Text
 				if result.Failure != nil || !result.Applied || got == original || !strings.Contains(got, omissionMarker) || result.TokensAfter > 1000 {
 					t.Fatalf("bracket history was not compressed: %+v", result)

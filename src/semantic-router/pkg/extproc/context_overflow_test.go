@@ -171,11 +171,11 @@ func encodedOverflowDispatch(t *testing.T, router *OpenAIRouter, ctx *RequestCon
 	if err != nil || model == "" {
 		t.Fatalf("selection: model=%q err=%v", model, err)
 	}
-	if _, response, err := router.prepareRequestForModelRouting(ctx.SemanticRequest, input, ctx); err != nil || response != nil {
-		t.Fatalf("plugin preparation: %v response=%v", err, response != nil)
+	if _, response, prepareErr := router.prepareRequestForModelRouting(ctx.SemanticRequest, input, ctx); prepareErr != nil || response != nil {
+		t.Fatalf("plugin preparation: %v response=%v", prepareErr, response != nil)
 	}
-	if dispatch, err := router.prepareProviderDispatch(ctx.SemanticRequest, model, d.Name, false, ctx); err != nil || dispatch == nil {
-		t.Fatalf("dispatch: %v", err)
+	if dispatch, dispatchErr := router.prepareProviderDispatch(ctx.SemanticRequest, model, d.Name, false, ctx); dispatchErr != nil || dispatch == nil {
+		t.Fatalf("dispatch: %v", dispatchErr)
 	}
 	body, _, err := (protocolcodec.OpenAIChatCodec{}).EncodeRequest(*ctx.SemanticRequest, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy())
 	if err != nil {
