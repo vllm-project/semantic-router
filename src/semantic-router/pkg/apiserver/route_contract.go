@@ -41,15 +41,22 @@ const (
 	APIVisibilityAdvanced APIVisibility = "advanced"
 )
 
-// EndpointContract is the semantic contract used by runtime discovery,
-// OpenAPI generation, the website reference, and agent tooling.
+// PluginOperationContract associates an operation with its canonical plugin.
+// Shared storage and observability routes may serve multiple plugins.
+type PluginOperationContract struct {
+	Plugin string `json:"plugin"`
+	Mode   string `json:"mode"`
+}
+
+// EndpointContract is shared by runtime discovery, OpenAPI, and agent tooling.
 type EndpointContract struct {
-	Capability string        `json:"capability"`
-	Plane      APIPlane      `json:"plane"`
-	Audiences  []APIAudience `json:"audiences"`
-	Stability  APIStability  `json:"stability"`
-	Visibility APIVisibility `json:"visibility"`
-	Deprecated bool          `json:"deprecated"`
+	PluginOperations []PluginOperationContract `json:"plugin_operations,omitempty"`
+	Capability       string                    `json:"capability"`
+	Plane            APIPlane                  `json:"plane"`
+	Audiences        []APIAudience             `json:"audiences"`
+	Stability        APIStability              `json:"stability"`
+	Visibility       APIVisibility             `json:"visibility"`
+	Deprecated       bool                      `json:"deprecated"`
 }
 
 type capabilityDefinition struct {
@@ -62,11 +69,10 @@ var capabilityRegistry = []capabilityDefinition{
 	{Name: "config", Description: "Validate, inspect, apply, version, and roll back Router configuration and Recipes."},
 	{Name: "routing", Description: "Preview routing behavior without invoking a generation backend."},
 	{Name: "inventory", Description: "Inspect configured and loaded model and classifier resources."},
-	{Name: "observability", Description: "Inspect routing replays and metrics, and submit outcome evidence."},
-	{Name: "storage", Description: "Manage Router-owned knowledge bases, memories, files, and vector stores."},
-	{Name: "response-cache", Description: "Inspect and manage the response-cache service."},
-	{Name: "context-compression", Description: "Inspect, preview, and manage context compression."},
-	{Name: "diagnostics", Description: "Invoke low-level classifiers, embeddings, NLI, and similarity diagnostics."},
+	{Name: "observability", Description: "Inspect routing replays, metrics, and management audit; submit outcome evidence."},
+	{Name: "storage", Description: "Manage Router-owned knowledge bases, memories, files, vector stores, cache partitions, and context recovery."},
+	{Name: "plugins", Description: "Discover recipe-scoped plugin bindings, dependencies, and typed behavior previews."},
+	{Name: "diagnostics", Description: "Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, and rerankers."},
 }
 
 func routeContract(
@@ -86,7 +92,9 @@ func routeContract(
 
 func applyRouteContract(routes []apiRoute, contract EndpointContract) []apiRoute {
 	for i := range routes {
+		operations := routes[i].PluginOperations
 		routes[i].EndpointMetadata.EndpointContract = contract
+		routes[i].PluginOperations = operations
 	}
 	return routes
 }

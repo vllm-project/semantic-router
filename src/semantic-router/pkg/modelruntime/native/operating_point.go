@@ -63,7 +63,11 @@ func (r *Runtime) OperatingPoint(ctx context.Context, spec config.ResolvedModelB
 		_ = handle.Close()
 		return nil, err
 	}
-	return &OperatingPointScorer{handle: handle, policy: policy}, nil
+	scorer := &OperatingPointScorer{handle: handle, policy: policy}
+	r.mu.Lock()
+	r.operatingPoints[handle] = scorer
+	r.mu.Unlock()
+	return scorer, nil
 }
 
 // A generation caches its preparation identity. Refuse a new policy after an

@@ -8,6 +8,20 @@ var validPromptGuardProtocols = map[string]bool{
 	PromptGuardProtocolHTTPClassify: true,
 }
 
+// validatePromptGuardStaticContracts checks module settings without inspecting
+// routing bindings. Window provider and budget checks need the complete recipe.
+func validatePromptGuardStaticContracts(cfg *RouterConfig) error {
+	guard := cfg.PromptGuard
+	if err := guard.validateWindowGeometry(); err != nil {
+		return err
+	}
+	guard.Window = nil
+	if err := validatePromptGuardBackendConfig(&guard); err != nil {
+		return err
+	}
+	return validatePromptGuardWiring(cfg)
+}
+
 // validatePromptGuardBackend validates the prompt_guard backend selection and
 // that the selected backend is actually wired up.
 func validatePromptGuardBackend(cfg *RouterConfig) error {
@@ -90,13 +104,26 @@ func (cfg PromptGuardConfig) ValidateBoundWindow(deployment ModelDeployment) err
 	return cfg.validateWindowParameters(deployment.Input.MaxTokens)
 }
 
-func (cfg PromptGuardConfig) validateWindowParameters(maxTokens int) error {
+func (cfg PromptGuardConfig) validateWindowGeometry() error {
+	if cfg.Window == nil {
+		return nil
+	}
 	seen := make(map[string]bool)
 	for _, label := range cfg.PositiveLabels {
 		if label == "" || seen[label] {
 			return fmt.Errorf("prompt_guard.positive_labels must be nonempty and unique for windowed inference")
 		}
 		seen[label] = true
+	}
+	if err := cfg.Window.validateGeometry(); err != nil {
+		return fmt.Errorf("prompt_guard.%w", err)
+	}
+	return nil
+}
+
+func (cfg PromptGuardConfig) validateWindowParameters(maxTokens int) error {
+	if err := cfg.validateWindowGeometry(); err != nil {
+		return err
 	}
 	head := SequenceHeadModelConfig{MaxSequenceLength: maxTokens, Window: cfg.Window}
 	if err := head.ValidateWindow(); err != nil {

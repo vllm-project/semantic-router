@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -97,6 +98,12 @@ type EndpointHallucinationDetector struct {
 	handle      *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
 	spec        config.ResolvedModelBinding
 	endpoint    string
+	// known and outside are the binding's span label set, compiled once. The
+	// chat adapter checks its quoted spans against the same set the classify
+	// adapter checks wire labels against, so a label the recipe did not
+	// configure is rejected on both paths.
+	known   map[string]struct{}
+	outside map[string]struct{}
 }
 
 func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*classifierModelRuntime) (*EndpointHallucinationDetector, error) {
@@ -104,25 +111,42 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 		return nil, fmt.Errorf("hallucination model config is required")
 	}
 	runtime := consumerModelRuntime(models)
-	endpoint := strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/")
-	external := &config.ExternalModelConfig{Name: "hallucination_endpoint", ModelName: cfg.ModelID, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint}, TimeoutSeconds: 10}
-	spec := config.ResolvedModelBinding{Recipe: runtime.recipe, Name: "hallucination_detector", Binding: config.ModelBinding{Deployment: "hallucination_detector", Contract: config.RemoteClassifierContractTokenSpans, Adapter: config.RemoteClassifierProtocolHTTPChat}, Deployment: config.ModelDeployment{Provider: "http", ExternalModel: external.Name}, Admission: runtime.cfg.ModelAdmission["hallucination_detector"]}
-	if declared, ok := runtime.plan.Lookup(runtime.recipe, "hallucination_detector"); ok {
-		spec = declared
-		if declared.Deployment.Provider != "http" {
-			return nil, fmt.Errorf("endpoint hallucination detector requires HTTP deployment")
-		}
-		backend := &config.RemoteClassifierBackend{Model: declared.Deployment.ExternalModel, Protocol: declared.Binding.Adapter, Contract: declared.Binding.Contract}
-		var err error
-		external, err = config.ResolveRemoteClassifierBackend(runtime.cfg, backend, config.ModelRoleClassification, config.RemoteClassifierContractTokenSpans)
+	spec, declared := runtime.plan.Lookup(runtime.recipe, "hallucination_detector")
+	if !declared {
+		// A classifier assembled without a compiled plan still desugars the
+		// legacy scalars exactly as CompileModelBindings does.
+		decl, deployment, legacy, err := config.LegacyHallucinationBinding(cfg)
 		if err != nil {
 			return nil, err
 		}
+		if !legacy {
+			return nil, fmt.Errorf("endpoint hallucination detector requires a hallucination_detector binding or backend: endpoint")
+		}
+		spec = config.ResolvedModelBinding{Recipe: runtime.recipe, Name: "hallucination_detector", Binding: decl, Deployment: deployment.WithDefaults(), Admission: runtime.cfg.ModelAdmission["hallucination_detector"]}
+	}
+	if spec.Deployment.Provider != "http" {
+		return nil, fmt.Errorf("endpoint hallucination detector requires HTTP deployment")
+	}
+	var external *config.ExternalModelConfig
+	var endpoint string
+	if spec.Deployment.ExternalModel == config.LegacyHallucinationEndpointModel {
+		external = config.LegacyHallucinationExternalModel(cfg)
+		endpoint = external.ModelEndpoint.Address
+	} else {
+		backend := &config.RemoteClassifierBackend{Model: spec.Deployment.ExternalModel, Protocol: spec.Binding.Adapter, Contract: spec.Binding.Contract}
+		resolved, err := config.ResolveRemoteClassifierBackend(runtime.cfg, backend, config.ModelRoleClassification, config.RemoteClassifierContractTokenSpans)
+		if err != nil {
+			return nil, err
+		}
+		external = resolved
 		scheme := external.ModelEndpoint.Protocol
 		if scheme == "" {
 			scheme = "http"
 		}
-		endpoint = fmt.Sprintf("%s://%s:%d/v1", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
+		endpoint = fmt.Sprintf("%s://%s:%d", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
+		if spec.Binding.Adapter == config.RemoteClassifierProtocolHTTPChat {
+			endpoint += "/v1"
+		}
 		copied := *cfg
 		copied.ModelID = external.ModelName
 		copied.Endpoint = endpoint
@@ -134,12 +158,37 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	if cfg.ModelID == "" {
 		return nil, fmt.Errorf("hallucination model_id is required")
 	}
-	client, err := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
+	labels, err := hallucinationLabelSet(spec)
 	if err != nil {
 		return nil, err
 	}
-	detector := &EndpointHallucinationDetector{config: cfg, client: client, endpoint: endpoint, spec: spec}
-	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, client, detector.classifyGrounded, func(input tasks.GroundedTextRequest, out tasks.TokenClassificationResult) error {
+	known, outside, err := compileTokenLabels(labels)
+	if err != nil {
+		return nil, err
+	}
+	detector := &EndpointHallucinationDetector{config: cfg, endpoint: endpoint, spec: spec, known: known, outside: outside}
+	var closer io.Closer
+	infer := detector.classifyGrounded
+	if spec.Binding.Adapter == config.RemoteClassifierProtocolHTTPClassify {
+		// A token_spans.v1 grounding service: the answer is the classified
+		// text, context and question ride along as parameters, and spans
+		// come back with code-point offsets into the answer. The shared
+		// token_spans decoder does the alignment, so this path parses no
+		// generated text.
+		tokens, tokensErr := newHTTPTokenClassifierInference(external, labels, external.GetTimeout())
+		if tokensErr != nil {
+			return nil, tokensErr
+		}
+		closer, infer = tokens, tokens.ClassifyGrounded
+	} else {
+		client, clientErr := connector.New(endpoint, bearerAuthorizer(external.AccessKey), connector.Options{AttemptTimeout: external.GetTimeout(), MaxRequestBytes: external.GetMaxRequestBytes(), MaxResponseBytes: external.GetMaxResponseBytes(), MaxErrorBytes: 4096})
+		if clientErr != nil {
+			return nil, clientErr
+		}
+		detector.client = client
+		closer = client
+	}
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, closer, infer, func(input tasks.GroundedTextRequest, out tasks.TokenClassificationResult) error {
 		for _, span := range out.Entities {
 			if span.Start < 0 || span.End > len(input.Answer) || span.Start >= span.End || input.Answer[span.Start:span.End] != span.Text {
 				return fmt.Errorf("invalid grounding span")
@@ -154,6 +203,41 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	return detector, nil
 }
 
+// defaultHallucinationTokenLabels is the span label set a grounding provider
+// may return when the binding names no mapping file: the native detector's
+// HALLUCINATED, the contract's generic classes (unsupported at minimum,
+// contradicted and unverifiable where a provider distinguishes them), and the
+// chat adapter's taxonomy categories. SUPPORTED and O mark grounded text and
+// must never arrive as spans.
+var defaultHallucinationTokenLabels = tasks.TokenLabelSet{
+	Labels:  append([]string{"HALLUCINATED", "unsupported", "contradicted", "unverifiable"}, endpointCategories...),
+	Outside: []string{"SUPPORTED", "O"},
+}
+
+// hallucinationLabelSet resolves the binding's span labels the way PII
+// resolves its mapping: a mapping_path on the binding is a label_to_idx /
+// idx_to_label file whose class zero is the outside label; without one the
+// default set applies.
+func hallucinationLabelSet(spec config.ResolvedModelBinding) (tasks.TokenLabelSet, error) {
+	path := strings.TrimSpace(spec.Binding.MappingPath)
+	if path == "" {
+		return defaultHallucinationTokenLabels, nil
+	}
+	mapping, err := LoadPIIMapping(config.ResolveModelPath(path))
+	if err != nil {
+		return tasks.TokenLabelSet{}, fmt.Errorf("hallucination span mapping: %w", err)
+	}
+	known, outside := knownPIILabels(mapping)
+	labels := tasks.TokenLabelSet{}
+	for label := range known {
+		labels.Labels = append(labels.Labels, label)
+	}
+	for label := range outside {
+		labels.Outside = append(labels.Outside, label)
+	}
+	return labels, nil
+}
+
 func (d *EndpointHallucinationDetector) Initialize() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -163,6 +247,7 @@ func (d *EndpointHallucinationDetector) Initialize() error {
 	d.initialized = true
 	logging.ComponentEvent("classifier", "hallucination_detector_initialized", map[string]interface{}{
 		"backend":   "endpoint",
+		"adapter":   d.spec.Binding.Adapter,
 		"model_ref": d.config.ModelID,
 		"endpoint":  d.endpoint,
 	})
@@ -284,8 +369,17 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 	}
 
 	rawSpans := *parsed.HallucinatedSpans
-	spans := make([]tasks.TokenEntity, 0, len(rawSpans))
+	// Each quoted span becomes a token_spans.v1 wire span with code-point
+	// offsets into the answer, and the shared decoder aligns it: label set,
+	// bounds, text match, byte conversion, duplicate rejection. The model
+	// gave no offsets, so a quote is located in the answer; repeated quotes
+	// take successive occurrences rather than all claiming the first one.
+	input := newSpanInput(answer)
+	wire := make([]tokenSpanWire, 0, len(rawSpans))
+	type spanMeta struct{ subtype, explanation string }
+	meta := make([]spanMeta, 0, len(rawSpans))
 	invalidCount := 0
+	searchFrom := 0
 	for _, s := range rawSpans {
 		if s.Text == "" {
 			invalidCount++
@@ -293,12 +387,13 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 		}
 		// The span must be quoted verbatim from the answer; anything not actually
 		// present is invalid so we never emit fabricated offsets.
-		start := strings.Index(answer, s.Text)
+		start := locateQuote(answer, s.Text, searchFrom)
 		if start < 0 {
-			logging.Debugf("Endpoint hallucination span not found in answer, skipping: %q", s.Text)
+			logging.Debugf("Endpoint hallucination span not found in answer, skipping")
 			invalidCount++
 			continue
 		}
+		searchFrom = start + len(s.Text)
 
 		category := normalizeTaxonomyValue(s.Category, endpointCategories)
 		subcategory := normalizeTaxonomyValue(s.Subcategory, endpointSubcategories)
@@ -307,17 +402,40 @@ func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, an
 			invalidCount++
 			continue
 		}
-
-		spans = append(spans, tasks.TokenEntity{Text: s.Text, Start: start, End: start + len(s.Text), EntityType: category, Subtype: subcategory, Explanation: endpointSpanExplanation(s.Explanation, category, subcategory)})
+		text := s.Text
+		cpStart := input.codePointAt(start)
+		cpEnd := input.codePointAt(start + len(text))
+		wire = append(wire, tokenSpanWire{Label: category, Text: &text, Start: &cpStart, End: &cpEnd})
+		meta = append(meta, spanMeta{subtype: subcategory, explanation: endpointSpanExplanation(s.Explanation, category, subcategory)})
 	}
 
 	// A response that returned spans but where every one failed validation is a
 	// malformed detector result, not a clean verdict. Fail open via an error
 	// rather than silently reporting hallucination_detected=false.
-	if len(spans) == 0 && invalidCount > 0 {
+	if len(wire) == 0 && invalidCount > 0 {
 		return nil, fmt.Errorf("endpoint returned %d span(s) but none were valid", invalidCount)
 	}
+	spans, err := alignTokenSpansScored(d.known, d.outside, answer, wire, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	for i := range spans {
+		spans[i].Subtype = meta[i].subtype
+		spans[i].Explanation = meta[i].explanation
+	}
 	return spans, nil
+}
+
+// locateQuote finds a quoted span in the answer, preferring the first
+// occurrence at or after from and falling back to the first occurrence
+// anywhere, so a quote that repeats earlier text still resolves.
+func locateQuote(answer, quote string, from int) int {
+	if from < len(answer) {
+		if at := strings.Index(answer[from:], quote); at >= 0 {
+			return from + at
+		}
+	}
+	return strings.Index(answer, quote)
 }
 
 // endpointSpanExplanation builds a backend-neutral explanation, preferring the
@@ -378,7 +496,7 @@ func (d *EndpointHallucinationDetector) DetectWithNLI(ctx context.Context, reqCo
 	}
 	enhanced := &EnhancedHallucinationResult{HallucinationDetected: len(result.Entities) > 0, Spans: make([]EnhancedHallucinationSpan, 0, len(result.Entities))}
 	for _, span := range result.Entities {
-		enhanced.Spans = append(enhanced.Spans, EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: span.Explanation})
+		enhanced.Spans = append(enhanced.Spans, EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, Label: span.EntityType, HallucinationConfidence: span.Confidence, ScoreAvailable: result.HasScores(), NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: span.Explanation})
 	}
 	return enhanced, nil
 }
@@ -407,6 +525,7 @@ func (d *EndpointHallucinationDetector) Detect(ctx context.Context, reqContext, 
 	}
 	for _, s := range enhanced.Spans {
 		res.UnsupportedSpans = append(res.UnsupportedSpans, s.Text)
+		res.Spans = append(res.Spans, HallucinationSpan{Text: s.Text, Start: s.Start, End: s.End, Label: s.Label, Confidence: s.HallucinationConfidence, ScoreAvailable: s.ScoreAvailable})
 	}
 	return res, nil
 }
