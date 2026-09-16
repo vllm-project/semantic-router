@@ -3,6 +3,7 @@ package routerruntime
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestConfigActivationDoesNotAttributeStaleCompletionToNewDocument(t *testing.T) {
@@ -25,8 +26,11 @@ func TestConfigActivationDoesNotAttributeStaleCompletionToNewDocument(t *testing
 	if r.ConfigActivation().Status != "failed" {
 		t.Fatal("a completed attempt was overwritten")
 	}
-	*state.FinishedAt = state.StartedAt
-	if r.ConfigActivation().FinishedAt.Equal(state.StartedAt) {
+	// Start and finish may share a clock tick. Mutate to a guaranteed different
+	// value so this assertion detects aliasing rather than timer resolution.
+	finished := *state.FinishedAt
+	*state.FinishedAt = finished.Add(time.Hour)
+	if !r.ConfigActivation().FinishedAt.Equal(finished) {
 		t.Fatal("snapshot shares mutable timestamp with registry")
 	}
 }
