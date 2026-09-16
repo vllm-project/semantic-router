@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 const (
@@ -76,18 +76,18 @@ const configMapWriteTimeout = 10 * time.Second
 
 var (
 	configMapWriterMu       sync.Mutex
-	configMapWriterResult   *k8s.ConfigMapWriter
+	configMapWriterResult   *configwriter.ConfigMapWriter
 	configMapWriterErr      error
 	configMapWriterResolved bool
 	// newInClusterConfigMapWriter is a seam for tests; production always uses
-	// k8s.NewInClusterConfigMapWriter.
-	newInClusterConfigMapWriter = k8s.NewInClusterConfigMapWriter
+	// configwriter.NewInClusterConfigMapWriter.
+	newInClusterConfigMapWriter = configwriter.NewInClusterConfigMapWriter
 )
 
 // resolvedConfigMapWriter builds the in-cluster ConfigMap client once and
 // reuses it. Every shipped Kubernetes deployment mounts the config file
 // read-only (issue #3688); this is that mount's write path.
-func resolvedConfigMapWriter() (*k8s.ConfigMapWriter, error) {
+func resolvedConfigMapWriter() (*configwriter.ConfigMapWriter, error) {
 	configMapWriterMu.Lock()
 	defer configMapWriterMu.Unlock()
 	if !configMapWriterResolved {
@@ -99,12 +99,12 @@ func resolvedConfigMapWriter() (*k8s.ConfigMapWriter, error) {
 
 // writeConfigAtomically persists a canonical config document. On a
 // Kubernetes deployment that has declared a ConfigMap write target (see
-// k8s.ConfigMapTargetFromEnv), it writes there via the Kubernetes API instead
+// configwriter.ConfigMapTargetFromEnv), it writes there via the Kubernetes API instead
 // of the local file, since that file is a read-only ConfigMap mount on every
 // shipped manifest (issue #3688). Every other deployment (local CLI, VM,
 // plain Docker) keeps writing the local file exactly as before.
 func writeConfigAtomically(configPath string, yamlData []byte) error {
-	if target, ok := k8s.ConfigMapTargetFromEnv(); ok {
+	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
 		writer, err := resolvedConfigMapWriter()
 		if err != nil {
 			return fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", err)

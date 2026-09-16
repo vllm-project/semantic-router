@@ -13,7 +13,8 @@ data:
   ROUTER_CONFIG_PATH: "/app/config/config.yaml"
   # Runtime config writes go through the Kubernetes API to the
   # semantic-router-config ConfigMap now (issue #3688), not the read-only
-  # mounted file, so this can be enabled again.
+  # mounted file, so this can be enabled again: entrypoint.sh's arbitrary-UID
+  # fail-closed check leaves this on since the write never touches disk.
   DASHBOARD_RUNTIME_CONFIG_WRITABLE: "true"
   # The recipe store is still a local writable-directory requirement this
   # fix does not address: no ConfigMap backs it, so it stays disabled here.

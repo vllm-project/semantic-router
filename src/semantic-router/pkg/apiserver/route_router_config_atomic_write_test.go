@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 // stubInClusterConfigMapWriter forces resolvedConfigMapWriter's lazy init to
@@ -20,7 +20,7 @@ import (
 // state afterward. Needed because that init caches its result process-wide:
 // without a reset here, whichever test exercises the Kubernetes path first
 // would permanently pin every later test in this package to its writer.
-func stubInClusterConfigMapWriter(t *testing.T, writer *k8s.ConfigMapWriter) func() {
+func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWriter) func() {
 	t.Helper()
 	configMapWriterMu.Lock()
 	origFactory := newInClusterConfigMapWriter
@@ -28,7 +28,7 @@ func stubInClusterConfigMapWriter(t *testing.T, writer *k8s.ConfigMapWriter) fun
 	origErr := configMapWriterErr
 	origResolved := configMapWriterResolved
 
-	newInClusterConfigMapWriter = func() (*k8s.ConfigMapWriter, error) { return writer, nil }
+	newInClusterConfigMapWriter = func() (*configwriter.ConfigMapWriter, error) { return writer, nil }
 	configMapWriterResult = nil
 	configMapWriterErr = nil
 	configMapWriterResolved = false
@@ -124,8 +124,8 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
 
-	t.Setenv(k8s.ConfigMapNameEnv, "semantic-router-config")
-	t.Setenv(k8s.ConfigMapNamespaceEnv, "vllm-semantic-router-system")
+	t.Setenv(configwriter.ConfigMapNameEnv, "semantic-router-config")
+	t.Setenv(configwriter.ConfigMapNamespaceEnv, "vllm-semantic-router-system")
 
 	fakeCM := &fakeConfigMap{
 		Namespace: "vllm-semantic-router-system",
@@ -133,7 +133,7 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 		Data:      map[string]string{"config.yaml": "routing: {original: true}\n"},
 	}
 	clientset := fakeclientset.NewSimpleClientset(fakeCM.toObject())
-	restoreWriter := stubInClusterConfigMapWriter(t, k8s.NewConfigMapWriter(clientset))
+	restoreWriter := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(clientset))
 	defer restoreWriter()
 
 	if err := writeConfigAtomically(configPath, []byte("routing: {new: true}\n")); err != nil {

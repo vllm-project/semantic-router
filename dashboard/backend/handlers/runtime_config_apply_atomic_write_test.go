@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 func TestWriteConfigAtomicallySucceeds(t *testing.T) {
@@ -93,15 +93,15 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
 
-	t.Setenv(k8s.ConfigMapNameEnv, "semantic-router-config")
-	t.Setenv(k8s.ConfigMapNamespaceEnv, "vllm-semantic-router-system")
+	t.Setenv(configwriter.ConfigMapNameEnv, "semantic-router-config")
+	t.Setenv(configwriter.ConfigMapNamespaceEnv, "vllm-semantic-router-system")
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "vllm-semantic-router-system", Name: "semantic-router-config"},
 		Data:       map[string]string{"config.yaml": "routing: {original: true}\n"},
 	}
 	clientset := fakeclientset.NewSimpleClientset(cm)
-	restore := stubInClusterConfigMapWriter(t, k8s.NewConfigMapWriter(clientset))
+	restore := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(clientset))
 	defer restore()
 
 	if err := writeConfigAtomically(configPath, []byte("routing: {new: true}\n")); err != nil {
@@ -129,8 +129,8 @@ func TestWriteConfigAtomicallyRefusesControllerOwnedConfigMap(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
 
-	t.Setenv(k8s.ConfigMapNameEnv, "operator-managed-config")
-	t.Setenv(k8s.ConfigMapNamespaceEnv, "ns")
+	t.Setenv(configwriter.ConfigMapNameEnv, "operator-managed-config")
+	t.Setenv(configwriter.ConfigMapNamespaceEnv, "ns")
 
 	isController := true
 	cm := &corev1.ConfigMap{
@@ -147,11 +147,11 @@ func TestWriteConfigAtomicallyRefusesControllerOwnedConfigMap(t *testing.T) {
 		Data: map[string]string{"config.yaml": "routing: {original: true}\n"},
 	}
 	clientset := fakeclientset.NewSimpleClientset(cm)
-	restore := stubInClusterConfigMapWriter(t, k8s.NewConfigMapWriter(clientset))
+	restore := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(clientset))
 	defer restore()
 
 	err := writeConfigAtomically(configPath, []byte("routing: {new: true}\n"))
-	if !errors.Is(err, k8s.ErrConfigMapControllerOwned) {
+	if !errors.Is(err, configwriter.ErrConfigMapControllerOwned) {
 		t.Fatalf("writeConfigAtomically error = %v, want ErrConfigMapControllerOwned", err)
 	}
 }
@@ -181,7 +181,7 @@ func TestWriteConfigAtomicallyKeepsLocalFileWithoutADeclaredTarget(t *testing.T)
 // state afterward. Needed because that init caches its result process-wide:
 // without a reset here, whichever test exercises the Kubernetes path first
 // would permanently pin every later test in this package to its writer.
-func stubInClusterConfigMapWriter(t *testing.T, writer *k8s.ConfigMapWriter) func() {
+func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWriter) func() {
 	t.Helper()
 	configMapWriterMu.Lock()
 	origFactory := newInClusterConfigMapWriter
@@ -189,7 +189,7 @@ func stubInClusterConfigMapWriter(t *testing.T, writer *k8s.ConfigMapWriter) fun
 	origErr := configMapWriterErr
 	origResolved := configMapWriterResolved
 
-	newInClusterConfigMapWriter = func() (*k8s.ConfigMapWriter, error) { return writer, nil }
+	newInClusterConfigMapWriter = func() (*configwriter.ConfigMapWriter, error) { return writer, nil }
 	configMapWriterResult = nil
 	configMapWriterErr = nil
 	configMapWriterResolved = false
