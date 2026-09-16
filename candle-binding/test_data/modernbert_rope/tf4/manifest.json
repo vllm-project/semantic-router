@@ -1,0 +1,21 @@
+{
+  "transformers": "4.57.6",
+  "torch": "2.10.0+rocm7.0",
+  "dtype": "float32",
+  "attention": "sdpa",
+  "seed": 20260913,
+  "script_sha256": "cbec6368799c0a01513526d33e72f1bca1d03e92c3db65a2ef80f34955efa0b3",
+  "implementation_sha256": {
+    "modeling_modernbert.py": "1b23db2f59d3f80bd9af89fb6df3ce15affd90b5ffc09925e732450e694868ff",
+    "modeling_rope_utils.py": "55cc0c8cb76f592ab178b4662adcbdf4ad5012bb0b4249c0a96603141f18e9ac"
+  },
+  "weights_sha256": "8f28e25dbadf411e45829bf223f4b719f77cec36af56d6c241127cfcffc0961f",
+  "files": {
+    "config.json": "8444e8b56031b078122474318f61bda4c1c6428f8fa5ca57cb9d7ffe5133644b",
+    "../rope.json": "514b2f01682a927824bb9bea16352f4cb3e65b3a2cbede27dc88d7c28c2b5bc0",
+    "../tiny-output.json": "6fc862ec1b4deedc48b80839ec9d54275e161bca66c1d4c2578ea3af579ca09a",
+    "../reference.safetensors.fixture": "d6e81d60bffde6ae60fda7281a3990411f9a344136f8c662e05dbbdcaf77e190"
+  },
+  "configuration_path": "direct official TF4 constructor",
+  "scope": "Generated random tiny backbone and numerical arrays; no trained checkpoint, data, or task-quality claim"
+}

@@ -8,6 +8,7 @@ import json
 import sys
 from pathlib import Path
 
+from router_calibration_evaluation import EVALUATION_SCOPES
 from router_calibration_manifest import (
     load_probe_manifest,
     report_safe_probe_manifest,
@@ -42,6 +43,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         probes,
         manifest,
         selected_probe_ids=getattr(args, "probe_ids", None),
+        scope=getattr(args, "scope", "deployment"),
     )
     report = {
         "manifest": report_safe_probe_manifest(manifest),
@@ -58,11 +60,10 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     response = deploy_config(
         args.router_url,
         Path(args.yaml),
-        Path(args.dsl) if args.dsl else None,
     )
     activation_state = wait_for_config_activation(
         args.router_url,
-        str(response.get("runtime_hash") or ""),
+        str(response.get("generated_runtime_hash") or ""),
         timeout_seconds=args.ready_timeout,
         interval_seconds=args.ready_interval,
     )
@@ -121,7 +122,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     snapshot_before = fetch_router_snapshot(args.router_url)
     write_json(report_dir / "snapshot-before.json", snapshot_before)
 
-    pre_eval = evaluate_probes(args.router_url, probes, manifest)
+    pre_eval = evaluate_probes(
+        args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
+    )
     write_json(report_dir / "eval-before.json", pre_eval)
 
     validate_result = None
@@ -129,15 +132,22 @@ def cmd_run(args: argparse.Namespace) -> int:
         validate_result = run_validate(dsl_path, yaml_path)
         write_json(report_dir / "validate.json", validate_result)
 
+        if not validate_result.get("valid", False):
+            print(
+                f"Validation failed; deployment skipped. Report written to {report_dir}",
+                file=sys.stderr,
+            )
+            return 1
+
     deploy_result = None
     activation_result = None
     ready_result = None
     if yaml_path is not None:
-        deploy_result = deploy_config(args.router_url, yaml_path, dsl_path)
+        deploy_result = deploy_config(args.router_url, yaml_path)
         write_json(report_dir / "deploy.json", deploy_result)
         activation_result = wait_for_config_activation(
             args.router_url,
-            str(deploy_result.get("runtime_hash") or ""),
+            str(deploy_result.get("generated_runtime_hash") or ""),
             timeout_seconds=args.ready_timeout,
             interval_seconds=args.ready_interval,
         )
@@ -152,7 +162,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     snapshot_after = fetch_router_snapshot(args.router_url)
     write_json(report_dir / "snapshot-after.json", snapshot_after)
 
-    post_eval = evaluate_probes(args.router_url, probes, manifest)
+    post_eval = evaluate_probes(
+        args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
+    )
     write_json(report_dir / "eval-after.json", post_eval)
 
     summary = render_markdown_summary(
@@ -217,6 +229,7 @@ def add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     eval_parser.add_argument("--output", help="Optional JSON output path")
+    add_scope_argument(eval_parser)
     eval_parser.set_defaults(func=cmd_eval)
 
 
@@ -230,9 +243,6 @@ def add_deploy_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Router base URL, for example http://host:8080",
     )
     deploy.add_argument("--yaml", required=True, help="Canonical router YAML path")
-    deploy.add_argument(
-        "--dsl", help="Optional DSL source path to archive with the deploy"
-    )
     deploy.add_argument(
         "--ready-timeout",
         type=float,
@@ -275,7 +285,7 @@ def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     run.add_argument(
         "--dsl",
-        help="Optional DSL source path for local validate and deploy archive. Defaults to manifest routing_assets.dsl when omitted.",
+        help="Optional DSL source path for local validation. Defaults to manifest routing_assets.dsl when omitted.",
     )
     run.add_argument("--report-dir", help="Directory for JSON and Markdown reports")
     run.add_argument(
@@ -296,6 +306,16 @@ def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Polling interval in seconds for GET /ready after deploy",
     )
     run.set_defaults(func=cmd_run)
+    add_scope_argument(run)
+
+
+def add_scope_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--scope",
+        choices=EVALUATION_SCOPES,
+        default="deployment",
+        help="Policy checks real routing evidence; deployment also requires the expected live model selection.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

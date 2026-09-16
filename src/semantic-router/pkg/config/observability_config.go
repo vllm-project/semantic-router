@@ -2,6 +2,7 @@ package config
 
 type APIConfig struct {
 	BatchClassification BatchClassificationConfig `yaml:"batch_classification"`
+	RoutingPreview      RoutingPreviewConfig      `yaml:"routing_preview,omitempty"`
 }
 
 type ObservabilityConfig struct {
@@ -51,12 +52,12 @@ type TracingConfig struct {
 type TracingExporterConfig struct {
 	Type     string `yaml:"type"`
 	Endpoint string `yaml:"endpoint,omitempty"`
-	Insecure bool   `yaml:"insecure,omitempty"`
+	Insecure bool   `yaml:"insecure"`
 }
 
 type TracingSamplingConfig struct {
 	Type string  `yaml:"type"`
-	Rate float64 `yaml:"rate,omitempty"`
+	Rate float64 `yaml:"rate"`
 }
 
 type TracingResourceConfig struct {

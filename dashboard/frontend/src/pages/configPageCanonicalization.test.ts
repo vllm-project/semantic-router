@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { ConfigData } from './configPageSupport'
 import {
   canonicalizeConfigForManagerSave,
-  removeRoutingModelCardIfUnreferenced,
+  removeModelCardDataIfUnreferenced,
   routingModelCardReferenceCount,
   writeRoutingModelCard,
 } from './configPageCanonicalization'
@@ -34,14 +34,25 @@ describe('shared routing model card canonicalization', () => {
 
   it('removes an old override only after the last alias changes catalog or is deleted', () => {
     const config = sharedConfig()
+    config.evaluation = {
+      records: [
+        {
+          model: 'openai/gpt-5.4',
+          benchmark: 'acme/quality@1.0.0',
+          metrics: { score: 0.9 },
+        },
+      ],
+    }
     config.providers!.models[0].catalog = 'anthropic/claude-sonnet-5'
 
-    removeRoutingModelCardIfUnreferenced(config, 'openai/gpt-5.4')
+    removeModelCardDataIfUnreferenced(config, 'openai/gpt-5.4')
     expect(config.routing?.modelCards).toHaveLength(1)
+    expect(config.evaluation?.records).toHaveLength(1)
 
     config.providers!.models = config.providers!.models.filter((model) => model.name !== 'public-b')
-    removeRoutingModelCardIfUnreferenced(config, 'openai/gpt-5.4')
+    removeModelCardDataIfUnreferenced(config, 'openai/gpt-5.4')
     expect(config.routing?.modelCards).toEqual([])
+    expect(config.evaluation).toBeUndefined()
   })
 
   it('allows an explicit edit to clear the shared override', () => {

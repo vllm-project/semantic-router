@@ -57,6 +57,14 @@ func normalizeModelCatalogDocument(raw []byte) ([]byte, error) {
 	// `configured` is interactive local-config state owned by the CLI. Never
 	// expose paths, credentials, or other local state through the catalog API.
 	envelope.Configured = nil
+	for modelIndex := range envelope.Models {
+		for roleIndex := range envelope.Models[modelIndex].Roles {
+			role := &envelope.Models[modelIndex].Roles[roleIndex]
+			if role.RecommendedPool == nil {
+				role.RecommendedPool = []string{}
+			}
+		}
+	}
 	return json.Marshal(envelope)
 }
 
@@ -607,15 +615,14 @@ func validateCatalogIndices(
 			}
 			if component.Metric != "" {
 				metric, ok := metrics[component.Benchmark+"#"+component.Metric]
-				profileOK := false
-				if ok {
-					_, profileOK = metric.profiles[component.BenchmarkProfile]
-				}
-				if component.Benchmark == "" || component.BenchmarkProfile == "" || !ok || !profileOK {
+				if component.Benchmark == "" || !ok || !validCatalogIndexComponentProfiles(component, metric.profiles) {
 					return nil, fmt.Errorf("index metric is unknown")
 				}
 			}
 			if component.Index != "" {
+				if component.Benchmark != "" || component.BenchmarkProfile != "" || len(component.BenchmarkProfiles) != 0 {
+					return nil, fmt.Errorf("nested index contains benchmark fields")
+				}
 				if _, ok := ids[component.Index]; !ok {
 					return nil, fmt.Errorf("nested index is unknown")
 				}
@@ -627,6 +634,35 @@ func validateCatalogIndices(
 		}
 	}
 	return ids, nil
+}
+
+func validCatalogIndexComponentProfiles(
+	component modelcatalog.IndexComponent,
+	declared map[string]struct{},
+) bool {
+	hasSingular := component.BenchmarkProfile != ""
+	hasPlural := len(component.BenchmarkProfiles) != 0
+	if hasSingular == hasPlural {
+		return false
+	}
+	profiles := component.BenchmarkProfiles
+	if hasSingular {
+		profiles = []string{component.BenchmarkProfile}
+	}
+	seen := make(map[string]struct{}, len(profiles))
+	for _, profile := range profiles {
+		if profile == "" {
+			return false
+		}
+		if _, duplicate := seen[profile]; duplicate {
+			return false
+		}
+		if _, ok := declared[profile]; !ok {
+			return false
+		}
+		seen[profile] = struct{}{}
+	}
+	return true
 }
 
 func validateCatalogIndexResults(
@@ -642,13 +678,26 @@ func validateCatalogIndexResults(
 		seen[key] = struct{}{}
 		_, modelOK := models[result.Model]
 		_, indexOK := indices[result.Index]
-		if !modelOK || result.ReasoningEffort == "" || !indexOK || result.Status != "available" ||
+		if !modelOK || result.ReasoningEffort == "" || !indexOK ||
 			!finite(result.Coverage) || result.Coverage < 0 || result.Coverage > 1 ||
-			result.Score == nil || !finite(*result.Score) {
+			!validCatalogIndexResultStatus(result) {
 			return fmt.Errorf("malformed index result")
 		}
 	}
 	return nil
+}
+
+func validCatalogIndexResultStatus(result modelcatalog.IndexResult) bool {
+	switch result.Status {
+	case "available":
+		return result.Score != nil && finite(*result.Score) && result.Coverage > 0
+	case "partial":
+		return result.Score == nil && result.Coverage > 0 && result.Coverage < 1
+	case "missing":
+		return result.Score == nil && result.Coverage == 0
+	default:
+		return false
+	}
 }
 
 func validModelCatalogDigest(value string) bool {
@@ -668,8 +717,9 @@ func validModelCatalogRoles(roles []modelcatalog.ModelRole) bool {
 		return false
 	}
 	for _, role := range roles {
-		if role.Name == "" || role.MinimumCandidates < 1 || len(role.Traits) == 0 ||
-			len(role.RecommendedPool) < role.MinimumCandidates {
+		// Recommendations are advisory. The minimum applies to the operator's
+		// eventual assignment, which is not part of this catalog response.
+		if role.Name == "" || role.MinimumCandidates < 1 || len(role.Traits) == 0 {
 			return false
 		}
 	}

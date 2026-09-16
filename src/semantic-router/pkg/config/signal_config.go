@@ -23,6 +23,7 @@ type Signals struct {
 	ModalityRules      []ModalityRule         `yaml:"modality_rules,omitempty"`
 	RoleBindings       []RoleBinding          `yaml:"role_bindings,omitempty"`
 	JailbreakRules     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	SafetyRules        []SafetyRule           `yaml:"safety,omitempty"`
 	HallucinationRules []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PIIRules           []PIIRule              `yaml:"pii,omitempty"`
 	KBRules            []KBSignalRule         `yaml:"kb,omitempty"`
@@ -109,6 +110,9 @@ type EmbeddingRule struct {
 	// the query embedding is computed from. Defaults to "text" when omitted,
 	// preserving existing behavior.
 	QueryModality QueryModality `yaml:"query_modality,omitempty"`
+	// PrototypeScoring overrides the family's construction and scoring settings
+	// for this rule. Nil inherits the family config; a present object is complete.
+	PrototypeScoring *PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
 }
 
 // EffectiveQueryModality returns the rule's declared query modality, or
@@ -450,12 +454,27 @@ func HasImageCandidatesInRules(rules []ComplexityRule) bool {
 }
 
 type ComplexityRule struct {
-	Name        string               `yaml:"name"`
-	Threshold   float32              `yaml:"threshold"`
-	Hard        ComplexityCandidates `yaml:"hard"`
-	Easy        ComplexityCandidates `yaml:"easy"`
-	Description string               `yaml:"description,omitempty"`
-	Composer    *RuleCombination     `yaml:"composer,omitempty"`
+	Name string `yaml:"name"`
+	// PrototypeScoring applies to all local text/image hard/easy banks. Nil
+	// inherits the family config; a present object is a complete override.
+	PrototypeScoring *PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// Threshold is the symmetric shorthand, kept because the local margin is
+	// signed and centred on zero: hard above +threshold, easy below
+	// -threshold. Mutually exclusive with the explicit pair below.
+	Threshold float32              `yaml:"threshold"`
+	Hard      ComplexityCandidates `yaml:"hard"`
+	Easy      ComplexityCandidates `yaml:"easy"`
+	// The explicit boundary pair, for a score whose scale is the model's own
+	// rather than a signed margin. The pair used states which way difficulty
+	// runs, so no separate direction field is needed: hard_above with
+	// easy_below where a higher score is harder, hard_below with easy_above
+	// where a lower one is. Resolved by EffectiveBoundaries.
+	HardAbove   *float64         `yaml:"hard_above,omitempty"`
+	EasyBelow   *float64         `yaml:"easy_below,omitempty"`
+	HardBelow   *float64         `yaml:"hard_below,omitempty"`
+	EasyAbove   *float64         `yaml:"easy_above,omitempty"`
+	Description string           `yaml:"description,omitempty"`
+	Composer    *RuleCombination `yaml:"composer,omitempty"`
 }
 
 type Category struct {

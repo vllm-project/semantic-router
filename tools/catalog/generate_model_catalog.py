@@ -446,9 +446,9 @@ def _validate_virtual_model_role(raw_role: Any, path: str) -> None:
         {"name", "required", "minimum_candidates", "traits", "recommended_pool"},
         path,
     )
-    pool = _sequence(role.get("recommended_pool"), f"{path}.recommended_pool")
+    _sequence(role.get("recommended_pool", []), f"{path}.recommended_pool")
     minimum = role.get("minimum_candidates")
-    if not isinstance(minimum, int) or minimum < 1 or minimum > len(pool):
+    if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 1:
         raise CatalogBuildError(f"{path}.minimum_candidates is invalid")
 
 
@@ -584,6 +584,8 @@ def _generated_models(
         model = json.loads(json.dumps(source))
         if model.get("kind") == "virtual":
             model["verification"]["asset_sha256"] = digest_by_asset[model["asset"]]
+            for role in model["roles"]:
+                role.setdefault("recommended_pool", [])
         generated.append(model)
     return generated
 
@@ -592,12 +594,7 @@ def render_outputs() -> dict[Path, bytes]:
     manifest, resources, assets = load_and_validate()
     models = _generated_models(resources, assets)
     results = _index_results(resources)
-    # Absence is the canonical representation of insufficient evidence. The
-    # complete model/effort/benchmark matrix remains available through the
-    # catalog audit, but it is not persisted into every runtime projection.
-    available_results = [
-        result for result in results if result["status"] == "available"
-    ]
+    routing_results = [result for result in results if result["status"] == "available"]
     generated_manifest = {
         "schema_version": OUTPUT_SCHEMA,
         "catalog_version": manifest["catalog_version"],
@@ -613,7 +610,7 @@ def render_outputs() -> dict[Path, bytes]:
         "benchmarks": resources["benchmarks"],
         "evaluations": resources["evaluations"],
         "indices": resources["indices"],
-        "index_results": available_results,
+        "index_results": routing_results,
     }
     public = {
         "schema_version": OUTPUT_SCHEMA,
@@ -635,7 +632,7 @@ def render_outputs() -> dict[Path, bytes]:
         "benchmarks": resources["benchmarks"],
         "evaluations": resources["evaluations"],
         "indices": resources["indices"],
-        "index_results": available_results,
+        "index_results": results,
     }
     _validate_schema(public, _load_json(SNAPSHOT_SCHEMA_PATH), "generated snapshot")
     public_json = (

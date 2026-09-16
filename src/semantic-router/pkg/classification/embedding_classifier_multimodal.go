@@ -1,11 +1,13 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -19,7 +21,7 @@ import (
 // should be classified against text anchors in the shared multimodal space.
 // For text queries, use ClassifyDetailed.
 func (c *EmbeddingClassifier) ClassifyDetailedMultimodal(modality config.QueryModality, payload string) (*EmbeddingClassificationResult, error) {
-	return c.classifyDetailedMultimodalWithCache(modality, payload, nil)
+	return c.classifyDetailedMultimodalWithCache(context.Background(), modality, payload, nil)
 }
 
 // classifyDetailedMultimodalWithCache is the cache-aware variant of
@@ -28,7 +30,10 @@ func (c *EmbeddingClassifier) ClassifyDetailedMultimodal(modality config.QueryMo
 // during the same EvaluateAllSignalsWithContext call, the embedding is
 // reused instead of recomputed via FFI. A nil cache is equivalent to the
 // pre-cache behavior.
-func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(modality config.QueryModality, payload string, cache *requestImageEmbeddingCache) (*EmbeddingClassificationResult, error) {
+func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(ctx context.Context, modality config.QueryModality, payload string, cache *requestImageEmbeddingCache) (*EmbeddingClassificationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(c.rules) == 0 {
 		return &EmbeddingClassificationResult{}, nil
 	}
@@ -60,17 +65,26 @@ func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(modality confi
 		return &EmbeddingClassificationResult{}, nil
 	}
 
-	queryEmbedding, err := cache.resolve(payload, c.optimizationConfig.TargetDimension, func() ([]float32, error) {
+	queryEmbedding, err := cache.resolveFor(c.provider, payload, c.optimizationConfig.TargetDimension, func() ([]float32, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if c.provider != nil {
+			return embedding.Image(ctx, c.provider, payload, 0)
+		}
 		return getMultiModalImageEmbedding(payload, 0)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute multimodal query embedding (modality=%s): %w", effective, err)
 	}
 
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	logging.Infof("Computed multimodal query embedding (modality: %s, dimension: %d)",
 		effective, len(queryEmbedding))
 
-	if ensureErr := c.ensureCandidateEmbeddings(); ensureErr != nil {
+	if ensureErr := c.ensureCandidateEmbeddings(ctx); ensureErr != nil {
 		return nil, ensureErr
 	}
 

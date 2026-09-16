@@ -362,7 +362,7 @@ def test_http_client_never_reads_environment_credentials_and_redacts_failures(
     monkeypatch.setenv("ENVOY_EVAL_KEY", "envoy-secret")
     session = FakeSession()
     EvaluationHTTPClient(session=session).post(
-        "http://router:8080/api/v1/eval",
+        "http://router:8080/api/v1/routing/preview",
         {"model": "auto"},
         track_id="routing",
         case_id="case-1",

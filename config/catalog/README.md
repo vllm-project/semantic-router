@@ -68,9 +68,10 @@ display `clamp((elo - 500) / 2000, 0, 1) * 100`. This presentation mapping is
 separate from index aggregation and never rewrites evidence.
 
 Benchmark `tags` are catalog-owned presentation facets. The curated `core` tag
-contains MMLU-Pro, GPQA Diamond, Humanity's Last Exam, SWE-bench Verified,
-Terminal-Bench 2.1, and SciCode. Hub surfaces place Core first among semantic
-filters while keeping All as the unfiltered default.
+contains MMLU-Pro, GPQA Diamond, HLE 1.0 text-only, LiveCodeBench, SciCode,
+and Terminal-Bench 2.1. Hub surfaces place Core first among semantic filters
+while keeping All as the unfiltered default. SWE-bench Verified and other
+useful measurements remain additional, individually visible evidence.
 
 Every available repository record carries a calendar anchor. Use
 `measured_at` when the evaluation run date is known; otherwise use
@@ -78,11 +79,13 @@ Every available repository record carries a calendar anchor. Use
 silently presented as a run date, and neither field belongs in the minimal
 user-authored evidence surface unless the operator actually knows the run date.
 
-The audit derives exactly five default-index slots for every Model Card and
-every selectable reasoning effort: MMLU-Pro, GPQA Diamond, Humanity's Last Exam
-without tools, SWE-bench Verified, and Terminal-Bench 2.1. A slot links only to
-an exact model/effort/profile measurement. An unavailable slot is reported by
-the audit but is not serialized into runtime or UI snapshots. A
+The audit derives exactly six default-index slots for every Model Card and
+every selectable reasoning effort: MMLU-Pro, GPQA Diamond, HLE 1.0 text-only
+without tools, LiveCodeBench, SciCode, and Terminal-Bench 2.1. A slot links only
+to an exact model/effort measurement and one of the component's ordered
+compatible profiles. Available, partial, and missing index rows are serialized
+in the public snapshot so the Hub can distinguish a ranking result from an
+evidence gap. The runtime projection contains only available routing priors. A
 vendor-published score with an unspecified effort stays on a separate
 `unspecified` row and is never copied into `low`, `medium`, `high`, or another
 selectable effort.
@@ -153,7 +156,8 @@ Catalog adoption is additive within the existing v0.3 hierarchy:
   canonical `catalog` value as its `name`.
 - A custom vLLM, SGLang, private, or newly released model omits `catalog`. It
   can remain a minimal binding or supply a handwritten Model Card, custom
-  reasoning behavior, and evaluations.
+  reasoning behavior, and top-level `evaluation.records[]` linked by its card
+  identity.
 
 Catalog release versions, digests, internal index identities, generated
 defaults, and binding relationship classifications never belong in normal
@@ -180,7 +184,19 @@ This is catalog or custom-model schema, never a new decision field.
 
 Virtual-model `recommended_pool` entries are suggestions, not foreign keys.
 They may name catalog-backed models or operator-defined models that only exist
-in a deployment configuration.
+in a deployment configuration. The list may be omitted or empty. Its length does
+not change a role's required assignment or `minimum_candidates`: operators must
+still provide enough eligible backends. For private routing, the operator owns
+the deployment boundary; a recommendation does not establish where a model runs
+or how that deployment handles data. Declared capabilities, context and output
+limits, and quality evidence must match the assigned deployment and policy.
+
+The MoM 2.0 policy's reference pools use DeepSeek V4 Flash and Pro at `max`
+reasoning effort and GLM-5.1 with reasoning enabled. Configure the assigned
+backend's reasoning mode to match the catalog evidence; other effort levels may
+not have the required index. These examples do not establish image capability or
+measured deployment latency and pricing. Vault leaves recommendations empty so
+operators explicitly assign deployments that meet their privacy requirements.
 
 Model Hub is a catalog, not an overall model ranking. The generated product
 views may compare only one selected benchmark version, profile, and metric.

@@ -5,16 +5,11 @@ import Layout from '@theme/Layout'
 import BrowseLayout from '@site/src/components/site/BrowseLayout'
 
 import catalogDocument from '../../static/model-catalog/catalog.json'
-import { ModelHubBenchmark } from '../components/model-hub/ModelHubBenchmark'
+import { ModelHubArena } from '../components/model-hub/ModelHubArena'
 import { ModelHubDirectory } from '../components/model-hub/ModelHubDirectory'
 import { ModelHubDetail } from '../components/model-hub/ModelHubDetail'
 import { ModelHubProviders } from '../components/model-hub/ModelHubProviders'
-import {
-  modelHubBenchmarkCharts,
-  modelHubBenchmarkDomain,
-  modelHubChartColors,
-  modelHubPublicEvaluations,
-} from '../data/modelHubBenchmarkSupport'
+import { modelHubPublicEvaluations } from '../data/modelHubBenchmarkSupport'
 import type {
   CatalogEvaluation,
   CatalogModel,
@@ -30,7 +25,6 @@ import {
 import {
   parseModelHubUrlState,
   serializeModelHubUrlState,
-  type ModelHubBenchmarkUrlState,
   type ModelHubUrlState,
 } from '../data/modelHubUrlState'
 import styles from './models.module.css'
@@ -38,8 +32,8 @@ import styles from './models.module.css'
 const catalog = catalogDocument as unknown as CatalogSnapshot
 const MODEL_PAGE_SIZE = 10
 const MODEL_HUB_SECTIONS = [
+  { key: 'arena', label: 'Arena' },
   { key: 'models', label: 'Models' },
-  { key: 'benchmarks', label: 'Benchmarks' },
   { key: 'providers', label: 'Providers' },
 ] as const
 
@@ -50,7 +44,7 @@ type UpdateModelHubUrlState = (
 
 function modelHubActiveSection(hash: string): string {
   const id = hash.replace('#', '')
-  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'models'
+  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'arena'
 }
 
 const supportedLifecycle = (
@@ -189,116 +183,6 @@ function useCatalogDirectory(
   }
 }
 
-function useBenchmarkExplorer(
-  benchmarkState: ModelHubBenchmarkUrlState,
-  updateUrlState: UpdateModelHubUrlState,
-) {
-  const allCharts = useMemo(() => modelHubBenchmarkCharts(catalog), [])
-  const colors = useMemo(
-    () =>
-      modelHubChartColors(
-        catalog.models.map(model => model.id),
-        catalog.models.map(model => model.id),
-      ),
-    [],
-  )
-  const { filter: benchmarkFilter, query, publisher } = benchmarkState
-  const benchmarkFilters = useMemo(() => {
-    const tagCounts = new Map<string, number>()
-    const domainCounts = new Map<string, number>()
-    allCharts.forEach((chart) => {
-      domainCounts.set(
-        chart.benchmark.domain,
-        (domainCounts.get(chart.benchmark.domain) ?? 0) + 1,
-      )
-      chart.benchmark.tags?.forEach((tag) => {
-        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
-      })
-    })
-    const tags = Array.from(tagCounts, ([tag, count]) => ({
-      id: `tag:${tag}`,
-      label: tag === 'core' ? 'Core' : tag,
-      count,
-    })).sort((left, right) => {
-      if (left.id === 'tag:core') return -1
-      if (right.id === 'tag:core') return 1
-      return left.label.localeCompare(right.label)
-    })
-    const domains = Array.from(domainCounts, ([domain, count]) => ({
-      id: `domain:${domain}`,
-      label: domain,
-      count,
-    })).sort((left, right) => left.label.localeCompare(right.label))
-    return [...tags, ...domains]
-  }, [allCharts])
-  const publishers = useMemo(
-    () =>
-      Array.from(
-        new Set(allCharts.flatMap(chart => chart.rows.map(row => row.model.publisher))),
-      ).sort((left, right) => left.localeCompare(right)),
-    [allCharts],
-  )
-  const activePublisher = publisher === 'all' || publishers.includes(publisher) ? publisher : 'all'
-  const activeBenchmarkFilter
-    = benchmarkFilter === 'all' || benchmarkFilters.some(item => item.id === benchmarkFilter)
-      ? benchmarkFilter
-      : 'all'
-  const charts = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase()
-    return allCharts
-      .filter((chart) => {
-        if (activeBenchmarkFilter === 'all') return true
-        if (activeBenchmarkFilter.startsWith('tag:')) {
-          return chart.benchmark.tags?.includes(activeBenchmarkFilter.slice(4)) ?? false
-        }
-        return chart.benchmark.domain === activeBenchmarkFilter.slice(7)
-      })
-      .map((chart) => {
-        const rows = chart.rows.filter(
-          row =>
-            (activePublisher === 'all' || row.model.publisher === activePublisher)
-            && (!needle
-              || `${row.model.display_name} ${row.model.id} ${row.model.publisher}`
-                .toLocaleLowerCase()
-                .includes(needle)),
-        )
-        return {
-          ...chart,
-          rows,
-          totalResults: chart.rows.length,
-          domain: modelHubBenchmarkDomain(
-            rows.map(row => row.value),
-            chart.metric,
-          ),
-          colors,
-        }
-      })
-      .filter(chart => chart.rows.length)
-  }, [activeBenchmarkFilter, activePublisher, allCharts, colors, query])
-
-  return {
-    charts,
-    chartCount: allCharts.length,
-    filters: benchmarkFilters,
-    filter: activeBenchmarkFilter,
-    setFilter: (filter: string) => updateUrlState(current => ({
-      ...current,
-      benchmark: { ...current.benchmark, filter },
-    })),
-    query,
-    setQuery: (nextQuery: string) => updateUrlState(current => ({
-      ...current,
-      benchmark: { ...current.benchmark, query: nextQuery },
-    })),
-    publisher: activePublisher,
-    setPublisher: (nextPublisher: string) => updateUrlState(current => ({
-      ...current,
-      benchmark: { ...current.benchmark, publisher: nextPublisher },
-    })),
-    publishers,
-  }
-}
-
 export default function ModelsPage() {
   const history = useHistory()
   const location = useLocation()
@@ -319,7 +203,6 @@ export default function ModelsPage() {
     () => new Map(catalog.reasoning_families.map(family => [family.id, family])),
     [],
   )
-  const benchmark = useBenchmarkExplorer(urlState.benchmark, updateUrlState)
   const selectedModel = urlState.selectedModelID
     ? modelByID.get(urlState.selectedModelID)
     : undefined
@@ -394,9 +277,36 @@ export default function ModelsPage() {
             </dl>
           )}
         >
-          <section id="models" className={styles.section} aria-labelledby="models-heading">
+          <section className={styles.section} aria-labelledby="arena">
             <header className={styles.sectionHeading}>
-              <h2 id="models-heading">Models</h2>
+              <h2 id="arena">Arena</h2>
+              <span>One index · same rules for single and virtual models</span>
+            </header>
+            <ModelHubArena
+              catalog={catalog}
+              scope={urlState.arenaScope}
+              setScope={arenaScope => updateUrlState(current => ({ ...current, arenaScope }))}
+              layer={urlState.arenaLayer}
+              setLayer={arenaLayer => updateUrlState(current => ({ ...current, arenaLayer }))}
+              capability={urlState.arenaCapability}
+              setCapability={arenaCapability => updateUrlState(current => ({
+                ...current,
+                arenaCapability,
+                arenaLayer: 'capabilities',
+              }))}
+              benchmark={urlState.arenaBenchmark}
+              setBenchmark={arenaBenchmark => updateUrlState(current => ({
+                ...current,
+                arenaBenchmark,
+                arenaLayer: 'benchmarks',
+              }))}
+              selectModel={selectModel}
+            />
+          </section>
+
+          <section className={styles.section} aria-labelledby="models">
+            <header className={styles.sectionHeading}>
+              <h2 id="models">Models</h2>
               <span>
                 {physicalModels}
                 {' '}
@@ -414,17 +324,9 @@ export default function ModelsPage() {
             />
           </section>
 
-          <section id="benchmarks" className={styles.section} aria-labelledby="benchmarks-heading">
+          <section className={styles.section} aria-labelledby="providers">
             <header className={styles.sectionHeading}>
-              <h2 id="benchmarks-heading">Benchmarks</h2>
-              <span>Exact published results</span>
-            </header>
-            <ModelHubBenchmark {...benchmark} selectModel={selectModel} />
-          </section>
-
-          <section id="providers" className={styles.section} aria-labelledby="providers-heading">
-            <header className={styles.sectionHeading}>
-              <h2 id="providers-heading">Providers</h2>
+              <h2 id="providers">Providers</h2>
               <span>
                 {catalog.providers.length}
                 {' '}

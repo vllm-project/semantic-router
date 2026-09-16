@@ -149,6 +149,10 @@ type RouterConfig struct {
 	// EffectiveModelRegistry is the immutable catalog/config join used to
 	// materialize this runtime snapshot.
 	EffectiveModelRegistry *modelcatalog.EffectiveRegistry `yaml:"-" json:"-"`
+	// Evaluation preserves operator-authored definitions and measurement
+	// records for canonical export. Compiled results live in
+	// EffectiveModelRegistry.
+	Evaluation *CanonicalEvaluation `yaml:"-" json:"-"`
 }
 
 // AuthzConfig configures how the router resolves per-user LLM API keys.
@@ -258,19 +262,24 @@ type InlineModels struct {
 	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
 	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
+	SafetyModels            SafetyModelsConfig            `yaml:"safety_models"`
 	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
 	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
+	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
-	Signals         `yaml:",inline"`
-	Projections     Projections          `yaml:"projections,omitempty"`
-	Decisions       []Decision           `yaml:"decisions,omitempty"`
-	Strategy        RoutingStrategy      `yaml:"strategy,omitempty"`
-	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
-	ReasoningConfig `yaml:",inline"`
+	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
+	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
+	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
+	Signals               `yaml:",inline"`
+	Projections           Projections          `yaml:"projections,omitempty"`
+	Decisions             []Decision           `yaml:"decisions,omitempty"`
+	Strategy              RoutingStrategy      `yaml:"strategy,omitempty"`
+	ModelSelection        ModelSelectionConfig `yaml:"model_selection,omitempty"`
+	ReasoningConfig       `yaml:",inline"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

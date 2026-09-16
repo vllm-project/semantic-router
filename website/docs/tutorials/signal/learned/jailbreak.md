@@ -52,6 +52,89 @@ routing:
 
 Use `include_history` for multi-turn attacks, and treat the pattern lists as tuning data for the configured detection method.
 
+### Request content and history
+
+For a routed request, Guard scores the consecutive user and tool messages at
+the end of the request, stopping at an assistant, system or developer message.
+This keeps all textual tool results together when a protocol represents them
+inside one user message. With
+`include_history: true`, it also scores earlier user and tool text. System and
+developer instructions and assistant replies are not independently scored as
+attack evidence. This narrows earlier versions' history behavior, which also
+scanned those trusted roles.
+
+If this current group has no eligible text, Guard does not substitute an older
+user turn or concatenate trusted instructions. Eligible earlier content is
+still inspected when `include_history` is enabled. No eligible text means no
+classification evidence, not a guarantee that the request is safe.
+
+This projection preserves complete text pieces and does not use the general
+routing text compressor. Each piece is scored separately; any matching piece
+can match the rule. It does not infer authority relationships across messages
+or inspect images, raw tool arguments, or content retrieved after routing.
+Message roles are a protocol boundary, not authenticated identity. The direct
+text detection API and response-direction scans retain their existing input
+contract; callers supplying flat text remain responsible for its scope.
+
+### Token windows for a local classifier
+
+The implicit local `mmbert32k` default scans each text piece in 512-token
+windows with 255 content tokens of overlap. Its document budget comes from the
+registered default Guard model: 32,768 tokens including special tokens. This
+applies only when no recipe model binding or `window` is specified and
+`max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
+a long piece requires multiple forwards. Preparation records the resolved window and document budget
+and checks the loaded model's actual capacity. An incompatible custom artifact
+fails preparation, and a piece exceeding the document budget produces an
+input-limit error.
+
+Explicit model bindings, document budgets, window policies, and remote backends
+keep their configured behavior. For example, a qualified 8K deployment with
+`input.overflow: reject` continues to process one whole piece within that budget.
+
+For a checkpoint evaluated with overlapping token windows, configure the same
+window policy in the prompt-guard module:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        variant: mmbert32k
+        max_sequence_length: 32768
+        window:
+          size: 128
+          overlap: 63
+```
+
+`size` includes the tokenizer's special tokens; `overlap` counts content
+tokens. For a tokenizer with two special tokens, this example scans 126 content
+tokens at a time with a stride of 63. The runtime plans windows from the
+complete input's token IDs without decoding and re-tokenizing window text,
+and resets positions in each window.
+The total input must fit `max_sequence_length`; overflow is an inference
+error, never an uninspected suffix.
+
+Request rules, the detection API, and response scans use the same maximum
+positive-label risk across windows. For multiple positive labels, the runtime
+sums their probabilities within each window before choosing the riskiest
+window. It retains that window's complete distribution for labels and
+confidence. Contrastive rules keep their existing text-window policy.
+
+Outside the implicit default, omitting `window` retains whole-input inference
+or the configured legacy scan. Window sizes and thresholds need separate
+checkpoint evaluation; scanning all tokens does not establish understanding of
+distant context. Quoted attacks and instructions whose meaning depends on
+another window require separate evaluation. Local Candle and ORT model bindings
+can also select token windows; their loaded adapter and graph must support the
+requested execution geometry.
+
+A provider result declaring truncated or incompletely processed input is an
+unresolved scan. Request rules, the text detection APIs, and response scans
+cannot use its probabilities to report a clean complete input. A detection on
+another completely scored piece still counts; errors remain subject to the
+configured `on_error` and response-rule policies.
+
 ### Direction
 
 `direction` selects what a rule scores. The default, `request`, scores the
@@ -102,7 +185,12 @@ unresolved unless the score the other chunks produced already matches it. The
 response is scored once and each rule draws its own line across that score, so
 a partial scan is resolved per rule: a score of 0.5 matches a rule at 0.4 and
 leaves a rule at 0.9 unresolved, because the chunk that was never scored is
-where a higher score would have been. Streaming responses are not scored.
+where a higher score would have been.
+
+A streamed response is scored once the stream ends and recorded with
+`enforcement: not_enforced_streaming` in place of an action. Its bytes are
+already with the client by then, so the `response_jailbreak` plugin does not
+run and no `block`, header or body action applies.
 
 ## Dependencies and Limitations
 

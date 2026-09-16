@@ -131,6 +131,13 @@ Feature controls:
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
+Deployment registries support Linux and macOS through descriptor-relative reads
+that reject symlinks in the registry path and its files. Use a canonical registry
+directory; macOS also requires read permission on its directory components.
+Other platforms reject a configured registry. Leaving `EVALUATION_DEPLOYMENTS_DIR`
+unset retains the single-runtime target. Evaluation workers require Linux for
+their sandbox.
+
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
 `DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
 Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as
@@ -238,6 +245,15 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 - **`--setup-mode` / `DASHBOARD_SETUP_MODE` is deprecated and ignored.** It is still read, but only so that a value disagreeing with the config file can be reported: `/api/setup/state` returns a `reason`, and the backend logs one `WARNING` per change (not per request, since the endpoint is unauthenticated). A stale environment value can no longer open bootstrap on its own.
 - **An unreadable or unparsable config resolves to "not in setup mode", deliberately.** Failing closed is the only safe posture for something gating unauthenticated admin creation; the resolver never falls back to the legacy flag on an error path. `/api/setup/state` answers `200` with a diagnostic `reason` (rather than a `500` the frontend silently coerced to "not in setup mode") so the condition is visible instead of silent. The reason never contains config file contents.
 - **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
+
+## Router contract access
+
+The **System → Platform & Access → Router API Docs** entry opens the running
+Router's Swagger UI through the authenticated Dashboard origin. Its companion
+proxies are `/api/router/api/v1` and `/api/router/openapi.json`; they expose the
+Router's `/api/v1` and `/openapi.json` responses through the existing read-only
+management proxy and do not maintain another API definition. Agents should
+query the Router endpoints directly and do not depend on the Dashboard.
 
 ## Architecture
 

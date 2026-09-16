@@ -10,10 +10,20 @@
   parameter: thinking
   modes: [enabled, disabled]
   default_mode: enabled
+- id: deepseek-v3.1
+  type: chat_template_kwargs
+  parameter: thinking
+  modes: [enabled, disabled]
+  default_mode: enabled
 - id: qwen3
   type: chat_template_kwargs
   parameter: enable_thinking
   modes: [enabled, disabled]
+  default_mode: enabled
+- id: qwen3-always-on
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled]
   default_mode: enabled
 - id: qwen3.8
   type: reasoning_effort

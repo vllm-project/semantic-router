@@ -6,37 +6,16 @@ from cli.catalog_provider_projection import (
     CatalogProviderProjectionError,
     validate_provider_model_configuration,
 )
-from cli.config_contract import iter_routing_profiles
+from cli.config_contract import (
+    PROJECTION_FAMILY_SPECS,
+    SIGNAL_FAMILY_SPECS,
+    iter_routing_profiles,
+)
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
 from cli.terminal import echo, error, fields, heading, success
 from cli.validation_error import ValidationError
 from cli.validator import print_validation_errors, validate_user_config
-
-_SIGNAL_SUMMARY_FIELDS = (
-    ("Keyword signals", "keywords"),
-    ("Embedding signals", "embeddings"),
-    ("Domains", "domains"),
-    ("Fact check signals", "fact_check"),
-    ("User feedback signals", "user_feedbacks"),
-    ("Reask signals", "reasks"),
-    ("Preference signals", "preferences"),
-    ("Language signals", "language"),
-    ("Context signals", "context"),
-    ("Structure signals", "structure"),
-    ("Complexity signals", "complexity"),
-    ("Modality signals", "modality"),
-    ("Authz signals", "role_bindings"),
-    ("Jailbreak signals", "jailbreak"),
-    ("Hallucination signals", "hallucination"),
-    ("PII signals", "pii"),
-    ("Knowledge-base signals", "kb"),
-    ("Conversation signals", "conversation"),
-    ("Event signals", "events"),
-    ("Metadata signals", "metadata"),
-    ("Classifier signals", "classifiers"),
-    ("Input-modality signals", "input_modality"),
-)
 
 
 def _count_items(value) -> int:
@@ -49,10 +28,10 @@ def _signal_summary_lines(signals) -> list[str]:
         return []
 
     lines = []
-    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
-        count = _count_items(getattr(signals, field_name, None))
+    for spec in SIGNAL_FAMILY_SPECS:
+        count = _count_items(getattr(signals, spec.signal_attr, None))
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  {spec.display_name}: {count}")
     return lines
 
 
@@ -61,44 +40,36 @@ def _projection_summary_lines(projections) -> list[str]:
         return []
 
     lines = []
-    for label, field_name in (
-        ("Projection partitions", "partitions"),
-        ("Projection scores", "scores"),
-        ("Projection mappings", "mappings"),
-    ):
-        count = _count_items(getattr(projections, field_name, None))
+    for spec in PROJECTION_FAMILY_SPECS:
+        count = _count_items(getattr(projections, spec.projection_attr, None))
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  Projection {spec.display_name.lower()}: {count}")
     return lines
 
 
 def _aggregate_signal_summary_lines(routing_profiles) -> list[str]:
     lines = []
     profiles = list(routing_profiles)
-    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
+    for spec in SIGNAL_FAMILY_SPECS:
         count = sum(
-            _count_items(getattr(profile.signals, field_name, None))
+            _count_items(getattr(profile.signals, spec.signal_attr, None))
             for _, profile in profiles
         )
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  {spec.display_name}: {count}")
     return lines
 
 
 def _aggregate_projection_summary_lines(routing_profiles) -> list[str]:
     lines = []
     profiles = list(routing_profiles)
-    for label, field_name in (
-        ("Projection partitions", "partitions"),
-        ("Projection scores", "scores"),
-        ("Projection mappings", "mappings"),
-    ):
+    for spec in PROJECTION_FAMILY_SPECS:
         count = sum(
-            _count_items(getattr(profile.projections, field_name, None))
+            _count_items(getattr(profile.projections, spec.projection_attr, None))
             for _, profile in profiles
         )
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  Projection {spec.display_name.lower()}: {count}")
     return lines
 
 

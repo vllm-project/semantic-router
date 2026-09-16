@@ -338,12 +338,14 @@
 .tableFrame {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
 }
 
-.tableFrame table {
+.tableFrame > table {
+  display: table;
   width: 100%;
-  min-width: 52rem;
+  min-width: 0;
   margin: 0;
   border-collapse: collapse;
   border: 0;
@@ -351,19 +353,22 @@
   table-layout: fixed;
 }
 
-.tableFrame th:first-child {
-  width: 34%;
+.modelColumn {
+  width: 38%;
 }
 
-.tableFrame th:nth-child(2) {
+.distributionColumn {
   width: 16%;
 }
 
-.tableFrame th:nth-child(3),
-.tableFrame th:nth-child(4),
-.tableFrame th:nth-child(5),
-.tableFrame th:nth-child(6) {
-  width: 12.5%;
+.contextColumn,
+.providersColumn,
+.releasedColumn {
+  width: 12%;
+}
+
+.resultsColumn {
+  width: 10%;
 }
 
 .tableFrame th,
@@ -454,6 +459,25 @@
   .modelRow > button {
     grid-template-columns: 1fr;
   }
+
+  .distributionColumn,
+  .releasedColumn,
+  .tableFrame th:nth-child(2),
+  .tableFrame td:nth-child(2),
+  .tableFrame th:nth-child(6),
+  .tableFrame td:nth-child(6) {
+    display: none;
+  }
+
+  .modelColumn {
+    width: 52%;
+  }
+
+  .contextColumn,
+  .providersColumn,
+  .resultsColumn {
+    width: 16%;
+  }
 }
 
 @media (max-width: 640px) {
@@ -482,6 +506,23 @@
     order: 4;
     width: 100%;
     margin-left: 0;
+  }
+
+  .contextColumn,
+  .providersColumn,
+  .tableFrame th:nth-child(3),
+  .tableFrame td:nth-child(3),
+  .tableFrame th:nth-child(4),
+  .tableFrame td:nth-child(4) {
+    display: none;
+  }
+
+  .modelColumn {
+    width: 76%;
+  }
+
+  .resultsColumn {
+    width: 24%;
   }
 }
 

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 
 	"gopkg.in/yaml.v2"
 )
@@ -22,12 +23,29 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		return nil, rejectErr
 	}
 
+	// Fragment decoding omits infrastructure validation. Validate policy
+	// fields independently of those broader checks.
+	routing := nestedStringMap(raw["routing"])
+	for field, target := range map[string]reflect.Type{
+		"candidate_requirements": reflect.TypeOf(CandidateRequirements{}),
+		"data_policy":            reflect.TypeOf(RoutingDataPolicy{}),
+	} {
+		if err := validateKnownFields(nestedStringMap(routing[field]), target); err != nil {
+			return nil, fmt.Errorf("routing.%s: %w", field, err)
+		}
+	}
+
 	doc := &routingFragmentDocument{}
 	if err := yaml.Unmarshal(data, doc); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
 
+	if err := doc.Routing.CandidateRequirements.Validate(); err != nil {
+		return nil, err
+	}
 	cfg := DefaultGlobalConfig()
+	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
+	cfg.DataPolicy = doc.Routing.DataPolicy.Clone()
 	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)
@@ -38,11 +56,11 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		cfg.ModelConfig[model.Name] = ModelParams{
 			ParamSize:         model.ParamSize,
 			ContextWindowSize: model.ContextWindowSize,
+			MaxOutputTokens:   model.MaxOutputTokens,
 			Description:       model.Description,
 			Capabilities:      append([]string(nil), model.Capabilities...),
 			LoRAs:             copyLoRAAdapters(model.LoRAs),
 			Tags:              append([]string(nil), model.Tags...),
-			Evaluations:       cloneUserEvaluations(model.Evaluations),
 			Modality:          model.Modality,
 		}
 	}

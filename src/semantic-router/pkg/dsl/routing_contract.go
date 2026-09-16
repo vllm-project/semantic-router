@@ -1,12 +1,12 @@
 package dsl
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
-	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -70,7 +70,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{Strategy: string(cfg.Strategy)}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone(), DataPolicy: cfg.DataPolicy.Clone()}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
@@ -78,11 +78,24 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 }
 
 func (d *decompiler) decompileRoutingStrategy() {
-	if d.cfg.Strategy == "" {
+	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil && d.cfg.DataPolicy == nil {
 		return
 	}
 	d.writeSection("ROUTING PROFILE")
-	d.write("ROUTING {\n  strategy: %s\n}\n\n", d.cfg.Strategy)
+	d.write("ROUTING {\n")
+	d.decompileRoutingPolicies()
+	if d.cfg.Strategy != "" {
+		d.write("  strategy: %s\n", d.cfg.Strategy)
+	}
+	if len(d.cfg.ModelBindings) > 0 {
+		// Convert the canonical structs through their JSON tags, then use the
+		// DSL formatter so object keys retain the grammar's identifier syntax.
+		bindings, _ := json.Marshal(d.cfg.ModelBindings)
+		var fields map[string]interface{}
+		_ = json.Unmarshal(bindings, &fields)
+		d.write("  model_bindings: %s\n", formatPluginConfigValue(fields))
+	}
+	d.write("}\n\n")
 }
 
 func (d *decompiler) appendSignalsToProgram(prog *Program) {
@@ -206,6 +219,9 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 }
 
 func (d *decompiler) appendSafetySignals(prog *Program) {
+	for i := range d.cfg.SafetyRules {
+		prog.Signals = append(prog.Signals, d.safetyToSignal(&d.cfg.SafetyRules[i]))
+	}
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
 	}
@@ -245,13 +261,13 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	if model.ContextWindowSize > 0 {
 		d.write("  context_window_size: %d\n", model.ContextWindowSize)
 	}
+	if model.MaxOutputTokens > 0 {
+		d.write("  max_output_tokens: %d\n", model.MaxOutputTokens)
+	}
 	d.writeOptionalRoutingModelString("description", model.Description)
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
 	d.writeRoutingModelLoRAs(model.LoRAs)
 	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	if len(model.Evaluations) > 0 {
-		d.write("  evaluations: %s\n", formatDSLFieldValue(evaluationsValue(model.Evaluations)))
-	}
 	d.writeOptionalRoutingModelString("modality", model.Modality)
 }
 
@@ -292,6 +308,9 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	if model.ContextWindowSize > 0 {
 		fields["context_window_size"] = IntValue{V: model.ContextWindowSize}
 	}
+	if model.MaxOutputTokens > 0 {
+		fields["max_output_tokens"] = IntValue{V: model.MaxOutputTokens}
+	}
 	if model.Description != "" {
 		fields["description"] = StringValue{V: model.Description}
 	}
@@ -314,40 +333,10 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)
 	}
-	if len(model.Evaluations) > 0 {
-		fields["evaluations"] = evaluationsValue(model.Evaluations)
-	}
 	if model.Modality != "" {
 		fields["modality"] = StringValue{V: model.Modality}
 	}
 	return &ModelDecl{Name: model.Name, Fields: fields}
-}
-
-func evaluationsValue(evaluations []modelcatalog.UserEvaluation) ArrayValue {
-	items := make([]Value, 0, len(evaluations))
-	for _, evaluation := range evaluations {
-		fields := map[string]Value{
-			"benchmark": StringValue{V: evaluation.Benchmark},
-		}
-		if len(evaluation.Metrics) > 0 {
-			metrics := make(map[string]Value, len(evaluation.Metrics))
-			for name, value := range evaluation.Metrics {
-				metrics[name] = FloatValue{V: value}
-			}
-			fields["metrics"] = ObjectValue{Fields: metrics}
-		}
-		if evaluation.Source != "" {
-			fields["source"] = StringValue{V: evaluation.Source}
-		}
-		if evaluation.MeasuredAt != "" {
-			fields["measured_at"] = StringValue{V: evaluation.MeasuredAt}
-		}
-		if len(evaluation.Metadata) > 0 {
-			fields["metadata"] = interfaceMapObjectValue(evaluation.Metadata)
-		}
-		items = append(items, ObjectValue{Fields: fields})
-	}
-	return ArrayValue{Items: items}
 }
 
 func quotedStringArray(values []string) string {

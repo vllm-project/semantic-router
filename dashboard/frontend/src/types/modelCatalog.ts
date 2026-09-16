@@ -128,7 +128,7 @@ export interface BuiltInModelRole {
 export interface BuiltInModelVerification {
   authority: string
   status: CatalogEvidenceStatus
-  verified_at: string
+  verified_at?: string
   source?: string
   asset_sha256?: string
 }
@@ -230,6 +230,7 @@ export interface CatalogIndexComponent {
   benchmark?: string
   metric?: string
   benchmark_profile?: string
+  benchmark_profiles?: string[]
   index?: string
   weight: number
   normalization: CatalogMetricNormalization
@@ -254,13 +255,14 @@ export interface CatalogIndexResult {
   model: string
   reasoning_effort: string
   index: string
-  status: 'available'
-  score: number
+  status: 'available' | 'partial' | 'missing'
+  score: number | null
   coverage: number
   components: Array<{
     benchmark?: string
     metric?: string
     benchmark_profile?: string
+    benchmark_profiles?: string[]
     index?: string
     evaluation?: string
     weight: number

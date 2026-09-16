@@ -9,28 +9,33 @@ import TableHeader from '../components/TableHeader'
 import { DataTable } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
+import { getAlgorithmFieldSchema, getPluginFieldSchema } from '../lib/dslSchemas'
 import type {
   ConfigData,
-  ConfigDecisionConditionType,
   DecisionConfig,
   DecisionFormState,
   NormalizedModel,
 } from './configPageSupport'
-import {
-  cloneDecisionConditions,
-  conditionHasNestedRules,
-  decisionRulesForSave,
-  getReasoningFamiliesMap,
-  mergeDecisionForSave,
-} from './configPageSupport'
+import { getReasoningFamiliesMap, mergeDecisionForSave } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
 import ConfigPageDecisionModelRefsEditor from './ConfigPageDecisionModelRefsEditor'
+import ConfigPageDecisionAlgorithmEditor from './ConfigPageDecisionAlgorithmEditor'
+import ConfigPageDecisionRulesEditor from './ConfigPageDecisionRulesEditor'
+import { algorithmFields, algorithmType } from './configPageDecisionAlgorithmSupport'
+import ConfigPageSchemaFieldsEditor from './ConfigPageSchemaFieldsEditor'
+import { requiredSchemaFieldErrors } from './configPageSchemaValidation'
 import {
-  decisionConditionsForSave,
+  DECISION_ACTION_SCHEMA,
+  DECISION_ADAPTATIONS_SCHEMA,
+  DECISION_DECLARATIVE_SCHEMA,
+  DECISION_OUTPUT_CONTRACT_SCHEMA,
+} from './configPageDecisionAdvancedSchemas'
+import {
   decisionModelRefsForSave,
   decisionPluginsForSave,
+  decisionRulesForSave,
 } from './configPageDecisionFormSupport'
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
 import { decisionColumns } from './configPageDecisionTable'
@@ -53,6 +58,10 @@ interface ConfigPageDecisionsSectionProps {
 }
 
 type DecisionRow = DecisionConfig
+
+function configuredObject(value: Record<string, unknown>): Record<string, unknown> | undefined {
+  return Object.keys(value).length > 0 ? value : undefined
+}
 
 export default function ConfigPageDecisionsSection({
   config,
@@ -133,47 +142,22 @@ export default function ConfigPageDecisionsSection({
   const handleViewDecision = (decision: DecisionRow) => {
     const sections: ViewSection[] = [
       {
-        title: 'Basic Information',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: decision.name },
           { label: 'Priority', value: `P${decision.priority}` },
+          { label: 'Tier', value: decision.tier ?? 'Not set' },
           { label: 'Description', value: decision.description || 'N/A', fullWidth: true },
         ],
       },
       {
-        title: 'Rules',
+        title: 'Routing policy',
         fields: [
-          { label: 'Operator', value: decision.rules?.operator || 'N/A' },
-          { label: 'On unknown', value: decision.rules?.on_unknown || 'Legacy default' },
           {
-            label: 'Conditions',
-            value: decision.rules?.conditions?.length ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {decision.rules.conditions.map((cond, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '0.5rem',
-                      background: 'rgba(143, 148, 156, 0.1)',
-                      borderRadius: '4px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {cond.type}: {cond.name}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              'No conditions'
-            ),
+            label: 'Rule Tree',
+            value: <ConfigPageDecisionRulesEditor value={decision.rules || {}} readOnly />,
             fullWidth: true,
           },
-        ],
-      },
-      {
-        title: 'Models',
-        fields: [
           {
             label: 'Model References',
             value: decision.modelRefs?.length ? (
@@ -185,131 +169,116 @@ export default function ConfigPageDecisionsSection({
             ),
             fullWidth: true,
           },
-        ],
-      },
-    ]
-
-    if (decision.plugins && decision.plugins.length > 0) {
-      sections.push({
-        title: 'Plugins',
-        fields: [
           {
-            label: 'Configured Plugins',
+            label: 'Direct Action',
             value: (
-              <div className={decisionStyles.viewStack}>
-                {decision.plugins.map((plugin, i) => (
-                  <article key={`${plugin.type}-${i}`} className={decisionStyles.viewCard}>
-                    <div className={decisionStyles.viewHeading}>
-                      <span className={decisionStyles.viewTitle}>{plugin.type}</span>
-                      <span className={decisionStyles.viewBadge}>
-                        {Object.keys(plugin.configuration || {}).length} configured fields
-                      </span>
-                    </div>
-                    <div className={decisionStyles.viewMeta}>
-                      {Object.entries(plugin.configuration || {}).map(([key, value]) => (
-                        <div key={key} className={decisionStyles.viewMetaRow}>
-                          <span className={decisionStyles.viewMetaLabel}>
-                            {key.replace(/_/g, ' ')}
-                          </span>
-                          <span className={decisionStyles.viewMetaValue}>
-                            {Array.isArray(value)
-                              ? `${value.length} items`
-                              : value && typeof value === 'object'
-                                ? `${Object.keys(value).length} fields`
-                                : String(value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <ConfigPageSchemaFieldsEditor
+                schema={DECISION_ACTION_SCHEMA}
+                value={decision.action || {}}
+                readOnly
+              />
             ),
             fullWidth: true,
           },
         ],
-      })
-    }
+      },
+    ]
+
+    sections.push({
+      title: 'Selection & runtime',
+      fields: [
+        {
+          label: 'Algorithm',
+          value: <ConfigPageDecisionAlgorithmEditor value={decision.algorithm} readOnly />,
+          fullWidth: true,
+        },
+        {
+          label: 'Adaptation & Protection',
+          value: (
+            <ConfigPageSchemaFieldsEditor
+              schema={DECISION_ADAPTATIONS_SCHEMA}
+              value={decision.adaptations || {}}
+              readOnly
+            />
+          ),
+          fullWidth: true,
+        },
+        ...(decision.plugins?.length
+          ? [
+              {
+                label: 'Plugins',
+                value: (
+                  <div className={decisionStyles.viewStack}>
+                    {decision.plugins.map((plugin, i) => (
+                      <article key={`${plugin.type}-${i}`} className={decisionStyles.viewCard}>
+                        <div className={decisionStyles.viewHeading}>
+                          <span className={decisionStyles.viewTitle}>{plugin.type}</span>
+                        </div>
+                        <ConfigPageSchemaFieldsEditor
+                          schema={getPluginFieldSchema(plugin.type)}
+                          value={plugin.configuration || {}}
+                          readOnly
+                        />
+                      </article>
+                    ))}
+                  </div>
+                ),
+                fullWidth: true,
+              },
+            ]
+          : []),
+      ],
+    })
+
+    sections.push({
+      title: 'Output behavior',
+      fields: [
+        { label: 'Output Contract', value: decision.output_contract || 'Not set', fullWidth: true },
+        {
+          label: 'Output Contract Spec',
+          value: (
+            <ConfigPageSchemaFieldsEditor
+              schema={DECISION_OUTPUT_CONTRACT_SCHEMA}
+              value={decision.output_contract_spec || {}}
+              readOnly
+            />
+          ),
+          fullWidth: true,
+        },
+        {
+          label: 'Iterations, Emits & Annotations',
+          value: (
+            <ConfigPageSchemaFieldsEditor
+              schema={DECISION_DECLARATIVE_SCHEMA}
+              value={{
+                candidateIterations: decision.candidateIterations || [],
+                emits: decision.emits || [],
+                annotations: decision.annotations || {},
+              }}
+              readOnly
+            />
+          ),
+          fullWidth: true,
+        },
+      ],
+    })
 
     openViewModal(`Decision: ${decision.name}`, sections, () => handleEditDecision(decision))
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
-    const conditionTypeOptions = [
-      'keyword',
-      'domain',
-      'preference',
-      'user_feedback',
-      'reask',
-      'embedding',
-      'fact_check',
-      'language',
-      'context',
-      'structure',
-      'complexity',
-      'modality',
-      'authz',
-      'jailbreak',
-      'pii',
-      'conversation',
-      'projection',
-    ] as const
-    const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
-      (mapping.outputs || []).map((output) => output.name),
-    )
-
-    const getConditionNameOptions = (type?: ConfigDecisionConditionType) => {
-      switch (type) {
-        case 'keyword':
-          return config?.signals?.keywords?.map((k) => k.name) || []
-        case 'domain':
-          return config?.signals?.domains?.map((d) => d.name) || []
-        case 'preference':
-          return config?.signals?.preferences?.map((p) => p.name) || []
-        case 'user_feedback':
-          return config?.signals?.user_feedbacks?.map((u) => u.name) || []
-        case 'reask':
-          return config?.signals?.reasks?.map((r) => r.name) || []
-        case 'embedding':
-          return config?.signals?.embeddings?.map((e) => e.name) || []
-        case 'fact_check':
-          return config?.signals?.fact_check?.map((f) => f.name) || []
-        case 'language':
-          return config?.signals?.language?.map((l) => l.name) || []
-        case 'context':
-          return config?.signals?.context?.map((c) => c.name) || []
-        case 'structure':
-          return config?.signals?.structure?.map((s) => s.name) || []
-        case 'complexity':
-          return (config?.signals?.complexity || []).flatMap((signal) => [
-            `${signal.name}:easy`,
-            `${signal.name}:medium`,
-            `${signal.name}:hard`,
-          ])
-        case 'modality':
-          return config?.signals?.modality?.map((m) => m.name) || []
-        case 'authz':
-          return config?.signals?.role_bindings?.map((binding) => binding.name) || []
-        case 'jailbreak':
-          return config?.signals?.jailbreak?.map((rule) => rule.name) || []
-        case 'pii':
-          return config?.signals?.pii?.map((rule) => rule.name) || []
-        case 'conversation':
-          return config?.signals?.conversation?.map((c) => c.name) || []
-        case 'projection':
-          return projectionOutputs
-        default:
-          return []
-      }
-    }
-
     const defaultForm: DecisionFormState = {
       name: '',
       description: '',
       priority: 1,
-      operator: 'AND',
-      on_unknown: '',
-      conditions: [{ type: 'keyword', name: '' }],
+      tier: undefined,
+      output_contract: '',
+      output_contract_spec: {},
+      action: {},
+      algorithm: undefined,
+      adaptations: {},
+      declarative: {},
+      rules: {},
       modelRefs: [
         {
           model: '',
@@ -329,9 +298,18 @@ export default function ConfigPageDecisionsSection({
             name: decision.name,
             description: decision.description || '',
             priority: decision.priority ?? 1,
-            operator: decision.rules?.operator || 'AND',
-            on_unknown: decision.rules?.on_unknown || '',
-            conditions: cloneDecisionConditions(decision.rules?.conditions),
+            tier: decision.tier,
+            output_contract: decision.output_contract || '',
+            output_contract_spec: decision.output_contract_spec || {},
+            action: decision.action || {},
+            algorithm: decision.algorithm,
+            adaptations: decision.adaptations || {},
+            declarative: {
+              candidateIterations: decision.candidateIterations || [],
+              emits: decision.emits || [],
+              annotations: decision.annotations || {},
+            },
+            rules: JSON.parse(JSON.stringify(decision.rules || {})),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
               model: ref.model,
               use_reasoning:
@@ -350,153 +328,62 @@ export default function ConfigPageDecisionsSection({
             })),
             plugins: (decision.plugins || []).map((plugin) => ({
               type: plugin.type,
-              configuration: JSON.stringify(plugin.configuration || {}, null, 2),
+              configuration: { ...(plugin.configuration || {}) },
             })),
           }
         : defaultForm
-
-    const renderConditionsEditor = (
-      value: DecisionFormState['conditions'],
-      onChange: (value: DecisionFormState['conditions']) => void,
-    ) => {
-      const rows: DecisionFormState['conditions'] = (Array.isArray(value) ? value : []).length
-        ? value
-        : [{ type: 'keyword', name: '' }]
-      if (rows.some(conditionHasNestedRules)) {
-        return (
-          <p className={decisionStyles.editorHelp} role="note">
-            Nested boolean rules are preserved unchanged. Use DSL mode to edit this rule tree.
-          </p>
-        )
-      }
-
-      const updateItem = (index: number, key: 'type' | 'name', val: string) => {
-        const next = rows.map((item, idx) => {
-          if (idx !== index) return item
-          if (key === 'type') {
-            return { type: val, name: '' }
-          }
-          return { ...item, [key]: val }
-        })
-        onChange(next)
-      }
-
-      const removeItem = (index: number) => {
-        const next = rows.filter((_, idx) => idx !== index)
-        onChange(next.length ? next : [{ type: 'keyword', name: '' }])
-      }
-
-      const addItem = () => onChange([...rows, { type: 'keyword', name: '' }])
-
-      return (
-        <div className={decisionStyles.editorList}>
-          {rows.map((cond, idx) => (
-            <div key={idx} className={decisionStyles.editorGridConditions}>
-              <label className={decisionStyles.editorControlLabel}>
-                <span className={decisionStyles.editorControlLabelText}>Signal type</span>
-                <select
-                  value={cond?.type || conditionTypeOptions[0]}
-                  onChange={(e) => updateItem(idx, 'type', e.target.value)}
-                  className={decisionStyles.editorSelect}
-                >
-                  {conditionTypeOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={decisionStyles.editorControlLabel}>
-                <span className={decisionStyles.editorControlLabelText}>Signal name</span>
-                <select
-                  value={cond?.name || ''}
-                  onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                  className={decisionStyles.editorSelect}
-                >
-                  <option value="" disabled>
-                    Select name
-                  </option>
-                  {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                  {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).length ===
-                    0 && (
-                    <option value="" disabled>
-                      No matching signals
-                    </option>
-                  )}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => removeItem(idx)}
-                className={decisionStyles.editorButtonSecondary}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          <button type="button" onClick={addItem} className={decisionStyles.editorButtonSecondary}>
-            Add Condition
-          </button>
-        </div>
-      )
-    }
 
     const fields: FieldConfig<DecisionFormState>[] = [
       {
         name: 'name',
         label: 'Name',
+        section: 'Identity',
+        fullWidth: true,
         type: 'text',
         required: true,
         placeholder: 'Enter a unique decision name',
       },
       {
-        name: 'description',
-        label: 'Description',
-        type: 'textarea',
-        placeholder: 'What does this decision route?',
-      },
-      {
         name: 'priority',
         label: 'Priority',
+        section: 'Identity',
         type: 'number',
         min: 0,
         placeholder: '1',
       },
       {
-        name: 'operator',
-        label: 'Rules Operator',
-        type: 'select',
-        options: ['AND', 'OR', 'NOT'],
-        description:
-          'AND: all conditions must match. OR: any condition matches. NOT: none of the conditions must match (exclusion routing).',
-        required: true,
+        name: 'tier',
+        label: 'Tier',
+        section: 'Identity',
+        type: 'number',
+        min: 0,
+        description: 'Optional decision tier used by tier-scoped learning and selection.',
       },
       {
-        name: 'on_unknown',
-        label: 'On Unknown',
-        type: 'select',
-        options: ['', 'no_match', 'match', 'fail_request'],
-        description:
-          'When a signal evaluator fails: no_match skips this decision, match selects it, fail_request rejects the request with 503. Empty keeps condition on_error.',
+        name: 'description',
+        label: 'Description',
+        section: 'Identity',
+        type: 'textarea',
+        placeholder: 'What does this decision route?',
       },
       {
-        name: 'conditions',
-        label: 'Conditions',
+        name: 'rules',
+        label: 'Rule Tree',
+        section: 'Routing policy',
         type: 'custom',
-        description: 'Add routing conditions (type and name).',
-        customRender: (value, onChange) =>
-          renderConditionsEditor(
-            Array.isArray(value) ? (value as DecisionFormState['conditions']) : [],
-            (nextValue) => onChange(nextValue),
-          ),
+        description:
+          'Configure an unconditional route or a recursive AND, OR, and NOT tree with predicates and classifier failure policy.',
+        customRender: (value, onChange) => (
+          <ConfigPageDecisionRulesEditor
+            value={(value as DecisionFormState['rules']) || {}}
+            onChange={(nextValue) => onChange(nextValue)}
+          />
+        ),
       },
       {
         name: 'modelRefs',
         label: 'Model References',
+        section: 'Routing policy',
         type: 'custom',
         description: 'Set target models and whether to enable reasoning.',
         customRender: (value, onChange) => (
@@ -509,14 +396,88 @@ export default function ConfigPageDecisionsSection({
         ),
       },
       {
+        name: 'action',
+        label: 'Direct Action',
+        section: 'Routing policy',
+        type: 'custom',
+        description: 'An explicit route action used instead of candidate ranking.',
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_ACTION_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
+          />
+        ),
+      },
+      {
+        name: 'algorithm',
+        label: 'Selection Algorithm',
+        section: 'Selection & runtime',
+        type: 'custom',
+        description: 'How this decision selects or combines multiple candidate models.',
+        customRender: (value, onChange) => (
+          <ConfigPageDecisionAlgorithmEditor value={value} onChange={onChange} />
+        ),
+      },
+      {
+        name: 'adaptations',
+        label: 'Learning & Protection',
+        section: 'Selection & runtime',
+        type: 'custom',
+        description: 'Decision-level overrides for online adaptation and model-switch protection.',
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_ADAPTATIONS_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
+          />
+        ),
+      },
+      {
         name: 'plugins',
         label: 'Plugins',
+        section: 'Selection & runtime',
         type: 'custom',
         description: 'Optional plugins applied to this decision.',
         customRender: (value, onChange) => (
           <ConfigPageDecisionPluginsEditor
             value={Array.isArray(value) ? (value as DecisionFormState['plugins']) : []}
             onChange={(nextValue) => onChange(nextValue)}
+          />
+        ),
+      },
+      {
+        name: 'output_contract',
+        label: 'Output Contract',
+        section: 'Output behavior',
+        type: 'textarea',
+        description: 'Optional model-facing output instructions.',
+      },
+      {
+        name: 'output_contract_spec',
+        label: 'Output Contract Specification',
+        section: 'Output behavior',
+        type: 'custom',
+        description: 'Typed extraction, normalization, rendering, and post-processing behavior.',
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_OUTPUT_CONTRACT_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
+          />
+        ),
+      },
+      {
+        name: 'declarative',
+        label: 'Declarative Extensions',
+        section: 'Output behavior',
+        type: 'custom',
+        description: 'Candidate iteration, emitted directives, and bounded annotations.',
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_DECLARATIVE_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
           />
         ),
       },
@@ -538,21 +499,50 @@ export default function ConfigPageDecisionsSection({
 
       const priority = Number.isFinite(formData.priority) ? formData.priority : 0
 
-      const conditions = decisionConditionsForSave(formData.conditions)
+      const rules = decisionRulesForSave(formData.rules)
       const modelRefs = decisionModelRefsForSave(formData.modelRefs)
       const plugins = decisionPluginsForSave(formData.plugins)
+      const action = configuredObject(formData.action)
+      const adaptations = configuredObject(formData.adaptations)
+      const outputContractSpec = configuredObject(formData.output_contract_spec)
+      const declarative = formData.declarative || {}
+      if (action) {
+        const errors = requiredSchemaFieldErrors(DECISION_ACTION_SCHEMA, action)
+        if (errors.length > 0) throw new Error(errors[0])
+      }
+      if (formData.algorithm) {
+        const errors = requiredSchemaFieldErrors(
+          getAlgorithmFieldSchema(algorithmType(formData.algorithm)),
+          algorithmFields(formData.algorithm),
+        )
+        if (errors.length > 0) throw new Error(errors[0])
+      }
+      const declarativeErrors = requiredSchemaFieldErrors(DECISION_DECLARATIVE_SCHEMA, declarative)
+      if (declarativeErrors.length > 0) throw new Error(declarativeErrors[0])
 
       const newDecision = mergeDecisionForSave(mode === 'edit' ? decision : undefined, {
         name,
         description: formData.description,
         priority: priority || 0,
-        rules: decisionRulesForSave(decision?.rules, {
-          operator: formData.operator,
-          conditions,
-          ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
-        }),
+        rules,
         modelRefs,
         plugins,
+        tier: Number.isFinite(formData.tier) ? formData.tier : undefined,
+        output_contract: formData.output_contract?.trim() || undefined,
+        output_contract_spec: outputContractSpec,
+        action: action as DecisionConfig['action'],
+        algorithm: formData.algorithm,
+        adaptations,
+        candidateIterations: Array.isArray(declarative.candidateIterations)
+          ? (declarative.candidateIterations as Array<Record<string, unknown>>)
+          : undefined,
+        emits: Array.isArray(declarative.emits)
+          ? (declarative.emits as Array<Record<string, unknown>>)
+          : undefined,
+        annotations:
+          declarative.annotations && typeof declarative.annotations === 'object'
+            ? (declarative.annotations as Record<string, unknown>)
+            : undefined,
       })
 
       if (!scopedConfig) {

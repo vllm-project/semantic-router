@@ -34,4 +34,32 @@ describe('EditModal accessibility contract', () => {
     expect(source).toContain('dismissible: !saving')
     expect(source).toContain('aria-busy={saving}')
   })
+
+  it('groups simple and complex fields into a shared responsive layout', () => {
+    const markup = renderToStaticMarkup(
+      createElement(EditModal, {
+        isOpen: true,
+        onClose: vi.fn(),
+        onSave: vi.fn(async () => undefined),
+        title: 'Add signal',
+        data: { name: '', type: 'keyword', definition: {} },
+        fields: [
+          { name: 'name', label: 'Name', section: 'Identity', type: 'text' },
+          {
+            name: 'type',
+            label: 'Type',
+            section: 'Identity',
+            type: 'select',
+            options: ['keyword'],
+          },
+          { name: 'definition', label: 'Definition', section: 'Definition', type: 'textarea' },
+        ],
+      }),
+    )
+
+    expect(markup).toContain('>Identity</h3>')
+    expect(markup).toContain('>Definition</h3>')
+    expect(markup).toContain('<select')
+    expect(markup).toContain('<textarea')
+  })
 })

@@ -55,6 +55,9 @@ func (d *decompiler) decompileKeywordSignals() {
 func (d *decompiler) decompileEmbeddingSignals() {
 	for _, emb := range d.cfg.EmbeddingRules {
 		d.write("SIGNAL embedding %s {\n", quoteName(emb.Name))
+		if emb.PrototypeScoring != nil {
+			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(emb.PrototypeScoring))))
+		}
 		if emb.SimilarityThreshold != 0 {
 			d.write("  threshold: %v\n", emb.SimilarityThreshold)
 		}
@@ -242,8 +245,26 @@ func (d *decompiler) decompileClassifierSignals() {
 func (d *decompiler) decompileComplexitySignals() {
 	for _, comp := range d.cfg.ComplexityRules {
 		d.write("SIGNAL complexity %s {\n", quoteName(comp.Name))
+		if comp.PrototypeScoring != nil {
+			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(comp.PrototypeScoring))))
+		}
 		if comp.Threshold != 0 {
 			d.write("  threshold: %v\n", comp.Threshold)
+		}
+		// The explicit boundary pair. Omitting these here would silently
+		// revert a rule to threshold semantics on a YAML -> DSL -> YAML round
+		// trip, discarding its declared cut points.
+		if comp.HardAbove != nil {
+			d.write("  hard_above: %v\n", *comp.HardAbove)
+		}
+		if comp.EasyBelow != nil {
+			d.write("  easy_below: %v\n", *comp.EasyBelow)
+		}
+		if comp.HardBelow != nil {
+			d.write("  hard_below: %v\n", *comp.HardBelow)
+		}
+		if comp.EasyAbove != nil {
+			d.write("  easy_above: %v\n", *comp.EasyAbove)
 		}
 		if comp.Description != "" {
 			d.write("  description: %q\n", comp.Description)

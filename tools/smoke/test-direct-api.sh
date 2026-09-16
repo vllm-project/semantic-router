@@ -13,7 +13,7 @@ echo ""
 # ============================================================================
 # 1. FACT CHECK CLASSIFIER
 # ============================================================================
-echo "## 1. Fact Check Classifier (/api/v1/classify/fact-check)"
+echo "## 1. Fact Check Classifier (/api/v1/diagnostics/classify/fact-check)"
 echo ""
 echo "| Query | Expected | Got | Label | Confidence | Result |"
 echo "|-------|----------|-----|-------|------------|--------|"
@@ -47,7 +47,7 @@ fc_correct=0
 fc_total=0
 for test in "${fact_check_tests[@]}"; do
     IFS='|' read -r query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/fact-check" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/fact-check" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -115,7 +115,7 @@ ml_fc_correct=0
 ml_fc_total=0
 for test in "${ml_fact_check_tests[@]}"; do
     IFS='|' read -r lang query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/fact-check" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/fact-check" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -147,7 +147,7 @@ echo ""
 # ============================================================================
 # 3. USER FEEDBACK CLASSIFIER
 # ============================================================================
-echo "## 3. User Feedback Classifier (/api/v1/classify/user-feedback)"
+echo "## 3. User Feedback Classifier (/api/v1/diagnostics/classify/user-feedback)"
 echo ""
 echo "| Query | Expected | Got | Confidence | Result |"
 echo "|-------|----------|-----|------------|--------|"
@@ -183,7 +183,7 @@ uf_correct=0
 uf_total=0
 for test in "${user_feedback_tests[@]}"; do
     IFS='|' read -r query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/user-feedback" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/user-feedback" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -251,7 +251,7 @@ ml_uf_correct=0
 ml_uf_total=0
 for test in "${ml_feedback_tests[@]}"; do
     IFS='|' read -r lang query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/user-feedback" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/user-feedback" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 

@@ -110,6 +110,7 @@
         "kv_transfer_params",
         "metrics",
         "prompt_logprobs",
+        "prompt_routed_experts",
         "prompt_text",
         "prompt_token_ids",
         "remote_block_ids",

@@ -122,9 +122,18 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `candidates` _string array_ | List of candidate phrases or examples |  |  |
 
-#### ComplexityRulesConfig
+#### ComplexityModelConfig
 
-ComplexityRulesConfig defines complexity-based signal classification
+ComplexityModelConfig configures how the complexity signal produces its
+score. It mirrors global.model_catalog.modules.complexity in the router
+config and is passed through field for field.
+
+The contract requirement sits here rather than on
+RemoteClassifierBackendConfig because it is a property of this consumer, not
+of the block: complexity reads two response shapes, so guessing wrong would
+surface per request instead of at admission. A consumer that reads one shape
+
+- categories does - keeps the field optional and defaults it.
 
 _Appears in:_
 
@@ -132,11 +141,35 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote scoring model. Its absence keeps local prototype<br />scoring; when set, the signal never reads the rules' hard/easy<br />candidates. It sits on the module rather than on a rule because routing<br />signals are replaced wholesale per recipe, so a per-rule backend would<br />vanish under any recipe that did not repeat it. |  | Optional: \{\} <br /> |
+
+#### ComplexityRulesConfig
+
+ComplexityRulesConfig defines complexity-based signal classification.
+
+The CEL rules below reject at admission the boundary combinations the Router
+refuses at config load. Without them the API server accepts the object and
+the Router crashloops on it, which turns a typo into an outage instead of a
+rejected write. They are per-object and static; anything needing the model
+catalog - whether backend.model resolves, for instance - stays with the
+Router's validator, which remains the single source of truth for the rest.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `prototype_scoring` _[PrototypeScoringConfig](#prototypescoringconfig)_ | PrototypeScoring replaces the family prototype-scoring configuration for<br />this rule. Absence inherits the family; a present object is a complete<br />override, including an empty object. Defaults remain Router-owned. |  | Optional: \{\} <br /> |
 | `name` _string_ | Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity") |  |  |
 | `description` _string_ | Description of what this rule classifies |  | Optional: \{\} <br /> |
-| `threshold` _string_ | Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.<br />Queries scoring above this threshold are classified as "hard" |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-| `hard` _[ComplexityCandidates](#complexitycandidates)_ | Hard candidates represent complex/difficult examples |  |  |
-| `easy` _[ComplexityCandidates](#complexitycandidates)_ | Easy candidates represent simple/easy examples |  |  |
+| `threshold` _string_ | Threshold for the local prototype-scoring path (0.0-1.0), stored as a<br />string to avoid float precision issues. The local margin is<br />hard-minus-easy and centred on zero, so the threshold is symmetric: a<br />margin above it is "hard", below its negative is "easy", and in between<br />is "medium". It does not apply under a score.v1 backend, whose score is<br />in the model's own units; state a boundary pair instead. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `hard_above` _string_ | HardAbove and EasyBelow are the two cut points for a score where a<br />higher value is harder, in the scoring model's own units - so no [0,1]<br />pattern applies and negative values are valid. Both are required<br />together, and the pair is mutually exclusive with Threshold and with<br />HardBelow/EasyAbove. Stored as strings to avoid float precision issues. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `easy_below` _string_ | EasyBelow is the lower cut point of the harder-when-higher pair: a score<br />below it is "easy", and anything between EasyBelow and HardAbove is<br />"medium". It must be below HardAbove, and both are required together. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `hard_below` _string_ | HardBelow and EasyAbove are the pair for a score where a lower value is<br />harder - a model predicting the chance of a correct answer, say. They<br />require a score.v1 backend: the local margin is harder-when-higher by<br />construction, and inverting it locally means swapping the candidate<br />lists. Stored as strings to avoid float precision issues. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `easy_above` _string_ | EasyAbove is the upper cut point of the harder-when-lower pair: a score<br />above it is "easy", and anything between HardBelow and EasyAbove is<br />"medium". It must be above HardBelow, and both are required together. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `hard` _[ComplexityCandidates](#complexitycandidates)_ | Hard candidates represent complex/difficult examples. Read only by the<br />local path; a remote backend never consults them, so they are optional. |  | Optional: \{\} <br /> |
+| `easy` _[ComplexityCandidates](#complexitycandidates)_ | Easy candidates represent simple/easy examples. Read only by the local<br />path; a remote backend never consults them, so they are optional. |  | Optional: \{\} <br /> |
 | `composer` _[RuleComposition](#rulecomposition)_ | Composer allows filtering based on other signals (e.g., only apply this rule if domain:medical) |  | Optional: \{\} <br /> |
 
 #### CompositionCondition
@@ -163,6 +196,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
 | `semantic_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | SemanticCache is the deprecated response-cache field. |  | Optional: \{\} <br /> |
@@ -170,6 +205,8 @@ _Appears in:_
 | `prompt_guard` _[PromptGuardConfig](#promptguardconfig)_ | Prompt guard configuration |  | Optional: \{\} <br /> |
 | `classifier` _[ClassifierConfig](#classifierconfig)_ | Classifier configuration |  | Optional: \{\} <br /> |
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
+| `complexity_model` _[ComplexityModelConfig](#complexitymodelconfig)_ | ComplexityModel says how the complexity signal produces its score.<br />Absent, the signal scores locally against each rule's hard/easy<br />candidates. With a backend, a remote model produces the score and the<br />candidates are never read. Mirrors<br />global.model_catalog.modules.complexity in the router config. |  | Optional: \{\} <br /> |
+| `external_models` _[ExternalModelConfig](#externalmodelconfig) array_ | ExternalModels declares the remote models that classifier backends<br />(`classifier.pii.backend.model`, `complexity_model.backend.model`) and<br />the prompt guard protocol refer to by name. Mirrors<br />global.model_catalog.external[] in the router config field for field;<br />the router's own validator decides whether a backend resolves against it. |  | Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
 | `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
@@ -244,6 +281,39 @@ _Appears in:_
 | `endpoint` _string_ |  | jaeger:4317 | Optional: \{\} <br /> |
 | `insecure` _boolean_ |  | true | Optional: \{\} <br /> |
 
+#### ExternalModelConfig
+
+ExternalModelConfig is one entry of global.model_catalog.external[]: a
+remote model a classifier backend or the prompt guard can name. Field names
+are the router's YAML keys so the generic typed conversion carries them
+unchanged.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the catalog name a backend block refers to in its model field. |  | MinLength: 1 <br /> |
+| `model_role` _string_ | ModelRole is what the model is used for; classifier backends require<br />"classification", the prompt guard protocol requires "guardrail". |  | MinLength: 1 <br /> |
+| `llm_model_name` _string_ | ModelName is the model identifier the remote service expects, and the<br />value a token_spans.v1 envelope's model member must equal. |  | MinLength: 1 <br /> |
+| `llm_endpoint` _[ExternalModelEndpoint](#externalmodelendpoint)_ | Endpoint is where the remote model is reached. |  |  |
+| `llm_timeout_seconds` _integer_ | TimeoutSeconds bounds one call when the backend block sets no deadline. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+
+#### ExternalModelEndpoint
+
+ExternalModelEndpoint is the address of a remote classification model.
+
+_Appears in:_
+
+- [ExternalModelConfig](#externalmodelconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `address` _string_ |  |  | MinLength: 1 <br /> |
+| `port` _integer_ |  |  | Maximum: 65535 <br />Minimum: 1 <br /> |
+| `protocol` _string_ |  |  | Enum: [http https] <br />Optional: \{\} <br /> |
+
 #### GatewayReference
 
 GatewayReference references an existing Gateway
@@ -299,7 +369,7 @@ _Appears in:_
 | `preload_embeddings` _boolean_ | PreloadEmbeddings enables precomputing candidate embeddings at startup | true | Optional: \{\} <br /> |
 | `target_dimension` _integer_ | TargetDimension is the embedding dimension to use (default: 768)<br />For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.<br />External providers may use other positive dimensions such as 1024, 1536, or 3072. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `target_layer` _integer_ | TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".<br />Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.<br />Evaluate the latency and quality trade-off on representative deployment data. |  | Enum: [3 6 11 22] <br />Optional: \{\} <br /> |
-| `enable_soft_matching` _boolean_ | EnableSoftMatching enables soft matching mode | true | Optional: \{\} <br /> |
+| `enable_soft_matching` _boolean_ | EnableSoftMatching allows below-threshold matches when no rule meets its threshold. | false | Optional: \{\} <br /> |
 | `min_score_threshold` _string_ | MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 
 #### ImageSpec
@@ -636,7 +706,12 @@ _Appears in:_
 
 #### PIIModelConfig
 
-PIIModelConfig defines PII model configuration
+PIIModelConfig defines PII model configuration.
+
+The contract rule sits on the consumer, as on ComplexityModelConfig: the
+shared backend block lists every contract any consumer reads, and each
+consumer narrows it to what it can parse, so a mismatch is refused at
+admission instead of by the router at load.
 
 _Appears in:_
 
@@ -644,11 +719,16 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `max_sequence_length` _integer_ | MaxSequenceLength is the total tokenized input budget, including special<br />tokens. Omission or zero preserves the 512-token legacy limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `use_mmbert_32k` _boolean_ | UseMmBERT32K selects the local model that supports token windows. |  | Optional: \{\} <br /> |
+| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window scans original content tokens with explicit overlap. Omission or<br />null leaves window selection unchanged; no CRD defaults are injected. |  | Optional: \{\} <br /> |
 | `model_id` _string_ |  |  | Optional: \{\} <br /> |
 | `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit<br />token windows are only supported by the local mmbert32k model. |  | Optional: \{\} <br /> |
+| `on_error` _string_ | OnError selects what a PII backend failure, or a provider-declared<br />truncation, does to the rule that consumed it: allow (default) treats the<br />content as not matching, block matches it as classification_error. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
 
 #### PersistenceSpec
 
@@ -700,7 +780,7 @@ _Appears in:_
 
 #### PromptGuardConfig
 
-PromptGuardConfig defines prompt guard configuration
+PromptGuardConfig defines prompt guard configuration.
 
 _Appears in:_
 
@@ -708,15 +788,52 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
+| `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local mmbert32k variant supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Protocol. When both fields are omitted, the operator uses<br />mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
-| `protocol` _string_ | Protocol selects a remote HTTP backend's wire contract. Mutually<br />exclusive with Variant. Requires an external model configured via a<br />vllmEndpoints/externalModels entry with model_role="guardrail". |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
-| `model_id` _string_ |  | models/mmbert32k-jailbreak-detector-merged | Optional: \{\} <br /> |
-| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.7 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
+| `protocol` _string_ | Protocol is retired and rejected at admission. Configure Backend with<br />the protocol, contract and explicit external model name instead. |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
+| `model_id` _string_ |  | models/Vela-1.0-Encoder-307M-Guard | Optional: \{\} <br /> |
+| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
 | `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
 | `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |
 | `on_error` _string_ | OnError selects what a prompt-guard classifier failure does to the rule<br />that failed to evaluate. "allow" (the default) tolerates the failure and<br />treats the content as not matching; "block" treats it as a positive<br />detection, because an inference failure means the content could not be<br />verified safe. Without this field on the CRD the setting is pruned by the<br />API server and an operator-managed deployment silently fails open. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
+
+#### PromptGuardWindowConfig
+
+PromptGuardWindowConfig scans original content tokens with overlap. The
+native tokenizer also checks that special tokens leave enough content room.
+
+_Appears in:_
+
+- [PIIModelConfig](#piimodelconfig)
+- [PromptGuardConfig](#promptguardconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `size` _integer_ | Size is the inference window budget, including special tokens. |  | Minimum: 1 <br /> |
+| `overlap` _integer_ | Overlap counts content tokens shared by consecutive windows. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+
+#### PrototypeScoringConfig
+
+PrototypeScoringConfig overrides prototype-bank construction and scoring for
+one embedding-backed signal rule. Router-owned defaults apply only after
+translation; the operator preserves an absent override and an empty object.
+
+_Appears in:_
+
+- [ComplexityRulesConfig](#complexityrulesconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled controls prototype clustering. False retains every candidate. |  | Optional: \{\} <br /> |
+| `cluster_similarity_threshold` _string_ | ClusterSimilarityThreshold is the clustering similarity threshold.<br />Stored as a numeric string, like other fractional operator config fields. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `max_prototypes` _integer_ | MaxPrototypes caps the number of cluster representatives. |  | Optional: \{\} <br /> |
+| `best_weight` _string_ | BestWeight weights the best prototype against the top-M mean. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `top_m` _integer_ | TopM is the number of highest-scoring prototypes included in the mean. |  | Optional: \{\} <br /> |
+| `margin_threshold` _string_ | MarginThreshold is the minimum winner-versus-runner-up score margin. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
 
 #### QdrantCacheConfig
 
@@ -852,6 +969,27 @@ _Appears in:_
 | `name` _string_ | Name of the vector field | embedding | Optional: \{\} <br /> |
 | `dimension` _integer_ | Dimension of the embedding vectors<br />For BERT: 384, for Qwen3: 1024, for Gemma: 768 |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `metric_type` _string_ | MetricType for vector similarity<br />Options: "COSINE", "IP" (inner product), "L2" (Euclidean) | COSINE | Enum: [COSINE IP L2] <br />Optional: \{\} <br /> |
+
+#### RemoteClassifierBackendConfig
+
+RemoteClassifierBackendConfig is the shared remote-classifier block. How
+the remote is called (protocol), what shape it answers with (contract),
+which catalog entry it is (model) and how long to wait (deadline) are
+independent axes rather than one enumeration. It mirrors the router's
+backend block field for field so the operator passes it through unchanged.
+
+_Appears in:_
+
+- [ComplexityModelConfig](#complexitymodelconfig)
+- [PIIModelConfig](#piimodelconfig)
+- [PromptGuardConfig](#promptguardconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `protocol` _string_ | Protocol is how the remote is called. |  | Enum: [http_classify http_chat] <br /> |
+| `contract` _string_ | Contract is the response shape the signal reads. Complexity reads two -<br />score.v1, one regression number interpreted through each rule's<br />boundaries, and label_distribution.v1, hard/easy/medium probabilities -<br />so the router requires it there rather than guessing per request. PII<br />reads token_spans.v1, entity spans with code-point offsets. Prompt guard<br />http_chat reads label_decision.v1, a verdict without invented probability. |  | Enum: [score.v1 label_distribution.v1 token_spans.v1 label_decision.v1] <br />Optional: \{\} <br /> |
+| `model` _string_ | Model is the name of an entry in the external model catalog. |  | MinLength: 1 <br /> |
+| `deadline_ms` _integer_ | DeadlineMs bounds one remote call. Defaults to the router's value. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### ResourceConfig
 

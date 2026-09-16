@@ -174,7 +174,7 @@ jobs:
 
   pr-gate:
     name: PR Gate
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - changes
       - quality

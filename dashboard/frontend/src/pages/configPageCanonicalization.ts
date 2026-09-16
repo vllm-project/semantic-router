@@ -108,6 +108,12 @@ export const ensureProvidersConfig = (cfg: ConfigData) => {
   return cfg.providers
 }
 
+export const ensureEvaluationConfig = (cfg: ConfigData) => {
+  if (!cfg.evaluation) cfg.evaluation = {}
+  if (!cfg.evaluation.records) cfg.evaluation.records = []
+  return cfg.evaluation
+}
+
 export const ensureProviderDefaultsConfig = (cfg: ConfigData) => {
   const providers = ensureProvidersConfig(cfg)
   if (!providers.defaults) {
@@ -159,9 +165,19 @@ export const routingModelCardReferenceCount = (cfg: ConfigData, name: string): n
   (cfg.providers?.models || []).filter((model) => (model.catalog?.trim() || model.name) === name)
     .length
 
-export const removeRoutingModelCardIfUnreferenced = (cfg: ConfigData, name: string) => {
+export const removeModelCardDataIfUnreferenced = (cfg: ConfigData, name: string) => {
   if (routingModelCardReferenceCount(cfg, name) === 0) {
     removeRoutingModelCard(cfg, name)
+    if (cfg.evaluation?.records) {
+      cfg.evaluation.records = cfg.evaluation.records.filter((record) => record.model !== name)
+      if (
+        cfg.evaluation.records.length === 0 &&
+        !cfg.evaluation.benchmarks?.length &&
+        !cfg.evaluation.indices?.length
+      ) {
+        delete cfg.evaluation
+      }
+    }
   }
 }
 
@@ -346,12 +362,11 @@ const promoteLegacyModelBindings = (cfg: ConfigData) => {
       cardPatch.tags = cloneUnknown(modelConfig.tags)
     }
     if (typeof modelConfig.quality_score === 'number') {
-      cardPatch.evaluations = [
-        {
-          benchmark: 'vllm-sr/operator-rating@1.0.0',
-          metrics: { score: modelConfig.quality_score },
-        },
-      ]
+      ensureEvaluationConfig(cfg).records!.push({
+        model: modelName,
+        benchmark: 'vllm-sr/operator-rating@1.0.0',
+        metrics: { score: modelConfig.quality_score },
+      })
     }
     if (modelConfig.modality) {
       cardPatch.modality = modelConfig.modality

@@ -86,7 +86,11 @@ func (r *OpenAIRouter) createLooper(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (looper.Looper, error) {
-	l, err := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
+	l, err := looper.FactoryWithClient(
+		&r.Config.Looper,
+		decision.Algorithm.Type,
+		r.looperModelClient(),
+	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
 			"request_id": reqCtx.RequestID,
@@ -96,6 +100,13 @@ func (r *OpenAIRouter) createLooper(
 		})
 	}
 	return l, err
+}
+
+func (r *OpenAIRouter) looperModelClient() *looper.Client {
+	if r.looperClient != nil {
+		return r.looperClient
+	}
+	return looper.NewClient(&r.Config.Looper)
 }
 
 // handleLooperExecution executes the looper for multi-model decisions
@@ -141,7 +152,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 	reqCtx *RequestContext,
 ) (*looper.Request, *ext_proc.ProcessingResponse) {
 	modelRefs := decision.ModelRefs
-	if len(reqCtx.VSREligibleModelRefs) > 0 {
+	if reqCtx.VSREligibleModelRefs != nil {
 		modelRefs = reqCtx.VSREligibleModelRefs
 	}
 	// Build looper request.
@@ -160,6 +171,9 @@ func (r *OpenAIRouter) buildLooperRequest(
 		"streaming":        streaming,
 		"response_api":     isResponseAPIRequest(reqCtx),
 	})
+	if _, err := r.applyDispatchRequestParams(request, reqCtx); err != nil {
+		return nil, r.createErrorResponse(400, "Invalid request parameter policy")
+	}
 	engine, err := r.protocolEngine()
 	if err == nil {
 		var encoded protocolcodec.RequestResult
@@ -169,16 +183,23 @@ func (r *OpenAIRouter) buildLooperRequest(
 			openAIRequest, err = parseOpenAIRequest(encoded.Body)
 			if err == nil {
 				looperReq := &looper.Request{
-					OriginalRequest:    openAIRequest,
-					BaseContextTokens:  reqCtx.VSRContextTokenCount,
-					ModelRefs:          modelRefs,
-					ModelParams:        r.getModelParams(),
-					Algorithm:          decision.Algorithm,
-					IsStreaming:        streaming,
-					DecisionName:       decision.Name,
-					RecipeName:         reqCtx.Routing.RecipeName(),
-					OutputContract:     decision.OutputContract,
-					OutputContractSpec: decision.OutputContractSpec,
+					OriginalRequest:       openAIRequest,
+					CandidateRequirements: r.candidateRequirements(reqCtx).Clone(),
+					PermittedModels:       looperPermittedModels(modelRefs, decision.Algorithm),
+					Grounding:             r.groundingForRecipe(reqCtx.Routing.RecipeName()),
+					BaseContextTokens:     reqCtx.VSRContextTokenCount,
+					ModelRefs:             modelRefs,
+					ModelParams:           r.getModelParams(),
+					Algorithm:             decision.Algorithm,
+					IsStreaming:           streaming,
+					DecisionName:          decision.Name,
+					RecipeName:            reqCtx.Routing.RecipeName(),
+					OutputContract:        decision.OutputContract,
+					OutputContractSpec:    decision.OutputContractSpec,
+				}
+				if params := decision.GetRequestParamsConfig(); params != nil && params.MaxTokensLimit != nil {
+					limit := *params.MaxTokensLimit
+					looperReq.MaxTokensLimit = &limit
 				}
 				return looperReq, nil
 			}
@@ -235,8 +256,9 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	reqCtx.VSRSelectedModel = resp.Model
 	reqCtx.VSRSelectionMethod = resp.AlgorithmType
 
-	// Capture router replay information if enabled
-	// ModelsUsed is the execution trace; resp.Model is the final response model.
+	// Capture router replay information if enabled. Detailed attempts remain in
+	// Replay; the public response surface keeps only aggregate Looper headers.
+	reqCtx.VSRLooperDiagnostics = looperReplayDiagnostics(resp.ExecutionTrace)
 	r.startRouterReplay(reqCtx, originalModel, resp.Model, decision.Name)
 	r.updateLooperReplayUsage(reqCtx, resp.Usage)
 	if resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {
@@ -281,4 +303,29 @@ func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper
 		CompletionTokens: replayIntPtr(completionTokens),
 		TotalTokens:      replayIntPtr(totalTokens),
 	})
+}
+
+func (r *OpenAIRouter) groundingForRecipe(recipe config.RecipeName) *looper.GroundingBackends {
+	if r.RecipeClassifiers != nil {
+		classifier, ok := r.RecipeClassifiers.ForRecipe(recipe)
+		if !ok {
+			return nil
+		}
+		return classifier.GroundingBackends()
+	}
+	if recipe == "" || recipe == config.DefaultRecipeName {
+		return r.Classifier.GroundingBackends()
+	}
+	return nil
+}
+
+func looperPermittedModels(refs []config.ModelRef, algorithm *config.AlgorithmConfig) []string {
+	var models []string
+	for _, ref := range refs {
+		models = append(models, ref.Model)
+		if ref.LoRAName != "" {
+			models = append(models, ref.LoRAName)
+		}
+	}
+	return append(models, explicitAlgorithmModels(algorithm)...)
 }

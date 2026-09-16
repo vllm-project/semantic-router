@@ -1,5 +1,10 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
-import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import {
+  mergeRouterFieldSchemas,
+  pluginFieldsFromRouterSchema,
+  signalFieldsFromRouterSchema,
+} from './routerConfigSchema'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
 
@@ -74,7 +79,7 @@ const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
   },
 ]
 
-export function getSignalFieldSchema(signalType: string): FieldSchema[] {
+function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
   if (policyFields) return policyFields
   switch (signalType) {
@@ -172,7 +177,17 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.70' },
       ]
     case 'language':
-      return [{ key: 'description', label: 'Description', type: 'string' }]
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        {
+          key: 'threshold',
+          label: 'Confidence Threshold',
+          type: 'number',
+          min: 0,
+          max: 1,
+          placeholder: '0.3',
+        },
+      ]
     case 'context':
       return [
         {
@@ -260,8 +275,39 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'threshold',
           label: 'Threshold',
           type: 'number',
-          required: true,
           placeholder: '0.1',
+          description:
+            'Symmetric cut point for local prototype scoring: a margin above it is hard, below its negative is easy. Not used with a score.v1 backend; set a boundary pair instead.',
+        },
+        {
+          key: 'hard_above',
+          label: 'Hard Above',
+          type: 'number',
+          placeholder: '0.85',
+          description:
+            'With Easy Below: boundaries for a remote score where a higher value is harder, in the model’s own units. Mutually exclusive with Threshold and with Hard Below / Easy Above.',
+        },
+        {
+          key: 'easy_below',
+          label: 'Easy Below',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores below this are easy; between Easy Below and Hard Above is medium.',
+        },
+        {
+          key: 'hard_below',
+          label: 'Hard Below',
+          type: 'number',
+          placeholder: '0.2',
+          description:
+            'With Easy Above: boundaries for a remote score where a lower value is harder, such as a predicted chance of answering correctly. Requires a score.v1 backend.',
+        },
+        {
+          key: 'easy_above',
+          label: 'Easy Above',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores above this are easy; between Hard Below and Easy Above is medium.',
         },
         {
           key: 'hard',
@@ -356,6 +402,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'target',
           label: 'Target',
           type: 'object',
+          required: true,
           description: 'Knowledge-base group or label to match.',
           fields: [
             {
@@ -372,10 +419,9 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'match',
           label: 'Match Strategy',
           type: 'select',
-          options: ['best', 'all'],
+          options: ['best', 'threshold'],
           description: 'How to match against the KB',
         },
-        { key: 'description', label: 'Description', type: 'string' },
       ]
     case 'conversation':
       return [
@@ -446,6 +492,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
       ]
     case 'event':
       return [
+        { key: 'description', label: 'Description', type: 'string' },
         {
           key: 'event_types',
           label: 'Event Types',
@@ -466,8 +513,15 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   }
 }
 
-export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
-  const capabilityFields = getCapabilityPluginFieldSchema(pluginType)
+export function getSignalFieldSchema(signalType: string): FieldSchema[] {
+  return mergeRouterFieldSchemas(
+    signalFieldsFromRouterSchema(signalType),
+    getCuratedSignalFieldSchema(signalType),
+  )
+}
+
+function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
+  const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
     case 'memory':
@@ -787,6 +841,13 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
     default:
       return [{ key: 'enabled', label: 'Enabled', type: 'boolean' }]
   }
+}
+
+export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
+  return mergeRouterFieldSchemas(
+    pluginFieldsFromRouterSchema(pluginType),
+    getCuratedPluginFieldSchema(pluginType),
+  )
 }
 
 export {

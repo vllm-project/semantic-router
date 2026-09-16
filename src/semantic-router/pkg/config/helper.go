@@ -322,7 +322,8 @@ func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PI
 
 // IsPIIClassifierEnabled checks if PII classification is enabled
 func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	return c.PIIModel.Active() && c.PIIModel.ModelID != "" && c.PIIMappingPath != ""
+	modelConfigured := c.PIIModel.ModelID != "" || c.PIIModel.Backend != nil
+	return c.PIIModel.Active() && modelConfigured && c.PIIMappingPath != ""
 }
 
 // IsCategoryClassifierEnabled checks if category classification is enabled
@@ -346,6 +347,15 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		return false
 	}
 
+	if c.PromptGuard.Backend != nil {
+		backend := c.PromptGuard.Backend
+		contract := RemoteClassifierContractLabelDistribution
+		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
+			contract = RemoteClassifierContractLabelDecision
+		}
+		_, err := ResolveRemoteClassifierBackend(c, backend, ModelRoleGuardrail, contract)
+		return err == nil
+	}
 	// Check configuration based on the selected backend
 	if c.PromptGuard.Protocol != "" {
 		// For remote backends: need external model with role="guardrail"
@@ -451,25 +461,12 @@ func (c *RouterConfig) ValidateEndpoints() error {
 
 // IsSystemPromptEnabled returns whether system prompt injection is enabled for a decision
 func (d *Decision) IsSystemPromptEnabled() bool {
-	config := d.GetSystemPromptConfig()
-	if config == nil {
-		return false
-	}
-	// If Enabled is explicitly set, use that value
-	if config.Enabled != nil {
-		return *config.Enabled
-	}
-	// Default to true if SystemPrompt is not empty
-	return config.SystemPrompt != ""
+	return d.GetSystemPromptConfig().IsEnabled()
 }
 
-// GetSystemPromptMode returns the system prompt injection mode, defaulting to "replace"
+// GetSystemPromptMode returns the injection mode, defaulting to insert.
 func (d *Decision) GetSystemPromptMode() string {
-	config := d.GetSystemPromptConfig()
-	if config == nil || config.Mode == "" {
-		return "insert" // Default mode
-	}
-	return config.Mode
+	return d.GetSystemPromptConfig().EffectiveMode()
 }
 
 // GetCategoryByName returns a category by name

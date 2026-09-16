@@ -9,7 +9,7 @@ import (
 // TestRecordJSONExposesDemotedHeaderFields locks the replay wire contract for
 // the two v0.4 demoted-header values (#2200, #2254). The replay API marshals
 // the full Record, so these exact snake_case keys are what GET
-// /v1/router_replay/{id} and the dashboard replay view read. Asserting the raw
+// /api/v1/observability/replays/{id} and the dashboard replay view read. Asserting the raw
 // JSON keys (not just a round trip) guards against a tag rename silently
 // breaking that contract.
 func TestRecordJSONExposesDemotedHeaderFields(t *testing.T) {

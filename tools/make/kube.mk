@@ -114,7 +114,7 @@ test-api: ## Test the Classification API
 	@curl -s -f http://localhost:8080/health || (echo "$(RED)[ERROR]$(NC) Health check failed. Is port-forward running?" && exit 1)
 	@echo "$(GREEN)[SUCCESS]$(NC) Health check passed"
 	@echo "$(BLUE)[INFO]$(NC) Testing intent classification..."
-	@curl -s -X POST http://localhost:8080/api/v1/classify/intent \
+	@curl -s -X POST http://localhost:8080/api/v1/diagnostics/classify/intent \
 		-H "Content-Type: application/json" \
 		-d '{"text": "What is machine learning?"}' | head -c 200
 	@echo ""
