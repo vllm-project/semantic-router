@@ -1,6 +1,6 @@
 # Deployment and model-pool details
 
-Follow the [operations skill](../SKILL.md) for installation and capability
+Follow the [operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md) for installation and capability
 preflight. Check the installed commands and selected image capabilities before
 runtime mutations; record concrete incompatibilities when a prerequisite fails.
 
@@ -42,8 +42,22 @@ and driver/container compatibility before downloading the full pool.
 
 When acceleration is required, verify the effective model bindings, successful
 initialization, and actual devices in the live inventory. A runtime platform
-selection alone does not establish each model's device. For an AMD deployment,
-read [AMD ROCm details](amd-rocm.md); other deployments do not need that reference.
+selection alone does not establish each model's device.
+
+For a local GPU deployment, explicitly select the `--platform` value supported
+by the installed `serve --help` and detected hardware. The CLI does not select
+a GPU platform automatically. Check inherited platform, image, and runtime
+overrides before reusing a stack. Verify device passthrough, driver compatibility,
+and the selected image. For Kubernetes, configure images and devices through the
+deployment profile rather than the local `--platform` shortcut.
+Keep Router devices separate from generation backends where required and retain
+the same selection on restart. If the available runtime cannot meet the requested
+acceleration, report that limitation before starting a different deployment.
+
+If initialization or inference fails, retain the image, model revision, error,
+and triggering input size. Qualify a proposed fix on that path; a successful
+short request does not establish long-context or concurrent behavior. Use the
+[evaluation checks](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md) required by the user's task.
 
 ## Add or replace physical models
 
@@ -81,7 +95,7 @@ prompt-plus-generation context. A learned binding's `overflow: reject` does not
 by itself make that limit an API rejection boundary: an unknown signal can cause
 `no_match` and another decision to serve the request. Candidate metadata can also
 exclude a budget that the backend accepts directly. Verify these separately with
-the [boundary checks](evaluation-loop.md#token-boundaries-and-public-errors)
+the [boundary checks](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md#token-boundaries-and-public-errors)
 before advertising supported limits.
 
 ## Dashboard access
@@ -106,7 +120,7 @@ do not assume default credentials. Record the access URL/tunnel and hand off
 credentials privately through the user's chosen secure mechanism.
 
 Follow the main skill's UI path and the
-[repeated checks](evaluation-loop.md#repeated-api-and-ui-checks) to verify real
+[repeated checks](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md#repeated-api-and-ui-checks) to verify real
 Playground completions. Server-backed preview and inference delivery are
 separate evidence. Keep credentials and raw private workload outputs out of
 source control and public receipts.

@@ -42,8 +42,22 @@ and driver/container compatibility before downloading the full pool.
 
 When acceleration is required, verify the effective model bindings, successful
 initialization, and actual devices in the live inventory. A runtime platform
-selection alone does not establish each model's device. For an AMD deployment,
-read [AMD ROCm details](https://vllm-sr.ai/install/agent/vllm-sr/references/amd-rocm.md); other deployments do not need that reference.
+selection alone does not establish each model's device.
+
+For a local GPU deployment, explicitly select the `--platform` value supported
+by the installed `serve --help` and detected hardware. The CLI does not select
+a GPU platform automatically. Check inherited platform, image, and runtime
+overrides before reusing a stack. Verify device passthrough, driver compatibility,
+and the selected image. For Kubernetes, configure images and devices through the
+deployment profile rather than the local `--platform` shortcut.
+Keep Router devices separate from generation backends where required and retain
+the same selection on restart. If the available runtime cannot meet the requested
+acceleration, report that limitation before starting a different deployment.
+
+If initialization or inference fails, retain the image, model revision, error,
+and triggering input size. Qualify a proposed fix on that path; a successful
+short request does not establish long-context or concurrent behavior. Use the
+[evaluation checks](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md) required by the user's task.
 
 ## Add or replace physical models
 

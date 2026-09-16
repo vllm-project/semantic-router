@@ -1,6 +1,6 @@
 # Configuration and Recipe details
 
-Use these details with the [operations skill](../SKILL.md). Start with installed
+Use these details with the [operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md). Start with installed
 help and the target Router's discovery; set `ROUTER_ORIGIN` to its actual
 management origin. An inference listener is a separate endpoint.
 
@@ -81,4 +81,4 @@ Discover the activated Recipe's published entrypoint from the running Router.
 `vllm-sr/auto` is reserved and cannot be rebound to that Recipe. Use
 `recipe validate`, `recipe plan`, and `recipe apply` only after checking their
 installed help and target contract. Verify the active binding using both
-preview and real routed requests; see [evaluation details](evaluation-loop.md).
+preview and real routed requests; see [evaluation details](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md).

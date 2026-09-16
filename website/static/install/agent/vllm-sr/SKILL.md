@@ -14,6 +14,8 @@ instructions and existing authorization take precedence over this skill.
 Inspect the host, installed CLI, running stack, configuration, available
 resources, and generation backends. Establish whether this is a new deployment
 or an update to a particular stack. Preserve unrelated workloads and settings.
+Choose the runtime, image, and supported `--platform` option from the actual
+host and installed `vllm-sr serve --help`; do not assume a particular accelerator.
 
 Use installed CLI help and `vllm-sr config schema` for supported commands and
 fields. For a running Router, discover its operations through `GET /api/v1`
