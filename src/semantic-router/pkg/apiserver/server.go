@@ -431,48 +431,26 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 // handleHealth handles health check requests
 func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status": "healthy", "service": "classification-api"}`))
+	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api"})
 }
 
 // handleReady reports whether router startup has completed enough for traffic.
 func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+	response := readinessResponse{Status: "starting", Service: "classification-api"}
 	state := s.loadStartupState()
-	if state == nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(`{"status":"starting","service":"classification-api","ready":false}`))
-		return
+	status := http.StatusServiceUnavailable
+	if state != nil {
+		response.Ready = state.Ready
+		response.readinessDetails = &readinessDetails{
+			Phase: state.Phase, Message: state.Message, DownloadingModel: state.DownloadingModel,
+			PendingModels: state.PendingModels, ReadyModels: state.ReadyModels, TotalModels: state.TotalModels,
+		}
+		if state.Ready {
+			response.Status = "ready"
+			status = http.StatusOK
+		}
 	}
-
-	if !state.Ready {
-		s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
-			"status":            "starting",
-			"service":           "classification-api",
-			"ready":             false,
-			"phase":             state.Phase,
-			"message":           state.Message,
-			"downloading_model": state.DownloadingModel,
-			"pending_models":    state.PendingModels,
-			"ready_models":      state.ReadyModels,
-			"total_models":      state.TotalModels,
-		})
-		return
-	}
-
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"status":            "ready",
-		"service":           "classification-api",
-		"ready":             true,
-		"phase":             state.Phase,
-		"message":           state.Message,
-		"downloading_model": state.DownloadingModel,
-		"pending_models":    state.PendingModels,
-		"ready_models":      state.ReadyModels,
-		"total_models":      state.TotalModels,
-	})
+	s.writeJSONResponse(w, status, response)
 }
 
 func (s *ClassificationAPIServer) writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
@@ -512,13 +490,10 @@ func (s *ClassificationAPIServer) writeJSONEncodingError(w http.ResponseWriter) 
 }
 
 func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode, message string) {
-	errorResponse := map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":      errorCode,
-			"message":   scrubSecretsInErrorMessage(message),
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
-		},
-	}
+	errorResponse := managementErrorResponse{Error: managementErrorDetail{
+		Code: errorCode, Message: scrubSecretsInErrorMessage(message),
+		Timestamp: time.Now().UTC().Format(time.RFC3339), RequestID: w.Header().Get(managementRequestIDHeader),
+	}}
 
 	s.writeJSONResponse(w, statusCode, errorResponse)
 }

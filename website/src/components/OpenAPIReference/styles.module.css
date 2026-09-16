@@ -130,7 +130,8 @@
 
 .directory button:focus-visible,
 .filters input:focus-visible,
-.filters select:focus-visible {
+.filters select:focus-visible,
+.reference summary:focus-visible {
   outline: 2px solid var(--ifm-color-primary);
   outline-offset: 2px;
 }
@@ -281,7 +282,7 @@
   background: var(--site-surface-alt);
 }
 
-.accessContract > div:first-child:nth-last-child(3) {
+.accessContract > div:first-child:nth-last-child(odd) {
   grid-column: 1 / -1;
 }
 
@@ -326,7 +327,7 @@
 
 .parameters > div,
 .bodyContract,
-.responses > div {
+.responses > details {
   padding: 0.65rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 7px;
@@ -372,38 +373,93 @@
   overflow-wrap: anywhere;
 }
 
-.bodyFields {
+.mediaSchemas,
+.pluginOperations {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-  gap: 0.4rem;
-  margin-top: 0.45rem;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
 }
 
-.bodyFields > div {
-  display: flex;
+.reference .mediaType {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  overflow-wrap: anywhere;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.7rem;
+}
+
+.schemaField {
   min-width: 0;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  padding: 0.48rem 0.55rem;
+  padding: 0.45rem 0.55rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 6px;
-  font-size: 0.62rem;
+  font-size: 0.65rem;
 }
 
-.reference .bodyFields code {
+.schemaField > summary,
+.responses > details > summary {
+  cursor: pointer;
+}
+
+.schemaLabel {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.reference .schemaField code,
+.schemaField span {
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: 0.72rem;
 }
 
-.bodyFields span,
-.bodyFields b {
+.schemaField > summary > * {
+  margin-right: 0.3rem;
+}
+
+.schemaField span,
+.schemaField b,
+.pluginOperations span {
   padding: 0.08rem 0.25rem;
   border-radius: 3px;
   background: var(--ifm-color-emphasis-200);
   color: var(--ifm-color-emphasis-700);
-  font-size: 0.55rem;
+  font-size: 0.59rem;
+}
+
+.reference .schemaField p {
+  margin: 0.35rem 0 0;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.schemaChildren {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  padding-left: min(2vw, 0.65rem);
+  border-left: 2px solid var(--ifm-color-emphasis-200);
+}
+
+.pluginOperations {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.pluginOperations > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+}
+
+.reference .pluginOperations code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
 }
 
 .block :global(.theme-code-block) {
@@ -417,15 +473,14 @@
   margin-top: 0.55rem;
 }
 
-.responses > div {
-  display: grid;
-  grid-template-columns: minmax(44px, max-content) minmax(0, 1fr);
-  align-items: start;
-  gap: 0.7rem;
+.responses > details {
   font-size: 0.76rem;
 }
 
-.responses strong {
+.responses > details > summary > strong {
+  display: inline-block;
+  min-width: 44px;
+  margin-right: 0.5rem;
   padding: 0.2rem 0.3rem;
   border-radius: 5px;
   background: var(--site-surface-alt);
@@ -435,26 +490,25 @@
   text-align: center;
 }
 
-.responses strong[data-status='2'] {
+.responses > details > summary > strong[data-status='2'] {
   background: color-mix(in srgb, #18794e 9%, var(--ifm-background-surface-color));
   color: #18794e;
 }
 
-:global([data-theme='dark']) .responses strong[data-status='2'] {
+:global([data-theme='dark']) .responses > details > summary > strong[data-status='2'] {
   color: #7dd3a5;
 }
 
-.reference .responses p {
-  margin: 0;
+.responses > details > summary > span {
+  overflow-wrap: anywhere;
   line-height: 1.6;
 }
 
-.reference .responses code {
-  display: block;
-  margin-top: 0.25rem;
-  overflow-wrap: anywhere;
-  color: var(--ifm-color-emphasis-600);
-  font-size: 0.7rem;
+.responseDetails,
+.responseHeaders {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
 }
 
 .empty {
