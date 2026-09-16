@@ -19,10 +19,10 @@ import (
 
 func openvinoError(err error) error {
 	if errors.Is(err, ov.ErrInputTooLong) {
-		return fmt.Errorf("%w: %v", binding.ErrInputLimit, err)
+		return fmt.Errorf("%w: %w", binding.ErrInputLimit, err)
 	}
 	if errors.Is(err, ov.ErrClosed) {
-		return fmt.Errorf("%w: %v", binding.ErrClosed, err)
+		return fmt.Errorf("%w: %w", binding.ErrClosed, err)
 	}
 	return err
 }
@@ -92,9 +92,9 @@ func (r *Runtime) openvinoEmbedding(ctx context.Context, spec config.ResolvedMod
 	// Embedding label metadata does not change graph execution.
 	a.Labels = nil
 	resource, identity, err := r.openvinoResource(ctx, spec, a, func() (io.Closer, error) {
-		model, err := ov.LoadEmbeddingModel(a.options())
-		if err != nil {
-			return nil, openvinoError(err)
+		model, loadErr := ov.LoadEmbeddingModel(a.options())
+		if loadErr != nil {
+			return nil, openvinoError(loadErr)
 		}
 		return &embeddingEngine{openvino: &openvinoEmbeddingEngine{model: model}}, nil
 	})
@@ -103,9 +103,9 @@ func (r *Runtime) openvinoEmbedding(ctx context.Context, spec config.ResolvedMod
 	}
 	prepared := &preparedEmbedding{resource: resource, identity: identity, capability: a.capability(spec)}
 	err = resource.Use(ctx, func(value io.Closer) error {
-		dimension, err := warmEmbeddingModel(value.(*embeddingEngine), view, nil)
+		dimension, warmErr := warmEmbeddingModel(value.(*embeddingEngine), view, nil)
 		prepared.capability.Embedding = &binding.EmbeddingCapability{Dimension: dimension, Pooling: "mean_or_exported", Normalization: "none", Modalities: []string{"text"}}
-		return err
+		return warmErr
 	})
 	if err != nil {
 		_ = resource.Close()
@@ -123,9 +123,9 @@ func (r *Runtime) openvinoSequence(ctx context.Context, spec config.ResolvedMode
 		return nil, fmt.Errorf("%w: OpenVINO classifier requires export id2label", binding.ErrCapability)
 	}
 	resource, _, err := r.openvinoResource(ctx, spec, a, func() (io.Closer, error) {
-		model, err := ov.LoadClassifierModel(a.options(), len(a.Labels))
-		if err != nil {
-			return nil, openvinoError(err)
+		model, loadErr := ov.LoadClassifierModel(a.options(), len(a.Labels))
+		if loadErr != nil {
+			return nil, openvinoError(loadErr)
 		}
 		return model, nil
 	})
