@@ -199,11 +199,41 @@ func TestBuiltinVaultUnknownTriageFailsClosed(t *testing.T) {
 	}
 }
 
-func TestBuiltinVaultPrivacyIsIndependentOfVerdict(t *testing.T) {
-	cfg := builtinPolicyClassifier(t, "vault").Config
-	if cfg.DataPolicy.ReplayAllowed() {
-		t.Fatal("Vault must deny replay before any decision is selected")
+func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
+	for _, name := range []string{"balance", "speed", "cost", "accuracy", "vault"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := builtinPolicyClassifier(t, name).Config
+			if !cfg.RouterReplay.Enabled || cfg.RouterReplay.StoreBackend != "postgres" || cfg.RouterReplay.TTLSeconds != 604800 {
+				t.Fatal("built-in recipes must default to seven-day PostgreSQL Replay")
+			}
+			for _, route := range cfg.Decisions {
+				if cfg.EffectiveRouterReplayConfig(&route) == nil {
+					t.Fatalf("decision %q must inherit Replay capture", route.Name)
+				}
+			}
+			cfg.RouterReplay.Enabled = false
+			for _, route := range cfg.Decisions {
+				if cfg.EffectiveRouterReplayConfig(&route) != nil {
+					t.Fatalf("global opt-out must prevent default capture for decision %q", route.Name)
+				}
+			}
+			cfg.RouterReplay.Enabled = true
+			denyReplay := false
+			cfg.DataPolicy = &config.RoutingDataPolicy{Replay: &denyReplay}
+			if cfg.EffectiveRouterReplayConfig(nil) != nil {
+				t.Fatal("operator opt-out must also prevent capture before decision selection")
+			}
+			for _, route := range cfg.Decisions {
+				if cfg.EffectiveRouterReplayConfig(&route) != nil {
+					t.Fatalf("operator opt-out must prevent capture for decision %q", route.Name)
+				}
+			}
+		})
 	}
+}
+
+func TestBuiltinVaultDataControlsAreIndependentOfVerdict(t *testing.T) {
+	cfg := builtinPolicyClassifier(t, "vault").Config
 	for _, route := range cfg.Decisions {
 		t.Run(route.Name, func(t *testing.T) {
 			tools := route.GetToolsConfig()

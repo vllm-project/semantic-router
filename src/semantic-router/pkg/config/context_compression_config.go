@@ -14,6 +14,7 @@ const (
 	ContextCompressionTargetPreserve    = "preserve"
 	ContextCompressionTargetExtractive  = "extractive"
 	ContextCompressionTargetRecoverable = "recoverable"
+	ContextCompressionTargetTruncate    = "truncate"
 
 	ContextCompressionScoringBM25      = "bm25"
 	ContextCompressionScoringEmbedding = "embedding"
@@ -128,11 +129,18 @@ type ContextCompressionTargetConfig struct {
 	TargetTokens int    `json:"target_tokens,omitempty" yaml:"target_tokens,omitempty"`
 }
 
+// Current-user truncation is an explicit opt-in; other targets retain their
+// existing extractive/recoverable policy.
+type ContextCompressionCurrentUserConfig struct {
+	Mode string `json:"mode,omitempty" yaml:"mode,omitempty"`
+}
+
 type ContextCompressionTargetsConfig struct {
-	ToolOutputs ContextCompressionTargetConfig `json:"tool_outputs,omitempty" yaml:"tool_outputs,omitempty"`
-	History     ContextCompressionTargetConfig `json:"history,omitempty" yaml:"history,omitempty"`
-	RAG         ContextCompressionTargetConfig `json:"rag,omitempty" yaml:"rag,omitempty"`
-	Memory      ContextCompressionTargetConfig `json:"memory,omitempty" yaml:"memory,omitempty"`
+	CurrentUser ContextCompressionCurrentUserConfig `json:"current_user,omitempty" yaml:"current_user,omitempty"`
+	ToolOutputs ContextCompressionTargetConfig      `json:"tool_outputs,omitempty" yaml:"tool_outputs,omitempty"`
+	History     ContextCompressionTargetConfig      `json:"history,omitempty" yaml:"history,omitempty"`
+	RAG         ContextCompressionTargetConfig      `json:"rag,omitempty" yaml:"rag,omitempty"`
+	Memory      ContextCompressionTargetConfig      `json:"memory,omitempty" yaml:"memory,omitempty"`
 }
 
 type ContextCompressionScoringConfig struct {

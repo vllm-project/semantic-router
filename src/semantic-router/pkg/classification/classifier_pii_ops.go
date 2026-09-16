@@ -26,6 +26,23 @@ func partialScanError(partial bool) error {
 	return nil
 }
 
+// ErrPIIScanRefused marks a scan refused under classifier.pii.on_error: block
+// because the provider declared it saw only part of the text. It does not
+// unwrap to ErrTokenSpansTruncated on purpose: callers tolerate a declared
+// truncation as a partial success, and a refusal must not pass through that
+// tolerance as if it were one.
+var ErrPIIScanRefused = errors.New("PII scan refused: provider truncated its input and on_error is block")
+
+// piiScanError wraps a token classification failure for callers. A truncation
+// under block becomes ErrPIIScanRefused, keeping the provider's message as
+// text but not its sentinel in the chain.
+func piiScanError(err error, block bool) error {
+	if block && errors.Is(err, ErrTokenSpansTruncated) {
+		return fmt.Errorf("%w: %s", ErrPIIScanRefused, err.Error())
+	}
+	return fmt.Errorf("PII token classification error: %w", err)
+}
+
 // ClassifyPIIWithThreshold performs PII token classification with a custom threshold
 func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, threshold float32) ([]string, error) {
 	if !c.IsPIIEnabled() {
@@ -44,7 +61,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, 
 		// truncation carries valid spans for the part the provider saw, and
 		// classifier.pii.on_error decides what the unseen remainder means.
 		if !errors.Is(err, ErrTokenSpansTruncated) || c.Config.PIIModel.IsBlock() {
-			return nil, fmt.Errorf("PII token classification error: %w", err)
+			return nil, piiScanError(err, c.Config.PIIModel.IsBlock())
 		}
 		logging.Warnf("PII classification: provider truncated its input; reporting the types it did return")
 		partial = true
@@ -137,7 +154,7 @@ func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold f
 			// remainder means here too: block refuses the whole scan, allow
 			// reports what was found. Any other error is fatal either way.
 			if !errors.Is(err, ErrTokenSpansTruncated) || c.Config.PIIModel.IsBlock() {
-				return nil, fmt.Errorf("PII token classification error: %w", err)
+				return nil, piiScanError(err, c.Config.PIIModel.IsBlock())
 			}
 			logging.Warnf("PII scan: provider truncated its input; reporting the spans it did return")
 			partial = true
@@ -266,7 +283,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(ctx context.Context, cont
 			// the other two entry points already refuse, and an omitted item
 			// is indistinguishable from a clean one to the caller.
 			if c.Config.PIIModel.IsBlock() {
-				return false, nil, fmt.Errorf("PII classification failed for content %d and on_error is block: %w", i, err)
+				return false, nil, fmt.Errorf("PII classification failed for content %d and on_error is block: %w", i, piiScanError(err, true))
 			}
 			if !errors.Is(err, ErrTokenSpansTruncated) {
 				logging.Errorf("Error analyzing content %d: %v", i, err)
