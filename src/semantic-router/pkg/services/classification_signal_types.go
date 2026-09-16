@@ -6,6 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 const (
@@ -13,6 +14,7 @@ const (
 	EvalSelectionPlannedFinal      = "planned_final"
 	EvalSelectionFallback          = "fallback"
 	EvalSelectionExecutionRequired = "execution_required"
+	EvalSelectionNotRequired       = "not_required"
 	EvalSelectionUnavailable       = "unavailable"
 	EvalSelectionFailed            = "failed"
 )
@@ -57,6 +59,7 @@ type MatchedSignals struct {
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
 	Jailbreak     []string `json:"jailbreak,omitempty"`
+	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
 	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
@@ -94,8 +97,8 @@ type EvalResponse struct {
 	DecisionResult         *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	EvalTrace              []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
 	RecommendedModels      []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
-	SelectedModel          string                                  `json:"selected_model,omitempty"`     // Concrete selector result or configured final-output model
-	SelectionStatus        string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, unavailable, or failed
+	SelectedModel          string                                  `json:"selected_model,omitempty"`     // Concrete selector result or configured final-output model; absent for immediate responses
+	SelectionStatus        string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, not_required, unavailable, or failed
 	SelectionMethod        string                                  `json:"selection_method,omitempty"`
 	SelectionReason        string                                  `json:"selection_reason,omitempty"`
 	RoutingDecision        string                                  `json:"routing_decision,omitempty"`
@@ -111,6 +114,7 @@ type EvalResponse struct {
 // from classification to the live Router selector. It intentionally excludes
 // raw tool schemas and message bodies beyond the current semantic query.
 type EvalModelSelectionInput struct {
+	Demand            selection.CandidateDemand
 	Recipe            config.RecipeName
 	Decision          *config.Decision
 	Query             string

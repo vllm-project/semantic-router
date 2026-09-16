@@ -45,14 +45,6 @@ func TestSelectModelForEvalUsesLiveMultiFactorPolicy(t *testing.T) {
 }
 
 func TestSelectModelForEvalPreservesFailClosedPolicy(t *testing.T) {
-	router := &OpenAIRouter{Config: &config.RouterConfig{
-		BackendModels: config.BackendModels{
-			ModelConfig: map[string]config.ModelParams{
-				"model-a": {},
-				"model-b": {},
-			},
-		},
-	}}
 	decision := &config.Decision{
 		Name: "strict-quality-route",
 		ModelRefs: []config.ModelRef{
@@ -72,12 +64,46 @@ func TestSelectModelForEvalPreservesFailClosedPolicy(t *testing.T) {
 		},
 	}
 
-	result := router.SelectModelForEval(services.EvalModelSelectionInput{Decision: decision})
-	if result.Status != services.EvalSelectionUnavailable || result.SelectedModel != "" {
-		t.Fatalf("fail-closed Eval selection = %+v", result)
-	}
-	if !strings.Contains(result.Reason, selection.ErrNoEligibleCandidates.Error()) {
-		t.Fatalf("fail-closed Eval reason = %q", result.Reason)
+	for _, test := range []struct {
+		name     string
+		learning config.RouterLearningConfig
+	}{
+		{name: "without learning"},
+		{
+			name: "with protection",
+			learning: config.RouterLearningConfig{
+				Enabled:    true,
+				Adaptation: config.RouterLearningAdaptationConfig{Enabled: extprocBoolPtr(false)},
+				Protection: config.RouterLearningProtectionConfig{Enabled: extprocBoolPtr(true)},
+			},
+		},
+		{
+			name: "with adaptation",
+			learning: config.RouterLearningConfig{
+				Enabled:    true,
+				Adaptation: config.RouterLearningAdaptationConfig{Enabled: extprocBoolPtr(true)},
+				Protection: config.RouterLearningProtectionConfig{Enabled: extprocBoolPtr(false)},
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router := &OpenAIRouter{Config: &config.RouterConfig{
+				RouterLearning: test.learning,
+				BackendModels: config.BackendModels{
+					ModelConfig: map[string]config.ModelParams{
+						"model-a": {},
+						"model-b": {},
+					},
+				},
+			}}
+			result := router.SelectModelForEval(services.EvalModelSelectionInput{Decision: decision})
+			if result.Status != services.EvalSelectionUnavailable || result.SelectedModel != "" {
+				t.Fatalf("fail-closed Eval selection = %+v", result)
+			}
+			if !strings.Contains(result.Reason, selection.ErrNoEligibleCandidates.Error()) {
+				t.Fatalf("fail-closed Eval reason = %q", result.Reason)
+			}
+		})
 	}
 }
 

@@ -1,0 +1,90 @@
+schema_version: v1
+name: vela-amd
+description: Route Preview checks for the explicit AMD Vela deployment. These probes inspect
+  routing and signals; retrieval and generation require separate live requests.
+routing_assets:
+  yaml: config/recipes/vela-amd/config.yaml
+  dsl: config/recipes/vela-amd/recipe.dsl
+router_eval_endpoint: /api/v1/routing/preview
+evaluation:
+  request_timeout_seconds: 150
+  concurrency: 4
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 6.8
+  min_projection_assertion_percent: 100.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes:
+  - text
+  - messages
+  min_tag_counts:
+    language: 4
+    negative: 1
+    multi_turn: 2
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    multi_turn: 100.0
+decisions:
+- id: observe
+  expected_decision: observe
+  expected_algorithm: static
+  expected_alias: vela-default
+  variants:
+  - id: semantic_code
+    query: Debug this Python program and fix its error.
+    expected_signals:
+      embeddings:
+      - semantic-code
+    tags:
+    - language:en
+    - class:negative
+  - id: code_message
+    messages:
+    - role: user
+      content: Debug this Python program and fix its error.
+    expected_signals:
+      embeddings:
+      - semantic-code
+    tags:
+    - language:en
+    - shape:messages
+  - id: chinese_code
+    query: 请解释 Python 列表和元组的区别，并各给一个例子。
+    tags:
+    - language:zh
+  forbidden_signals:
+    keywords:
+    - knowledge-query
+- id: knowledge
+  expected_decision: knowledge
+  expected_algorithm: static
+  expected_alias: vela-default
+  expected_plugins:
+  - rag
+  variants:
+  - id: document_query
+    query: 'Search my documents: how do I configure the service?'
+    expected_signals:
+      keywords:
+      - knowledge-query
+    tags:
+    - language:en
+  - id: document_followup
+    messages:
+    - role: user
+      content: I have indexed the service documentation.
+    - role: assistant
+      content: What would you like to find?
+    - role: user
+      content: 'Search my documents: explain the setup steps.'
+    expected_signals:
+      keywords:
+      - knowledge-query
+    tags:
+    - language:en
+    - shape:messages
+    - multi-turn

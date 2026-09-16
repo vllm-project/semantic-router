@@ -28,22 +28,35 @@ import (
 // Runtime owns one generation's preparation metadata. Pool can be shared with
 // the preceding generation; each returned task owns an independent reference.
 type Runtime struct {
-	Pool      *binding.Pool
-	registry  *binding.Registry
-	sequence  *binding.Task[string, tasks.LabelDistribution]
-	tokens    *binding.Task[string, tasks.TokenClassificationResult]
-	grounded  *binding.Task[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
-	pair      *binding.Task[tasks.TextPairRequest, tasks.LabelDistribution]
-	mu        sync.Mutex
-	artifacts map[string]string
+	Pool            *binding.Pool
+	registry        *binding.Registry
+	inventory       *binding.Inventory
+	sequence        *binding.Task[string, tasks.LabelDistribution]
+	scores          *binding.Task[string, tasks.LabelScores]
+	sequenceWindows *binding.Task[tasks.TextWindowsRequest, tasks.WindowedLabelDistribution]
+	scoreWindows    *binding.Task[tasks.TextWindowsRequest, tasks.WindowedLabelScores]
+	tokens          *binding.Task[string, tasks.TokenClassificationResult]
+	tokenWindows    *binding.Task[tasks.TextWindowsRequest, tasks.WindowedTokenClassification]
+	grounded        *binding.Task[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
+	pair            *binding.Task[tasks.TextPairRequest, tasks.LabelDistribution]
+	mu              sync.Mutex
+	artifacts       map[string]string
 }
 
 func New(pool *binding.Pool) *Runtime {
 	if pool == nil {
 		pool = binding.NewPool()
 	}
-	registry := binding.NewRegistry(diagnostics.Observe)
+	inventory := binding.NewInventory()
+	registry := binding.NewRegistry(func(event binding.Event) {
+		inventory.Observe(event)
+		diagnostics.Observe(event)
+	})
 	sequence, _ := binding.Register(registry, config.RemoteClassifierContractLabelDistribution, validateText, validateDistribution)
+	scores, _ := binding.Register(registry, config.RemoteClassifierContractLabelScores, validateText, func(_ string, result tasks.LabelScores) error { return tasks.ValidateLabelScores(result.Scores) })
+	sequenceWindows, _ := binding.RegisterTask(registry, "windowed_label_distribution.v1", config.RemoteClassifierContractLabelDistribution, validateWindowInput, validateWindowDistribution)
+	scoreWindows, _ := binding.RegisterTask(registry, "windowed_label_scores.v1", config.RemoteClassifierContractLabelScores, validateWindowInput, validateWindowScores)
+	tokenWindows, _ := binding.RegisterTask(registry, "windowed_token_spans.v1", config.RemoteClassifierContractTokenSpans, validateWindowInput, validateWindowTokens)
 	tokens, _ := binding.Register(registry, config.RemoteClassifierContractTokenSpans, validateText, validateSpans)
 	grounded, _ := binding.RegisterTask(registry, "grounded_text.v1", config.RemoteClassifierContractTokenSpans, func(input tasks.GroundedTextRequest) error {
 		if err := validateText(input.Context); err != nil {
@@ -61,7 +74,18 @@ func New(pool *binding.Pool) *Runtime {
 	}, func(_ tasks.TextPairRequest, output tasks.LabelDistribution) error {
 		return validateDistribution("", output)
 	})
-	return &Runtime{Pool: pool, registry: registry, sequence: sequence, tokens: tokens, grounded: grounded, pair: pair, artifacts: make(map[string]string)}
+	return &Runtime{Pool: pool, registry: registry, inventory: inventory, sequence: sequence, scores: scores, sequenceWindows: sequenceWindows, scoreWindows: scoreWindows, tokens: tokens, tokenWindows: tokenWindows, grounded: grounded, pair: pair, artifacts: make(map[string]string)}
+}
+
+// ObserveBinding also admits typed external connectors to this generation's
+// inventory without exposing their endpoint or resource compatibility key.
+func (r *Runtime) ObserveBinding(event binding.Event) {
+	r.inventory.Observe(event)
+	diagnostics.Observe(event)
+}
+
+func (r *Runtime) PreparedBindings() []binding.PreparedBinding {
+	return r.inventory.Snapshot()
 }
 
 func validateText(text string) error {
@@ -150,6 +174,17 @@ func (r *Runtime) artifactRevision(ctx context.Context, path string) (string, er
 	if cached, ok := r.artifacts[abs]; ok {
 		return cached, nil
 	}
+	revision, err := fingerprintArtifact(ctx, abs)
+	if err != nil {
+		return "", err
+	}
+	r.artifacts[abs] = revision
+	return revision, nil
+}
+
+// fingerprintArtifact is also used to verify an already prepared generation;
+// it uses the same identity framing and file traversal as normal preparation.
+func fingerprintArtifact(ctx context.Context, abs string) (string, error) {
 	directory, err := os.OpenRoot(filepath.Dir(abs))
 	if err != nil {
 		return "", fmt.Errorf("open model artifact directory: %w", err)
@@ -201,9 +236,7 @@ func (r *Runtime) artifactRevision(ctx context.Context, path string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("fingerprint model artifact: %w", err)
 	}
-	revision := hex.EncodeToString(hash.Sum(nil))
-	r.artifacts[abs] = revision
-	return revision, nil
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func openArtifactFile(directory *os.Root, name string, mode fs.FileMode) (*os.File, error) {

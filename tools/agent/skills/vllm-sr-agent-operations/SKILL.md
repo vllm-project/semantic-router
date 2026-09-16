@@ -105,8 +105,9 @@ over this skill.
    to `mom-v1`; it does not need a standalone directory. Use `builtin export`
    to inspect the verified bundle, or `builtin init` to select the named recipe
    and bind its decisions to providers from your config. Read the listed
-   candidate requirements and supply an explicit bindings file for every
-   decision. Preserve recipe structure and algorithm minimums; do not replace
+   candidate requirements and supply explicit bindings for each decision that
+   calls a backend. Immediate-response decisions, such as Vault's `guard`, need no model
+   assignment. Preserve recipe structure and algorithm minimums; do not replace
    it with a similarly named source example or silently delete lanes to force
    validation. When the user authorizes a capability-specific derivative, use
    explicit adaptation options such as `builtin init --exclude-decision`.
@@ -118,9 +119,12 @@ over this skill.
 
    Replace starter placeholders and check listener
    addresses before launch. Preserve unrelated fields. Each routable physical
-   model needs a provider entry, a matching model card, and a decision model
-   reference. Keep credentials in environment variables and only environment
-   references in config.
+   model needs a provider entry and a decision model reference. Named recipes
+   place decisions under `recipes[].routing.decisions`; built-in recipes receive
+   model assignments when an Entrypoint is published. Keep optional model metadata
+   in the shared top-level `routing.modelCards`, adding metadata required by the
+   selected algorithm or capability. Keep credentials in environment variables
+   and only environment references in config.
 
    Check backend reachability from the deployment network. Before asserting
    routed response identity, inspect the backend's model listing and make a
@@ -189,7 +193,8 @@ allow 300 seconds. A timeout is failed or incomplete evidence. Management comman
 use `--token-env` (default `VSR_MGMT_TOKEN`); routed probe uses `--api-key-env`
 (default `OPENAI_API_KEY`). Pass only environment variable names, never values.
 
-Preview proves the decision path without invoking a backend. Probe sends a real
+Preview evaluates signals and decisions, including configured classifier and
+embedding inference, without backend generation. Probe sends a real
 request through Envoy. `--base-url` accepts the listener origin or its OpenAI
 `/v1` root. Set `SELECTED_MODEL` from the expected routing decision and set
 `RESPONSE_MODEL` from the direct backend calibration; omit the response assertion
@@ -236,6 +241,9 @@ Recipe activation, or rollback; [deployment details](references/deployment-loop.
 for isolation and model-pool changes; and
 [evaluation details](references/evaluation-loop.md) for branch coverage or a
 requested benchmark. Load only the reference needed for the current step.
+
+Use [recipe tuning](references/recipe-tuning.md) to improve signals, projections,
+decisions, retrieval, or agent continuity against representative requests.
 
 See the [Router API](https://vllm-sr.ai/docs/api/router) and
 [agent evaluation loop](https://vllm-sr.ai/docs/benchmarking/agent-evaluation-loop)

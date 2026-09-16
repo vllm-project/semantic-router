@@ -658,51 +658,23 @@ impl RmsNorm {
     /// assert_eq!(output.dims(), &[2, 128, 1024]);
     /// ```
     pub fn forward(&self, x: &Tensor) -> UnifiedResult<Tensor> {
-        // ⚠️ CRITICAL: Using f64 precision for RMS normalization
-        // This is to achieve >0.99 cosine similarity with Python reference
-        // RmsNorm is sensitive to precision as it involves square root and division
-
-        // Step 0: Convert input to f64
-        let x_f64 = x
-            .to_dtype(candle_core::DType::F64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: x to f64", None))?;
-
-        // Step 1: Square the input in f64
-        let x_squared = x_f64
+        let x_squared = x
             .sqr()
             .map_err(|e| from_candle_error(e, "RmsNorm: compute x^2", None))?;
-
-        // Step 2: Compute mean along last dimension, keeping dimension
         let mean_squared = x_squared
             .mean_keepdim(candle_core::D::Minus1)
             .map_err(|e| from_candle_error(e, "RmsNorm: compute mean(x^2)", None))?;
-
-        // Step 3: Add epsilon and take square root in f64
-        // RMS = sqrt(mean(x^2) + eps)
         let mean_plus_eps = (mean_squared + self.eps)
             .map_err(|e| from_candle_error(e, "RmsNorm: add epsilon", None))?;
         let rms = mean_plus_eps
             .sqrt()
             .map_err(|e| from_candle_error(e, "RmsNorm: compute sqrt", None))?;
-
-        // Step 4: Normalize by dividing by RMS in f64
-        let normalized_f64 = x_f64
+        let normalized = x
             .broadcast_div(&rms)
             .map_err(|e| from_candle_error(e, "RmsNorm: normalize (x / rms)", None))?;
-
-        // Step 5: Convert weight to f64 and apply scaling
-        let weight_f64 = self
-            .weight
-            .to_dtype(candle_core::DType::F64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: weight to f64", None))?;
-        let output_f64 = normalized_f64
-            .broadcast_mul(&weight_f64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: scale by weight", None))?;
-
-        // Step 6: Convert back to f32 for subsequent layers
-        output_f64
-            .to_dtype(candle_core::DType::F32)
-            .map_err(|e| from_candle_error(e, "RmsNorm: output to f32", None))
+        normalized
+            .broadcast_mul(&self.weight)
+            .map_err(|e| from_candle_error(e, "RmsNorm: scale by weight", None))
     }
 }
 
@@ -1097,9 +1069,7 @@ impl Qwen3Attention {
 
     /// Compute attention with the shared memory-bounded kernel.
     ///
-    /// The scores are still formed and normalized in f64, as before, so this is the
-    /// same arithmetic the reference comparison was validated against; only the
-    /// `(b, heads, seq, seq)` score matrix is no longer materialized. Masking is
+    /// The `(b, heads, seq, seq)` score matrix is never materialized. Masking is
     /// causal plus padding, which is what `embedding_forward` used to encode in a
     /// `(b, 1, seq, seq)` mask.
     ///
@@ -1124,17 +1094,9 @@ impl Qwen3Attention {
         v: &Tensor,
         attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
-        let to_f64 = |t: &Tensor, what: &str| {
-            t.to_dtype(candle_core::DType::F64)
-                .map_err(|e| from_candle_error(e, &format!("Qwen3Attention: {what} to f64"), None))
-        };
-        let q_f64 = to_f64(q, "Q")?;
-        let k_f64 = to_f64(k, "K")?;
-        let v_f64 = to_f64(v, "V")?;
-
         let pad_mask = match attention_mask {
             Some(mask) => Some(
-                prepare_padding_mask(mask, candle_core::DType::F64)
+                prepare_padding_mask(mask, q.dtype())
                     .map_err(|e| from_candle_error(e, "Qwen3Attention: padding mask", None))?,
             ),
             None => None,
@@ -1146,13 +1108,8 @@ impl Qwen3Attention {
             scale: self.scaling,
             q_offset: 0,
         };
-        let attn_output_f64 = chunked_sdpa(&q_f64, &k_f64, &v_f64, pad_mask.as_ref(), &cfg)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: chunked attention", None))?;
-
-        // Convert back to f32 for subsequent layers
-        attn_output_f64
-            .to_dtype(candle_core::DType::F32)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: output to f32", None))
+        chunked_sdpa(q, k, v, pad_mask.as_ref(), &cfg)
+            .map_err(|e| from_candle_error(e, "Qwen3Attention: chunked attention", None))
     }
 
     /// Compute attention using Flash Attention 2 (when feature is enabled)

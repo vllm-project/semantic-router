@@ -19,7 +19,7 @@ func FormatMemoriesAsContext(memories []*memory.RetrieveResult) string {
 
 	for _, result := range memories {
 		if result.Memory != nil && result.Memory.Content != "" {
-			sb.WriteString(fmt.Sprintf("- %s\n", result.Memory.Content))
+			_, _ = fmt.Fprintf(&sb, "- %s\n", result.Memory.Content)
 		}
 	}
 

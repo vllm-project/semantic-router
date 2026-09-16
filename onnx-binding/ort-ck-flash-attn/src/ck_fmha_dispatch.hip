@@ -185,7 +185,9 @@ static int launch_fmha_fwd_impl(
         ck_tile::make_kernel<Kernel::kBlockSize, Kernel::kBlockPerCu>(
             Kernel{}, grids, blocks, 0, kargs));
 
-    return 0;
+    // Propagate launch errors through the custom op's V2 OrtStatus callback.
+    // Do not synchronize here: ORT owns the stream and its completion checks.
+    return static_cast<int>(hipPeekAtLastError());
 }
 
 template <int kHeadDim>

@@ -9,6 +9,8 @@ _TOKEN_ID_ATTRIBUTES = (
     "pad_token_id",
     "cls_token_id",
     "sep_token_id",
+    "bos_token_id",
+    "eos_token_id",
     "unk_token_id",
     "mask_token_id",
 )

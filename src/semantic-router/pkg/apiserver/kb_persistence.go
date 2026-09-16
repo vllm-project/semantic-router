@@ -89,6 +89,8 @@ func persistConfigAndSync(
 	yamlBytes []byte,
 	newCfg *config.RouterConfig,
 ) error {
+	release := s.runtimeRegistry.LockConfigPublication()
+	defer release()
 	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
 		return err
 	}

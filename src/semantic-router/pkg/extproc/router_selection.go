@@ -428,6 +428,9 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 	if decisionCfg.LatencyPercentile != 0 {
 		result.LatencyPercentile = decisionCfg.LatencyPercentile
 	}
+	if decisionCfg.LatencyMetric != "" {
+		result.LatencyMetric = decisionCfg.LatencyMetric
+	}
 	if decisionCfg.OnNoCandidates != "" {
 		result.OnNoCandidates = decisionCfg.OnNoCandidates
 	}

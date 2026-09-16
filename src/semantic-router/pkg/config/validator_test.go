@@ -862,7 +862,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 		Expect(err.Error()).To(ContainSubstring("algorithm.workflows.final.model references model \"final-a\" outside decision modelRefs"))
 	})
 
-	It("rejects dynamic workflows without planner model", func() {
+	It("accepts dynamic workflows with an assigned worker planner default", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{{
@@ -882,8 +882,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 		}
 
 		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.workflows: planner.model is required"))
+		Expect(err).NotTo(HaveOccurred())
 	})
 }
 

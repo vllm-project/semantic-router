@@ -61,7 +61,7 @@ func (p *Pool) Acquire(ctx context.Context, identity ResourceIdentity, budget st
 		if entry.err != nil {
 			return nil, errors.Join(entry.err, p.release(key, entry))
 		}
-		return &Resource{pool: p, key: key, entry: entry}, nil
+		return &Resource{pool: p, key: key, entry: entry, identity: identity}, nil
 	}
 	if gate == nil {
 		gate = admission.Noop{}
@@ -87,7 +87,7 @@ func (p *Pool) Acquire(ctx context.Context, identity ResourceIdentity, budget st
 	if loadErr != nil {
 		return nil, errors.Join(loadErr, p.release(key, entry))
 	}
-	return &Resource{pool: p, key: key, entry: entry}, nil
+	return &Resource{pool: p, key: key, entry: entry, identity: identity}, nil
 }
 
 func (p *Pool) release(key string, entry *resourceEntry) error {
@@ -114,6 +114,7 @@ type Resource struct {
 	pool     *Pool
 	key      string
 	entry    *resourceEntry
+	identity ResourceIdentity
 	closed   bool
 	closeErr error
 	closers  []io.Closer
