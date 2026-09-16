@@ -110,6 +110,11 @@ configured inference budget. Check the effective model and deployment limits
 before retrying. Other inference failures retain their bounded signal error
 codes; the configured unknown-signal policy determines the route outcome.
 
+Standalone classification, embedding, and similarity diagnostics return
+`400 INVALID_INPUT` when inference reports that a model's input budget was
+exceeded. The error retains the model's limit details; other inference failures
+remain server errors.
+
 ## Inspect models and metrics
 
 | Method | Path | Use |
