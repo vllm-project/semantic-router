@@ -254,7 +254,7 @@ def build_artifact(manifest_path: Path) -> dict[str, Any]:
     if "current_threshold" in policy:
         current_threshold = float(policy["current_threshold"])
         baseline = {
-            "threshold": _rounded(current_threshold),
+            "threshold": current_threshold,
             "metrics": {
                 split: evaluate_threshold(
                     splits[split], current_threshold, manifest.get("resources")
@@ -278,7 +278,9 @@ def build_artifact(manifest_path: Path) -> dict[str, Any]:
         candidate_diff = {
             "path": "algorithm.confidence.threshold",
             "from": policy.get("current_threshold"),
-            "to": _rounded(threshold),
+            # This value is executable policy, not a display-only metric.
+            # Rounding can cross a score boundary and invalidate the metrics.
+            "to": threshold,
         }
 
     artifact = {
@@ -306,7 +308,7 @@ def build_artifact(manifest_path: Path) -> dict[str, Any]:
         "baseline": baseline,
         "fallback": {
             "on_no_safe_threshold": fallback["on_no_safe_threshold"],
-            "effective_threshold": _rounded(threshold),
+            "effective_threshold": threshold,
         },
         "objective": manifest["objective"],
         "rollback_identity": policy["rollback_identity"],

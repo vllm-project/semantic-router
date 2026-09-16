@@ -13,6 +13,7 @@ from tuning.confidence_calibration import (
     build_artifact,
     evaluate_threshold,
     load_confidence_inputs,
+    write_artifact,
 )
 
 FIXTURE_MANIFEST = (
@@ -248,3 +249,69 @@ def test_checked_in_fixture_rebuilds_without_network():
     assert first["selection"]["split"] == "calibration"
     assert first["selection"]["threshold"] == pytest.approx(0.55)
     assert first["collection"]["mode"] == "checked-in-fixture"
+
+
+@pytest.mark.parametrize("lower", [0.500000001, 0.500000008])
+def test_config_proposal_preserves_policy_after_json_round_trip(tmp_path, lower):
+    manifest_path = _write_manifest(
+        tmp_path,
+        calibration=[
+            ("c1", lower, False, True),
+            ("c2", lower + 0.000000001, True, False),
+        ],
+        held_out=[
+            ("h1", lower, False, True),
+            ("h2", lower + 0.000000001, True, False),
+        ],
+        min_net_uplift=1,
+    )
+    artifact = build_artifact(manifest_path)
+    output = tmp_path / "artifact.json"
+    write_artifact(artifact, output)
+    restored = json.loads(output.read_text(encoding="utf-8"))
+    proposed = restored["candidate_config_diff"]["to"]
+    selected = artifact["selection"]["threshold"]
+    _, splits, _ = load_confidence_inputs(manifest_path)
+
+    for split in ("calibration", "held_out"):
+        records = splits[split]
+        assert [r.question_id for r in records if r.confidence < proposed] == [
+            r.question_id for r in records if r.confidence < selected
+        ]
+        metrics = evaluate_threshold(records, proposed)
+        assert metrics == restored["metrics"][split]
+        assert metrics["net_uplift"] == 1
+        assert metrics["regressions"] == 0
+    assert proposed == selected
+    assert restored["fallback"]["effective_threshold"] == selected
+
+
+def test_retained_and_baseline_thresholds_survive_json_round_trip(tmp_path):
+    manifest_path = _write_manifest(
+        tmp_path,
+        calibration=[("c1", 0.500000001, False, True)],
+        held_out=[("h1", 0.500000001, False, True)],
+        max_escalation_rate=0.0,
+        min_net_uplift=1,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    threshold = 0.5000000015
+    manifest["policy"]["current_threshold"] = threshold
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    artifact = build_artifact(manifest_path)
+    output = tmp_path / "artifact.json"
+    write_artifact(artifact, output)
+    restored = json.loads(output.read_text(encoding="utf-8"))
+    _, splits, _ = load_confidence_inputs(manifest_path)
+
+    assert restored["status"] == "no_safe_threshold"
+    assert restored["candidate_config_diff"] is None
+    for saved_threshold in (
+        restored["baseline"]["threshold"],
+        restored["fallback"]["effective_threshold"],
+    ):
+        metrics = evaluate_threshold(splits["held_out"], saved_threshold)
+        assert metrics == restored["metrics"]["held_out"]
+        assert metrics == restored["baseline"]["metrics"]["held_out"]
+        assert metrics["escalated"] == 1
+        assert saved_threshold == threshold
