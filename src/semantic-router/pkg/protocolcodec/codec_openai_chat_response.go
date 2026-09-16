@@ -22,9 +22,11 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	var diagnostics llmprotocol.Diagnostics
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
-		"kv_transfer": wire.hasLegacyKVTransferMetadata(),
-		"metadata":    len(wire.Metadata) > 0,
-		"moderation":  len(wire.Moderation) > 0,
+		"kv_transfer":     wire.hasLegacyKVTransferMetadata(),
+		"metadata":        len(wire.Metadata) > 0,
+		"moderation":      len(wire.Moderation) > 0,
+		"x_groq":          len(wire.XGroq) > 0,
+		"usage_breakdown": wire.hasUsageBreakdown(),
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
@@ -55,16 +57,34 @@ func decodeChatResponseUsage(
 		return
 	}
 	response.Usage = decodeChatUsage(*wire)
-	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
-		"usage.compute_units":                                        len(wire.ComputeUnits) > 0,
-		"usage.prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
-		"usage.prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
-		"usage.prompt_tokens_details.text_tokens":                    wire.PromptTokensDetails != nil && wire.PromptTokensDetails.TextTokens != 0,
-		"usage.completion_tokens_details.accepted_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AcceptedPredictionTokens != 0,
-		"usage.completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
-		"usage.completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
-		"usage.completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
-	}, "provider accounting detail has no separate protocol-neutral bucket")
+	appendProviderFieldOmissions(
+		diagnostics, policy, llmprotocol.OpenAIChatV1,
+		chatUsageFieldOmissions(*wire, "usage."), chatUsageOmissionReason,
+	)
+}
+
+const chatUsageOmissionReason = "provider accounting detail has no separate protocol-neutral bucket"
+
+// chatUsageFieldOmissions lists usage detail with no neutral bucket. Buffered
+// responses and final stream chunks share one usage wire, so they share this
+// inventory and report the same omissions under their own field prefix.
+func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool {
+	return map[string]bool{
+		prefix + "compute_units":                                        len(wire.ComputeUnits) > 0,
+		prefix + "prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
+		prefix + "prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
+		prefix + "prompt_tokens_details.text_tokens":                    wire.PromptTokensDetails != nil && wire.PromptTokensDetails.TextTokens != 0,
+		prefix + "completion_tokens_details.accepted_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AcceptedPredictionTokens != 0,
+		prefix + "completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
+		prefix + "completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
+		prefix + "completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
+		prefix + "cost_in_usd_ticks":                                    wire.CostInUSDTicks != nil,
+		prefix + "num_sources_used":                                     wire.NumSourcesUsed != nil && *wire.NumSourcesUsed != 0,
+		prefix + "queue_time":                                           wire.QueueTime != nil,
+		prefix + "prompt_time":                                          wire.PromptTime != nil,
+		prefix + "completion_time":                                      wire.CompletionTime != nil,
+		prefix + "total_time":                                           wire.TotalTime != nil,
+	}
 }
 
 func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
