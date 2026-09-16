@@ -140,3 +140,95 @@ func TestValidatePromptGuardBackend_StillRejectsUnknownOnError(t *testing.T) {
 		t.Errorf("error %q should name on_error", err)
 	}
 }
+<<<<<<< ours
+=======
+
+func TestValidatePromptGuardNamedBackend(t *testing.T) {
+	cfg := remotePromptGuardConfig()
+	cfg.PromptGuard.Protocol = ""
+	cfg.PromptGuard.Backend = &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPChat, Contract: RemoteClassifierContractLabelDecision, Model: "guard"}
+	if err := validatePromptGuardBackend(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.IsPromptGuardEnabled() {
+		t.Fatal("named backend was silently disabled")
+	}
+	cfg.PromptGuard.Backend.Contract = RemoteClassifierContractLabelDistribution
+	if err := validatePromptGuardBackend(cfg); err == nil {
+		t.Fatal("chat cannot declare probabilities")
+	}
+	cfg.PromptGuard.Backend.Contract = RemoteClassifierContractLabelDecision
+	cfg.PromptGuard.Backend.Model = "unknown"
+	if err := validatePromptGuardBackend(cfg); err == nil {
+		t.Fatal("guard fell back to first matching role")
+	}
+}
+
+func TestCanonicalPromptGuardNamedBackendReplacesInheritedVariant(t *testing.T) {
+	raw := MustStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"backend": map[string]interface{}{"protocol": "http_chat", "model": "guard", "contract": "label_decision.v1"}}}}})
+	model := PromptGuardConfig{Variant: PromptGuardVariantMmBERT32K}
+	if err := normalizeCanonicalPromptGuardBackend(&model, raw); err != nil || model.Variant != "" {
+		t.Fatalf("model=%+v err=%v", model, err)
+	}
+	legacy := MustStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"protocol": "http_chat"}}}})
+	if err := normalizeCanonicalPromptGuardBackend(&model, legacy); err == nil || !strings.Contains(err.Error(), "migrate") {
+		t.Fatalf("legacy protocol should require migration: %v", err)
+	}
+}
+
+// prompt_guard.circuit_breaker must reject non-positive thresholds when
+// enabled, even though PromptGuardConfig owns its own circuit-breaker config
+// that RemoteClassifierBackend.Validate does not see.
+func TestValidatePromptGuardBackend_RejectsNonPositiveCircuitBreakerThreshold(t *testing.T) {
+	cfg := remotePromptGuardConfig()
+	zero := 0
+	cfg.PromptGuard.CircuitBreaker = &RemoteClassifierCircuitBreakerConfig{
+		Enabled:             true,
+		ConsecutiveFailures: &zero,
+	}
+
+	err := validatePromptGuardBackend(cfg)
+	if err == nil {
+		t.Fatal("expected an error for a non-positive circuit_breaker threshold")
+	}
+	if !strings.Contains(err.Error(), "circuit_breaker.consecutive_failures") {
+		t.Errorf("error %q should name circuit_breaker.consecutive_failures", err)
+	}
+}
+
+func TestValidatePromptGuardBackend_RejectsZeroHalfOpenProbes(t *testing.T) {
+	cfg := remotePromptGuardConfig()
+	zero := 0
+	cfg.PromptGuard.CircuitBreaker = &RemoteClassifierCircuitBreakerConfig{
+		Enabled:             true,
+		HalfOpenMaxRequests: &zero,
+	}
+
+	err := validatePromptGuardBackend(cfg)
+	if err == nil {
+		t.Fatal("expected an error for half_open_max_requests: 0")
+	}
+	if !strings.Contains(err.Error(), "circuit_breaker.half_open_max_requests") {
+		t.Errorf("error %q should name circuit_breaker.half_open_max_requests", err)
+	}
+}
+
+func TestValidatePromptGuardBackend_AcceptsPositiveCircuitBreaker(t *testing.T) {
+	cfg := remotePromptGuardConfig()
+	threshold := 3
+	open := 30000
+	probes := 1
+	cfg.PromptGuard.CircuitBreaker = &RemoteClassifierCircuitBreakerConfig{
+		Enabled:             true,
+		ConsecutiveFailures: &threshold,
+		OpenIntervalMs:      &open,
+		HalfOpenMaxRequests: &probes,
+	}
+
+	if err := validatePromptGuardBackend(cfg); err != nil {
+		t.Fatalf("unexpected error for positive circuit_breaker config: %v", err)
+	}
+}
+	}
+}
+>>>>>>> theirs

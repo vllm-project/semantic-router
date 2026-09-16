@@ -33,6 +33,9 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 			return fmt.Errorf("prompt_guard.protocol: unrecognized value %q, must be one of: %s, %s",
 				cfg.Protocol, PromptGuardProtocolHTTPChat, PromptGuardProtocolHTTPClassify)
 		}
+		if err := cfg.CircuitBreaker.Validate(); err != nil {
+			return fmt.Errorf("prompt_guard.%w", err)
+		}
 		return nil
 	}
 	if !validPromptGuardVariants[cfg.Variant] {
