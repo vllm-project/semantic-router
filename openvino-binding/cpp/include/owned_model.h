@@ -21,8 +21,10 @@ typedef struct {
     int status;
 } OVOwnedResult;
 
-OVEmbeddingHandle* ov_embedding_open(const char* path, const char* device);
-OVClassifierHandle* ov_classifier_open(const char* path, const char* device, int classes);
+OVEmbeddingHandle* ov_embedding_open(const char* path, const char* device,
+                                      const int* end_tokens, int end_token_count);
+OVClassifierHandle* ov_classifier_open(const char* path, const char* device, int classes,
+                                        const int* end_tokens, int end_token_count);
 OVOwnedResult ov_embedding_run(OVEmbeddingHandle* handle, const char* text,
                                int max_tokens, bool reject_overflow);
 OVOwnedResult ov_classifier_run(OVClassifierHandle* handle, const char* text,

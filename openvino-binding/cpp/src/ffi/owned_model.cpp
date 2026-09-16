@@ -7,10 +7,12 @@
 
 struct OVEmbeddingHandle {
     openvino_sr::embeddings::EmbeddingGenerator model;
+    std::vector<int> end_tokens;
 };
 
 struct OVClassifierHandle {
     openvino_sr::classifiers::TextClassifier model;
+    std::vector<int> end_tokens;
 };
 
 namespace {
@@ -33,19 +35,23 @@ OVOwnedResult resultFrom(const std::vector<float>& values, int original,
 }  // namespace
 
 extern "C" {
-OVEmbeddingHandle* ov_embedding_open(const char* path, const char* device) {
-    if (!path || !device) return nullptr;
+OVEmbeddingHandle* ov_embedding_open(const char* path, const char* device,
+                                      const int* end_tokens, int end_token_count) {
+    if (!path || !device || end_token_count < 0 || (end_token_count > 0 && !end_tokens)) return nullptr;
     try {
         auto handle = std::make_unique<OVEmbeddingHandle>();
+        if (end_token_count > 0) handle->end_tokens.assign(end_tokens, end_tokens + end_token_count);
         if (!handle->model.initialize(path, device)) return nullptr;
         return handle.release();
     } catch (...) { return nullptr; }
 }
 
-OVClassifierHandle* ov_classifier_open(const char* path, const char* device, int classes) {
-    if (!path || !device || classes <= 0) return nullptr;
+OVClassifierHandle* ov_classifier_open(const char* path, const char* device, int classes,
+                                        const int* end_tokens, int end_token_count) {
+    if (!path || !device || classes <= 0 || end_token_count < 0 || (end_token_count > 0 && !end_tokens)) return nullptr;
     try {
         auto handle = std::make_unique<OVClassifierHandle>();
+        if (end_token_count > 0) handle->end_tokens.assign(end_tokens, end_tokens + end_token_count);
         if (!handle->model.initialize(path, classes, device)) return nullptr;
         return handle.release();
     } catch (...) { return nullptr; }
@@ -56,7 +62,7 @@ OVOwnedResult ov_embedding_run(OVEmbeddingHandle* handle, const char* text,
     if (!handle || !text || max_tokens <= 0) return {nullptr, 0, 0, 0, 2};
     try {
         int original = 0;
-        auto values = handle->model.generateEmbedding(text, max_tokens, reject_overflow, &original);
+        auto values = handle->model.generateEmbedding(text, max_tokens, reject_overflow, &original, handle->end_tokens);
         return resultFrom(values, original, max_tokens, reject_overflow);
     } catch (...) { return {nullptr, 0, 0, 0, 2}; }
 }
@@ -66,7 +72,7 @@ OVOwnedResult ov_classifier_run(OVClassifierHandle* handle, const char* text,
     if (!handle || !text || max_tokens <= 0) return {nullptr, 0, 0, 0, 2};
     try {
         int original = 0;
-        auto value = handle->model.classifyWithProbabilities(text, max_tokens, reject_overflow, &original);
+        auto value = handle->model.classifyWithProbabilities(text, max_tokens, reject_overflow, &original, handle->end_tokens);
         return resultFrom(value.probabilities, original, max_tokens, reject_overflow);
     } catch (...) { return {nullptr, 0, 0, 0, 2}; }
 }

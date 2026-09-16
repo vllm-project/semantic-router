@@ -26,6 +26,9 @@ type ModelOptions struct {
 	Device    string
 	MaxTokens int
 	Overflow  string
+	// EndTokenIDs lists the tokenizer's suffix special tokens. Truncation keeps
+	// their envelope after the retained prefix; no token IDs are guessed.
+	EndTokenIDs []int
 }
 
 type InputUsage struct {
@@ -58,7 +61,23 @@ func (o ModelOptions) validate() error {
 	if o.Overflow != "reject" && o.Overflow != "truncate" {
 		return fmt.Errorf("OpenVINO supports reject or truncate overflow")
 	}
+	for _, id := range o.EndTokenIDs {
+		if id < 0 || id > math.MaxInt32 {
+			return fmt.Errorf("OpenVINO special token ID must fit a nonnegative int32")
+		}
+	}
 	return nil
+}
+
+func endTokenIDs(options ModelOptions) ([]C.int, *C.int) {
+	ids := make([]C.int, len(options.EndTokenIDs))
+	for i, id := range options.EndTokenIDs {
+		ids[i] = C.int(id)
+	}
+	if len(ids) == 0 {
+		return ids, nil
+	}
+	return ids, &ids[0]
 }
 
 // EmbeddingModel owns one compiled model and tokenizer. Close waits for active
@@ -76,7 +95,8 @@ func LoadEmbeddingModel(options ModelOptions) (*EmbeddingModel, error) {
 	path, device := C.CString(options.ModelPath), C.CString(options.Device)
 	defer C.free(unsafe.Pointer(path))
 	defer C.free(unsafe.Pointer(device))
-	handle := C.ov_embedding_open(path, device)
+	ids, suffix := endTokenIDs(options)
+	handle := C.ov_embedding_open(path, device, suffix, C.int(len(ids)))
 	if handle == nil {
 		return nil, fmt.Errorf("load OpenVINO embedding model %q on %s", options.ModelPath, options.Device)
 	}
@@ -125,7 +145,8 @@ func LoadClassifierModel(options ModelOptions, numClasses int) (*ClassifierModel
 	path, device := C.CString(options.ModelPath), C.CString(options.Device)
 	defer C.free(unsafe.Pointer(path))
 	defer C.free(unsafe.Pointer(device))
-	handle := C.ov_classifier_open(path, device, C.int(numClasses))
+	ids, suffix := endTokenIDs(options)
+	handle := C.ov_classifier_open(path, device, C.int(numClasses), suffix, C.int(len(ids)))
 	if handle == nil {
 		return nil, fmt.Errorf("load OpenVINO classifier %q on %s", options.ModelPath, options.Device)
 	}

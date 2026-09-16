@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 namespace openvino_sr {
 namespace classifiers {
@@ -28,7 +29,8 @@ public:
     
     // Classify with all class probabilities
     core::ClassificationResultWithProbs classifyWithProbabilities(const std::string& text, int max_length = 8192,
-                                                                    bool reject_overflow = false, int* original_tokens = nullptr);
+                                                                    bool reject_overflow = false, int* original_tokens = nullptr,
+                                         const std::vector<int>& end_tokens = {});
     
     // Check if initialized
     bool isInitialized() const { return model_ && model_->compiled_model != nullptr; }
