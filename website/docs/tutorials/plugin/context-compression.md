@@ -9,7 +9,8 @@ request, then this plugin performs the upstream body mutation.
 
 Compression is local, extractive, query-aware, and fail-open. It uses
 bounded BM25-style ranking, keeps leading and trailing context, and never
-changes system, user, or assistant text.
+changes system instructions. Current-user text stays unchanged unless the
+route explicitly enables the overflow policy below.
 
 ## Key Advantages
 
@@ -46,6 +47,8 @@ plugins:
         target_tokens: auto
         reserve_output_tokens: auto
       targets:
+        current_user:
+          mode: preserve
         tool_outputs:
           mode: extractive
           min_tokens: 2000
@@ -80,6 +83,62 @@ budget from the selected model context window and requested output reserve.
 RAG and memory evidence are protected by typed provenance by default. Set the
 corresponding target mode to `extractive` only when the route explicitly
 accepts evidence compression.
+
+## Requests beyond the model context window
+
+Encoder input truncation only bounds the router's classification view. It does
+not shorten the conversation sent to the generation model. To accept oversized
+plain-text user messages, opt into the existing plugin on the affected decision:
+
+```yaml
+plugins:
+  - type: context_compression
+    configuration:
+      enabled: true
+      targets:
+        current_user:
+          mode: truncate
+        history:
+          mode: extractive
+          min_tokens: 2000
+          target_tokens: 1000
+        tool_outputs:
+          mode: preserve
+```
+
+`current_user.mode` defaults to `preserve`. With `truncate`, routing signals and
+the decision still see the original request. Before model budget eligibility,
+the router prepares a detached request using the largest usable input budget
+among the decision's compatible candidates. Normal model selection then checks
+the reduced request. The actual provider-bound request is checked again after
+other plugins and provider preparation; it cannot rely on the earlier estimate.
+
+The preparation accounts for the effective system-prompt and request-parameter
+policies, output-token reserve, tool definitions and structured content. It uses
+UTF-8 text bytes as a conservative text-token bound, plus 1,024 tokens of base
+framing reserve, 32 per message/instruction, and 64 per tool definition/call/result. This intentionally keeps less text than a model tokenizer might permit,
+especially for English and repeated characters. It is not an exact tokenizer
+count or a guarantee for arbitrary media preprocessing or custom chat templates.
+Configure accurate model context and output limits. An explicit
+`budget.reserve_output_tokens` can increase, but cannot reduce, the actual
+requested output reserve.
+
+Existing extractive targets can reduce older text first. Current-user truncation
+retains a prefix and suffix on Unicode boundaries and inserts
+`[... context omitted by route compression ...]` between them. It never claims
+that omitted content was read. Only the latest plain-text user message is
+eligible: system/developer instructions, authorization and safety text, tool
+calls and schemas, media, citations and JSON user payloads remain protected.
+Tool/result messages and IDs stay paired; their text changes only under their
+own configured target policy. Recoverable targets remain reserved for the
+selected-route stage and are not stored speculatively during budget preparation.
+
+If protected content alone is too large, or configured compression cannot meet
+the input budget, the router returns HTTP 400 with `context_length_exceeded`
+without forwarding a partially rewritten request. `fail_open` cannot override
+this admission boundary. Disabled or bypassed compression retains the ordinary
+request validation behavior. Compression diagnostics report the applied
+strategy, conservative count source, before/after counts and omitted content.
 
 ## Content handling
 

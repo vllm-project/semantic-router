@@ -6,8 +6,9 @@
 
 A recipe's `routing.data_policy.replay: false` takes precedence over global and
 route-local replay settings. It prevents capture even for rejected requests;
-`router_replay.enabled: true` cannot override it. Vault uses this policy, so its
-requests are intentionally absent from Dashboard Insights. See the
+`router_replay.enabled: true` cannot override it. All five built-in MoM recipes,
+including Vault, enable PostgreSQL replay by default; operators can use this
+policy to forbid capture for any recipe. See the
 [Replay API and privacy controls](../../api/router#router-replay).
 
 The default `memory` store loses records when configuration is reloaded or the
@@ -55,6 +56,12 @@ plugins:
       max_body_bytes: 4096
       max_tool_trace_steps: 100
 ```
+
+Captured body and structured-text limits count UTF-8 bytes. Truncation keeps
+complete characters, so a captured excerpt can be slightly shorter than its
+byte limit. Malformed UTF-8 sequences are replaced with `U+FFFD` before applying
+the limit. Truncation flags indicate when the byte limit removed text; existing
+flags remain set. Original raw tool arguments and outputs remain unchanged.
 
 ## Looper diagnostics
 

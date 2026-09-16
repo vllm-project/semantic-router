@@ -13,6 +13,7 @@ func (s *Service) Apply(ctx context.Context, request Request) ServiceResult {
 	if request.Request == nil {
 		return s.apply(ctx, request)
 	}
+	request.Request.allowCurrentUserTruncation = request.Policy.Targets.CurrentUser.Mode == TargetTruncate
 	plan := &request.Request.Transformations
 	if plan.terminal != nil {
 		return ServiceResult{Request: request.Request, Failure: plan.terminal}
