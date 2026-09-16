@@ -129,6 +129,27 @@ Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
 
+## Request budget errors
+
+When `candidate_requirements.context` is `known_limits`, the Router checks the
+estimated input plus the effective output limit against each candidate's configured
+limits. If every candidate fails only this budget check, the request returns HTTP
+`400` with `context_length_exceeded` or `max_output_tokens_exceeded`. Unknown model
+limits, missing capabilities, unavailable selection evidence, and mixed failures
+remain selection failures; they are not reported as a caller budget error.
+
+Input accounting is an estimate, not the selected model's tokenizer. A backend
+may still reject a request that passed this check. Valid backend errors retain
+their HTTP status and meaningful message. vLLM's integer HTTP error codes are
+normalized to strings; for example, its `BadRequestError` with `code: 400` becomes
+an `invalid_request_error` with `code: "400"` in OpenAI-compatible output.
+
+A request with `stream: true` that is rejected before generation receives the
+same non-2xx JSON error rather than a successful SSE stream. When Replay is
+enabled, these errors are retained as failed requests with the observed status;
+Router budget rejections use the terminal reason `request_budget_exceeded`.
+These checks do not themselves truncate the provider-bound conversation.
+
 ## Router Replay
 
 Router Replay records routing decisions and selected request lifecycle data.
