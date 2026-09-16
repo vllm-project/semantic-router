@@ -181,6 +181,12 @@ func validateParsedHotReloadCompatibility(
 	if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
 		return err
 	}
+	if currentCfg != nil && nextCfg != nil &&
+		currentCfg.Observability.Tracing != nextCfg.Observability.Tracing {
+		return fmt.Errorf(
+			"tracing configuration changed; the tracer provider is initialized at startup and cannot be activated by the Router hot-reload API; activate the candidate through the deployment workflow",
+		)
+	}
 	if !reflect.DeepEqual(
 		envoyDeploymentProjectionFromConfig(currentCfg),
 		envoyDeploymentProjectionFromConfig(nextCfg),
