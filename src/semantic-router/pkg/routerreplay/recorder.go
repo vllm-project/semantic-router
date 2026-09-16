@@ -482,7 +482,7 @@ func logSignalFields(signals Signal) map[string]interface{} {
 }
 
 func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
-	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled {
+	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled && !r.JailbreakScoreAvailable {
 		return
 	}
 
@@ -490,7 +490,7 @@ func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
 	fields["jailbreak_enabled"] = r.JailbreakEnabled
 	fields["pii_enabled"] = r.PIIEnabled
 
-	if r.JailbreakDetected {
+	if r.JailbreakDetected || r.JailbreakScoreAvailable {
 		fields["jailbreak_detected"] = r.JailbreakDetected
 		fields["jailbreak_type"] = r.JailbreakType
 		fields["jailbreak_score_available"] = r.JailbreakScoreAvailable

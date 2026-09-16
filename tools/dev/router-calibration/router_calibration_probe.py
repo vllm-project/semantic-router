@@ -14,6 +14,7 @@ from router_calibration_image import (
     IMAGE_FIXTURE_MEDIA_TYPES,
     validate_image_fixture_payload,
 )
+from router_calibration_signal_values import normalize_signal_values
 
 PADDING_PLACEMENTS = frozenset({"before", "after", "around"})
 PROBE_SCHEMA_VERSION = "v1"
@@ -26,6 +27,7 @@ SELECTION_STATUSES = frozenset(
         "execution_required",
         "unavailable",
         "failed",
+        "not_required",
     }
 )
 MAX_PROBE_REPEAT = 10_000
@@ -65,6 +67,7 @@ DECISION_FIELDS = frozenset(
         "plugin_match",
         "expected_alias",
         "expected_signals",
+        "expected_signal_values",
         "forbidden_signals",
         "signal_match",
         "robustness",
@@ -89,6 +92,7 @@ VARIANT_FIELDS = frozenset(
         "notes",
         "expected_selection_status",
         "expected_signals",
+        "expected_signal_values",
     }
 )
 PADDING_FIELDS = frozenset({"text", "repeat", "placement"})
@@ -147,6 +151,7 @@ class Probe:
     expected_plugins: tuple[str, ...] = ()
     forbidden_plugins: tuple[str, ...] = ()
     plugin_match: str = "contains"
+    expected_signal_values: dict[str, dict[str, float]] = field(default_factory=dict)
     expected_signals: tuple[tuple[str, str], ...] = ()
     forbidden_signals: tuple[tuple[str, str], ...] = ()
     signal_match: str = "contains"
@@ -179,6 +184,7 @@ class DecisionDefaults:
     forbidden_plugins: tuple[str, ...]
     plugin_match: str
     expected_alias: str | None
+    expected_signal_values: dict[str, dict[str, float]]
     expected_signals: tuple[tuple[str, str], ...]
     forbidden_signals: tuple[tuple[str, str], ...]
     signal_match: str
@@ -269,6 +275,9 @@ def _load_decision_defaults(
                 raw_decision.get("plugin_match"), f"{label}.plugin_match"
             ),
             expected_alias=_optional_string(raw_decision.get("expected_alias")),
+            expected_signal_values=normalize_signal_values(
+                raw_decision.get("expected_signal_values", {}), label
+            ),
             expected_signals=_normalize_expected_signals(
                 raw_decision.get("expected_signals"), decision_id
             ),
@@ -345,6 +354,10 @@ def _load_variant(
             raw_variant.get("expected_signals"),
             probe_id,
             default=defaults.expected_signals,
+        ),
+        expected_signal_values=normalize_signal_values(
+            raw_variant.get("expected_signal_values", defaults.expected_signal_values),
+            label,
         ),
         forbidden_signals=defaults.forbidden_signals,
         signal_match=defaults.signal_match,

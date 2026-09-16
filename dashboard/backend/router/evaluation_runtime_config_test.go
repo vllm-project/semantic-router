@@ -134,7 +134,12 @@ routing:
 }
 
 func TestEvaluationRoutesLoadDeploymentScopedTargetsWithoutCatalogLeaks(t *testing.T) {
-	root := t.TempDir()
+	// Resolve the trusted temporary root, not the authored registry path:
+	// macOS exposes its temp directory through /var, which is a symlink.
+	root, rootErr := filepath.EvalSymlinks(t.TempDir())
+	if rootErr != nil {
+		t.Fatal(rootErr)
+	}
 	configPath := filepath.Join(root, "config.yaml")
 	configBytes := []byte(`version: v0.3
 global:

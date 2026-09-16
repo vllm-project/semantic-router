@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,6 +185,10 @@ func (l *configFileReloadLoop) reload() {
 	l.logConfigFileStat()
 
 	if err := l.server.reloadRouterFromFile(l.cfgFile); err != nil {
+		if errors.Is(err, errConfigReloadSuperseded) {
+			logging.ComponentEvent("extproc", "config_reload_superseded", map[string]interface{}{"file": l.cfgFile})
+			return
+		}
 		l.logReloadFailure(err)
 		return
 	}

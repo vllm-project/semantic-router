@@ -9,6 +9,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
+func TestSelectionEligibilityPreservesMinimumPoolCause(t *testing.T) {
+	refs := []config.ModelRef{{Model: "first"}, {Model: "second"}}
+	ctx := &RequestContext{VSRSelectedDecision: &config.Decision{
+		Name: "review", ModelRefs: refs, Algorithm: &config.AlgorithmConfig{MinimumCandidates: 2},
+	}}
+	_, err := applySelectionEligibility(
+		&selection.SelectionContext{CandidateModels: refs, InputTokens: 10},
+		&selection.SelectionResult{SelectedModel: "first", EligibleModels: refs[:1]}, ctx,
+	)
+	if !errors.Is(err, selection.ErrNoEligibleCandidates) || !errors.Is(err, errNoContextEligibleDecisionModel) {
+		t.Fatalf("minimum pool rejection must preserve selection and context causes: %v", err)
+	}
+	if ctx.VSREligibleModelRefs != nil || ctx.VSRPolicyEligibleModelRefs != nil {
+		t.Fatal("rejected selector result changed request eligibility")
+	}
+}
+
 // Exercise actual multi_factor selection, the saved request inventory, and
 // provider dispatch in sequence. The capable sibling is deliberately rejected
 // by a different policy, so a 200 routed to that sibling would violate it.

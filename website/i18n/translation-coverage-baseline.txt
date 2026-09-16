@@ -138,6 +138,7 @@ zh-Hans	tutorials/global/models-entrypoints-serving.md
 zh-Hans	tutorials/global/overview.md
 zh-Hans	tutorials/global/recipes.md
 zh-Hans	tutorials/global/stores-and-tools.md
+zh-Hans	tutorials/global/vela-models.md
 zh-Hans	tutorials/learning/adaptations.md
 zh-Hans	tutorials/learning/decision-adaptations.md
 zh-Hans	tutorials/learning/experience.md

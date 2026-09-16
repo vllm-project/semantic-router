@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "c42edf227f70d5b4e60b706bc7d354351a2ee6e8"
   source_file: "docs/tutorials/signal/learned/modality.md"
   outdated: false
 ---
@@ -52,6 +52,12 @@ routing:
 保持规则名与决策要引用的路由行为对齐。通过 `global.model_catalog.modules.modality_detector` 配置检测器。
 
 ## 依赖与限制 {#dependencies-and-limitations}
+
+未声明配方模型绑定时，`classifier.max_sequence_length: 0` 保留 512-token 默认值。长提示会选取开头、中间和结尾的代表性片段用于路由；原生分类器还可能按 token 预算截断。这项策略限制推理成本，并不对每个 token 分类。
+
+要让模态分类接收未经路由采样的输入，请将 `modality_detector` 绑定到命名部署，并将 `input.max_tokens` 设为大于 512。设置 `input.overflow: reject` 可拒绝超出预算的输入。预算应在所选模型产物和提供方已验证的范围内；模型标称支持 32K，并不表示每种提供方都已验证 32K 执行。模块的 `classifier.max_sequence_length` 设为大于 512 的正值也会跳过路由采样，但仍保留模块的截断策略。
+
+`method: classifier` 下，实际推理错误会使模态保持未知，由决策的 `on_unknown` 策略处理，不会产生 `AR` 匹配。`method: hybrid` 则显式允许关键词回退。
 
 模态检测器对预期输出模式分类；它不证明后端支持请求的输入附件。请保持模型卡能力与提供方校验对齐。完整示例见：
 [`config/fragments/signal/modality/multimodal.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/modality/multimodal.yaml)。
