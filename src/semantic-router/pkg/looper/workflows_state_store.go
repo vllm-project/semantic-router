@@ -1,6 +1,7 @@
 package looper
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -42,6 +43,15 @@ const (
 	// proactively purges expired entries. Keeps memory/file state bounded
 	// even when no new requests arrive.
 	workflowStateSweeperInterval = 60 * time.Second
+
+	// maxWorkflowRedisClaimAttempts bounds GET/EVAL retries when another
+	// claimant advances the snapshot between the pre-script read and the
+	// compare-and-swap.
+	maxWorkflowRedisClaimAttempts = 32
+
+	workflowRedisClaimConflict   = "conflict"
+	workflowRedisClaimModeClaim  = "claim"
+	workflowRedisClaimModeExpire = "expire"
 )
 
 // workflowStateClaimLease is how long a resume may hold exclusive access
@@ -976,10 +986,11 @@ func validWorkflowStateID(id string) bool {
 }
 
 type workflowRedisToolStateStore struct {
-	client    *redis.Client
-	keyPrefix string
-	ttl       time.Duration
-	closeOnce sync.Once
+	client              *redis.Client
+	keyPrefix           string
+	ttl                 time.Duration
+	closeOnce           sync.Once
+	testClaimInterleave func()
 }
 
 func newWorkflowRedisToolStateStore(cfg config.WorkflowStateRedisConfig, ttl time.Duration) *workflowRedisToolStateStore {
@@ -1080,42 +1091,52 @@ func (s *workflowRedisToolStateStore) Claim(ctx context.Context, recipe config.R
 	if !validWorkflowStateID(id) {
 		return nil, false, fmt.Errorf("invalid workflow state id %q", id)
 	}
+	for attempt := 1; attempt <= maxWorkflowRedisClaimAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
+		claim, ok, retry, err := s.claimAgainstCurrentSnapshot(ctx, recipe, id)
+		if err != nil || !retry {
+			return claim, ok, err
+		}
+	}
+	return nil, false, fmt.Errorf("claim workflow state %q raced", id)
+}
+
+func (s *workflowRedisToolStateStore) claimAgainstCurrentSnapshot(
+	ctx context.Context,
+	recipe config.RecipeName,
+	id string,
+) (*workflowStateClaim, bool, bool, error) {
 	data, err := s.client.Get(ctx, s.key(recipe, id)).Bytes()
 	if errors.Is(err, redis.Nil) {
-		legacy, legacyErr := s.client.Get(ctx, s.legacyKey(id)).Bytes()
-		if errors.Is(legacyErr, redis.Nil) {
-			return nil, false, nil
-		}
-		if legacyErr != nil {
-			return nil, false, fmt.Errorf("inspect legacy workflow state in redis: %w", legacyErr)
-		}
-		var legacyState workflowPendingToolState
-		if unmarshalErr := json.Unmarshal(legacy, &legacyState); unmarshalErr == nil && workflowStateRecipeMissing(&legacyState) {
-			return nil, false, errWorkflowStateUnscoped
-		}
-		return nil, false, nil
+		return nil, false, false, s.inspectLegacyRedisState(ctx, id)
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("read workflow state from redis: %w", err)
+		return nil, false, false, fmt.Errorf("read workflow state from redis: %w", err)
 	}
 	var state workflowPendingToolState
 	if unmarshalErr := json.Unmarshal(data, &state); unmarshalErr != nil {
-		return nil, false, fmt.Errorf("parse workflow state: %w", unmarshalErr)
+		return nil, false, false, fmt.Errorf("parse workflow state: %w", unmarshalErr)
 	}
 	if claimErr := workflowStateClaimable(&state, recipe); claimErr != nil {
-		return nil, false, claimErr
+		return nil, false, false, claimErr
+	}
+	if s.testClaimInterleave != nil {
+		s.testClaimInterleave()
 	}
 	now := time.Now().UTC()
-	sidecar, sidecarErr := s.client.Get(ctx, s.claimKey(recipe, id)).Result()
-	sidecarLive := sidecarErr == nil && sidecar != "" && sidecar == state.ClaimToken
-	if workflowToolStateExpired(&state, s.ttl, now) && !sidecarLive {
-		_ = s.client.Del(ctx, s.key(recipe, id), s.claimKey(recipe, id)).Err()
-		return nil, false, nil
-	}
-	token := newWorkflowToolStateID()
-	claimedJSON, err := marshalWorkflowStateWithClaim(&state, token, now)
-	if err != nil {
-		return nil, false, err
+	mode := workflowRedisClaimModeClaim
+	token := ""
+	claimedJSON := []byte{}
+	if workflowToolStateExpired(&state, s.ttl, now) {
+		mode = workflowRedisClaimModeExpire
+	} else {
+		token = newWorkflowToolStateID()
+		claimedJSON, err = marshalWorkflowStateWithClaim(&state, token, now)
+		if err != nil {
+			return nil, false, false, err
+		}
 	}
 	result, err := workflowRedisClaimScript.Run(
 		ctx,
@@ -1124,23 +1145,37 @@ func (s *workflowRedisToolStateStore) Claim(ctx context.Context, recipe config.R
 		token,
 		claimedJSON,
 		strconv.FormatInt(currentWorkflowStateClaimLease().Milliseconds(), 10),
+		data,
+		mode,
+		workflowRedisClaimConflict,
 	).Result()
 	if errors.Is(err, redis.Nil) || result == nil {
-		return nil, false, nil
+		return nil, false, false, nil
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("claim workflow state from redis: %w", err)
+		return nil, false, false, fmt.Errorf("claim workflow state from redis: %w", err)
+	}
+	if workflowRedisResultIsConflict(result) {
+		return nil, false, true, nil
+	}
+	if mode == workflowRedisClaimModeExpire {
+		return nil, false, false, fmt.Errorf("claim workflow state from redis returned %T after expire", result)
 	}
 	snapshot, ok := workflowRedisScriptBytes(result)
 	if !ok {
-		return nil, false, fmt.Errorf("claim workflow state from redis returned %T", result)
+		return nil, false, false, fmt.Errorf("claim workflow state from redis returned %T", result)
+	}
+	if !bytes.Equal(snapshot, claimedJSON) {
+		_ = s.Release(ctx, recipe, id, token)
+		return nil, false, false, fmt.Errorf("claim workflow state from redis persisted a different snapshot")
 	}
 	if unmarshalErr := json.Unmarshal(snapshot, &state); unmarshalErr != nil {
-		return nil, false, fmt.Errorf("parse workflow state: %w", unmarshalErr)
+		_ = s.Release(ctx, recipe, id, token)
+		return nil, false, false, fmt.Errorf("parse workflow state: %w", unmarshalErr)
 	}
 	if claimErr := workflowStateClaimable(&state, recipe); claimErr != nil {
 		_ = s.Release(ctx, recipe, id, token)
-		return nil, false, claimErr
+		return nil, false, false, claimErr
 	}
 	state.ClaimToken = ""
 	state.ClaimedAt = time.Time{}
@@ -1149,7 +1184,22 @@ func (s *workflowRedisToolStateStore) Claim(ctx context.Context, recipe config.R
 		ID:     id,
 		Token:  token,
 		State:  &state,
-	}, true, nil
+	}, true, false, nil
+}
+
+func (s *workflowRedisToolStateStore) inspectLegacyRedisState(ctx context.Context, id string) error {
+	legacy, err := s.client.Get(ctx, s.legacyKey(id)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect legacy workflow state in redis: %w", err)
+	}
+	var legacyState workflowPendingToolState
+	if unmarshalErr := json.Unmarshal(legacy, &legacyState); unmarshalErr == nil && workflowStateRecipeMissing(&legacyState) {
+		return errWorkflowStateUnscoped
+	}
+	return nil
 }
 
 func (s *workflowRedisToolStateStore) Renew(ctx context.Context, recipe config.RecipeName, id, token string) error {
@@ -1279,6 +1329,11 @@ func workflowRedisScriptBytes(value interface{}) ([]byte, bool) {
 	}
 }
 
+func workflowRedisResultIsConflict(value interface{}) bool {
+	data, ok := workflowRedisScriptBytes(value)
+	return ok && string(data) == workflowRedisClaimConflict
+}
+
 func marshalWorkflowStateWithClaim(state *workflowPendingToolState, token string, claimedAt time.Time) ([]byte, error) {
 	if state == nil {
 		return nil, fmt.Errorf("workflow tool state missing")
@@ -1340,6 +1395,15 @@ if live then
     return false
   end
 end
+-- ARGV[4] is the snapshot from the pre-script GET. Refuse to persist a
+-- claimed copy of that generation if another claimant already advanced it.
+if value ~= ARGV[4] then
+  return ARGV[6]
+end
+if ARGV[5] == "expire" then
+  redis.call("DEL", KEYS[1], KEYS[2])
+  return false
+end
 local ttl = redis.call("PTTL", KEYS[1])
 local lease = tonumber(ARGV[3]) or 0
 if ttl and ttl > 0 and lease > ttl then
@@ -1350,7 +1414,7 @@ if ttl and ttl > 0 then
   redis.call("PEXPIRE", KEYS[1], ttl)
 end
 redis.call("SET", KEYS[2], ARGV[1], "PX", lease)
-return value
+return ARGV[2]
 `)
 
 var workflowRedisCommitScript = redis.NewScript(`
