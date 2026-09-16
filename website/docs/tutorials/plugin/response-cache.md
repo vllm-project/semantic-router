@@ -106,11 +106,22 @@ Dropping the collection deletes cached responses. Do not apply this cache
 migration to an agentic-memory collection; preserve its source records and
 re-embed them into a new collection instead.
 
+For local `mmbert` embeddings, including Vela Embedding, changing the model,
+tokenizer, representation size, or inference settings starts a separate cache
+space. The router retains your tenant namespace and explicit cache revision;
+historical entries remain stored until their normal expiry or explicit cleanup.
+The first requests after a model upgrade are cache misses. Restarting with the
+same representation reuses its compatible cache. This binding does not infer
+the identity of a mutable remote embedding endpoint.
+
 ## Operations
 
 The management API exposes redacted health, capabilities, statistics, candidate
-configuration testing, scoped invalidation, epoch-based flush, and a
-hash-chained audit view under `/api/v1/response-cache/*`. Invalidation defaults
+configuration testing, scoped invalidation, and epoch-based flush under
+`/api/v1/storage/response-cache/*`. The plugin descriptor at
+`/api/v1/plugins/response_cache` links to these operations. Hash-chained audit
+is shared across management operations at `/api/v1/observability/audit`
+(`audit.read`). Invalidation defaults
 to dry-run. Flush requires the explicit confirmation phrase
 `flush response cache` and never calls backend-wide `FLUSHALL`.
 

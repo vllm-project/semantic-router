@@ -2823,6 +2823,10 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 		num_entities: result.num_entities,
 	})
 
+	if result.num_entities < 0 || (result.num_entities > 0 && result.entities == nil) {
+		return nil, fmt.Errorf("mmBERT-32K PII token classification failed")
+	}
+
 	if result.num_entities == 0 {
 		return []TokenEntity{}, nil
 	}

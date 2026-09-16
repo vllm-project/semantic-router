@@ -13,12 +13,38 @@ sys.path.insert(0, str(TEST_DIR))
 import baseline_artifact  # noqa: E402
 from artifact_inventory import LoadSite, ServedArtifact  # noqa: E402
 from baseline_artifact import BaselineError, resolve_measured_artifact  # noqa: E402
+from constants import VELA_RELEASE_REVISIONS  # noqa: E402
 from provenance.crossref import artifact_identity_digest, file_digest  # noqa: E402
 from provenance.emit import write_manifest  # noqa: E402
 
 REPO = "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
 REVISION = "b" * 40
 CONFIG_JSON = b'{"architectures": ["ModernBertForSequenceClassification"]}'
+
+
+def test_served_vela_download_uses_the_router_pin_not_hub_head(tmp_path, monkeypatch):
+    repo = "llm-semantic-router/Vela-1.0-Encoder-307M-Feedback"
+    site = LoadSite(
+        "feedback", "models/" + repo.rsplit("/", maxsplit=1)[-1], None, None, None, ()
+    )
+    served = ServedArtifact("feedback", site.model_path, (site,))
+    calls = []
+    monkeypatch.setattr(
+        baseline_artifact,
+        "resolve_hf_revision",
+        lambda _: pytest.fail("must not resolve moving HEAD"),
+    )
+    monkeypatch.setattr(
+        baseline_artifact,
+        "download_artifact",
+        lambda *args: calls.append(args) or tmp_path,
+    )
+    args = argparse.Namespace(
+        artifact_manifest=None, artifact_dir=None, artifact_repo=None
+    )
+    measured = resolve_measured_artifact(args, served)
+    assert measured.revision == VELA_RELEASE_REVISIONS[repo]
+    assert calls[0][:2] == (repo, VELA_RELEASE_REVISIONS[repo])
 
 
 def served_artifact():

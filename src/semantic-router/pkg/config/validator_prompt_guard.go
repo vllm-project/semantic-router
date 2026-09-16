@@ -11,7 +11,19 @@ var validPromptGuardProtocols = map[string]bool{
 // validatePromptGuardBackend validates the prompt_guard backend selection and
 // that the selected backend is actually wired up.
 func validatePromptGuardBackend(cfg *RouterConfig) error {
-	if err := validatePromptGuardBackendConfig(&cfg.PromptGuard); err != nil {
+	guard := cfg.PromptGuard
+	if binding, bound := cfg.ModelBindings["prompt_guard"]; bound && guard.Window != nil {
+		deployment, exists := cfg.ModelDeployments[binding.Deployment]
+		if !exists {
+			return fmt.Errorf("prompt_guard binding names an unknown deployment")
+		}
+		if err := guard.ValidateBoundWindow(deployment); err != nil {
+			return err
+		}
+		// Execution comes from the explicit binding, not a legacy variant.
+		guard.Window = nil
+	}
+	if err := validatePromptGuardBackendConfig(&guard); err != nil {
 		return err
 	}
 	return validatePromptGuardWiring(cfg)
@@ -21,6 +33,9 @@ func validatePromptGuardBackend(cfg *RouterConfig) error {
 // variant (local) and protocol (remote) are mutually exclusive, and each must
 // name a recognized value.
 func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
+	if err := cfg.ValidateWindow(); err != nil {
+		return err
+	}
 	if cfg.Backend != nil {
 		if cfg.Variant != "" || cfg.Protocol != "" {
 			return fmt.Errorf("prompt_guard.backend is mutually exclusive with variant and legacy protocol")
@@ -47,6 +62,45 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 	if !validPromptGuardVariants[cfg.Variant] {
 		return fmt.Errorf("prompt_guard.variant: unrecognized value %q, must be one of: %s, %s",
 			cfg.Variant, PromptGuardVariantCandle, PromptGuardVariantMmBERT32K)
+	}
+	return nil
+}
+
+// ValidateWindow keeps token-window inference local and explicit. The total
+// input budget remains independent of each inference window's size.
+func (cfg PromptGuardConfig) ValidateWindow() error {
+	if cfg.Window == nil {
+		return nil
+	}
+	if cfg.Backend != nil || cfg.Protocol != "" || cfg.Variant != PromptGuardVariantMmBERT32K {
+		return fmt.Errorf("prompt_guard.window requires the local mmbert32k variant")
+	}
+	return cfg.validateWindowParameters(cfg.MaxSequenceLength)
+}
+
+// ValidateBoundWindow checks consumer window policy against its explicit local
+// deployment. The loaded owned provider validates the actual architecture.
+func (cfg PromptGuardConfig) ValidateBoundWindow(deployment ModelDeployment) error {
+	if cfg.Window == nil {
+		return nil
+	}
+	if deployment.Provider != "candle" && deployment.Provider != "ort" {
+		return fmt.Errorf("prompt_guard.window requires a local deployment")
+	}
+	return cfg.validateWindowParameters(deployment.Input.MaxTokens)
+}
+
+func (cfg PromptGuardConfig) validateWindowParameters(maxTokens int) error {
+	seen := make(map[string]bool)
+	for _, label := range cfg.PositiveLabels {
+		if label == "" || seen[label] {
+			return fmt.Errorf("prompt_guard.positive_labels must be nonempty and unique for windowed inference")
+		}
+		seen[label] = true
+	}
+	head := SequenceHeadModelConfig{MaxSequenceLength: maxTokens, Window: cfg.Window}
+	if err := head.ValidateWindow(); err != nil {
+		return fmt.Errorf("prompt_guard.%w", err)
 	}
 	return nil
 }

@@ -38,6 +38,8 @@ global:
   router:
     learning:
       enabled: true
+      adaptation:
+        enabled: false
       protection:
         enabled: true
         scope: conversation
@@ -52,6 +54,9 @@ global:
           stability_weight: 1.0
 ```
 
+This enables protection independently of online model-choice adaptation. Both
+components otherwise default to enabled when the master switch is enabled.
+
 ## Scopes
 
 | Scope | What is protected | What can re-route |
@@ -61,9 +66,11 @@ global:
 
 Use `conversation` when each agent run should be independently routed. Use
 `session` when one session-level model choice should remain stable across
-multiple user-initiated runs. Both scopes reset continuity when the matched
-decision changes, and neither scope can retain a previous model outside the
-current adaptation candidate set.
+multiple user-initiated runs. In `conversation` scope, a changed decision resets
+minimum-turn and continuity-cost preferences. In `session` scope, a changed
+decision or conversation alone does not release an eligible current model;
+idle timeout, bypass, candidate exclusion, or qualified rescue can release it.
+Neither scope can retain a previous model outside the admitted candidate set.
 
 If the configured identity headers are missing, protection fails open and
 records diagnostics instead of failing the request.
@@ -83,9 +90,28 @@ The switch rule is:
 switch if proposal_gain >= switch_margin + stability_weight * switch_cost
 ```
 
-Protection can also allow a deterministic `rescue_switch` when the current
-model appears underpowered because of repeated failures, retries, failed
-verification, or explicit outcome evidence.
+Protection can also allow a deterministic `rescue_switch` after repeated
+backend failures or replay-linked outcomes identify the current model as
+underpowered. With protection identity present, backend `429` and `5xx`
+responses supply failure observations even when adaptation is disabled; this
+does not enable adaptive model choice or quality updates. A correction or
+retry prompt alone is not an owned model outcome, though its signals can change
+the matched decision. Rescue requires another eligible proposal and sufficient
+evidence; it is not immediate backend failover.
+
+Rescue is limited to eligible models at a portable turn boundary. It cannot
+override an active tool-loop lock or a nonportable-context lock. Minimum-turn
+and session-continuity preferences may yield to rescue when those hard
+boundaries are absent. Adaptation and protection also preserve any candidate
+restrictions imposed by the decision's selector, including lexicographic bands.
+
+With protection in `apply` mode and the configured identity present, a hard
+ownership lock whose previous model is outside the admitted pool returns
+`503` instead of transferring ownership or forcing that model. Router-owned
+Responses history becomes portable after the router has expanded it into the
+complete stateless request; its retained `previous_response_id` alone does not
+create a lock. An active tool loop still does. Unknown response IDs fail during
+history lookup, before selection.
 
 ## Decision Boundaries
 

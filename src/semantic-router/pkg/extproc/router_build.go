@@ -34,33 +34,36 @@ type classifierMappings struct {
 }
 
 type routerComponents struct {
-	embeddings           *embedding.Set
-	modelRuntime         *native.Runtime
-	cfg                  *config.RouterConfig
-	categoryDescriptions []string
-	classifier           *classification.Classifier
-	recipeClassifiers    *classification.RecipeClassifiers
-	classificationSvc    *services.ClassificationService
-	semanticCache        cache.CacheBackend
-	toolsDatabase        *tools.ToolsDatabase
-	toolEmbedder         *cachedToolEmbedder
-	responseAPIFilter    *ResponseAPIFilter
-	replayRecorder       *routerreplay.Recorder
-	replayStoreShared    bool
-	replayRecorders      map[string]*routerreplay.Recorder
-	shadowDispatcher     *shadowDispatcher
-	modelSelector        *selection.Registry
-	recipeModelSelectors map[config.RecipeName]*selection.Registry
-	lookupTable          lookuptable.LookupTable
-	memoryStore          memory.Store
-	memoryExtractor      *memory.MemoryExtractor
-	protocolCodecs       *protocolcodec.Registry
-	looperClient         *looper.Client
-	credentialResolver   *authz.CredentialResolver
-	rateLimiter          *ratelimit.RateLimitResolver
-	lookupTableCancel    func()
-	routerSessionStore   *sessiontelemetry.RouterSessionStateStoreSlot
-	resources            *resourceScope
+	embeddings            *embedding.Set
+	modelRuntime          *native.Runtime
+	rerankers             map[config.RecipeName]modelruntime.PairScorer
+	cfg                   *config.RouterConfig
+	categoryDescriptions  []string
+	classifier            *classification.Classifier
+	recipeClassifiers     *classification.RecipeClassifiers
+	classificationSvc     *services.ClassificationService
+	semanticCache         cache.CacheBackend
+	responseCache         *cache.ResponseCacheService
+	semanticCacheIdentity string
+	toolsDatabase         *tools.ToolsDatabase
+	toolEmbedder          *cachedToolEmbedder
+	responseAPIFilter     *ResponseAPIFilter
+	replayRecorder        *routerreplay.Recorder
+	replayStoreShared     bool
+	replayRecorders       map[string]*routerreplay.Recorder
+	shadowDispatcher      *shadowDispatcher
+	modelSelector         *selection.Registry
+	recipeModelSelectors  map[config.RecipeName]*selection.Registry
+	lookupTable           lookuptable.LookupTable
+	memoryStore           memory.Store
+	memoryExtractor       *memory.MemoryExtractor
+	protocolCodecs        *protocolcodec.Registry
+	looperClient          *looper.Client
+	credentialResolver    *authz.CredentialResolver
+	rateLimiter           *ratelimit.RateLimitResolver
+	lookupTableCancel     func()
+	routerSessionStore    *sessiontelemetry.RouterSessionStateStoreSlot
+	resources             *resourceScope
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -206,6 +209,11 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	}
 	components.embeddings = embeddings
 	components.resources.add(embeddings.Close)
+	components.rerankers, err = modelruntime.PrepareRerankers(context.Background(), cfg, components.modelRuntime)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
+	components.resources.add(func() error { return modelruntime.CloseRerankers(components.rerankers) })
 	if cfg.Looper.IsEnabled() {
 		looperClient, clientErr := looper.NewConnectorClient(&cfg.Looper)
 		if clientErr != nil {
@@ -287,7 +295,9 @@ func (components *routerComponents) buildEarlyResources() error {
 			})
 		},
 		func(cfg *config.RouterConfig) (cache.CacheBackend, error) {
-			return createSemanticCache(cfg, components.embeddings)
+			semanticCache, identity, err := createSemanticCache(cfg, components.embeddings)
+			components.semanticCacheIdentity = identity
+			return semanticCache, err
 		},
 	)
 }
@@ -325,6 +335,11 @@ func (components *routerComponents) buildEarlyResourcesWith(
 	}); ok {
 		target.SetPolarityVerifier(components.classifier.PolarityVerifier())
 	}
+	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.embeddings)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+
 	return nil
 }
 
@@ -388,11 +403,14 @@ func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		Config:                  components.cfg,
+		Embeddings:              components.embeddings,
+		rerankers:               components.rerankers,
 		CategoryDescriptions:    components.categoryDescriptions,
 		Classifier:              components.classifier,
 		RecipeClassifiers:       components.recipeClassifiers,
 		ClassificationService:   components.classificationSvc,
 		Cache:                   components.semanticCache,
+		ResponseCache:           components.responseCache,
 		ToolsDatabase:           components.toolsDatabase,
 		toolEmbedder:            components.toolEmbedder,
 		ResponseAPIFilter:       components.responseAPIFilter,

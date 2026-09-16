@@ -50,7 +50,7 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 	return mappings, nil
 }
 
-func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, error) {
+func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, string, error) {
 	semanticCacheCfg := cfg.SemanticCache
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.CacheBackendType(semanticCacheCfg.BackendType),
@@ -77,17 +77,23 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	if cacheConfig.Enabled && len(sets) > 0 && sets[0] != nil {
 		provider, err := sets[0].Get(cacheConfig.EmbeddingModel, 0, 0)
 		if err != nil {
-			return nil, fmt.Errorf("semantic cache embedding: %w", err)
+			return nil, "", fmt.Errorf("semantic cache embedding: %w", err)
 		}
 		cacheConfig.EmbeddingProvider = provider
 	}
+	cacheConfig, identity, err := cache.PrepareEmbeddingNamespace(cacheConfig, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+		return embedding.ResolveProviderIdentity(cacheConfig.EmbeddingProvider, settings)
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("bind semantic cache embedding: %w", err)
+	}
 	semanticCache, err := cache.NewCacheBackend(cacheConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create semantic cache: %w", err)
+		return nil, "", fmt.Errorf("failed to create semantic cache: %w", err)
 	}
 	if err := cache.ValidateBackendEmbedding(context.Background(), semanticCache); err != nil {
 		_ = semanticCache.Close()
-		return nil, fmt.Errorf("failed to prepare semantic cache embedding: %w", err)
+		return nil, "", fmt.Errorf("failed to prepare semantic cache embedding: %w", err)
 	}
 
 	if semanticCache.IsEnabled() {
@@ -104,7 +110,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 		})
 	}
 
-	return semanticCache, nil
+	return semanticCache, identity, nil
 }
 
 func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {

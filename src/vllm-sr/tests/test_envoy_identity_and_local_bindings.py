@@ -50,6 +50,40 @@ def _model_routes(rendered):
     }
 
 
+@pytest.mark.parametrize("timeout", ["0s", "300s"])
+def test_chat_duration_is_independent_of_extproc_message_timeout(tmp_path, timeout):
+    path = _write_config(tmp_path, ["model-a", "model-b"])
+    document = yaml.safe_load(path.read_text())
+    document["listeners"][0]["timeout"] = timeout
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    assert not validate_user_config(config, log_summary=False)
+    output = tmp_path / "envoy.yaml"
+    generate_envoy_config_from_user_config(config, str(output))
+    rendered = yaml.safe_load(output.read_text())
+    listener = rendered["static_resources"]["listeners"][0]
+    hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
+    assert hcm["stream_idle_timeout"] == timeout
+    assert all(route["route"]["timeout"] == timeout for route in _routes(rendered))
+    for route in _routes(rendered):
+        action = route["route"]
+        assert (
+            action.get(
+                "idle_timeout", action.get("idleTimeout", hcm["stream_idle_timeout"])
+            )
+            == timeout
+        )
+    extproc = next(
+        item["typed_config"]
+        for item in hcm["http_filters"]
+        if item["name"] == "envoy.filters.http.ext_proc"
+    )
+    # An unlimited chat must still give the processor time to answer each
+    # message, and its gRPC stream must not add a hidden whole-chat deadline.
+    assert extproc["message_timeout"] == "1200s"
+    assert "timeout" not in extproc["grpc_service"]
+
+
 def test_distinct_aliases_retain_distinct_clusters_and_backend_routes(tmp_path):
     aliases = [
         "model-a",

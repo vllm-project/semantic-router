@@ -271,6 +271,10 @@ func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields m
 	if m.Quality != nil {
 		fields["quality"] = qualityEvidenceValue(m.Quality)
 	}
+	if m.Objective != nil {
+		fields["objective"] = multiFactorObjectiveValue(m.Objective)
+	}
+	setStringValue(fields, "latency_metric", m.LatencyMetric)
 	setIntValue(fields, "latency_percentile", m.LatencyPercentile)
 	setStringValue(fields, "on_no_candidates", m.OnNoCandidates)
 }
@@ -282,6 +286,10 @@ func qualityEvidenceValue(quality *config.QualityEvidenceConfig) ObjectValue {
 	}
 	setStringValue(fields, "index", quality.Index)
 	setStringValue(fields, "on_missing", quality.OnMissing)
+	setFloatValue(fields, "min_coverage", quality.MinCoverage)
+	if quality.MinScore != nil {
+		fields["min_score"] = FloatValue{V: *quality.MinScore}
+	}
 	return ObjectValue{Fields: fields}
 }
 

@@ -124,6 +124,13 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 
 	addRecipeRoutingDefinition(schema)
 	setCoreEnums(schema)
+	deployments := definitionProperty(schema, "CanonicalModelCatalog", "deployments")
+	if deployments == nil {
+		return nil, fmt.Errorf("canonical model deployment schema is missing")
+	}
+	// Offline consumers resolve the same named defaults as the Router without
+	// copying artifact identities or materializing them in authoring documents.
+	deployments.Default = routerconfig.DefaultCanonicalGlobal().ModelCatalog.Deployments
 
 	pluginRefs, err := addPluginDefinitions(reflector, schema)
 	if err != nil {
@@ -234,6 +241,9 @@ func setCoreEnums(root *jsonschema.Schema) {
 		string(routerconfig.ConfigSourceKubernetes),
 	})
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())
+	setDefinitionPropertyEnum(root, "CandidateRequirements", "capabilities", []string{routerconfig.CandidateCapabilitiesDeclared})
+	setDefinitionPropertyEnum(root, "CandidateRequirements", "context", []string{routerconfig.CandidateContextKnownLimits})
+	setDefinitionPropertyEnum(root, "MultiFactorSelectionConfig", "latency_metric", []string{"ttft", "tpot"})
 	setDefinitionPropertyEnum(root, "DecisionPlugin", "type", routerconfig.SupportedDecisionPluginTypes())
 	conditionTypes := append(routerconfig.SupportedDecisionSignalTypes(), routerconfig.SignalTypeProjection)
 	setDefinitionPropertyEnum(root, "RuleNode", "type", conditionTypes)

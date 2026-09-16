@@ -116,7 +116,7 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 256
+        dimension: 768
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 256
@@ -132,10 +132,10 @@ global:
       semantic:
         qwen3_model_path: ""
         gemma_model_path: ""
-        mmbert_model_path: ""
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: ""
         bert_model_path: ""
         use_cpu: true
         embedding_config:
           model_type: mmbert
-          target_dimension: 256
+          target_dimension: 768
