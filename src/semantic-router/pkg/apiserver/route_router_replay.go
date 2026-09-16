@@ -3,8 +3,12 @@
 package apiserver
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/redaction"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
@@ -21,6 +25,10 @@ func apiRouterReplayRoutes() []apiRoute {
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
+			jsonResponse[routerreplay.ListResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
 		managedRoute(
 			EndpointMetadata{
@@ -31,6 +39,10 @@ func apiRouterReplayRoutes() []apiRoute {
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
+			jsonResponse[routerreplay.AggregateResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
 		managedRoute(
 			EndpointMetadata{
@@ -44,11 +56,19 @@ func apiRouterReplayRoutes() []apiRoute {
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
+			jsonResponse[routerreplay.TrajectoryResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiObservabilityReplaysPath + "/{id}", Method: "GET", Description: "Read one Router Replay record"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
+			jsonResponse[routerreplay.RoutingRecord](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
 	}
 }
@@ -77,10 +97,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	runtime, release := s.currentReplayRuntime()
 	defer release()
 	if runtime == nil {
-		s.writeJSONResponse(w, http.StatusNotFound, replayManagementError(
-			http.StatusNotFound,
-			"router replay is disabled or unavailable",
-		))
+		s.writeErrorResponse(w, http.StatusNotFound, "REPLAY_UNAVAILABLE", "router replay is disabled or unavailable")
 		return
 	}
 
@@ -90,10 +107,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	}
 	response, handled := runtime.HandleReplayRequest(r.Method, requestTarget)
 	if !handled {
-		s.writeJSONResponse(w, http.StatusNotFound, replayManagementError(
-			http.StatusNotFound,
-			"router replay is disabled or unavailable",
-		))
+		s.writeErrorResponse(w, http.StatusNotFound, "REPLAY_UNAVAILABLE", "router replay is disabled or unavailable")
 		return
 	}
 
@@ -101,10 +115,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	if !s.canViewReplayDetails(r) {
 		redacted, _, err := redaction.RedactResponseBody(body)
 		if err != nil {
-			s.writeJSONResponse(w, http.StatusInternalServerError, replayManagementError(
-				http.StatusInternalServerError,
-				"router replay response could not be safely redacted",
-			))
+			s.writeErrorResponse(w, http.StatusInternalServerError, "REPLAY_REDACTION_ERROR", "router replay response could not be safely redacted")
 			return
 		}
 		body = redacted
@@ -112,8 +123,21 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 
 	statusCode := response.StatusCode
 	if statusCode < 100 || statusCode > 599 {
-		statusCode = http.StatusInternalServerError
-		body = []byte(`{"error":{"message":"Internal server error","type":"internal_error","code":500}}`)
+		s.writeErrorResponse(w, http.StatusInternalServerError, "REPLAY_INVALID_STATUS", "Internal server error")
+		return
+	}
+	if statusCode >= 400 {
+		var payload struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		message := http.StatusText(statusCode)
+		if json.Unmarshal(body, &payload) == nil && payload.Error.Message != "" {
+			message = payload.Error.Message
+		}
+		s.writeErrorResponse(w, statusCode, fmt.Sprintf("REPLAY_HTTP_%d", statusCode), message)
+		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
@@ -139,14 +163,4 @@ func (s *ClassificationAPIServer) canViewReplayDetails(r *http.Request) bool {
 	}
 	roles := s.managementAuthPolicy().Roles
 	return principal.hasPermission(PermReplayDetail, roles)
-}
-
-func replayManagementError(statusCode int, message string) map[string]interface{} {
-	return map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": message,
-			"type":    "invalid_request_error",
-			"code":    statusCode,
-		},
-	}
 }

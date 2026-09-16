@@ -269,7 +269,7 @@
 
 .parameters > div,
 .bodyContract,
-.responses > div {
+.responses > details {
   padding: 0.65rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 7px;
@@ -308,37 +308,83 @@
   font-size: 0.7rem;
 }
 
-.bodyFields {
+.mediaSchemas,
+.pluginOperations {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-  gap: 0.4rem;
-  margin-top: 0.45rem;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
 }
 
-.bodyFields > div {
-  display: flex;
+.mediaType {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  overflow-wrap: anywhere;
+  font-size: 0.65rem;
+}
+
+.schemaField {
   min-width: 0;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  padding: 0.48rem 0.55rem;
+  padding: 0.45rem 0.55rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 6px;
-  font-size: 0.62rem;
+  font-size: 0.65rem;
 }
 
-.bodyFields code {
-  min-width: 0;
+.schemaField > summary,
+.responses > details > summary {
+  cursor: pointer;
+}
+
+.schemaLabel {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.schemaField code,
+.schemaField span {
   overflow-wrap: anywhere;
 }
 
-.bodyFields span,
-.bodyFields b {
+.schemaField > summary > * {
+  margin-right: 0.3rem;
+}
+
+.schemaField span,
+.schemaField b,
+.pluginOperations span {
   padding: 0.08rem 0.25rem;
   border-radius: 3px;
   background: var(--ifm-color-emphasis-200);
   color: var(--ifm-color-emphasis-700);
-  font-size: 0.55rem;
+  font-size: 0.59rem;
+}
+
+.schemaField p {
+  margin: 0.35rem 0 0;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.65rem;
+}
+
+.schemaChildren {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  padding-left: min(2vw, 0.65rem);
+  border-left: 2px solid var(--ifm-color-emphasis-200);
+}
+
+.pluginOperations {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.pluginOperations > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.7rem;
 }
 
 .block pre {
@@ -356,17 +402,23 @@
   margin-top: 0.55rem;
 }
 
-.responses > div {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.5rem;
+.responses > details {
   font-size: 0.69rem;
 }
 
-.responses code {
-  color: var(--ifm-color-emphasis-600);
-  font-size: 0.62rem;
+.responses > details > summary > strong {
+  margin-right: 0.5rem;
+}
+
+.responses > details > summary > span {
+  overflow-wrap: anywhere;
+}
+
+.responseDetails,
+.responseHeaders {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
 }
 
 .empty {
@@ -411,11 +463,4 @@
     grid-template-columns: 1fr;
   }
 
-  .responses > div {
-    grid-template-columns: 40px minmax(0, 1fr);
-  }
-
-  .responses code {
-    grid-column: 2;
-  }
 }

@@ -30,6 +30,10 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 		return
 	}
+	if errors.Is(err, services.ErrUnknownDiagnosticRecipe) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_RECIPE", err.Error())
+		return
+	}
 	if errors.Is(err, services.ErrUnknownRoutingModel) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
 		return
@@ -132,6 +136,13 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 		return
 	}
 
+	selected, releaseRecipe, scopeErr := recipeDiagnosticService(service, req.Recipe)
+	defer releaseRecipe()
+	if scopeErr != nil {
+		s.writeClassificationError(w, scopeErr)
+		return
+	}
+	service = selected
 	metrics.RecordBatchClassificationTexts("unified", len(req.Texts))
 	if !s.ensureUnifiedClassifierAvailable(w, service) {
 		return
@@ -226,6 +237,7 @@ func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.Respon
 
 func (s *ClassificationAPIServer) buildBatchClassificationResponse(unifiedResults *services.UnifiedBatchResponse, req BatchClassificationRequest) BatchClassificationResponse {
 	return BatchClassificationResponse{
+		Recipe:           diagnosticRecipeName(req.Recipe),
 		Results:          s.extractRequestedResults(unifiedResults, req.TaskType, req.Options),
 		TotalCount:       len(req.Texts),
 		ProcessingTimeMs: unifiedResults.ProcessingTimeMs,
