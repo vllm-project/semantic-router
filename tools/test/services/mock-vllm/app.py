@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from asyncio import sleep as sleep_for_fixture
 from collections.abc import Iterator
 from typing import Any
 
@@ -48,6 +49,15 @@ app.state.shadow_control = (
 )
 if app.state.shadow_control is not None:
     app.include_router(shadow_router)
+
+
+async def apply_fixture_delay() -> None:
+    """Optional controlled backend work for wall-clock aggregation contracts."""
+    delay_ms = int(os.environ.get("MOCK_RESPONSE_DELAY_MS", "0"))
+    if delay_ms < 0:
+        raise ValueError("MOCK_RESPONSE_DELAY_MS must be non-negative")
+    if delay_ms:
+        await sleep_for_fixture(delay_ms / 1000)
 
 
 def is_hallucination_detection_request(req: ChatRequest) -> bool:
@@ -207,6 +217,7 @@ async def chat_completions(request: Request):
         field = ".".join(str(part) for part in detail.get("loc", ())) or None
         return invalid_request_response(detail["msg"], field)
 
+    await apply_fixture_delay()
     created_ts = int(time.time())
     control_response = mock_chat_control_response(req, created_ts)
     if control_response is not None:

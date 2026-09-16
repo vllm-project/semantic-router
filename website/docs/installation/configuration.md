@@ -29,7 +29,7 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners and timeouts. |
+| `listeners` | Public Router listeners, timeouts, and optional bearer credentials for CLI-managed Envoy listeners. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |

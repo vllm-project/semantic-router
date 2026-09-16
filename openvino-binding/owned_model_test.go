@@ -58,10 +58,12 @@ func ownedExpected(variant string, ids []int) ([]float32, []float32) {
 	}
 	mean := total / count
 	embedding := []float32{float32(mean), float32(2*mean + 1), float32(3*mean + 2)}
-	logits := []float64{0.01 * total, 0.1 * count, 1}
+	// Independently compute the fixture's exact binary-fraction logits before
+	// the binding's float32 softmax; CPU plugins may reduce model precision.
+	logits := []float64{total / 64, count / 8, 1}
 	if variant == "b" {
 		embedding = []float32{float32(11 - mean), float32(0.5*mean - 7), float32(2*mean + 5)}
-		logits = []float64{1, -0.02 * total, 0.05 * count}
+		logits = []float64{1, -total / 32, count / 16}
 	}
 	denominator := float64(0)
 	for i := range logits {

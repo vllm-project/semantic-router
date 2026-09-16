@@ -1,103 +1,117 @@
-name: CI Change Classification
+name: CI Plan
 
 on:
   workflow_call:
-    outputs:
-      core_test:
-        value: ${{ jobs.classify.outputs.core_test }}
-      image_calibration:
-        value: ${{ jobs.classify.outputs.image_calibration }}
-      dashboard:
-        value: ${{ jobs.classify.outputs.dashboard }}
-      website:
-        value: ${{ jobs.classify.outputs.website }}
-      paper:
-        value: ${{ jobs.classify.outputs.paper }}
-      helm:
-        value: ${{ jobs.classify.outputs.helm }}
-      e2e:
-        value: ${{ jobs.classify.outputs.e2e }}
-      e2e_profiles:
-        value: ${{ jobs.classify.outputs.e2e_profiles }}
-      full_e2e_profiles:
-        value: ${{ jobs.classify.outputs.full_e2e_profiles }}
-      cli:
-        value: ${{ jobs.classify.outputs.cli }}
-      memory:
-        value: ${{ jobs.classify.outputs.memory }}
-      images:
-        value: ${{ jobs.classify.outputs.images }}
-      pr_images:
-        value: ${{ jobs.classify.outputs.pr_images }}
-      publish_images:
-        value: ${{ jobs.classify.outputs.publish_images }}
-      operator:
-        value: ${{ jobs.classify.outputs.operator }}
-      openvino:
-        value: ${{ jobs.classify.outputs.openvino }}
-      performance:
-        value: ${{ jobs.classify.outputs.performance }}
-      router_learning:
-        value: ${{ jobs.classify.outputs.router_learning }}
-      recipe_conformance:
-        value: ${{ jobs.classify.outputs.recipe_conformance }}
-      riscv_qemu:
-        value: ${{ jobs.classify.outputs.riscv_qemu }}
-      docs_only:
-        value: ${{ jobs.classify.outputs.docs_only }}
-      security:
-        value: ${{ jobs.classify.outputs.security }}
+    inputs:
+      profile:
+        type: string
+        default: pr
       full:
-        value: ${{ jobs.classify.outputs.full }}
+        type: boolean
+        default: false
+      draft:
+        type: boolean
+        default: false
+      verification:
+        description: Explicit verification for a manual run; normal entrypoints use changed paths.
+        type: string
+        default: ''
+    outputs:
+      plan:
+        value: ${{ jobs.plan.outputs.plan }}
+      images:
+        value: ${{ jobs.plan.outputs.images }}
+      publish_images:
+        value: ${{ jobs.plan.outputs.publish_images }}
+      build_native:
+        value: ${{ jobs.plan.outputs.build_native }}
+      multiarch:
+        value: ${{ jobs.plan.outputs.multiarch }}
+      publish_helm:
+        value: ${{ jobs.plan.outputs.publish_helm }}
+      publish_python:
+        value: ${{ jobs.plan.outputs.publish_python }}
+      quality:
+        value: ${{ jobs.plan.outputs.quality }}
+      generated:
+        value: ${{ jobs.plan.outputs.generated }}
+      security:
+        value: ${{ jobs.plan.outputs.security }}
+      core:
+        value: ${{ jobs.plan.outputs.core }}
+      storage:
+        value: ${{ jobs.plan.outputs.storage }}
+      dashboard:
+        value: ${{ jobs.plan.outputs.dashboard }}
+      operator:
+        value: ${{ jobs.plan.outputs.operator }}
+      local:
+        value: ${{ jobs.plan.outputs.local }}
+      recipes:
+        value: ${{ jobs.plan.outputs.recipes }}
+      native:
+        value: ${{ jobs.plan.outputs.native }}
+      performance:
+        value: ${{ jobs.plan.outputs.performance }}
+      package:
+        value: ${{ jobs.plan.outputs.package }}
+      component_batches:
+        value: ${{ jobs.plan.outputs.component_batches }}
+      e2e:
+        value: ${{ jobs.plan.outputs.e2e }}
 
 permissions:
   contents: read
 
 jobs:
-  classify:
-    name: Classify changed files
-    runs-on: ubuntu-latest
+  plan:
+    name: Verification Plan
+    runs-on: ubuntu-24.04
     outputs:
-      core_test: ${{ steps.classify.outputs.core_test }}
-      image_calibration: ${{ steps.classify.outputs.image_calibration }}
-      dashboard: ${{ steps.classify.outputs.dashboard }}
-      website: ${{ steps.classify.outputs.website }}
-      paper: ${{ steps.classify.outputs.paper }}
-      helm: ${{ steps.classify.outputs.helm }}
-      e2e: ${{ steps.classify.outputs.e2e }}
-      e2e_profiles: ${{ steps.classify.outputs.e2e_profiles }}
-      full_e2e_profiles: ${{ steps.classify.outputs.full_e2e_profiles }}
-      cli: ${{ steps.classify.outputs.cli }}
-      memory: ${{ steps.classify.outputs.memory }}
-      images: ${{ steps.classify.outputs.images }}
-      pr_images: ${{ steps.classify.outputs.pr_images }}
-      publish_images: ${{ steps.classify.outputs.publish_images }}
-      operator: ${{ steps.classify.outputs.operator }}
-      openvino: ${{ steps.classify.outputs.openvino }}
-      performance: ${{ steps.classify.outputs.performance }}
-      router_learning: ${{ steps.classify.outputs.router_learning }}
-      recipe_conformance: ${{ steps.classify.outputs.recipe_conformance }}
-      riscv_qemu: ${{ steps.classify.outputs.riscv_qemu }}
-      docs_only: ${{ steps.classify.outputs.docs_only }}
-      security: ${{ steps.classify.outputs.security }}
-      full: ${{ steps.classify.outputs.full }}
+      plan: ${{ steps.plan.outputs.plan }}
+      images: ${{ steps.plan.outputs.images }}
+      publish_images: ${{ steps.plan.outputs.publish_images }}
+      build_native: ${{ steps.plan.outputs.build_native }}
+      multiarch: ${{ steps.plan.outputs.multiarch }}
+      publish_helm: ${{ steps.plan.outputs.publish_helm }}
+      publish_python: ${{ steps.plan.outputs.publish_python }}
+      quality: ${{ steps.plan.outputs.quality }}
+      generated: ${{ steps.plan.outputs.generated }}
+      security: ${{ steps.plan.outputs.security }}
+      core: ${{ steps.plan.outputs.core }}
+      storage: ${{ steps.plan.outputs.storage }}
+      dashboard: ${{ steps.plan.outputs.dashboard }}
+      operator: ${{ steps.plan.outputs.operator }}
+      local: ${{ steps.plan.outputs.local }}
+      recipes: ${{ steps.plan.outputs.recipes }}
+      native: ${{ steps.plan.outputs.native }}
+      performance: ${{ steps.plan.outputs.performance }}
+      package: ${{ steps.plan.outputs.package }}
+      component_batches: ${{ steps.plan.outputs.component_batches }}
+      e2e: ${{ steps.plan.outputs.e2e }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - id: classify
-        name: Classify domains and explicit escalations
+      - run: python3 -m pip install PyYAML==6.0.3
+      - id: plan
         env:
+          PROFILE: ${{ inputs.profile }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}
+          FULL: ${{ inputs.full }}
+          DRAFT: ${{ inputs.draft }}
+          VERIFICATION: ${{ inputs.verification }}
         run: |
-          full_arg=()
-          if [[ "$FULL" == "true" ]]; then
-            full_arg+=(--full)
-          fi
-          python3 tools/ci/classify_pr_changes.py \
-            --base "$BASE_SHA" \
-            --head "$GITHUB_SHA" \
-            "${full_arg[@]}" \
-            --github-output "$GITHUB_OUTPUT"
+          flags=()
+          if [[ "$FULL" == true ]]; then flags+=(--full); fi
+          if [[ "$DRAFT" == true ]]; then flags+=(--draft); fi
+          if [[ -n "$VERIFICATION" ]]; then flags+=(--verification "$VERIFICATION"); fi
+          python3 tools/ci/ci_plan.py --profile "$PROFILE" \
+            --base "$BASE_SHA" --head "$GITHUB_SHA" "${flags[@]}" \
+            --output .agent-harness/ci/plan.json --github-output "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-plan
+          path: .agent-harness/ci/plan.json
+          include-hidden-files: true
+          if-no-files-found: error

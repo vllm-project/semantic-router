@@ -121,7 +121,7 @@ class KubernetesGeneratedContractsTests(unittest.TestCase):
 
     def test_operator_gate_rejects_new_untracked_generated_artifacts(self) -> None:
         workflow = yaml.safe_load(WORKFLOW.read_text())
-        steps = workflow["jobs"]["manifests"]["steps"]
+        steps = workflow["jobs"]["checks"]["steps"]
         generation = next(
             step["run"]
             for step in steps
@@ -149,6 +149,50 @@ class KubernetesGeneratedContractsTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("new.generated.yaml", result.stdout)
         self.assertIn("out of date", result.stdout)
+
+    def test_operator_unit_reports_do_not_pollute_generated_artifact_checks(
+        self,
+    ) -> None:
+        job = yaml.safe_load(WORKFLOW.read_text())["jobs"]["checks"]
+        steps = job["steps"]
+        operator = self.root / "deploy/operator"
+        operator.mkdir(parents=True)
+        binary = self.root / "bin/go"
+        self.write(Path("bin/go"), "#!/bin/sh\nprintf '{}\\n'\n")
+        binary.chmod(0o755)
+        environment = {
+            **self.environment,
+            "PATH": str(binary.parent) + os.pathsep + self.environment["PATH"],
+            "OPERATOR_TEST_REPORT_DIR": job["env"]["OPERATOR_TEST_REPORT_DIR"].replace(
+                "${{ github.workspace }}", str(self.root)
+            ),
+        }
+        subprocess.run(
+            ["git", "init", "--quiet"], cwd=self.root, env=environment, check=True
+        )
+        for name in ("Discover Operator Unit Tests", "Run Operator Unit Tests"):
+            command = next(step["run"] for step in steps if step.get("name") == name)
+            subprocess.run(
+                ["bash", "-e", "-c", command],
+                cwd=operator,
+                env=environment,
+                check=True,
+            )
+        report = Path(environment["OPERATOR_TEST_REPORT_DIR"])
+        self.assertTrue((report / "operator-discovery.jsonl").is_file())
+        self.assertTrue((report / "operator-events.jsonl").is_file())
+        verification = next(
+            step["run"] for step in steps if step.get("name") == "Verify no changes"
+        )
+        result = subprocess.run(
+            ["bash", "-e", "-c", verification],
+            cwd=operator,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_crd_reference_gate_propagates_failure_after_identical_output(self) -> None:
         self.write(Path("website/docs/api/crd-reference.md"), "current reference\n")

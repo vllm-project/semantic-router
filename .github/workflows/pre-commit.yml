@@ -1,190 +1,68 @@
-name: Pre-commit
+name: Source Quality
 
 on:
   workflow_call:
     inputs:
       docs_only:
-        description: Run the lightweight docs and website gate.
+        description: Skip native-language tooling for documentation-only changes.
         required: true
         type: boolean
       website:
-        description: Build the website in lightweight mode.
-        required: false
-        default: false
+        description: Build the website when its source or contracts change.
         type: boolean
+        default: false
+      verifications:
+        description: Selected source-quality activity from the CI plan.
+        type: string
+        default: "[]"
 
 permissions:
   contents: read
 
 jobs:
-  generated-docs:
-    runs-on: ubuntu-latest
-    name: Generated reference drift
+  quality:
+    name: Checks
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Check Out the Planned Source
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-
-      - name: Install reference generator dependencies
-        run: python -m pip install -r tools/docs/requirements.txt
-
-      # Always runs, including source-only changes and docs-only PRs. No command
-      # in this gate repairs an artifact before its committed contents are checked.
-      - name: Reject stale generated references
-        run: make docs-generated-check docs-cli-test docs-community-test
-
-  soak-behavior:
-    if: ${{ !inputs.docs_only }}
-    runs-on: ubuntu-latest
-    name: Soak behavior (PR head)
-    timeout-minutes: 15
-    steps:
-      - name: Check out the exact PR head
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Record tested commit
-        run: git rev-parse HEAD | tee -a "$GITHUB_STEP_SUMMARY"
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: e2e/go.mod
-          cache-dependency-path: e2e/go.sum
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install proxy test dependencies
-        run: python -m pip install pytest==8.3.5
-
-      - name: Test buffered and streaming soak behavior
-        run: make soak-test
-
-      - name: Test fault proxy behavior
-        if: ${{ !cancelled() }}
-        run: python -m pytest bench/test_openai_fault_proxy.py -q
-
-  docs-precommit:
-    if: inputs.docs_only
-    runs-on: ubuntu-latest
-    name: Docs and website lightweight checks
-
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up Node
-        if: inputs.website
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - name: Cache Node dependencies
-        if: inputs.website
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            website/node_modules
-          key: ${{ runner.os }}-node-docs-ci-${{ hashFiles('website/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-docs-ci-
-
-      - name: Run changed-file checks
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export BASE_REF="origin/${{ github.base_ref }}"
-          else
-            export BASE_REF="HEAD^"
-          fi
-          make check
-
-      - name: Build website
-        if: inputs.website
-        run: |
-          cd website
-          npm ci
-          npm run build
-
-  full-precommit:
-    if: ${{ !inputs.docs_only }}
-    runs-on: ubuntu-latest
-    name: Full pre-commit checks
-
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetch full history for pre-commit
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
-      - name: Set up Rust
+      - name: Set Up Rust
+        if: ${{ !inputs.docs_only }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.90
+          toolchain: "1.90"
           components: rustfmt, clippy
-
-      - name: Install system dependencies
+      - name: Install System Dependencies
+        if: ${{ !inputs.docs_only }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            make \
-            build-essential \
-            pkg-config \
-            shellcheck
-
-      - name: Resolve golangci-lint version
+          sudo apt-get install -y make build-essential pkg-config shellcheck
+      - name: Resolve Go Linter Version
+        if: ${{ !inputs.docs_only }}
         id: golangci_lint
         run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up golangci-lint
+      - name: Set Up Go Linter
+        if: ${{ !inputs.docs_only }}
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           args: --help
-
-      - name: Cache Rust dependencies
+      - name: Cache Rust Dependencies
+        if: ${{ !inputs.docs_only }}
         uses: actions/cache@v4
         with:
           path: |
@@ -196,65 +74,67 @@ jobs:
           key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-precommit-
-
-      - name: Cache Go dependencies
+      - name: Cache Go Dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
+          path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-precommit-
-
-      - name: Cache Node dependencies
+      - name: Cache Node Dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.npm
+          path: ~/.npm
           key: ${{ runner.os }}-node-precommit-${{ hashFiles('website/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-precommit-
-
-      - name: Cache pre-commit environments
+      - name: Cache Pre-Commit Environments
         uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
             ${{ runner.os }}-precommit-
-
-      # Domain checks may invoke dashboard tests that shell out to the CLI.
-      - name: Install vllm-sr CLI
-        run: pip install -e src/vllm-sr
-
-      - name: Run changed-file checks
+      - name: Install Reference Generator Dependencies
+        run: python -m pip install -r tools/docs/requirements.txt
+      # Check committed references before any website command can regenerate them.
+      - name: Check Generated References
+        run: make docs-generated-check docs-cli-test docs-community-test docs-check-translation-coverage
+      - name: Check Changed Source
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             export BASE_REF="origin/${{ github.base_ref }}"
           else
             export BASE_REF="HEAD^"
           fi
-          make check
-
-      - name: Show pre-commit results
+          make check CI_STATIC_ONLY=true
+      - name: Build Website
+        if: inputs.website
+        working-directory: website
+        run: |
+          npm ci
+          npm run build
+      - name: Record Quality Evidence
+        if: inputs.verifications != '[]'
+        env:
+          VERIFICATIONS: ${{ inputs.verifications }}
+          CHECK_WEBSITE: ${{ inputs.website }}
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          checks=(--check changed-source-format-lint --check generated-reference-contracts)
+          if [ "$CHECK_WEBSITE" = true ]; then checks+=(--check website-build); fi
+          python3 tools/ci/workflow_evidence.py --verifications "$VERIFICATIONS" --id quality \
+            "${checks[@]}" --output .agent-harness/quality-result.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.verifications != '[]'
+        with:
+          name: ci-result-quality
+          path: .agent-harness/quality-result.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Show Failure Context
         if: failure()
         run: |
-          echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
-          echo ""
-          echo "=== Files with gofmt issues (gofmt -l) ==="
-          gofmt -l $(find . -name "*.go" -not -path "./.git/*") || true
-          echo ""
-          echo "=== gofmt diff for all modified Go files ==="
-          gofmt -d $(find . -name "*.go" -not -path "./.git/*") || true
-          echo ""
-          echo "=== Working tree changes after pre-commit run ==="
-          git diff --name-only || true
-          echo ""
-          echo "=== Full git diff ==="
-          git diff || true
-          echo ""
-          echo "To reproduce the full PR baseline locally:"
-          echo "  make ci-full"
-          echo ""
-          echo "To run changed-file checks locally:"
-          echo "  make check BASE_REF=origin/${{ github.base_ref }}"
+          git status --short
+          git diff --stat
+          echo "Reproduce with make check BASE_REF=origin/${{ github.base_ref }}"
