@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 type Signals struct {
@@ -510,6 +512,29 @@ func (r *ComplexityRule) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	value, written := raw["threshold"]
 	r.ThresholdSet = written && value != nil
 	return nil
+}
+
+// MarshalYAML writes the rule as its fields, with one exception. Threshold
+// carries omitempty so a pair rule does not grow a `threshold: 0` on its way
+// through the operator or the DSL emitter, but a zero that was written has to
+// survive emission: dropping it would let a rule the loader refuses pass once
+// it has been serialised and read back. That one case is written through a
+// map with the key restored. Every other rule is written exactly as before.
+func (r ComplexityRule) MarshalYAML() (interface{}, error) {
+	type plain ComplexityRule
+	if !r.ThresholdSet || r.Threshold != 0 {
+		return plain(r), nil
+	}
+	encoded, err := yaml.Marshal(plain(r))
+	if err != nil {
+		return nil, err
+	}
+	fields := map[string]interface{}{}
+	if err := yaml.Unmarshal(encoded, &fields); err != nil {
+		return nil, err
+	}
+	fields["threshold"] = r.Threshold
+	return fields, nil
 }
 
 // thresholdDeclared reports whether the rule states a threshold at all: a

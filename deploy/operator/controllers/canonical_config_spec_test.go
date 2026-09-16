@@ -598,3 +598,34 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 		t.Fatalf("a remote rule must not grow candidates: %#v", remote)
 	}
 }
+
+// The ConfigMap is written through yaml.v3. A written zero has to come out
+// there too, or the Router would accept a pair the CRD refused.
+func TestOperatorComplexityRuleWrittenZeroThresholdIsSerialised(t *testing.T) {
+	hardAbove, easyBelow := 0.85, 0.60
+	rule := routerconfig.ComplexityRule{
+		Name:         "r",
+		ThresholdSet: true,
+		HardAbove:    &hardAbove,
+		EasyBelow:    &easyBelow,
+	}
+
+	out, err := yaml.Marshal(rule)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "threshold: 0") {
+		t.Fatalf("a written zero must be serialised through yaml.v3, got:\n%s", out)
+	}
+
+	var reloaded routerconfig.ComplexityRule
+	if err := yaml.Unmarshal(out, &reloaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !reloaded.ThresholdSet {
+		t.Fatal("presence must survive a yaml.v3 round trip")
+	}
+	if _, err := reloaded.EffectiveBoundaries(); err == nil {
+		t.Fatal("expected the reloaded rule to be refused for stating both")
+	}
+}
