@@ -315,14 +315,14 @@ func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.Intel
 
 	newConfig, err := config.ParseYAMLBytes(canonicalBytes)
 	if err != nil {
+		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
+		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
 		return fmt.Errorf("failed to normalize canonical config: %w", err)
 	}
 	newConfig.ConfigSource = config.ConfigSourceKubernetes
 
-	// The initial Kubernetes static-config parse is intentionally tolerant
-	// because routing state comes from CRDs. Once pool and route have been
-	// converted, run the shared K8s-safe validator dispatch so reconcile holds
-	// CRD-loaded config to the same family contracts as file-loaded config.
+	// Parsing already validates static global settings. Now validate the complete
+	// routing graph from CRDs before publishing the candidate to the runtime.
 	if err := config.ValidateKubernetesConfigContracts(newConfig); err != nil {
 		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
 		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())

@@ -21,6 +21,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -572,8 +573,15 @@ func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
 func (s *Server) reloadRouterFromFile(configPath string) error {
 	s.reloadMu.Lock()
 	defer s.reloadMu.Unlock()
+	before, _ := reloadDocumentHash(configPath)
 	candidateCfg, err := parseReloadConfig(configPath)
 	if err != nil {
+		// Do not attribute an older parse failure to a concurrent replacement.
+		if after, hashErr := reloadDocumentHash(configPath); hashErr == nil && after == before {
+			attempt := s.runtime.BeginConfigActivation(before, "file")
+			s.runtime.SetConfigActivationStage(attempt, "parse")
+			s.runtime.FinishConfigActivation(attempt, "failed", err)
+		}
 		return err
 	}
 
@@ -594,13 +602,27 @@ func (s *Server) reloadRouterFromConfigLocked(
 	source string,
 	configPath string,
 	candidateCfg *config.RouterConfig,
-) error {
+) (reloadErr error) {
+	if candidateCfg == nil {
+		return errors.New("config reload candidate is nil")
+	}
+	attempt := s.runtime.BeginConfigActivation(candidateCfg.DocumentHash, source)
+	defer func() {
+		status := "active"
+		if errors.Is(reloadErr, errConfigReloadSuperseded) {
+			status = "superseded"
+		} else if reloadErr != nil {
+			status = "failed"
+		}
+		s.runtime.FinishConfigActivation(attempt, status, reloadErr)
+	}()
 	if s.lifecycle.isStopping() {
 		return errors.New("router server is shutting down")
 	}
 	if err := config.ValidateRoutingPreviewReload(resolveServerConfig(s), candidateCfg); err != nil {
 		return err
 	}
+	s.runtime.SetConfigActivationStage(attempt, "artifacts")
 	if err := modeldownload.ValidateReloadArtifacts(resolveServerConfig(s), candidateCfg); err != nil {
 		return fmt.Errorf("model artifact reload preflight failed: %w", err)
 	}
@@ -608,25 +630,30 @@ func (s *Server) reloadRouterFromConfigLocked(
 		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
 			return err
 		}
+		s.runtime.SetConfigActivationStage(attempt, "model_download")
 		if err := ensureReloadConfigModels(candidateCfg); err != nil {
 			return fmt.Errorf("model download preflight failed: %w", err)
 		}
 	}
 
+	s.runtime.SetConfigActivationStage(attempt, "dependencies")
 	runtimeState, err := prepareReloadRuntime(candidateCfg)
 	if err != nil {
 		return fmt.Errorf("runtime dependency init failed: %w", err)
 	}
 
+	s.runtime.SetConfigActivationStage(attempt, "model_prepare")
 	newRouter, err := buildReloadRouter(candidateCfg, s.modelPool)
 	if err != nil {
 		return err
 	}
 	attachRuntimeRegistry(newRouter, s.runtime)
+	s.runtime.SetConfigActivationStage(attempt, "warmup")
 	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
 		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
 	}
+	s.runtime.SetConfigActivationStage(attempt, "publication")
 	if source == "file" {
 		release := s.runtime.LockConfigPublication()
 		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
@@ -736,6 +763,7 @@ func publishRouterState(
 			ResponseCache:         router.responseCacheService(),
 			ContextCompression:    router.contextCompressionService(),
 			CompressionRecovery:   router.CompressionRecovery,
+			Plugins:               pluginruntime.Capabilities{Guards: router, Retrieval: router, Inspector: router},
 		})
 		return
 	}
