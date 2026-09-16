@@ -9,6 +9,14 @@ Use the CLI and Router API directly. The Dashboard is optional. The user's
 instructions, existing authorization, and deployment boundaries take precedence
 over this skill.
 
+## Work progressively
+
+Follow the stages below: identify the target and prerequisites, configure and
+activate, verify routing and delivery, then optimize against that verified
+baseline. Load a linked reference only when its stage needs more detail. Keep
+failed checks and affected branches visible while continuing independent work;
+readiness or a passing subset does not establish a working complete Recipe.
+
 ## Authoritative contracts
 
 - Treat installed CLI help, the running Router's discovery response, JSON
@@ -60,14 +68,15 @@ over this skill.
    mutations. If missing, report the exact version and unsupported command.
    Resolve a compatible package or source build within the authorized scope
    before runtime changes; do not silently translate this workflow to obsolete
-   commands. The newest published dev package may still lag main.
+   commands.
 4. Select the host-appropriate deployment path from installed help. For an
    additional local stack, discover and use its stack identity, state location,
    and port controls; inspect all resulting ports for collisions. Current local
    Docker uses `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET`; the offset also
    affects inference listener host ports. Inspect `VLLM_SR_STATE_ROOT_DIR`, which
    overrides the config directory's state location, before selecting an isolated
-   stack. Keep the same target context for lifecycle commands. Set `ROUTER_ORIGIN`
+   stack. Keep the same stack, state, runtime, platform, and image selections for
+   lifecycle commands. Set `ROUTER_ORIGIN`
    to the selected management origin and pass `--endpoint` explicitly for online
    operations; CLI defaults do not infer a custom management port from YAML.
    Prefer the supported minimal mode when no UI or observability is requested.
@@ -77,6 +86,12 @@ over this skill.
    address is different from host publication. Split Docker may require the
    Router to bind internally to `0.0.0.0` while publishing management on host
    loopback. Do not blindly set every internal address to `127.0.0.1`.
+5. Size the Router's signal models and generation backends separately, including
+   weights, runtime/KV memory, cache storage, and the intended context/concurrency.
+   A platform flag selects runtime support; it does not prove every model binding
+   uses a GPU. For required acceleration, inspect the selected Recipe's bindings
+   and device settings, then verify actual devices in startup evidence and the
+   live model inventory. See [deployment details](references/deployment-loop.md).
 
 ## Configure and start or update
 
@@ -106,8 +121,11 @@ over this skill.
    to inspect the verified bundle, or `builtin init` to select the named recipe
    and bind its decisions to providers from your config. Read the listed
    candidate requirements and supply explicit bindings for each decision that
-   calls a backend. Immediate-response decisions, such as Vault's `guard`, need no model
-   assignment. Preserve recipe structure and algorithm minimums; do not replace
+   calls a backend. Check required quality evidence as well as candidate counts:
+   a healthy backend can still be excluded when a required index is unavailable.
+   Record the affected branch as blocked; do not invent scores or weaken the
+   selector to make a probe pass. Immediate-response decisions, such as Vault's
+   `guard`, need no model assignment. Preserve recipe structure and algorithm minimums; do not replace
    it with a similarly named source example or silently delete lanes to force
    validation. When the user authorizes a capability-specific derivative, use
    explicit adaptation options such as `builtin init --exclude-decision`.
@@ -132,6 +150,11 @@ over this skill.
    returned top-level `model`; backend aliases can differ from provider names.
    If direct verification is unavailable, report that limit and avoid inventing
    an expected response identity.
+   Align Model Card metadata with the deployed backend's actual modalities,
+   context, and output limits; align decision bindings with supported reasoning
+   effort. Published model maxima are not proof of the local serving configuration.
+   Report Router signal input limits separately; the backend's context window
+   alone does not establish the routed input limit.
 3. **New stack:** locally validate, then perform its initial launch using the
    selected deployment options:
 
@@ -145,7 +168,9 @@ over this skill.
    its advertised readiness operation. Wait for readiness before routing checks.
    Record the live config revision and refresh the relevant deployed schema.
 4. **Existing stack:** locally validate, then plan the exact mutation against
-   the selected Router:
+   the selected Router. Derive the candidate from a fresh canonical `config get`,
+   preserving active defaults and unrelated settings; see
+   [configuration details](references/configuration-loop.md).
 
    ```bash
    vllm-sr config validate --config config.yaml
@@ -203,19 +228,22 @@ Also assert the selected Recipe when testing Recipe binding and the installed
 probe supports it. A selected-model header alone does not prove delivery.
 
 Test representative branches for the requested change; one successful prompt
-does not establish coverage of every route. Keep config, active revision,
-preview trace, probe results, and runtime identity together. For optimization,
-capture a baseline, make one coherent change, and compare the requested quality,
-cost, latency, or safety objective. Keep it only when evidence supports the
-objective without violating hard constraints. Run model or Mixture-of-Models
-benchmarks only when requested; begin with
-`vllm-sr benchmark intelligence plan --help`.
+does not establish coverage of every route. For requested stability testing, use
+the [repeated API and UI checks](references/evaluation-loop.md#repeated-api-and-ui-checks)
+and report counts, duration, concurrency, failures, and tested limits. Keep config,
+active revision, preview traces, probe results, and runtime identity together.
 
 ## Optional Dashboard verification
 
 Use this path when the user requests Dashboard or Playground work. Discover the
 installed Dashboard launch/access options and reuse the intended stack. Keep
 remote UI access local or tunneled unless public exposure is authorized.
+`--minimal` omits the Dashboard. When adding it, preserve the stack's runtime,
+platform, images, and state, and complete the supported authentication/bootstrap
+flow before testing. Verify login and session renewal; do not assume a
+default account. A tunnel does not restrict an already public container port;
+check publication and access controls before handing off the URL. See
+[deployment details](references/deployment-loop.md#dashboard-access).
 
 Verify the active Recipe and published entrypoint shown in the UI. If testing
 Playground, send a real request and verify streamed backend output and completion;
@@ -224,9 +252,24 @@ use its server-backed preview and confirm a Router response. Label any simulated
 preview as simulation and do not present it as live routing evidence. Report UI,
 routing, and backend results separately when they differ.
 
+## Optimize a verified baseline
+
+Capture the requested quality, cost, latency, resource, or reliability baseline
+first. Make one coherent change, keeping unrelated variables fixed, and repeat
+the same cases and workload. Retain the candidate only when it meets the
+objective without violating hard constraints.
+Recheck capability metadata and affected branches after changing model precision,
+GPU count, context, or concurrency. Recover the previous configuration when a
+candidate regresses. A short feature smoke test does not qualify long-context or
+sustained-load stability. Run model or Mixture-of-Models benchmarks when requested
+or needed for the agreed objective; begin with
+`vllm-sr benchmark intelligence plan --help`.
+
 ## Boundaries and handoff
 
-- Never print, commit, or put secret values in command arguments or YAML.
+- Keep secrets out of logs, command arguments, source control, and public
+  artifacts. Deliver credentials privately when the user explicitly requests
+  them, using the requested secure access method.
 - Preserve unrelated workloads and user configuration. Resolve exact container
   and file targets; obtain missing authorization before destructive changes,
   public exposure, or disrupting another service. Do not ask again for actions
