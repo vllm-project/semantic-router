@@ -50,6 +50,9 @@ func initClassifier(b *testing.B) {
 	})
 
 	if classifierErr != nil {
+		if missingBenchModels(classifierErr) {
+			b.Skipf("Failed to initialize classifier: %v", classifierErr)
+		}
 		b.Fatalf("Failed to initialize classifier: %v", classifierErr)
 	}
 }

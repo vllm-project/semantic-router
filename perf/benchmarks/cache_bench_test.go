@@ -84,6 +84,9 @@ func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 		cacheEmbeddingProvider = provider
 	})
 	if cacheEmbeddingErr != nil {
+		if missingBenchModels(cacheEmbeddingErr) {
+			b.Skipf("Failed to initialize embedding models: %v", cacheEmbeddingErr)
+		}
 		b.Fatalf("Failed to initialize embedding models: %v", cacheEmbeddingErr)
 	}
 	return cacheEmbeddingProvider

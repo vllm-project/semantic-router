@@ -61,6 +61,9 @@ func initIntentClassifier(b *testing.B) {
 		intentMapping = mapping
 	})
 	if intentInitErr != nil {
+		if missingBenchModels(intentInitErr) {
+			b.Skipf("Failed to initialize intent classifier: %v", intentInitErr)
+		}
 		b.Fatalf("Failed to initialize intent classifier: %v", intentInitErr)
 	}
 }
