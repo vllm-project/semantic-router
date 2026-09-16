@@ -2256,7 +2256,7 @@ class OperatingPointReference(BaseModel):
 
 
 class ModelBinding(BaseModel):
-    """A recipe-owned use of a router model deployment."""
+    """A shared task default or recipe-owned use of a model deployment."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -2313,10 +2313,6 @@ class Routing(BaseModel):
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
 
-    @model_validator(mode="after")
-    def validate_classifier_selectors(self):
-        return _validate_unbound_classifier_selectors(self)
-
 
 class Entrypoint(BaseModel):
     """Request-facing virtual model names mapped to one routing recipe."""
@@ -2359,10 +2355,6 @@ class RecipeRouting(BaseModel):
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
-
-    @model_validator(mode="after")
-    def validate_classifier_selectors(self):
-        return _validate_unbound_classifier_selectors(self)
 
 
 class Recipe(BaseModel):
@@ -2431,6 +2423,16 @@ class UserConfig(BaseModel):
     recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_classifier_selectors(self):
+        # Global serving defaults are available only at document scope. Do not
+        # reject a valid inherited selector while parsing a child profile.
+        from cli.model_runtime_defaults import iter_effective_routing_profiles
+
+        for _, profile in iter_effective_routing_profiles(self):
+            _validate_unbound_classifier_selectors(profile)
+        return self
 
     @property
     def signals(self) -> Signals:

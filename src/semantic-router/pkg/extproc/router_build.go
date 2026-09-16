@@ -29,6 +29,7 @@ import (
 
 type routerComponents struct {
 	embeddings            *embedding.Set
+	cacheEmbeddings       *embedding.Set
 	modelRuntime          *native.Runtime
 	rerankers             map[config.RecipeName]modelruntime.PairScorer
 	cfg                   *config.RouterConfig
@@ -203,6 +204,14 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	}
 	components.embeddings = embeddings
 	components.resources.add(embeddings.Close)
+	components.cacheEmbeddings = embeddings
+	if cfg.NeedsSemanticResponseCache() && cfg.GlobalModelBindings["embedding"].Deployment != "" {
+		components.cacheEmbeddings, err = modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, components.modelRuntime)
+		if err != nil {
+			return nil, rollbackResources(components.resources, err)
+		}
+		components.resources.add(components.cacheEmbeddings.Close)
+	}
 	components.rerankers, err = modelruntime.PrepareRerankers(context.Background(), cfg, components.modelRuntime)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
@@ -275,7 +284,7 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 
 func (components *routerComponents) buildEarlyResources() error {
 	var err error
-	components.semanticCache, components.semanticCacheIdentity, err = createSemanticCache(components.cfg, components.embeddings)
+	components.semanticCache, components.semanticCacheIdentity, err = createSemanticCache(components.cfg, components.cacheEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
@@ -299,7 +308,7 @@ func (components *routerComponents) buildEarlyResources() error {
 	}); ok {
 		target.SetPolarityVerifier(components.classifier.PolarityVerifier())
 	}
-	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.embeddings)
+	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.cacheEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}

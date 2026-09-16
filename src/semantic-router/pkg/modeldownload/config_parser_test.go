@@ -451,7 +451,7 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -493,12 +493,12 @@ routing:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/Vela-1.0-Encoder-307M-Embedding",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -562,9 +562,9 @@ global:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/Vela-1.0-Encoder-307M-Embedding",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
 func TestBuildModelSpecsSkipsUnusedFeedbackDetectorDefaults(t *testing.T) {

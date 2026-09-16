@@ -4,6 +4,7 @@ import "strings"
 
 // EmbeddingModelsNeeded identifies actual consumers in a single prepared scope.
 func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices bool) map[string]bool {
+	cacheNeeded := sharedServices && cfg.NeedsSemanticResponseCache()
 	cfg = cfg.ModelConsumerScope()
 	needed := map[string]bool{}
 	if len(cfg.EmbeddingRules) > 0 || len(cfg.ReaskRules) > 0 || len(cfg.KnowledgeBases) > 0 || (len(cfg.ComplexityRules) > 0 && cfg.ComplexityModel.Backend == nil) {
@@ -30,7 +31,7 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	if sharedServices && cfg.Tools.Enabled {
 		needed[primary] = true
 	}
-	if sharedServices && cfg.SemanticCache.Enabled {
+	if cacheNeeded {
 		needed[SemanticCacheEmbeddingModel(cfg)] = true
 	}
 	if sharedServices && MemoryConfigured(cfg) {

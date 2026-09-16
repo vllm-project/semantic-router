@@ -25,6 +25,17 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	scopes := []*config.RouterConfig{}
 	defaultScope := *cfg.ModelConsumerScope()
 	defaultScope.Recipes, defaultScope.Entrypoints = nil, nil
+	defaultScope.SemanticCache.Enabled = cfg.NeedsSemanticResponseCache()
+	if spec, ok := plan.LookupGlobal("embedding"); ok && cfg.NeedsSemanticResponseCache() {
+		defaultScope.SemanticCache.Enabled = false
+		if spec.Deployment.Provider != "http" {
+			serviceScope := *cfg
+			serviceScope.RoutingScope = config.GlobalModelScope
+			if err := inventory.addDeployment(&serviceScope, spec); err != nil {
+				return nil, err
+			}
+		}
+	}
 	scopes = append(scopes, &defaultScope)
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
 		if recipe.Name != config.DefaultRecipeName {
@@ -228,7 +239,7 @@ func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.Res
 				// single-graph export remains supported by the provider.
 				groups = append(groups, []string{"model.onnx", "onnx/model.onnx", "onnx/layer-22/model.onnx"})
 				layers := []int{cfg.EmbeddingConfig.TargetLayer}
-				if cfg.RoutingScope == config.DefaultRecipeName && cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == "mmbert" {
+				if (cfg.RoutingScope == config.DefaultRecipeName || cfg.RoutingScope == config.GlobalModelScope) && cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == "mmbert" {
 					layers = append(layers, 6)
 				}
 				for _, layer := range layers {

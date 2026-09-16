@@ -108,6 +108,64 @@ curl -fsS http://localhost:8899/v1/chat/completions \
   -d '{"model":"auto","messages":[{"role":"user","content":"Explain Python tuples briefly."}],"max_tokens":128}'
 ```
 
+## Share model serving across recipes and services
+
+Declare shared task bindings in `global.model_catalog.bindings`. They use the
+same binding fields as `routing.model_bindings`, with execution settings kept
+in `global.model_catalog.deployments`:
+
+```yaml
+global:
+  model_catalog:
+    bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+    deployments:
+      vela-embedding:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: ort
+        device: cpu
+        precision: native
+        input:
+          max_tokens: 512
+          overflow: reject
+  stores:
+    response_cache:
+      enabled: true
+      embedding_model: mmbert
+```
+
+Recipes inherit these serving defaults. An explicit recipe binding overrides
+only that recipe's consumer; the top-level `routing.model_bindings` belongs to
+the default recipe. The response cache resolves the global catalog independently.
+Rule-named classifier and safety bindings apply only where the matching rule
+exists. A catalog declaration alone does not load a model.
+
+Enable the `response_cache` plugin on the decisions whose responses should be
+cached. With routing decisions present, an enabled store without a reachable
+cache consumer does not load an embedding. Exact-only consumers use the store
+without an embedding. The existing global semantic-cache behavior remains for
+configurations without routing decisions.
+
+The in-memory semantic cache uses the `mmbert` layer-6, 256-dimension view;
+routing can use layer 22 and 768 dimensions of the same serving resource. The
+configured cache model must match the global embedding model and adapter.
+Startup validates the required tokenizer, layers, and dimensions before
+publishing readiness. Consumer views do not change the deployment's device,
+precision, graph, or input policy. Incompatible execution settings create
+separate resources rather than falling back to CPU.
+
+Resource sharing preserves recipe-scoped handles and cache partitions. Cache
+entries remain isolated by recipe, decision, backend selection, protocol, user
+scope, and representation identity. An ORT embedding resource can contain
+multiple materialized layer sessions; sharing the resource does not imply a
+single ONNX session. Model inventory exposes `metadata.resource_id` from the
+actual resource pool and retains every consumer's metadata, including its
+layer and dimension. The `@global` inventory scope is reserved for shared
+model services.
+
 ## Run Vela on AMD
 
 Use the [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
