@@ -128,20 +128,6 @@
   text-transform: capitalize;
 }
 
-.recordStatusSuccess {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.recordStatusError {
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #fca5a5;
-}
-
-.recordStatusNeutral {
-  color: rgba(255, 255, 255, 0.58);
-}
-
 .recordTrace {
   grid-column: 1 / -1;
   overflow: hidden;
@@ -978,18 +964,21 @@
 }
 
 .statusSuccess {
-  background: rgba(143, 148, 156, 0.15);
-  color: var(--color-primary-light);
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: var(--color-success);
 }
 
 .statusError {
   background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
   color: var(--color-danger);
 }
 
 .statusPending {
   background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--color-warning);
 }
 
 .statusUnknown {
