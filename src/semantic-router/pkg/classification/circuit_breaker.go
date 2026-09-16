@@ -64,6 +64,12 @@ type circuitBreaker struct {
 	admittedProbes   int
 	unresolvedProbes int
 	halfOpenFailed   bool
+
+	// generation increments each time half-open is entered. An admitted
+	// request records the generation it was admitted under; callbacks ignore
+	// completions whose generation does not match the current one, preventing
+	// stale closed-state responses from interfering with half-open probes.
+	halfOpenGen int
 }
 
 func newCircuitBreaker(name string, cfg *config.RemoteClassifierCircuitBreakerConfig) *circuitBreaker {
@@ -79,14 +85,15 @@ func newCircuitBreaker(name string, cfg *config.RemoteClassifierCircuitBreakerCo
 }
 
 // allow reports whether the caller may issue a request. It transitions
-// open→half-open when the interval expires.
-func (cb *circuitBreaker) allow() bool {
+// open→half-open when the interval expires and returns the admission
+// generation for matching completions to their admission state.
+func (cb *circuitBreaker) allow() (bool, int) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
 	switch cb.breakerState {
 	case circuitBreakerClosed:
-		return true
+		return true, 0
 	case circuitBreakerOpen:
 		if time.Since(cb.openAt) >= cb.openInterval {
 			cb.setHalfOpenLocked()
@@ -95,9 +102,9 @@ func (cb *circuitBreaker) allow() bool {
 	if cb.breakerState == circuitBreakerHalfOpen && cb.admittedProbes < cb.maxProbes {
 		cb.admittedProbes++
 		cb.unresolvedProbes++
-		return true
+		return true, cb.halfOpenGen
 	}
-	return false
+	return false, 0
 }
 
 func (cb *circuitBreaker) setHalfOpenLocked() {
@@ -106,13 +113,15 @@ func (cb *circuitBreaker) setHalfOpenLocked() {
 	cb.admittedProbes = 0
 	cb.unresolvedProbes = 0
 	cb.halfOpenFailed = false
+	cb.halfOpenGen++
 	cb.transitionLocked(from, circuitBreakerHalfOpen)
 }
 
 // recordFailure increments the failure count and trips the breaker when the
 // threshold is reached. In half-open a failure is marked and the breaker
-// reopens once all admitted probes resolve.
-func (cb *circuitBreaker) recordFailure() {
+// reopens once all admitted probes resolve. admissionGen is the generation
+// returned by allow; completions from a stale generation are ignored.
+func (cb *circuitBreaker) recordFailure(admissionGen int) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -123,6 +132,9 @@ func (cb *circuitBreaker) recordFailure() {
 			cb.tripLocked()
 		}
 	case circuitBreakerHalfOpen:
+		if admissionGen != cb.halfOpenGen {
+			return
+		}
 		if cb.unresolvedProbes > 0 {
 			cb.unresolvedProbes--
 		}
@@ -143,13 +155,18 @@ func (cb *circuitBreaker) tripLocked() {
 }
 
 // recordSuccess resets failures and transitions half-open→closed when all
-// admitted probes have resolved without failure.
-func (cb *circuitBreaker) recordSuccess() {
+// admitted probes have resolved without failure. admissionGen is the
+// generation returned by allow; completions from a stale generation are
+// ignored.
+func (cb *circuitBreaker) recordSuccess(admissionGen int) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
 	cb.failureCount = 0
 	if cb.breakerState != circuitBreakerHalfOpen {
+		return
+	}
+	if admissionGen != cb.halfOpenGen {
 		return
 	}
 	if cb.unresolvedProbes > 0 {
@@ -161,11 +178,15 @@ func (cb *circuitBreaker) recordSuccess() {
 // releaseProbe releases an admitted half-open probe slot without counting it
 // as a success or failure. Used when an error is not counted toward breaker
 // state (e.g. caller cancellation). In closed/open state it is a no-op.
-func (cb *circuitBreaker) releaseProbe() {
+// admissionGen must be the generation returned by allow.
+func (cb *circuitBreaker) releaseProbe(admissionGen int) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
 	if cb.breakerState != circuitBreakerHalfOpen {
+		return
+	}
+	if admissionGen != cb.halfOpenGen {
 		return
 	}
 	if cb.unresolvedProbes > 0 {
@@ -239,7 +260,8 @@ func newCircuitBreakingBackend(inner SequenceClassifierBackend, cfg *config.Remo
 }
 
 func (b *circuitBreakingBackend) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
-	if !b.cb.allow() {
+	allowed, gen := b.cb.allow()
+	if !allowed {
 		recordCircuitBreakerSkip(b.name)
 		return SequenceClassificationResult{}, &ErrCircuitBreakerOpen{
 			Name:       b.name,
@@ -250,14 +272,14 @@ func (b *circuitBreakingBackend) Classify(ctx context.Context, text string) (Seq
 	result, err := b.inner.Classify(ctx, text)
 	if err != nil {
 		if isUnavailableError(err) {
-			b.cb.recordFailure()
+			b.cb.recordFailure(gen)
 			recordCircuitBreakerFailure(b.name)
 		} else {
-			b.cb.releaseProbe()
+			b.cb.releaseProbe(gen)
 		}
 		return SequenceClassificationResult{}, err
 	}
-	b.cb.recordSuccess()
+	b.cb.recordSuccess(gen)
 	return result, nil
 }
 
@@ -280,7 +302,8 @@ func newCircuitBreakingBackendScoring(inner ScoringBackend, cfg *config.RemoteCl
 }
 
 func (b *circuitBreakingScoringBackend) Score(ctx context.Context, text string) (float64, error) {
-	if !b.cb.allow() {
+	allowed, gen := b.cb.allow()
+	if !allowed {
 		recordCircuitBreakerSkip(b.name)
 		return 0, &ErrCircuitBreakerOpen{
 			Name:       b.name,
@@ -291,38 +314,42 @@ func (b *circuitBreakingScoringBackend) Score(ctx context.Context, text string) 
 	score, err := b.inner.Score(ctx, text)
 	if err != nil {
 		if isUnavailableError(err) {
-			b.cb.recordFailure()
+			b.cb.recordFailure(gen)
 			recordCircuitBreakerFailure(b.name)
 		} else {
-			b.cb.releaseProbe()
+			b.cb.releaseProbe(gen)
 		}
 		return 0, err
 	}
-	b.cb.recordSuccess()
+	b.cb.recordSuccess(gen)
 	return score, nil
 }
 
 // isUnavailableError reports whether err is a retry-exhausted connector error
 // indicating the backend is unreachable or returning a retryable status.
-// Caller cancellation and other non-retryable errors are not counted.
+// Caller cancellation is never counted. Classifier-owned deadline exceeded
+// (backend timeout) IS counted as unavailable.
 func isUnavailableError(err error) bool {
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
 	connErr := new(connector.Error)
 	if errors.As(err, &connErr) {
 		switch connErr.Kind {
 		case connector.KindTransport:
-			// Only retryable transport failures (connection refused, timeout
-			// after the retry budget, etc.) indicate the backend is down.
-			// Caller cancellation and non-retryable transport conditions
-			// carry Retryable=false and must not count toward the breaker.
-			return connErr.Retryable
+			if connErr.Retryable {
+				return true
+			}
+			// Non-retryable transport after budget exhausted.
+			// Caller cancellation → not counted.
+			if errors.Is(connErr.Cause, context.Canceled) {
+				return false
+			}
+			// Classifier-owned DeadlineExceeded (backend timeout) → counted.
+			// Other non-retryable transport → not counted.
+			return errors.Is(connErr.Cause, context.DeadlineExceeded)
 		case connector.KindStatus:
-			// Retryable status (5xx, 408, 429) indicate the backend is
-			// overloaded or down even after retry budget was exhausted.
 			return connErr.Retryable
 		}
+		return false
 	}
+	// Bare context errors (not wrapped by connector) are caller-driven.
 	return false
 }
