@@ -50,6 +50,18 @@ fn dense_sdpa_reference(
     att.matmul(&v).unwrap() // (b, heads, seq, hd)
 }
 
+fn assert_all_finite(t: &Tensor, what: &str) {
+    let values = t
+        .to_dtype(DType::F32)
+        .unwrap()
+        .flatten_all()
+        .unwrap()
+        .to_vec1::<f32>()
+        .unwrap();
+    let bad = values.iter().filter(|v| !v.is_finite()).count();
+    assert_eq!(bad, 0, "{what}: {bad} non-finite values");
+}
+
 fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
     a.broadcast_sub(b)
         .unwrap()
@@ -507,6 +519,8 @@ fn test_cpu_softmax_matches_original_boundaries() -> candle_core::Result<()> {
             };
             let original = chunked_sdpa(&q, &k, &v, None, &cfg)?;
             let candidate = chunked_sdpa_cpu_softmax(&q, &k, &v, None, &cfg)?;
+            assert_all_finite(&original, "original CPU boundaries");
+            assert_all_finite(&candidate, "fused CPU boundaries");
             assert!(
                 max_abs_diff(&original, &candidate) <= 2e-4,
                 "CPU softmax differs for seq={seq}, window={window:?}"
@@ -536,6 +550,8 @@ fn test_cpu_softmax_preserves_partial_and_all_padding() -> candle_core::Result<(
         };
         let original = chunked_sdpa(&q, &q, &q, Some(&pad), &cfg)?;
         let candidate = chunked_sdpa_cpu_softmax(&q, &q, &q, Some(&pad), &cfg)?;
+        assert_all_finite(&original, "original CPU padding");
+        assert_all_finite(&candidate, "fused CPU padding");
         assert!(max_abs_diff(&original, &candidate) <= 2e-4);
     }
     Ok(())
@@ -553,4 +569,280 @@ fn test_cpu_softmax_preserves_all_negative_infinity() -> candle_core::Result<()>
     assert!(old.iter().all(|x| x.is_nan()));
     assert!(new.iter().all(|x| x.is_nan()));
     Ok(())
+}
+
+#[test]
+fn test_cpu_softmax_matches_dense_across_key_lengths() -> candle_core::Result<()> {
+    let device = Device::Cpu;
+    for seq in [512usize, 513, 1025] {
+        let values: Vec<f32> = (0..2 * 2 * seq * 4)
+            .map(|i| ((i % 37) as f32 - 18.0) / 41.0)
+            .collect();
+        let q = Tensor::from_vec(values, (2, 2, seq, 4), &device)?;
+        let k = (&q * 0.7)?;
+        let values: Vec<f32> = (0..2 * 2 * seq * 4)
+            .map(|i| ((i * 11 % 71) as f32 - 35.0) / 23.0)
+            .collect();
+        let v = Tensor::from_vec(values, (2, 2, seq, 4), &device)?;
+        // Different padding sides and lengths exercise the per-batch mask.
+        let raw: Vec<u32> = (0..2 * seq)
+            .map(|i| u32::from(if i < seq { i < seq - 7 } else { i - seq >= 17 }))
+            .collect();
+        let pad = prepare_padding_mask(&Tensor::from_vec(raw, (2, seq), &device)?, DType::F32)?;
+        for window in [None, Some(32)] {
+            let cfg = ChunkedSdpaConfig {
+                block_size: 64,
+                window,
+                causal: false,
+                scale: 0.5,
+                q_offset: 0,
+            };
+            // Exercise long global attention and narrow local key ranges
+            // through the same fused CPU entry point.
+            let reference = dense_sdpa_reference(&q, &k, &v, Some(&pad), window, false, cfg.scale);
+            let out = chunked_sdpa_cpu_softmax(&q, &k, &v, Some(&pad), &cfg)?;
+            assert_all_finite(&reference, "dense batch padding");
+            assert_all_finite(&out, "CPU batch padding");
+            assert!(
+                max_abs_diff(&out, &reference) < 1e-4,
+                "CPU attention differs for seq={seq}, window={window:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_cpu_softmax_matches_dense_with_cached_keys() -> candle_core::Result<()> {
+    let device = Device::Cpu;
+    let offset = 1024;
+    let q_len = 3;
+    let k_len = offset + q_len;
+    let values: Vec<f32> = (0..2 * k_len * 4)
+        .map(|i| ((i % 31) as f32 - 15.0) / 19.0)
+        .collect();
+    let k = Tensor::from_vec(values, (1, 2, k_len, 4), &device)?;
+    let q = (&k.narrow(2, offset, q_len)? * 0.7)?;
+    let v = (&k * -0.4)?;
+    for window in [None, Some(3)] {
+        let cfg = ChunkedSdpaConfig {
+            block_size: 2,
+            window,
+            causal: true,
+            scale: 0.5,
+            q_offset: offset,
+        };
+        let reference = dense_offset_reference(&q, &k, &v, offset, window, true, cfg.scale);
+        let out = chunked_sdpa_cpu_softmax(&q, &k, &v, None, &cfg)?;
+        assert_all_finite(&reference, "dense cached keys");
+        assert_all_finite(&out, "CPU cached keys");
+        assert!(
+            max_abs_diff(&out, &reference) < 1e-4,
+            "CPU cached keys differ for window={window:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn test_chunked_sdpa_key_blocks_match_dense() {
+    let device = Device::Cpu;
+    let heads = 4;
+    let head_dim = 8;
+    let scale = (head_dim as f64).powf(-0.5);
+    let seq_len = 40;
+
+    let mut mask_vec = vec![1u32; seq_len];
+    for m in mask_vec.iter_mut().skip(seq_len - 7) {
+        *m = 0;
+    }
+    let raw_mask = Tensor::from_vec(mask_vec, (1, seq_len), &device).unwrap();
+    let pad = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+    let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
+
+    for window in [None, Some(4usize)] {
+        for causal in [false, true] {
+            for pad_mask in [None, Some(&pad)] {
+                let reference = dense_sdpa_reference(&q, &k, &v, pad_mask, window, causal, scale);
+                for &block in &[3usize, 8, 512] {
+                    for &key_block in &[0usize, 1, 3, 5, 16, 512] {
+                        let cfg = ChunkedSdpaConfig {
+                            block_size: block,
+                            window,
+                            causal,
+                            scale,
+                            q_offset: 0,
+                        };
+                        let out =
+                            chunked_sdpa_with_key_block(&q, &k, &v, pad_mask, &cfg, key_block)
+                                .unwrap();
+                        assert_all_finite(&reference, "reference");
+                        assert_all_finite(&out, "chunked");
+                        let diff = max_abs_diff(&out, &reference);
+                        assert!(
+                            diff < 1e-4,
+                            "window={:?} causal={} pad={} block={} key_block={}: max|Δ|={}",
+                            window,
+                            causal,
+                            pad_mask.is_some(),
+                            block,
+                            key_block,
+                            diff
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_chunked_sdpa_key_blocks_match_dense_with_decode_offset() {
+    let device = Device::Cpu;
+    let heads = 4;
+    let head_dim = 8;
+    let scale = (head_dim as f64).powf(-0.5);
+    for window in [None, Some(3usize)] {
+        for &(offset, q_len) in &[(0usize, 9usize), (5, 1), (5, 4), (20, 3), (17, 8)] {
+            let k_len = offset + q_len;
+            let q = Tensor::randn(0f32, 1f32, (1, heads, q_len, head_dim), &device).unwrap();
+            let k = Tensor::randn(0f32, 1f32, (1, heads, k_len, head_dim), &device).unwrap();
+            let v = Tensor::randn(0f32, 1f32, (1, heads, k_len, head_dim), &device).unwrap();
+            let reference = dense_offset_reference(&q, &k, &v, offset, window, true, scale);
+            for &key_block in &[1usize, 2, 7] {
+                let cfg = ChunkedSdpaConfig {
+                    block_size: 2,
+                    window,
+                    causal: true,
+                    scale,
+                    q_offset: offset,
+                };
+                let out = chunked_sdpa_with_key_block(&q, &k, &v, None, &cfg, key_block).unwrap();
+                assert_all_finite(&reference, "reference");
+                assert_all_finite(&out, "chunked");
+                let diff = max_abs_diff(&out, &reference);
+                assert!(
+                    diff < 1e-4,
+                    "window={:?} offset={} q_len={} key_block={}: max|Δ|={}",
+                    window,
+                    offset,
+                    q_len,
+                    key_block,
+                    diff
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_chunked_sdpa_all_masked_first_key_tile_stays_finite() {
+    let device = Device::Cpu;
+    let q = Tensor::zeros((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let v = Tensor::ones((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let cfg = ChunkedSdpaConfig {
+        block_size: 0,
+        window: Some(4),
+        causal: false,
+        scale: 1.0,
+        q_offset: 0,
+    };
+    for out in [
+        chunked_sdpa(&q, &q, &v, None, &cfg).unwrap(),
+        chunked_sdpa_cpu_softmax(&q, &q, &v, None, &cfg).unwrap(),
+    ] {
+        assert_all_finite(&out, "windowed single query block");
+        let diff = max_abs_diff(&out, &v);
+        assert!(diff < 1e-6, "max|Δ|={}", diff);
+    }
+}
+
+#[test]
+fn test_chunked_sdpa_single_query_with_masked_first_keys_stays_finite() {
+    let device = Device::Cpu;
+    let q = Tensor::zeros((1, 1, 1, 1), DType::F32, &device).unwrap();
+    let k = Tensor::zeros((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let v = Tensor::ones((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let mut mask = vec![0f32; 1024];
+    for m in mask.iter_mut().take(512) {
+        *m = f32::NEG_INFINITY;
+    }
+    let pad = Tensor::from_vec(mask, (1, 1, 1, 1024), &device).unwrap();
+    let cfg = ChunkedSdpaConfig {
+        block_size: ATTN_QUERY_BLOCK,
+        window: None,
+        causal: false,
+        scale: 1.0,
+        q_offset: 0,
+    };
+    for out in [
+        chunked_sdpa(&q, &k, &v, Some(&pad), &cfg).unwrap(),
+        chunked_sdpa_cpu_softmax(&q, &k, &v, Some(&pad), &cfg).unwrap(),
+    ] {
+        assert_all_finite(&out, "masked first key tile");
+        let value = out.flatten_all().unwrap().to_vec1::<f32>().unwrap()[0];
+        assert!((value - 1.0).abs() < 1e-6, "got {value}");
+    }
+}
+
+#[test]
+fn test_chunked_sdpa_f64_scores_below_f32_min_stay_finite() -> candle_core::Result<()> {
+    let device = Device::Cpu;
+    let q = Tensor::from_vec(vec![1e20f64], (1, 1, 1, 1), &device)?;
+    let k = Tensor::from_vec(vec![-1e20f64; 2], (1, 1, 2, 1), &device)?;
+    let v = Tensor::from_vec(vec![1f64, 3.0], (1, 1, 2, 1), &device)?;
+    let cfg = ChunkedSdpaConfig {
+        block_size: 1,
+        window: None,
+        causal: false,
+        scale: 1.0,
+        q_offset: 0,
+    };
+    // Equal finite logits around -1e40 must normalize across two key tiles.
+    let out = chunked_sdpa_with_key_block(&q, &k, &v, None, &cfg, 1)?;
+    assert_eq!(out.dtype(), DType::F64);
+    assert_all_finite(&out, "large negative F64 scores");
+    let value = out.flatten_all()?.to_vec1::<f64>()?[0];
+    assert!((value - 2.0).abs() < 1e-12, "got {value}");
+    Ok(())
+}
+
+#[test]
+fn test_chunked_sdpa_half_precision_accumulates_without_overflow() {
+    let device = Device::Cpu;
+    for dtype in [DType::F16, DType::BF16] {
+        let q = Tensor::zeros((1, 1, 1, 1), dtype, &device).unwrap();
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: false,
+            scale: 1.0,
+            q_offset: 0,
+        };
+        for k_len in [512, 1537] {
+            let k = Tensor::zeros((1, 1, k_len, 1), dtype, &device).unwrap();
+            let v = (Tensor::ones((1, 1, k_len, 1), DType::F32, &device).unwrap() * 200.0)
+                .unwrap()
+                .to_dtype(dtype)
+                .unwrap();
+            for out in [
+                chunked_sdpa(&q, &k, &v, None, &cfg).unwrap(),
+                chunked_sdpa_cpu_softmax(&q, &k, &v, None, &cfg).unwrap(),
+            ] {
+                assert_eq!(out.dtype(), dtype);
+                assert_all_finite(&out, "half precision output");
+                let value = out
+                    .to_dtype(DType::F32)
+                    .unwrap()
+                    .flatten_all()
+                    .unwrap()
+                    .to_vec1::<f32>()
+                    .unwrap()[0];
+                assert!(
+                    (value - 200.0).abs() < 1.0,
+                    "{dtype:?} k_len={k_len}: got {value}"
+                );
+            }
+        }
+    }
 }
