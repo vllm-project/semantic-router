@@ -10,14 +10,28 @@ Merge configuration fragments into an existing Router configuration.
 
 ## Local embeddings
 
-Select the full Vela representation: layer 22 and 768 dimensions.
+Declare Vela once in the global catalog so recipes and services can reuse it.
+This CPU example uses layer 22 and 768 dimensions for semantic routing:
 
 ```yaml
 global:
   model_catalog:
+    bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+    deployments:
+      vela-embedding:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: candle
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 512
+          overflow: reject
     embeddings:
       semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         embedding_config:
           model_type: mmbert
           preload_embeddings: true
@@ -26,8 +40,8 @@ global:
 ```
 
 Use the CPU image for Candle inference. The name `mmbert` selects the compatible
-inference architecture; the model path selects Vela. The normal serve workflow
-downloads the registered model.
+inference architecture; the deployment selects Vela. The normal serve workflow
+downloads the registered model when an enabled feature needs it.
 
 ### AMD GPU
 
@@ -36,6 +50,12 @@ To run Vela Embedding on AMD, add an explicit ROCm deployment and binding:
 ```yaml
 global:
   model_catalog:
+    bindings:
+      embedding:
+        deployment: local-embedding
+        contract: embedding.v1
+        adapter: mmbert
+        head: onnx/model_fa.onnx
     deployments:
       local-embedding:
         artifact: models/Vela-1.0-Encoder-307M-Embedding
@@ -47,13 +67,6 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-routing:
-  model_bindings:
-    embedding:
-      deployment: local-embedding
-      contract: embedding.v1
-      adapter: mmbert
-      head: onnx/model_fa.onnx
 ```
 
 Start with `vllm-sr serve --platform amd --config config.yaml`. The AMD image
