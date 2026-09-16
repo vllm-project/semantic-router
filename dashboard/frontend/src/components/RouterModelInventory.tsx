@@ -4,6 +4,8 @@ import {
   getLoadedModelCount,
   getPreviewRouterModels,
   getRouterModelAnchor,
+  getRouterModelConsumers,
+  getRouterModelResources,
   getRouterModelState,
   getRouterModelStateLabel,
   getTotalKnownModelCount,
@@ -185,9 +187,13 @@ function getModelChips(model: RouterModelInfo): string[] {
   return [...chips].slice(0, 6)
 }
 
-function buildDetailSections(model: RouterModelInfo): DetailSection[] {
+function buildDetailSections(
+  model: RouterModelInfo,
+  consumers: RouterModelInfo[],
+): DetailSection[] {
+  const shared = consumers.length > 1
   const identityRows: DetailRow[] = [
-    { label: 'Router Key', value: model.name },
+    ...(!shared ? [{ label: 'Router Key', value: model.name }] : []),
     { label: 'Artifact Path', value: getRouterModelArtifactPath(model) || 'Not reported' },
   ]
 
@@ -195,7 +201,7 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     identityRows.push({ label: 'Artifact Kind', value: 'Local derived artifact' })
   }
 
-  if (model.recipe) {
+  if (model.recipe && !shared) {
     identityRows.push({ label: 'Recipe', value: model.recipe })
   }
 
@@ -266,7 +272,14 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     capabilityRows.push({ label: 'Datasets', value: datasets })
   }
 
-  const runtimeRows = buildMetadataRows(model.metadata)
+  const metadata = shared
+    ? Object.fromEntries(
+        Object.entries(model.metadata ?? {}).filter(([key, value]) =>
+          consumers.every((consumer) => consumer.metadata?.[key] === value),
+        ),
+      )
+    : model.metadata
+  const runtimeRows = buildMetadataRows(metadata)
   if (model.load_time) {
     runtimeRows.unshift({ label: 'Load Time', value: model.load_time })
   }
@@ -278,6 +291,25 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     { title: 'Identity', rows: identityRows },
     { title: 'Capabilities', rows: capabilityRows },
     { title: 'Runtime & Config', rows: runtimeRows },
+    ...(shared
+      ? [
+          {
+            title: 'Consumers',
+            rows: consumers.map((consumer) => ({
+              label: `${consumer.recipe || 'default'} / ${consumer.metadata?.binding || consumer.name}`,
+              value: [
+                getModelKind(consumer),
+                getRouterModelStateLabel(consumer),
+                consumer.metadata?.default_layer && `Layer ${consumer.metadata.default_layer}`,
+                consumer.metadata?.default_dimension &&
+                  `${consumer.metadata.default_dimension} dimensions`,
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            })),
+          },
+        ]
+      : []),
   ].filter((section) => section.rows.length > 0)
 }
 
@@ -313,7 +345,10 @@ const DeviceMark: React.FC<{ model: RouterModelInfo; compact?: boolean }> = ({
   )
 }
 
-const PreviewCardBody: React.FC<{ model: RouterModelInfo }> = ({ model }) => {
+const PreviewCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModelInfo[] }> = ({
+  model,
+  consumers,
+}) => {
   const context = getRouterModelContext(model)
   return (
     <>
@@ -324,6 +359,9 @@ const PreviewCardBody: React.FC<{ model: RouterModelInfo }> = ({ model }) => {
         </span>
       </div>
       <h3 className={styles.previewModelId}>{getRouterModelDisplayName(model)}</h3>
+      {consumers.length > 1 && (
+        <p className={styles.previewContext}>Shared by {consumers.length} consumers</p>
+      )}
       <p className={styles.previewContext}>
         {context.source === 'registry' ? 'Registry context' : 'Context window'}: {context.label}
       </p>
@@ -334,8 +372,11 @@ const PreviewCardBody: React.FC<{ model: RouterModelInfo }> = ({ model }) => {
   )
 }
 
-const FullCardBody: React.FC<{ model: RouterModelInfo }> = ({ model }) => {
-  const sections = buildDetailSections(model)
+const FullCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModelInfo[] }> = ({
+  model,
+  consumers,
+}) => {
+  const sections = buildDetailSections(model, consumers)
   const chips = getModelChips(model)
   const description = getModelDescription(model)
 
@@ -404,10 +445,25 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
   const [sort, setSort] = useState<ModelInventorySort>('state')
   const [page, setPage] = useState(1)
   const pageSize = 8
-  const allModels = useMemo(() => sortRouterModels(modelsInfo?.models ?? []), [modelsInfo?.models])
+  const resources = useMemo(
+    () => getRouterModelResources(sortRouterModels(modelsInfo?.models ?? [])),
+    [modelsInfo?.models],
+  )
+  const allModels = useMemo(() => resources.map(({ model }) => model), [resources])
   const filteredModels = useMemo(
-    () => filterAndSortRouterModels(allModels, query, stateFilter, sort),
-    [allModels, query, sort, stateFilter],
+    () =>
+      filterAndSortRouterModels(
+        resources
+          .filter(
+            ({ consumers }) =>
+              filterAndSortRouterModels(consumers, query, 'all', 'state').length > 0,
+          )
+          .map(({ model }) => model),
+        '',
+        stateFilter,
+        sort,
+      ),
+    [resources, query, sort, stateFilter],
   )
   const totalPages = Math.max(1, Math.ceil(filteredModels.length / pageSize))
   const currentPage = clampInventoryPage(page, filteredModels.length, pageSize)
@@ -522,6 +578,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
             data-testid={`router-model-grid-${mode}`}
           >
             {models.map((model) => {
+              const consumers = getRouterModelConsumers(modelsInfo?.models ?? [], model)
               const className = [
                 styles.card,
                 mode === 'preview' ? styles.previewCard : styles.detailCard,
@@ -533,9 +590,9 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
 
               const cardContent =
                 mode === 'preview' ? (
-                  <PreviewCardBody model={model} />
+                  <PreviewCardBody model={model} consumers={consumers} />
                 ) : (
-                  <FullCardBody model={model} />
+                  <FullCardBody model={model} consumers={consumers} />
                 )
 
               if (onSelectModel && mode === 'preview') {

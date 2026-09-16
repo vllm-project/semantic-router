@@ -1,7 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import type { RouterModelInfo } from '../utils/routerRuntime'
+import {
+  getLoadedModelCount,
+  getPreviewRouterModels,
+  getRouterModelConsumers,
+  getRouterModelResources,
+  getTotalKnownModelCount,
+  type RouterModelInfo,
+} from '../utils/routerRuntime'
 import RouterModelInventory from './RouterModelInventory'
 import {
   getRouterModelArtifactPath,
@@ -163,5 +170,92 @@ describe('router model presentation', () => {
     expect(
       filterAndSortRouterModels(models, 'Vela-1.0-Encoder-307M-Domain', 'all', 'name'),
     ).toEqual([models[0]])
+  })
+})
+
+describe('shared runtime resource inventory', () => {
+  const embedding = models[3]
+  const cache: RouterModelInfo = {
+    ...embedding,
+    recipe: '@global',
+    metadata: {
+      ...embedding.metadata,
+      resource_id: 'shared-embedding-resource',
+      binding: 'response_cache.embedding',
+      default_layer: '6',
+      default_dimension: '256',
+    },
+  }
+  const routing: RouterModelInfo = {
+    ...embedding,
+    recipe: 'balance',
+    metadata: {
+      ...embedding.metadata,
+      resource_id: 'shared-embedding-resource',
+      binding: 'embedding',
+      default_layer: '22',
+      default_dimension: '768',
+    },
+  }
+
+  it('shows one card per reported shared resource and retains both consumer views in details', () => {
+    const inventory = [...models.slice(0, 3), cache, routing]
+    expect(headings(render(inventory))).toHaveLength(4)
+    expect(render(inventory)).toContain('Shared by 2 consumers')
+    const detail = render([cache, routing], 'detail')
+    expect(headings(detail)).toEqual(['Vela-1.0-Encoder-307M-Embedding'])
+    for (const value of [
+      'Consumers',
+      '@global / response_cache.embedding',
+      'balance / embedding',
+      'Layer 6',
+      '256 dimensions',
+      'Layer 22',
+      '768 dimensions',
+      'shared-embedding-resource',
+    ]) {
+      expect(detail).toContain(value)
+    }
+    expect(getRouterModelConsumers(inventory, cache)).toEqual([cache, routing])
+    expect(cache.metadata?.default_layer).toBe('6')
+    expect(routing.metadata?.default_layer).toBe('22')
+  })
+
+  it('adjusts binding summary counts and preview limits by actual resource identity', () => {
+    const info = {
+      models: [cache, routing, ...models.slice(0, 3)],
+      summary: { loaded_models: 5, total_models: 5 },
+    }
+    expect(getLoadedModelCount(info)).toBe(4)
+    expect(getTotalKnownModelCount(info)).toBe(4)
+    expect(getPreviewRouterModels(info, 4)).toHaveLength(4)
+    expect(new Set(getPreviewRouterModels(info, 4).map((model) => model.type)).size).toBe(4)
+    expect(getTotalKnownModelCount({ ...info, summary: { total_models: 7 } })).toBe(6)
+  })
+
+  it('does not deduplicate by matching model names or paths, or merge different serving resources', () => {
+    const cpu = {
+      ...routing,
+      metadata: { ...routing.metadata, resource_id: 'separate-cpu-resource', device: 'cpu' },
+    }
+    expect(getRouterModelResources([cache, cpu])).toHaveLength(2)
+    const unknown = { ...routing, metadata: { ...routing.metadata, resource_id: '' } }
+    expect(getRouterModelResources([unknown, { ...unknown, recipe: 'other' }])).toHaveLength(2)
+    expect(getRouterModelConsumers([cache], unknown)).toEqual([unknown])
+    expect(render([cache, cpu]).match(/alt="AMD GPU"/g)).toHaveLength(1)
+  })
+
+  it('does not conceal a failed consumer behind a ready consumer or inflate readiness', () => {
+    const failed = { ...routing, loaded: false, state: 'not_loaded' }
+    const info = { models: [cache, failed], summary: { loaded_models: 1, total_models: 2 } }
+    const [resource] = getRouterModelResources(info.models)
+    expect(resource.model.loaded).toBe(false)
+    expect(resource.model.state).toBe('not_loaded')
+    expect(resource.consumers).toEqual([cache, failed])
+    expect(getLoadedModelCount(info)).toBe(0)
+    expect(getTotalKnownModelCount(info)).toBe(1)
+    const detail = render(info.models, 'detail')
+    expect(detail).toContain('Not Loaded')
+    expect(detail).toContain('Ready')
   })
 })
