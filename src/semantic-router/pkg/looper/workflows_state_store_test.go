@@ -1295,7 +1295,7 @@ func assertStaleReplaceLosesToLiveClaimant(t *testing.T, s workflowToolStateStor
 func TestStateStore_SweepSkipsLiveClaim(t *testing.T) {
 	const id = "claimed-ttl"
 	t.Run("memory", func(t *testing.T) {
-		s := newWorkflowMemoryToolStateStore(10 * time.Millisecond)
+		s := newWorkflowMemoryToolStateStore(50 * time.Millisecond)
 		t.Cleanup(func() { _ = s.Close() })
 		ctx := context.Background()
 		if _, err := s.Put(ctx, makeTestState(id)); err != nil {
@@ -1305,7 +1305,7 @@ func TestStateStore_SweepSkipsLiveClaim(t *testing.T) {
 		if err != nil || !ok || claim == nil {
 			t.Fatalf("Claim: ok=%v err=%v", ok, err)
 		}
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(80 * time.Millisecond)
 		busy, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
 		if err != nil {
 			t.Fatalf("Claim after TTL while held: %v", err)
@@ -1318,7 +1318,7 @@ func TestStateStore_SweepSkipsLiveClaim(t *testing.T) {
 		}
 	})
 	t.Run("file", func(t *testing.T) {
-		s := newWorkflowFileToolStateStore(filepath.Join(t.TempDir(), "claimed-ttl"), 10*time.Millisecond)
+		s := newWorkflowFileToolStateStore(filepath.Join(t.TempDir(), "claimed-ttl"), 50*time.Millisecond)
 		t.Cleanup(func() { _ = s.Close() })
 		ctx := context.Background()
 		if _, err := s.Put(ctx, makeTestState(id)); err != nil {
@@ -1328,7 +1328,7 @@ func TestStateStore_SweepSkipsLiveClaim(t *testing.T) {
 		if err != nil || !ok || claim == nil {
 			t.Fatalf("Claim: ok=%v err=%v", ok, err)
 		}
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(80 * time.Millisecond)
 		busy, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
 		if err != nil {
 			t.Fatalf("Claim after TTL while held: %v", err)

@@ -695,6 +695,9 @@ func (s *workflowFileToolStateStore) Claim(_ context.Context, recipe config.Reci
 	if unmarshalErr := json.Unmarshal(data, &state); unmarshalErr != nil {
 		return nil, false, fmt.Errorf("parse workflow state: %w", unmarshalErr)
 	}
+	if workflowDurableClaimHeld(&state, now) {
+		return nil, false, nil
+	}
 	if workflowToolStateExpired(&state, s.ttl, now) {
 		return nil, false, nil
 	}
