@@ -20,7 +20,8 @@ public:
     // Initialize embedding model
     bool initialize(
         const std::string& model_path,
-        const std::string& device = "CPU"
+        const std::string& device = "CPU",
+        int pad_token_id = 50283
     );
     
     // Generate embedding for text
@@ -50,6 +51,7 @@ public:
     bool isInitialized() const { return model_ && model_->compiled_model != nullptr; }
     
 private:
+    int pad_token_id_ = 50283;
     std::shared_ptr<core::ModelInstance> model_;
     core::OVNativeTokenizer tokenizer_;
     std::mutex mutex_;

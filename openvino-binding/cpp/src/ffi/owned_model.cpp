@@ -36,23 +36,23 @@ OVOwnedResult resultFrom(const std::vector<float>& values, int original,
 
 extern "C" {
 OVEmbeddingHandle* ov_embedding_open(const char* path, const char* device,
-                                      const int* end_tokens, int end_token_count) {
-    if (!path || !device || end_token_count < 0 || (end_token_count > 0 && !end_tokens)) return nullptr;
+                                      const int* end_tokens, int end_token_count, int pad_token_id) {
+    if (!path || !device || pad_token_id < 0 || end_token_count < 0 || (end_token_count > 0 && !end_tokens)) return nullptr;
     try {
         auto handle = std::make_unique<OVEmbeddingHandle>();
         if (end_token_count > 0) handle->end_tokens.assign(end_tokens, end_tokens + end_token_count);
-        if (!handle->model.initialize(path, device)) return nullptr;
+        if (!handle->model.initialize(path, device, pad_token_id)) return nullptr;
         return handle.release();
     } catch (...) { return nullptr; }
 }
 
 OVClassifierHandle* ov_classifier_open(const char* path, const char* device, int classes,
-                                        const int* end_tokens, int end_token_count) {
-    if (!path || !device || classes <= 0 || end_token_count < 0 || (end_token_count > 0 && !end_tokens)) return nullptr;
+                                        const int* end_tokens, int end_token_count, int pad_token_id) {
+    if (!path || !device || pad_token_id < 0 || classes <= 0 || end_token_count < 0 || (end_token_count > 0 && !end_tokens)) return nullptr;
     try {
         auto handle = std::make_unique<OVClassifierHandle>();
         if (end_token_count > 0) handle->end_tokens.assign(end_tokens, end_tokens + end_token_count);
-        if (!handle->model.initialize(path, classes, device)) return nullptr;
+        if (!handle->model.initialize(path, classes, device, pad_token_id)) return nullptr;
         return handle.release();
     } catch (...) { return nullptr; }
 }

@@ -12,9 +12,12 @@ namespace classifiers {
 bool TextClassifier::initialize(
     const std::string& model_path,
     int num_classes,
-    const std::string& device
+    const std::string& device,
+    int pad_token_id
 ) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (pad_token_id < 0) return false;
+    pad_token_id_ = pad_token_id;
     
     try {
         auto& manager = core::ModelManager::getInstance();
@@ -155,11 +158,10 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
             return result;
         }
         
-        // Create attention mask (ModernBERT uses 50283 as PAD token)
-        const int MODERNBERT_PAD = 50283;
+        // Use this artifact's padding token for its attention mask.
         std::vector<int64_t> attention_mask(token_ids.size());
         for (size_t i = 0; i < token_ids.size(); ++i) {
-            attention_mask[i] = (token_ids[i] != MODERNBERT_PAD) ? 1 : 0;
+            attention_mask[i] = (token_ids[i] != pad_token_id_) ? 1 : 0;
         }
         
         // Convert to i64 for ModernBERT
@@ -232,11 +234,10 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
             return result;
         }
         
-        // Create attention mask (ModernBERT uses 50283 as PAD token)
-        const int MODERNBERT_PAD = 50283;
+        // Use this artifact's padding token for its attention mask.
         std::vector<int64_t> attention_mask(token_ids.size());
         for (size_t i = 0; i < token_ids.size(); ++i) {
-            attention_mask[i] = (token_ids[i] != MODERNBERT_PAD) ? 1 : 0;
+            attention_mask[i] = (token_ids[i] != pad_token_id_) ? 1 : 0;
         }
         
         // Convert to i64

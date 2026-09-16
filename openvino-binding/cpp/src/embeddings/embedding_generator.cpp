@@ -8,9 +8,6 @@
 namespace openvino_sr {
 namespace embeddings {
 
-// Constants for special tokens (ModernBERT)
-static const int MODERNBERT_PAD = 50283;
-
 static int getPositiveEnvOrDefault(const char* key, int def) {
     if (const char* v = std::getenv(key)) {
         int parsed = std::atoi(v);
@@ -21,9 +18,12 @@ static int getPositiveEnvOrDefault(const char* key, int def) {
 
 bool EmbeddingGenerator::initialize(
     const std::string& model_path,
-    const std::string& device
+    const std::string& device,
+    int pad_token_id
 ) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (pad_token_id < 0) return false;
+    pad_token_id_ = pad_token_id;
     
     try {
         auto& manager = core::ModelManager::getInstance();
@@ -143,7 +143,7 @@ std::vector<float> EmbeddingGenerator::generateEmbedding(
             auto attention_mask_tensor = ov::Tensor(ov::element::i64, input_shape);
             auto mask_data = attention_mask_tensor.data<int64_t>();
             for (size_t i = 0; i < seq_len; ++i) {
-                mask_data[i] = (token_ids[i] != MODERNBERT_PAD) ? 1 : 0;
+                mask_data[i] = (token_ids[i] != pad_token_id_) ? 1 : 0;
             }
             slot->request.set_input_tensor(1, attention_mask_tensor);
         }
@@ -185,7 +185,7 @@ std::vector<float> EmbeddingGenerator::generateEmbedding(
             int valid_token_count = 0;
             
             for (size_t seq_idx = 0; seq_idx < sequence_length && seq_idx < seq_len; ++seq_idx) {
-                if (token_ids[seq_idx] != MODERNBERT_PAD) {
+                if (token_ids[seq_idx] != pad_token_id_) {
                     for (size_t h = 0; h < hidden_size; ++h) {
                         size_t idx = seq_idx * hidden_size + h;
                         embedding[h] += output_data[idx];

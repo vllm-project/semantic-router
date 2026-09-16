@@ -29,6 +29,7 @@ type ModelOptions struct {
 	// EndTokenIDs lists the tokenizer's suffix special tokens. Truncation keeps
 	// their envelope after the retained prefix; no token IDs are guessed.
 	EndTokenIDs []int
+	PadTokenID  int
 }
 
 type InputUsage struct {
@@ -60,6 +61,9 @@ func (o ModelOptions) validate() error {
 	}
 	if o.Overflow != "reject" && o.Overflow != "truncate" {
 		return fmt.Errorf("OpenVINO supports reject or truncate overflow")
+	}
+	if o.PadTokenID < 0 || o.PadTokenID > math.MaxInt32 {
+		return fmt.Errorf("OpenVINO padding token ID must fit a nonnegative int32")
 	}
 	for _, id := range o.EndTokenIDs {
 		if id < 0 || id > math.MaxInt32 {
@@ -96,7 +100,7 @@ func LoadEmbeddingModel(options ModelOptions) (*EmbeddingModel, error) {
 	defer C.free(unsafe.Pointer(path))
 	defer C.free(unsafe.Pointer(device))
 	ids, suffix := endTokenIDs(options)
-	handle := C.ov_embedding_open(path, device, suffix, C.int(len(ids)))
+	handle := C.ov_embedding_open(path, device, suffix, C.int(len(ids)), C.int(options.PadTokenID))
 	if handle == nil {
 		return nil, fmt.Errorf("load OpenVINO embedding model %q on %s", options.ModelPath, options.Device)
 	}
@@ -146,7 +150,7 @@ func LoadClassifierModel(options ModelOptions, numClasses int) (*ClassifierModel
 	defer C.free(unsafe.Pointer(path))
 	defer C.free(unsafe.Pointer(device))
 	ids, suffix := endTokenIDs(options)
-	handle := C.ov_classifier_open(path, device, C.int(numClasses), suffix, C.int(len(ids)))
+	handle := C.ov_classifier_open(path, device, C.int(numClasses), suffix, C.int(len(ids)), C.int(options.PadTokenID))
 	if handle == nil {
 		return nil, fmt.Errorf("load OpenVINO classifier %q on %s", options.ModelPath, options.Device)
 	}
