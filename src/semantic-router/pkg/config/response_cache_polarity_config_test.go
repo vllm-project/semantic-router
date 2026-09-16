@@ -137,3 +137,31 @@ func TestNeedsLocalNLIForSemanticCache(t *testing.T) {
 		t.Fatal("cache-only NLI must not be reported as a hallucination consumer")
 	}
 }
+
+func TestCacheNLIRequiresActualSupportedConsumer(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.PolarityGuard = &PolarityGuardConfig{Mode: "nli"}
+	cfg.GlobalModelBindings = map[string]ModelBinding{"hallucination_explainer": {Deployment: "global-nli"}}
+	if !cfg.NeedsLocalNLIForSemanticCache() {
+		t.Fatal("explicit global binding without module alias lost NLI demand")
+	}
+	if err := validatePolarityGuard(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg.SemanticCache.BackendType = "redis"
+	if cfg.NeedsLocalNLIForSemanticCache() {
+		t.Fatal("backend without verifier provisioned unused NLI")
+	}
+	if err := validatePolarityGuard(cfg); err == nil {
+		t.Fatal("requested NLI silently ignored by unsupported backend")
+	}
+	cfg.Decisions = []Decision{{Name: "unused"}}
+	cfg.GlobalModelBindings = nil
+	if cfg.NeedsLocalNLIForSemanticCache() {
+		t.Fatal("idle cache provisioned NLI")
+	}
+	if err := validatePolarityGuard(cfg); err != nil {
+		t.Fatal("unused module default required a model", err)
+	}
+}

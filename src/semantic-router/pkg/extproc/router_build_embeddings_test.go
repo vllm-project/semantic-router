@@ -25,6 +25,8 @@ func TestBuildRouterDoesNotLoadEmbeddingForIdleOrExactOnlyCache(t *testing.T) {
 			cfg.SemanticCache.Enabled = true
 			cfg.SemanticCache.EmbeddingModel = "mmbert"
 			cfg.MmBertModelPath = "/not-installed/unused-cache-embedding"
+			cfg.SemanticCache.PolarityGuard = &config.PolarityGuardConfig{Mode: "nli"}
+			cfg.HallucinationMitigation.NLIModel.ModelID = "/not-installed/unused-cache-nli"
 			cfg.Decisions = []config.Decision{{Name: "route"}}
 			if mode == "exact" {
 				cfg.Decisions[0].Plugins = []config.DecisionPlugin{{Type: "response_cache", Configuration: config.MustStructuredPayload(config.ResponseCachePluginConfig{Enabled: true, Mode: "exact"})}}

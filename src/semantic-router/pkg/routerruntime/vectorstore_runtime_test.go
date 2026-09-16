@@ -78,7 +78,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 			})
 			vector, err := runtime.Embedder.Embed(context.Background(), "ingestion query")
 			want := []float32{1, 0}
-			if name != "implicit embedding" {
+			if name == "global embedding" {
 				want = []float32{0, 1}
 			}
 			if err != nil || !reflect.DeepEqual(vector, want) {

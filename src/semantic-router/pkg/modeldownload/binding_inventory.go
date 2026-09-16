@@ -25,22 +25,24 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	scopes := []*config.RouterConfig{}
 	defaultScope := *cfg.ModelConsumerScope()
 	defaultScope.Recipes, defaultScope.Entrypoints = nil, nil
-	defaultScope.SemanticCache.Enabled = cfg.NeedsSemanticResponseCache()
-	if _, ok := plan.LookupGlobal("embedding"); ok {
-		defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
-		defaultScope.VectorStore = nil
-		serviceScope := cfg.ConfigForGlobalModelServices()
-		// The NLI verifier still belongs to the classification/API owner.
-		// This additional scope owns only service embedding requirements.
-		serviceScope.SemanticCache.PolarityGuard = nil
-		if err := inventory.addScope(serviceScope, plan); err != nil {
-			return nil, err
-		}
+	defaultScope.SemanticCache.Enabled = false
+	defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
+	defaultScope.VectorStore = nil
+	serviceScope := cfg.ConfigForGlobalModelServices()
+	projectedServices, err := config.ProjectRecipeModelBindings(serviceScope, plan, config.GlobalModelScope)
+	if err != nil {
+		return nil, err
 	}
+	if err := inventory.addScope(projectedServices, plan); err != nil {
+		return nil, err
+	}
+
 	scopes = append(scopes, &defaultScope)
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
 		if recipe.Name != config.DefaultRecipeName {
-			scopes = append(scopes, cfg.ConfigForRecipe(recipe))
+			scoped := cfg.ConfigForRecipe(recipe)
+			scoped.SemanticCache.Enabled = false
+			scopes = append(scopes, scoped)
 		}
 	}
 	for _, scope := range scopes {
@@ -75,7 +77,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		primary = "qwen3"
 	}
 	global := cfg.RoutingScope == config.GlobalModelScope
-	sharedServices := global || (cfg.RoutingScope == config.DefaultRecipeName && cfg.GlobalModelBindings["embedding"].Deployment == "")
+	sharedServices := global
 	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
 	scoped := *cfg
 	scoped.Recipes, scoped.Entrypoints = nil, nil
