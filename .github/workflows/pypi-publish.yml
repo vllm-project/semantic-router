@@ -3,25 +3,17 @@ name: vllm-sr Python Publisher
 on:
   workflow_call:
     inputs:
-      channel:
-        description: Package channel, stable for releases or dev for validated main commits.
-        required: false
-        default: stable
-        type: string
       version:
         description: Stable version without a leading v.
-        required: false
-        default: ""
+        required: true
         type: string
       tag:
         description: Stable tag with a leading v.
-        required: false
-        default: ""
+        required: true
         type: string
       catalog_snapshot:
         description: Immutable built-in catalog snapshot derived from the release minor.
-        required: false
-        default: ""
+        required: true
         type: string
   workflow_dispatch:
     inputs:
@@ -49,34 +41,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Prepare development package version
-        if: inputs.channel == 'dev'
-        id: dev
-        run: |
-          python tools/ci/prepare_dev_package.py \
-            --source-date-epoch "$(git show -s --format=%ct HEAD)" \
-            --github-output "$GITHUB_OUTPUT"
-
       - name: Validate package version
         id: contract
         working-directory: src/vllm-sr
         env:
-          PACKAGE_CHANNEL: ${{ inputs.channel || 'stable' }}
-          RELEASE_VERSION: ${{ steps.dev.outputs.version || inputs.version }}
+          RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
           INPUT_CATALOG_SNAPSHOT: ${{ inputs.catalog_snapshot }}
         run: |
-          case "$PACKAGE_CHANNEL" in
-            stable|dev) ;;
-            *) echo "::error::Unsupported package channel '$PACKAGE_CHANNEL'"; exit 1 ;;
-          esac
           PACKAGE_VERSION="$(
             sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1
           )"
@@ -84,22 +61,17 @@ jobs:
             echo "::error::Package version '$PACKAGE_VERSION' does not match '$RELEASE_VERSION'"
             exit 1
           fi
-          if [[ "$PACKAGE_CHANNEL" == "stable" ]] &&
-             [[ "${{ github.event_name }}" != "workflow_dispatch" ]] &&
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] &&
              [[ "$RELEASE_TAG" != "v${RELEASE_VERSION}" ]]; then
             echo "::error::Release tag '$RELEASE_TAG' does not match package version"
             exit 1
           fi
-          if [[ "$PACKAGE_CHANNEL" == "dev" ]]; then
-            CATALOG_SNAPSHOT=latest
-          else
-            IFS=. read -r VERSION_MAJOR VERSION_MINOR _ <<< "$RELEASE_VERSION"
-            EXPECTED_CATALOG_SNAPSHOT="v${VERSION_MAJOR}.${VERSION_MINOR}"
-            CATALOG_SNAPSHOT="${INPUT_CATALOG_SNAPSHOT:-$EXPECTED_CATALOG_SNAPSHOT}"
-            if [[ "$CATALOG_SNAPSHOT" != "$EXPECTED_CATALOG_SNAPSHOT" ]]; then
-              echo "::error::Catalog snapshot '$CATALOG_SNAPSHOT' does not match '$EXPECTED_CATALOG_SNAPSHOT'"
-              exit 1
-            fi
+          IFS=. read -r VERSION_MAJOR VERSION_MINOR _ <<< "$RELEASE_VERSION"
+          EXPECTED_CATALOG_SNAPSHOT="v${VERSION_MAJOR}.${VERSION_MINOR}"
+          CATALOG_SNAPSHOT="${INPUT_CATALOG_SNAPSHOT:-$EXPECTED_CATALOG_SNAPSHOT}"
+          if [[ "$CATALOG_SNAPSHOT" != "$EXPECTED_CATALOG_SNAPSHOT" ]]; then
+            echo "::error::Catalog snapshot '$CATALOG_SNAPSHOT' does not match '$EXPECTED_CATALOG_SNAPSHOT'"
+            exit 1
           fi
           if [[ ! -d "../../config/recipes/built-in/$CATALOG_SNAPSHOT" ]]; then
             echo "::error::Missing release catalog snapshot 'config/recipes/built-in/$CATALOG_SNAPSHOT'"
@@ -111,15 +83,12 @@ jobs:
         working-directory: src/vllm-sr
         env:
           CATALOG_SNAPSHOT: ${{ steps.contract.outputs.catalog_snapshot }}
-          PACKAGE_CHANNEL: ${{ inputs.channel || 'stable' }}
-          RELEASE_VERSION: ${{ steps.dev.outputs.version || inputs.version }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           python -m pip install --upgrade pip
-          python -m pip install build twine pyyaml
-          if [[ "$PACKAGE_CHANNEL" == "stable" ]]; then
-            python ../../tools/release/snapshot_model_catalog.py \
-              --check --version "$RELEASE_VERSION"
-          fi
+          pip install build twine
+          python ../../tools/release/snapshot_model_catalog.py \
+            --check --version "$RELEASE_VERSION"
           python ../../tools/release/stage_model_catalog_package.py
           python ../../tools/release/stage_model_catalog_package.py --check
           python -m build
@@ -156,7 +125,6 @@ jobs:
               }
             done
           done
-
           unzip -Z1 "$WHEEL_PATH" > wheel-files.txt
           for file in "${REQUIRED_FILES[@]}"; do
             grep -Fqx "$file" wheel-files.txt || {
@@ -164,9 +132,6 @@ jobs:
               exit 1
             }
           done
-
-      - name: Verify installed wheel capabilities
-        run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/*.whl
 
       - uses: actions/upload-artifact@v4
         with:
@@ -194,12 +159,10 @@ jobs:
         run: twine upload --repository testpypi dist/*
 
   pypi:
-    name: Publish vllm-sr to PyPI
+    name: Publish stable vllm-sr to PyPI
     if: >-
-      github.repository == 'vllm-project/semantic-router'
-      && github.event_name == 'push'
-      && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
-        || (inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')))
+      github.event_name == 'push'
+      && startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -210,7 +173,7 @@ jobs:
 
       - run: pip install twine
 
-      - name: Publish verified package
+      - name: Publish stable package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
