@@ -311,6 +311,8 @@ def _start_support_services(
     stack_layout,
     enable_observability,
 ):
+    if not enable_observability:
+        _stop_observability_containers(stack_layout)
     started_backends = provision_storage_backends(
         user_config, stack_layout, state_root_dir=state_root_dir
     )
@@ -540,6 +542,27 @@ def _observability_container_names(stack_layout: RuntimeStackLayout) -> tuple[st
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
     )
+
+
+def _stop_observability_containers(stack_layout: RuntimeStackLayout) -> None:
+    """Stop this stack's old collectors when switching to minimal mode.
+
+    Keep containers and their data for the next full-mode start. Strict checks
+    prevent an unavailable container runtime from looking like an empty stack.
+    The caller holds the stack lifecycle lock throughout deployment.
+    """
+    names = _observability_container_names(stack_layout)
+    stopped_states = {"not found", "exited", "created", "dead"}
+    states = {name: container_status_strict(name) for name in names}
+    for name, state in states.items():
+        if state in {"running", "paused", "restarting"}:
+            if not container_stop_container(name):
+                raise RuntimeError(f"Failed to stop observability container: {name}")
+        elif state not in stopped_states:
+            raise RuntimeError(f"Observability container is not stopped: {name}")
+    for name in names:
+        if container_status_strict(name) not in stopped_states:
+            raise RuntimeError(f"Observability container is not stopped: {name}")
 
 
 def _storage_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...]:
