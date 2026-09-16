@@ -300,3 +300,42 @@ func TestContextOverflowPreparedStreamCompletesAndReplays(t *testing.T) {
 		t.Fatalf("stream replay: found=%v state=%s status=%d reason=%s", ok, record.LifecycleState, record.ResponseStatus, record.TerminalReason)
 	}
 }
+
+func TestContextOverflowCompressesMultipleOldUserAndAssistantTurns(t *testing.T) {
+	r, ctx := overflowFixture(t, "Return only BLUE43:42")
+	latest := ctx.SemanticRequest.Messages[0]
+	messages := make([]llmprotocol.Message, 0, 13)
+	for range 6 {
+		messages = append(messages,
+			llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Older user context " + strings.Repeat(" a", 4000)}}},
+			llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Older assistant context " + strings.Repeat(" a", 4000)}}})
+	}
+	ctx.SemanticRequest.Messages = append(messages, latest)
+	before, err := selection.EffectiveCandidateRequest(ctx.SemanticRequest, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.prepareDecisionContextOverflow(ctx, "auto"); err != nil {
+		t.Fatal(err)
+	}
+	userChanged, assistantChanged := false, false
+	for i, message := range ctx.SemanticRequest.Messages[:len(messages)-1] {
+		if message.Content[0].Text != before.Messages[i].Content[0].Text {
+			if message.Role == llmprotocol.RoleUser {
+				userChanged = true
+			} else if message.Role == llmprotocol.RoleAssistant {
+				assistantChanged = true
+			}
+		}
+	}
+	if !userChanged || !assistantChanged {
+		t.Fatal("old user and assistant history did not both compress")
+	}
+	if !reflect.DeepEqual(ctx.SemanticRequest.Messages[len(messages):], before.Messages[len(messages):]) {
+		t.Fatal("short current instruction changed")
+	}
+	count, _ := (overflowTokenCounter{}).CountRequest("model", &contextcompression.RequestIR{Semantic: ctx.SemanticRequest})
+	if count+8192 > 32768 {
+		t.Fatalf("multi-turn dispatch bound=%d", count)
+	}
+}
