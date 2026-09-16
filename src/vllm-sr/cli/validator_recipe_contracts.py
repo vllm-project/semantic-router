@@ -65,7 +65,9 @@ def _recipe_name_contract(
 ) -> tuple[set[str], list[ValidationError]]:
     errors: list[ValidationError] = []
     top_level_has_profile = bool(
-        config.routing.model_bindings
+        config.routing.candidate_requirements is not None
+        or config.routing.data_policy is not None
+        or config.routing.model_bindings
         or config.routing.signals.model_dump(exclude_defaults=True, exclude_none=True)
         or config.routing.projections.model_dump(
             exclude_defaults=True, exclude_none=True
@@ -76,6 +78,13 @@ def _recipe_name_contract(
     recipe_names = {"default"}
     explicit_default_seen = False
     for recipe in config.recipes:
+        if recipe.name == "@global":
+            errors.append(
+                ValidationError(
+                    "Recipe name '@global' is reserved for shared model services",
+                    field="recipes.@global",
+                )
+            )
         explicit_default_allowed = (
             recipe.name == "default"
             and not top_level_has_profile

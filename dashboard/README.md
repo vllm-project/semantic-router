@@ -131,6 +131,13 @@ Feature controls:
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
+Deployment registries support Linux and macOS through descriptor-relative reads
+that reject symlinks in the registry path and its files. Use a canonical registry
+directory; macOS also requires read permission on its directory components.
+Other platforms reject a configured registry. Leaving `EVALUATION_DEPLOYMENTS_DIR`
+unset retains the single-runtime target. Evaluation workers require Linux for
+their sandbox.
+
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
 `DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
 Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as
@@ -169,6 +176,15 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
+
+For local Docker or Podman stacks, export `DASHBOARD_JWT_SECRET` in the host
+environment before `vllm-sr serve`. The CLI forwards it only to Dashboard as an
+inherited environment name, keeping its value out of container command arguments
+and logs. Reuse the same secret across container replacements and keep the
+Dashboard authentication database on its persistent volume. Without a configured
+secret, each Dashboard process generates a new signing key and existing sessions
+must log in again. Rotating the key also invalidates existing sessions; it does not
+change stored administrator accounts. Do not use `--recipe-env` for this key.
 
 Writes authenticated by the session cookie must carry an `X-CSRF-Token` header
 and a matching `Origin`. The frontend does this on its own. Set

@@ -224,6 +224,11 @@ func writeProcessReport(spec ProcessSpec) error {
 		return err
 	}
 	completedAt := time.Now().UTC()
+	if fixture.manifest.Mode == ModeReplay {
+		// This fixture replays frozen evidence and makes no live observation
+		// claim. Use its immutable timestamp independently of wall-clock steps.
+		completedAt = fixture.manifest.CreatedAt
+	}
 	provenance := Provenance{
 		SchemaVersion: SchemaVersion, GeneratedAt: completedAt, CodeRevision: fixture.manifest.CodeRevision,
 		BenchmarkRevisions:     map[string]string{"evaluation-smoke": "builtin-v1"},

@@ -119,6 +119,10 @@ func (broker *workerHTTPBroker) attestResponse(
 		digest := digestString(normalizedAnswer(*content))
 		entry.ResponseContentDigest = &digest
 	}
+	if request.Operation == workerBrokerRoutedChatCompletion || request.Operation == workerBrokerArmChatCompletion {
+		complete := response.Success && brokerFinalAnswerComplete(response.Payload)
+		entry.FinalAnswerComplete = &complete
+	}
 	receipt, err := brokerEntryReceipt(entry)
 	if err == nil {
 		entry.BrokerReceipt = receipt

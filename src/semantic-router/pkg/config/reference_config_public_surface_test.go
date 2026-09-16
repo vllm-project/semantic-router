@@ -49,7 +49,15 @@ func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}
 func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{}) {
 	routing := mustMapAt(t, root, "routing")
 
-	assertMapCoversStructFields(t, routing, reflect.TypeOf(CanonicalRouting{}), "routing")
+	// Recipe-wide policies can be demonstrated by a named recipe without
+	// changing the broad default profile's compatibility behavior.
+	profiles := []interface{}{routing}
+	for _, profile := range collectChildMapsFromSlice(t, mustSliceAt(t, root, "recipes"), "routing", "recipes") {
+		profiles = append(profiles, profile)
+	}
+	assertSliceUnionCoversStructFields(t, profiles, reflect.TypeOf(CanonicalRouting{}), "routing profiles")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "candidate_requirements", "routing profiles"), reflect.TypeOf(CandidateRequirements{}), "routing.candidate_requirements")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "data_policy", "routing profiles"), reflect.TypeOf(RoutingDataPolicy{}), "routing.data_policy")
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, routing, "modelCards"),

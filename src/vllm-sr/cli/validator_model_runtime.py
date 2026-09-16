@@ -1,9 +1,16 @@
 """Model-runtime checks that do not load local or remote model resources."""
 
+from pathlib import PurePosixPath
+
+from cli.model_runtime_defaults import (
+    effective_model_deployments,
+    global_model_bindings,
+    iter_effective_routing_profiles,
+)
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
+from cli.validator_pii_window import validate_pii_windows
 
-CLASSIFICATION_MAX_TOKENS = 512
 DEVICE_SELECTOR_PARTS = 2
 
 
@@ -19,7 +26,7 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
                 field="global.model_catalog.modules.prompt_guard.protocol",
             )
         )
-    deployments = catalog.get("deployments", {})
+    deployments = effective_model_deployments(config)
     external_names = {item.get("name") for item in catalog.get("external", [])}
     for name, deployment in deployments.items():
         message = _deployment_error(name, deployment, external_names)
@@ -29,10 +36,41 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
                     message, field=f"global.model_catalog.deployments.{name}"
                 )
             )
-    profiles = [("routing", config.routing)] + [
-        (f"recipes.{recipe.name}.routing", recipe.routing) for recipe in config.recipes
+    for consumer, binding in global_model_bindings(config).items():
+        field = f"global.model_catalog.bindings.{consumer}"
+        if binding.deployment not in deployments:
+            errors.append(
+                ValidationError(
+                    f"Unknown model deployment '{binding.deployment}'",
+                    field=field + ".deployment",
+                )
+            )
+            continue
+        message = _binding_error(
+            consumer, binding, deployments[binding.deployment], global_default=True
+        )
+        if message:
+            errors.append(ValidationError(message, field=field))
+    profiles = [
+        ("routing" if name == "default" else f"recipes.{name}.routing", profile)
+        for name, profile in iter_effective_routing_profiles(config)
     ]
     for prefix, profile in profiles:
+        for decision in profile.decisions:
+            for plugin in decision.plugins or []:
+                data = plugin.configuration
+                if (
+                    plugin.type.value == "rag"
+                    and data.get("enabled")
+                    and data.get("rerank") is not None
+                    and "rag.reranker" not in profile.model_bindings
+                ):
+                    errors.append(
+                        ValidationError(
+                            "Neural rerank requires recipe-local model_bindings.rag.reranker",
+                            field=f"{prefix}.decisions.{decision.name}.plugins",
+                        )
+                    )
         for consumer, binding in profile.model_bindings.items():
             if binding.deployment not in deployments:
                 errors.append(
@@ -50,11 +88,16 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
                         message, field=f"{prefix}.model_bindings.{consumer}"
                     )
                 )
+    errors.extend(validate_pii_windows(config, deployments))
     return errors
 
 
-def _binding_error(consumer, binding, deployment, profile=None):
+def _binding_error(
+    consumer, binding, deployment, profile=None, *, global_default=False
+):
     provider = deployment.get("provider") or "candle"
+    if binding.operating_point is not None and not consumer.startswith("classifier."):
+        return "operating_point is only supported by generic classifier bindings"
     contracts = {
         "prompt_guard": "label_distribution.v1",
         "domain_classifier": "label_distribution.v1",
@@ -66,8 +109,46 @@ def _binding_error(consumer, binding, deployment, profile=None):
         "hallucination_explainer": "text_pair_distribution.v1",
         "embedding": "embedding.v1",
         "complexity": "score.v1",
+        "rag.reranker": "relevance_scores.v1",
     }
-    if consumer.startswith("classifier."):
+    if binding.pair_scorer is not None and consumer != "rag.reranker":
+        return "pair_scorer selection is only supported by rag.reranker"
+    if consumer == "rag.reranker":
+        if provider == "http" or binding.adapter != "vela_reranker":
+            return "Reranker requires a local vela_reranker adapter"
+        if binding.mapping_path or (provider == "candle" and binding.head):
+            return (
+                "Reranker has no label mapping or separate Candle classification head"
+            )
+        if ((deployment.get("input") or {}).get("overflow") or "reject") != "reject":
+            return "Reranker requires reject overflow for complete tokenizer pairs"
+    if global_default and consumer.startswith("safety."):
+        contracts[consumer] = (
+            binding.contract
+            if binding.contract in {"label_distribution.v1", "label_scores.v1"}
+            else "label_distribution.v1"
+        )
+    elif consumer.startswith("safety."):
+        matches = []
+        for rule in profile.signals.safety if profile else []:
+            if consumer == f"safety.{rule.name}":
+                matches.append("label_distribution.v1")
+            if rule.hazard and consumer == f"safety.{rule.name}.hazard":
+                matches.append("label_scores.v1")
+        if len(matches) != 1:
+            return "Safety binding must identify exactly one head in the same recipe"
+        contracts[consumer] = matches[0]
+        if binding.mapping_path:
+            return "Safety labels define the mapping; mapping_path is not supported"
+        if provider == "http" and binding.adapter != "http_classify":
+            return "Safety HTTP head requires http_classify adapter"
+    if global_default and consumer.startswith("classifier."):
+        contracts[consumer] = (
+            "label_scores.v1"
+            if binding.contract == "label_scores.v1"
+            else "label_distribution.v1"
+        )
+    elif consumer.startswith("classifier."):
         contracts[consumer] = "label_distribution.v1"
         name = consumer.removeprefix("classifier.")
         rule = (
@@ -86,6 +167,26 @@ def _binding_error(consumer, binding, deployment, profile=None):
             return "Generic classifier binding requires an existing rule in the same recipe"
         if binding.mapping_path:
             return "Generic classifier labels define the mapping; mapping_path is not supported"
+        if binding.contract == "label_scores.v1":
+            contracts[consumer] = binding.contract
+            if (
+                binding.operating_point is None
+                or provider not in {"candle", "ort"}
+                or (provider == "candle" and binding.head)
+                or rule.type == "llm"
+            ):
+                return "Independent scores require operating_point and a complete Candle or qualified ORT artifact"
+            budget = deployment.get("input") or {}
+            if (
+                budget.get("max_tokens", 0) <= 0
+                or (budget.get("overflow") or "reject") != "reject"
+            ):
+                return "operating_point requires an explicit document budget and reject overflow"
+            precision = deployment.get("precision") or "native"
+            if precision != "native" and (provider != "candle" or precision != "fp32"):
+                return "operating_point requires Candle float32 or qualified ORT native execution"
+        elif binding.operating_point is not None:
+            return "operating_point requires label_scores.v1"
         if rule.type == "llm":
             if provider != "http" or binding.adapter != "http_chat":
                 return (
@@ -135,12 +236,6 @@ def _binding_error(consumer, binding, deployment, profile=None):
         "hallucination_explainer",
     }:
         return f"{consumer} has no ORT task adapter"
-    if (
-        consumer != "embedding"
-        and provider != "http"
-        and budget.get("max_tokens", 0) > CLASSIFICATION_MAX_TOKENS
-    ):
-        return "Classification task supports at most 512 tokens; input.max_tokens is a deployment budget"
     return None
 
 
@@ -173,7 +268,7 @@ def _deployment_error(name, deployment, external_names):
         device = deployment.get("device") or "cpu"
         if device != "cpu":
             parts = device.split(":")
-            allowed = {"migraphx"} if provider == "ort" else {"cuda", "metal"}
+            allowed = {"migraphx", "rocm"} if provider == "ort" else {"cuda", "metal"}
             if (
                 len(parts) != DEVICE_SELECTOR_PARTS
                 or parts[0] not in allowed
@@ -196,6 +291,26 @@ def _deployment_error(name, deployment, external_names):
             return f"Unknown external model '{deployment['external_model']}'"
     else:
         return f"Unsupported provider '{provider}'"
+    profile = deployment.get("custom_ops_profile") or "none"
+    if profile != "none" and (
+        profile != "ck_flash_attention"
+        or provider != "ort"
+        or not (deployment.get("device") or "cpu").startswith("rocm:")
+    ):
+        return "custom_ops_profile requires ck_flash_attention on an ORT rocm:index deployment"
+    cache_dir = deployment.get("compilation_cache_dir")
+    if cache_dir is not None and cache_dir != "":
+        if provider != "ort" or not (deployment.get("device") or "cpu").startswith(
+            "migraphx:"
+        ):
+            return "compilation_cache_dir requires an ORT migraphx:index deployment"
+        if (
+            not isinstance(cache_dir, str)
+            or cache_dir.strip() != cache_dir
+            or "\x00" in cache_dir
+            or not PurePosixPath(cache_dir).is_absolute()
+        ):
+            return "compilation_cache_dir must be an absolute, trimmed path without null bytes"
     budget = deployment.get("input") or {}
     if budget.get("max_tokens", 0) < 0:
         return "input.max_tokens must not be negative"

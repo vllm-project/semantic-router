@@ -83,6 +83,9 @@ func (request *RequestIR) compressionBlockAllowed(message *MessageIR, block *Tex
 	if message.Protection&(ProtectInstructions|ProtectAuthorization|ProtectSafety) != 0 {
 		return false
 	}
+	if request.allowCurrentUserTruncation && request.currentUserTextBlock(message, block) {
+		return true
+	}
 	// Enabling a history policy opts into the shared live-turn protection.
 	// With no new policy enabled, retain the legacy compression eligibility.
 	if request.Transformations.historyEnabled && block.Source == TargetHistory &&

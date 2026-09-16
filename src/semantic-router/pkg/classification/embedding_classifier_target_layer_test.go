@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -27,7 +28,7 @@ func TestEmbeddingClassifierPassesTargetLayerToBackend(t *testing.T) {
 		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
 	}
 
-	if _, err := classifier.computeEmbedding("query", "mmbert"); err != nil {
+	if _, err := classifier.computeEmbedding(context.Background(), "query", "mmbert"); err != nil {
 		t.Fatalf("computeEmbedding failed: %v", err)
 	}
 	if capturedLayer != 6 {

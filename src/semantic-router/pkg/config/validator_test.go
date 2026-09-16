@@ -101,7 +101,7 @@ func registerValidateConfigStructureCoreSpecs() {
 }
 
 func registerValidateConfigStructureCoreDispatchSpecs() {
-	It("skips everything in k8s mode", func() {
+	It("defers routing contracts until CRDs are available in k8s mode", func() {
 		cfg := &RouterConfig{
 			ConfigSource: ConfigSourceKubernetes,
 			IntelligentRouting: IntelligentRouting{
@@ -133,6 +133,7 @@ func registerValidateConfigStructureCoreDispatchSpecs() {
 	It("keeps the shared dispatch table wired for file and k8s validation", func() {
 		for _, validators := range [][]configContractValidator{
 			globalConfigContractValidators,
+			routingConfigContractValidators,
 			routingProfileContractValidators,
 		} {
 			Expect(validators).NotTo(BeEmpty())
@@ -862,7 +863,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 		Expect(err.Error()).To(ContainSubstring("algorithm.workflows.final.model references model \"final-a\" outside decision modelRefs"))
 	})
 
-	It("rejects dynamic workflows without planner model", func() {
+	It("accepts dynamic workflows with an assigned worker planner default", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{{
@@ -882,8 +883,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 		}
 
 		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.workflows: planner.model is required"))
+		Expect(err).NotTo(HaveOccurred())
 	})
 }
 

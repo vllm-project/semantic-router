@@ -285,6 +285,7 @@ class RecipeScopedProbeRuntimeTest(unittest.TestCase):
                 [],
                 {"schema_version": "v1"},
                 selected_probe_ids=["direct:baseline"],
+                scope="deployment",
             )
 
     def test_eval_parser_preserves_repeated_probe_id_order(self) -> None:

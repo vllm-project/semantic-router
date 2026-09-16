@@ -1,8 +1,13 @@
 import importlib
+import io
 import json
+import os
+import shlex
+import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import yaml
@@ -36,8 +41,34 @@ class RecipeConformanceTest(unittest.TestCase):
         # model assignments are composed by the Dashboard when a Mixture is
         # created, so the package itself stays model- and deployment-neutral.
         self.assertEqual(len(mom.entrypoints), 0)
-        self.assertEqual(len(mom.decisions), 27)
-        self.assertEqual(mom.variants, 235)
+        self.assertEqual(
+            set(mom.decisions),
+            {
+                "balance:simple",
+                "balance:medium",
+                "balance:reasoning",
+                "speed:fast",
+                "speed:tools",
+                "speed:reasoning",
+                "cost:economy",
+                "cost:tools",
+                "cost:reasoning",
+                "accuracy:simple",
+                "accuracy:reasoning",
+                "accuracy:review",
+                "accuracy:agent",
+                "vault:guard",
+                "vault:sensitive",
+                "vault:private",
+            },
+        )
+        self.assertEqual(len(mom.decisions), 16)
+        self.assertEqual(mom.variants, 307)
+        self.assertEqual(
+            mom.coverage["signals"]["by_family"]["classifier"]["asserted"],
+            ["classifier:content-risk"],
+        )
+        self.assertEqual(set(mom.algorithms), {"multi_factor", "fusion", "workflows"})
         self.assertTrue(mom.coverage["passed"])
 
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:
@@ -280,6 +311,142 @@ class RecipeConformanceTest(unittest.TestCase):
         }
         self.assertEqual(planned, {recipe.name for recipe in inventory})
 
+    def test_cpu_plan_keeps_complete_static_inventory_and_reports_hardware(
+        self,
+    ) -> None:
+        inventory = recipe_conformance.discover_inventory(
+            recipe_conformance.DEFAULT_RECIPE_ROOT
+        )
+        by_name = {recipe.name: recipe for recipe in inventory}
+        self.assertEqual(by_name["vela-amd"].required_devices, ("migraphx:0", "rocm:0"))
+        with tempfile.TemporaryDirectory() as directory:
+            args = recipe_conformance.build_parser().parse_args(
+                ["--output-dir", directory, "plan", "--shards", "3"]
+            )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(recipe_conformance.command_plan(args), 0)
+            matrix = json.loads(output.getvalue())
+            planned = {
+                name
+                for shard in matrix["include"]
+                for name in shard["recipes"].split(",")
+            }
+            self.assertEqual(planned, set(by_name) - {"vela-amd"})
+            receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
+            self.assertEqual(
+                receipt["excluded"],
+                [{"recipe": "vela-amd", "required_devices": ["migraphx:0", "rocm:0"]}],
+            )
+
+    def test_accelerator_requirements_follow_devices_not_recipe_names(self) -> None:
+        deployments = {
+            "local": {"provider": "candle", "device": "cpu"},
+            "remote": {"provider": "http"},
+            "gpu": {"provider": "candle", "device": "cuda:0"},
+            "other": {"provider": "ort", "device": "migraphx:2"},
+        }
+        config = {"global": {"model_catalog": {"deployments": deployments}}}
+        self.assertEqual(
+            recipe_conformance.configured_accelerators(config), ("cuda:0", "migraphx:2")
+        )
+        del deployments["gpu"]
+        del deployments["other"]
+        self.assertEqual(recipe_conformance.configured_accelerators(config), ())
+
+    def test_cpu_runner_rejects_hardware_before_any_stack_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / "mutated"
+            for name in ("vllm-sr", "docker"):
+                command = root / name
+                command.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 0\n")
+                command.chmod(0o755)
+            # Use this test process's Python, including its conformance dependencies.
+            python = root / "python3"
+            python.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n')
+            python.chmod(0o755)
+            env = {
+                **os.environ,
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "RECIPES": "accuracy,vela-amd",
+                "ROUTER_IMAGE": "cpu-test",
+            }
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(
+                        recipe_conformance.REPO_ROOT
+                        / "e2e/testing/run_recipe_conformance.sh"
+                    ),
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("requires explicit devices", result.stderr)
+            self.assertFalse(marker.exists(), result.stdout + result.stderr)
+        args = recipe_conformance.build_parser().parse_args(
+            ["check-cpu", "--recipes", "accuracy,knowledge"]
+        )
+        self.assertEqual(recipe_conformance.command_check_cpu(args), 0)
+
+    def test_hardware_requirement_is_not_a_runtime_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "inventory.json").write_text(
+                json.dumps(
+                    {
+                        "recipes": [
+                            {"name": "gpu", "required_devices": ["rocm:0"]},
+                            {"name": "cpu", "required_devices": []},
+                        ]
+                    }
+                )
+            )
+            report = recipe_conformance.build_consolidated_report(root)
+            self.assertEqual(report["summary"]["requires_hardware_recipes"], 1)
+            self.assertEqual(report["summary"]["passed_recipes"], 0)
+            self.assertEqual(report["summary"]["missing_recipes"], 1)
+            self.assertFalse(report["summary"]["passed"])
+            gpu = report["results"][0]
+            self.assertEqual(gpu["status"], "requires_hardware")
+            self.assertFalse(gpu["passed"])
+            self.assertEqual(gpu["total"], 0)
+
+    def test_cpu_success_does_not_complete_catalog_with_unrun_hardware(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "inventory.json").write_text(
+                json.dumps(
+                    {
+                        "recipes": [
+                            {"name": "gpu", "required_devices": ["rocm:0"]},
+                            {"name": "cpu", "required_devices": []},
+                        ]
+                    }
+                )
+            )
+            (root / "cpu").mkdir()
+            (root / "cpu/eval-report.json").write_text(
+                json.dumps(
+                    {
+                        "inventory": {"name": "cpu"},
+                        "evaluation": {"passed": True, "matched": 2, "total": 2},
+                    }
+                )
+            )
+            summary = recipe_conformance.build_consolidated_report(root)["summary"]
+            self.assertEqual(summary["passed_recipes"], 1)
+            self.assertEqual(summary["requires_hardware_recipes"], 1)
+            self.assertFalse(summary["complete"])
+            self.assertFalse(summary["passed"])
+            self.assertTrue(summary["cpu_compatible_complete"])
+            self.assertTrue(summary["cpu_compatible_passed"])
+
     def test_incomplete_recipe_directory_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             recipe = Path(tempdir) / "incomplete"
@@ -358,6 +525,50 @@ class RecipeConformanceTest(unittest.TestCase):
             [probe.model for probe in bound],
             ["vllm-sr/auto", "auto", "custom-auto", "vllm-sr/auto"],
         )
+
+    def test_portable_recipe_defaults_do_not_create_runtime_entrypoints(self) -> None:
+        config = {
+            "global": {"router": {"learning": {"enabled": True}}},
+            "recipes": [{"name": "balanced", "routing": {}}],
+        }
+        probes = [
+            recipe_conformance.Probe(
+                decision_id="route",
+                variant_id="portable",
+                probe_id="route:portable",
+                expected_decision="route",
+                expected_recipe="balanced",
+            )
+        ]
+
+        self.assertEqual(recipe_conformance.config_entrypoints(config), {})
+        self.assertIs(
+            recipe_conformance.bind_default_entrypoints(config, probes), probes
+        )
+        self.assertIsNone(probes[0].model)
+
+    def test_composed_recipe_keeps_runtime_entrypoint_coverage(self) -> None:
+        bundle = {
+            "global": {"router": {"learning": {"enabled": True}}},
+            "recipes": [{"name": "balanced", "routing": {}}],
+        }
+        for field, value in (
+            ("providers", {"models": [{"name": "backend"}]}),
+            ("routing", {"decisions": [{"name": "fallback"}]}),
+            ("entrypoints", [{"recipe": "balanced", "model_names": ["route"]}]),
+        ):
+            with self.subTest(field=field):
+                config = {**bundle, field: value}
+                entrypoints = recipe_conformance.config_entrypoints(config)
+                self.assertEqual(
+                    {
+                        name: entrypoints[name]
+                        for name in ("vllm-sr/auto", "auto", "MoM")
+                    },
+                    dict.fromkeys(("vllm-sr/auto", "auto", "MoM"), "default"),
+                )
+                if field == "entrypoints":
+                    self.assertEqual(entrypoints["route"], "balanced")
 
     def test_consolidated_report_marks_missing_recipes(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

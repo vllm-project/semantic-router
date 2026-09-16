@@ -56,7 +56,6 @@ static_resources:
                 route:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('1200s') }}
-                  idleTimeout: 1200s
                   {% if model.reliability.retry_count | default(0) > 0 %}
                   retry_policy:
                     retry_on: {{ model.reliability.retry_on | default('connect-failure,refused-stream') }}
@@ -153,13 +152,14 @@ static_resources:
               grpc_service:
                 envoy_grpc:
                   cluster_name: extproc_service
-                timeout: 1200s
               processing_mode:
                 request_header_mode: "SEND"
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
-              message_timeout: {{ listener.timeout | default('1200s') }}
+              # Unlike route/idle timeouts, zero expires immediately here.
+              # Bound each Router processing step independently of chat duration.
+              message_timeout: 1200s
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
