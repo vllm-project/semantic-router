@@ -14,6 +14,12 @@ multiple model endpoints through one canonical config or the Dashboard.
 
 Ports are configured in the selected config under the listeners section.
 
+Local startup waits up to 1800 seconds for Router readiness, or Dashboard
+readiness during first-run setup. Use --startup-timeout SECONDS for a different
+positive budget when model loading or GPU compilation needs more time.
+The wait begins after containers start. It does not change inference deadlines.
+Timeout exits the CLI with an error and leaves containers available for inspection.
+
 DEPLOYMENT TARGETS:
 
 \b
@@ -57,5 +63,6 @@ Examples:
   vllm-sr serve --log-level debug
   # AMD ROCm image, device passthrough, and router internal GPU defaults
   vllm-sr serve --platform amd
+  vllm-sr serve --platform amd --startup-timeout 7200
   VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 """

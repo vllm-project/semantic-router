@@ -14,7 +14,9 @@ class ModelRef(BaseModel):
     """Model reference in decision."""
 
     model: str
-    use_reasoning: bool | None = False
+    # Omission is not an authored false: runtime serialization must preserve
+    # the caller's choice and leave canonical defaulting to the Router.
+    use_reasoning: bool | None = None
     reasoning_description: str | None = None
     reasoning_mode: Literal["enabled", "disabled", "adaptive"] | None = None
     reasoning_effort: str | None = None  # Model-specific reasoning effort level.
@@ -437,6 +439,7 @@ class MultiFactorSelectionConfig(BaseModel):
     slo: MultiFactorSLOConfig | None = None
     quality: QualityEvidenceConfig | None = None
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
+    latency_metric: Literal["ttft", "tpot"] | None = None
     on_no_candidates: Literal["cheapest", "first", "fail"] | None = "cheapest"
 
     @model_validator(mode="after")

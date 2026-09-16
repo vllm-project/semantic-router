@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "e754075d1f11f729e985bf05b71114f5b807878f"
   source_file: "docs/tutorials/signal/learned/fact-check.md"
   outdated: false
 ---
@@ -53,3 +53,5 @@ routing:
 
 事实核查分类器通过 `global.model_catalog.modules.hallucination_mitigation.fact_check` 处理请求文本。它预测核验是否有用，并不核验主张。完整示例见：
 [`config/fragments/signal/fact-check/needs-verification.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/fact-check/needs-verification.yaml)。
+
+可达路由决策依赖此信号时，配置的模型必须初始化成功，否则 Router 启动失败。仅供独立诊断 API 使用的模型仍尽力初始化，不会因不可用而阻止无关路由。

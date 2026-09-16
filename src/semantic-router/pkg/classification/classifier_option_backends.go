@@ -62,7 +62,7 @@ func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *Ca
 		if variant == "" || variant == config.CategoryVariantCandle {
 			variant = "auto"
 		}
-		spec := b.models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, variant, config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU)
+		spec := b.models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, variant, config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU, b.cfg.CategoryModel.MaxSequenceLength)
 		var labels []string
 		if categoryMapping != nil {
 			labels = indexedNativeLabels(categoryMapping.IdxToCategory)
@@ -72,6 +72,9 @@ func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *Ca
 		return nil
 	}
 	categoryInitializer, categoryInference := categoryDependenciesForVariant(variant)
+	if native, ok := categoryInitializer.(*MmBERT32KCategoryInitializerImpl); ok {
+		native.maxSequenceLength = b.cfg.CategoryModel.MaxSequenceLength
+	}
 	b.options = append(b.options, withCategory(categoryMapping, categoryInitializer, categoryInference))
 	return nil
 }
@@ -108,12 +111,20 @@ func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 }
 
 func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *JailbreakMapping, models ...*classifierModelRuntime) (JailbreakInitializer, SequenceClassifierBackend, error) {
+	if cfg.PromptGuard.Window != nil {
+		if jailbreakMapping == nil {
+			// No reachable model consumer loaded a mapping for this recipe.
+			return nil, nil, nil
+		}
+		backend, err := newWindowedJailbreakBackend(cfg.PromptGuard, jailbreakMapping, models...)
+		return backend, backend, err
+	}
 	if len(models) > 0 && cfg.PromptGuard.Protocol == "" && cfg.PromptGuard.Backend == nil {
 		adapter := cfg.PromptGuard.Variant
 		if adapter == "" || adapter == config.PromptGuardVariantCandle {
 			adapter = "auto"
 		}
-		spec := models[0].localSpec("prompt_guard", cfg.PromptGuard.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU)
+		spec := models[0].localSpec("prompt_guard", cfg.PromptGuard.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU, cfg.PromptGuard.MaxSequenceLength)
 		var labels []string
 		if jailbreakMapping != nil {
 			labels = indexedNativeLabels(jailbreakMapping.IdxToLabel)
@@ -131,13 +142,20 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 	}
 	switch cfg.PromptGuard.Variant {
 	case config.PromptGuardVariantMmBERT32K:
-		return createMmBERT32KJailbreakInitializer(), jailbreakInference, nil
+		return &MmBERT32KJailbreakInitializerImpl{maxSequenceLength: cfg.PromptGuard.MaxSequenceLength}, jailbreakInference, nil
 	default:
 		return createJailbreakInitializer(), jailbreakInference, nil
 	}
 }
 
 func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, models ...*classifierModelRuntime) (PIIInitializer, PIIInference, error) {
+	if cfg.PIIModel.Window != nil {
+		backend, err := newWindowedPIIBackend(cfg.PIIModel, piiMapping, models...)
+		if err != nil {
+			return nil, nil, err
+		}
+		return backend, backend, nil
+	}
 	if cfg.PIIModel.Backend != nil {
 		if piiMapping == nil {
 			// The mapping loader is skipped on purpose when no reachable routing
@@ -186,7 +204,7 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 		if cfg.PIIModel.UseMmBERT32K {
 			adapter = "mmbert32k"
 		}
-		spec := models[0].localSpec("pii_classifier", cfg.PIIModel.ModelID, adapter, config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU)
+		spec := models[0].localSpec("pii_classifier", cfg.PIIModel.ModelID, adapter, config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU, cfg.PIIModel.MaxSequenceLength)
 		var labels []string
 		if piiMapping != nil {
 			labels = indexedNativeLabels(piiMapping.IdxToLabel)
@@ -198,7 +216,7 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 		logging.ComponentEvent("classifier", "pii_detector_backend_selected", map[string]interface{}{
 			"backend": "mmbert_32k",
 		})
-		return createMmBERT32KPIIInitializer(), createMmBERT32KPIIInference(), nil
+		return &MmBERT32KPIIInitializerImpl{maxSequenceLength: cfg.PIIModel.MaxSequenceLength}, createMmBERT32KPIIInference(), nil
 	}
 	return createPIIInitializer(), createPIIInference(), nil
 }

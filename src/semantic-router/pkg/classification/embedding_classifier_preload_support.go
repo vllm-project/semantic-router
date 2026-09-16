@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"strings"
@@ -29,12 +30,12 @@ func (c *EmbeddingClassifier) WarmupCandidateEmbeddings() error {
 		})
 		return nil
 	}
-	return c.ensureCandidateEmbeddings()
+	return c.ensureCandidateEmbeddings(context.Background())
 }
 
 // preloadCandidateEmbeddings computes embeddings for all unique candidates across all rules.
 // Uses concurrent processing for better performance.
-func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
+func (c *EmbeddingClassifier) preloadCandidateEmbeddings(ctx context.Context) error {
 	startTime := time.Now()
 	candidates := c.collectUniqueCandidates()
 	if len(candidates) == 0 {
@@ -53,7 +54,7 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 
 	numWorkers := c.preloadWorkerCount(len(candidates))
 	candidateEmbeddings, successCount, firstError := c.collectCandidateEmbeddingResults(
-		c.startCandidateEmbeddingWorkers(candidates, modelType, numWorkers),
+		c.startCandidateEmbeddingWorkers(ctx, candidates, modelType, numWorkers),
 	)
 
 	elapsed := time.Since(startTime)
@@ -105,6 +106,7 @@ func (c *EmbeddingClassifier) preloadWorkerCount(candidateCount int) int {
 }
 
 func (c *EmbeddingClassifier) startCandidateEmbeddingWorkers(
+	ctx context.Context,
 	candidates []string,
 	modelType string,
 	numWorkers int,
@@ -123,7 +125,7 @@ func (c *EmbeddingClassifier) startCandidateEmbeddingWorkers(
 		go func() {
 			defer wg.Done()
 			for candidate := range candidateChan {
-				embedding, err := c.computeEmbedding(candidate, modelType, "preload")
+				embedding, err := c.computeEmbedding(ctx, candidate, modelType, "preload")
 				if err != nil {
 					resultChan <- embeddingPreloadResult{candidate: candidate, err: err}
 					continue

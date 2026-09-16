@@ -153,13 +153,13 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   SIGNAL keyword unified_balance_reasoning_markers {
     operator: "OR"
-    keywords: ["analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "consistency tradeoffs", "competing production failure", "分析取舍", "第一性原理", "根因分析", "逐步推理", "取舍", "根因", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "トレードオフ", "根本原因", "トレードオフを分析", "根本原因と", "kompromisse analysieren"]
+    keywords: ["\\bprove\\b", "\\bproof\\b", "formal derivation", "严格证明", "数学证明", "analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "consistency tradeoffs", "competing production failure", "分析取舍", "第一性原理", "根因分析", "逐步推理", "取舍", "根因", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "トレードオフ", "根本原因", "トレードオフを分析", "根本原因と", "kompromisse analysieren"]
     method: "regex"
   }
 
   SIGNAL keyword unified_balance_verification_markers {
     operator: "OR"
-    keywords: ["verify the answer", "cite sources", "fact-check", "check the evidence", "provide evidence", "核实答案", "引用来源", "检查证据", "verificar la respuesta", "citer les sources", "答えを検証", "quellen zitieren"]
+    keywords: ["\\bverify\\b", "\\bcite\\b", "\\bcitations?\\b", "verify the answer", "cite sources", "fact-check", "check the evidence", "provide evidence", "核实答案", "引用来源", "检查证据", "verificar la respuesta", "citer les sources", "答えを検証", "quellen zitieren"]
     method: "regex"
   }
 
@@ -240,7 +240,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   PROJECTION score unified_balance_effort_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "keyword", weight: -0.1, name: "unified_balance_terse_markers", value_source: "confidence" }, { type: "keyword", weight: -1, name: "unified_balance_negated_reasoning", value_source: "confidence" }, { type: "keyword", weight: 0.85, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.45, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.05, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
+    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "keyword", weight: -0.1, name: "unified_balance_terse_markers", value_source: "confidence" }, { type: "keyword", weight: -1, name: "unified_balance_negated_reasoning", value_source: "confidence" }, { type: "keyword", weight: 0.85, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.1, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.05, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
   }
 
   PROJECTION mapping unified_balance_effort_band {
@@ -830,6 +830,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
 
   SIGNAL pii unified_privacy_pii_strict {
     threshold: 0.7
+    pii_types_allowed: ["GPE"]
     description: "Detect personally identifiable information that must remain local."
   }
 

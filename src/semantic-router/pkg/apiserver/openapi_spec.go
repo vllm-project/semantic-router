@@ -46,7 +46,7 @@ func newOpenAPISpec() OpenAPISpec {
 		Paths: make(map[string]OpenAPIPath),
 		Components: OpenAPIComponents{
 			SecuritySchemes: map[string]OpenAPISecurityScheme{
-				"bearerAuth": {
+				"bearerAuth": { // #nosec G101 -- OpenAPI security scheme metadata, not a credential.
 					Type:         "http",
 					Scheme:       "bearer",
 					BearerFormat: "opaque management token",
@@ -84,6 +84,11 @@ func buildOpenAPIOperation(route apiRoute) *OpenAPIOperation {
 		operation.RequestBody = buildOpenAPIRequestBody(route.RequestBody)
 	}
 	addKnowledgeBaseActivationResponses(route, operation)
+	if route.Path == apiRoutingPreviewPath && route.Method == http.MethodPost {
+		operation.Responses["429"] = openAPIErrorResponse("Preview inference capacity is occupied, including workers still finishing after timeout")
+		operation.Responses["503"] = openAPIObjectResponse("Decision unresolved, inference canceled, or API server shutting down")
+		operation.Responses["504"] = openAPIErrorResponse("REQUEST_TIMEOUT: configured routing Preview request deadline exceeded")
+	}
 
 	return operation
 }

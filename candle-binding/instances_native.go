@@ -12,6 +12,7 @@ extern char* candle_instance_guard(uint64_t, const char*, const char*);
 extern char* candle_instance_generative(uint64_t, const char*, const char*, const char*, bool);
 extern char* candle_instance_load_backbone(const char*);
 extern char* candle_instance_load_sequence(const char*);
+extern char* candle_instance_load_label_scores(const char*);
 extern char* candle_instance_load_token(const char*);
 extern char* candle_instance_load_nli(const char*);
 extern char* candle_instance_load_hallucination(const char*);
@@ -25,6 +26,7 @@ extern char* candle_instance_tokens(uint64_t, const char*);
 extern char* candle_instance_nli(uint64_t, const char*, const char*);
 extern char* candle_instance_hallucination(uint64_t, const char*, const char*, const char*, float);
 extern char* candle_instance_embedding(uint64_t, const char*, size_t, size_t);
+extern char* candle_instance_embedding_descriptor(uint64_t, size_t, size_t);
 extern char* candle_instance_image(uint64_t, const uint8_t*, size_t, size_t);
 extern char* candle_instance_audio(uint64_t, const float*, size_t, size_t, size_t, size_t);
 extern void candle_instance_free_string(char*);
@@ -94,6 +96,8 @@ func nativeInstanceLoad(options InstanceOptions, task string) (uint64, error) {
 		result = C.candle_instance_load_generative(args[0])
 	case "sequence":
 		result = C.candle_instance_load_sequence(args[0])
+	case "label_scores":
+		result = C.candle_instance_load_label_scores(args[0])
 	case "token":
 		result = C.candle_instance_load_token(args[0])
 	case "nli":
@@ -119,6 +123,14 @@ func nativeInstanceClone(handle uint64) (uint64, error) {
 
 func nativeInstanceInfo(handle uint64) (InstanceInfo, error) {
 	return decodeInstanceResult[InstanceInfo](C.candle_instance_info(C.uint64_t(handle)))
+}
+
+func nativeInstanceEmbeddingDescriptor(handle uint64, layer, dimension int) (string, error) {
+	raw, err := decodeInstanceResult[json.RawMessage](C.candle_instance_embedding_descriptor(C.uint64_t(handle), C.size_t(layer), C.size_t(dimension)))
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func nativeInstanceBindHead(handle uint64, path, task string) (uint64, error) {

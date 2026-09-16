@@ -52,7 +52,7 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 	}
 
 	for _, decision := range cfg.AllRoutingDecisions() {
-		if decision.HasPlugin("memory") {
+		if memoryConfig := decision.GetMemoryConfig(); memoryConfig != nil && memoryConfig.Enabled {
 			logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
 			return true
 		}
@@ -64,6 +64,11 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 // createMemoryStore creates a memory store based on configuration.
 // Switches on cfg.Memory.Backend: "valkey" creates a ValkeyStore, "milvus" (or empty) creates a MilvusStore.
 func createMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
+	bound, bindErr := bindMemoryEmbedding(cfg, sets...)
+	if bindErr != nil {
+		return nil, bindErr
+	}
+	cfg = bound
 	backend := cfg.Memory.Backend
 	if backend == "" {
 		backend = "milvus"
