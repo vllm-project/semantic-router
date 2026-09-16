@@ -87,6 +87,33 @@ func TestProviderPromptCacheUsagePreservesBufferedFieldPresence(t *testing.T) {
 	}
 }
 
+func TestProviderPromptCacheUsageRejectsKnownSubtotalAboveTotal(t *testing.T) {
+	tests := []struct {
+		name   string
+		format llmprotocol.WireFormat
+		body   []byte
+	}{
+		{
+			name:   "chat",
+			format: llmprotocol.OpenAIChatV1,
+			body:   chatCacheUsageBody(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":5},"completion_tokens":2,"total_tokens":6}`),
+		},
+		{
+			name:   "responses",
+			format: llmprotocol.OpenAIResponsesV1,
+			body:   responsesCacheUsageBody(`{"input_tokens":4,"input_tokens_details":{"cached_tokens":5},"output_tokens":2,"total_tokens":6}`),
+		},
+	}
+
+	engine := NewBuiltinEngine()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, _, err := engine.DecodeResponse(test.format, test.body)
+			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "usage_total_mismatch")
+		})
+	}
+}
+
 func TestProviderPromptCacheUsagePreservesStreamingFieldPresence(t *testing.T) {
 	one := int64(1)
 	zero := int64(0)

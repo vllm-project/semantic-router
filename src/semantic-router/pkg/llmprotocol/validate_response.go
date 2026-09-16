@@ -306,7 +306,7 @@ func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 		return true, false
 	}
 	if !complete {
-		return true, false
+		return sum <= *total.Value, false
 	}
 	return !found || *total.Value == sum, false
 }
