@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -77,7 +78,7 @@ func decodeProtectionCorpus(raw []byte) (protectionCorpus, error) {
 	if err := decoder.Decode(&corpus); err != nil {
 		return corpus, err
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return corpus, fmt.Errorf("corpus must contain exactly one YAML document")
 	}
 	if corpus.Schema != "agent-routing-protection.v1" || len(corpus.Scenarios) == 0 || len(corpus.MissingCoverage) == 0 {

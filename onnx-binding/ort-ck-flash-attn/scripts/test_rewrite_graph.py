@@ -16,6 +16,7 @@ from rewrite_graph import (
     attention_window,
     build_maps,
     find_attention_blocks,
+    fp32_head_initializers,
     output_precision_conflict,
     rewrite,
     rotary_fp32_initializers,
@@ -35,6 +36,41 @@ def graph_with_weights(*weights):
 
 
 class WeightPrecision(unittest.TestCase):
+    def test_explicit_fp32_head_exemption_follows_dataflow(self):
+        graph = graph_with_weights(
+            ("encoder", np.ones((2, 2), np.float16)),
+            ("head", np.ones((2, 2), np.float32)),
+            ("head_scale", np.array(0.5, np.float32)),
+        )
+        graph.node.extend(
+            [
+                helper.make_node("MatMul", ["x", "encoder"], ["qkv"]),
+                helper.make_node("Identity", ["qkv"], ["attention"]),
+                helper.make_node("Cast", ["attention"], ["hidden"], to=1),
+                helper.make_node("MatMul", ["hidden", "head"], ["logit"]),
+                helper.make_node("Mul", ["logit", "head_scale"], ["scores"]),
+            ]
+        )
+        del graph.output[:]
+        graph.output.append(
+            helper.make_tensor_value_info("scores", TensorProto.FLOAT, [1, 2])
+        )
+        blocks = [{"output_tensor": "attention"}]
+        maps, _ = build_maps(graph)
+        exempt = fp32_head_initializers(graph, maps, blocks)
+        self.assertEqual(exempt, {"head", "head_scale"})
+        self.assertEqual(
+            weight_precision(graph.initializer, head_constants=exempt),
+            TensorProto.FLOAT16,
+        )
+        # A reused head-looking weight inside the encoder cannot be exempted.
+        graph.node[0].input[1] = "head"
+        maps, _ = build_maps(graph)
+        exempt = fp32_head_initializers(graph, maps, blocks)
+        self.assertNotIn("head", exempt)
+        with self.assertRaisesRegex(ValueError, "mixes weight precisions"):
+            weight_precision(graph.initializer, head_constants=exempt)
+
     def test_fp16_weights_read_as_fp16_without_value_info(self):
         graph = graph_with_weights(
             ("w1", np.zeros((2, 2), np.float16)),
@@ -110,7 +146,46 @@ def graph_with_fp32_rotary_constant():
     return graph
 
 
+def graph_with_position_input_and_yarn(scale=1.1386294):
+    """The explicit position input and shared attention factor in HF exports."""
+    graph = graph_with_fp32_rotary_constant()
+    del graph.node[0]  # The input supplies the positions formerly produced by Range.
+    graph.input.append(
+        helper.make_tensor_value_info("position_ids", TensorProto.INT64, [1, "seq"])
+    )
+    graph.node[0].input[0] = "position_ids"
+    axes = next(t for t in graph.initializer if t.name == "axes")
+    axes.CopyFrom(numpy_helper.from_array(np.array([1], np.int64), "axes"))
+    if scale is not None:
+        graph.initializer.append(
+            numpy_helper.from_array(np.array(scale, np.float32), "attention_factor")
+        )
+    # Independent branches may be ordered differently from their trig producers.
+    casts = [node for node in graph.node if node.output[0] in {"sin_half", "cos_half"}]
+    del graph.node[-2:]
+    for cast in reversed(casts):
+        if scale is not None:
+            original = cast.input[0]
+            scaled = original + "_scaled"
+            graph.node.append(
+                helper.make_node("Mul", ["attention_factor", original], [scaled])
+            )
+            cast.input[0] = scaled
+        graph.node.append(cast)
+    for index, node in enumerate(graph.node):
+        node.name = f"unrelated_{index}"
+    return graph
+
+
 class RotaryPrecision(unittest.TestCase):
+    def assert_island_refused(self, graph):
+        before = graph.SerializeToString()
+        exempt = rotary_fp32_initializers(graph, build_maps(graph)[0])
+        self.assertEqual(exempt, set())
+        with self.assertRaisesRegex(ValueError, "mixes weight precisions"):
+            weight_precision(graph.initializer, position_constants=exempt)
+        self.assertEqual(before, graph.SerializeToString())
+
     def test_fp32_rotary_island_is_preserved_but_not_counted_as_weight(self):
         graph = graph_with_fp32_rotary_constant()
         before = graph.SerializeToString()
@@ -143,6 +218,114 @@ class RotaryPrecision(unittest.TestCase):
             self.assertEqual(
                 rotary_fp32_initializers(graph, build_maps(graph)[0]), set()
             )
+
+    def test_position_input_and_shared_yarn_scale_preserve_all_bytes(self):
+        graph = graph_with_position_input_and_yarn()
+        before = graph.SerializeToString()
+        exempt = rotary_fp32_initializers(graph, build_maps(graph)[0])
+        self.assertEqual(exempt, {"frequencies", "attention_factor"})
+        self.assertEqual(
+            weight_precision(graph.initializer, position_constants=exempt),
+            TensorProto.FLOAT16,
+        )
+        self.assertEqual(before, graph.SerializeToString())
+
+    def test_position_input_without_yarn_and_legacy_range_with_yarn(self):
+        plain = graph_with_position_input_and_yarn(None)
+        scaled = graph_with_position_input_and_yarn()
+        plain.input[-1].type.tensor_type.shape.dim[1].dim_value = 64
+        self.assertEqual(
+            rotary_fp32_initializers(plain, build_maps(plain)[0]), {"frequencies"}
+        )
+        scaled.node.insert(
+            0, helper.make_node("Range", ["start", "length", "step"], ["position_ids"])
+        )
+        axes = next(t for t in scaled.initializer if t.name == "axes")
+        axes.CopyFrom(numpy_helper.from_array(np.array([0, 1], np.int64), "axes"))
+        del scaled.input[-1]
+        self.assertEqual(
+            rotary_fp32_initializers(scaled, build_maps(scaled)[0]),
+            {"frequencies", "attention_factor"},
+        )
+
+    def test_position_input_requires_declared_int64_singleton_batch(self):
+        variants = (
+            ("other", TensorProto.INT64, [1, "seq"]),
+            ("position_ids", TensorProto.FLOAT, [1, "seq"]),
+            ("position_ids", TensorProto.INT64, ["seq"]),
+            ("position_ids", TensorProto.INT64, ["batch", "seq"]),
+            ("position_ids", TensorProto.INT64, [2, "seq"]),
+            ("position_ids", TensorProto.INT64, [1, None]),
+        )
+        for name, dtype, shape in variants:
+            with self.subTest(name=name, dtype=dtype, shape=shape):
+                graph = graph_with_position_input_and_yarn()
+                graph.input[-1].CopyFrom(
+                    helper.make_tensor_value_info(name, dtype, shape)
+                )
+                graph.node[0].input[0] = name
+                self.assert_island_refused(graph)
+
+    def test_yarn_scale_must_be_positive_finite_scalar(self):
+        for value in (0, -1, float("nan"), float("inf"), [1, 2]):
+            with self.subTest(value=value):
+                self.assert_island_refused(graph_with_position_input_and_yarn(value))
+
+    def test_yarn_scale_must_be_same_constant_for_both_branches(self):
+        for variant in ("different_constant", "one_branch", "input"):
+            with self.subTest(variant=variant):
+                graph = graph_with_position_input_and_yarn()
+                multiply = next(node for node in graph.node if node.op_type == "Mul")
+                if variant == "different_constant":
+                    graph.initializer.append(
+                        numpy_helper.from_array(
+                            np.array(1.2, np.float32), "other_factor"
+                        )
+                    )
+                    multiply.input[0] = "other_factor"
+                elif variant == "one_branch":
+                    cast = next(
+                        node
+                        for node in graph.node
+                        if node.input[0] == multiply.output[0]
+                    )
+                    cast.input[0] = multiply.input[1]
+                    graph.node.remove(multiply)
+                else:
+                    graph.input.append(
+                        helper.make_tensor_value_info(
+                            "attention_factor", TensorProto.FLOAT, []
+                        )
+                    )
+                self.assert_island_refused(graph)
+
+    def test_new_rotary_path_refuses_extra_consumers_and_graph_outputs(self):
+        for name in (
+            "frequencies",
+            "angles",
+            "angles_t",
+            "angles_cat",
+            "sin",
+            "sin_scaled",
+            "attention_factor",
+        ):
+            for variant in ("consumer", "graph_output"):
+                with self.subTest(name=name, variant=variant):
+                    graph = graph_with_position_input_and_yarn()
+                    if variant == "consumer":
+                        graph.node.append(
+                            helper.make_node("Identity", [name], ["leaked"])
+                        )
+                    else:
+                        graph.output.append(
+                            helper.make_tensor_value_info(name, TensorProto.FLOAT, None)
+                        )
+                    self.assert_island_refused(graph)
+
+    def test_scaled_rotary_path_requires_fp16_output(self):
+        graph = graph_with_position_input_and_yarn()
+        graph.node[-1].attribute[0].i = TensorProto.FLOAT
+        self.assert_island_refused(graph)
 
 
 class OutputPrecisionConflict(unittest.TestCase):

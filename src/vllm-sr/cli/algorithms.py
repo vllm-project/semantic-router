@@ -439,6 +439,7 @@ class MultiFactorSelectionConfig(BaseModel):
     slo: MultiFactorSLOConfig | None = None
     quality: QualityEvidenceConfig | None = None
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
+    latency_metric: Literal["ttft", "tpot"] | None = None
     on_no_candidates: Literal["cheapest", "first", "fail"] | None = "cheapest"
 
     @model_validator(mode="after")

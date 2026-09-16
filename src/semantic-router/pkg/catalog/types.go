@@ -261,7 +261,7 @@ type LoRAAdapter struct {
 type ModelVerification struct {
 	Authority   string `json:"authority" yaml:"authority"`
 	Status      string `json:"status" yaml:"status"`
-	VerifiedAt  string `json:"verified_at" yaml:"verified_at,omitempty"`
+	VerifiedAt  string `json:"verified_at,omitempty" yaml:"verified_at,omitempty"`
 	Source      string `json:"source,omitempty" yaml:"source,omitempty"`
 	AssetSHA256 string `json:"asset_sha256,omitempty" yaml:"asset_sha256,omitempty"`
 }
@@ -294,7 +294,7 @@ type ModelCard struct {
 	ReleasedAt      string               `json:"released_at,omitempty"`
 	KnowledgeCutoff string               `json:"knowledge_cutoff,omitempty"`
 	Lifecycle       string               `json:"lifecycle"`
-	Limits          ModelLimits          `json:"limits,omitempty"`
+	Limits          ModelLimits          `json:"limits,omitzero"`
 	Capabilities    []string             `json:"capabilities"`
 	Modalities      Modalities           `json:"modalities"`
 	ReasoningFamily string               `json:"reasoning_family,omitempty"`

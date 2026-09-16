@@ -154,6 +154,7 @@ func TestBuildHybridSelectionConfigMergesDecisionOverrides(t *testing.T) {
 func TestBuildMultiFactorSelectionConfigCopiesQualityEvidencePolicy(t *testing.T) {
 	minimumScore := 40.0
 	got := buildMultiFactorSelectionConfig(&config.MultiFactorSelectionConfig{
+		LatencyMetric: "ttft",
 		Objective: &config.MultiFactorObjectiveConfig{
 			Strategy: config.MultiFactorObjectiveLexicographic,
 			Priorities: []config.MultiFactorPriorityConfig{
@@ -169,6 +170,7 @@ func TestBuildMultiFactorSelectionConfigCopiesQualityEvidencePolicy(t *testing.T
 		},
 	})
 	assertString(t, got.QualityIndex, "vllm-sr/agentic@1.0.0", "multi_factor.quality.index")
+	assertString(t, got.LatencyMetric, "ttft", "multi_factor.latency_metric")
 	assertString(t, got.QualityOnMissing, "exclude", "multi_factor.quality.on_missing")
 	assertFloat(t, got.QualityMinCoverage, 0.8, "multi_factor.quality.min_coverage")
 	if got.QualityMinScore == nil {

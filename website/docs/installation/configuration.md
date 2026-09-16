@@ -153,6 +153,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `pii` — learned signal | `pii` detects sensitive personal data in requests. | [`config/fragments/signal/pii/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/pii/) | [Guide](../tutorials/signal/learned/pii) |
 | `preference` — learned signal | `preference` infers response-style preferences from examples and classifier settings. | [`config/fragments/signal/preference/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/preference/) | [Guide](../tutorials/signal/learned/preference) |
 | `reask` — learned signal | `reask` detects when the current user turn semantically repeats recent user turns in the same conversation. | [`config/fragments/signal/reask/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/reask/) | [Guide](../tutorials/signal/learned/reask) |
+| `safety` — learned signal | The `safety` signal predicts content risks. | [`config/fragments/signal/safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/safety/) | [Guide](../tutorials/signal/learned/safety) |
 | `structure` — heuristic signal | `structure` detects request-shape facts such as many explicit questions, ordered workflow markers, or dense constraint phrasing. | [`config/fragments/signal/structure/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/structure/) | [Guide](../tutorials/signal/heuristic/structure) |
 | `user-feedback` — learned signal | `user-feedback` detects correction, dissatisfaction, or escalation feedback from the conversation. | [`config/fragments/signal/user-feedback/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/user-feedback/) | [Guide](../tutorials/signal/learned/user-feedback) |
 
@@ -354,6 +355,58 @@ for built-in virtual models, CLI serving, backend binding, forking, packaging,
 and migration. See
 [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
+
+### Recipe-wide candidate and replay policies
+
+Set these independently optional policies inside the default or a named recipe's
+`routing` block:
+
+```yaml
+candidate_requirements:
+  capabilities: declared
+  context: known_limits
+data_policy:
+  replay: false
+```
+
+`capabilities: declared` requires the assigned model to declare support for the
+request's task, including tools and image input, as well as a compatible provider
+protocol. `context: known_limits` checks estimated input demand plus the effective
+output reserve against declared model limits. The request must supply an output
+bound, or its decision must configure a positive `request_params.default_max_tokens`.
+That default applies only when the caller omits the bound; `max_tokens_limit` then
+caps it as usual. A model's maximum output capacity is not a request default.
+Missing required model facts or an effective output bound make a candidate ineligible. Input accounting remains estimated, especially for
+multimodal content; this is not an exact provider token-capacity guarantee. Omit a
+field to retain that dimension's existing compatibility behavior.
+
+For example, a decision can supply the bound through its existing plugin:
+
+```yaml
+plugins:
+  - type: request_params
+    configuration:
+      default_max_tokens: 4096
+      max_tokens_limit: 8192
+```
+
+A recipe's `replay: false` prevents router replay capture even if a decision tries
+to enable it, including requests rejected before a decision is available. Absent
+or true adds no restriction to the existing global and decision configuration.
+This field does not control other stores, logs, or backend retention. Operators
+must assign deployments that meet their privacy requirements.
+
+For multi-factor selection, `latency_metric: ttft` compares time to first token;
+`tpot` compares time per output token. Omission preserves the existing TPOT-then-TTFT
+fallback. Pair the metric with explicit quality evidence and a lexicographic
+objective when quality is a floor rather than a score to trade away.
+
+Discover the current contract with
+`vllm-sr config schema --section routing.candidate_requirements` and
+`vllm-sr config schema --section routing.data_policy`.
+DSL `ROUTING` blocks support the same objects. Kubernetes CRD emission preserves
+these policies for the default routing profile; named recipes and entrypoints
+require canonical YAML and are rejected by CRD emission rather than discarded.
 
 ## Provider reliability
 

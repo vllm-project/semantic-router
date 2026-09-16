@@ -147,4 +147,29 @@ func Identity(provider Provider) string {
 	}
 	return fmt.Sprintf("%T:%p", provider, provider)
 }
-func (p *providerView) CacheIdentity() string { return Identity(p.Provider) }
+
+// Option identities are separate from physical resource identities: two views
+// may share one model while producing incompatible vectors.
+type OptionCacheIdentifiable interface{ CacheIdentityForOptions(Options) string }
+
+func (p *providerView) CacheIdentity() string {
+	if identified, ok := p.Provider.(OptionCacheIdentifiable); ok {
+		return identified.CacheIdentityForOptions(p.options)
+	}
+	return fmt.Sprintf("%s:layer=%d:dimension=%d", Identity(p.Provider), p.options.Layer, p.options.Dimension)
+}
+
+func (p *providerView) CacheIdentityForOptions(options Options) string {
+	if identified, ok := p.Provider.(OptionCacheIdentifiable); ok {
+		return identified.CacheIdentityForOptions(options)
+	}
+	return fmt.Sprintf("%s:layer=%d:dimension=%d", Identity(p.Provider), options.Layer, options.Dimension)
+}
+
+func (p *providerView) RepresentationIdentity(options Options, inputPolicy string) (ContentIdentity, error) {
+	owned, ok := p.Provider.(RepresentationProvider)
+	if !ok {
+		return ContentIdentity{}, ErrIdentityUnsupported
+	}
+	return owned.RepresentationIdentity(options, inputPolicy)
+}

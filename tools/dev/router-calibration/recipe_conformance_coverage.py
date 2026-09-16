@@ -6,6 +6,7 @@ from collections import Counter
 from typing import Any
 
 from router_calibration_probe import Probe
+from router_calibration_signal_values import signal_value_reference
 
 SIGNAL_RESPONSE_TYPES = {
     "keywords": "keywords",
@@ -99,6 +100,13 @@ def collect_coverage(
     tag_counts: Counter[str] = Counter()
     for probe in probes:
         recipe = _probe_recipe(probe, entrypoints)
+        # Raw evidence counts only after resolving its rule in this recipe.
+        # Runtime evaluation separately requires the observed finite value.
+        local_signals = configured_signal_names(profiles.get(recipe, {}))
+        asserted_signals.update(
+            _signal_key(*signal_value_reference(key, local_signals))
+            for key in probe.expected_signal_values
+        )
         decision_key = _decision_key(recipe, probe.expected_decision)
         asserted_decisions.add(decision_key)
         asserted_signals.update(
@@ -293,6 +301,11 @@ def _configured_algorithms(
             str(_mapping(decision.get("algorithm")).get("type") or "static"),
         )
         for (recipe, name), decision in decisions.items()
+        if _mapping(decision.get("algorithm"))
+        or not any(
+            _mapping(plugin).get("type") == "fast_response"
+            for plugin in _sequence(decision.get("plugins"))
+        )
     }
 
 
@@ -361,6 +374,10 @@ def _decision_surface_key(recipe: str, decision: str, surface: str) -> str:
 
 
 def _signal_key(signal_type: str, name: str) -> str:
+    # Complexity and independent classifier outcomes carry a label suffix;
+    # coverage counts the configured rule. Outcome matching stays label-exact.
+    if signal_type in {"complexity", "classifier"}:
+        name = name.split(":", 1)[0]
     return f"{signal_type}:{name}"
 
 

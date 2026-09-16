@@ -2,7 +2,7 @@
 title: 配置工作流
 description: 选择 CLI、控制面板、Helm、Operator 和 DSL 如何编写并应用同一份 canonical Router 配置。
 translation:
-  source_commit: "291c084f11ecdc1a56ccc932255ce3babacf19b9"
+  source_commit: "8ded1a3c28a4af8358c8d638955b0318caeb8ed4"
   source_file: "docs/installation/configuration-workflows.md"
   outdated: false
 ---
@@ -21,7 +21,7 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-`config init` 写入打包的最小 canonical 模板，并且除非显式指定 `--force`，否则拒绝替换现有文件。当 Router 已经在运行时，从 `vllm-sr config get` 开始，以便保留不相关的活动设置。仅当同一模型名称出现在 `providers.models`、`routing.modelCards` 和适用决策的 `modelRefs` 中时，该模型才成为路由候选。
+`config init` 写入打包的最小 canonical 模板，并且除非显式指定 `--force`，否则拒绝替换现有文件。当 Router 已经在运行时，从 `vllm-sr config get` 开始，以便保留不相关的活动设置。在 `providers.models` 中声明物理模型，并在适用决策的 `modelRefs` 中引用其名称。命名配方的决策位于 `recipes[].routing.decisions`；可复用的内置配方在发布入口点时接收模型分配。可选模型元数据统一保留在顶层 `routing.modelCards`，并根据所选算法或能力补充上下文限制、LoRA 适配器等必需信息。
 
 本地运行时在运行时拥有的状态中派生栈专用服务地址，而不会重写源文件。同一运行时和栈的并发 `serve` 和 `stop` 操作会串行化；在活动生命周期操作完成后重试。
 
