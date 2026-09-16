@@ -58,7 +58,9 @@
 // explicitly, because a mean rule is scored without the blend and the report
 // would then record semantics the run did not use.
 //
-// Build/run (needs the candle lib + the multimodal model):
+// Build/run (needs every native binding built by `make rust-ci` on the
+// library path, since the router module links all of them, plus the
+// multimodal model):
 //
 //	hf download llm-semantic-router/multi-modal-embed-small \
 //	  config.json model.safetensors tokenizer.json tokenizer_config.json \
@@ -67,8 +69,8 @@
 //	  --local-dir models/mom-embedding-multimodal
 //
 //	cd src/semantic-router && \
-//	  DYLD_LIBRARY_PATH=$PWD/../../candle-binding/target/release \
-//	  LD_LIBRARY_PATH=$PWD/../../candle-binding/target/release \
+//	  LIBS=$PWD/../../candle-binding/target/release:$PWD/../../onnx-binding/target/release:$PWD/../../ml-binding/target/release:$PWD/../../nlp-binding/target/release && \
+//	  DYLD_LIBRARY_PATH=$LIBS LD_LIBRARY_PATH=$LIBS \
 //	  go run ./cmd/image-routing-calibration \
 //	    -model ../../models/mom-embedding-multimodal \
 //	    -artifact-revision fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4 \
@@ -676,10 +678,12 @@ func scoreFixture(classifier *classification.EmbeddingClassifier, root, path str
 // validateRules refuses a rule set the calibration cannot score honestly:
 // every rule must be an image-modality rule with candidates, otherwise the
 // classifier silently skips it and the tool would have nothing to calibrate;
-// and every rule must select aggregation_method max, because the classifier
-// scores mean-aggregated rules without the prototype blend the report records
-// (embeddingAggregationOptions in pkg/classification), so the report would
-// describe semantics the run did not use.
+// and every rule must select aggregation_method max and carry no per-rule
+// prototype_scoring override, because the classifier scores mean-aggregated
+// rules without the prototype blend and overridden rules with their own
+// blend (embeddingAggregationOptions in pkg/classification), while the
+// report records the family config; either would make the report describe
+// semantics the run did not use.
 func validateRules(rules []config.EmbeddingRule) error {
 	for _, rule := range rules {
 		if modality := rule.EffectiveQueryModality(); modality != config.QueryModalityImage {
@@ -691,6 +695,12 @@ func validateRules(rules []config.EmbeddingRule) error {
 		if rule.AggregationMethodConfiged != config.AggregationMethodMax {
 			return fmt.Errorf("rule %q has aggregation_method %q; the report records %q (prototype blend) so every rule must set it explicitly",
 				rule.Name, rule.AggregationMethodConfiged, config.AggregationMethodMax)
+		}
+		// A per-rule prototype_scoring override is resolved by the classifier
+		// in place of the family config the report records, so the report
+		// would describe a blend the run did not use.
+		if rule.PrototypeScoring != nil {
+			return fmt.Errorf("rule %q overrides prototype_scoring; the report records the family scoring config, so per-rule overrides cannot be calibrated here", rule.Name)
 		}
 	}
 	return nil

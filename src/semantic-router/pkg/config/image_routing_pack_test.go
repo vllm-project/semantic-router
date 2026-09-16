@@ -48,6 +48,12 @@ func TestImageRoutingPack_StructuralContract(t *testing.T) {
 		if got, want := rule.AggregationMethodConfiged, AggregationMethodMax; got != want {
 			t.Errorf("rule %q: aggregation_method = %q, want %q", rule.Name, got, want)
 		}
+		// The thresholds were calibrated under the family prototype blend;
+		// a per-rule override would score under a different one, and the
+		// calibration tool refuses to calibrate such a rule.
+		if rule.PrototypeScoring != nil {
+			t.Errorf("rule %q: carries a prototype_scoring override; the calibrated thresholds assume the family blend", rule.Name)
+		}
 		// This pack ships 8 candidates per rule. Pinning the floor at
 		// 8 catches silent reduction during future edits. Other shipped
 		// fragment files (e.g., config/fragments/signal/embedding/support.yaml)
@@ -109,6 +115,9 @@ func TestImageRoutingPack_MatchesMultimodalE2EProfile(t *testing.T) {
 					Threshold         float32  `yaml:"threshold"`
 					AggregationMethod string   `yaml:"aggregationMethod"`
 					Candidates        []string `yaml:"candidates"`
+					// Any override block, even empty, is a mismatch with
+					// the pack the gate calibrated.
+					PrototypeScoring map[string]interface{} `yaml:"prototypeScoring"`
 				} `yaml:"embeddings"`
 			} `yaml:"signals"`
 		} `yaml:"spec"`
@@ -126,6 +135,9 @@ func TestImageRoutingPack_MatchesMultimodalE2EProfile(t *testing.T) {
 			mirror.AggregationMethod != string(rule.AggregationMethodConfiged) ||
 			!slices.Equal(mirror.Candidates, rule.Candidates) {
 			t.Errorf("E2E profile rule %q does not match canonical image-routing.yaml", rule.Name)
+		}
+		if mirror.PrototypeScoring != nil {
+			t.Errorf("E2E profile rule %q carries a prototypeScoring override; the calibrated thresholds assume the family blend", rule.Name)
 		}
 	}
 }

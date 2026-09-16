@@ -31,6 +31,15 @@ type profileValues struct {
 type embeddingRule struct {
 	Name      string  `json:"name"`
 	Threshold float64 `json:"threshold"`
+	// A per-rule prototype-scoring override (CRD spelling and pack
+	// spelling) replaces the family blend the thresholds were calibrated
+	// under; any presence, even an empty block, is a mismatch.
+	PrototypeScoringCRD  json.RawMessage `json:"prototypeScoring"`
+	PrototypeScoringPack json.RawMessage `json:"prototype_scoring"`
+}
+
+func (r embeddingRule) overridesPrototypeScoring() bool {
+	return len(r.PrototypeScoringCRD) != 0 || len(r.PrototypeScoringPack) != 0
 }
 
 type intelligentRouteManifest struct {
@@ -132,6 +141,12 @@ func TestImageRulesMirrorTheShippedPack(t *testing.T) {
 		}
 		if rule.Name != shipped[i].Name || rule.Threshold != shipped[i].Threshold {
 			t.Fatalf("profile rule %d = %+v does not mirror the shipped pack rule %+v", i, rule, shipped[i])
+		}
+		// The calibration gate refuses per-rule prototype_scoring overrides on
+		// the pack; the CRD the E2E router deploys must not carry one either,
+		// or the E2E scores under a blend the thresholds were not selected for.
+		if rule.overridesPrototypeScoring() || shipped[i].overridesPrototypeScoring() {
+			t.Fatalf("rule %q carries a prototype-scoring override; the calibrated thresholds assume the family blend", rule.Name)
 		}
 	}
 }

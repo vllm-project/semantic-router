@@ -209,6 +209,8 @@ domains:
       - src/semantic-router/go.sum
       - Makefile
       - tools/make/rust.mk
+      # Defines build-onnx-binding and its features, which rust-ci depends on.
+      - tools/make/build-run-test.mk
       # Defines the make target the gate runs for the profile package test.
       - tools/make/e2e.mk
     checks: [make test-e2e-profile-multimodal]

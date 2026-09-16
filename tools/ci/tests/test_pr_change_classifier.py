@@ -98,6 +98,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             "src/semantic-router/go.sum",
             "Makefile",
             "tools/make/rust.mk",
+            "tools/make/build-run-test.mk",
         ):
             with self.subTest(path=path):
                 self.assertIn("image-calibration", classify([path]).selected_jobs)

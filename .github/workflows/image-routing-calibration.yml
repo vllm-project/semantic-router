@@ -85,15 +85,16 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             candle-binding/target/
+            onnx-binding/target/
             ml-binding/target/
             nlp-binding/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('candle-binding/Cargo.lock', 'ml-binding/Cargo.lock', 'nlp-binding/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('candle-binding/Cargo.lock', 'onnx-binding/Cargo.lock', 'ml-binding/Cargo.lock', 'nlp-binding/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      # rust-ci builds candle-binding, ml-binding, and nlp-binding; the router
-      # module links all three, so the tool needs every target dir on the
-      # runtime library path below.
+      # rust-ci builds candle-binding, onnx-binding, ml-binding, and
+      # nlp-binding; the router module links all four, so the tool needs every
+      # target dir on the runtime library path below.
       - name: Build Rust libraries (CPU-only, no CUDA)
         run: make rust-ci
 
@@ -168,7 +169,9 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
         env:
           CGO_ENABLED: 1
-          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release:${{ github.workspace }}/ml-binding/target/release:${{ github.workspace }}/nlp-binding/target/release
+          # The router module links every native binding rust-ci builds
+          # (candle, onnx, ml, nlp); the tool cannot start without all four.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release:${{ github.workspace }}/onnx-binding/target/release:${{ github.workspace }}/ml-binding/target/release:${{ github.workspace }}/nlp-binding/target/release
 
       - name: Upload calibration reports
         if: always()

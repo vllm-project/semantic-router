@@ -253,6 +253,10 @@ func TestValidateRules_RejectsUnscorableRules(t *testing.T) {
 		// records; both would make the report describe a run it did not do.
 		"mean aggregation":  {Name: "mean", QueryModality: config.QueryModalityImage, AggregationMethodConfiged: config.AggregationMethodMean, Candidates: []string{"a"}},
 		"unset aggregation": {Name: "unset", QueryModality: config.QueryModalityImage, Candidates: []string{"a"}},
+		// A per-rule prototype_scoring override replaces the family config the
+		// report records, so the report would describe a blend the run did
+		// not use.
+		"prototype override": {Name: "override", QueryModality: config.QueryModalityImage, AggregationMethodConfiged: config.AggregationMethodMax, Candidates: []string{"a"}, PrototypeScoring: &config.PrototypeScoringConfig{BestWeight: 1, TopM: 1}},
 	}
 	for name, rule := range cases {
 		t.Run(name, func(t *testing.T) {
