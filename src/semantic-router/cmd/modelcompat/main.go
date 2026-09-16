@@ -1,9 +1,7 @@
-// Command modelcompat generates and validates Router Model compatibility evidence.
-// It is an explicit offline test/release tool and is not used by router startup.
+// Command modelcompat generates and validates offline compatibility receipts.
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -19,7 +17,7 @@ const usage = `Usage: modelcompat <command> [options]
 
 Commands:
   qualify-candle-cpu  Run offline conformance against a local Candle classifier
-  validate            Validate a compatibility receipt without running a model
+  validate           Validate a compatibility receipt without running a model
 
 qualify-candle-cpu requires:
   --model-path PATH          Local directory containing config, tokenizer, and weights
@@ -28,15 +26,16 @@ qualify-candle-cpu requires:
   --labels A,B               Labels in class-index order
   --suite PATH               Versioned qualification suite JSON
   [--device-profile PROFILE] Defaults to GOOS/GOARCH/cpu
-  [--output PATH]            Defaults to stdout
+  --output PATH             New receipt file; stdout and overwrites are not supported
 
-validate requires one receipt path.
+validate [--expected-digest SHA256] PATH checks structure and reports the receipt digest.
+The digest checks integrity, not authenticity. Use make qualify-candle-cpu for a clean-checkout build.
 `
 
 type nativeCandleRuntime struct{}
 
-func (nativeCandleRuntime) Initialize(modelPath string, numClasses int, useCPU bool) error {
-	return candle.InitGenericClassifier(modelPath, numClasses, useCPU)
+func (nativeCandleRuntime) Initialize(modelPath string, numClasses int) error {
+	return candle.InitGenericClassifier(modelPath, numClasses, true)
 }
 
 func (nativeCandleRuntime) Classify(input string) (compatibility.ClassificationResult, error) {
@@ -44,7 +43,7 @@ func (nativeCandleRuntime) Classify(input string) (compatibility.ClassificationR
 	return compatibility.ClassificationResult{
 		Class:         result.Class,
 		Confidence:    result.Confidence,
-		Probabilities: append([]float32(nil), result.Probabilities...),
+		Probabilities: result.Probabilities,
 		NumClasses:    result.NumClasses,
 	}, err
 }
@@ -90,7 +89,7 @@ func runQualifyCandleCPU(
 		"tested device profile",
 	)
 	suitePath := flags.String("suite", "", "qualification suite JSON path")
-	outputPath := flags.String("output", "-", "receipt output path, or - for stdout")
+	outputPath := flags.String("output", "", "new receipt output file (not stdout)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -107,11 +106,15 @@ func runQualifyCandleCPU(
 		{"--router-revision", *routerRevision},
 		{"--labels", *labelsText},
 		{"--suite", *suitePath},
+		{"--output", *outputPath},
 	}
 	for _, value := range required {
 		if strings.TrimSpace(value.value) == "" {
 			return fmt.Errorf("%s is required", value.name)
 		}
+	}
+	if *outputPath == "-" {
+		return fmt.Errorf("--output must name a new file; native logs use stdout")
 	}
 
 	labels, err := parseLabels(*labelsText)
@@ -131,7 +134,7 @@ func runQualifyCandleCPU(
 		return err
 	}
 
-	subject := compatibility.CandleClassifierSubject{
+	subject := compatibility.Subject{
 		SchemaVersion:    compatibility.SubjectSchemaVersionV1,
 		ArtifactRevision: *artifactRevision,
 		ArtifactDigest:   artifactDigest,
@@ -152,7 +155,14 @@ func runQualifyCandleCPU(
 	if err != nil {
 		return err
 	}
-	if err := writeReceipt(*outputPath, receipt, stdout); err != nil {
+	return writeQualificationResult(*outputPath, receipt, stdout)
+}
+
+func writeQualificationResult(path string, receipt compatibility.Receipt, stdout io.Writer) error {
+	if err := writeReceipt(path, receipt); err != nil {
+		return err
+	}
+	if err := reportReceipt(receipt, stdout); err != nil {
 		return err
 	}
 	if failed := compatibility.FailedCheckNames(receipt); len(failed) != 0 {
@@ -164,6 +174,7 @@ func runQualifyCandleCPU(
 func runValidate(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	expectedDigest := flags.String("expected-digest", "", "independently retained receipt digest")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -178,10 +189,29 @@ func runValidate(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	verifyExpected := false
+	flags.Visit(func(value *flag.Flag) {
+		if value.Name == "expected-digest" {
+			verifyExpected = true
+		}
+	})
+	if verifyExpected {
+		if err := receipt.VerifyDigest(*expectedDigest); err != nil {
+			return err
+		}
+	}
+	return reportReceipt(receipt, stdout)
+}
+
+func reportReceipt(receipt compatibility.Receipt, stdout io.Writer) error {
+	digest, err := receipt.Digest()
+	if err != nil {
+		return err
+	}
 	_, err = fmt.Fprintf(
 		stdout,
-		"valid receipt %s; failed checks: %d\n",
-		receipt.SubjectDigest,
+		"structurally valid receipt %s; failed checks: %d\n",
+		digest,
 		len(compatibility.FailedCheckNames(receipt)),
 	)
 	return err
@@ -203,18 +233,18 @@ func parseLabels(value string) ([]string, error) {
 	return labels, nil
 }
 
-func writeReceipt(path string, receipt compatibility.Receipt, stdout io.Writer) error {
-	data, err := json.MarshalIndent(receipt, "", "  ")
+func writeReceipt(path string, receipt compatibility.Receipt) error {
+	data, err := receipt.CanonicalJSON()
 	if err != nil {
 		return fmt.Errorf("encode compatibility receipt: %w", err)
 	}
-	data = append(data, '\n')
-	if path == "-" {
-		_, err = stdout.Write(data)
-		return err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
 		return fmt.Errorf("write compatibility receipt: %w", err)
 	}
-	return nil
+	defer file.Close()
+	if _, err := file.Write(data); err != nil {
+		return fmt.Errorf("write compatibility receipt: %w", err)
+	}
+	return file.Close()
 }

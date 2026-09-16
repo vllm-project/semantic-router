@@ -17,10 +17,7 @@ type fakeRuntime struct {
 	malformed   bool
 }
 
-func (f *fakeRuntime) Initialize(_ string, _ int, useCPU bool) error {
-	if !useCPU {
-		return errors.New("CPU was not selected")
-	}
+func (f *fakeRuntime) Initialize(_ string, _ int) error {
 	f.initialized = true
 	return nil
 }
@@ -133,6 +130,64 @@ func TestRunValidateAcceptsFailedEvidence(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "failed checks: 1") {
 		t.Fatalf("validate output = %q", stdout.String())
+	}
+}
+
+func TestRunValidateExpectedDigest(t *testing.T) {
+	path := "../../pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json"
+	const digest = "sha256:d02895afb86cb4ffeb146f0902f14048410cf70909612ab0da5bc097e1870c31"
+	var stdout bytes.Buffer
+	if err := run([]string{"validate", "--expected-digest", digest, path}, nil, &stdout); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), digest) {
+		t.Fatalf("validator did not report the complete receipt digest: %s", stdout.String())
+	}
+	for _, wrong := range []string{"", "invalid", "sha256:" + strings.Repeat("0", 64)} {
+		if err := run([]string{"validate", "--expected-digest", wrong, path}, nil, &bytes.Buffer{}); err == nil {
+			t.Fatalf("wrong expected digest %q was accepted", wrong)
+		}
+	}
+}
+
+func TestRunQualifyRequiresOutputFile(t *testing.T) {
+	for _, output := range []string{"", "-"} {
+		runtime := &fakeRuntime{}
+		err := run([]string{
+			"qualify-candle-cpu", "--model-path", "unused", "--artifact-revision", "model-commit",
+			"--router-revision", "router-commit", "--labels", "A,B", "--suite", "unused",
+			"--output", output,
+		}, runtime, &bytes.Buffer{})
+		if err == nil || !strings.Contains(err.Error(), "--output") || runtime.initialized {
+			t.Fatalf("output %q: error=%v initialized=%v", output, err, runtime.initialized)
+		}
+	}
+}
+
+func TestWriteReceiptDoesNotOverwriteEvidence(t *testing.T) {
+	data, err := os.ReadFile("../../pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := compatibility.ParseReceipt(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "receipt.json")
+	if err := writeReceipt(path, receipt); err != nil {
+		t.Fatal(err)
+	}
+	want, err := receipt.CanonicalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt.Checks[0].Passed = false
+	if err := writeReceipt(path, receipt); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("overwrite error = %v, want os.ErrExist", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("existing evidence changed: %v", err)
 	}
 }
 

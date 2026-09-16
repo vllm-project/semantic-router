@@ -20,14 +20,14 @@ type ClassificationResult struct {
 
 // CandleRuntime is implemented by the active native binding and by model-free tests.
 type CandleRuntime interface {
-	Initialize(modelPath string, numClasses int, useCPU bool) error
+	Initialize(modelPath string, numClasses int) error
 	Classify(input string) (ClassificationResult, error)
 }
 
 // QualifyLocalCandleCPU executes one offline conformance run. Failed checks are
 // evidence and therefore produce a valid receipt; invalid inputs return an error.
 func QualifyLocalCandleCPU(
-	subject CandleClassifierSubject,
+	subject Subject,
 	modelPath string,
 	suite QualificationSuite,
 	runtime CandleRuntime,
@@ -36,9 +36,6 @@ func QualifyLocalCandleCPU(
 		return Receipt{}, fmt.Errorf("Candle qualification runtime is required")
 	}
 	if err := validateLocalCandleCPUSubject(subject); err != nil {
-		return Receipt{}, err
-	}
-	if err := suite.Validate(subject.Labels); err != nil {
 		return Receipt{}, err
 	}
 	suiteDigest, err := suite.Digest(subject.Labels)
@@ -58,7 +55,7 @@ func QualifyLocalCandleCPU(
 	}
 
 	unavailable := checkUnavailable(runtime, suite.DeadlineBehavior.Input)
-	if err := runtime.Initialize(modelPath, len(subject.Labels), true); err != nil {
+	if err := runtime.Initialize(modelPath, len(subject.Labels)); err != nil {
 		detail := fmt.Sprintf("Candle initialization failed: %v", err)
 		return NewReceipt(subject, suiteDigest, []CheckOutcome{
 			{Name: CheckLabelParity, Passed: false, Details: detail},
@@ -76,7 +73,7 @@ func QualifyLocalCandleCPU(
 	})
 }
 
-func validateLocalCandleCPUSubject(subject CandleClassifierSubject) error {
+func validateLocalCandleCPUSubject(subject Subject) error {
 	if err := subject.Validate(); err != nil {
 		return err
 	}

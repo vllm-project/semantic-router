@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	SubjectSchemaVersionV1      = "semantic-router.local-candle-classifier-subject/v1"
+	SubjectSchemaVersionV1      = "semantic-router.compatibility-subject/v1"
 	ReceiptSchemaVersionV1      = "semantic-router.compatibility-receipt/v1"
 	ExecutionPredicateType      = "semantic-router.execution"
 	ExecutionPredicateVersionV1 = "v1"
@@ -24,15 +24,15 @@ const (
 	CheckUnavailableBehavior    = "unavailable_behavior"
 )
 
-var requiredCandleChecks = [...]string{
+var requiredLabelDistributionChecks = [...]string{
 	CheckLabelParity,
 	CheckInputBounds,
 	CheckDeadlineBehavior,
 	CheckUnavailableBehavior,
 }
 
-// CandleClassifierSubject identifies one exact embedded classifier qualification target.
-type CandleClassifierSubject struct {
+// Subject identifies one exact qualification target independently of its connector.
+type Subject struct {
 	SchemaVersion    string   `json:"schema_version"`
 	ArtifactRevision string   `json:"artifact_revision"`
 	ArtifactDigest   string   `json:"artifact_digest"`
@@ -42,7 +42,7 @@ type CandleClassifierSubject struct {
 	Provider         string   `json:"provider"`
 	DeviceProfile    string   `json:"device_profile"`
 	RouterRevision   string   `json:"router_revision"`
-	Labels           []string `json:"labels"`
+	Labels           []string `json:"labels,omitempty"`
 }
 
 // CheckOutcome records one observed conformance check without assigning support status.
@@ -52,20 +52,21 @@ type CheckOutcome struct {
 	Details string `json:"details,omitempty"`
 }
 
-// Receipt is an unsigned evidence payload intended for offline signing workflows.
+// Receipt is unsigned offline evidence. Its content digest does not authenticate
+// an issuer or imply that the recorded checks passed.
 type Receipt struct {
-	SchemaVersion            string                  `json:"schema_version"`
-	Subject                  CandleClassifierSubject `json:"subject"`
-	SubjectDigest            string                  `json:"subject_digest"`
-	PredicateType            string                  `json:"predicate_type"`
-	PredicateVersion         string                  `json:"predicate_version"`
-	QualificationSuiteDigest string                  `json:"qualification_suite_digest"`
-	Checks                   []CheckOutcome          `json:"checks"`
+	SchemaVersion            string         `json:"schema_version"`
+	Subject                  Subject        `json:"subject"`
+	SubjectDigest            string         `json:"subject_digest"`
+	PredicateType            string         `json:"predicate_type"`
+	PredicateVersion         string         `json:"predicate_version"`
+	QualificationSuiteDigest string         `json:"qualification_suite_digest"`
+	Checks                   []CheckOutcome `json:"checks"`
 }
 
 // NewReceipt constructs an evidence payload for offline conformance results.
 func NewReceipt(
-	subject CandleClassifierSubject,
+	subject Subject,
 	qualificationSuiteDigest string,
 	checks []CheckOutcome,
 ) (Receipt, error) {
@@ -90,8 +91,11 @@ func NewReceipt(
 }
 
 // Digest returns the deterministic identity of the validated subject.
-func (s CandleClassifierSubject) Digest() (string, error) {
-	encoded, err := s.canonicalJSON()
+func (s Subject) Digest() (string, error) {
+	if err := s.Validate(); err != nil {
+		return "", err
+	}
+	encoded, err := canonicalJSON(s)
 	if err != nil {
 		return "", err
 	}
@@ -100,7 +104,7 @@ func (s CandleClassifierSubject) Digest() (string, error) {
 }
 
 // Validate rejects incomplete or ambiguous subject identities.
-func (s CandleClassifierSubject) Validate() error {
+func (s Subject) Validate() error {
 	required := []struct {
 		name  string
 		value string
@@ -129,7 +133,7 @@ func (s CandleClassifierSubject) Validate() error {
 	if err := validateSHA256("compatibility subject", "artifact_digest", s.ArtifactDigest); err != nil {
 		return err
 	}
-	if len(s.Labels) < 2 {
+	if s.TaskContract == LabelDistributionContractV1 && len(s.Labels) < 2 {
 		return fmt.Errorf("compatibility subject labels must contain at least two entries")
 	}
 	seen := make(map[string]struct{}, len(s.Labels))
@@ -177,10 +181,10 @@ func (r Receipt) Validate() error {
 			expected,
 		)
 	}
-	return validateChecks(r.Checks)
+	return validateChecks(r.Checks, r.Subject.TaskContract)
 }
 
-func validateChecks(checks []CheckOutcome) error {
+func validateChecks(checks []CheckOutcome, taskContract string) error {
 	if len(checks) == 0 {
 		return fmt.Errorf("compatibility receipt checks must not be empty")
 	}
@@ -197,7 +201,10 @@ func validateChecks(checks []CheckOutcome) error {
 		}
 		seen[check.Name] = struct{}{}
 	}
-	for _, name := range requiredCandleChecks {
+	if taskContract != LabelDistributionContractV1 {
+		return nil
+	}
+	for _, name := range requiredLabelDistributionChecks {
 		if _, exists := seen[name]; !exists {
 			return fmt.Errorf("compatibility receipt check %q is required", name)
 		}
@@ -222,15 +229,48 @@ func ParseReceipt(data []byte) (Receipt, error) {
 	return receipt, nil
 }
 
-func (s CandleClassifierSubject) canonicalJSON() ([]byte, error) {
-	if err := s.Validate(); err != nil {
+// CanonicalJSON returns the v1 evidence encoding: fixed field order, declared
+// slice order, no HTML escaping, and no trailing newline. It is not RFC 8785.
+func (r Receipt) CanonicalJSON() ([]byte, error) {
+	if err := r.Validate(); err != nil {
 		return nil, err
 	}
+	return canonicalJSON(r)
+}
+
+// Digest identifies the complete validated evidence, including all outcomes.
+// It is kept outside the payload to avoid a self-referential checksum.
+func (r Receipt) Digest() (string, error) {
+	encoded, err := r.CanonicalJSON()
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(encoded)
+	return "sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+// VerifyDigest checks content integrity against an independently retained digest.
+// A digest stored alongside editable evidence is not proof of authenticity.
+func (r Receipt) VerifyDigest(expected string) error {
+	if err := validateSHA256("compatibility receipt", "expected_digest", expected); err != nil {
+		return err
+	}
+	actual, err := r.Digest()
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return fmt.Errorf("compatibility receipt digest %q does not match expected %q", actual, expected)
+	}
+	return nil
+}
+
+func canonicalJSON(value any) ([]byte, error) {
 	var encoded bytes.Buffer
 	encoder := json.NewEncoder(&encoded)
 	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(s); err != nil {
-		return nil, fmt.Errorf("encode compatibility subject: %w", err)
+	if err := encoder.Encode(value); err != nil {
+		return nil, fmt.Errorf("encode compatibility identity: %w", err)
 	}
 	return bytes.TrimSuffix(encoded.Bytes(), []byte{'\n'}), nil
 }

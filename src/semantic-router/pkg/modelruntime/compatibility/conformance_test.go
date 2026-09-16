@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,10 +18,7 @@ type fakeCandleRuntime struct {
 	delay       time.Duration
 }
 
-func (f *fakeCandleRuntime) Initialize(_ string, _ int, useCPU bool) error {
-	if !useCPU {
-		return errors.New("expected CPU initialization")
-	}
+func (f *fakeCandleRuntime) Initialize(_ string, _ int) error {
 	if f.initErr != nil {
 		return f.initErr
 	}
@@ -117,7 +115,7 @@ func TestQualifyLocalCandleCPURecordsInitializationFailure(t *testing.T) {
 		t.Fatalf("QualifyLocalCandleCPU() error = %v", err)
 	}
 	want := []string{CheckLabelParity, CheckInputBounds, CheckDeadlineBehavior}
-	if failed := FailedCheckNames(receipt); !slicesEqual(failed, want) {
+	if failed := FailedCheckNames(receipt); !slices.Equal(failed, want) {
 		t.Fatalf("FailedCheckNames() = %v, want %v", failed, want)
 	}
 	if !receipt.Checks[3].Passed {
@@ -233,13 +231,13 @@ func passingFakeRuntime() *fakeCandleRuntime {
 	}
 }
 
-func qualificationSubject(t *testing.T, artifact string) CandleClassifierSubject {
+func qualificationSubject(t *testing.T, artifact string) Subject {
 	t.Helper()
 	digest, err := DigestLocalCandleArtifact(artifact)
 	if err != nil {
 		t.Fatalf("DigestLocalCandleArtifact() error = %v", err)
 	}
-	return CandleClassifierSubject{
+	return Subject{
 		SchemaVersion:    SubjectSchemaVersionV1,
 		ArtifactRevision: "model-commit",
 		ArtifactDigest:   digest,
@@ -265,16 +263,4 @@ func qualificationSuite() QualificationSuite {
 		},
 		DeadlineBehavior: DeadlineProbe{Input: "deadline", MaxDurationMillis: 1000},
 	}
-}
-
-func slicesEqual(left []string, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
 }

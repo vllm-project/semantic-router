@@ -82,9 +82,19 @@ download-models: ## Download models using router's built-in download logic
 download-models-lora: ## Download LoRA models (same as download-models now)
 	@$(MAKE) download-models
 
-qualify-candle-cpu: rust-ci ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
+.PHONY: qualify-candle-cpu check-candle-qualification-source
+
+# Do not attribute a working-tree build to HEAD. Local planning artifacts outside
+# the compiled source trees do not affect this source check.
+check-candle-qualification-source:
+	@git diff --quiet HEAD -- || { echo "Candle qualification requires committed sources (tracked changes found)"; exit 1; }
+	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding)" && \
+		test -z "$$untracked" || { echo "Candle qualification requires committed sources (untracked source files found)"; exit 1; }
+
+qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
 	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
 	@test -n "$(CANDLE_ARTIFACT_REVISION)" || (echo "CANDLE_ARTIFACT_REVISION is required" && exit 1)
+	@$(MAKE) rust-ci
 	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
 	@cd src/semantic-router && \
 		CGO_LDFLAGS="-L$(CURDIR)/candle-binding/target/release" \

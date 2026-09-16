@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestCandleClassifierSubjectDigest(t *testing.T) {
+func TestSubjectDigest(t *testing.T) {
 	subject := testSubject()
 	first, err := subject.Digest()
 	if err != nil {
@@ -20,16 +20,16 @@ func TestCandleClassifierSubjectDigest(t *testing.T) {
 		t.Fatalf("Digest() repeated = %q, want %q", second, first)
 	}
 
-	mutations := map[string]func(*CandleClassifierSubject){
-		"artifact revision": func(value *CandleClassifierSubject) { value.ArtifactRevision = "revision-2" },
-		"artifact digest":   func(value *CandleClassifierSubject) { value.ArtifactDigest = "sha256:" + strings.Repeat("b", 64) },
-		"task contract":     func(value *CandleClassifierSubject) { value.TaskContract = "label_distribution.v2" },
-		"connector":         func(value *CandleClassifierSubject) { value.Connector = "sr.candle.embedded.v2" },
-		"precision":         func(value *CandleClassifierSubject) { value.Precision = "f16" },
-		"provider":          func(value *CandleClassifierSubject) { value.Provider = "candle-cuda" },
-		"device profile":    func(value *CandleClassifierSubject) { value.DeviceProfile = "linux/amd64/cuda" },
-		"router revision":   func(value *CandleClassifierSubject) { value.RouterRevision = "router-revision-2" },
-		"label order":       func(value *CandleClassifierSubject) { value.Labels = []string{"JAILBREAK", "SAFE"} },
+	mutations := map[string]func(*Subject){
+		"artifact revision": func(value *Subject) { value.ArtifactRevision = "revision-2" },
+		"artifact digest":   func(value *Subject) { value.ArtifactDigest = "sha256:" + strings.Repeat("b", 64) },
+		"task contract":     func(value *Subject) { value.TaskContract = "label_distribution.v2" },
+		"connector":         func(value *Subject) { value.Connector = "sr.candle.embedded.v2" },
+		"precision":         func(value *Subject) { value.Precision = "f16" },
+		"provider":          func(value *Subject) { value.Provider = "candle-cuda" },
+		"device profile":    func(value *Subject) { value.DeviceProfile = "linux/amd64/cuda" },
+		"router revision":   func(value *Subject) { value.RouterRevision = "router-revision-2" },
+		"label order":       func(value *Subject) { value.Labels = []string{"JAILBREAK", "SAFE"} },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
@@ -47,16 +47,16 @@ func TestCandleClassifierSubjectDigest(t *testing.T) {
 	}
 }
 
-func TestCandleClassifierSubjectValidation(t *testing.T) {
+func TestSubjectValidation(t *testing.T) {
 	tests := []struct {
 		name    string
-		mutate  func(*CandleClassifierSubject)
+		mutate  func(*Subject)
 		wantErr string
 	}{
-		{"missing revision", func(value *CandleClassifierSubject) { value.ArtifactRevision = "" }, "artifact_revision is required"},
-		{"invalid digest", func(value *CandleClassifierSubject) { value.ArtifactDigest = "sha256:not-a-digest" }, "artifact_digest must be a lowercase sha256 digest"},
-		{"too few labels", func(value *CandleClassifierSubject) { value.Labels = []string{"SAFE"} }, "at least two"},
-		{"duplicate labels", func(value *CandleClassifierSubject) { value.Labels = []string{"SAFE", "SAFE"} }, "duplicated"},
+		{"missing revision", func(value *Subject) { value.ArtifactRevision = "" }, "artifact_revision is required"},
+		{"invalid digest", func(value *Subject) { value.ArtifactDigest = "sha256:not-a-digest" }, "artifact_digest must be a lowercase sha256 digest"},
+		{"too few labels", func(value *Subject) { value.Labels = []string{"SAFE"} }, "at least two"},
+		{"duplicate labels", func(value *Subject) { value.Labels = []string{"SAFE", "SAFE"} }, "duplicated"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -148,8 +148,8 @@ func TestLocalCandleCPUReceiptFixture(t *testing.T) {
 	if len(receipt.Subject.Labels) != 2 || receipt.Subject.Labels[0] != "SAFE" || receipt.Subject.Labels[1] != "JAILBREAK" {
 		t.Fatalf("labels = %v, want [SAFE JAILBREAK]", receipt.Subject.Labels)
 	}
-	if len(receipt.Checks) != len(requiredCandleChecks) {
-		t.Fatalf("checks = %d, want %d", len(receipt.Checks), len(requiredCandleChecks))
+	if len(receipt.Checks) != len(requiredLabelDistributionChecks) {
+		t.Fatalf("checks = %d, want %d", len(receipt.Checks), len(requiredLabelDistributionChecks))
 	}
 	for _, check := range receipt.Checks {
 		if !strings.Contains(check.Details, "not conformance evidence") {
@@ -158,8 +158,8 @@ func TestLocalCandleCPUReceiptFixture(t *testing.T) {
 	}
 }
 
-func testSubject() CandleClassifierSubject {
-	return CandleClassifierSubject{
+func testSubject() Subject {
+	return Subject{
 		SchemaVersion:    SubjectSchemaVersionV1,
 		ArtifactRevision: "synthetic-model-revision-001",
 		ArtifactDigest:   "sha256:" + strings.Repeat("a", 64),
@@ -174,8 +174,8 @@ func testSubject() CandleClassifierSubject {
 }
 
 func testChecks() []CheckOutcome {
-	checks := make([]CheckOutcome, 0, len(requiredCandleChecks))
-	for _, name := range requiredCandleChecks {
+	checks := make([]CheckOutcome, 0, len(requiredLabelDistributionChecks))
+	for _, name := range requiredLabelDistributionChecks {
 		checks = append(checks, CheckOutcome{Name: name, Passed: true})
 	}
 	return checks

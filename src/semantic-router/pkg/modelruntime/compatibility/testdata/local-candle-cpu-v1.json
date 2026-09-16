@@ -1,7 +1,7 @@
 {
   "schema_version": "semantic-router.compatibility-receipt/v1",
   "subject": {
-    "schema_version": "semantic-router.local-candle-classifier-subject/v1",
+    "schema_version": "semantic-router.compatibility-subject/v1",
     "artifact_revision": "synthetic-model-revision-001",
     "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "task_contract": "label_distribution.v1",
@@ -12,7 +12,7 @@
     "router_revision": "synthetic-router-revision-001",
     "labels": ["SAFE", "JAILBREAK"]
   },
-  "subject_digest": "sha256:d83320976694b44cb2639af2768fc325ec141b5975e3f92b38246b3e3adbf28b",
+  "subject_digest": "sha256:3d4b1cabc20d54f51709a7127d7b6319f7fd6b1466d8e6fb92bbbb197ada08a2",
   "predicate_type": "semantic-router.execution",
   "predicate_version": "v1",
   "qualification_suite_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
