@@ -37,7 +37,8 @@ def validate_reasoning_controls(config: UserConfig) -> list[ValidationError]:
                 else model.reasoning.model_dump(exclude_none=True)
             )
         else:
-            card = cards.get(model.catalog or model.name, {})
+            # Model names are local aliases, not implicit catalog bindings.
+            card = cards.get(model.catalog, {})
             family = families.get(card.get("reasoning_family"))
         model_families[model.name] = family
 

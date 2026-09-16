@@ -123,6 +123,32 @@ def test_catalog_bound_model_inherits_always_on_family():
     assert any("always-on" in error.message for error in errors)
 
 
+@pytest.mark.parametrize("named", [False, True])
+@pytest.mark.parametrize("binding", [None, "catalog", "reasoning"])
+def test_config_validate_requires_explicit_reasoning_binding(tmp_path, named, binding):
+    document = _config({"use_reasoning": False}, named=named)
+    model = document["providers"]["models"][0]
+    model.pop("reasoning")
+    model["name"] = "openai/gpt-oss-20b"
+    document["routing"].pop("modelCards")
+    routing = document["recipes"][0]["routing"] if named else document["routing"]
+    routing["decisions"][0]["modelRefs"][0]["model"] = model["name"]
+    if binding == "catalog":
+        model["catalog"] = model["name"]
+    elif binding == "reasoning":
+        model["reasoning"] = {"family": "gpt-oss"}
+
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(document))
+    result = CliRunner().invoke(cli, ["config", "validate", "--config", str(path)])
+    if binding is None:
+        assert result.exit_code == 0, result.output
+        assert "Configuration is valid" in result.output
+    else:
+        assert result.exit_code != 0, result.output
+        assert "always-on reasoning family" in result.output
+
+
 def test_familyless_custom_effort_remains_passthrough_but_mode_requires_family():
     document = _config({"use_reasoning": True, "reasoning_effort": "custom"})
     document["providers"]["models"][0].pop("reasoning")
