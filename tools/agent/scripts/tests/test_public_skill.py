@@ -82,15 +82,30 @@ class PublicSkillTests(unittest.TestCase):
         self.assertEqual(
             {path.name for path in source_refs},
             {
+                "amd-rocm.md",
                 "configuration-loop.md",
                 "deployment-loop.md",
                 "evaluation-loop.md",
                 "recipe-tuning.md",
             },
         )
-        source_entry = (skill.SOURCE / "SKILL.md").read_text()
-        for path in source_refs:
-            self.assertIn(f"(references/{path.name})", source_entry)
+        # Specialized references may be discovered through another reference;
+        # every published document must still be reachable from the entrypoint.
+        documents = skill.published_files(skill.SOURCE)
+        pending = [Path("SKILL.md")]
+        reached = set()
+        while pending:
+            path = pending.pop()
+            if path in reached:
+                continue
+            reached.add(path)
+            for match in skill.MARKDOWN_LINK.finditer(documents[path]):
+                target = match[2].split("#", 1)[0]
+                if target.startswith(skill.PUBLIC_ORIGIN):
+                    linked = Path(target[len(skill.PUBLIC_ORIGIN) :])
+                    if linked in documents:
+                        pending.append(linked)
+        self.assertEqual(reached, set(documents))
         self.assertTrue((skill.SOURCE / "agents/openai.yaml").is_file())
         public_entry = (skill.DESTINATION / "SKILL.md").read_text()
         self.assertNotIn("](references/", public_entry)

@@ -40,12 +40,10 @@ count. Include KV/runtime memory at the requested context and concurrency, and
 storage for weights, images, and compilation caches. Verify device visibility
 and driver/container compatibility before downloading the full pool.
 
-For local AMD Docker, `--platform amd` selects ROCm support and
-`VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES` can restrict Router GPUs. Inspect
-`recipes[].routing.model_bindings` and the referenced deployments: the platform
-alone does not move every binding to a GPU. Check the live inventory's backend
-and device plus successful binding initialization. Treat CPU fallback, missing
-bindings, or failed initialization as unmet acceleration requirements.
+When acceleration is required, verify the effective model bindings, successful
+initialization, and actual devices in the live inventory. A runtime platform
+selection alone does not establish each model's device. For an AMD deployment,
+read [AMD ROCm details](amd-rocm.md); other deployments do not need that reference.
 
 ## Add or replace physical models
 
