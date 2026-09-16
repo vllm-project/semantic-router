@@ -37,7 +37,7 @@ config:
           conditions:
             - type: classifier
               name: local_jailbreak_score
-              label: JAILBREAK
+              label: jailbreak
               predicate:
                 gte: 0.5
         modelRefs:
@@ -824,7 +824,7 @@ config:
           description: Deterministic in-process local classifier E2E signal (real candle inference, no mock)
           type: local
           model_path: models/mmbert32k-jailbreak-detector-merged
-          labels: [SAFE, JAILBREAK]
+          labels: [benign, jailbreak]
           use_cpu: true
     modelCards:
       - name: base-model
