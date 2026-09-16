@@ -4,6 +4,7 @@ import (
 	"context"
 	"hash/fnv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -51,6 +52,28 @@ type MemoryStore struct {
 	ttl                   time.Duration
 	maxSessions           int
 	maxSessionsByIdentity int
+
+	// nextRevision is a store-wide (not per-key) monotonic counter: every
+	// successful write anywhere in this store — a fresh admission or an
+	// existing key's update — draws the next value from this single
+	// sequence, and no value is ever issued twice. This is deliberately not
+	// a per-key "how many times has this key been updated" counter (that
+	// would reset to 1 on every fresh admission, as it did before this
+	// field existed) — a maintainer-reported vulnerability showed that
+	// letting two different incarnations of the same key share a revision
+	// numbering space lets a writer's stale pre-expiry CAS
+	// (expectedRevision > 0) coincidentally match a completely different,
+	// later incarnation created after expiry via CompareAndSwap(0), and
+	// silently overwrite it. A global counter makes that structurally
+	// impossible: a revision captured before a key's expiry can never equal
+	// one issued after that key was reclaimed, because reclamation always
+	// draws a strictly higher value from this same sequence. Safe for
+	// concurrent use without a lock — Add is independently atomic, so this
+	// can be called while holding admissionMu (admitNewLocked) or only a
+	// shard's mu (CompareAndSwap's update path) with no new lock-ordering
+	// rule. Starts at zero; the first Add(1) returns 1, so 0 remains
+	// reserved for "no revision issued yet" (CompareAndSwap's create case).
+	nextRevision atomic.Uint64
 
 	// admissionMu guards every field below and serializes admission
 	// (new-key creation, which may trigger eviction) relative to other
@@ -234,7 +257,14 @@ func (s *MemoryStore) CompareAndSwap(
 	stored := next.Clone()
 	stored.LastSeenAt = now
 	stored.ExpiresAt = now.Add(ttl)
-	stored.Revision = entry.state.Revision + 1
+	// Draw from the store-wide sequence, not entry.state.Revision + 1: see
+	// nextRevision's doc comment. A per-key increment here would be exactly
+	// the pre-fix behavior for this path (harmless on its own, since this
+	// branch only runs against a live, still-current entry) but the two
+	// write sites must stay on the same global sequence for admitNewLocked's
+	// guarantee to hold — a fresh admission must never coincidentally match
+	// a value this path could also produce.
+	stored.Revision = s.nextRevision.Add(1)
 	entry.state = stored
 	return true, nil
 }
@@ -291,7 +321,12 @@ func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, 
 	stored := next.Clone()
 	stored.LastSeenAt = now
 	stored.ExpiresAt = now.Add(ttl)
-	stored.Revision = 1
+	// Not a hardcoded 1: see nextRevision's doc comment. A fresh admission
+	// must draw a value this same key's earlier (expired, reclaimed)
+	// incarnation could never have held, or a writer still holding that
+	// earlier incarnation's revision could replay a stale CAS against this
+	// one and have it incorrectly match.
+	stored.Revision = s.nextRevision.Add(1)
 
 	shard := s.shardFor(key)
 	shard.mu.Lock()
