@@ -41,7 +41,7 @@ func recordSessionTurnOutcome(ctx *RequestContext, usage responseUsageMetrics, p
 		ctx.VSRProgressOutcomeRecorded || requestBypassesRouting(ctx) {
 		return
 	}
-	key := progressEvidenceStateKey(ctx)
+	key := routingLearningStateKey(ctx)
 	if key == "" {
 		return
 	}

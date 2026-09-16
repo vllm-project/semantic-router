@@ -508,7 +508,7 @@ func TestSwitchGateReadsDecisionStateFromLearningKey(t *testing.T) {
 
 	now := time.Now()
 	for i := 0; i < 3; i++ {
-		sessiontelemetry.RecordTurnOutcome(routingSessionStateKey(ctx), sessiontelemetry.TurnOutcome{
+		sessiontelemetry.RecordTurnOutcome(stateKey, sessiontelemetry.TurnOutcome{
 			TurnIndex: i,
 			Model:     "model-b",
 			Category:  sessiontelemetry.TurnNoProgress,
@@ -558,7 +558,7 @@ func TestSwitchGateCountsLearningKeySwitchesInWindow(t *testing.T) {
 
 	now := time.Now()
 	for i := 0; i < 3; i++ {
-		sessiontelemetry.RecordTurnOutcome(routingSessionStateKey(ctx), sessiontelemetry.TurnOutcome{
+		sessiontelemetry.RecordTurnOutcome(stateKey, sessiontelemetry.TurnOutcome{
 			TurnIndex: i,
 			Model:     "model-b",
 			Category:  sessiontelemetry.TurnNoProgress,

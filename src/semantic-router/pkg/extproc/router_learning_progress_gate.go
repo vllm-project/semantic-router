@@ -39,24 +39,13 @@ func turnOutcomeFacts(window []sessiontelemetry.TurnOutcome) []selection.TurnOut
 	return facts
 }
 
-func progressEvidenceStateKey(ctx *RequestContext) string {
-	if ctx != nil && !ctx.Routing.IsPassthrough() && ctx.ResponseObjectState != nil {
-		return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.ResponseObjectState.SessionTrackingID)
-	}
-	return routingSessionStateKey(ctx)
-}
-
 func configureProgressEvidence(ctx *RequestContext, cfg config.ProgressGateConfig, now time.Time) {
 	if ctx == nil || !cfg.Enabled {
 		return
 	}
 	ctx.VSRProgressGateConfig = &cfg
 	ttl := time.Duration(cfg.WindowTTLSeconds) * time.Second
-	key, stateKey := progressEvidenceStateKey(ctx), routingLearningStateKey(ctx)
-	sessiontelemetry.ConfigureTurnOutcomeWindow(key, cfg.WindowSize, ttl, now)
-	if stateKey != key {
-		sessiontelemetry.ConfigureTurnOutcomeWindow(stateKey, cfg.WindowSize, ttl, now)
-	}
+	sessiontelemetry.ConfigureTurnOutcomeWindow(routingLearningStateKey(ctx), cfg.WindowSize, ttl, now)
 }
 
 // switchGateVerdict evaluates a proposal; its caller commits the final result.
@@ -72,11 +61,10 @@ func (r *OpenAIRouter) switchGateVerdict(
 	if !gateCfg.Enabled || currentModel == "" || proposedModel == "" || currentModel == proposedModel {
 		return selection.SwitchGateDecision{}, nil, false
 	}
-	sessionKey := progressEvidenceStateKey(ctx)
+	sessionKey := routingLearningStateKey(ctx)
 	if sessionKey == "" {
 		return selection.SwitchGateDecision{}, nil, false
 	}
-	stateKey := routingLearningStateKey(ctx)
 	now := time.Now()
 	windowTTL := time.Duration(gateCfg.WindowTTLSeconds) * time.Second
 	configureProgressEvidence(ctx, gateCfg, now)
@@ -87,7 +75,7 @@ func (r *OpenAIRouter) switchGateVerdict(
 		Evidence:  evidence,
 		Downgrade: downgrade,
 	}
-	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(stateKey, now); ok {
+	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(sessionKey, now); ok {
 		// The oscillation guard is window-scoped: count the model changes
 		// inside the gate's own evidence window, not the session lifetime.
 		in.SwitchesInWindow = sessiontelemetry.CountRecentSwitches(snapshot.SwitchTimestamps, windowTTL, now)

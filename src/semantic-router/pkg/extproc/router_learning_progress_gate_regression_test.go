@@ -49,7 +49,7 @@ func TestProgressStreamAbortBeforeEOSRecordsTerminalOutcome(t *testing.T) {
 			if !ctx.StreamingAborted {
 				t.Fatal("pre-EOS termination must mark the stream aborted")
 			}
-			window := sessiontelemetry.RecentTurnOutcomes(progressEvidenceStateKey(ctx), time.Now())
+			window := sessiontelemetry.RecentTurnOutcomes(routingLearningStateKey(ctx), time.Now())
 			if len(window) != 1 {
 				t.Fatalf("pre-EOS termination must record exactly one outcome, got %+v", window)
 			}
@@ -83,7 +83,7 @@ func TestProgressCompletedStreamDoesNotGainAbortOutcome(t *testing.T) {
 
 	_ = router.handleProcessReceiveError(ctx, io.EOF)
 
-	window := sessiontelemetry.RecentTurnOutcomes(progressEvidenceStateKey(ctx), time.Now())
+	window := sessiontelemetry.RecentTurnOutcomes(routingLearningStateKey(ctx), time.Now())
 	if len(window) != 1 {
 		t.Fatalf("completed stream gained an extra outcome: %+v", window)
 	}
@@ -204,7 +204,7 @@ func TestProgressWindowConfiguredBeforeFirstSwitch(t *testing.T) {
 		router.applyProtectionPreflight(routerLearningInput{ctx: ctx, selCtx: selCtx, baseResult: &selection.SelectionResult{SelectedModel: "cheap"}, selectedModelRef: &selCtx.CandidateModels[0]})
 		recordSessionTurn(ctx, responseUsageMetrics{completionTokensReported: true, completionTokens: 1}, sessiontelemetry.TurnPricing{})
 	}
-	key := config.RoutingNamespaceKey("", "pre-switch")
+	key := config.RoutingNamespaceKey("", "pre-switch/conv")
 	if got := sessiontelemetry.RecentTurnOutcomesWithPolicy(key, time.Now(), 16, time.Hour); len(got) != 12 {
 		t.Fatalf("first switch would have lost configured history: %+v", got)
 	}
@@ -230,7 +230,7 @@ func TestProgressTerminalCaptureWithoutBillingUsage(t *testing.T) {
 			configureProgressEvidence(ctx, cfg, time.Now())
 			recordSessionTurn(ctx, tc.usage, sessiontelemetry.TurnPricing{})
 			recordSessionTurn(ctx, tc.usage, sessiontelemetry.TurnPricing{})
-			window := sessiontelemetry.RecentTurnOutcomes(progressEvidenceStateKey(ctx), time.Now())
+			window := sessiontelemetry.RecentTurnOutcomes(routingLearningStateKey(ctx), time.Now())
 			if len(window) != 1 || window[0].Category != tc.want {
 				t.Fatalf("terminal capture missing or duplicated: %+v", window)
 			}
@@ -308,10 +308,66 @@ func TestProgressRejectedRescueSurvivesFinalPolicy(t *testing.T) {
 	}
 }
 
+// TestProgressEvidenceKeyUsesResponseTrackingIdentity keeps Responses traffic on
+// one window: the per-request id changes every turn, so the key must come from
+// the stable tracking identity installed before the gate runs.
 func TestProgressEvidenceKeyUsesResponseTrackingIdentity(t *testing.T) {
-	ctx := &RequestContext{SessionID: "request-id", ResponseObjectState: &ResponseObjectState{SessionTrackingID: "stable-session"}}
-	if key := progressEvidenceStateKey(ctx); key != config.RoutingNamespaceKey("", "stable-session") {
+	ctx := &RequestContext{
+		SessionID:           "request-id",
+		ResponseObjectState: &ResponseObjectState{SessionTrackingID: "stable-session"},
+	}
+	populateSessionTransitionFields(ctx)
+	if key := routingLearningStateKey(ctx); key != config.RoutingNamespaceKey("", "stable-session") {
 		t.Fatalf("unstable Responses evidence key: %s", key)
+	}
+}
+
+// TestProgressEvidenceIsScopedToConversation keeps two conversations that share
+// a session id from pooling outcomes, which would let one spend or suppress the
+// other's switch budget.
+func TestProgressEvidenceIsScopedToConversation(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeConversation)}
+	router.Config.RouterLearning.Protection.Tuning.ProgressGate = &config.ProgressGateTuning{
+		Enabled: extprocBoolPtr(true), WindowSize: extprocIntPtr(16), WindowTTLSeconds: extprocIntPtr(3600),
+	}
+	selCtx := &selection.SelectionContext{CandidateModels: []config.ModelRef{{Model: "cheap"}}}
+
+	const sharedSession = "shared-session"
+	for i := 0; i < 4; i++ {
+		ctx := routerLearningRequestContext(sharedSession, "conv-noisy")
+		ctx.RequestID, ctx.RequestModel = fmt.Sprint(i), "cheap"
+		router.applyProtectionPreflight(routerLearningInput{
+			ctx: ctx, selCtx: selCtx,
+			baseResult:       &selection.SelectionResult{SelectedModel: "cheap"},
+			selectedModelRef: &selCtx.CandidateModels[0],
+		})
+		recordSessionTurn(ctx, responseUsageMetrics{completionTokensReported: true, completionTokens: 1}, sessiontelemetry.TurnPricing{})
+	}
+
+	quietCtx := routerLearningRequestContext(sharedSession, "conv-quiet")
+	quietCtx.RequestID, quietCtx.RequestModel = "quiet", "cheap"
+	router.applyProtectionPreflight(routerLearningInput{
+		ctx: quietCtx, selCtx: selCtx,
+		baseResult:       &selection.SelectionResult{SelectedModel: "cheap"},
+		selectedModelRef: &selCtx.CandidateModels[0],
+	})
+
+	noisyKey := config.RoutingNamespaceKey("", sharedSession+"/conv-noisy")
+	quietKey := routingLearningStateKey(quietCtx)
+	if quietKey == noisyKey {
+		t.Fatalf("both conversations share one evidence key: %s", quietKey)
+	}
+	if got := sessiontelemetry.RecentTurnOutcomesWithPolicy(noisyKey, time.Now(), 16, time.Hour); len(got) != 4 {
+		t.Fatalf("the busy conversation lost its own evidence: %+v", got)
+	}
+	if got := sessiontelemetry.RecentTurnOutcomesWithPolicy(quietKey, time.Now(), 16, time.Hour); len(got) != 0 {
+		t.Fatalf("evidence leaked across conversations under one session: %+v", got)
+	}
+	if got := sessiontelemetry.RecentTurnOutcomesWithPolicy(config.RoutingNamespaceKey("", sharedSession), time.Now(), 16, time.Hour); len(got) != 0 {
+		t.Fatalf("evidence still lands on the unscoped session key: %+v", got)
 	}
 }
 
