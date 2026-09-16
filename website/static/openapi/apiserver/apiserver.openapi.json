@@ -4095,8 +4095,8 @@
     },
     "/api/v1/observability/replays/trajectory": {
       "get": {
-        "summary": "Build a Router Replay session trajectory",
-        "description": "Build a Router Replay session trajectory",
+        "summary": "Build a recipe-scoped session trajectory with each recorded routing result",
+        "description": "Build a recipe-scoped session trajectory with each recorded routing result",
         "operationId": "get_api_v1_observability_replays_trajectory",
         "tags": [
           "observability"
@@ -4107,6 +4107,14 @@
             "in": "query",
             "description": "Logical session whose tool trajectory should be returned.",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Exact recipe scope; an empty value selects legacy unscoped records. Required when the session ID occurs in multiple recipes.",
             "schema": {
               "type": "string"
             }
@@ -4888,8 +4896,8 @@
     },
     "/api/v1/routing/preview": {
       "post": {
-        "summary": "Preview all configured signals and the resulting route without invoking a generation backend",
-        "description": "Preview all configured signals and the resulting route without invoking a generation backend",
+        "summary": "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+        "description": "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
         "operationId": "post_api_v1_routing_preview",
         "tags": [
           "routing"
@@ -4949,6 +4957,68 @@
           },
           "413": {
             "description": "Request body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Preview inference capacity is occupied, including workers still finishing after timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Decision unresolved, inference canceled, or API server shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "REQUEST_TIMEOUT: configured routing Preview request deadline exceeded",
             "content": {
               "application/json": {
                 "schema": {

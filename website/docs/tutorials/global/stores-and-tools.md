@@ -152,6 +152,20 @@ CLI local runtime will provision Postgres and fill `metadata_postgres` connectio
 defaults when `metadata_store: postgres` is set. Use `memory` only for ephemeral
 local experiments because store and file metadata is lost on router restart.
 
+With local `mmbert` embeddings, including Vela Embedding, each new vector store
+records the identity of the representation that created its vectors. After a
+model or dimension change, existing stores remain visible and their uploaded
+files are retained. Searching or attaching files to an incompatible or untagged
+store returns `409 EMBEDDING_REINDEX_REQUIRED`. Create a new vector store and
+reattach the original uploaded file IDs to generate compatible vectors. Client
+metadata cannot replace the router-owned `_router_embedding_identity` field.
+
+The same check applies to request-time RAG and cached retrieval results. The
+`llama_stack` backend embeds search queries remotely, so it cannot currently be
+combined with identity-bound local `mmbert` document embeddings. Use `memory`,
+`milvus`, `valkey`, or `qdrant` for that configuration. Remote provider identity
+verification is a separate capability.
+
 ### Tools
 
 ```yaml

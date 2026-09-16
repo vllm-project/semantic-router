@@ -88,16 +88,7 @@ func assertAuthenticatedRoutingPublication(
 }
 
 func TestRealWorkerAuthenticatedRoutingUsesServerBrokeredCredential(t *testing.T) {
-	python := os.Getenv("VLLM_SR_EVALUATION_TEST_PYTHON")
-	if python == "" {
-		t.Skip("set VLLM_SR_EVALUATION_TEST_PYTHON to run the real Python worker")
-	}
-	pythonRoot, err := filepath.Abs("../../../src/vllm-sr")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PYTHONPATH", pythonRoot)
-	t.Setenv("TMPDIR", "/tmp")
+	python := realEvaluationWorkerPython(t)
 	const routerAccessEnv = "ROUTER_EVAL_TOKEN"
 	const routerAccessValue = "server-owned-router-evaluation-secret"
 	t.Setenv(routerAccessEnv, routerAccessValue)

@@ -97,7 +97,7 @@ func TestRecordSessionTurnRecordsResponseAPILineageOnlyTurn(t *testing.T) {
 	}
 	recordSessionTurn(ctx, responseUsageMetrics{promptTokens: 50, completionTokens: 10}, sessiontelemetry.TurnPricing{})
 
-	if _, ok := sessiontelemetry.GetRouterSessionSnapshot("respapi:lineage:resp_root", time.Now()); !ok {
+	if _, ok := sessiontelemetry.GetRouterSessionSnapshot(routingSessionStateKey(ctx), time.Now()); !ok {
 		t.Fatal("lineage-only Response API turn (empty ConversationID) must still be recorded under its internal tracking id")
 	}
 }

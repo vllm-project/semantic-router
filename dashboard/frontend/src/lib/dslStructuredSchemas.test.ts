@@ -21,6 +21,16 @@ function flattenSchema(schema: FieldSchema[]): FieldSchema[] {
 }
 
 describe('DSL structured field schemas', () => {
+  it.each(['embedding', 'complexity'])('offers typed prototype controls for %s rules', (signal) => {
+    const prototype = requireField(getSignalFieldSchema(signal), 'prototype_scoring')
+    expect(prototype.type).toBe('object')
+    expect(prototype.required).toBeFalsy()
+    expect(requireField(prototype.fields || [], 'enabled').type).toBe('boolean')
+    for (const key of ['max_prototypes', 'best_weight', 'top_m']) {
+      expect(requireField(prototype.fields || [], key).type, key).toBe('number')
+    }
+  })
+
   it('uses JSON controls only for recursive or deliberately open payloads', () => {
     const schemas = [
       ...ALGORITHM_TYPES.flatMap((type) => getAlgorithmFieldSchema(type)),

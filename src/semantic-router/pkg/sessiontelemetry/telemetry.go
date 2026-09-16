@@ -220,7 +220,7 @@ func RecordTurn(p TurnParams) {
 }
 
 func scopedTelemetrySessionID(scope config.RecipeName, sessionID string) string {
-	return config.RoutingNamespaceKey(scope, sessionID)
+	return RoutingSessionKey(scope, sessionID)
 }
 
 func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time) turnCumulativeState {

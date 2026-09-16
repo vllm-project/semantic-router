@@ -1,9 +1,9 @@
 package extproc
 
 import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
