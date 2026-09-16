@@ -77,13 +77,19 @@ func verdictOutcomeCategory(verdict routerLearningOutcomeVerdict) (sessionteleme
 	}
 }
 
+// ingestedEvidenceKey resolves the window ingested feedback lands in: the
+// recorded protection-scoped key when present, else the bare-session
+// fallback that records without learning diagnostics were written under.
+func ingestedEvidenceKey(record routerreplay.RoutingRecord) string {
+	if record.Learning != nil && record.Learning.ProtectionStateKey != "" {
+		return record.Learning.ProtectionStateKey
+	}
+	return config.RoutingNamespaceKey(config.RecipeName(record.Recipe), record.SessionID)
+}
+
 // recordIngestedTurnOutcome mirrors an accepted model verdict into the evidence
 // window. The verdict grades an earlier turn, so it is written with that turn's
 // event time and the window inserts it in order rather than at the tail.
-//
-// The replay record stores the bare session ID, so the routing namespace is
-// rebuilt here: response-side capture keys the window by
-// routingSessionStateKey, and both writers must land in the same window.
 func recordIngestedTurnOutcome(
 	record routerreplay.RoutingRecord,
 	model string,
@@ -102,7 +108,7 @@ func recordIngestedTurnOutcome(
 	if record.ResponseStatus == 429 || record.ResponseStatus >= 500 {
 		category = sessiontelemetry.TurnProviderError
 	}
-	sessionKey := config.RoutingNamespaceKey(config.RecipeName(record.Recipe), record.SessionID)
+	sessionKey := ingestedEvidenceKey(record)
 	sessiontelemetry.RecordTurnOutcome(sessionKey, sessiontelemetry.TurnOutcome{
 		RequestID:       record.RequestID,
 		TurnIndex:       record.TurnIndex,

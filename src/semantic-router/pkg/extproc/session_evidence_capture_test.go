@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
@@ -159,6 +160,54 @@ func TestRecordIngestedTurnOutcomeSharesSessionKeyWithCapture(t *testing.T) {
 	}
 	if window[0].Category != sessiontelemetry.TurnRegression || !window[0].ModelAttributable {
 		t.Fatalf("underpowered verdict must be an attributable regression: %+v", window[0])
+	}
+}
+
+// TestIngestedOutcomeLandsInRecordedWindow keeps ingested verdicts in the
+// window the gate reads: the recorder persists the protection-scoped key, so
+// feedback under the default conversation scope cannot fall back to the bare
+// session key that records without learning diagnostics were written under.
+func TestIngestedOutcomeLandsInRecordedWindow(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeConversation)}
+	router.Config.RouterLearning.Protection.Tuning.ProgressGate = &config.ProgressGateTuning{
+		Enabled: extprocBoolPtr(true), WindowSize: extprocIntPtr(16), WindowTTLSeconds: extprocIntPtr(3600),
+	}
+	selCtx := &selection.SelectionContext{CandidateModels: []config.ModelRef{{Model: "cheap"}}}
+
+	ctx := routerLearningRequestContext("shared-session", "conv-recorded")
+	ctx.RequestID, ctx.RequestModel = "turn", "cheap"
+	router.applyProtectionPreflight(routerLearningInput{
+		ctx: ctx, selCtx: selCtx,
+		baseResult:       &selection.SelectionResult{SelectedModel: "cheap"},
+		selectedModelRef: &selCtx.CandidateModels[0],
+	})
+
+	record := routerreplay.RoutingRecord{
+		SessionID: ctx.SessionID,
+		Timestamp: time.Now().Add(-time.Minute),
+		Learning:  &routerreplay.LearningDiagnostics{},
+	}
+	router.populateReplayIdentity(&record, ctx)
+	if want := routingLearningStateKey(ctx); record.Learning.ProtectionStateKey != want {
+		t.Fatalf("recorded key %q must match the gate key %q", record.Learning.ProtectionStateKey, want)
+	}
+	fallback := ingestedEvidenceKey(routerreplay.RoutingRecord{SessionID: record.SessionID})
+	if record.Learning.ProtectionStateKey == fallback {
+		t.Fatalf("the recorded key must differ from the bare-session fallback %q", fallback)
+	}
+
+	now := time.Now()
+	sessiontelemetry.ConfigureTurnOutcomeWindow(ingestedEvidenceKey(record), 16, time.Hour, now)
+	recordIngestedTurnOutcome(record, "cheap", routerLearningOutcomeUnderpowered, 0.9, true)
+
+	if got := sessiontelemetry.RecentTurnOutcomesWithPolicy(record.Learning.ProtectionStateKey, now, 16, time.Hour); len(got) != 1 {
+		t.Fatalf("ingested verdict missed the recorded window: %+v", got)
+	}
+	if got := sessiontelemetry.RecentTurnOutcomesWithPolicy(fallback, now, 16, time.Hour); len(got) != 0 {
+		t.Fatalf("ingested verdict fell back to the bare session key: %+v", got)
 	}
 }
 

@@ -19511,6 +19511,9 @@
                                     "type": "integer"
                                   }
                                 }
+                              },
+                              "protection_state_key": {
+                                "type": "string"
                               }
                             }
                           },
@@ -22892,6 +22895,9 @@
                               "type": "integer"
                             }
                           }
+                        },
+                        "protection_state_key": {
+                          "type": "string"
                         }
                       }
                     },
