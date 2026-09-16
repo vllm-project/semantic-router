@@ -70,10 +70,10 @@ pub fn chunked_sdpa(
     chunked_sdpa_with_key_block(q, k, v, pad_mask, cfg, ATTN_KEY_BLOCK)
 }
 
-/// Use Candle's fused row-wise softmax on CPU when a query block's keys fit
-/// in one tile. Larger key ranges use the same bounded online softmax as the
-/// regular entry point. The fused operation has no backward implementation;
-/// the regular entry point keeps its existing autograd behavior.
+/// Preserve the qualified fused row-wise CPU softmax path, which bounds memory
+/// by query blocks. Other devices additionally block keys with online softmax.
+/// The fused operation has no backward implementation; the regular entry point
+/// keeps its existing autograd behavior.
 pub fn chunked_sdpa_cpu_softmax(
     q: &Tensor,
     k: &Tensor,
@@ -81,7 +81,9 @@ pub fn chunked_sdpa_cpu_softmax(
     pad_mask: Option<&Tensor>,
     cfg: &ChunkedSdpaConfig,
 ) -> candle_core::Result<Tensor> {
-    chunked_sdpa_impl(q, k, v, pad_mask, cfg, ATTN_KEY_BLOCK, q.device().is_cpu())
+    let cpu_softmax = q.device().is_cpu();
+    let key_block = if cpu_softmax { 0 } else { ATTN_KEY_BLOCK };
+    chunked_sdpa_impl(q, k, v, pad_mask, cfg, key_block, cpu_softmax)
 }
 
 pub(crate) fn chunked_sdpa_with_key_block(
@@ -112,7 +114,10 @@ fn chunked_sdpa_impl(
         DType::F16 | DType::BF16 => DType::F32,
         dtype => dtype,
     };
-    let max_floor = f32::MIN as f64;
+    let max_floor = match compute_dtype {
+        DType::F64 => f64::MIN,
+        _ => f32::MIN as f64,
+    };
 
     // Fold the scale into the queries once (cheap, O(seq*d)) before chunking.
     let q = (q * cfg.scale)?.contiguous()?;
