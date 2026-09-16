@@ -139,14 +139,59 @@ All limits include special tokens. The complete AMD pipeline currently has an
 
 Local classifiers default to 512 tokens. Set a deployment's `input.max_tokens`
 to increase the budget for a compatible checkpoint and graph; for example,
-`32768` enables a 32K budget on the native Vela CPU path. `overflow: reject`
-returns an error for oversized inputs.
+`32768` enables a 32K budget on the native Vela CPU path. On AMD, also select
+and qualify a graph and execution provider that support that length; see the
+[AMD 32K options](../amd-rocm.md#optional-32k-domain-and-factcheck-on-rocm).
+
+For an ordinary Domain, FactCheck, Feedback, or embedding encoder, edit the
+existing deployment's `input` block to process up to 32,768 tokens and truncate
+longer input before inference:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela-domain:
+        # Keep this deployment's artifact, provider, device, and precision.
+        input:
+          max_tokens: 32768
+          overflow: truncate
+```
+
+This is a fragment, not a complete deployment. Keep the binding pointed at the
+same deployment, or create a separate deployment when recipes need different
+input policies. The budget includes tokenizer special tokens. `truncate` keeps
+the beginning of the input within that budget and preserves the tokenizer's
+special-token envelope. At or below the limit, the complete input is processed.
+Above it, these encoders return their normal result with input-usage metadata
+marking the truncation. `overflow: reject` explicitly rejects oversized input;
+it remains the default when the policy is omitted.
+
+Encoder budgets cover **input only**. Classification scores and embedding
+vectors do not reserve generated output tokens. Truncating the encoder's input
+does not modify the original chat messages, system instructions, or tool calls
+sent to the generation backend. A backend configured with
+`--max-model-len 32768` separately budgets its tokenized prompt **plus generated
+output**, including chat-template and tool overhead. Encoder truncation alone
+does not make an over-budget generation request eligible for that backend.
+
+Do not apply this truncation policy to every binding. Safety scans, token-span
+coverage, calibrated operating points, and rerankers have their own completeness
+contracts. Keep their required windowing or rejection policies; a partial scan
+must not be treated as a complete safety result.
 
 Long-input CPU inference can be substantially slower. Choose the smallest
 budget that covers your workload and measure both quality and latency. For
 scanning local risks across a long request, see
 [Safety input policies](safety.md#native-classifier-context). Embedding signals
 also have a separate [full-context setting](embeddings.md#input-policy).
+
+Validate the edited configuration, restart through `vllm-sr serve`, and test
+short input, exactly-at-budget input, and over-budget input using the model's
+actual tokenizer. Check original and processed token counts and the truncation
+flag; character counts and a generation model's tokenizer are not substitutes.
+Use [Route Preview](lifecycle-diagnostics.md#inspect-the-executed-path) to verify
+signal execution separately from a real chat request's generation budget.
 
 ## Add another model or task
 
