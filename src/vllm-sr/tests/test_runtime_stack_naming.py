@@ -236,6 +236,7 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
 
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",

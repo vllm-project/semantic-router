@@ -12,18 +12,21 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // writeClassificationError maps a classification service error to an HTTP
-// status code: empty/whitespace input is a client error (400 INVALID_INPUT);
+// status code: empty/whitespace input or a model input limit is a client error
+// (400 INVALID_INPUT);
 // an unavailable classifier or unresolved decision under fail_request is a
 // service outage (503); anything else is treated as an
 // internal error (500 CLASSIFICATION_ERROR).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
 	if errors.Is(err, services.ErrEmptyText) ||
-		errors.Is(err, services.ErrInvalidRequestFacts) {
+		errors.Is(err, services.ErrInvalidRequestFacts) ||
+		errors.Is(err, binding.ErrInputLimit) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 		return
 	}

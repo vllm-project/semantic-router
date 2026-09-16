@@ -13,7 +13,8 @@ func (m *classifierModelRuntime) resolveDefaultJailbreakWindow() error {
 	guard := m.cfg.PromptGuard
 	if _, bound := m.plan.Lookup(m.recipe, "prompt_guard"); bound ||
 		!guard.Enabled || guard.Variant != config.PromptGuardVariantMmBERT32K || guard.Backend != nil || guard.Protocol != "" ||
-		guard.MaxSequenceLength != 0 || guard.Window != nil {
+		guard.MaxSequenceLength != 0 || guard.Window != nil ||
+		!isDefaultModelArtifact(guard.ModelID, config.DefaultSystemModels().PromptGuard) {
 		return nil
 	}
 	model := config.GetModelByPath(config.DefaultSystemModels().PromptGuard)

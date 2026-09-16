@@ -32,9 +32,12 @@ def test_reference_vela_policy_survives_runtime_materialization(
     modules = catalog["modules"]
     fact_check = modules["hallucination_mitigation"]["fact_check"]
     assert fact_check["threshold"] == 0.95
+    pii = modules["classifier"]["pii"]
+    assert pii["max_sequence_length"] == 32768
+    assert pii["window"] == {"size": 512, "overlap": 255}
+    assert pii["use_cpu"] is (platform == "cpu")
     for module in (
         modules["classifier"]["domain"],
-        modules["classifier"]["pii"],
         fact_check,
         modules["feedback_detector"],
         modules["modality_detector"]["classifier"],
