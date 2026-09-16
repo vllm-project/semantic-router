@@ -76,6 +76,16 @@ its unsupported image path and excluded decision; it is not a successful run of
 the full multimodal baseline. Do not reduce candidate minimums or invent a model
 to hide unavailable capability.
 
+Record limits at each layer: the learned deployment's `input.max_tokens` and
+`overflow`, the decision's `rules.on_unknown`, Model Card context/output limits
+used by `candidate_requirements.context: known_limits`, and the backend's total
+prompt-plus-generation context. A learned binding's `overflow: reject` does not
+by itself make that limit an API rejection boundary: an unknown signal can cause
+`no_match` and another decision to serve the request. Candidate metadata can also
+exclude a budget that the backend accepts directly. Verify these separately with
+the [boundary checks](evaluation-loop.md#token-boundaries-and-public-errors)
+before advertising supported limits.
+
 ## Dashboard access
 
 When UI access is requested, launch the Dashboard component with the intended

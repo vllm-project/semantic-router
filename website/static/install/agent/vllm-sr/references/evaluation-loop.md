@@ -132,6 +132,25 @@ IDs and actual assertions exercised, and report baseline and adapted coverage.
 Do not rewrite digest-bound resources or claim full bundle conformance from a
 filtered result.
 
+## Token boundaries and public errors
+
+Test below, at, and above each relevant limit independently: learned input
+capacity and overflow handling, candidate context/output eligibility, and the
+backend's combined prompt-plus-generation context. Record the counting method
+at each layer; tokenizers, chat templates, and Router estimates can differ.
+Keep the other budgets within their limits to identify which boundary acted.
+
+For learned overflow, inspect signal status, `rules.on_unknown`, the applied
+unknown-policy header/trace when available, and the final selected decision.
+An overflow rejected by a binding can still yield a successful request through
+another decision under `no_match`; do not infer API rejection or input truncation
+from the binding limit alone. Check output budgets against Model Card
+`max_output_tokens` and `known_limits` eligibility separately from the backend's
+actual capacity. Compare direct backend and public entrypoint responses, keeping
+their HTTP status, error body, and any fallback or degradation; their errors need
+not be identical. Report the observed public contract, including incomplete
+delivery, instead of counting every HTTP 200 as a boundary pass.
+
 ## Repeated API and UI checks
 
 When stability is requested, define a bounded matrix before running it: relevant
