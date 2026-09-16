@@ -431,6 +431,11 @@ func TestFactory_Create(t *testing.T) {
 			expectedMethod: MethodLatencyAware,
 		},
 		{
+			name:           "create random selector",
+			method:         "random",
+			expectedMethod: MethodRandom,
+		},
+		{
 			name:           "create static selector (default)",
 			method:         "static",
 			expectedMethod: MethodStatic,
