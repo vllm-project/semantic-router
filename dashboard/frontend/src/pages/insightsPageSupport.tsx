@@ -295,7 +295,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
           {row.streaming && (
             <span className={`${styles.indicator} ${styles.indicatorActive}`}>Streaming</span>
           )}
-          {!row.from_cache && !row.streaming && <span>No flags</span>}
+          {!row.from_cache && !row.streaming && <span>No recorded flags</span>}
         </div>
       ),
     },
