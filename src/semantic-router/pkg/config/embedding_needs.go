@@ -56,9 +56,6 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 				needed[primary] = true
 			}
 		}
-		if decision.HasPlugin("tool_selection") && cfg.GlobalModelBindings["embedding"].Deployment == "" {
-			needed[primary] = true
-		}
 		if compression := decision.GetContextCompressionConfig(); compression != nil && compression.EffectiveScoring().Method != ContextCompressionScoringBM25 {
 			needed[primary] = true
 		}
