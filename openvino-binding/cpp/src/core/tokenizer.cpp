@@ -76,13 +76,9 @@ std::vector<int> OVNativeTokenizer::tokenize(const std::string &text,
     ov::Tensor input_tensor(ov::element::string, ov::Shape{1});
     input_tensor.data<std::string>()[0] = text;
 
-    // Reuse per-thread InferRequest to avoid repeated allocation overhead.
-    thread_local ov::InferRequest infer_request;
-    thread_local ov::CompiledModel* cached_model = nullptr;
-    if (cached_model != compiled_tokenizer_.get()) {
-        infer_request = compiled_tokenizer_->create_infer_request();
-        cached_model = compiled_tokenizer_.get();
-    }
+    // Keep the request scoped to this tokenizer. A thread-local request would
+    // retain a retired model and could match a new model at the same address.
+    auto infer_request = compiled_tokenizer_->create_infer_request();
     infer_request.set_input_tensor(input_tensor);
     infer_request.infer();
 
@@ -132,13 +128,9 @@ TokenizationResult OVNativeTokenizer::tokenizeFull(const std::string &text,
     ov::Tensor input_tensor(ov::element::string, ov::Shape{1});
     input_tensor.data<std::string>()[0] = text;
 
-    // Reuse per-thread InferRequest to avoid repeated allocation overhead.
-    thread_local ov::InferRequest infer_request;
-    thread_local ov::CompiledModel* cached_model = nullptr;
-    if (cached_model != compiled_tokenizer_.get()) {
-        infer_request = compiled_tokenizer_->create_infer_request();
-        cached_model = compiled_tokenizer_.get();
-    }
+    // Keep the request scoped to this tokenizer. A thread-local request would
+    // retain a retired model and could match a new model at the same address.
+    auto infer_request = compiled_tokenizer_->create_infer_request();
     infer_request.set_input_tensor(input_tensor);
     infer_request.infer();
 

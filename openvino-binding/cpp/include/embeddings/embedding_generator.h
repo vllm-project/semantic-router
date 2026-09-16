@@ -24,7 +24,8 @@ public:
     );
     
     // Generate embedding for text
-    std::vector<float> generateEmbedding(const std::string& text, int max_length = 512);
+    std::vector<float> generateEmbedding(const std::string& text, int max_length = 512,
+                                         bool reject_overflow = false, int* original_tokens = nullptr);
     
     // Compute similarity between two texts
     float computeSimilarity(const std::string& text1, const std::string& text2, int max_length = 512);

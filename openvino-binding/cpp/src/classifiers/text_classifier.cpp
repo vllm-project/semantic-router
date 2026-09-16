@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
+#include <limits>
 
 namespace openvino_sr {
 namespace classifiers {
@@ -97,7 +98,7 @@ bool TextClassifier::initialize(
         if (last_slash != std::string::npos) {
             model_dir = model_dir.substr(0, last_slash);
         }
-        tokenizer_.loadVocab(model_dir);
+        if (!tokenizer_.loadVocab(model_dir)) return false;
 
           // Detect attention_mask input name at init time to avoid per-inference try-catch.
           attention_mask_name_ = "attention_mask";
@@ -177,7 +178,8 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
         // Acquire an InferRequest slot and keep it locked for the full inference.
         auto& manager = core::ModelManager::getInstance();
         auto* slot = manager.acquireInferRequest(*model_);
-        
+        if (!slot) return result;
+
         // Keep the slot locked until tensors and inference are complete.
         std::unique_lock<std::mutex> request_lock(slot->mutex, std::adopt_lock);
         
@@ -210,7 +212,8 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
     return result;
 }
 
-core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(const std::string& text) {
+core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(const std::string& text, int max_length,
+                                                                               bool reject_overflow, int* original_tokens) {
     core::ClassificationResultWithProbs result;
     result.predicted_class = -1;
     result.confidence = 0.0f;
@@ -222,7 +225,12 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
     
     try {
         // Tokenize input
-        std::vector<int> token_ids = tokenizer_.tokenize(text, 8192);
+        auto token_ids = tokenizer_.tokenize(text, std::numeric_limits<int>::max());
+        if (original_tokens) *original_tokens = static_cast<int>(token_ids.size());
+        if (max_length <= 0 || (reject_overflow && token_ids.size() > static_cast<size_t>(max_length))) {
+            return result;
+        }
+        if (token_ids.size() > static_cast<size_t>(max_length)) token_ids.resize(max_length);
         
         if (token_ids.empty()) {
             std::cerr << "Tokenization failed or returned empty" << std::endl;
@@ -251,7 +259,8 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
         // Acquire an InferRequest slot and keep it locked for the full inference.
         auto& manager = core::ModelManager::getInstance();
         auto* slot = manager.acquireInferRequest(*model_);
-        
+        if (!slot) return result;
+
         // Keep the slot locked until tensors and inference are complete.
         std::unique_lock<std::mutex> request_lock(slot->mutex, std::adopt_lock);
         

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>
+#include <limits>
 
 namespace openvino_sr {
 namespace embeddings {
@@ -77,7 +78,7 @@ bool EmbeddingGenerator::initialize(
         if (last_slash != std::string::npos) {
             model_dir = model_dir.substr(0, last_slash);
         }
-        tokenizer_.loadVocab(model_dir);
+        if (!tokenizer_.loadVocab(model_dir)) return false;
         
         std::cout << "OpenVINO embedding model initialized: " << model_path 
                   << " on " << device << std::endl;
@@ -92,7 +93,9 @@ bool EmbeddingGenerator::initialize(
 
 std::vector<float> EmbeddingGenerator::generateEmbedding(
     const std::string& text,
-    int max_length
+    int max_length,
+    bool reject_overflow,
+    int* original_tokens
 ) {
     if (!model_ || !model_->compiled_model) {
         std::cerr << "Embedding model not initialized" << std::endl;
@@ -101,7 +104,12 @@ std::vector<float> EmbeddingGenerator::generateEmbedding(
     
     try {
         // Tokenize text
-        auto token_ids = tokenizer_.tokenize(text, max_length);
+        auto token_ids = tokenizer_.tokenize(text, std::numeric_limits<int>::max());
+        if (original_tokens) *original_tokens = static_cast<int>(token_ids.size());
+        if (max_length <= 0 || (reject_overflow && token_ids.size() > static_cast<size_t>(max_length))) {
+            return {};
+        }
+        if (token_ids.size() > static_cast<size_t>(max_length)) token_ids.resize(max_length);
         if (token_ids.empty()) {
             std::cerr << "Tokenization failed or returned empty" << std::endl;
             return {};

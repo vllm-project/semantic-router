@@ -27,7 +27,8 @@ public:
     core::ClassificationResult classify(const std::string& text);
     
     // Classify with all class probabilities
-    core::ClassificationResultWithProbs classifyWithProbabilities(const std::string& text);
+    core::ClassificationResultWithProbs classifyWithProbabilities(const std::string& text, int max_length = 8192,
+                                                                    bool reject_overflow = false, int* original_tokens = nullptr);
     
     // Check if initialized
     bool isInitialized() const { return model_ && model_->compiled_model != nullptr; }
