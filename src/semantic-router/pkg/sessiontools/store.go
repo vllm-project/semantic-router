@@ -74,6 +74,15 @@ type Store interface {
 	// quota identifies the cardinality bucket this key counts against for
 	// admission/eviction purposes.
 	//
+	// Implementations must make revisions incarnation-safe: a revision
+	// value must never be reused at a given key across that key's full
+	// lifetime, including across expiry and later recreation. A per-key
+	// counter that resets on every fresh admission does not satisfy this —
+	// a writer holding a revision captured from an earlier, since-expired
+	// incarnation could then have its stale CompareAndSwap coincidentally
+	// match a completely different, later incarnation and silently
+	// overwrite it.
+	//
 	// Returns (true, nil) on success. Returns (false, ErrRevisionMismatch)
 	// when expectedRevision does not match — an expected outcome under
 	// concurrent writers, not treated as a failure by this signature
