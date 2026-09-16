@@ -455,6 +455,20 @@ extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
+import (
+	"encoding/base64"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"regexp"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+	"unsafe"
+)
+
 var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
 
 const userAgent = "semantic-router/1.0 (https://github.com/vllm-project/semantic-router)"
@@ -471,19 +485,6 @@ func ensureEmbeddingModelReady(modelType string) error {
 	}
 	return nil
 }
-import (
-	"encoding/base64"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"regexp"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
-	"unsafe"
-)
 
 var (
 	initOnce                              sync.Once

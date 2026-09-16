@@ -364,7 +364,7 @@ func TestCheckEmbeddingReadinessImageRequestRequiresMultimodal(t *testing.T) {
 		t.Fatal("expected image request to be rejected when multimodal is not prepared")
 	}
 	both := embedding.NewSet(map[string]embedding.Provider{
-		"qwen3":     fakeProvider("candle"),
+		"qwen3":      fakeProvider("candle"),
 		"multimodal": fakeProvider("candle"),
 	}, "qwen3")
 	if err := checkEmbeddingReadiness(both, EmbeddingRequest{Images: images}); err != nil {
@@ -386,7 +386,7 @@ func TestCheckEmbeddingReadinessMixedRequestNeedsBothFamilies(t *testing.T) {
 		t.Fatal("expected mixed request to be rejected when no text model is prepared")
 	}
 	both := embedding.NewSet(map[string]embedding.Provider{
-		"qwen3":     fakeProvider("candle"),
+		"qwen3":      fakeProvider("candle"),
 		"multimodal": fakeProvider("candle"),
 	}, "qwen3")
 	if err := checkEmbeddingReadiness(both, mixed); err != nil {
