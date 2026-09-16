@@ -114,6 +114,21 @@ type SequenceHeadWindowConfig struct {
 	Overlap int `yaml:"overlap"`
 }
 
+// validateGeometry checks the window without depending on a model binding's
+// input budget or provider, which may not exist until CRDs are merged.
+func (c *SequenceHeadWindowConfig) validateGeometry() error {
+	if c == nil {
+		return nil
+	}
+	if c.Size <= 0 {
+		return fmt.Errorf("window.size must be positive and at most max_sequence_length")
+	}
+	if c.Overlap < 0 || c.Overlap >= c.Size {
+		return fmt.Errorf("window.overlap must be nonnegative and smaller than window.size")
+	}
+	return nil
+}
+
 func (c SequenceHeadModelConfig) ValidateWindow() error {
 	if c.Window == nil {
 		return nil
@@ -121,10 +136,7 @@ func (c SequenceHeadModelConfig) ValidateWindow() error {
 	if c.Window.Size <= 0 || c.Window.Size > c.InputLimit() {
 		return fmt.Errorf("window.size must be positive and at most max_sequence_length")
 	}
-	if c.Window.Overlap < 0 || c.Window.Overlap >= c.Window.Size {
-		return fmt.Errorf("window.overlap must be nonnegative and smaller than window.size")
-	}
 	// The native tokenizer additionally checks that special tokens leave
 	// enough content room for this overlap when scanning the model.
-	return nil
+	return c.Window.validateGeometry()
 }
