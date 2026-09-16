@@ -22,7 +22,7 @@ func TestReceiptGoldenRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	var golden bytes.Buffer
-	if err := json.Compact(&golden, data); err != nil {
+	if err = json.Compact(&golden, data); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(canonical, golden.Bytes()) {
@@ -33,7 +33,7 @@ func TestReceiptGoldenRoundTrip(t *testing.T) {
 	if receipt.SubjectDigest != wantSubject {
 		t.Fatalf("subject digest = %s, want %s", receipt.SubjectDigest, wantSubject)
 	}
-	if err := receipt.VerifyDigest(wantReceipt); err != nil {
+	if err = receipt.VerifyDigest(wantReceipt); err != nil {
 		t.Fatal(err)
 	}
 	roundTrip, err := ParseReceipt(canonical)
@@ -44,7 +44,7 @@ func TestReceiptGoldenRoundTrip(t *testing.T) {
 	if err != nil || !bytes.Equal(again, canonical) {
 		t.Fatalf("round-trip changed canonical bytes: %v", err)
 	}
-	if err := roundTrip.VerifyDigest(wantReceipt); err != nil {
+	if err = roundTrip.VerifyDigest(wantReceipt); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -82,12 +82,12 @@ func TestReceiptDigestDetectsTampering(t *testing.T) {
 			r := baseline
 			r.Checks = append([]CheckOutcome(nil), baseline.Checks...)
 			mutate(&r)
-			data, err := json.Marshal(r)
-			if err != nil {
-				t.Fatal(err)
+			data, marshalErr := json.Marshal(r)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
 			}
-			parsed, err := ParseReceipt(data)
-			if err == nil && parsed.VerifyDigest(expected) == nil {
+			parsed, parseErr := ParseReceipt(data)
+			if parseErr == nil && parsed.VerifyDigest(expected) == nil {
 				t.Fatal("tampered evidence verified against the original digest")
 			}
 		})
@@ -97,10 +97,10 @@ func TestReceiptDigestDetectsTampering(t *testing.T) {
 	if err != nil || digest == expected {
 		t.Fatalf("failed evidence must have a distinct digest: %s, %v", digest, err)
 	}
-	if err := baseline.VerifyDigest(digest); err != nil {
+	if err = baseline.VerifyDigest(digest); err != nil {
 		t.Fatalf("intact failed evidence must verify: %v", err)
 	}
-	if err := baseline.VerifyDigest("invalid"); err == nil {
+	if err = baseline.VerifyDigest("invalid"); err == nil {
 		t.Fatal("malformed expected digest accepted")
 	}
 }
@@ -144,7 +144,7 @@ func TestReceiptSchemaIsConnectorNeutral(t *testing.T) {
 	if receipt.Subject.SchemaVersion != SubjectSchemaVersionV1 || receipt.SubjectDigest == original {
 		t.Fatal("another connector must retain the schema but change the identity")
 	}
-	if err := validateLocalCandleCPUSubject(subject); err == nil {
+	if err = validateLocalCandleCPUSubject(subject); err == nil {
 		t.Fatal("Candle runner must not accept another connector")
 	}
 }

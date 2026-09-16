@@ -31,7 +31,7 @@ func TestDigestLocalCandleArtifact(t *testing.T) {
 		t.Fatalf("identical artifact digests = %q and %q", firstDigest, secondDigest)
 	}
 
-	if err := os.WriteFile(filepath.Join(second, "tokenizer.json"), []byte(`{"version":"2.0"}`), 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(second, "tokenizer.json"), []byte(`{"version":"2.0"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	changedDigest, err := DigestLocalCandleArtifact(second)
@@ -58,7 +58,7 @@ func TestDigestLocalCandleArtifactMatchesLoaderWeightPreference(t *testing.T) {
 	if before != want {
 		t.Fatalf("DigestLocalCandleArtifact() = %q, want golden %q", before, want)
 	}
-	if err := os.WriteFile(filepath.Join(artifact, "pytorch_model.bin"), []byte("changed fallback"), 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(artifact, "pytorch_model.bin"), []byte("changed fallback"), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	after, err := DigestLocalCandleArtifact(artifact)

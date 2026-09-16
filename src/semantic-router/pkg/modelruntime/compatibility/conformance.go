@@ -33,7 +33,7 @@ func QualifyLocalCandleCPU(
 	runtime CandleRuntime,
 ) (Receipt, error) {
 	if runtime == nil {
-		return Receipt{}, fmt.Errorf("Candle qualification runtime is required")
+		return Receipt{}, fmt.Errorf("candle qualification runtime is required")
 	}
 	if err := validateLocalCandleCPUSubject(subject); err != nil {
 		return Receipt{}, err

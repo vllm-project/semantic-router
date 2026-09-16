@@ -31,8 +31,13 @@ func TestNativeCandleCPUCommandRoundTrip(t *testing.T) {
 	if digest != artifactDigest {
 		t.Fatalf("model is not the pinned tiny BERT fixture: %s", digest)
 	}
+	testExecutable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	runCommand := func(args ...string) ([]byte, error) {
-		command := exec.Command(os.Args[0], append([]string{"-test.run=^TestModelcompatCommandProcess$", "--"}, args...)...)
+		// #nosec G204 -- Re-exec this test binary with fixture-controlled arguments, without a shell.
+		command := exec.Command(testExecutable, append([]string{"-test.run=^TestModelcompatCommandProcess$", "--"}, args...)...)
 		command.Env = append(os.Environ(), "MODEL_COMPAT_COMMAND_PROCESS=1")
 		return command.CombinedOutput()
 	}
@@ -52,7 +57,7 @@ func TestNativeCandleCPUCommandRoundTrip(t *testing.T) {
 	if !strings.Contains(string(output), expected) {
 		t.Fatalf("qualification did not report complete receipt digest: %s", output)
 	}
-	if output, err := runCommand("validate", "--expected-digest", expected, path); err != nil {
+	if output, err = runCommand("validate", "--expected-digest", expected, path); err != nil {
 		t.Fatalf("round-trip validation failed: %v\n%s", err, output)
 	}
 	receipt.Checks[0].Passed = false
@@ -60,10 +65,10 @@ func TestNativeCandleCPUCommandRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, tampered, 0o600); err != nil {
+	if err = os.WriteFile(path, tampered, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if output, err := runCommand("validate", "--expected-digest", expected, path); err == nil || !strings.Contains(string(output), "does not match expected") {
+	if output, err = runCommand("validate", "--expected-digest", expected, path); err == nil || !strings.Contains(string(output), "does not match expected") {
 		t.Fatalf("tampered evidence must fail integrity validation: %v\n%s", err, output)
 	}
 }

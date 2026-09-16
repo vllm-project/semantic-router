@@ -46,16 +46,16 @@ func (s QualificationSuite) Validate(labels []string) error {
 		return fmt.Errorf("unsupported Candle qualification suite schema %q", s.SchemaVersion)
 	}
 	if len(s.LabelParity) == 0 {
-		return fmt.Errorf("Candle qualification label_parity probes must not be empty")
+		return fmt.Errorf("candle qualification label_parity probes must not be empty")
 	}
 	if len(s.InputBounds) == 0 {
-		return fmt.Errorf("Candle qualification input_bounds probes must not be empty")
+		return fmt.Errorf("candle qualification input_bounds probes must not be empty")
 	}
 	if s.DeadlineBehavior.MaxDurationMillis <= 0 {
-		return fmt.Errorf("Candle qualification deadline max_duration_ms must be positive")
+		return fmt.Errorf("candle qualification deadline max_duration_ms must be positive")
 	}
 	if s.DeadlineBehavior.MaxDurationMillis > math.MaxInt64/int64(time.Millisecond) {
-		return fmt.Errorf("Candle qualification deadline max_duration_ms exceeds time.Duration")
+		return fmt.Errorf("candle qualification deadline max_duration_ms exceeds time.Duration")
 	}
 	if err := validateNamedProbes("label_parity", len(s.LabelParity), func(index int) string {
 		return s.LabelParity[index].Name
@@ -65,7 +65,7 @@ func (s QualificationSuite) Validate(labels []string) error {
 	for index, probe := range s.LabelParity {
 		if !slices.Contains(labels, probe.WantLabel) {
 			return fmt.Errorf(
-				"Candle qualification label_parity[%d].want_label %q is not in subject labels",
+				"candle qualification label_parity[%d].want_label %q is not in subject labels",
 				index,
 				probe.WantLabel,
 			)
@@ -111,17 +111,17 @@ func validateNamedProbes(kind string, count int, nameAt func(int) string) error 
 	for index := range count {
 		name := nameAt(index)
 		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("Candle qualification %s[%d].name is required", kind, index)
+			return fmt.Errorf("candle qualification %s[%d].name is required", kind, index)
 		}
 		if strings.TrimSpace(name) != name {
 			return fmt.Errorf(
-				"Candle qualification %s[%d].name must not have surrounding whitespace",
+				"candle qualification %s[%d].name must not have surrounding whitespace",
 				kind,
 				index,
 			)
 		}
 		if _, exists := seen[name]; exists {
-			return fmt.Errorf("Candle qualification %s probe %q is duplicated", kind, name)
+			return fmt.Errorf("candle qualification %s probe %q is duplicated", kind, name)
 		}
 		seen[name] = struct{}{}
 	}

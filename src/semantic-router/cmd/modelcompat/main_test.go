@@ -111,7 +111,7 @@ func TestRunValidateAcceptsFailedEvidence(t *testing.T) {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 	var receipt compatibility.Receipt
-	if err := json.Unmarshal(data, &receipt); err != nil {
+	if err = json.Unmarshal(data, &receipt); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
 	receipt.Checks[0].Passed = false
@@ -120,12 +120,12 @@ func TestRunValidateAcceptsFailedEvidence(t *testing.T) {
 		t.Fatalf("Marshal() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "receipt.json")
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err = os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
 	var stdout bytes.Buffer
-	if err := run([]string{"validate", path}, nil, &stdout); err != nil {
+	if err = run([]string{"validate", path}, nil, &stdout); err != nil {
 		t.Fatalf("run(validate) error = %v", err)
 	}
 	if !strings.Contains(stdout.String(), "failed checks: 1") {
@@ -174,7 +174,7 @@ func TestWriteReceiptDoesNotOverwriteEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "receipt.json")
-	if err := writeReceipt(path, receipt); err != nil {
+	if err = writeReceipt(path, receipt); err != nil {
 		t.Fatal(err)
 	}
 	want, err := receipt.CanonicalJSON()
@@ -182,7 +182,7 @@ func TestWriteReceiptDoesNotOverwriteEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	receipt.Checks[0].Passed = false
-	if err := writeReceipt(path, receipt); !errors.Is(err, os.ErrExist) {
+	if err = writeReceipt(path, receipt); !errors.Is(err, os.ErrExist) {
 		t.Fatalf("overwrite error = %v, want os.ErrExist", err)
 	}
 	got, err := os.ReadFile(path)

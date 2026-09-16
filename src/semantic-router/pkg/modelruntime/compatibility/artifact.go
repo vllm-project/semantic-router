@@ -46,9 +46,9 @@ func DigestLocalCandleArtifact(modelPath string) (string, error) {
 		Files:         make([]candleArtifactFileIdentity, 0, len(files)),
 	}
 	for _, name := range files {
-		digest, err := digestArtifactFile(filepath.Join(modelPath, name))
-		if err != nil {
-			return "", fmt.Errorf("digest local Candle artifact %s: %w", name, err)
+		digest, digestErr := digestArtifactFile(filepath.Join(modelPath, name))
+		if digestErr != nil {
+			return "", fmt.Errorf("digest local Candle artifact %s: %w", name, digestErr)
 		}
 		identity.Files = append(identity.Files, candleArtifactFileIdentity{
 			Path:   name,
@@ -89,7 +89,7 @@ func digestArtifactFile(path string) (string, error) {
 	defer file.Close()
 
 	digest := sha256.New()
-	if _, err := io.Copy(digest, file); err != nil {
+	if _, err = io.Copy(digest, file); err != nil {
 		return "", err
 	}
 	return "sha256:" + hex.EncodeToString(digest.Sum(nil)), nil
