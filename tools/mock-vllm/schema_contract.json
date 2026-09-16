@@ -116,7 +116,9 @@
         "remote_block_ids",
         "remote_engine_id",
         "remote_host",
-        "remote_port"
+        "remote_port",
+        "usage_breakdown",
+        "x_groq"
       ],
       "official_usage_fields": [
         "completion_tokens",
@@ -125,6 +127,14 @@
         "prompt_tokens",
         "prompt_tokens_details",
         "total_tokens"
+      ],
+      "extension_usage_fields": [
+        "completion_time",
+        "cost_in_usd_ticks",
+        "num_sources_used",
+        "prompt_time",
+        "queue_time",
+        "total_time"
       ]
     },
     "openai_responses": {
