@@ -68,9 +68,10 @@ func responseWireFormats(ctx *RequestContext) (llmprotocol.WireFormat, llmprotoc
 
 func upstreamTransportFallback(status int, cause error) *llmprotocol.ProtocolError {
 	category, code := llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_error"
-	if status == 429 {
+	switch status {
+	case 429:
 		category, code = llmprotocol.ErrorRateLimited, "rate_limited"
-	} else if status == 408 || status == 504 {
+	case 408, 504:
 		category, code = llmprotocol.ErrorUpstreamTimeout, "upstream_timeout"
 	}
 	return llmprotocol.NewError(category, code, "model service returned an invalid error response", cause)

@@ -3,7 +3,6 @@ import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
   ModelExternalIdsEditor,
-  ModelEvaluationsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
   ModelReliabilityEditor,
@@ -27,16 +26,6 @@ export function getModelStructuredFormFields(): FieldConfig[] {
       type: 'custom',
       description: 'Structured routing labels used by filters, policies, and inventory search.',
       customRender: (value, onChange) => <ModelTagsEditor value={value} onChange={onChange} />,
-    },
-    {
-      name: 'evaluations',
-      label: 'Evaluations',
-      type: 'custom',
-      description:
-        'Optional measurements for a custom model. Built-in models receive repository evidence automatically.',
-      customRender: (value, onChange) => (
-        <ModelEvaluationsEditor value={value} onChange={onChange} />
-      ),
     },
     {
       name: 'loras',

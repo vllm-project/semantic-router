@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net"
 	"reflect"
@@ -118,10 +119,14 @@ func TestStartProfilingServerRejectsLiveMetricsPort(t *testing.T) {
 	}
 }
 
-func startProfilingForTest(t *testing.T, cfg *config.RouterConfig, opts runtimeOptions) []func() {
+func startProfilingForTest(t *testing.T, cfg *config.RouterConfig, opts runtimeOptions) []func(context.Context) error {
 	t.Helper()
-	hooks := make([]func(), 0)
-	t.Cleanup(func() { runShutdownHooks(&hooks) })
+	hooks := make([]func(context.Context) error, 0)
+	t.Cleanup(func() {
+		if err := runShutdownHooks(context.Background(), &hooks); err != nil {
+			t.Errorf("shutdown profiling server: %v", err)
+		}
+	})
 	startProfilingServerIfEnabled(cfg, opts, &hooks)
 	return hooks
 }
@@ -141,12 +146,20 @@ func freePort(t *testing.T) int {
 
 func TestRunShutdownHooksCompletesInRegistrationOrder(t *testing.T) {
 	completed := make([]string, 0, 2)
-	hooks := []func(){
-		func() { completed = append(completed, "replay-and-vector-stores") },
-		func() { completed = append(completed, "runtime-resources") },
+	hooks := []func(context.Context) error{
+		func(context.Context) error {
+			completed = append(completed, "replay-and-vector-stores")
+			return nil
+		},
+		func(context.Context) error {
+			completed = append(completed, "runtime-resources")
+			return nil
+		},
 	}
 
-	runShutdownHooks(&hooks)
+	if err := runShutdownHooks(context.Background(), &hooks); err != nil {
+		t.Fatalf("runShutdownHooks() error = %v", err)
+	}
 
 	want := []string{"replay-and-vector-stores", "runtime-resources"}
 	if !reflect.DeepEqual(completed, want) {

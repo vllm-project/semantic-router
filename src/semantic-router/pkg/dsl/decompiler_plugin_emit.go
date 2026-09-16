@@ -14,6 +14,7 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"response_cache":      emitResponseCachePluginConfig,
 	"context_compression": emitStructuredPluginConfig,
 	"router_replay":       emitRouterReplayPluginConfig,
+	"shadow_dispatch":     emitStructuredPluginConfig,
 	"memory":              emitMemoryPluginConfig,
 	"hallucination":       emitHallucinationPluginConfig,
 	"fast_response":       emitFastResponsePluginConfig,
@@ -158,6 +159,9 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if len(cfg.BlockedParams) > 0 {
 		fmt.Fprintf(sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
 	}
+	if cfg.DefaultMaxTokens != nil {
+		fmt.Fprintf(sb, "    default_max_tokens: %d\n", *cfg.DefaultMaxTokens)
+	}
 	if cfg.MaxTokensLimit != nil {
 		fmt.Fprintf(sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)
 	}
@@ -266,6 +270,13 @@ func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
 }
 
 func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
+	if cfg.Rerank != nil {
+		if cfg.Rerank.TopK == nil {
+			fmt.Fprint(sb, "    rerank: {}\n")
+		} else {
+			fmt.Fprintf(sb, "    rerank: { top_k: %d }\n", *cfg.Rerank.TopK)
+		}
+	}
 	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
 		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
 	}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import generatedCatalog from '../generated/modelCatalog.json'
+import generatedCatalog from '../modelCatalogDocument'
 import { getBuiltInModelCatalog, ModelCatalogApiError } from './modelCatalogApi'
 
 afterEach(() => {
@@ -21,6 +21,44 @@ describe('built-in model catalog API transport', () => {
 })
 
 describe('built-in model catalog API snapshot identity', () => {
+  it.each(['physical', 'virtual'])('rejects an empty %s verification date', async (kind) => {
+    const catalog = structuredClone(validCatalog)
+    const models = catalog.models as Array<Record<string, unknown>>
+    const model = models.find((item) => item.kind === kind)!
+    const verification = model.verification as Record<string, unknown>
+    verification.verified_at = ''
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(catalog), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toMatchObject({
+      name: 'ModelCatalogApiError',
+      status: 502,
+    })
+  })
+
+  it('accepts undated claimed policies and empty advisory pools without weakening assignments', async () => {
+    const catalog = structuredClone(validCatalog)
+    const models = catalog.models as Array<Record<string, unknown>>
+    const model = models.find((item) => item.kind === 'virtual')!
+    const verification = model.verification as Record<string, unknown>
+    verification.status = 'claimed'
+    delete verification.verified_at
+    const roles = model.roles as Array<Record<string, unknown>>
+    roles[0].recommended_pool = []
+    roles[0].required = true
+    roles[0].minimum_candidates = 2
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(catalog), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).resolves.toEqual(catalog)
+    roles[0].minimum_candidates = 0
+    await expect(getBuiltInModelCatalog()).rejects.toBeInstanceOf(ModelCatalogApiError)
+  })
+
   it('fails closed when the server omits version or model inventory', async () => {
     vi.stubGlobal(
       'fetch',
@@ -49,6 +87,35 @@ describe('built-in model catalog API snapshot identity', () => {
       name: 'ModelCatalogApiError',
       status: 502,
     })
+  })
+
+  it('accepts explicit partial and missing index coverage without a score', async () => {
+    const catalog = structuredClone(validCatalog)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(catalog), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).resolves.toEqual(catalog)
+  })
+
+  it.each([
+    ['a partial result with a score', 'partial', 42, undefined],
+    ['an available result without a score', 'available', null, undefined],
+    ['a partial result with zero coverage', 'partial', null, 0],
+    ['a missing result with nonzero coverage', 'missing', null, 0.5],
+  ])('rejects %s', async (_name, status, score, coverage) => {
+    const malformed = structuredClone(validCatalog)
+    const results = malformed.index_results as Array<Record<string, unknown>>
+    results[0].status = status
+    results[0].score = score
+    if (coverage !== undefined) results[0].coverage = coverage
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(malformed))),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toBeInstanceOf(ModelCatalogApiError)
   })
 })
 
@@ -174,6 +241,18 @@ describe('built-in model catalog API nested metadata', () => {
         )
         const models = provider?.models as Array<Record<string, unknown>>
         models[0].relationship = 'brokered'
+      },
+    ],
+    [
+      'protocol-specific reasoning efforts',
+      (payload: Record<string, unknown>) => {
+        const providers = payload.providers as Array<Record<string, unknown>>
+        const provider = providers.find((candidate) => candidate.id === 'openai')!
+        const models = provider.models as Array<Record<string, unknown>>
+        const astra = models.find((candidate) => candidate.catalog === 'openai/gpt-6-astra')!
+        astra.reasoning_efforts_by_protocol = {
+          'anthropic/messages@1': ['low'],
+        }
       },
     ],
     [

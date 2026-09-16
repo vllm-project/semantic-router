@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -88,6 +89,8 @@ func persistConfigAndSync(
 	yamlBytes []byte,
 	newCfg *config.RouterConfig,
 ) error {
+	release := s.runtimeRegistry.LockConfigPublication()
+	defer release()
 	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
 		return err
 	}
@@ -98,6 +101,24 @@ func persistConfigAndSync(
 	}
 	s.publishConfigMutation(newCfg)
 	return nil
+}
+
+// KB writes use the same candidate document/hash as full config updates. Do
+// not wait while holding staged asset state; readers can poll /config/hash.
+func (s *ClassificationAPIServer) knowledgeBaseActivationStatus(runtimePath string, successStatus int) (knowledgeBaseActivation, int) {
+	if s.runtimeRegistry == nil {
+		return knowledgeBaseActivation{ActivationStatus: "unknown"}, successStatus
+	}
+	hash, err := configFileHash(runtimePath)
+	if err != nil {
+		return knowledgeBaseActivation{ActivationStatus: "pending"}, http.StatusAccepted
+	}
+	state := knowledgeBaseActivation{ActivationStatus: "pending", GeneratedRuntimeHash: hash}
+	if s.activeConfigDocumentHash() == hash {
+		state.ActivationStatus = "active"
+		return state, successStatus
+	}
+	return state, http.StatusAccepted
 }
 
 func yamlNodeFromValue(value any) (*yaml.Node, error) {

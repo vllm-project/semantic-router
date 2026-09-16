@@ -110,4 +110,4 @@ traffic before using them for production routing.
 - Looper-generated planner, worker, verifier, judge, and synthesis prompts are
   checked against each target Model's known context window before dispatch.
   Missing context metadata remains eligible for compatibility.
-- Validate a complete config with `vllm-sr validate --config config.yaml`.
+- Validate a complete config with `vllm-sr config validate --config config.yaml`.

@@ -21,6 +21,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 type routeHeaderState struct {
@@ -64,14 +65,38 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
-	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch.targetFormat, ctx); protocolErr != nil {
-		return nil, protocolErr
+	required := llmprotocol.RequiredCapabilities(*request)
+	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
+		if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.isLooperRequest(ctx) {
+			return nil, protocolErr // An explicit algorithm role must not silently become another worker.
+		}
+		rerouted, ok := r.rerouteToQualifiedDecisionModel(request, dispatch, required, ctx)
+		if !ok {
+			return nil, protocolErr
+		}
+		dispatch = rerouted
+		ctx.ImmediateProtocolError = nil
+		// The reasoning mode is model-scoped (family/effort come from the
+		// model's reasoning config), so a reroute must re-apply it against the
+		// rerouted model. System prompt and request params are decision-scoped
+		// and were already applied to the shared request, so they are not
+		// re-applied here.
+		if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+			r.applySemanticReasoningMode(
+				request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
+			)
+		}
 	}
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.SemanticRequest = request
+	// Per-model accounting (token tracking, TTFB, usage attribution) keys off
+	// the model that actually serves the request. A capability reroute may
+	// redirect this request to a sibling modelRef, so RequestModel must be the
+	// final dispatch model, not the decision-selected one.
+	ctx.RequestModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
-		"model":       logicalModel,
+		"model":       dispatch.logicalModel,
 		"backend":     dispatch.backendName,
 		"wire_format": dispatch.targetFormat,
 	})
@@ -85,24 +110,19 @@ func (r *OpenAIRouter) codecCapabilitiesForFormat(format llmprotocol.WireFormat)
 	return r.ProtocolCodecs.CapabilitiesFor(format)
 }
 
-// rejectDispatchCapabilityMismatch applies the same wire-fidelity gate the
-// codec engine enforces at encode, but at dispatch time so a request whose
-// required capabilities the chosen backend wire cannot express surfaces as a
-// protocol error instead of a generic 500 from encoding. This is the first
-// slice of capability-driven dispatch: it turns "crash with 500" into "clean
-// 400 unsupported_capability" and gives future capability-aware re-routing a
-// single check point.
+// rejectDispatchCapabilityMismatch applies both wire fidelity and declared
+// model task constraints to the primary dispatch, using the same qualification
+// as fallback candidates. A wire's ability to encode a task does not establish
+// that the selected model can execute it.
 func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	request *llmprotocol.Request,
-	format llmprotocol.WireFormat,
+	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	available, ok := r.codecCapabilitiesForFormat(format)
-	if !ok {
-		// Unknown wire formats are rejected earlier by wireFormatForModel.
-		return nil
+	if err := r.validateDispatchRequirements(request, dispatch, ctx); err != nil {
+		return err
 	}
-	if err := llmprotocol.RequireCapabilities(format, available, llmprotocol.RequiredCapabilities(*request)); err != nil {
+	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(*request)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
@@ -110,6 +130,123 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 		return err
 	}
 	return nil
+}
+
+// declaredModelCapabilities projects recognized model facts without allowing
+// descriptive catalog labels to erase their constraints. A model with no
+// recognized declaration retains the unannotated compatibility behavior.
+func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
+	if r == nil || r.Config == nil {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	params, ok := r.Config.ModelConfig[model]
+	if !ok || len(params.Capabilities) == 0 {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	return llmprotocol.ModelCapabilities(params.Capabilities)
+}
+
+func (r *OpenAIRouter) providerCapabilityMismatch(model string, format llmprotocol.WireFormat, required llmprotocol.CapabilitySet) error {
+	available, ok := r.codecCapabilitiesForFormat(format)
+	if !ok {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("model %q has no codec for %q", model, format), nil)
+	}
+	if err := llmprotocol.RequireCapabilities(format, available, required); err != nil {
+		return err
+	}
+	if declared, annotated := r.declaredModelCapabilities(model); annotated && !declared.Contains(required.TaskCapabilities()) {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			fmt.Sprintf("model %q does not declare the required tasks: %s", model, strings.Join(required.TaskCapabilities().Names(), ", ")), nil)
+	}
+	return nil
+}
+
+// rerouteToQualifiedDecisionModel tries to satisfy the required capabilities
+// by dispatching to another modelRef offered by the selected decision, when
+// the originally selected model's wire format cannot express them. It returns
+// the re-resolved dispatch and whether a qualified candidate was found.
+//
+// Candidates are considered in modelRef order; the first whose wire format can
+// express every required capability wins. This is capability-driven selection
+// at the dispatch seam: routing prefers a qualified backend over a clean
+// rejection, and only rejects when no candidate qualifies.
+func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
+	request *llmprotocol.Request,
+	selected *providerDispatch,
+	required llmprotocol.CapabilitySet,
+	ctx *RequestContext,
+) (*providerDispatch, bool) {
+	if r == nil || r.Config == nil || request == nil || selected == nil || ctx == nil {
+		return nil, false
+	}
+	decision := ctx.VSRSelectedDecision
+	if decision == nil || decision.Name == "" {
+		return nil, false
+	}
+	model := r.findQualifiedRerouteModel(decision, selected, required, ctx)
+	if model == "" {
+		return nil, false
+	}
+	candidate, err := r.resolveProviderDispatch(model, decision.Name, selected.useReasoning)
+	if err != nil {
+		return nil, false
+	}
+	request.Model = candidate.upstreamModel
+	ctx.TargetFormat = candidate.targetFormat
+	logging.ComponentDebugEvent("extproc", "provider_dispatch_rerouted", map[string]interface{}{
+		"request_id":  ctx.RequestID,
+		"from":        selected.logicalModel,
+		"to":          model,
+		"wire_format": candidate.targetFormat,
+	})
+	return candidate, true
+}
+
+// findQualifiedRerouteModel returns the first decision modelRef, in declared
+// order, that can express every required capability and is not the currently
+// selected model; "" when no sibling qualifies.
+func (r *OpenAIRouter) findQualifiedRerouteModel(
+	decision *config.Decision,
+	selected *providerDispatch,
+	required llmprotocol.CapabilitySet,
+	ctx *RequestContext,
+) string {
+	refs := decision.ModelRefs
+	if ctx.VSREligibleModelRefs != nil {
+		// Selection has already narrowed this decision's inventory. Fallback
+		// cannot resurrect candidates excluded at that boundary.
+		refs = ctx.VSREligibleModelRefs
+	}
+	for _, modelRef := range refs {
+		model := modelRef.Model
+		if model == "" || model == selected.logicalModel || (!selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.modelRefExceedsContextWindow(modelRef, ctx.VSRContextTokenCount)) {
+			continue
+		}
+		if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
+			if err := r.validateModelDemand(r.candidateRequirements(ctx), model, selection.DemandForRequest(ctx.SemanticRequest)); err != nil {
+				continue
+			}
+		}
+		if r.qualifiedRerouteCandidate(model, required) != "" {
+			return model
+		}
+	}
+	return ""
+}
+
+// qualifiedRerouteCandidate reports the model's wire format when the model can
+// express every required capability, or "" when it cannot serve the request.
+// Expressibility is judged on the wire format's codec capability set first,
+// then narrowed by the model's own declared capabilities when annotated.
+func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmprotocol.CapabilitySet) llmprotocol.WireFormat {
+	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
+	if err != nil {
+		return ""
+	}
+	if r.providerCapabilityMismatch(model, format, required) != nil {
+		return ""
+	}
+	return format
 }
 
 func (r *OpenAIRouter) resolveProviderDispatch(
@@ -206,6 +343,8 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.AnthropicMessagesV1, nil
 	case config.APIFormatResponses, "openai.responses", string(llmprotocol.OpenAIResponsesV1):
 		return llmprotocol.OpenAIResponsesV1, nil
+	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
+		return llmprotocol.OpenAIImagesV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}
@@ -236,7 +375,10 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
-	return buildRequestBodyContinueResponse(state, nil, false)
+	// Body-stage model and path mutations can change the Envoy route selected
+	// during headers. Apply the same cache policy to every provider dispatch,
+	// including internal multi-model calls and unchanged logical model names.
+	return buildRequestBodyContinueResponse(state, nil, r.shouldClearRouteCache())
 }
 
 // finalizeProviderDispatchResponse serializes the request only after every
@@ -250,15 +392,24 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
 	}
+	if err := r.validateDispatchRequirements(ctx.SemanticRequest, dispatch, ctx); err != nil {
+		return nil, err
+	}
+	captureRequestDemand(
+		ctx,
+		requestDemandStageProviderBound,
+		ctx.SemanticRequest,
+		dispatch.logicalModel,
+	)
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
-		return nil, status.Errorf(codes.Internal, "encode provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "encode provider request")
 	}
 	body, err = r.adaptProviderRequest(body, dispatch, ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "provider_adapter_error")
-		return nil, status.Errorf(codes.Internal, "adapt provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "adapt provider request")
 	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
@@ -278,6 +429,28 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		"body_bytes":  len(body),
 	})
 	return response, nil
+}
+
+// processBodyRoutingError answers every ProtocolError it recognizes with HTTP
+// 400, so only client-owned categories may reach it unwrapped. status.Errorf
+// formats with Sprintf, which flattens the error and hides it from errors.As,
+// keeping server-owned categories on the internal path where they belong.
+func dispatchWireError(err error, ctx *RequestContext, reason string) error {
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) && isClientProtocolError(protocolError.Category) {
+		if ctx != nil {
+			ctx.ImmediateProtocolError = protocolError
+		}
+		return err
+	}
+	return status.Errorf(codes.Internal, "%s: %v", reason, err)
+}
+
+// Categories a caller can fix by changing the request. Everything else,
+// including ErrorInternal and the upstream categories, is a server fault.
+func isClientProtocolError(category llmprotocol.ErrorCategory) bool {
+	return category == llmprotocol.ErrorInvalidRequest ||
+		category == llmprotocol.ErrorUnsupportedFeature
 }
 
 func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,7 @@ func repoRel(parts ...string) string {
 var apiserverDocNeedles = []string{
 	"http://localhost:8080",
 	"/openapi.json",
-	"/config/router",
+	"/api/v1/config",
 }
 
 var configContractRequiredDocs = []docNeedles{
@@ -44,9 +45,9 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
 			"`providers.defaults.model`",
-			"vllm-sr validate --config config.yaml",
+			"vllm-sr config validate --config config.yaml",
 			"Environment references and secrets",
 			"Entrypoints and recipes",
 			"exhaustive canonical example",
@@ -82,7 +83,7 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
 			"`routing.modelCards`",
 			"`routing.modelCards[].loras`",
 			"`config/fragments/algorithm/`",
@@ -146,6 +147,10 @@ var configContractRequiredDocs = []docNeedles{
 	},
 	{
 		path:    repoRel("website", "docs", "api", "apiserver.md"),
+		needles: apiserverDocNeedles,
+	},
+	{
+		path:    repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
 		needles: apiserverDocNeedles,
 	},
 	{
@@ -575,18 +580,12 @@ var latestTutorialAllowedDirectories = map[string]bool{
 	"projection": true,
 }
 
-// currentTranslationFallbackDocs are deliberately absent from the latest
-// zh-Hans overrides. Docusaurus serves the canonical current English page when
-// an override is missing; historical versioned translations remain untouched.
-var currentTranslationFallbackDocs = []string{
+// Retired cookbook overrides must not shadow the current tutorial hierarchy.
+// Current translated API, training and troubleshooting pages remain supported.
+var retiredCookbookTranslationDocs = []string{
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "classifier-tuning.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "pii-policy.md"),
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "cookbook", "vllm-endpoints.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "training-overview.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "training", "model-performance-eval.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "common-errors.md"),
-	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "troubleshooting", "vsr-headers.md"),
 }
 
 func TestConfigContractDocsStayAligned(t *testing.T) {
@@ -615,7 +614,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 	assertSignalTutorialDocsMatchConfigHierarchy(t, root)
 	assertAlgorithmTutorialDocsMatchConfigHierarchy(t, root)
 	assertPluginTutorialDocsMatchConfigHierarchy(t, root)
-	assertPathsDoNotExist(t, root, currentTranslationFallbackDocs)
+	assertPathsDoNotExist(t, root, retiredCookbookTranslationDocs)
 }
 
 func TestConfigProposalIsReachableFromSidebar(t *testing.T) {
@@ -654,14 +653,19 @@ func assertTutorialSidebarTaxonomy(t *testing.T, root string) {
 func assertTutorialFilesContainRequiredSections(t *testing.T, root string) {
 	t.Helper()
 	tutorialRoot := filepath.Join(root, repoRel("website", "docs", "tutorials"))
-	err := filepath.Walk(tutorialRoot, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(tutorialRoot)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -701,14 +705,19 @@ func assertMarkdownTreeDoesNotContainAny(t *testing.T, root string, forbidden []
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return
 	}
-	err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+	files, openErr := os.OpenRoot(root)
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer files.Close()
+	err := fs.WalkDir(files.FS(), ".", func(path string, info fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
-		contentBytes, err := os.ReadFile(path)
+		contentBytes, err := files.ReadFile(path)
 		if err != nil {
 			return err
 		}

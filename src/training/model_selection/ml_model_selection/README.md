@@ -109,6 +109,36 @@ go run validate.go \
   --algorithm all
 ```
 
+For a deterministic training/export/native parity check, install `pytest` and
+run from the repository root:
+
+```bash
+python -m pytest src/training/model_selection/ml_model_selection/tests/test_native_parity.py -q
+```
+
+This builds the current Rust binding and compares real sklearn predictions
+against the exported artifact through its C ABI. It covers linear/RBF SVM,
+binary/multiclass voting, Python reload, KNN latency weighting and neighbor ties.
+Only NumPy, scikit-learn, pytest, and Cargo are needed; Torch is optional for
+these selectors.
+
+SVM and KNN exports now declare `format_version: 2`. Deploy a runtime that
+supports this version alongside the training tools. SVM exports preserve the
+original SVC decision functions and input scale. KNN uses normalized feature
+distance and the same fixed 10-second latency scale in Python and Rust. Existing
+Python SVM files can recover their exact top-level parameters; existing KNN files
+adopt the corrected selection rules. See the [native artifact compatibility
+reference](../../../../ml-binding/README.md#artifact-compatibility-and-prediction-rules)
+for migration details and the treatment of native-only legacy SVM classifiers.
+
+The small checked-in Rust fixtures can be regenerated after an intentional
+training-contract change with:
+
+```bash
+python src/training/model_selection/ml_model_selection/tests/generate_native_fixtures.py
+cargo test --manifest-path ml-binding/Cargo.toml
+```
+
 Use a held-out split and report the dataset, candidate models, scoring method,
 embedding model, selector parameters, random seed, and quality/latency tradeoff.
 Do not copy one local run's output into this README as a general performance

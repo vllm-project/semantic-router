@@ -610,12 +610,41 @@ fixtures:
         )
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
-        receipt = _mom_materialization_receipt(probes)
-        self.assertEqual(len(probes), 235)
-        self.assertEqual(receipt["message_probes"], 89)
-        self.assertEqual(receipt["generated_probes"], 50)
-        self.assertEqual(receipt["image_parts"], 57)
-        self.assertEqual(receipt["text_bytes"], 26_230_077)
+        self.assertEqual(len(probes), 307)
+        original_probes, added_probes = probes[:269], probes[269:280]
+        self.assertEqual(
+            {probe.decision_id for probe in probes[280:285]},
+            {
+                "contract-direct-result-repair",
+                "contract-personal-action-care",
+                "contract-plural-workflow-start",
+                "contract-single-worker-workflow",
+                "contract-quoted-result-repair",
+            },
+        )
+        self.assertEqual(
+            {probe.decision_id for probe in added_probes},
+            {
+                "contract-workflow-distribution",
+                "contract-workflow-delegation",
+                "contract-workflow-plan-only",
+                "contract-workflow-translation",
+                "contract-independent-review",
+                "contract-correctness-repair",
+                "contract-correction-prohibited",
+                "contract-formatting-revision",
+                "contract-quoted-correction",
+                "contract-consequential-advice",
+                "contract-personal-support",
+            },
+        )
+        # Pin the original packet, including the bounded Vault context fixtures.
+        # Added contract probes keep their own inventory and comparison group.
+        receipt = _mom_materialization_receipt(original_probes)
+        self.assertEqual(receipt["message_probes"], 90)
+        self.assertEqual(receipt["generated_probes"], 42)
+        self.assertEqual(receipt["image_parts"], 53)
+        self.assertEqual(receipt["text_bytes"], 18_741_471)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -635,12 +664,66 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "3f01766dddb0f84699c0e450381874b6cd22428fb3ed41a5928e2fb79c00723b",
+            "9a7d3c6b91e2441b6f3148b74e128cb37830ea43330b9aa6e1a71258b04c351d",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "6de1f8f7fdb3104233e22a133b4037226c6a86112a03e1bd5c1199c8ec63ff98",
+            "2382f3ff030d465233f1f7bdccb26e855ceaf0f34a924bd66ad046f131459fcc",
         )
+        by_id = {probe.probe_id: probe for probe in probes}
+        self.assertEqual(len(by_id), len(probes))
+        vault_context_probes = [
+            probe
+            for probe in probes
+            if probe.expected_recipe == "vault" and "stress:long-input" in probe.tags
+        ]
+        self.assertEqual(len(vault_context_probes), 6)
+        for probe in vault_context_probes:
+            with self.subTest(probe_id=probe.probe_id):
+                self.assertTrue(probe.variant_id.startswith("vault_long_"))
+                self.assertIsNone(probe.generated_text)
+                payload = router_calibration_evaluation._build_request_payload(probe)
+                text_bytes = len(payload.get("text", "").encode("utf-8")) + sum(
+                    router_calibration_evaluation.message_text_bytes(message)
+                    for message in payload.get("messages", [])
+                )
+                # Keep substantive context with ample room below the default
+                # 32K-token triage cap; this is a byte bound, not token counting.
+                self.assertGreaterEqual(text_bytes, 1_000)
+                self.assertLessEqual(text_bytes, 12_000)
+        # Preserve protocol and intent regressions independently of the old
+        # capability-based lanes: recursion is reasoning, Flow resumes the
+        # agent, and a programming visibility term is not confidential data.
+        expected_routes = {
+            "accuracy_reasoning:accuracy_multi_round_exploration__recursive_search": (
+                "accuracy",
+                "reasoning",
+            ),
+            "accuracy_agent:accuracy_dynamic_workflow__flow_state_resume": (
+                "accuracy",
+                "agent",
+            ),
+            "vault_v2_private_visibility_term:vault_v2_private_visibility_term": (
+                "vault",
+                "private",
+            ),
+            "vault_sensitive:vault_image__private_image_over_tools_collision": (
+                "vault",
+                "sensitive",
+            ),
+        }
+        for probe_id, route in expected_routes.items():
+            with self.subTest(probe_id=probe_id):
+                probe = by_id[probe_id]
+                self.assertEqual(
+                    (probe.expected_recipe, probe.expected_decision), route
+                )
+        containment = [probe for probe in probes if probe.expected_decision == "guard"]
+        self.assertEqual(len(containment), 6)
+        for probe in containment:
+            self.assertEqual(probe.expected_selection_status, "not_required")
+            self.assertIsNone(probe.expected_algorithm)
+            self.assertIn("fast_response", probe.expected_plugins)
 
 
 if __name__ == "__main__":

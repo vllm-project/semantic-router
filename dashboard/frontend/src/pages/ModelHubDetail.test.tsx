@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import generatedCatalog from '../generated/modelCatalog.json'
+import generatedCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { EvaluationCard, ModelAccess, ModelDetail, VirtualPool } from './ModelHubDetail'
 import { providerProtocolOperations } from './modelHubProviderOperations'
@@ -66,9 +66,30 @@ describe('model hub detail', () => {
     const markup = renderToStaticMarkup(<VirtualPool row={row!} catalog={catalog} />)
     for (const role of row!.model.roles ?? []) {
       expect(markup).toContain(role.name.split('_').join(' '))
-      for (const model of role.recommended_pool) expect(markup).toContain(model)
+      for (const id of role.recommended_pool) {
+        const model = catalog.models.find((candidate) => candidate.id === id)
+        expect(markup).toContain(model?.display_name ?? id)
+      }
     }
-    expect(markup).toContain('Custom model slot')
+    const customRow = structuredClone(row!)
+    customRow.model.roles![0].recommended_pool.push('operator/example-model')
+    const customMarkup = renderToStaticMarkup(<VirtualPool row={customRow} catalog={catalog} />)
+    expect(customMarkup).toContain('operator/example-model')
+    expect(customMarkup).toContain('Custom model slot')
+  })
+
+  it('keeps required roles visible when the operator owns all backend assignments', () => {
+    const row = modelHubRows(catalog, virtualFilters).find(
+      (candidate) => candidate.model.id === 'vllm-sr/mom-v1-vault',
+    )!
+    expect(row.model.roles!.every((role) => role.recommended_pool.length === 0)).toBe(true)
+    const markup = renderToStaticMarkup(<VirtualPool row={row} catalog={catalog} />)
+    for (const role of row.model.roles!) {
+      expect(markup).toContain(role.name)
+      expect(markup).toContain(`min ${role.minimum_candidates}`)
+    }
+    expect(markup).toContain('Required role')
+    expect(markup).not.toContain('Custom model slot')
   })
 
   it('exposes a linked, keyboard-roving tab pattern', () => {

@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -22,7 +23,7 @@ func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	id := strings.TrimSuffix(path, "/files")
 	if id == "" || id == path {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
@@ -42,6 +43,10 @@ func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *htt
 
 	vsf, err := pipeline.AttachFile(id, req.FileID, req.ChunkingStrategy)
 	if err != nil {
+		if errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+			s.writeErrorResponse(w, http.StatusConflict, "EMBEDDING_REINDEX_REQUIRED", err.Error())
+			return
+		}
 		s.writeErrorResponse(w, http.StatusBadRequest, "ATTACH_ERROR", "failed to attach file")
 		return
 	}
@@ -56,7 +61,7 @@ func (s *ClassificationAPIServer) handleListVectorStoreFiles(w http.ResponseWrit
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	id := strings.TrimSuffix(path, "/files")
 	if id == "" || id == path {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
@@ -79,7 +84,7 @@ func (s *ClassificationAPIServer) handleDetachFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	parts := strings.SplitN(path, "/files/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID and file ID are required")

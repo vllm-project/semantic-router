@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -24,7 +25,7 @@ func (c *Classifier) initializeFeedbackDetector() error {
 		return nil
 	}
 
-	detector, err := NewFeedbackDetector(&c.Config.FeedbackDetector)
+	detector, err := NewFeedbackDetector(&c.Config.FeedbackDetector, c.models)
 	if err != nil {
 		return fmt.Errorf("failed to create feedback detector: %w", err)
 	}
@@ -33,24 +34,26 @@ func (c *Classifier) initializeFeedbackDetector() error {
 		return fmt.Errorf("failed to initialize feedback detector: %w", err)
 	}
 
+	// The owned backend admits at its physical resource.
+
 	c.feedbackDetector = detector
 	return nil
 }
 
 // ClassifyFeedback performs user feedback classification on the given text.
-func (c *Classifier) ClassifyFeedback(text string) (*FeedbackResult, error) {
+func (c *Classifier) ClassifyFeedback(ctx context.Context, text string) (*FeedbackResult, error) {
 	if c.feedbackDetector == nil || !c.feedbackDetector.IsInitialized() {
 		return nil, fmt.Errorf("feedback detector is not initialized")
 	}
 
-	result, err := c.feedbackDetector.Classify(text)
+	result, err := c.feedbackDetector.Classify(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("feedback classification failed: %w", err)
 	}
 
 	if result != nil {
-		logging.Infof("Feedback classification: feedback_type=%s, confidence=%.3f",
-			result.FeedbackType, result.Confidence)
+		logging.Infof("Feedback classification: feedback_type=%s, confidence_available=%v",
+			result.FeedbackType, result.ConfidenceAvailable)
 	}
 
 	return result, nil

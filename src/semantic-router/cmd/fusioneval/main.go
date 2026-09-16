@@ -46,7 +46,6 @@ import (
 
 	openai "github.com/openai/openai-go"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
@@ -177,14 +176,30 @@ func run(opt options) error {
 
 	// Wire the REAL candle NLI for panel-mode grounding (arms C/D's reference).
 	// Context mode would additionally need the hallucination detector; deferred.
-	if err = candle.InitNLIModel(opt.nliModel, opt.useCPU); err != nil {
-		return fmt.Errorf("init candle NLI model %q: %w", opt.nliModel, err)
+	nli, nliOwner, err := prepareNLI(opt)
+	if err != nil {
+		return fmt.Errorf("prepare candle NLI model %q: %w", opt.nliModel, err)
 	}
-	looper.SetGroundingBackends(realNLI(), nil)
+	defer func() { _ = nliOwner.Close() }()
 
 	looperCfg := &config.LooperConfig{Endpoint: opt.endpoint}
-	client := looper.NewClient(looperCfg)
-	fusion := looper.NewFusionLooper(looperCfg)
+	client, err := looper.NewConnectorClient(looperCfg)
+	if err != nil {
+		return fmt.Errorf("create Looper client: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+	fusionLooper, err := looper.FactoryWithClient(
+		looperCfg,
+		config.DecisionAlgorithmFusion,
+		client,
+	)
+	if err != nil {
+		return fmt.Errorf("create Fusion Looper: %w", err)
+	}
+	fusion, ok := fusionLooper.(*looper.FusionLooper)
+	if !ok {
+		return fmt.Errorf("fusion factory returned %T", fusionLooper)
+	}
 
 	// Phase 1: build (or resume) the panel cache — generate each panel ONCE.
 	cache, err := buildPanelCache(client, opt, items)
@@ -195,7 +210,7 @@ func run(opt options) error {
 
 	// Phase 2: per arm, synthesize every item from its cached panel.
 	for _, arm := range opt.arms {
-		if err := runArm(fusion, client, opt, looperCfg, items, cache, arm); err != nil {
+		if err := runArm(fusion, client, opt, items, cache, arm, nli); err != nil {
 			return fmt.Errorf("arm %s: %w", arm, err)
 		}
 	}
@@ -203,21 +218,11 @@ func run(opt options) error {
 	return nil
 }
 
-func realNLI() looper.NLIClassifyFunc {
-	return func(premise, hypothesis string) (float32, float32, error) {
-		r, err := candle.ClassifyNLI(premise, hypothesis)
-		if err != nil {
-			return 0, 0, err
-		}
-		return r.EntailmentProb, r.ContradictProb, nil
-	}
-}
-
 // placeboNLI returns deterministic seeded-random scores: reproducible for a given
 // (seed, premise, hypothesis) but carrying no real signal. Mirrors the in-package
 // test placebo so arm D weights on noise, isolating the score's signal.
 func placeboNLI(seed uint64) looper.NLIClassifyFunc {
-	return func(premise, hypothesis string) (float32, float32, error) {
+	return func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
@@ -275,7 +280,12 @@ func generatePanel(client *looper.Client, opt options, it item) ([]cachedRespons
 	out := make([]cachedResponse, 0, len(opt.panelModels))
 	for _, model := range opt.panelModels {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, model, false, 1, nil, "")
+		resp, err := client.CallModelWithOptions(
+			context.Background(),
+			*req,
+			looper.ModelTarget{Name: model},
+			looper.CallOptions{Iteration: 1},
+		)
 		if err != nil {
 			return nil, fmt.Errorf("model %q: %w", model, err)
 		}
@@ -293,10 +303,10 @@ func runArm(
 	fusion *looper.FusionLooper,
 	client *looper.Client,
 	opt options,
-	looperCfg *config.LooperConfig,
 	items []item,
 	cache map[string]cachedPanelItem,
 	arm string,
+	nli looper.NLIClassifyFunc,
 ) error {
 	outPath := filepath.Join(opt.outDir, fmt.Sprintf("answers_%s.jsonl", arm))
 	done, err := resumeIDs(outPath)
@@ -317,7 +327,7 @@ func runArm(
 		if !ok {
 			return fmt.Errorf("no cached panel for %s", it.ID)
 		}
-		rec := produceArm(fusion, client, opt, it, entry, arm)
+		rec := produceArm(fusion, client, opt, it, entry, arm, nli)
 		if err := appendJSON(fh, rec); err != nil {
 			return err
 		}
@@ -336,12 +346,18 @@ func produceArm(
 	it item,
 	entry cachedPanelItem,
 	arm string,
+	nli looper.NLIClassifyFunc,
 ) answerRecord {
 	rec := answerRecord{ID: it.ID, Domain: it.Domain, Arm: arm, PanelSHA256: entry.PanelSHA256, Panel: []panelRec{}}
 
 	if arm == "A" {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, opt.judge, false, 1, nil, "")
+		resp, err := client.CallModelWithOptions(
+			context.Background(),
+			*req,
+			looper.ModelTarget{Name: opt.judge},
+			looper.CallOptions{Iteration: 1},
+		)
 		if err != nil {
 			rec.Error = err.Error()
 			return rec
@@ -352,14 +368,15 @@ func produceArm(
 	}
 
 	grounding, placebo := armGrounding(arm, opt.reference)
+	armNLI := nli
 	if placebo {
-		looper.SetGroundingBackends(placeboNLI(itemSeed(opt.placeboSeed, it.ID)), nil)
-		defer looper.SetGroundingBackends(realNLI(), nil)
+		armNLI = placeboNLI(itemSeed(opt.placeboSeed, it.ID))
 	}
 
 	req := &looper.Request{
 		OriginalRequest: buildRequest(it.Question, it.Context, opt),
 		DecisionName:    "fusioneval",
+		Grounding:       &looper.GroundingBackends{NLI: armNLI},
 		CachedPanel:     toModelResponses(entry.Panel),
 		Algorithm: &config.AlgorithmConfig{
 			Type: "fusion",
@@ -382,7 +399,7 @@ func produceArm(
 }
 
 // armGrounding maps an arm label to its grounding config and whether the placebo
-// NLI must be swapped in for this arm.
+// NLI must be selected for this request.
 func armGrounding(arm, reference string) (cfg *config.FusionGroundingConfig, placebo bool) {
 	switch arm {
 	case "B":

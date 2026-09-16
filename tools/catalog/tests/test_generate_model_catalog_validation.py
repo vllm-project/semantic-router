@@ -38,6 +38,61 @@ class ModelCatalogValidationTests(unittest.TestCase):
             "models[0].roles[0]",
         )
 
+    def test_virtual_model_recommendations_do_not_satisfy_required_assignments(
+        self,
+    ) -> None:
+        resources = catalog._load_json(catalog.RESOURCE_SCHEMA_PATH)
+        role_schema = {
+            **resources["$defs"]["models"]["items"]["properties"]["roles"]["items"],
+            "$defs": resources["$defs"],
+        }
+        role = {
+            "name": "review",
+            "required": True,
+            "minimum_candidates": 2,
+            "traits": ["reasoning"],
+        }
+        for advisory in (
+            {},
+            {"recommended_pool": []},
+            {"recommended_pool": ["operator/model"]},
+        ):
+            with self.subTest(advisory=advisory):
+                candidate = {**role, **advisory}
+                catalog._validate_schema(candidate, role_schema, "role")
+                catalog._validate_virtual_model_role(candidate, "role")
+                self.assertEqual(candidate["minimum_candidates"], 2)
+
+        source = {
+            "kind": "virtual",
+            "asset": "example",
+            "verification": {},
+            "roles": [role],
+        }
+        generated = catalog._generated_models(
+            {"models": [source]}, [{"id": "example", "sha256": "sha256:example"}]
+        )[0]
+        self.assertEqual(generated["roles"][0]["recommended_pool"], [])
+        self.assertNotIn("recommended_pool", source["roles"][0])
+
+        for minimum in (0, -1, True, 1.5, None):
+            with (
+                self.subTest(minimum=minimum),
+                self.assertRaises(catalog.CatalogBuildError),
+            ):
+                catalog._validate_virtual_model_role(
+                    {**role, "minimum_candidates": minimum}, "role"
+                )
+
+        for pool in (None, ["operator/model", "operator/model"], ["../model"]):
+            with (
+                self.subTest(pool=pool),
+                self.assertRaises(catalog.CatalogBuildError),
+            ):
+                catalog._validate_schema(
+                    {**role, "recommended_pool": pool}, role_schema, "role"
+                )
+
     def test_physical_chat_models_require_routing_metadata(self) -> None:
         model = {
             "distribution": {"type": "open_weights"},
@@ -250,7 +305,10 @@ class ModelCatalogValidationTests(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            repo_root = Path(directory)
+            physical_root = Path(directory) / "repository"
+            physical_root.mkdir()
+            repo_root = Path(directory) / "workspace"
+            repo_root.symlink_to(physical_root, target_is_directory=True)
             source_root = repo_root / "config" / "catalog"
             model_root = source_root / "resources" / "models"
             single_root = model_root / "single"
@@ -501,6 +559,174 @@ class ModelCatalogValidationTests(unittest.TestCase):
                 providers, models, {"openai/chat-completions@1"}
             )
 
+    def test_provider_model_api_restrictions_are_protocol_scoped(self) -> None:
+        protocols = {
+            "openai/chat-completions@1",
+            "openai/responses@1",
+        }
+        binding = {
+            "catalog": "example/model",
+            "relationship": "first_party",
+            "id": "native-model",
+            "protocols": sorted(protocols),
+            "restrictions": {
+                "tools_protocols": ["openai/responses@1"],
+                "long_context_pricing": {
+                    "input_threshold_tokens": 272000,
+                    "prompt_multiplier": 2.0,
+                    "completion_multiplier": 1.5,
+                },
+                "unsupported_request_fields": {
+                    "openai/chat-completions@1": ["temperature", "logprobs"],
+                },
+                "unsupported_include_values": ["message.output_text.logprobs"],
+            },
+        }
+        providers = {
+            "example": {
+                "protocols": sorted(protocols),
+                "supported_operations": [
+                    f"{protocol}#create" for protocol in sorted(protocols)
+                ],
+                "models": [binding],
+            }
+        }
+        models = {"example/model": {"kind": "physical", "lifecycle": "active"}}
+
+        catalog._validate_provider_bindings(providers, models, protocols)
+
+        binding["restrictions"]["tools_protocols"] = ["anthropic/messages@1"]
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "tools_protocols references an unbound protocol"
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols)
+
+        binding["restrictions"]["tools_protocols"] = ["openai/responses@1"]
+        binding["restrictions"]["unsupported_request_fields"] = {
+            "openai/responses@1": ["temperature", "temperature"]
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "must be a non-empty unique list"
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols)
+
+        binding["restrictions"]["unsupported_request_fields"] = {
+            "openai/responses@1": ["reasoning.effort"]
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "must be a JSON field name"
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols)
+
+        binding["restrictions"]["unsupported_request_fields"] = {
+            "openai/responses@1": ["temperature"]
+        }
+        binding["restrictions"]["long_context_pricing"] = {
+            "input_threshold_tokens": 0,
+            "prompt_multiplier": 2.0,
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError,
+            "input_threshold_tokens must be a positive integer",
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols)
+
+        binding["restrictions"]["long_context_pricing"] = {
+            "input_threshold_tokens": 272000,
+            "prompt_multiplier": float("inf"),
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "prompt_multiplier must be positive"
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols)
+
+        binding["restrictions"]["long_context_pricing"] = {
+            "input_threshold_tokens": 272000,
+            "prompt_multiplier": 2.0,
+        }
+        binding["restrictions"]["unsupported_include_values"] = [
+            "message.output_text.logprobs",
+            "message.output_text.logprobs",
+        ]
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "must be a non-empty unique list"
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols)
+
+        binding["restrictions"]["unsupported_include_values"] = [
+            "message[0].output_text"
+        ]
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "must be a dotted JSON field path"
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols)
+
+    def test_provider_reasoning_efforts_can_be_narrowed_by_protocol(self) -> None:
+        protocols = {
+            "openai/chat-completions@1",
+            "openai/responses@1",
+        }
+        binding = {
+            "catalog": "example/model",
+            "relationship": "first_party",
+            "id": "native-model",
+            "protocols": sorted(protocols),
+            "reasoning_efforts": ["low", "max"],
+            "reasoning_efforts_by_protocol": {
+                "openai/chat-completions@1": ["low"],
+            },
+        }
+        providers = {
+            "example": {
+                "protocols": sorted(protocols),
+                "supported_operations": [
+                    f"{protocol}#create" for protocol in sorted(protocols)
+                ],
+                "reasoning_transport": "top_level_effort",
+                "models": [binding],
+            }
+        }
+        models = {
+            "example/model": {
+                "kind": "physical",
+                "lifecycle": "active",
+                "reasoning_family": "example",
+            }
+        }
+        families = {
+            "example": {
+                "type": "reasoning_effort",
+                "parameter": "reasoning_effort",
+                "levels": ["low", "max"],
+                "modes": ["enabled"],
+                "default_mode": "enabled",
+            }
+        }
+
+        catalog._validate_provider_bindings(providers, models, protocols, families)
+
+        binding["reasoning_efforts_by_protocol"] = {"anthropic/messages@1": ["low"]}
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError, "references an unbound protocol"
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols, families)
+
+        binding["reasoning_efforts_by_protocol"] = {
+            "openai/chat-completions@1": ["medium"]
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError,
+            "must narrow the provider reasoning_efforts",
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols, families)
+
+        del binding["reasoning_efforts"]
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError,
+            "requires reasoning_efforts",
+        ):
+            catalog._validate_provider_bindings(providers, models, protocols, families)
+
     def test_provider_binding_relationship_is_required_and_closed(self) -> None:
         binding = {
             "catalog": "example/model",
@@ -586,9 +812,12 @@ class ModelCatalogValidationTests(unittest.TestCase):
             "terminal_harness",
             "swe_harness",
         ):
-            with self.subTest(subject_key=subject_key), self.assertRaisesRegex(
-                catalog.CatalogBuildError,
-                rf"subject\.{subject_key} is only valid for benchmark families",
+            with (
+                self.subTest(subject_key=subject_key),
+                self.assertRaisesRegex(
+                    catalog.CatalogBuildError,
+                    rf"subject\.{subject_key} is only valid for benchmark families",
+                ),
             ):
                 catalog._validate_evaluations(
                     [
@@ -750,6 +979,68 @@ class ModelCatalogValidationTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_partial_index_components_remain_unscored(self) -> None:
+        resources = {
+            "models": [{"id": "example/model", "kind": "physical"}],
+            "reasoning_families": [],
+            "benchmarks": [
+                {
+                    "id": "example/one@1.0.0",
+                    "domain": "reasoning",
+                    "default_profile": "standard",
+                    "profiles": [{"id": "standard"}],
+                    "metrics": [{"id": "score"}],
+                },
+                {
+                    "id": "example/two@1.0.0",
+                    "domain": "reasoning",
+                    "default_profile": "standard",
+                    "profiles": [{"id": "standard"}],
+                    "metrics": [{"id": "score"}],
+                },
+            ],
+            "evaluations": [
+                {
+                    "id": "example/run@1.0.0",
+                    "model": "example/model",
+                    "benchmark": "example/one@1.0.0",
+                    "benchmark_profile": "standard",
+                    "reasoning_effort": "default",
+                    "status": "available",
+                    "metrics": {"score": 0.8},
+                    "evidence": {"provenance": "operator"},
+                }
+            ],
+            "indices": [
+                {
+                    "id": "example/index@1.0.0",
+                    "scale": [0, 100],
+                    "missing": {"policy": "require_all"},
+                    "components": [
+                        {
+                            "benchmark": "example/one@1.0.0",
+                            "metric": "score",
+                            "benchmark_profile": "standard",
+                            "weight": 0.5,
+                            "normalization": {"type": "identity"},
+                        },
+                        {
+                            "benchmark": "example/two@1.0.0",
+                            "metric": "score",
+                            "benchmark_profile": "standard",
+                            "weight": 0.5,
+                            "normalization": {"type": "identity"},
+                        },
+                    ],
+                }
+            ],
+        }
+
+        result = catalog._index_results(resources)[0]
+        self.assertEqual(result["status"], "partial")
+        self.assertIsNone(result["score"])
+        self.assertEqual(result["coverage"], 0.5)
 
 
 if __name__ == "__main__":

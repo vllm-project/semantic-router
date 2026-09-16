@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -35,6 +36,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         for path in (
             "config/recipes/**",
             "src/vllm-sr/MANIFEST.in",
+            "src/vllm-sr/setup.py",
             "src/vllm-sr/cli/model_assets/**",
             "src/vllm-sr/cli/model_bundle.py",
             "src/vllm-sr/cli/model_catalog.py",
@@ -45,7 +47,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
             "config/schemas/recipe-probes-v1.schema.json",
             "tools/dev/router-calibration/**",
             "tools/make/recipe-conformance.mk",
-            "tools/release/sync_model_catalog.py",
+            "tools/release/stage_model_catalog_package.py",
             "tools/release/snapshot_model_catalog.py",
         ):
             self.assertIn(path, push["paths"])
@@ -68,11 +70,22 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertNotIn("vllm-sr recipe pack", self.text)
         self.assertNotIn(".vllm-sr-recipe.zip", self.text)
 
-    def test_workflow_checks_source_mirror_and_conformance(self) -> None:
-        self.assertIn("sync_model_catalog.py --check", self.text)
+    def test_workflow_stages_package_assets_and_checks_conformance(self) -> None:
+        self.assertIn("make model-catalog-package-check", self.text)
         self.assertIn("make recipe-conformance-static", self.text)
         self.assertIn("python -m cli.model_catalog_export", self.text)
+        self.assertNotIn("make model-catalog-package-stage", self.text)
         self.assertNotIn("vllm-sr model ", self.text)
+
+    def test_source_package_build_stages_catalog_assets_automatically(self) -> None:
+        setup_text = (REPO_ROOT / "src" / "vllm-sr" / "setup.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("stage_model_catalog_package.py", setup_text)
+        self.assertIn("runpy.run_path", setup_text)
+        self.assertIn('"latest" / "catalog.yaml"', setup_text)
+        self.assertIn("if not catalog.is_file()", setup_text)
 
     def test_catalog_make_targets_work_without_an_agent_virtualenv(self) -> None:
         make_text = (REPO_ROOT / "tools" / "make" / "model-catalog.mk").read_text(
@@ -102,18 +115,26 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn("dist/model-catalog-receipt/", self.text)
         self.assertIn("source-commit.txt", self.text)
         self.assertIn(
-            "find config/recipes/built-in src/vllm-sr/cli/model_assets",
+            "find config/recipes/built-in",
             self.text,
         )
         self.assertIn("SHA256SUMS", self.text)
         self.assertIn("retention-days: 30", self.text)
 
-    def test_generated_package_mirror_is_collapsed_for_code_review(self) -> None:
-        attributes = (REPO_ROOT / ".gitattributes").read_text(encoding="utf-8")
+    def test_package_staging_tree_is_ignored_instead_of_committed(self) -> None:
+        ignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(
-            "src/vllm-sr/cli/model_assets/** linguist-generated=true",
-            attributes,
+            "src/vllm-sr/cli/model_assets/*/",
+            ignore,
         )
+        tracked = subprocess.run(
+            ["git", "ls-files", "src/vllm-sr/cli/model_assets"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        self.assertEqual(tracked, ["src/vllm-sr/cli/model_assets/__init__.py"])
 
     def test_canonical_release_does_not_attach_recipe_or_catalog_assets(self) -> None:
         release_path = REPO_ROOT / ".github" / "workflows" / "release.yml"
@@ -146,7 +167,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
     def test_pypi_wheel_dynamically_checks_the_bound_release_snapshot(self) -> None:
         publish_path = REPO_ROOT / ".github" / "workflows" / "pypi-publish.yml"
         publish_text = publish_path.read_text(encoding="utf-8")
-        self.assertIn("sync_model_catalog.py --check", publish_text)
+        self.assertIn("stage_model_catalog_package.py --check", publish_text)
         self.assertIn("snapshot_model_catalog.py", publish_text)
         self.assertIn('--check --version "$RELEASE_VERSION"', publish_text)
         self.assertIn("INPUT_CATALOG_SNAPSHOT", publish_text)
@@ -175,7 +196,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
             'snapshot_model_catalog.py --version "$(RELEASE_VERSION)"',
             release_makefile,
         )
-        self.assertIn("sync_model_catalog.py --check", release_makefile)
+        self.assertIn("model-catalog-package-check", release_makefile)
         self.assertNotIn("--force", release_makefile)
 
 

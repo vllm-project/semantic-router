@@ -5,6 +5,12 @@ listeners:
     port: 8899
     timeout: 1200s
 global:
+  model_catalog:
+    embeddings:
+      semantic:
+        embedding_config:
+          enable_soft_matching: true
+          top_k: 1
   stores:
     response_cache:
       enabled: false
@@ -156,6 +162,28 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
+evaluation:
+  records:
+    - model: anthropic/claude-opus-4.6
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
+    - model: google/gemini-2.5-flash-lite
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.68
+    - model: google/gemini-3.1-pro
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.82
+    - model: openai/gpt5.4
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
+    - model: qwen/qwen3.5-rocm
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.58
 routing:
   decisions:
     - algorithm:
@@ -163,6 +191,7 @@ routing:
       description: Understand image-bearing requests with the dedicated visual-language model.
       modelRefs:
         - model: local/omni
+          use_reasoning: false
       name: omni
       priority: 300
       rules:
@@ -196,8 +225,6 @@ routing:
                 type: domain
               - name: legal_risk_markers
                 type: keyword
-              - name: premium_legal_analysis
-                type: embedding
             operator: OR
           - conditions:
               - name: premium_legal_analysis
@@ -209,6 +236,22 @@ routing:
               - name: legal_risk:hard
                 type: complexity
             operator: OR
+          - conditions:
+              - conditions:
+                  - name: normative_topic_markers
+                    type: keyword
+                  - name: argument_request_markers
+                    type: keyword
+                  - conditions:
+                      - conditions:
+                          - name: legal_risk_markers
+                            type: keyword
+                          - name: legal_risk:hard
+                            type: complexity
+                        operator: OR
+                    operator: NOT
+                operator: AND
+            operator: NOT
         operator: AND
       tier: 2
     - description: Narrow premium reasoning lane for formal math proofs and derivations.
@@ -249,8 +292,6 @@ routing:
                     type: keyword
                   - name: reference_heavy_markers
                     type: keyword
-                  - name: needs_fact_check
-                    type: fact_check
                   - name: architecture_markers
                     type: keyword
                   - name: agentic_request_markers
@@ -285,91 +326,127 @@ routing:
         conditions:
           - conditions:
               - conditions:
-                  - name: math
-                    type: domain
-                  - conditions:
-                      - name: reasoning_request_markers
-                        type: keyword
-                    operator: NOT
-                  - conditions:
-                      - name: balance_reasoning
-                        type: projection
-                      - name: math_task:medium
-                        type: complexity
-                    operator: OR
-                operator: AND
-              - conditions:
-                  - name: philosophy
-                    type: domain
-                  - conditions:
-                      - name: reasoning_general_en
-                        type: embedding
-                      - name: reasoning_general_zh
-                        type: embedding
-                      - name: research_synthesis
-                        type: embedding
-                    operator: OR
-                operator: AND
-              - conditions:
-                  - conditions:
-                      - name: reasoning_general_en
-                        type: embedding
-                      - name: reasoning_general_zh
-                        type: embedding
-                      - name: research_synthesis
-                        type: embedding
-                      - name: research_request_markers
-                        type: keyword
-                      - name: reasoning_request_markers
-                        type: keyword
-                    operator: OR
-                  - conditions:
-                      - name: balance_medium
-                        type: projection
-                      - name: balance_complex
-                        type: projection
-                      - name: balance_reasoning
-                        type: projection
-                    operator: OR
-                operator: AND
-            operator: OR
-          - conditions:
-              - conditions:
-                  - name: law
-                    type: domain
-                  - name: health
-                    type: domain
-                  - name: verification_required
-                    type: projection
-                  - name: wrong_answer
-                    type: user_feedback
-                  - name: correction_feedback_markers
-                    type: keyword
-                  - name: likely_dissatisfied
-                    type: reask
-                  - name: verification_markers
-                    type: keyword
-                  - name: reference_heavy_markers
-                    type: keyword
-                  - name: needs_fact_check
-                    type: fact_check
-                  - name: architecture_markers
-                    type: keyword
-                  - name: agentic_request_markers
-                    type: keyword
-                  - name: code_request_markers
-                    type: keyword
-                  - name: implementation_markers
-                    type: keyword
                   - conditions:
                       - name: math
                         type: domain
-                      - name: reasoning_request_markers
-                        type: keyword
+                      - conditions:
+                          - name: reasoning_request_markers
+                            type: keyword
+                        operator: NOT
+                      - conditions:
+                          - name: balance_reasoning
+                            type: projection
+                          - conditions:
+                              - name: math_task:medium
+                                type: complexity
+                              - conditions:
+                                  - name: balance_medium
+                                    type: projection
+                                  - name: balance_complex
+                                    type: projection
+                                operator: OR
+                            operator: AND
+                        operator: OR
+                    operator: AND
+                  - conditions:
+                      - name: philosophy
+                        type: domain
+                      - conditions:
+                          - name: reasoning_general_en
+                            type: embedding
+                          - name: reasoning_general_zh
+                            type: embedding
+                          - name: research_synthesis
+                            type: embedding
+                        operator: OR
+                    operator: AND
+                  - conditions:
+                      - conditions:
+                          - name: reasoning_general_en
+                            type: embedding
+                          - name: reasoning_general_zh
+                            type: embedding
+                          - name: research_synthesis
+                            type: embedding
+                          - name: research_request_markers
+                            type: keyword
+                          - name: reasoning_request_markers
+                            type: keyword
+                        operator: OR
+                      - conditions:
+                          - name: balance_medium
+                            type: projection
+                          - name: balance_complex
+                            type: projection
+                          - name: balance_reasoning
+                            type: projection
+                        operator: OR
                     operator: AND
                 operator: OR
-            operator: NOT
-        operator: AND
+              - conditions:
+                  - conditions:
+                      - name: law
+                        type: domain
+                      - name: health
+                        type: domain
+                      - name: verification_required
+                        type: projection
+                      - name: wrong_answer
+                        type: user_feedback
+                      - name: correction_feedback_markers
+                        type: keyword
+                      - name: likely_dissatisfied
+                        type: reask
+                      - name: verification_markers
+                        type: keyword
+                      - name: reference_heavy_markers
+                        type: keyword
+                      - name: architecture_markers
+                        type: keyword
+                      - name: agentic_request_markers
+                        type: keyword
+                      - name: code_request_markers
+                        type: keyword
+                      - name: implementation_markers
+                        type: keyword
+                      - conditions:
+                          - name: math
+                            type: domain
+                          - name: reasoning_request_markers
+                            type: keyword
+                        operator: AND
+                    operator: OR
+                operator: NOT
+            operator: AND
+          - conditions:
+              - name: normative_topic_markers
+                type: keyword
+              - name: argument_request_markers
+                type: keyword
+              - conditions:
+                  - conditions:
+                      - name: legal_risk_markers
+                        type: keyword
+                      - name: legal_risk:hard
+                        type: complexity
+                    operator: OR
+                operator: NOT
+              - conditions:
+                  - conditions:
+                      - name: verification_required
+                        type: projection
+                      - name: verification_markers
+                        type: keyword
+                      - name: reference_heavy_markers
+                        type: keyword
+                      - name: wrong_answer
+                        type: user_feedback
+                      - name: correction_feedback_markers
+                        type: keyword
+                    operator: OR
+                operator: NOT
+            operator: AND
+        operator: OR
       tier: 4
     - description: High-structure execution plans, systems design, and specialist STEM synthesis.
       modelRefs:
@@ -425,6 +502,12 @@ routing:
                     operator: OR
                 operator: AND
               - conditions:
+                  - name: architecture_design
+                    type: embedding
+                  - name: architecture_markers
+                    type: keyword
+                operator: AND
+              - conditions:
                   - conditions:
                       - name: physics
                         type: domain
@@ -437,8 +520,16 @@ routing:
                       - name: computer science
                         type: domain
                     operator: OR
-                  - name: complex_stem
-                    type: embedding
+                  - conditions:
+                      - name: complex_stem
+                        type: embedding
+                      - conditions:
+                          - name: scientific_inquiry_markers
+                            type: keyword
+                          - name: explanation_request_markers
+                            type: keyword
+                        operator: AND
+                    operator: OR
                 operator: AND
             operator: OR
           - conditions:
@@ -578,22 +669,10 @@ routing:
                 type: projection
               - name: verification_markers
                 type: keyword
-              - name: needs_fact_check
-                type: fact_check
               - name: reference_heavy_markers
                 type: keyword
               - name: evidence_synthesis:hard
                 type: complexity
-            operator: OR
-          - conditions:
-              - name: health_guidance
-                type: embedding
-              - name: balance_medium
-                type: projection
-              - name: balance_complex
-                type: projection
-              - name: balance_reasoning
-                type: projection
             operator: OR
           - conditions:
               - conditions:
@@ -643,6 +722,10 @@ routing:
                 type: embedding
               - name: history_topic_markers
                 type: keyword
+              - name: research_synthesis
+                type: embedding
+              - name: explanation_request_markers
+                type: keyword
             operator: OR
           - conditions:
               - name: verification_required
@@ -651,8 +734,6 @@ routing:
                 type: keyword
               - name: reference_heavy_markers
                 type: keyword
-              - name: needs_fact_check
-                type: fact_check
             operator: OR
           - conditions:
               - conditions:
@@ -674,6 +755,30 @@ routing:
                     type: reask
                 operator: OR
             operator: NOT
+          - operator: OR
+            conditions:
+              - operator: NOT
+                conditions:
+                  - operator: OR
+                    conditions:
+                      - type: domain
+                        name: physics
+                      - type: domain
+                        name: chemistry
+                      - type: domain
+                        name: biology
+                      - type: domain
+                        name: engineering
+                      - type: domain
+                        name: computer science
+              - operator: NOT
+                conditions:
+                  - type: keyword
+                    name: scientific_inquiry_markers
+              - operator: NOT
+                conditions:
+                  - type: keyword
+                    name: explanation_request_markers
         operator: AND
       tier: 9
     - description: Cheap clarification lane for explicit restatements and single-turn re-asks.
@@ -706,8 +811,6 @@ routing:
                     type: keyword
                   - name: reference_heavy_markers
                     type: keyword
-                  - name: needs_fact_check
-                    type: fact_check
                   - name: code_request_markers
                     type: keyword
                 operator: OR
@@ -764,8 +867,20 @@ routing:
                         type: context
                       - name: history_topic_markers
                         type: keyword
-                      - name: evidence_synthesis:medium
-                        type: complexity
+                      - name: explanation_request_markers
+                        type: keyword
+                      - conditions:
+                          - name: evidence_synthesis:medium
+                            type: complexity
+                          - conditions:
+                              - name: business_analysis
+                                type: embedding
+                              - name: history_explainer
+                                type: embedding
+                              - name: psychology_support
+                                type: embedding
+                            operator: OR
+                        operator: AND
                     operator: OR
                 operator: AND
             operator: OR
@@ -773,8 +888,6 @@ routing:
               - conditions:
                   - name: verification_required
                     type: projection
-                  - name: needs_fact_check
-                    type: fact_check
                   - name: verification_markers
                     type: keyword
                   - name: reference_heavy_markers
@@ -797,6 +910,30 @@ routing:
                     type: keyword
                 operator: OR
             operator: NOT
+          - operator: OR
+            conditions:
+              - operator: NOT
+                conditions:
+                  - operator: OR
+                    conditions:
+                      - type: domain
+                        name: physics
+                      - type: domain
+                        name: chemistry
+                      - type: domain
+                        name: biology
+                      - type: domain
+                        name: engineering
+                      - type: domain
+                        name: computer science
+              - operator: NOT
+                conditions:
+                  - type: keyword
+                    name: scientific_inquiry_markers
+              - operator: NOT
+                conditions:
+                  - type: keyword
+                    name: explanation_request_markers
         operator: AND
       tier: 11
     - description: Low-cost creative writing, copywriting, and interpersonal drafting.
@@ -822,6 +959,20 @@ routing:
                 type: keyword
               - name: creative_tasks
                 type: embedding
+              - conditions:
+                  - conditions:
+                      - name: drafting_action_markers
+                        type: keyword
+                      - name: interpersonal_drafting
+                        type: embedding
+                    operator: OR
+                  - conditions:
+                      - name: personal_tone_markers
+                        type: keyword
+                      - name: creative_form_markers
+                        type: keyword
+                    operator: OR
+                operator: AND
             operator: OR
           - conditions:
               - name: balance_simple
@@ -847,8 +998,6 @@ routing:
                     type: embedding
                   - name: verification_required
                     type: projection
-                  - name: needs_fact_check
-                    type: fact_check
                   - name: verification_markers
                     type: keyword
                   - name: reference_heavy_markers
@@ -890,6 +1039,14 @@ routing:
                 operator: AND
               - name: simple_request_markers
                 type: keyword
+              - conditions:
+                  - name: verification_markers
+                    type: keyword
+                  - conditions:
+                      - name: explanation_request_markers
+                        type: keyword
+                    operator: NOT
+                operator: AND
             operator: OR
           - conditions:
               - name: simple_request_markers
@@ -947,8 +1104,6 @@ routing:
                       - conditions:
                           - name: verification_required
                             type: projection
-                          - name: needs_fact_check
-                            type: fact_check
                           - name: verification_markers
                             type: keyword
                           - name: reference_heavy_markers
@@ -971,6 +1126,38 @@ routing:
                     operator: NOT
                 operator: AND
             operator: OR
+          - operator: OR
+            conditions:
+              - type: embedding
+                name: fast_qa_en
+              - type: embedding
+                name: fast_qa_zh
+              - type: keyword
+                name: simple_request_markers
+              - operator: NOT
+                conditions:
+                  - operator: OR
+                    conditions:
+                      - type: domain
+                        name: business
+                      - type: domain
+                        name: economics
+                      - type: domain
+                        name: history
+                      - type: domain
+                        name: psychology
+                      - type: embedding
+                        name: business_analysis
+                      - type: embedding
+                        name: history_explainer
+                      - type: embedding
+                        name: psychology_support
+                      - type: keyword
+                        name: history_topic_markers
+                      - type: embedding
+                        name: research_synthesis
+                      - type: keyword
+                        name: explanation_request_markers
         operator: AND
       tier: 13
     - description: Lowest-cost fallback for everyday traffic and non-specialized requests.
@@ -1088,15 +1275,6 @@ routing:
       tier: 15
   modelCards:
     - capabilities:
-        - chat
-        - image_understanding
-        - multimodal
-        - omni
-        - text
-        - vision
-      modality: omni
-      name: local/omni
-    - capabilities:
         - legal_analysis
         - policy_review
         - high_risk_review
@@ -1104,10 +1282,6 @@ routing:
       description: PREMIUM tier alias reserved for legal and high-risk analysis.
       modality: text
       name: anthropic/claude-opus-4.6
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       tags:
         - tier:premium
         - cost:highest
@@ -1120,10 +1294,6 @@ routing:
       description: MEDIUM tier alias for low-cost verified explanation and correction tasks.
       modality: text
       name: google/gemini-2.5-flash-lite
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.68
       tags:
         - tier:medium
         - cost:low
@@ -1137,14 +1307,19 @@ routing:
       description: COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning.
       modality: text
       name: google/gemini-3.1-pro
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.82
       tags:
         - tier:complex
         - cost:upper_mid
         - specialty:complex_generalist
+    - capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+        - omni
+        - text
+        - vision
+      modality: omni
+      name: local/omni
     - capabilities:
         - reasoning
         - proofs
@@ -1153,10 +1328,6 @@ routing:
       description: REASONING tier alias for narrow formal math proofs and derivations.
       modality: text
       name: openai/gpt5.4
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.9
       tags:
         - tier:reasoning
         - cost:high
@@ -1171,10 +1342,6 @@ routing:
       description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic.
       modality: text
       name: qwen/qwen3.5-rocm
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.58
       tags:
         - tier:simple
         - cost:free
@@ -1276,6 +1443,7 @@ routing:
           - general_chat_fallback
           - health_guidance
           - history_explainer
+          - interpersonal_drafting
           - premium_legal_analysis
           - psychology_support
           - reasoning_general_en
@@ -1583,13 +1751,6 @@ routing:
         method: weighted_sum
         name: urgency_pressure
   signals:
-    conversation:
-      - description: Request contains at least one image content part.
-        feature:
-          source:
-            type: image_content
-          type: exists
-        name: balance_has_images
     complexity:
       - description: General difficulty boundary for simple answers versus synthesis-heavy reasoning.
         easy:
@@ -1735,15 +1896,22 @@ routing:
         name: evidence_synthesis
         threshold: 0.12
     context:
-      - max_tokens: "999"
-        min_tokens: "0"
+      - max_tokens: '999'
+        min_tokens: '0'
         name: short_context
-      - max_tokens: "7999"
+      - max_tokens: '7999'
         min_tokens: 1K
         name: medium_context
       - max_tokens: 256K
         min_tokens: 8K
         name: long_context
+    conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: balance_has_images
     domains:
       - description: Programming, software systems, debugging, APIs, and infrastructure.
         name: computer science
@@ -1774,6 +1942,13 @@ routing:
       - description: General knowledge and miscellaneous topics.
         name: other
     embeddings:
+      - aggregation_method: max
+        candidates:
+          - Draft a polite personal message that sets a boundary while preserving a friendly relationship.
+          - Help me phrase a scheduling request as a considerate note.
+          - Compose a personal apology that sounds sincere rather than defensive.
+        name: interpersonal_drafting
+        threshold: 0.55
       - aggregation_method: max
         candidates:
           - Who are you?
@@ -1922,7 +2097,7 @@ routing:
         name: premium_legal_analysis
         threshold: 0.8
     fact_check:
-      - description: Narrow factual-verification route for requests that explicitly ask for evidence or source checking.
+      - description: Requests that depend on external factual knowledge; verification routing combines this evidence with task and source requirements.
         name: needs_fact_check
     keywords:
       - case_sensitive: false
@@ -1968,6 +2143,10 @@ routing:
         operator: OR
       - case_sensitive: false
         keywords:
+          - verify
+          - citations
+          - cite
+          - sources
           - verify this
           - verify the claim
           - verify with a source
@@ -2054,6 +2233,12 @@ routing:
           - 简单解释
           - 用一句话
           - 直接回答
+          - 只写答案
+          - 只需答案
+          - 只要答案
+          - 仅给答案
+          - 只输出答案
+          - 仅输出答案
         name: simple_request_markers
         operator: OR
       - case_sensitive: false
@@ -2252,6 +2437,109 @@ routing:
           - 赶紧
           - 现在就
         name: urgency_markers
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - argue
+          - argument
+          - defend
+          - justify
+          - reasoning
+          - 论证
+          - 辩护
+          - 反驳
+          - 推理
+        name: argument_request_markers
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - ethics
+          - ethical
+          - moral
+          - deontology
+          - utilitarianism
+          - consequentialism
+          - 道德
+          - 伦理
+          - 义务
+        name: normative_topic_markers
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - explain
+          - compare
+          - analyze
+          - analyse
+          - summarize
+          - why
+          - how
+          - 解释
+          - 分析
+          - 比较
+          - 总结
+          - 原因
+          - 机制
+        name: explanation_request_markers
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - experiment
+          - experiments
+          - experimental
+          - simulation
+          - simulations
+          - hypothesis
+          - hypotheses
+          - modeling
+          - modelling
+          - 实验
+          - 模拟
+          - 假设
+          - 建模
+        name: scientific_inquiry_markers
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - poem
+          - poetry
+          - story
+          - fiction
+          - fictional
+          - slogan
+          - tagline
+          - 诗
+          - 诗歌
+          - 故事
+          - 小说
+          - 虚构
+          - 标语
+        name: creative_form_markers
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - write
+          - draft
+          - compose
+          - rewrite
+          - 写
+          - 起草
+          - 措辞
+        name: drafting_action_markers
+        operator: OR
+      - case_sensitive: false
+        keywords:
+          - calm
+          - supportive
+          - polite
+          - tactful
+          - warm
+          - sincere
+          - friendly
+          - 温和
+          - 礼貌
+          - 真诚
+          - 友善
+        name: personal_tone_markers
         operator: OR
     language:
       - description: English language queries

@@ -55,6 +55,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 
 func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if emb.PrototypeScoring != nil {
+		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(emb.PrototypeScoring)}
+	}
 	if emb.SimilarityThreshold != 0 {
 		fields["threshold"] = FloatValue{V: float64(emb.SimilarityThreshold)}
 	}
@@ -165,6 +168,9 @@ func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *Signal
 
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if comp.PrototypeScoring != nil {
+		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(comp.PrototypeScoring)}
+	}
 	if comp.Threshold != 0 {
 		fields["threshold"] = FloatValue{V: float64(comp.Threshold)}
 	}
@@ -210,6 +216,17 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 		fields["subjects"] = ArrayValue{Items: items}
 	}
 	return &SignalDecl{SignalType: "authz", Name: rb.Name, Fields: fields}
+}
+
+func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.UseNLI {
+		fields["use_nli"] = BoolValue{V: true}
+	}
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	return &SignalDecl{SignalType: "hallucination", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {

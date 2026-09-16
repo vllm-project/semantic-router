@@ -1,5 +1,9 @@
 # Modality Routing Classifier
 
+For the Vela workflow with source-group isolation and expanded output contracts,
+see [Vela Modality repair](VELA_REPAIR.md). This page describes the original
+training pipeline.
+
 This pipeline trains a three-class prompt classifier:
 
 | Label | Intended response |

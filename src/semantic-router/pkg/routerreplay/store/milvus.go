@@ -463,10 +463,11 @@ func (m *MilvusStore) AppendOutcome(ctx context.Context, id string, outcome Outc
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
+func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error {
 	return m.updateRecord(ctx, id, func(record *Record) {
 		record.HallucinationDetected = detected
 		record.HallucinationConfidence = confidence
+		applyHallucinationScore(record, score)
 		record.HallucinationSpans = cloneStringSlice(spans)
 		record.HallucinationSpanDetails = cloneHallucinationSpanDetails(spanDetails)
 	})

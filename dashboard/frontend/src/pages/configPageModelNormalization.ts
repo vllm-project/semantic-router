@@ -1,5 +1,5 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../generated/modelCatalog.json'
+import bundledCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog, BuiltInModelMetadata } from '../types/modelCatalog'
 import {
   normalizeEndpoint,
@@ -29,6 +29,13 @@ const intersectValues = <Value extends string>(
   return current.filter((value) => allowed.has(value))
 }
 
+const catalogProtocolForAPIFormat = (apiFormat?: string): string | undefined => {
+  if (apiFormat === 'openai') return 'openai/chat-completions@1'
+  if (apiFormat === 'responses') return 'openai/responses@1'
+  if (apiFormat === 'anthropic') return 'anthropic/messages@1'
+  return undefined
+}
+
 const catalogReasoningConstraints = (
   model: ProviderModelConfig,
   catalog?: BuiltInModelCatalog | null,
@@ -39,8 +46,14 @@ const catalogReasoningConstraints = (
   for (const backend of model.backend_refs ?? []) {
     const provider = catalog.providers.find((candidate) => candidate.id === backend.provider)
     const binding = provider?.models?.find((candidate) => candidate.catalog === model.catalog)
+    const protocol = model.api_format
+      ? catalogProtocolForAPIFormat(model.api_format)
+      : provider?.default_protocol
+    const bindingEfforts = protocol
+      ? (binding?.reasoning_efforts_by_protocol?.[protocol] ?? binding?.reasoning_efforts)
+      : binding?.reasoning_efforts
     reasoningModes = intersectValues(reasoningModes, binding?.reasoning_modes)
-    reasoningEfforts = intersectValues(reasoningEfforts, binding?.reasoning_efforts)
+    reasoningEfforts = intersectValues(reasoningEfforts, bindingEfforts)
   }
   return { reasoning_modes: reasoningModes, reasoning_efforts: reasoningEfforts }
 }
@@ -72,7 +85,6 @@ const normalizedProviderModel = (
     capabilities: override?.capabilities ?? builtIn?.capabilities,
     loras: override?.loras,
     tags: override?.tags ?? builtIn?.tags,
-    evaluations: override?.evaluations,
     modality: override?.modality ?? catalogRuntimeModality(builtIn),
     card_override: override,
     pricing: model.pricing,
@@ -90,7 +102,6 @@ const normalizedUnboundCard = (card: RoutingModelCard): NormalizedModel => ({
   capabilities: card.capabilities,
   loras: card.loras,
   tags: card.tags,
-  evaluations: card.evaluations,
   modality: card.modality,
 })
 

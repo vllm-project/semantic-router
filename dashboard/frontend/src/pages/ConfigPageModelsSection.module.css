@@ -88,14 +88,18 @@
 }
 
 .liveVerification {
-  display: flex;
+  display: grid;
   min-width: 145px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.5rem;
+  column-gap: 0.5rem;
+  row-gap: 0.15rem;
 }
 
 .liveVerificationHeading {
   display: flex;
+  grid-row: 1;
+  grid-column: 1;
   align-items: center;
   min-width: 0;
   gap: 0.42rem;
@@ -111,9 +115,9 @@
 }
 
 .liveVerificationDotSuccess {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  border-color: rgba(74, 222, 128, 0.75);
+  background: var(--color-success, #22c55e);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
 }
 
 .liveVerificationDotError {
@@ -135,6 +139,10 @@
   font-weight: 690;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.liveVerificationLabelSuccess {
+  color: #bbf7d0;
 }
 
 .liveVerificationEvidence {
@@ -168,22 +176,25 @@
 }
 
 .liveVerificationError {
+  grid-column: 1 / -1;
+  min-width: 0;
+  max-width: 100%;
   color: #fecaca;
 }
 
 .liveVerificationButton {
   display: inline-flex;
+  grid-row: 1;
+  grid-column: 2;
+  width: 28px;
+  height: 28px;
   align-items: center;
-  gap: 0.3rem;
-  width: fit-content;
-  min-height: 28px;
-  padding: 0.28rem 0.58rem;
+  justify-content: center;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.045);
   color: rgba(255, 255, 255, 0.78);
-  font-size: 0.68rem;
-  font-weight: 680;
 }
 
 .liveVerificationButton:hover:not(:disabled) {

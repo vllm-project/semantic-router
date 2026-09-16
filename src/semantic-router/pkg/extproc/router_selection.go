@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -17,9 +17,13 @@ import (
 )
 
 // createModelSelectorRegistries leaves publication to publishRouterState.
-func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader, classifiers ...*classification.RecipeClassifiers) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
-	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg)
+	var defaultSet *embedding.Set
+	if len(classifiers) > 0 && classifiers[0] != nil {
+		defaultSet = classifiers[0].Default().PreparedEmbeddings()
+	}
+	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg, defaultSet)
 	registries := make(map[config.RecipeName]*selection.Registry)
 
 	if len(cfg.Recipes) == 0 {
@@ -31,6 +35,13 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
 		scopedConfig := cfg.ConfigForRecipe(recipe)
+		var scoped *embedding.Set
+		if len(classifiers) > 0 && classifiers[0] != nil {
+			if classifier, ok := classifiers[0].ForRecipe(recipe.Name); ok {
+				scoped = classifier.PreparedEmbeddings()
+			}
+		}
+		embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(scopedConfig, scoped)
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed, defaultEmbeddingConfig)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
@@ -73,7 +84,7 @@ func createModelSelectorRegistry(
 	return registry
 }
 
-func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
+func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
 	models := cfg.EmbeddingModels
 	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
@@ -84,34 +95,20 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selec
 		ModelType:       modelType,
 		TargetDimension: selectionEmbeddingDimension(models, modelType),
 	}
-	var remoteProvider embedding.Provider
-	var remoteError error
-	if backend == config.EmbeddingBackendOpenAICompatible {
-		remoteProvider, remoteError = embedding.NewProvider(models, embedding.ProviderOptions{})
+
+	var prepared *embedding.Set
+	if len(sets) > 0 {
+		prepared = sets[0]
 	}
 	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
-		switch backend {
-		case config.EmbeddingBackendOpenAICompatible:
-			if remoteError != nil {
-				return nil, remoteError
-			}
-			return remoteProvider.Embed(context.Background(), text)
-		case config.EmbeddingBackendOpenVINO:
+		if backend == config.EmbeddingBackendOpenVINO {
 			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
-		default:
-			if candle_binding.SupportsBatchedEmbedding(embeddingConfig.ModelType) {
-				output, err := candle_binding.GetEmbeddingBatched(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
-				if err != nil {
-					return nil, err
-				}
-				return output.Embedding, nil
-			}
-			output, err := candle_binding.GetEmbeddingWithModelType(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
-			if err != nil {
-				return nil, err
-			}
-			return output.Embedding, nil
 		}
+		provider, err := prepared.Get(embeddingConfig.ModelType, embeddingConfig.TargetDimension, 0)
+		if err != nil {
+			return nil, err
+		}
+		return provider.Embed(context.Background(), text)
 	}, defaultConfig
 }
 
@@ -397,6 +394,17 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 			Load:    decisionCfg.Weights.Load,
 		}
 	}
+	if decisionCfg.Objective != nil {
+		result.Objective = selection.MultiFactorObjective{
+			Strategy:   decisionCfg.Objective.Strategy,
+			Priorities: make([]selection.MultiFactorPriority, 0, len(decisionCfg.Objective.Priorities)),
+		}
+		for _, priority := range decisionCfg.Objective.Priorities {
+			result.Objective.Priorities = append(result.Objective.Priorities, selection.MultiFactorPriority{
+				Factor: priority.Factor, Tolerance: priority.Tolerance,
+			})
+		}
+	}
 	if decisionCfg.SLO != nil {
 		result.SLO = selection.MultiFactorSLO{
 			MaxTPOTMs:    decisionCfg.SLO.MaxTPOTMs,
@@ -405,8 +413,23 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 			MaxInflight:  decisionCfg.SLO.MaxInflight,
 		}
 	}
+	if decisionCfg.Quality != nil {
+		result.QualityIndex = decisionCfg.Quality.Index
+		result.QualityOnMissing = decisionCfg.Quality.OnMissing
+		result.QualityMinCoverage = decisionCfg.Quality.MinCoverage
+		if decisionCfg.Quality.MinScore != nil {
+			value := *decisionCfg.Quality.MinScore
+			result.QualityMinScore = &value
+		}
+		if result.QualityOnMissing == "" {
+			result.QualityOnMissing = config.QualityEvidenceOnMissingExclude
+		}
+	}
 	if decisionCfg.LatencyPercentile != 0 {
 		result.LatencyPercentile = decisionCfg.LatencyPercentile
+	}
+	if decisionCfg.LatencyMetric != "" {
+		result.LatencyMetric = decisionCfg.LatencyMetric
 	}
 	if decisionCfg.OnNoCandidates != "" {
 		result.OnNoCandidates = decisionCfg.OnNoCandidates
@@ -547,8 +570,8 @@ func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) (look
 	})
 
 	cancel := func() {
-		for _, f := range cancelFuncs {
-			f()
+		for i := len(cancelFuncs) - 1; i >= 0; i-- {
+			cancelFuncs[i]()
 		}
 	}
 	return storage, cancel
@@ -593,20 +616,14 @@ func maybePopulateFromReplay(
 	if !ltCfg.PopulateFromReplay || reader == nil {
 		return
 	}
-	// Same #1843 exposure as the periodic populator below: this one-shot
-	// call also parses replay-store entries, and it runs on every router
-	// build, including config reloads of a live router.
-	goSafely("lookup_table_populator_initial", func() {
-		populateFromReplay(storage, reader)
-	})
-
-	if ltCfg.PopulateInterval == "" {
-		return
-	}
-	interval, err := config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
-	if err != nil {
-		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
-		return
+	var interval time.Duration
+	if ltCfg.PopulateInterval != "" {
+		var err error
+		interval, err = config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
+		if err != nil {
+			logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
+			interval = 0
+		}
 	}
 	*cancelFuncs = append(*cancelFuncs, startLookupTablePopulator(storage, reader, interval))
 }
@@ -630,8 +647,8 @@ func applyLookupTableOverrides(ltCfg config.LookupTableConfig, storage lookuptab
 
 // populateFromReplay fetches all records from the replay reader and runs the
 // builder synchronously. Errors are logged but do not prevent startup.
-func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Reader) {
-	records, err := reader.List(context.Background())
+func populateFromReplay(ctx context.Context, storage lookuptable.LookupTableStorage, reader store.Reader) {
+	records, err := reader.List(ctx)
 	if err != nil {
 		logging.Errorf("[RouterSelection] Failed to list replay records for lookup table population: %v", err)
 		return
@@ -651,42 +668,41 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 	})
 }
 
-// defaultPopulateInterval is the fallback cadence used when
-// startLookupTablePopulator is given a non-positive interval, so a
-// misconfigured value can neither panic time.NewTicker nor silently disable
-// periodic replay re-derivation.
-const defaultPopulateInterval = 15 * time.Minute
-
-// startLookupTablePopulator launches a background goroutine that periodically
-// re-derives lookup table entries from the replay store.
-// The returned cancel function stops the goroutine. A non-positive interval is
-// defensively replaced with defaultPopulateInterval (time.NewTicker panics on a
-// non-positive duration).
+// startLookupTablePopulator derives entries once and repeats when interval is positive.
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
-	if interval <= 0 {
-		logging.Warnf("[RouterSelection] Non-positive lookup table populate interval %s; using default %s", interval, defaultPopulateInterval)
-		interval = defaultPopulateInterval
-	}
 	ctx, cancel := context.WithCancel(context.Background())
-	// goSafely so a panic in populateFromReplay (e.g. malformed
-	// replay-store entry) is logged instead of crashing the whole
-	// router process — see #1843.
+	done := make(chan struct{})
 	goSafely("lookup_table_populator", func() {
+		defer close(done)
+		populateFromReplay(ctx, storage, reader)
+		if interval <= 0 {
+			return
+		}
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			select {
 			case <-ticker.C:
-				populateFromReplay(storage, reader)
+				populateFromReplay(ctx, storage, reader)
 			case <-ctx.Done():
 				return
 			}
 		}
 	})
-	logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
-		"interval": interval.String(),
-	})
-	return cancel
+	if interval > 0 {
+		logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
+			"interval": interval.String(),
+		})
+	}
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 func closeRecipeModelSelectors(registries map[config.RecipeName]*selection.Registry) error {

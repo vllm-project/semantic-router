@@ -14,7 +14,7 @@ MANAGEMENT_TOKEN_ENV = "VSR_MGMT_TOKEN"
 
 def normalize_router_url(router_url: str) -> str:
     normalized = router_url.strip().rstrip("/")
-    return normalized.removesuffix("/api/v1/eval")
+    return normalized.removesuffix("/api/v1/routing/preview")
 
 
 def http_json(
@@ -22,6 +22,7 @@ def http_json(
     url: str,
     payload: dict[str, Any] | None = None,
     timeout_seconds: float = 60.0,
+    if_match: str | None = None,
 ) -> tuple[int, dict[str, Any] | list[Any] | str]:
     body = None
     headers = {"Accept": "application/json"}
@@ -31,6 +32,8 @@ def http_json(
     if payload is not None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
+    if if_match:
+        headers["If-Match"] = if_match
 
     req = request.Request(url=url, method=method.upper(), data=body, headers=headers)
     try:

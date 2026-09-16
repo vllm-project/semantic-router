@@ -5,7 +5,7 @@ Add category field to training data using VSR's category classifier.
 This script:
 1. Reads training_data.jsonl (50,544 records)
 2. Groups by embedding_id (5,616 unique queries)
-3. Calls VSR's /api/v1/classify/intent for each unique query
+3. Calls VSR's /api/v1/diagnostics/classify/intent for each unique query
 4. Adds category field to all records
 5. Outputs enriched training data
 
@@ -19,27 +19,26 @@ import json
 import sys
 import time
 from collections import defaultdict
+from http import HTTPStatus
 from pathlib import Path
-from typing import Optional
+
+import requests
+
+FAILED_QUERY_PREVIEW_LIMIT = 5
+QUERY_PREVIEW_LENGTH = 100
 
 
-def classify_with_vsr(text: str, vsr_url: str, timeout: int = 30) -> Optional[dict]:
+def classify_with_vsr(text: str, vsr_url: str, timeout: int = 30) -> dict | None:
     """Call VSR's classification API."""
     try:
-        import requests
-    except ImportError:
-        print("Error: requests library required. Install with: pip install requests")
-        sys.exit(1)
-
-    try:
         response = requests.post(
-            f"{vsr_url}/api/v1/classify/intent",
+            f"{vsr_url}/api/v1/diagnostics/classify/intent",
             json={"text": text},
             timeout=timeout,
             headers={"Content-Type": "application/json"},
         )
 
-        if response.status_code == 200:
+        if response.status_code == HTTPStatus.OK:
             data = response.json()
             return {
                 "category": data.get("classification", {}).get("category", "other"),
@@ -56,14 +55,8 @@ def classify_with_vsr(text: str, vsr_url: str, timeout: int = 30) -> Optional[di
 def test_vsr_connection(vsr_url: str) -> bool:
     """Test connection to VSR API."""
     try:
-        import requests
-    except ImportError:
-        print("Error: requests library required. Install with: pip install requests")
-        sys.exit(1)
-
-    try:
         response = requests.get(f"{vsr_url}/health", timeout=5)
-        return response.status_code == 200
+        return response.status_code == HTTPStatus.OK
     except requests.exceptions.RequestException:
         return False
 
@@ -141,7 +134,7 @@ def main():
     print("Step 1: Loading training data...")
     records_by_embedding = defaultdict(list)
 
-    with open(input_path, "r", encoding="utf-8") as f:
+    with open(input_path, encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
@@ -182,7 +175,11 @@ def main():
             failed_queries.append(
                 {
                     "embedding_id": embedding_id,
-                    "query": query[:100] + "..." if len(query) > 100 else query,
+                    "query": (
+                        query[:QUERY_PREVIEW_LENGTH] + "..."
+                        if len(query) > QUERY_PREVIEW_LENGTH
+                        else query
+                    ),
                 }
             )
             category = "other"  # Mark as 'other' if classification fails
@@ -272,7 +269,7 @@ def main():
     # Show sample record
     print("Sample record (first line):")
     print("-" * 50)
-    with open(output_path, "r") as f:
+    with open(output_path) as f:
         sample = json.loads(f.readline())
         print(f"  query:       {sample['query'][:60]}...")
         print(f"  task_name:   {sample['task_name']}")
@@ -284,10 +281,10 @@ def main():
     if failed_queries:
         print()
         print(f"Failed queries ({len(failed_queries)}):")
-        for fq in failed_queries[:5]:
+        for fq in failed_queries[:FAILED_QUERY_PREVIEW_LIMIT]:
             print(f"  - embedding_id={fq['embedding_id']}: {fq['query']}")
-        if len(failed_queries) > 5:
-            print(f"  ... and {len(failed_queries) - 5} more")
+        if len(failed_queries) > FAILED_QUERY_PREVIEW_LIMIT:
+            print(f"  ... and {len(failed_queries) - FAILED_QUERY_PREVIEW_LIMIT} more")
 
 
 if __name__ == "__main__":

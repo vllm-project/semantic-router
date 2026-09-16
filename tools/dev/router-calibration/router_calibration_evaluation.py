@@ -11,12 +11,22 @@ from typing import Any
 from router_calibration_http import ensure_success, http_json, normalize_router_url
 from router_calibration_probe import (
     MAX_GENERATED_TEXT_BYTES,
+    SELECTION_STATUSES,
     Probe,
     ProbeImageFixture,
     message_content_text_bytes,
 )
+from router_calibration_signal_values import compare_signal_values
 
 MAX_REQUEST_BYTES = 10 << 20
+EVALUATION_SCOPES = ("deployment", "policy")
+
+
+class ProbeRequestError(RuntimeError):
+    def __init__(self, message: str, status: int, payload: Any):
+        super().__init__(message)
+        self.http_status = status
+        self.raw_response = payload
 
 
 def evaluate_probe(
@@ -25,20 +35,31 @@ def evaluate_probe(
     request_timeout_seconds: float = 60.0,
     allowed_decisions: frozenset[str] | None = None,
     http_client: Callable[..., tuple[int, Any]] = http_json,
+    *,
+    scope: str = "deployment",
 ) -> dict[str, Any]:
+    if scope not in EVALUATION_SCOPES:
+        raise ValueError(f"unknown evaluation scope {scope!r}")
     status, payload = http_client(
         "POST",
-        f"{normalize_router_url(router_url)}/api/v1/eval?trace=true",
+        f"{normalize_router_url(router_url)}/api/v1/routing/preview?trace=true",
         _build_request_payload(probe),
         timeout_seconds=request_timeout_seconds,
     )
-    data = ensure_success(status, payload, "POST /api/v1/eval")
+    try:
+        data = ensure_success(status, payload, "POST /api/v1/routing/preview")
+    except RuntimeError as exc:
+        raise ProbeRequestError(str(exc), status, payload) from exc
     if not isinstance(data, dict):
-        raise RuntimeError(
-            f"unexpected eval payload for probe {probe.probe_id}: {data!r}"
+        raise ProbeRequestError(
+            f"unexpected eval payload for probe {probe.probe_id}: {data!r}",
+            status,
+            data,
         )
-    outcome = _compare_probe_outcome(data, probe, allowed_decisions)
-    return _build_probe_result(data, probe, outcome)
+    outcome = _compare_probe_outcome(data, probe, allowed_decisions, scope=scope)
+    result = _build_probe_result(data, probe, outcome)
+    result["http_status"] = status
+    return result
 
 
 def _build_request_payload(
@@ -99,6 +120,8 @@ def _compare_probe_outcome(
     data: dict[str, Any],
     probe: Probe,
     allowed_decisions: frozenset[str] | None,
+    *,
+    scope: str = "deployment",
 ) -> dict[str, Any]:
     decision_result = data.get("decision_result") or {}
     actual_decision = (
@@ -114,6 +137,7 @@ def _compare_probe_outcome(
     selected_model = str(data.get("selected_model") or "").strip()
     selection_status = str(data.get("selection_status") or "").strip()
     selection_method = str(data.get("selection_method") or "").strip()
+    selection_reason = str(data.get("selection_reason") or "").strip()
     signal_errors = data.get("signal_errors") or {}
     actual_recipe = str(data.get("recipe") or "").strip()
     expected_recipe = probe.expected_recipe or "default"
@@ -128,6 +152,11 @@ def _compare_probe_outcome(
         forbidden=probe.forbidden_signals,
         actual=decision_result.get("matched_signals") or {},
         match_mode=probe.signal_match,
+    )
+    value_comparison = compare_signal_values(
+        probe.expected_signal_values,
+        data.get("signal_values"),
+        signal_errors,
     )
     plugin_comparison = compare_expected_plugins(
         expected=probe.expected_plugins,
@@ -146,6 +175,8 @@ def _compare_probe_outcome(
         status=selection_status,
         method=selection_method,
         recommended_models=actual_models,
+        expected_status=probe.expected_selection_status,
+        reason=selection_reason,
     )
     checks = {
         "decision": actual_decision == probe.expected_decision,
@@ -157,11 +188,39 @@ def _compare_probe_outcome(
         ),
         "plugins": plugin_comparison["matched"],
         "signals": signal_comparison["matched"],
+        "signal_values": value_comparison["matched"],
         "alias": expected_alias_matches(probe.expected_alias, actual_models),
         "trace": trace_comparison["matched"],
         "signal_errors": not signal_errors,
         "selection": selection_comparison["matched"],
     }
+    selection_shape = compare_selection_structure(
+        status=selection_status,
+        selected_model=selected_model,
+        method=selection_method,
+        reason=selection_reason,
+        recommended_models=actual_models,
+    )
+    for field in (
+        "selection_status",
+        "selected_model",
+        "selection_method",
+        "selection_reason",
+    ):
+        if field in data and not isinstance(data[field], str):
+            selection_shape["errors"].append(f"{field} must be a string")
+    if "recommended_models" in data and (
+        not isinstance(data["recommended_models"], list)
+        or any(not isinstance(model, str) for model in data["recommended_models"])
+    ):
+        selection_shape["errors"].append("recommended_models must be a list of strings")
+    selection_shape["matched"] = not selection_shape["errors"]
+    policy_matched = (
+        all(value for name, value in checks.items() if name != "selection")
+        and selection_shape["matched"]
+        and (probe.expected_selection_status is None or checks["selection"])
+    )
+    deployment_matched = all(checks.values())
     return {
         "decision_result": decision_result,
         "actual_decision": actual_decision,
@@ -170,17 +229,23 @@ def _compare_probe_outcome(
         "selected_model": selected_model,
         "selection_status": selection_status,
         "selection_method": selection_method,
+        "selection_reason": selection_reason,
         "signal_errors": signal_errors,
         "actual_recipe": actual_recipe,
         "expected_recipe": expected_recipe,
         "actual_algorithm": actual_algorithm,
         "actual_plugins": actual_plugins,
         "signal_comparison": signal_comparison,
+        "value_comparison": value_comparison,
         "plugin_comparison": plugin_comparison,
         "trace_comparison": trace_comparison,
         "selection_comparison": selection_comparison,
+        "selection_structure": selection_shape,
+        "evaluation_scope": scope,
+        "policy_matched": policy_matched,
+        "deployment_matched": deployment_matched,
         "checks": checks,
-        "matched": all(checks.values()),
+        "matched": policy_matched if scope == "policy" else deployment_matched,
     }
 
 
@@ -202,6 +267,8 @@ def _build_probe_result(
         "actual_model": outcome["actual_model"],
         "selected_model": outcome["selected_model"],
         "selection_status": outcome["selection_status"],
+        "expected_selection_status": probe.expected_selection_status,
+        "selection_reason": outcome["selection_reason"],
         "selection_method": outcome["selection_method"],
         "signal_errors": outcome["signal_errors"],
         "expected_recipe": outcome["expected_recipe"],
@@ -216,6 +283,9 @@ def _build_probe_result(
         "unexpected_plugins": plugins["unexpected"],
         "forbidden_plugin_matches": plugins["forbidden"],
         "expected_signals": expected_signals_by_type(probe.expected_signals),
+        "expected_signal_values": probe.expected_signal_values,
+        "observed_signal_values": outcome["value_comparison"]["observed"],
+        "signal_value_errors": outcome["value_comparison"]["errors"],
         "forbidden_signals": expected_signals_by_type(probe.forbidden_signals),
         "signal_match": probe.signal_match,
         "missing_expected_signals": signals["missing"],
@@ -235,16 +305,22 @@ def _build_probe_result(
         "tags": list(probe.tags),
         "actual_decision": outcome["actual_decision"],
         "matched": outcome["matched"],
+        "evaluation_scope": outcome["evaluation_scope"],
+        "policy_matched": outcome["policy_matched"],
+        "deployment_matched": outcome["deployment_matched"],
         "model_matched": checks["model"],
         "recipe_matched": checks["recipe"],
         "algorithm_matched": checks["algorithm"],
         "plugins_matched": checks["plugins"],
         "signals_matched": checks["signals"],
+        "signal_values_matched": checks["signal_values"],
         "alias_matched": checks["alias"],
         "trace_matched": checks["trace"],
         "signal_errors_matched": checks["signal_errors"],
         "selection_matched": checks["selection"],
         "selection_errors": selection["errors"],
+        "selection_structure_matched": outcome["selection_structure"]["matched"],
+        "selection_structure_errors": outcome["selection_structure"]["errors"],
         "trace_decisions": trace["decisions"],
         "trace_errors": trace["errors"],
         "recommended_models": list(outcome["actual_models"]),
@@ -253,7 +329,40 @@ def _build_probe_result(
         "unmatched_signals": decision_result.get("unmatched_signals") or {},
         "signal_confidences": data.get("signal_confidences") or {},
         "metrics": data.get("metrics") or {},
+        "raw_response": data,
     }
+
+
+def compare_selection_structure(
+    *,
+    status: str,
+    selected_model: str,
+    method: str,
+    reason: str,
+    recommended_models: tuple[str, ...],
+) -> dict[str, Any]:
+    """Policy evidence still requires an honest, recognizable selection result."""
+    errors: list[str] = []
+    concrete = {"selected", "planned_final", "fallback"}
+    deferred = {"execution_required", "unavailable", "failed", "not_required"}
+    if status not in concrete | deferred:
+        errors.append(f"unknown or missing selection_status={status!r}")
+    if status in concrete:
+        if not selected_model:
+            errors.append(f"selected_model is required for {status}")
+        if not method:
+            errors.append(f"selection_method is required for {status}")
+    if status in deferred and selected_model:
+        errors.append(f"{status} must not fabricate selected_model")
+    if status in {"unavailable", "failed", "not_required"} and not reason.strip():
+        errors.append(f"selection_reason is required for {status}")
+    if status == "execution_required" and not method:
+        errors.append("selection_method is required for execution_required")
+    if status == "not_required" and method != "fast_response":
+        errors.append("not_required requires selection_method=fast_response")
+    if status == "selected" and selected_model not in recommended_models:
+        errors.append("selected_model is not a recommended decision candidate")
+    return {"matched": not errors, "errors": errors}
 
 
 def compare_expected_signals(
@@ -345,10 +454,18 @@ def compare_eval_selection(
     status: str,
     method: str,
     recommended_models: tuple[str, ...],
+    expected_status: str | None = None,
+    reason: str = "",
 ) -> dict[str, Any]:
     """Require an honest final-selection contract when the probe names an algorithm."""
+    if expected_status is not None and expected_status not in SELECTION_STATUSES:
+        return {
+            "matched": False,
+            "errors": [f"unsupported expected selection status {expected_status!r}"],
+        }
+
     normalized_algorithm = str(algorithm or "").strip()
-    if not normalized_algorithm:
+    if not normalized_algorithm and expected_status is None:
         return {"matched": True, "errors": []}
 
     expected_statuses = {
@@ -365,6 +482,8 @@ def compare_eval_selection(
         "remom": {"planned_final", "execution_required"},
         "confidence": {"execution_required"},
     }.get(normalized_algorithm)
+    if expected_status is not None:
+        expected_statuses = {expected_status}
     errors: list[str] = []
     if not status:
         errors.append("selection_status is missing")
@@ -374,22 +493,38 @@ def compare_eval_selection(
             f"{sorted(expected_statuses)!r} "
             f"for algorithm {normalized_algorithm!r}"
         )
-    if not method:
-        errors.append("selection_method is missing")
-    elif method != normalized_algorithm and not (
-        method == "single" and status == "selected"
+    negative = status in {"unavailable", "failed"}
+    if status == "not_required":
+        if method != "fast_response":
+            errors.append("not_required requires selection_method=fast_response")
+        if not reason.strip():
+            errors.append("selection_reason is required for not_required")
+    if (
+        status != "not_required"
+        and normalized_algorithm
+        and (not negative or expected_status not in {"unavailable", "failed"} or method)
     ):
-        errors.append(f"selection_method={method!r}, want {normalized_algorithm!r}")
-    if status in {"selected", "planned_final"} and not selected_model:
+        if not method:
+            errors.append("selection_method is missing")
+        elif method != normalized_algorithm and not (
+            method == "single" and status == "selected"
+        ):
+            errors.append(f"selection_method={method!r}, want {normalized_algorithm!r}")
+    if status in {"selected", "planned_final", "fallback"} and not selected_model:
         errors.append(f"selected_model is required for {status}")
     if (
-        status == "selected"
+        status in {"selected", "fallback"}
         and selected_model
         and selected_model not in recommended_models
     ):
         errors.append("selected_model is not a recommended decision candidate")
-    if status == "execution_required" and selected_model:
-        errors.append("execution_required must not fabricate selected_model")
+    if (
+        status in {"execution_required", "unavailable", "failed", "not_required"}
+        and selected_model
+    ):
+        errors.append(f"{status} must not fabricate selected_model")
+    if negative and not reason.strip():
+        errors.append(f"selection_reason is required for {status}")
     return {"matched": not errors, "errors": errors}
 
 

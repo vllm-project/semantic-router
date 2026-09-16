@@ -1,21 +1,12 @@
-export interface Signal {
-  keyword?: string[]
-  embedding?: string[]
-  domain?: string[]
-  fact_check?: string[]
-  user_feedback?: string[]
-  reask?: string[]
-  preference?: string[]
-  language?: string[]
-  context?: string[]
-  structure?: string[]
-  complexity?: string[]
-  modality?: string[]
-  authz?: string[]
-  jailbreak?: string[]
-  pii?: string[]
-  kb?: string[]
-}
+import type {
+  InsightsTrajectoryRoute,
+  ReplayAdaptationScore,
+  ReplayRouteDiagnostics,
+  ReplaySessionPolicy,
+} from './insightsPageRoutingTypes'
+import type { SignalType } from '../generated/routerConfigContract'
+
+export type Signal = Partial<Record<SignalType, string[]>>
 
 export interface ToolTraceStep {
   type: string
@@ -98,6 +89,7 @@ export interface ProjectionTrace {
 }
 
 export interface InsightsRecord {
+  conversation_id?: string
   id: string
   timestamp: string
   request_id?: string
@@ -111,14 +103,28 @@ export interface InsightsRecord {
   original_model?: string
   selected_model?: string
   reasoning_mode?: string
-  confidence_score?: number
+  confidence_score?: number | null
+  confidence_score_available?: boolean
   selection_method?: string
+  route_diagnostics?: ReplayRouteDiagnostics
+  session_policy?: ReplaySessionPolicy
+  learning?: {
+    protection?: ReplaySessionPolicy
+    protection_preflight?: ReplaySessionPolicy
+    adaptation?: {
+      mode?: string
+      action?: string
+      reason?: string
+      scores?: Record<string, ReplayAdaptationScore>
+    }
+  }
   signals: Signal
   projections?: string[]
   projection_scores?: Record<string, number>
   projection_trace?: ProjectionTrace
   signal_confidences?: Record<string, number>
   signal_values?: Record<string, number>
+  signal_error_matches?: Record<string, boolean>
   tool_trace?: ToolTrace
   request_body?: string
   response_body?: string
@@ -137,10 +143,12 @@ export interface InsightsRecord {
   pii_enabled?: boolean
   jailbreak_detected?: boolean
   jailbreak_type?: string
-  jailbreak_confidence?: number
+  jailbreak_confidence?: number | null
+  jailbreak_score_available?: boolean
   response_jailbreak_detected?: boolean
   response_jailbreak_type?: string
-  response_jailbreak_confidence?: number
+  response_jailbreak_confidence?: number | null
+  response_jailbreak_score_available?: boolean
   pii_detected?: boolean
   pii_entities?: string[]
   pii_blocked?: boolean
@@ -176,6 +184,7 @@ export interface InsightsTrajectoryToolCall {
 }
 
 export interface InsightsTrajectoryMessage {
+  conversation_id?: string
   role: 'user' | 'assistant' | 'tool'
   content?: string
   tool_calls?: InsightsTrajectoryToolCall[]
@@ -189,6 +198,8 @@ export interface InsightsTrajectoryMessage {
 export interface InsightsTrajectory {
   object: 'router_replay.trajectory'
   session_id: string
+  recipe?: string
+  routes?: InsightsTrajectoryRoute[]
   record_count: number
   turn_count: number
   messages: InsightsTrajectoryMessage[]
