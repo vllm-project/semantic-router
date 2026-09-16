@@ -72,6 +72,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	}
 
 	if c.Config.PromptGuard.Backend != nil {
+		c.jailbreakModelReady = true
 		return nil
 	}
 	if c.Config.PromptGuard.Protocol != "" {
@@ -225,6 +226,7 @@ func (c *Classifier) initializePIIClassifier() error {
 	if c.Config.PIIModel.Backend != nil {
 		// Remote inference is fully constructed during classifier assembly and has
 		// no local model lifecycle to execute.
+		c.piiModelReady = true
 		return nil
 	}
 	if !c.IsPIIEnabled() || c.piiInitializer == nil {

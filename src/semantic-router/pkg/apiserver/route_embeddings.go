@@ -44,21 +44,43 @@ func isEmbeddingModelNotReady(err error) bool {
 }
 
 // checkEmbeddingReadiness validates that the models required for the request
-// are initialized. Text inputs require text-model readiness; image inputs
-// require multimodal-model readiness. This prevents a text-ready-only
-// deployment from attempting image inference (which would 500) and a
-// multimodal-only deployment from being rejected for text-only requests.
-func checkEmbeddingReadiness(req EmbeddingRequest) error {
-	if (len(req.Texts) > 0 || len(req.Images) > 0) && req.Model == "multimodal" && !candle_binding.IsMultiModalReady() {
+// are prepared in the acquired embedding generation. Text inputs require a
+// prepared text-model family; image inputs require the multimodal provider.
+// Readiness derives from the private set of providers this generation actually
+// prepared, never from process-global flags, so a request is judged against the
+// models its own runtime owns. This prevents a text-ready-only deployment from
+// attempting image inference (which would 500) and a multimodal-only deployment
+// from being rejected for text-only requests.
+func checkEmbeddingReadiness(set *embedding.Set, req EmbeddingRequest) error {
+	if len(req.Texts) == 0 && len(req.Images) == 0 {
+		return nil
+	}
+	if len(req.Texts) > 0 && !textEmbeddingReady(set, req.Model) {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
-	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingModelReady(req.Model) {
-		return candle_binding.ErrEmbeddingModelNotReady
-	}
-	if len(req.Images) > 0 && !candle_binding.IsMultiModalReady() {
+	if len(req.Images) > 0 && !set.Has("multimodal") {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
 	return nil
+}
+
+// textEmbeddingReady reports whether the text portion's selected model family
+// is prepared for the generation. An unspecified ("") or "auto" request needs
+// any prepared text model; a multimodal-only generation must not satisfy text
+// inputs. An explicit family (qwen3, gemma, mmbert, ...) must be present, with
+// model == "multimodal" allowed to serve text through its own provider.
+func textEmbeddingReady(set *embedding.Set, model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "", "auto":
+		for _, info := range set.Models() {
+			if info.Name != "multimodal" {
+				return true
+			}
+		}
+		return false
+	default:
+		return set.Has(model)
+	}
 }
 
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
@@ -106,7 +128,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		s.writeEmbeddingRuntimeError(w, prepareErr)
 		return
 	}
-	if err := checkEmbeddingReadiness(req); err != nil {
+	if err := checkEmbeddingReadiness(prepared, req); err != nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
 			fmt.Sprintf("failed to generate embedding: %v", err))
 		return
@@ -328,12 +350,6 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !candle_binding.IsEmbeddingModelReady(req.Model) {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			"Embedding models are not initialized — configure an embedding model in your router config")
-		return
-	}
-
 	prepared, release, err := s.acquireEmbeddingsForRecipe(req.Recipe)
 	if err != nil {
 		s.writeEmbeddingRuntimeError(w, err)
@@ -345,17 +361,18 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 	request := EmbeddingRequest{
 		Model:           req.Model,
 		Dimension:       req.Dimension,
+		TargetLayer:     req.TargetLayer,
 		QualityPriority: req.QualityPriority,
 		LatencyPriority: req.LatencyPriority,
+		Texts:           []string{req.Text1, req.Text2},
 	}
 
-	if err := checkEmbeddingReadiness(request); err != nil {
+	if err := checkEmbeddingReadiness(prepared, request); err != nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
 			fmt.Sprintf("failed to calculate similarity: %v", err))
 		return
 	}
 
-	request := EmbeddingRequest{Model: req.Model, Dimension: req.Dimension, TargetLayer: req.TargetLayer, QualityPriority: req.QualityPriority, LatencyPriority: req.LatencyPriority}
 	first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
 	request.Model = first.ModelUsed
 
@@ -367,9 +384,8 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 			score, err = embeddingCosine(first.Embedding, second.Embedding)
 		}
 	}
-	result := SimilarityResponse{Recipe: diagnosticRecipeName(req.Recipe), Similarity: score, ModelUsed: first.ModelUsed, ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000}
-
 	result := SimilarityResponse{
+		Recipe:           diagnosticRecipeName(req.Recipe),
 		Similarity:       score,
 		ModelUsed:        first.ModelUsed,
 		ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000,
@@ -378,7 +394,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		if isEmbeddingModelNotReady(err) {
 			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
 				fmt.Sprintf("failed to calculate similarity: %v", err))
-      return
+			return
 		}
 		if errors.Is(err, binding.ErrInputLimit) {
 			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
@@ -410,9 +426,16 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 	defer release()
-	if !candle_binding.IsEmbeddingModelReady(req.Model) {
+	if err := checkEmbeddingReadiness(prepared, EmbeddingRequest{
+		Model:           req.Model,
+		Dimension:       req.Dimension,
+		TargetLayer:     req.TargetLayer,
+		QualityPriority: req.QualityPriority,
+		LatencyPriority: req.LatencyPriority,
+		Texts:           []string{req.Query},
+	}); err != nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			"Embedding models are not initialized — configure an embedding model in your router config")
+			fmt.Sprintf("failed to calculate batch similarity: %v", err))
 		return
 	}
 	response, err := ownedBatchSimilarity(r.Context(), prepared, req)

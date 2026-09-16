@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -247,11 +249,19 @@ func TestValidateBatchSimilarityRequestRejectsNegativeTopK(t *testing.T) {
 	}
 }
 
-func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
-	if candle_binding.IsEmbeddingReady() {
-		t.Skip("test requires embedding models to be uninitialized")
-	}
+// --- Embedding readiness tests using embedding.Set fakes -------------------
 
+// fakeProvider returns a stub embedding.Provider with the given backend name.
+func fakeProvider(backend string) embedding.Provider {
+	p, _ := embedding.NewFuncProvider(backend, 768, func(_ context.Context, _ string) ([]float32, error) {
+		return make([]float32, 768), nil
+	})
+	return p
+}
+
+// A zero-value server acquires a nil embedding set. Every handler must
+// surface 503 EMBEDDING_NOT_READY rather than a 500 or protocol error.
+func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 	s := &ClassificationAPIServer{}
 
 	tests := []struct {
@@ -286,17 +296,101 @@ func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			rr := httptest.NewRecorder()
-
 			tc.handler(rr, req)
 
 			if rr.Code != http.StatusServiceUnavailable {
 				t.Fatalf("expected 503, got %d: %s", rr.Code, rr.Body.String())
 			}
-
 			if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
 				t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
 			}
 		})
+	}
+}
+
+func TestCheckEmbeddingReadinessNilSetReturnsNotReady(t *testing.T) {
+	err := checkEmbeddingReadiness(nil, EmbeddingRequest{Texts: []string{"hello"}})
+	if err == nil {
+		t.Fatal("expected nil embedding set to return not-ready for text request")
+	}
+	if !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected ErrEmbeddingModelNotReady, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessEmptyTextReturnsNil(t *testing.T) {
+	if err := checkEmbeddingReadiness(nil, EmbeddingRequest{}); err != nil {
+		t.Fatalf("expected nil error for empty request, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextWithTextModelPrepared(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected auto text to pass when qwen3 is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextRejectsMultimodalOnlySet(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}})
+	if err == nil {
+		t.Fatal("expected auto text to be rejected when only multimodal is prepared")
+	}
+}
+
+func TestCheckEmbeddingReadinessExplicitFamilyMustBePresent(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"gemma": fakeProvider("candle")}, "gemma")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "gemma", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected gemma text to pass when gemma is prepared, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "qwen3", Texts: []string{"hi"}}); err == nil {
+		t.Fatal("expected qwen3 text to be rejected when only gemma is prepared")
+	}
+}
+
+func TestCheckEmbeddingReadinessMultimodalTextPassesWithMultimodalPrepared(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "multimodal", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected multimodal text to pass when multimodal is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessImageRequestRequiresMultimodal(t *testing.T) {
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	images := []string{"data:image/png;base64,aGVsbG8="}
+	err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Images: images})
+	if err == nil {
+		t.Fatal("expected image request to be rejected when multimodal is not prepared")
+	}
+	both := embedding.NewSet(map[string]embedding.Provider{
+		"qwen3":     fakeProvider("candle"),
+		"multimodal": fakeProvider("candle"),
+	}, "qwen3")
+	if err := checkEmbeddingReadiness(both, EmbeddingRequest{Images: images}); err != nil {
+		t.Fatalf("expected image request to pass when multimodal is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessMixedRequestNeedsBothFamilies(t *testing.T) {
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	mixed := EmbeddingRequest{
+		Texts:  []string{"hello"},
+		Images: []string{"data:image/png;base64,aGVsbG8="},
+	}
+	if err := checkEmbeddingReadiness(textOnly, mixed); err == nil {
+		t.Fatal("expected mixed request to be rejected when multimodal is not prepared")
+	}
+	imageOnly := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(imageOnly, mixed); err == nil {
+		t.Fatal("expected mixed request to be rejected when no text model is prepared")
+	}
+	both := embedding.NewSet(map[string]embedding.Provider{
+		"qwen3":     fakeProvider("candle"),
+		"multimodal": fakeProvider("candle"),
+	}, "qwen3")
+	if err := checkEmbeddingReadiness(both, mixed); err != nil {
+		t.Fatalf("expected mixed request to pass when both are prepared, got %v", err)
 	}
 }
 
@@ -360,199 +454,5 @@ func TestValidateEmbeddingRequestTargetLayerRejectedForNonMmbert(t *testing.T) {
 	}
 	if code != "INVALID_PARAMETER" {
 		t.Fatalf("expected INVALID_PARAMETER, got %q", code)
-	}
-}
-
-// When text models are ready, text embedding requests must not return 503.
-func TestEmbeddingHandlerSucceedsWhenTextModelsReady(t *testing.T) {
-	orig := candle_binding.IsEmbeddingReady()
-	candle_binding.SetEmbeddingReady(true)
-	defer candle_binding.SetEmbeddingReady(orig)
-
-	s := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
-		strings.NewReader(`{"texts":["hello"]}`))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	s.handleEmbeddings(rr, req)
-
-	if rr.Code == http.StatusServiceUnavailable {
-		t.Fatalf("expected non-503 when text models are ready, got 503: %s", rr.Body.String())
-	}
-}
-
-// When multimodal is not ready, image embedding must return 503 via the error path.
-func TestEmbeddingHandlerReturns503WhenMultimodalNotReady(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	origImage := candle_binding.IsMultiModalReady()
-	candle_binding.SetEmbeddingReady(true)
-	candle_binding.SetMultiModalReady(false)
-	defer candle_binding.SetEmbeddingReady(origText)
-	defer candle_binding.SetMultiModalReady(origImage)
-
-	s := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
-		strings.NewReader(`{"images":["data:image/png;base64,aGVsbG8="]}`))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	s.handleEmbeddings(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503 when multimodal not ready, got %d: %s", rr.Code, rr.Body.String())
-	}
-	if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
-		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
-	}
-}
-
-// When both text and multimodal are ready, image embedding must not return 503.
-func TestEmbeddingHandlerSucceedsWhenMultimodalReady(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	origImage := candle_binding.IsMultiModalReady()
-	candle_binding.SetEmbeddingReady(true)
-	candle_binding.SetMultiModalReady(true)
-	defer candle_binding.SetEmbeddingReady(origText)
-	defer candle_binding.SetMultiModalReady(origImage)
-
-	s := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
-		strings.NewReader(`{"images":["data:image/png;base64,aGVsbG8="]}`))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	s.handleEmbeddings(rr, req)
-
-	if rr.Code == http.StatusServiceUnavailable {
-		t.Fatalf("expected non-503 when multimodal is ready, got 503: %s", rr.Body.String())
-	}
-}
-
-// When only multimodal is ready (text models absent), text embedding must
-// return 503 — a multimodal-only deployment must not serve text requests.
-func TestEmbeddingHandlerReturns503WhenTextModelsNotReady(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	origImage := candle_binding.IsMultiModalReady()
-	candle_binding.SetEmbeddingReady(false)
-	candle_binding.SetMultiModalReady(true)
-	defer candle_binding.SetEmbeddingReady(origText)
-	defer candle_binding.SetMultiModalReady(origImage)
-
-	s := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
-		strings.NewReader(`{"texts":["hello"]}`))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	s.handleEmbeddings(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503 when text models not ready, got %d: %s", rr.Code, rr.Body.String())
-	}
-	if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
-		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
-	}
-}
-
-// When only multimodal is ready, image embedding must succeed — a
-// multimodal-only deployment must serve image requests.
-func TestEmbeddingHandlerSucceedsForImagesInMultimodalOnlyDeployment(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	origImage := candle_binding.IsMultiModalReady()
-	candle_binding.SetEmbeddingReady(false)
-	candle_binding.SetMultiModalReady(true)
-	defer candle_binding.SetEmbeddingReady(origText)
-	defer candle_binding.SetMultiModalReady(origImage)
-
-	s := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
-		strings.NewReader(`{"images":["data:image/png;base64,aGVsbG8="]}`))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	s.handleEmbeddings(rr, req)
-
-	if rr.Code == http.StatusServiceUnavailable {
-		t.Fatalf("expected non-503 for images in multimodal-only deployment, got 503: %s", rr.Body.String())
-	}
-}
-
-// When only text models are ready, a mixed text+image request must return 503
-// because the multimodal gate blocks the image portion.
-func TestEmbeddingHandlerReturns503ForMixedRequestWhenMultimodalNotReady(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	origImage := candle_binding.IsMultiModalReady()
-	candle_binding.SetEmbeddingReady(true)
-	candle_binding.SetMultiModalReady(false)
-	defer candle_binding.SetEmbeddingReady(origText)
-	defer candle_binding.SetMultiModalReady(origImage)
-
-	s := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
-		strings.NewReader(`{"texts":["hello"],"images":["data:image/png;base64,aGVsbG8="]}`))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	s.handleEmbeddings(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503 for mixed request when multimodal not ready, got %d: %s", rr.Code, rr.Body.String())
-	}
-	if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
-		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
-	}
-}
-
-// When only multimodal is ready, a mixed text+image request must return 503
-// because the text gate blocks the text portion.
-func TestEmbeddingHandlerReturns503ForMixedRequestWhenTextModelsNotReady(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	origImage := candle_binding.IsMultiModalReady()
-	candle_binding.SetEmbeddingReady(false)
-	candle_binding.SetMultiModalReady(true)
-	defer candle_binding.SetEmbeddingReady(origText)
-	defer candle_binding.SetMultiModalReady(origImage)
-
-	s := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
-		strings.NewReader(`{"texts":["hello"],"images":["data:image/png;base64,aGVsbG8="]}`))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	s.handleEmbeddings(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503 for mixed request when text models not ready, got %d: %s", rr.Code, rr.Body.String())
-	}
-	if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
-		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
-	}
-}
-
-func TestCheckEmbeddingReadinessUsesSelectedTextFamily(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	candle_binding.SetEmbeddingReady(true)
-	candle_binding.SetEmbeddingModelReady("qwen3", false)
-	defer candle_binding.SetEmbeddingReady(origText)
-
-	if err := checkEmbeddingReadiness(EmbeddingRequest{Model: "qwen3", Texts: []string{"hello"}}); err == nil {
-		t.Fatal("expected qwen3 request to be rejected when qwen3 is not ready")
-	}
-	if err := checkEmbeddingReadiness(EmbeddingRequest{Model: "gemma", Texts: []string{"hello"}}); err != nil {
-		t.Fatalf("expected ready gemma request to pass, got %v", err)
-	}
-}
-
-func TestCheckEmbeddingReadinessAllowsMultimodalTextWithoutTextFamily(t *testing.T) {
-	origText := candle_binding.IsEmbeddingReady()
-	origImage := candle_binding.IsMultiModalReady()
-	candle_binding.SetEmbeddingReady(false)
-	candle_binding.SetMultiModalReady(true)
-	defer candle_binding.SetEmbeddingReady(origText)
-	defer candle_binding.SetMultiModalReady(origImage)
-
-	if err := checkEmbeddingReadiness(EmbeddingRequest{Model: "multimodal", Texts: []string{"hello"}}); err != nil {
-		t.Fatalf("expected multimodal text request to pass, got %v", err)
 	}
 }
