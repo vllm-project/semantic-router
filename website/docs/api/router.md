@@ -129,6 +129,27 @@ Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
 
+## Request budget errors
+
+When `candidate_requirements.context` is `known_limits`, the Router checks the
+estimated input plus the effective output limit against each candidate's configured
+limits. If every candidate fails only this budget check, the request returns HTTP
+`400` with `context_length_exceeded` or `max_output_tokens_exceeded`. Unknown model
+limits, missing capabilities, unavailable selection evidence, and mixed failures
+remain selection failures; they are not reported as a caller budget error.
+
+Input accounting is an estimate, not the selected model's tokenizer. A backend
+may still reject a request that passed this check. Valid backend errors retain
+their HTTP status and meaningful message. vLLM's integer HTTP error codes are
+normalized to strings; for example, its `BadRequestError` with `code: 400` becomes
+an `invalid_request_error` with `code: "400"` in OpenAI-compatible output.
+
+A request with `stream: true` that is rejected before generation receives the
+same non-2xx JSON error rather than a successful SSE stream. When Replay is
+enabled, these errors are retained as failed requests with the observed status;
+Router budget rejections use the terminal reason `request_budget_exceeded`.
+These checks do not themselves truncate the provider-bound conversation.
+
 ## Router Replay
 
 Router Replay records routing decisions and selected request lifecycle data.
@@ -187,6 +208,45 @@ lists eligible models independently of their scores; an unrecorded score appears
 as `—`, while a recorded zero remains zero. Missing identity or evidence
 is displayed explicitly. A recipe's `data_policy.replay: false` prevents its
 requests from appearing in Replay, including rejected requests.
+
+### Configured-rate cost estimates
+
+Insights estimates model costs from recorded token usage and the selected model's
+configured input, cached-input, cache-write, and output rates. These estimates
+exclude infrastructure charges and invoice adjustments. Missing usage or pricing
+stays unknown; record cells explain whether usage, price, or a baseline was not
+recorded. An explicitly configured free rate remains zero.
+
+For each new routed record, the baseline is the highest estimated cost in the
+selected recipe's complete model pool across all its decisions, including models
+outside the matched decision. This includes decision model references, explicit
+candidate-iteration models, and route-action destinations. The router default is
+included only when a recipe decision with no model references permits that
+fallback; strict candidate requirements, minimum-candidate constraints, immediate
+responses, and route actions do not implicitly admit the default. Auxiliary
+planner and judge models do not expand the pool.
+The comparison uses the same recorded usage and currency.
+Other recipes, unpriced models, and other currencies are ignored;
+no exchange-rate conversion is performed. Equal-cost candidates use model-name
+order for a stable baseline. A direct model request without a selected recipe compares
+against itself. If the recipe has no priced model in the same currency, its baseline
+remains unavailable. Candidate eligibility and tokenization on an alternative model
+are not re-evaluated: this is a configured-rate comparison, not a second inference.
+Cache hits record zero additional model-inference cost; storage and lookup costs
+are outside this estimate. Existing records retain their captured baseline and
+prices. Historical records without a captured price show **Price not recorded**;
+adding or changing today's configured rates does not backfill their costs.
+
+The aggregate response's `summary.by_currency` contains a sorted array of
+`currency`, `total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count`
+for each currency. Complete estimates are retained in their own group. With one
+currency, the existing flat summary fields retain those same values. With several
+currencies, flat `currency` is omitted and flat amounts are zero placeholders;
+clients must use `by_currency` rather than display or combine those placeholders.
+No cross-currency total is reported. `cost_record_count` counts complete estimates
+across groups, while `excluded_record_count` counts non-completed requests and
+records without complete usage, price, currency, or baseline data. Details
+distinguish those unavailable-data reasons.
 
 When bearer authentication is enabled, replay callers need `replay.read`.
 Prompt, response, tool, and other sensitive details remain redacted unless the

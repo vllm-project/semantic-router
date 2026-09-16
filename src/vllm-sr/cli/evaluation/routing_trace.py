@@ -18,6 +18,8 @@ from cli.evaluation.evidence import (
 )
 
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:/+ -]+$")
+_ERROR_CHARS = re.compile(r"[^A-Za-z0-9_.:/+ -]")
+_MAX_ERROR_LENGTH = 200
 _MAX_TRACE_DEPTH = 8
 _MAX_TRACE_CHILDREN = 32
 _MAX_TRACES = 64
@@ -40,6 +42,13 @@ def _safe_token(value: object, *, limit: int = 160) -> str | None:
     if not value or len(value) > limit or "://" in value or "@" in value:
         return None
     return value if _SAFE_TOKEN.fullmatch(value) else None
+
+
+def _bounded_error(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    sanitized = _ERROR_CHARS.sub("", value).strip()[:_MAX_ERROR_LENGTH]
+    return sanitized or None
 
 
 def _bounded_number(value: object) -> float | None:
@@ -235,6 +244,7 @@ def normalize_routing_diagnostic(
         traces=_decision_traces(payload, budget),
         signals=_signals(payload, budget),
         applied_unknown_policies=_applied_unknown_policies(payload, budget),
+        decision_error=_bounded_error(payload.get("decision_error")),
     )
     if budget.truncated:
         diagnostic = diagnostic.model_copy(update={"truncated": True})
