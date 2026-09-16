@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styles from './RouterModelInventory.module.css'
-import { useReadonly } from '../contexts/ReadonlyContext'
 import {
   getLoadedModelCount,
   getPreviewRouterModels,
   getRouterModelAnchor,
+  getRouterModelConsumers,
+  getRouterModelResources,
   getRouterModelState,
   getRouterModelStateLabel,
   getTotalKnownModelCount,
@@ -12,6 +13,14 @@ import {
   type RouterModelInfo,
   type RouterModelsInfo,
 } from '../utils/routerRuntime'
+import {
+  getRouterModelArtifactPath,
+  getRouterModelContext,
+  getRouterModelDevice,
+  getRouterModelDisplayName,
+  getRouterModelPreviewName,
+  isLocalDerivedRouterModel,
+} from './routerModelPresentation'
 import {
   clampInventoryPage,
   filterAndSortRouterModels,
@@ -80,30 +89,10 @@ function formatTitleLabel(value?: string): string {
     .join(' ')
 }
 
-function extractRuntimePath(value?: string): string {
-  if (!value) return ''
-  const match = value.match(/path=([^,)]+)/)
-  return match?.[1]?.trim() ?? ''
-}
-
 function summarizeValues(values?: string[], noun = 'items'): string | undefined {
   if (!values?.length) return undefined
   if (values.length <= 3) return values.join(', ')
   return `${values.length} ${noun}`
-}
-
-function getDisplayModelID(model: RouterModelInfo): string {
-  return (
-    model.registry?.local_path ||
-    model.resolved_model_path ||
-    extractRuntimePath(model.model_path) ||
-    model.model_path ||
-    model.name
-  )
-}
-
-function getModelTitle(model: RouterModelInfo): string {
-  return formatTitleLabel(model.name)
 }
 
 function getModelKind(model: RouterModelInfo): string {
@@ -199,13 +188,21 @@ function getModelChips(model: RouterModelInfo): string[] {
   return [...chips].slice(0, 6)
 }
 
-function buildDetailSections(model: RouterModelInfo): DetailSection[] {
+function buildDetailSections(
+  model: RouterModelInfo,
+  consumers: RouterModelInfo[],
+): DetailSection[] {
+  const shared = consumers.length > 1
   const identityRows: DetailRow[] = [
-    { label: 'Router Key', value: model.name },
-    { label: 'Model ID', value: getDisplayModelID(model) },
+    ...(!shared ? [{ label: 'Router Key', value: model.name }] : []),
+    { label: 'Artifact Path', value: getRouterModelArtifactPath(model) || 'Not reported' },
   ]
 
-  if (model.recipe) {
+  if (isLocalDerivedRouterModel(model)) {
+    identityRows.push({ label: 'Artifact Kind', value: 'Local derived artifact' })
+  }
+
+  if (model.recipe && !shared) {
     identityRows.push({ label: 'Recipe', value: model.recipe })
   }
 
@@ -213,11 +210,22 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     identityRows.push({ label: 'Repository', value: model.registry.repo_id })
   }
 
+  if (model.registry?.revision) {
+    identityRows.push({ label: 'Registry Revision', value: model.registry.revision })
+  }
+
   if (model.registry?.base_model) {
     identityRows.push({ label: 'Base Model', value: model.registry.base_model })
   }
 
-  const capabilityRows: DetailRow[] = [{ label: 'Type', value: getModelKind(model) }]
+  const context = getRouterModelContext(model)
+  const capabilityRows: DetailRow[] = [
+    { label: 'Type', value: getModelKind(model) },
+    {
+      label: 'Context Window',
+      value: context.source === 'runtime' ? context.label : 'Not reported',
+    },
+  ]
 
   if (model.registry?.parameter_size) {
     capabilityRows.push({ label: 'Size', value: model.registry.parameter_size })
@@ -225,8 +233,8 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
 
   if (model.registry?.max_context_length) {
     capabilityRows.push({
-      label: 'Context',
-      value: `${model.registry.max_context_length.toLocaleString()} tokens`,
+      label: 'Registry Context',
+      value: `${model.registry.max_context_length.toLocaleString('en-US')} tokens`,
     })
   }
 
@@ -265,7 +273,14 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     capabilityRows.push({ label: 'Datasets', value: datasets })
   }
 
-  const runtimeRows = buildMetadataRows(model.metadata)
+  const metadata = shared
+    ? Object.fromEntries(
+        Object.entries(model.metadata ?? {}).filter(([key, value]) =>
+          consumers.every((consumer) => consumer.metadata?.[key] === value),
+        ),
+      )
+    : model.metadata
+  const runtimeRows = buildMetadataRows(metadata)
   if (model.load_time) {
     runtimeRows.unshift({ label: 'Load Time', value: model.load_time })
   }
@@ -277,6 +292,25 @@ function buildDetailSections(model: RouterModelInfo): DetailSection[] {
     { title: 'Identity', rows: identityRows },
     { title: 'Capabilities', rows: capabilityRows },
     { title: 'Runtime & Config', rows: runtimeRows },
+    ...(shared
+      ? [
+          {
+            title: 'Consumers',
+            rows: consumers.map((consumer) => ({
+              label: `${consumer.recipe || 'default'} / ${consumer.metadata?.binding || consumer.name}`,
+              value: [
+                getModelKind(consumer),
+                getRouterModelStateLabel(consumer),
+                consumer.metadata?.default_layer && `Layer ${consumer.metadata.default_layer}`,
+                consumer.metadata?.default_dimension &&
+                  `${consumer.metadata.default_dimension} dimensions`,
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            })),
+          },
+        ]
+      : []),
   ].filter((section) => section.rows.length > 0)
 }
 
@@ -293,50 +327,59 @@ function renderDetailRows(rows: DetailRow[]): JSX.Element {
   )
 }
 
-const PlatformMark: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
-  <img
-    src="/amd-logo.png"
-    alt="AMD platform"
-    className={`${styles.platformLogo} ${compact ? styles.platformLogoCompact : styles.platformLogoLarge}`}
-  />
-)
+const DeviceMark: React.FC<{ model: RouterModelInfo }> = ({ model }) => {
+  const device = getRouterModelDevice(model)
+  return (
+    <span className={styles.deviceMark}>
+      {device.isAmd && <img src="/amd-logo.png" alt="AMD GPU" className={styles.platformLogo} />}
+      <span>{device.label}</span>
+    </span>
+  )
+}
 
-const PreviewCardBody: React.FC<{
-  model: RouterModelInfo
-  isAmdPlatform: boolean
-}> = ({ model, isAmdPlatform }) => (
-  <>
-    <div className={styles.previewTopRow}>
-      <span className={styles.previewPurpose}>{getModelKind(model)}</span>
-      <span className={`${styles.stateChip} ${getStateChipClass(model)}`}>
-        {getRouterModelStateLabel(model)}
-      </span>
-    </div>
-
-    <p className={styles.previewModelId}>{getDisplayModelID(model)}</p>
-
-    {isAmdPlatform && (
-      <div className={styles.platformFooterCompact}>
-        <PlatformMark compact />
+const PreviewCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModelInfo[] }> = ({
+  model,
+  consumers,
+}) => {
+  const context = getRouterModelContext(model)
+  const name = getRouterModelPreviewName(model)
+  return (
+    <>
+      <div className={styles.previewTopRow}>
+        <span className={styles.previewPurpose}>{getModelKind(model)}</span>
+        <span className={`${styles.previewState} ${getStateChipClass(model)}`}>
+          {getRouterModelStateLabel(model)}
+        </span>
       </div>
-    )}
-  </>
-)
+      <div className={styles.previewIdentity}>
+        <h3 className={styles.previewModelId}>{name.title}</h3>
+        {name.subtitle && <p className={styles.previewSubtitle}>{name.subtitle}</p>}
+      </div>
+      <div className={styles.previewFooter}>
+        <p className={styles.previewContext}>
+          {context.source === 'registry' ? 'Registry context' : 'Context window'}: {context.label}
+        </p>
+        {consumers.length > 1 && (
+          <p className={styles.previewContext}>Shared by {consumers.length} consumers</p>
+        )}
+      </div>
+    </>
+  )
+}
 
-const FullCardBody: React.FC<{
-  model: RouterModelInfo
-  isAmdPlatform: boolean
-}> = ({ model, isAmdPlatform }) => {
-  const sections = buildDetailSections(model)
+const FullCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModelInfo[] }> = ({
+  model,
+  consumers,
+}) => {
+  const sections = buildDetailSections(model, consumers)
   const chips = getModelChips(model)
   const description = getModelDescription(model)
-  const hasFooter = Boolean(model.registry?.model_card_url) || isAmdPlatform
 
   return (
     <>
       <div className={styles.titleBlock}>
         <div className={styles.titleRow}>
-          <h3 className={styles.modelName}>{getModelTitle(model)}</h3>
+          <h3 className={styles.modelName}>{getRouterModelDisplayName(model)}</h3>
           <span className={`${styles.stateChip} ${getStateChipClass(model)}`}>
             {getRouterModelStateLabel(model)}
           </span>
@@ -364,24 +407,22 @@ const FullCardBody: React.FC<{
         ))}
       </div>
 
-      {hasFooter && (
-        <div
-          className={`${styles.detailFooter} ${!model.registry?.model_card_url ? styles.detailFooterEnd : ''}`}
-        >
-          {model.registry?.model_card_url ? (
-            <a
-              className={styles.cardLink}
-              href={model.registry.model_card_url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open model card
-            </a>
-          ) : null}
+      <div
+        className={`${styles.detailFooter} ${!model.registry?.model_card_url ? styles.detailFooterEnd : ''}`}
+      >
+        {model.registry?.model_card_url ? (
+          <a
+            className={styles.cardLink}
+            href={model.registry.model_card_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open model card
+          </a>
+        ) : null}
 
-          {isAmdPlatform && <PlatformMark />}
-        </div>
-      )}
+        <DeviceMark model={model} />
+      </div>
     </>
   )
 }
@@ -394,17 +435,30 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
   emptyMessage = 'No router model metadata is available yet.',
   onSelectModel,
 }) => {
-  const { platform } = useReadonly()
-  const isAmdPlatform = platform?.toLowerCase() === 'amd'
   const [query, setQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<ModelInventoryStateFilter>('all')
   const [sort, setSort] = useState<ModelInventorySort>('state')
   const [page, setPage] = useState(1)
   const pageSize = 8
-  const allModels = useMemo(() => sortRouterModels(modelsInfo?.models ?? []), [modelsInfo?.models])
+  const resources = useMemo(
+    () => getRouterModelResources(sortRouterModels(modelsInfo?.models ?? [])),
+    [modelsInfo?.models],
+  )
+  const allModels = useMemo(() => resources.map(({ model }) => model), [resources])
   const filteredModels = useMemo(
-    () => filterAndSortRouterModels(allModels, query, stateFilter, sort),
-    [allModels, query, sort, stateFilter],
+    () =>
+      filterAndSortRouterModels(
+        resources
+          .filter(
+            ({ consumers }) =>
+              filterAndSortRouterModels(consumers, query, 'all', 'state').length > 0,
+          )
+          .map(({ model }) => model),
+        '',
+        stateFilter,
+        sort,
+      ),
+    [resources, query, sort, stateFilter],
   )
   const totalPages = Math.max(1, Math.ceil(filteredModels.length / pageSize))
   const currentPage = clampInventoryPage(page, filteredModels.length, pageSize)
@@ -519,6 +573,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
             data-testid={`router-model-grid-${mode}`}
           >
             {models.map((model) => {
+              const consumers = getRouterModelConsumers(modelsInfo?.models ?? [], model)
               const className = [
                 styles.card,
                 mode === 'preview' ? styles.previewCard : styles.detailCard,
@@ -530,9 +585,9 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
 
               const cardContent =
                 mode === 'preview' ? (
-                  <PreviewCardBody model={model} isAmdPlatform={isAmdPlatform} />
+                  <PreviewCardBody model={model} consumers={consumers} />
                 ) : (
-                  <FullCardBody model={model} isAmdPlatform={isAmdPlatform} />
+                  <FullCardBody model={model} consumers={consumers} />
                 )
 
               if (onSelectModel && mode === 'preview') {
