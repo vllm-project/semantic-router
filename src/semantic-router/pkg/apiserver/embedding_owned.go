@@ -123,7 +123,7 @@ func embeddingCosine(a, b []float32) (float32, error) {
 }
 
 func ownedBatchSimilarity(ctx context.Context, set *embedding.Set, request BatchSimilarityRequest) (BatchSimilarityResponse, error) {
-	req := EmbeddingRequest{Model: request.Model, Dimension: request.Dimension, QualityPriority: request.QualityPriority, LatencyPriority: request.LatencyPriority}
+	req := EmbeddingRequest{Model: request.Model, Dimension: request.Dimension, TargetLayer: request.TargetLayer, QualityPriority: request.QualityPriority, LatencyPriority: request.LatencyPriority}
 	start := time.Now()
 	query, err := ownedEmbeddingOutput(ctx, set, req, request.Query)
 	if err != nil {
@@ -148,4 +148,33 @@ func ownedBatchSimilarity(ctx context.Context, set *embedding.Set, request Batch
 		matches = matches[:request.TopK]
 	}
 	return BatchSimilarityResponse{Matches: matches, TotalCandidates: len(request.Candidates), ModelUsed: query.ModelUsed, ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000}, nil
+}
+
+// Explicit recipe selection shares the same service/generation lease as model
+// diagnostics. The default helper stays available for shared storage consumers.
+func (s *ClassificationAPIServer) acquireEmbeddingRuntimeForRecipe(recipe string) (*config.RouterConfig, *embedding.Set, func(), error) {
+	if recipe == "" {
+		return s.acquireEmbeddingRuntime()
+	}
+	_, service, release := s.acquireClassificationRuntime()
+	source, ok := service.(interface {
+		AcquireRecipeRuntimeSnapshot(string) (*config.RouterConfig, *classification.Classifier, func(), error)
+	})
+	if !ok {
+		release()
+		return nil, nil, func() {}, fmt.Errorf("embedding runtime cannot select a recipe")
+	}
+	cfg, classifier, snapshotRelease, err := source.AcquireRecipeRuntimeSnapshot(recipe)
+	if err != nil {
+		release()
+		return nil, nil, func() {}, err
+	}
+	prepared, err := classifierEmbeddings(classifier)
+	var once sync.Once
+	return cfg, prepared, func() { once.Do(func() { snapshotRelease(); release() }) }, err
+}
+
+func (s *ClassificationAPIServer) acquireEmbeddingsForRecipe(recipe string) (*embedding.Set, func(), error) {
+	_, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(recipe)
+	return prepared, release, err
 }
