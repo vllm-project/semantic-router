@@ -36,16 +36,7 @@ type routerReplayListQuery struct {
 	showDetails bool
 }
 
-type routerReplayListResponse struct {
-	Object     string                       `json:"object"`
-	Count      int                          `json:"count"`
-	Total      int                          `json:"total"`
-	Limit      int                          `json:"limit"`
-	Offset     int                          `json:"offset"`
-	HasMore    bool                         `json:"has_more"`
-	NextOffset *int                         `json:"next_offset,omitempty"`
-	Data       []routerreplay.RoutingRecord `json:"data"`
-}
+type routerReplayListResponse = routerreplay.ListResponse
 
 // handleRouterReplayAPI serves read-only endpoints for router replay records.
 func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {

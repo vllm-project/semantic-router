@@ -240,6 +240,8 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   modality: 'Detect multi-modal input (text, image, audio)',
   authz: 'Authorization-based routing (RBAC)',
   jailbreak: 'Detect jailbreak attempts via classifier or contrastive methods',
+  safety:
+    'Detect unsafe content with built-in or external models; optionally require any selected hazard category to reach its threshold',
   pii: 'Detect personally identifiable information in queries',
   kb: 'Knowledge base signal for taxonomy-driven classification',
 }
@@ -568,12 +570,10 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
                 </tr>
                 <tr>
                   <td>
-                  <code>reasoning</code>
-                </td>
-                <td>boolean</td>
-                <td>
-                    Enable the model's catalog-defined reasoning behavior
-                </td>
+                    <code>reasoning</code>
+                  </td>
+                  <td>boolean</td>
+                  <td>Enable the model's catalog-defined reasoning behavior</td>
                 </tr>
               </tbody>
             </table>
@@ -587,7 +587,9 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Algorithms */}
-      {matchesSearch('algorithm confidence ratings remom fusion workflows static router_dc automix hybrid') && (
+      {matchesSearch(
+        'algorithm confidence ratings remom fusion workflows static router_dc automix hybrid',
+      ) && (
         <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="🧮">
           <p className={styles.hint}>
             Algorithms determine how to select among multiple models. Syntax:{' '}

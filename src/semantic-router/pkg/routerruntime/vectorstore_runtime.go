@@ -48,6 +48,46 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 	cfg.VectorStore.ApplyDefaults()
 	success := false
 
+	var pool *binding.Pool
+	if len(pools) > 0 {
+		pool = pools[0]
+	}
+	// Ingestion outlives individual request generations and owns independent
+	// embedding references until all its workers have stopped.
+	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
+	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
+	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
+	embeddingConfig.ModelDeployments = cfg.ModelDeployments
+	// Ingestion owns only the shared embedding consumer. Recipe classifier and
+	// safety bindings require their signal declarations and do not belong to
+	// this service's preparation scope.
+	if selected, ok := cfg.ModelBindings["embedding"]; ok {
+		embeddingConfig.ModelBindings = map[string]config.ModelBinding{"embedding": selected}
+	}
+	embeddingConfig.ExternalModels = cfg.ExternalModels
+	embeddingConfig.ModelAdmission = cfg.ModelAdmission
+	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), embeddingConfig, native.New(pool))
+	if err != nil {
+		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
+	}
+	embedder, err := prepared.Get(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension, 0)
+	if err != nil {
+		_ = prepared.Close()
+		return nil, err
+	}
+	defer func() {
+		if !success {
+			_ = prepared.Close()
+		}
+	}()
+	identity, err := embedding.ResolveProviderIdentity(embedder, embedding.ConsumerSettings{
+		ModelType: cfg.VectorStore.EmbeddingModel, Dimension: cfg.VectorStore.EmbeddingDimension,
+		InputPolicy: "vectorstore-chunk-content-and-query-v1",
+	})
+	if err != nil && (cfg.VectorStore.EmbeddingModel == "mmbert" || !errors.Is(err, embedding.ErrIdentityUnsupported)) {
+		return nil, fmt.Errorf("bind vector store embedding representation: %w", err)
+	}
+
 	storeReg, fileReg, regCloser, err := buildMetadataRegistries(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metadata registry: %w", err)
@@ -74,7 +114,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 			_ = backend.Close()
 		}
 	}()
-	manager := vectorstore.NewManager(backend, storeReg, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
+	manager := vectorstore.NewManager(backend, storeReg, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
 
 	ctx := context.Background()
 	if err = manager.LoadFromRegistry(ctx); err != nil {
@@ -84,28 +124,6 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 		logging.Warnf("Failed to load file registry on startup: %v", err)
 	}
 
-	var pool *binding.Pool
-	if len(pools) > 0 {
-		pool = pools[0]
-	}
-	// Ingestion outlives individual request generations and owns independent
-	// embedding references until all its workers have stopped.
-	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
-	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
-	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
-	embeddingConfig.ModelDeployments = cfg.ModelDeployments
-	embeddingConfig.ModelBindings = cfg.ModelBindings
-	embeddingConfig.ExternalModels = cfg.ExternalModels
-	embeddingConfig.ModelAdmission = cfg.ModelAdmission
-	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), embeddingConfig, native.New(pool))
-	if err != nil {
-		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
-	}
-	embedder, err := prepared.Get(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension, 0)
-	if err != nil {
-		_ = prepared.Close()
-		return nil, err
-	}
 	pipeline := vectorstore.NewIngestionPipeline(backend, fileStore, manager, embedder, vectorstore.PipelineConfig{
 		Workers:   cfg.VectorStore.IngestionWorkers,
 		QueueSize: 100,

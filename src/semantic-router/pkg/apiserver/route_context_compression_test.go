@@ -48,7 +48,7 @@ func TestContextCompressionPreviewIsRedactedAndApplied(t *testing.T) {
 	encoded, _ := json.Marshal(body)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/context-compression/preview",
+		"/api/v1/plugins/context_compression/preview",
 		bytes.NewReader(encoded),
 	)
 	recorder := httptest.NewRecorder()
@@ -70,19 +70,19 @@ func TestContextCompressionPreviewIsRedactedAndApplied(t *testing.T) {
 
 func TestContextCompressionRoutesUseDedicatedPermissions(t *testing.T) {
 	permissions := map[string]RoutePermission{}
-	for _, route := range apiContextCompressionRoutes() {
+	for _, route := range apiRoutes() {
 		permissions[route.Path] = route.Permission
 	}
-	if permissions["/api/v1/context-compression/stats"] != PermCompressionRead {
-		t.Fatalf("stats permission = %q", permissions["/api/v1/context-compression/stats"])
+	if permissions["/api/v1/observability/plugins/context_compression/stats"] != PermCompressionRead {
+		t.Fatalf("stats permission = %q", permissions["/api/v1/observability/plugins/context_compression/stats"])
 	}
-	if permissions["/api/v1/context-compression/preview"] != PermCompressionPreview {
-		t.Fatalf("preview permission = %q", permissions["/api/v1/context-compression/preview"])
+	if permissions["/api/v1/plugins/context_compression/preview"] != PermCompressionPreview {
+		t.Fatalf("preview permission = %q", permissions["/api/v1/plugins/context_compression/preview"])
 	}
-	if permissions["/api/v1/context-compression/recovery/invalidate"] != PermCompressionManage {
+	if permissions["/api/v1/storage/context-recovery/invalidate"] != PermCompressionManage {
 		t.Fatalf(
 			"invalidate permission = %q",
-			permissions["/api/v1/context-compression/recovery/invalidate"],
+			permissions["/api/v1/storage/context-recovery/invalidate"],
 		)
 	}
 }
@@ -93,7 +93,7 @@ func TestContextCompressionPreviewHonorsDisabledPolicy(t *testing.T) {
 	}
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/context-compression/preview",
+		"/api/v1/plugins/context_compression/preview",
 		strings.NewReader(`{
 			"configuration":{"enabled":false},
 			"request_body":{"messages":[]}
@@ -117,7 +117,7 @@ func TestContextCompressionStatsDoNotExposeContent(t *testing.T) {
 	}
 	request := httptest.NewRequest(
 		http.MethodGet,
-		"/api/v1/context-compression/stats",
+		"/api/v1/observability/plugins/context_compression/stats",
 		nil,
 	)
 	recorder := httptest.NewRecorder()
@@ -130,9 +130,8 @@ func TestContextCompressionStatsDoNotExposeContent(t *testing.T) {
 			t.Fatalf("stats exposed %q: %s", forbidden, recorder.Body.String())
 		}
 	}
-	if !strings.Contains(recorder.Body.String(), "compression.preview") ||
-		strings.Contains(recorder.Body.String(), "cache.flush") {
-		t.Fatalf("stats audit was not scoped: %s", recorder.Body.String())
+	if strings.Contains(recorder.Body.String(), `"audit"`) || strings.Contains(recorder.Body.String(), "compression.preview") {
+		t.Fatalf("stats duplicated the management audit: %s", recorder.Body.String())
 	}
 }
 
@@ -157,7 +156,7 @@ func TestContextCompressionRecoveryInvalidateUsesTrustedScope(t *testing.T) {
 	}
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/context-compression/recovery/invalidate",
+		"/api/v1/storage/context-recovery/invalidate",
 		strings.NewReader(`{
 			"recipe":"recipe",
 			"decision":"decision",

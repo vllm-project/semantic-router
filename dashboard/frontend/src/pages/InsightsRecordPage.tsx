@@ -17,6 +17,7 @@ import {
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import InsightsRecordSection from './InsightsRecordSection'
 import InsightsRecordTrace from './InsightsRecordTrace'
+import InsightsSessionRoutes from './InsightsSessionRoutes'
 
 export default function InsightsRecordPage() {
   const navigate = useNavigate()
@@ -47,7 +48,9 @@ export default function InsightsRecordPage() {
       setError(null)
       if (nextRecord.session_id) {
         try {
-          setTrajectory(await fetchInsightsTrajectory(nextRecord.session_id))
+          setTrajectory(
+            await fetchInsightsTrajectory(nextRecord.session_id, nextRecord.recipe || ''),
+          )
         } catch (traceCause) {
           setTraceError(traceCause instanceof Error ? traceCause.message : 'Unknown error')
         }
@@ -151,7 +154,7 @@ export default function InsightsRecordPage() {
                     : record.selection_method || 'Route'}
                 </strong>
                 <ProductIcon name="arrow-right" width={15} height={15} />
-                <span>{record.selected_model || 'Selected model'}</span>
+                <span>{record.selected_model || 'No backend selected'}</span>
               </div>
             </div>
             {lifecycle ? (
@@ -164,6 +167,7 @@ export default function InsightsRecordPage() {
           </header>
 
           <div className={styles.recordSections}>
+            <InsightsSessionRoutes trajectory={trajectory} />
             {sections.map((section, sectionIndex) => (
               <Fragment key={`${section.title ?? 'details'}-${sectionIndex}`}>
                 <InsightsRecordSection section={section} sectionIndex={sectionIndex} />

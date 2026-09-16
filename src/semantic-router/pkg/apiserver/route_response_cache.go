@@ -59,9 +59,9 @@ func (s *ClassificationAPIServer) handleResponseCacheHealth(
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CACHE_UNHEALTHY", "Response cache health check failed")
 		return
 	}
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"status":       "healthy",
-		"capabilities": service.Capabilities(),
+	s.writeJSONResponse(w, http.StatusOK, cacheHealthResponse{
+		Status:       "healthy",
+		Capabilities: service.Capabilities(),
 	})
 }
 

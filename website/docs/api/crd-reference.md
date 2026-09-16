@@ -160,6 +160,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `prototype_scoring` _[PrototypeScoringConfig](#prototypescoringconfig)_ | PrototypeScoring replaces the family prototype-scoring configuration for<br />this rule. Absence inherits the family; a present object is a complete<br />override, including an empty object. Defaults remain Router-owned. |  | Optional: \{\} <br /> |
 | `name` _string_ | Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity") |  |  |
 | `description` _string_ | Description of what this rule classifies |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Threshold for the local prototype-scoring path (0.0-1.0), stored as a<br />string to avoid float precision issues. The local margin is<br />hard-minus-easy and centred on zero, so the threshold is symmetric: a<br />margin above it is "hard", below its negative is "easy", and in between<br />is "medium". It does not apply under a score.v1 backend, whose score is<br />in the model's own units; state a boundary pair instead. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
@@ -368,7 +369,7 @@ _Appears in:_
 | `preload_embeddings` _boolean_ | PreloadEmbeddings enables precomputing candidate embeddings at startup | true | Optional: \{\} <br /> |
 | `target_dimension` _integer_ | TargetDimension is the embedding dimension to use (default: 768)<br />For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.<br />External providers may use other positive dimensions such as 1024, 1536, or 3072. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `target_layer` _integer_ | TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".<br />Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.<br />Evaluate the latency and quality trade-off on representative deployment data. |  | Enum: [3 6 11 22] <br />Optional: \{\} <br /> |
-| `enable_soft_matching` _boolean_ | EnableSoftMatching enables soft matching mode | true | Optional: \{\} <br /> |
+| `enable_soft_matching` _boolean_ | EnableSoftMatching allows below-threshold matches when no rule meets its threshold. | false | Optional: \{\} <br /> |
 | `min_score_threshold` _string_ | MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 
 #### ImageSpec
@@ -718,12 +719,15 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `max_sequence_length` _integer_ | MaxSequenceLength is the total tokenized input budget, including special<br />tokens. Omission or zero preserves the 512-token legacy limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `use_mmbert_32k` _boolean_ | UseMmBERT32K selects the local model that supports token windows. |  | Optional: \{\} <br /> |
+| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window scans original content tokens with explicit overlap. Omission or<br />null leaves window selection unchanged; no CRD defaults are injected. |  | Optional: \{\} <br /> |
 | `model_id` _string_ |  |  | Optional: \{\} <br /> |
 | `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
-| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert and use_cpu above; the router also refuses a<br />backend combined with the use_mmbert_32k selector that this CRD does not<br />expose, so that combination cannot be written here. |  | Optional: \{\} <br /> |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit<br />token windows are only supported by the local mmbert32k model. |  | Optional: \{\} <br /> |
 | `on_error` _string_ | OnError selects what a PII backend failure, or a provider-declared<br />truncation, does to the rule that consumed it: allow (default) treats the<br />content as not matching, block matches it as classification_error. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
 
 #### PersistenceSpec
@@ -776,7 +780,7 @@ _Appears in:_
 
 #### PromptGuardConfig
 
-PromptGuardConfig defines prompt guard configuration
+PromptGuardConfig defines prompt guard configuration.
 
 _Appears in:_
 
@@ -785,15 +789,51 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
+| `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local mmbert32k variant supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
 | `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
 | `protocol` _string_ | Protocol is retired and rejected at admission. Configure Backend with<br />the protocol, contract and explicit external model name instead. |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
-| `model_id` _string_ |  | models/mmbert32k-jailbreak-detector-merged | Optional: \{\} <br /> |
-| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.7 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `model_id` _string_ |  | models/Vela-1.0-Encoder-307M-Guard | Optional: \{\} <br /> |
+| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
 | `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
 | `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |
 | `on_error` _string_ | OnError selects what a prompt-guard classifier failure does to the rule<br />that failed to evaluate. "allow" (the default) tolerates the failure and<br />treats the content as not matching; "block" treats it as a positive<br />detection, because an inference failure means the content could not be<br />verified safe. Without this field on the CRD the setting is pruned by the<br />API server and an operator-managed deployment silently fails open. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
+
+#### PromptGuardWindowConfig
+
+PromptGuardWindowConfig scans original content tokens with overlap. The
+native tokenizer also checks that special tokens leave enough content room.
+
+_Appears in:_
+
+- [PIIModelConfig](#piimodelconfig)
+- [PromptGuardConfig](#promptguardconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `size` _integer_ | Size is the inference window budget, including special tokens. |  | Minimum: 1 <br /> |
+| `overlap` _integer_ | Overlap counts content tokens shared by consecutive windows. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+
+#### PrototypeScoringConfig
+
+PrototypeScoringConfig overrides prototype-bank construction and scoring for
+one embedding-backed signal rule. Router-owned defaults apply only after
+translation; the operator preserves an absent override and an empty object.
+
+_Appears in:_
+
+- [ComplexityRulesConfig](#complexityrulesconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled controls prototype clustering. False retains every candidate. |  | Optional: \{\} <br /> |
+| `cluster_similarity_threshold` _string_ | ClusterSimilarityThreshold is the clustering similarity threshold.<br />Stored as a numeric string, like other fractional operator config fields. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `max_prototypes` _integer_ | MaxPrototypes caps the number of cluster representatives. |  | Optional: \{\} <br /> |
+| `best_weight` _string_ | BestWeight weights the best prototype against the top-M mean. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `top_m` _integer_ | TopM is the number of highest-scoring prototypes included in the mean. |  | Optional: \{\} <br /> |
+| `margin_threshold` _string_ | MarginThreshold is the minimum winner-versus-runner-up score margin. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
 
 #### QdrantCacheConfig
 
