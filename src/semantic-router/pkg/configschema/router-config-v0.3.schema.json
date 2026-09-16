@@ -1674,6 +1674,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ContextCompressionCurrentUserConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ContextCompressionPluginConfig": {
       "properties": {
         "enabled": {
@@ -1778,6 +1787,9 @@
     },
     "ContextCompressionTargetsConfig": {
       "properties": {
+        "current_user": {
+          "$ref": "#/$defs/ContextCompressionCurrentUserConfig"
+        },
         "tool_outputs": {
           "$ref": "#/$defs/ContextCompressionTargetConfig"
         },
