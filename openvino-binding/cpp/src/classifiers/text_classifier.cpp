@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
-#include <limits>
 
 namespace openvino_sr {
 namespace classifiers {
@@ -226,21 +225,8 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
     
     try {
         // Tokenize input
-        auto token_ids = tokenizer_.tokenize(text, std::numeric_limits<int>::max());
-        if (original_tokens) *original_tokens = static_cast<int>(token_ids.size());
-        if (max_length <= 0 || (reject_overflow && token_ids.size() > static_cast<size_t>(max_length))) {
-            return result;
-        }
-        if (token_ids.size() > static_cast<size_t>(max_length)) {
-            size_t suffix = token_ids.size();
-            while (suffix > 0 && std::find(end_tokens.begin(), end_tokens.end(), token_ids[suffix - 1]) != end_tokens.end()) --suffix;
-            const size_t suffix_length = token_ids.size() - suffix;
-            if (suffix_length >= static_cast<size_t>(max_length)) return result;
-            std::vector<int> tail(token_ids.begin() + suffix, token_ids.end());
-            token_ids.resize(static_cast<size_t>(max_length) - suffix_length);
-            token_ids.insert(token_ids.end(), tail.begin(), tail.end());
-        }
-        
+        auto token_ids = tokenizer_.tokenizeWithBudget(text, max_length, reject_overflow, original_tokens, end_tokens);
+
         if (token_ids.empty()) {
             std::cerr << "Tokenization failed or returned empty" << std::endl;
             return result;

@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <limits>
 
 namespace openvino_sr {
 namespace core {
@@ -110,6 +112,23 @@ std::vector<int> OVNativeTokenizer::tokenize(const std::string &text,
     std::cerr << "Tokenization error: " << e.what() << std::endl;
     return {};
   }
+}
+
+std::vector<int> OVNativeTokenizer::tokenizeWithBudget(
+    const std::string& text, int max_length, bool reject_overflow,
+    int* original_tokens, const std::vector<int>& end_tokens) {
+    auto ids = tokenize(text, std::numeric_limits<int>::max());
+    if (original_tokens) *original_tokens = static_cast<int>(ids.size());
+    if (max_length <= 0 || (reject_overflow && ids.size() > static_cast<size_t>(max_length))) return {};
+    if (ids.size() <= static_cast<size_t>(max_length)) return ids;
+    size_t suffix = ids.size();
+    while (suffix > 0 && std::find(end_tokens.begin(), end_tokens.end(), ids[suffix - 1]) != end_tokens.end()) --suffix;
+    const size_t suffix_length = ids.size() - suffix;
+    if (suffix_length >= static_cast<size_t>(max_length)) return {};
+    std::vector<int> tail(ids.begin() + suffix, ids.end());
+    ids.resize(static_cast<size_t>(max_length) - suffix_length);
+    ids.insert(ids.end(), tail.begin(), tail.end());
+    return ids;
 }
 
 TokenizationResult OVNativeTokenizer::tokenizeFull(const std::string &text,
