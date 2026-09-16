@@ -50,6 +50,29 @@ control.
 
 ## Configuration
 
+When configuration omits a setting, the defaults are:
+
+| Setting | Default |
+| --- | --- |
+| `global.router.learning.enabled` | `false`; the master switch must be enabled. |
+| `adaptation.enabled` and `protection.enabled` | `true`, subject to the master switch. |
+| `adaptation.candidate_set` | `decision` |
+| `protection.scope` | `conversation` |
+| Protection identity headers | `x-session-id` and `x-conversation-id` |
+
+Initializing a built-in recipe with `vllm-sr recipe builtin init` enables
+conversation protection and leaves online adaptation off unless your base
+configuration already sets these values. Existing settings, including explicit
+`false` values, custom identity headers, and tuning, are preserved. These are
+configuration-wide defaults; decision-level `bypass` controls still apply.
+
+Clients must send stable session and conversation identities for protection to
+retain a model. Missing identities leave routing unprotected and produce a
+diagnostic. See [session identification](../../api/session-identification).
+
+The reference `config/config.yaml` enables both components. To also enable online
+adaptation and share protection state across replicas, configure:
+
 ```yaml
 global:
   router:
@@ -83,6 +106,10 @@ global:
 The shared store is optional. Request-time reads use a strict timeout and fail
 open to the bounded local store. Response-side updates write the same snapshot
 to Redis so another replica can recover conversation protection state.
+
+After an upgrade from an older Redis snapshot format, each session establishes
+a new protection baseline on its next routed request. Use a durable Replay
+store to retain conversation traces across router restarts.
 
 Decision-local controls are sparse. Most decisions inherit global behavior:
 

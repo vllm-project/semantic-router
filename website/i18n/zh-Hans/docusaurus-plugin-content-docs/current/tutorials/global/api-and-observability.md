@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "cd975c6129460d700dd9c116ddd3356cdd90e915"
   source_file: "docs/tutorials/global/api-and-observability.md"
   outdated: false
 ---
@@ -56,11 +56,20 @@ Content-Type: application/json
 global:
   services:
     api:
+      routing_preview:
+        request_timeout_seconds: 120
+        max_concurrency: 16
       batch_classification:
         max_batch_size: 100
 ```
 
 `max_batch_size` 限制每次 `/api/v1/diagnostics/classify/batch` 请求的 `texts` 数量。超过上限会返回 `400 INVALID_INPUT`。
+
+`routing_preview` 作用于 `POST /api/v1/routing/preview`。推理时限从请求体解析完成后开始计算，默认 120 秒。`request_timeout_seconds` 可设为 1 至 3600 秒，应根据实际输入长度和部署硬件的测量结果选择。该设置支持配置热更新；其他 HTTP 路由保留现有超时设置。
+
+达到时限后，API 返回 `504 REQUEST_TIMEOUT`，并取消排队中或可取消的推理。已经执行的原生推理可能稍后才结束；在其结束前，模型资源和并发名额都会保留，关闭服务时也不例外。`max_concurrency` 是正整数，默认允许 16 个推理任务并发执行，不提供等待队列；名额用完后，新请求返回 `429 OVERLOADED`。修改此并发上限需要重新部署并重启服务，热更新会拒绝该变更。
+
+响应写入另有 5 秒余量，用于发送结果或超时响应。Dashboard Topology 使用配置的 Preview 时限加上该余量，并传递客户端取消信号。Recipe 探测仍使用 `probes.yaml` 中独立的 `evaluation.request_timeout_seconds` 客户端时限；应按实际测试配置。如果外部 HTTP 客户端或代理需要收到 Router 的超时响应，其时限应至少多留 5 秒。
 
 ### Response API
 

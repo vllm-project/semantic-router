@@ -55,7 +55,7 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 
 	// Require userID - without it, memory would be orphaned (unretrievable)
 	if userID == "" {
-		if state := ctx.ResponseObjectState; state != nil && state.ConversationHistory != nil {
+		if state := ctx.ResponseObjectState; state != nil && !state.ProviderContextApplied && state.ConversationHistory != nil {
 			history = convertStoredResponsesToMessages(state.ConversationHistory)
 		}
 		history = append(history, cloneSemanticMessages(ctx.SemanticRequest.Messages)...)
@@ -68,7 +68,7 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 	if sessionID == "" {
 		sessionID = deriveSessionIDFromSemanticMessages(ctx.SemanticRequest.Messages, userID)
 	}
-	if state := ctx.ResponseObjectState; state != nil && state.ConversationHistory != nil {
+	if state := ctx.ResponseObjectState; state != nil && !state.ProviderContextApplied && state.ConversationHistory != nil {
 		history = convertStoredResponsesToMessages(state.ConversationHistory)
 	}
 	history = append(history, cloneSemanticMessages(ctx.SemanticRequest.Messages)...)

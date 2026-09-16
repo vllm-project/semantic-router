@@ -559,19 +559,19 @@ global:
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 
-	if cfg.CategoryModel.ModelID != "models/mmbert32k-intent-classifier-merged" {
+	if cfg.CategoryModel.ModelID != "models/Vela-1.0-Encoder-307M-Domain" {
 		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
 	}
 	if cfg.CategoryModel.Variant != CategoryVariantMmBERT32K || cfg.CategoryModel.UseMmBERT32K {
 		t.Fatalf("expected sparse category override to keep canonical mmBERT-32K variant, got variant=%q legacy=%v", cfg.CategoryModel.Variant, cfg.CategoryModel.UseMmBERT32K)
 	}
-	if cfg.PIIModel.ModelID != "models/mmbert32k-pii-detector-merged" {
+	if cfg.PIIModel.ModelID != "models/Vela-1.0-Encoder-307M-PII" {
 		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
 	}
 	if !cfg.PIIModel.UseMmBERT32K {
 		t.Fatal("expected sparse PII override to keep mmBERT-32K enabled")
 	}
-	if cfg.PromptGuard.ModelID != "models/mmbert32k-jailbreak-detector-merged" {
+	if cfg.PromptGuard.ModelID != "models/Vela-1.0-Encoder-307M-Guard" {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
 	}
 	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {

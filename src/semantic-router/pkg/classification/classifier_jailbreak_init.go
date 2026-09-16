@@ -79,7 +79,8 @@ func createJailbreakInitializer() JailbreakInitializer {
 
 // MmBERT32KJailbreakInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for jailbreak detection.
 type MmBERT32KJailbreakInitializerImpl struct {
-	usedMmBERT32K bool
+	maxSequenceLength int
+	usedMmBERT32K     bool
 }
 
 func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
@@ -87,7 +88,7 @@ func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, nu
 		"backend":   "mmbert_32k",
 		"model_ref": modelID,
 	})
-	err := candle_binding.InitMmBert32KJailbreakClassifier(modelID, useCPU)
+	err := candle_binding.InitMmBert32KJailbreakClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector: %w", err)
 	}
@@ -97,11 +98,6 @@ func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, nu
 		"model_ref": modelID,
 	})
 	return nil
-}
-
-// createMmBERT32KJailbreakInitializer creates an mmBERT-32K jailbreak initializer.
-func createMmBERT32KJailbreakInitializer() JailbreakInitializer {
-	return &MmBERT32KJailbreakInitializerImpl{}
 }
 
 // deriveArgmax returns the index and score of the highest-probability class

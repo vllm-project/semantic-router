@@ -89,8 +89,9 @@ config:
           modality: text
     modelCards:
       - name: openai/gpt-oss-20b
+        capabilities: [chat]
       - name: mock/native-responses
-      # The simulator accepts images; the real GPT-OSS catalog card is text-only.
+      # Explicit task declarations distinguish these custom simulator models.
       - name: mock/vision
         capabilities:
           - chat
