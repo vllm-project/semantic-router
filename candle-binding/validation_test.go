@@ -526,9 +526,11 @@ func TestSharedEmbeddingValidationRunsInBothModes(t *testing.T) {
 }
 
 // TestCrossArch32BitCompileGate verifies that the candle-binding package and test suite
-// compile cleanly for 32-bit architectures (GOARCH=386) with CGO disabled.
+// compile cleanly for 32-bit architectures (linux/386) with CGO disabled.
 // This prevents compile-time constant conversions or architecture assumptions from
 // breaking cross-build contracts.
+// An explicit supported target OS (GOOS=linux) is set so the gate does not inherit
+// unsupported targets on host platforms such as macOS (darwin/386 is unsupported since Go 1.15).
 func TestCrossArch32BitCompileGate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping cross-architecture compilation gate in short mode")
@@ -537,11 +539,29 @@ func TestCrossArch32BitCompileGate(t *testing.T) {
 	if err != nil {
 		t.Skip("go binary not found in PATH")
 	}
-	outputBinary := filepath.Join(t.TempDir(), "candle_binding_32bit.test")
-	cmd := exec.Command(goBin, "test", "-c", "-o", outputBinary, ".")
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOARCH=386")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("cross-compilation for 32-bit (GOARCH=386) failed: %v\nOutput:\n%s", err, string(out))
+
+	compileWithEnv := func(t *testing.T, baseEnv []string) {
+		outputBinary := filepath.Join(t.TempDir(), "candle_binding_32bit.test")
+		cmd := exec.Command(goBin, "test", "-c", "-o", outputBinary, ".")
+		var env []string
+		for _, e := range baseEnv {
+			if !strings.HasPrefix(e, "GOOS=") && !strings.HasPrefix(e, "GOARCH=") && !strings.HasPrefix(e, "CGO_ENABLED=") {
+				env = append(env, e)
+			}
+		}
+		cmd.Env = append(env, "CGO_ENABLED=0", "GOOS=linux", "GOARCH=386")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("cross-compilation for 32-bit (linux/386) failed: %v\nOutput:\n%s", err, string(out))
+		}
 	}
+
+	t.Run("explicit linux/386 target", func(t *testing.T) {
+		compileWithEnv(t, os.Environ())
+	})
+
+	t.Run("inherited darwin environment regression", func(t *testing.T) {
+		darwinEnv := append(os.Environ(), "GOOS=darwin")
+		compileWithEnv(t, darwinEnv)
+	})
 }
