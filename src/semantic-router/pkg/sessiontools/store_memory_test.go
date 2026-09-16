@@ -238,6 +238,76 @@ func TestMemoryStore_TTLSlidesOnLoad(t *testing.T) {
 	}
 }
 
+// TestMemoryStore_StaleRevisionRejectedAfterExpiryAndReadmission is a fully
+// sequential, deterministic reproduction of a maintainer-reported
+// vulnerability distinct from the concurrent ABA race guarded below: before
+// nextRevision existed, admitNewLocked reset every freshly-admitted entry
+// to Revision 1 regardless of the key's history. A writer that loaded
+// revision 1 before its entry expired could replay CompareAndSwap with
+// expectedRevision=1 *after* a different writer recreated the same key via
+// CompareAndSwap(0) — and since the fresh incarnation also started at
+// revision 1, the stale writer's CAS incorrectly matched and silently
+// overwrote the fresh tool set. This requires no goroutines at all: it's a
+// plain sequence of calls against one store, one key.
+func TestMemoryStore_StaleRevisionRejectedAfterExpiryAndReadmission(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Now())
+	store := newTestStore(t, clock, 100, 10, 60)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+	key := "sess-1"
+
+	// Writer A creates the key, then loads it — capturing the revision it
+	// will (incorrectly, pre-fix) try to replay later.
+	stateA := newTestState(0)
+	stateA.PolicyFingerprint = "writer-a"
+	appliedCreateA, errCreateA := store.CompareAndSwap(ctx, key, 0, stateA, 60*time.Second, quota)
+	if errCreateA != nil || !appliedCreateA {
+		t.Fatalf("writer A create: applied=%v err=%v", appliedCreateA, errCreateA)
+	}
+	loadedA, errLoadA := store.Load(ctx, key)
+	if errLoadA != nil || !loadedA.Found {
+		t.Fatalf("writer A load: found=%v err=%v", loadedA.Found, errLoadA)
+	}
+	staleRevision := loadedA.State.Revision
+
+	// The entry expires with nobody touching it.
+	clock.Advance(61 * time.Second)
+
+	// Writer B reclaims the same key with a fresh incarnation.
+	stateB := newTestState(0)
+	stateB.PolicyFingerprint = "writer-b"
+	appliedCreateB, errCreateB := store.CompareAndSwap(ctx, key, 0, stateB, 60*time.Second, quota)
+	if errCreateB != nil || !appliedCreateB {
+		t.Fatalf("writer B create: applied=%v err=%v", appliedCreateB, errCreateB)
+	}
+
+	// Writer A replays its stale CAS against what it still believes is its
+	// own live entry. This must be rejected: staleRevision belongs to a
+	// since-reclaimed incarnation of this key, not to writer B's.
+	staleReplay := newTestState(0)
+	staleReplay.PolicyFingerprint = "writer-a-stale-overwrite"
+	appliedStale, errStale := store.CompareAndSwap(ctx, key, staleRevision, staleReplay, 60*time.Second, quota)
+	if appliedStale {
+		t.Fatal("writer A's stale CAS must not apply after B recreated the key")
+	}
+	if !errors.Is(errStale, ErrRevisionMismatch) {
+		t.Fatalf("err = %v, want ErrRevisionMismatch", errStale)
+	}
+
+	// Writer B's fresh state must have survived untouched.
+	final, errFinal := store.Load(ctx, key)
+	if errFinal != nil || !final.Found {
+		t.Fatalf("final load: found=%v err=%v", final.Found, errFinal)
+	}
+	if final.State.PolicyFingerprint != "writer-b" {
+		t.Fatalf("PolicyFingerprint = %q, want %q (writer A's stale CAS must not have applied)",
+			final.State.PolicyFingerprint, "writer-b")
+	}
+	if final.State.Revision == staleRevision {
+		t.Fatalf("final revision (%d) must not equal writer A's stale revision (%d)", final.State.Revision, staleRevision)
+	}
+}
+
 // TestMemoryStore_ExpiredReadmission_ABARace guards against the ABA race
 // deleteIfExpiredLocked/compareAndSwapCreate exist to prevent: a stale
 // "this entry looked expired" observation (from Load or a losing
@@ -261,7 +331,15 @@ func TestMemoryStore_ExpiredReadmission_ABARace(t *testing.T) {
 
 func runExpiredReadmissionAttempt(t *testing.T, ctx context.Context, attempt int, quota QuotaKey, casWorkers, loadWorkers int) {
 	clock := newSyntheticClock(time.Unix(int64(attempt+1), 0))
-	store := newTestStore(t, clock, 1000, 1000, 60)
+	// Store default TTL matches the initial seed's explicit TTL (both 1s)
+	// deliberately: capturing initialRevision below requires a Load, and
+	// Load's sliding-expiry refresh (see Load's doc comment) extends
+	// ExpiresAt using the store's *default* TTL, not whatever explicit TTL
+	// the entry was originally created with. A mismatched, longer store
+	// default here would silently un-expire the seed entry before the race
+	// even starts. The CAS workers below are unaffected: they each pass an
+	// explicit time.Minute TTL of their own.
+	store := newTestStore(t, clock, 1000, 1000, 1)
 	key := fmt.Sprintf("aba-race-%d", attempt)
 
 	initial := newTestState(0)
@@ -269,6 +347,11 @@ func runExpiredReadmissionAttempt(t *testing.T, ctx context.Context, attempt int
 	if applied, err := store.CompareAndSwap(ctx, key, 0, initial, time.Second, quota); err != nil || !applied {
 		t.Fatalf("attempt %d: initial create applied=%v err=%v", attempt, applied, err)
 	}
+	initialLoaded, err := store.Load(ctx, key)
+	if err != nil || !initialLoaded.Found {
+		t.Fatalf("attempt %d: load after initial create: found=%v err=%v", attempt, initialLoaded.Found, err)
+	}
+	initialRevision := initialLoaded.State.Revision
 
 	clock.Advance(2 * time.Second)
 
@@ -277,7 +360,7 @@ func runExpiredReadmissionAttempt(t *testing.T, ctx context.Context, attempt int
 		t.Fatal(err)
 	}
 
-	assertReadmissionState(t, ctx, store, key, attempt, appliedCAS)
+	assertReadmissionState(t, ctx, store, key, attempt, appliedCAS, initialRevision)
 }
 
 func executeReadmissionWorkers(
@@ -336,7 +419,7 @@ func executeReadmissionWorkers(
 	return appliedCAS, nil
 }
 
-func assertReadmissionState(t *testing.T, ctx context.Context, store *MemoryStore, key string, attempt, appliedCAS int) {
+func assertReadmissionState(t *testing.T, ctx context.Context, store *MemoryStore, key string, attempt, appliedCAS int, initialRevision uint64) {
 	if appliedCAS != 1 {
 		t.Fatalf("attempt %d: CAS(0) successes = %d, want exactly 1", attempt, appliedCAS)
 	}
@@ -348,8 +431,16 @@ func assertReadmissionState(t *testing.T, ctx context.Context, store *MemoryStor
 	if !final.Found {
 		t.Fatalf("attempt %d: fresh state was pruned by expired cleanup", attempt)
 	}
-	if final.State.Revision != 1 {
-		t.Fatalf("attempt %d: final revision = %d, want 1", attempt, final.State.Revision)
+	// Revision is a store-wide monotonic token (see State.Revision's doc
+	// comment), not a per-key counter reset to 1 on every admission — so
+	// the only thing worth asserting here is that readmission drew a
+	// genuinely new value, distinct from the expired incarnation's own.
+	// Asserting a literal like 1 would be both wrong (this store instance
+	// already issued one revision for the expired seed state) and would
+	// defeat the point: a readmission that reused the seed's own revision
+	// is exactly the incarnation-collision bug this store must prevent.
+	if final.State.Revision == initialRevision {
+		t.Fatalf("attempt %d: readmission reused the expired incarnation's revision (%d)", attempt, initialRevision)
 	}
 	if final.State.PolicyFingerprint == "expired" {
 		t.Fatalf("attempt %d: expired state survived readmission", attempt)
