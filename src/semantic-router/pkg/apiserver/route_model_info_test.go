@@ -304,9 +304,31 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 	}
 }
 
+func TestBuildHallucinationModelsReportsTokenSpansAdapter(t *testing.T) {
+	cfg := buildAuxiliaryModelsConfig()
+	cfg.ExternalModels = append(cfg.ExternalModels, config.ExternalModelConfig{Name: "grounding", ModelName: "grounding-spans", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 9000}})
+	if cfg.ModelDeployments == nil {
+		cfg.ModelDeployments = map[string]config.ModelDeployment{}
+	}
+	if cfg.ModelBindings == nil {
+		cfg.ModelBindings = map[string]config.ModelBinding{}
+	}
+	cfg.ModelDeployments["grounding"] = config.ModelDeployment{Provider: "http", ExternalModel: "grounding"}
+	cfg.ModelBindings["hallucination_detector"] = config.ModelBinding{Deployment: "grounding", Adapter: config.RemoteClassifierProtocolHTTPClassify, Contract: config.RemoteClassifierContractTokenSpans}
+
+	detector := requireModelInfo(t, buildHallucinationModels(cfg, classifierModelAvailability{}), "hallucination_detector")
+	if detector.Metadata["model_type"] != "token_spans_endpoint" || detector.Metadata["adapter"] != config.RemoteClassifierProtocolHTTPClassify || detector.Metadata["lifecycle"] != "external" {
+		t.Fatalf("token_spans detector metadata is not truthful: %+v", detector.Metadata)
+	}
+	if _, ok := detector.Metadata["include_explanation"]; ok {
+		t.Fatalf("a token_spans service has no explanation prompt to advertise: %+v", detector.Metadata)
+	}
+}
+
 func TestBuildHallucinationModelsOmitsLocalExplainerForEndpointBackend(t *testing.T) {
 	cfg := buildAuxiliaryModelsConfig()
 	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
+	cfg.HallucinationMitigation.HallucinationModel.Endpoint = "http://127.0.0.1:8077/v1"
 
 	models := buildHallucinationModels(cfg, classifierModelAvailability{})
 	detector := requireModelInfo(t, models, "hallucination_detector")

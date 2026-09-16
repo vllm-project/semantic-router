@@ -14,18 +14,20 @@ import (
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
-	ModelBindings        map[string]config.ModelBinding `json:"modelBindings,omitempty"`
-	Strategy             string                         `json:"strategy,omitempty"`
-	Entrypoints          []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
-	Recipes              []*RecipeDeclJSON              `json:"recipes,omitempty"`
-	Signals              []*SignalDeclJSON              `json:"signals"`
-	ProjectionPartitions []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
-	ProjectionScores     []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
-	ProjectionMappings   []*ProjectionMappingDeclJSON   `json:"projectionMappings,omitempty"`
-	Routes               []*RouteDeclJSON               `json:"routes"`
-	Models               []*ModelDeclJSON               `json:"models"`
-	Plugins              []*PluginDeclJSON              `json:"plugins"`
-	TestBlocks           []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
+	CandidateRequirements *config.CandidateRequirements  `json:"candidateRequirements,omitempty"`
+	DataPolicy            *config.RoutingDataPolicy      `json:"dataPolicy,omitempty"`
+	ModelBindings         map[string]config.ModelBinding `json:"modelBindings,omitempty"`
+	Strategy              string                         `json:"strategy,omitempty"`
+	Entrypoints           []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
+	Recipes               []*RecipeDeclJSON              `json:"recipes,omitempty"`
+	Signals               []*SignalDeclJSON              `json:"signals"`
+	ProjectionPartitions  []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
+	ProjectionScores      []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
+	ProjectionMappings    []*ProjectionMappingDeclJSON   `json:"projectionMappings,omitempty"`
+	Routes                []*RouteDeclJSON               `json:"routes"`
+	Models                []*ModelDeclJSON               `json:"models"`
+	Plugins               []*PluginDeclJSON              `json:"plugins"`
+	TestBlocks            []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
 }
 
 // EntrypointDeclJSON is the JSON form of a request-facing recipe binding.
@@ -243,12 +245,14 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	}
 
 	result := &ProgramJSON{
-		ModelBindings: cloneModelBindings(prog.ModelBindings),
-		Strategy:      prog.Strategy,
-		Signals:       make([]*SignalDeclJSON, 0, len(prog.Signals)),
-		Routes:        make([]*RouteDeclJSON, 0, len(prog.Routes)),
-		Models:        make([]*ModelDeclJSON, 0, len(prog.Models)),
-		Plugins:       make([]*PluginDeclJSON, 0, len(prog.Plugins)),
+		ModelBindings:         cloneModelBindings(prog.ModelBindings),
+		CandidateRequirements: prog.CandidateRequirements.Clone(),
+		DataPolicy:            prog.DataPolicy.Clone(),
+		Strategy:              prog.Strategy,
+		Signals:               make([]*SignalDeclJSON, 0, len(prog.Signals)),
+		Routes:                make([]*RouteDeclJSON, 0, len(prog.Routes)),
+		Models:                make([]*ModelDeclJSON, 0, len(prog.Models)),
+		Plugins:               make([]*PluginDeclJSON, 0, len(prog.Plugins)),
 	}
 	for _, entrypoint := range prog.Entrypoints {
 		result.Entrypoints = append(result.Entrypoints, &EntrypointDeclJSON{

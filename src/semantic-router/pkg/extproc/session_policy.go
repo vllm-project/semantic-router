@@ -25,7 +25,7 @@ func recordAgenticSessionDecision(
 		previousModel = selCtx.AgenticSession.PreviousModel
 	}
 	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
-		SessionID:      config.RoutingNamespaceKey(selCtx.RecipeName, selCtx.SessionID),
+		SessionID:      selectionSessionStateKey(selCtx),
 		UserID:         selCtx.UserID,
 		PreviousModel:  previousModel,
 		SelectedModel:  selectedModelRef.Model,

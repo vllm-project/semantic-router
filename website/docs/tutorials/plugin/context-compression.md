@@ -121,11 +121,11 @@ the configured embedding runtime is unavailable.
 
 ## Management and preview
 
-- `GET /api/v1/context-compression/capabilities`
-- `GET /api/v1/context-compression/health`
-- `GET /api/v1/context-compression/stats`
-- `POST /api/v1/context-compression/preview`
-- `POST /api/v1/context-compression/recovery/invalidate`
+- `GET /api/v1/plugins/context_compression/capabilities`
+- `GET /api/v1/plugins/context_compression/health`
+- `GET /api/v1/observability/plugins/context_compression/stats`
+- `POST /api/v1/plugins/context_compression/preview`
+- `POST /api/v1/storage/context-recovery/invalidate`
 
 Preview returns only plans, target indexes, token counts, scores, warnings, and
 skip reasons. It never returns source or omitted content and requires

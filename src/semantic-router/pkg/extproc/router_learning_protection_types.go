@@ -40,5 +40,6 @@ func (s learningSelectionResult) Method() selection.SelectionMethod {
 func (s learningSelectionResult) UpdateFeedback(context.Context, *selection.Feedback) error {
 	return nil
 }
+
 func (s learningSelectionResult) Tier() selection.AlgorithmTier                { return selection.TierSupported }
 func (s learningSelectionResult) ExternalDependencies() []selection.Dependency { return nil }

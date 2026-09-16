@@ -21,13 +21,10 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 	ctx *RequestContext,
 	currentAssistantResponse string,
 ) {
-	autoStoreEnabled := extractAutoStore(ctx)
-	if requestAutoStore, ok := extractRequestAutoStore(ctx); ok {
-		autoStoreEnabled = requestAutoStore
-	} else if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
-		logging.Infof("extractAutoStore: Falling back to router config, AutoStore=%v", r.Config.Memory.AutoStore)
-		autoStoreEnabled = true
+	if r == nil || ctx == nil {
+		return
 	}
+	autoStoreEnabled := r.responseMemoryAutoStoreEnabled(ctx)
 	logging.Infof(
 		"Memory store check: MemoryExtractor=%v, autoStore=%v, responseJailbreakPassed=%v",
 		r.MemoryExtractor != nil,
@@ -78,6 +75,28 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 			logging.Warnf("Memory store failed: %v", err)
 		}
 	})
+}
+
+// responseMemoryAutoStoreEnabled applies server policy before client choices.
+// A client may opt out but cannot undo an explicit decision-level prohibition.
+func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool {
+	if r == nil || r.Config == nil || ctx == nil || retentionDropsResponseContent(ctx) {
+		return false
+	}
+	memoryConfig, enabled := r.resolveMemoryPluginConfig(ctx)
+	if !enabled || (memoryConfig != nil && memoryConfig.AutoStore != nil && !*memoryConfig.AutoStore) {
+		return false
+	}
+	if state := ctx.ResponseObjectState; state != nil && state.AutoStore != nil {
+		return *state.AutoStore
+	}
+	if requestAutoStore, ok := extractRequestAutoStore(ctx); ok {
+		return requestAutoStore
+	}
+	if memoryConfig != nil && memoryConfig.AutoStore != nil {
+		return extractAutoStore(ctx)
+	}
+	return r.Config.Memory.AutoStore
 }
 
 func (r *OpenAIRouter) memoryHistoryForExtractor(
