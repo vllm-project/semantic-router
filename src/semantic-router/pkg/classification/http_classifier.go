@@ -146,6 +146,11 @@ func isNilMapping(mapping sequenceLabelMapping) bool {
 
 type httpClassifyRequest struct {
 	Inputs string `json:"inputs"`
+	// Parameters carries task inputs that are not the classified text, the
+	// way the HuggingFace pipelines accept a parameters object next to
+	// inputs. Grounded detection sends context and question here; offsets in
+	// the response still index Inputs alone.
+	Parameters map[string]string `json:"parameters,omitempty"`
 }
 
 type httpClassifyLabelScore struct {

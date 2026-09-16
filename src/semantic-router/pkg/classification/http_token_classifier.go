@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -122,22 +123,40 @@ var httpTokenClassifyOperation = connector.Operation{
 
 // ClassifyTokens implements TokenClassifierBackend.
 func (h *HTTPTokenClassifierInference) ClassifyTokens(ctx context.Context, text string) (tasks.TokenClassificationResult, error) {
-	return h.classifyTokenResult(ctx, text)
+	return h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: text})
+}
+
+// ClassifyGrounded runs grounded span detection over the token_spans.v1
+// contract: the answer is the classified text and travels as inputs, so every
+// returned offset indexes the answer; context and question travel as
+// parameters. The provider sees the same three fields the native detector
+// does, without the router assembling a prompt it would then have to parse.
+func (h *HTTPTokenClassifierInference) ClassifyGrounded(ctx context.Context, input tasks.GroundedTextRequest) (tasks.TokenClassificationResult, error) {
+	if input.Context == "" {
+		return tasks.TokenClassificationResult{}, fmt.Errorf("context is required for hallucination detection")
+	}
+	return h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: input.Answer, Parameters: map[string]string{"context": input.Context, "question": input.Question}})
 }
 
 func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text string) ([]tasks.TokenEntity, error) {
-	result, err := h.classifyTokenResult(ctx, text)
+	result, err := h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: text})
 	return result.Entities, err
 }
 
-func (h *HTTPTokenClassifierInference) classifyTokenResult(ctx context.Context, text string) (tasks.TokenClassificationResult, error) {
+func (h *HTTPTokenClassifierInference) classifyTokenResult(ctx context.Context, request httpClassifyRequest) (tasks.TokenClassificationResult, error) {
+	text := request.Inputs
 	if !utf8.ValidString(text) {
 		return tasks.TokenClassificationResult{}, fmt.Errorf("token_spans input is not valid UTF-8")
+	}
+	for _, value := range request.Parameters {
+		if !utf8.ValidString(value) {
+			return tasks.TokenClassificationResult{}, fmt.Errorf("token_spans parameter is not valid UTF-8")
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
-	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
+	reqBody, err := json.Marshal(request)
 	if err != nil {
 		return tasks.TokenClassificationResult{}, fmt.Errorf("failed to marshal token_spans request: %w", err)
 	}
@@ -233,6 +252,14 @@ func isPresentJSON(raw json.RawMessage) bool {
 // violation rejects the whole response: a provider whose offsets are off by
 // one is redacting the wrong characters, and that must not be a warning.
 func alignTokenSpans(known, outside map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int) ([]tasks.TokenEntity, error) {
+	return alignTokenSpansScored(known, outside, text, spans, truncatedAt, true)
+}
+
+// alignTokenSpansScored is alignTokenSpans with the score requirement as a
+// parameter. A provider bound through an adapter that yields no per-span score
+// (the chat adapter's quoted spans) shares every other rule of the contract:
+// label set, bounds, text match, byte conversion and duplicate rejection.
+func alignTokenSpansScored(known, outside map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int, requireScore bool) ([]tasks.TokenEntity, error) {
 	input := newSpanInput(text)
 	if err := input.checkTruncatedAt(truncatedAt); err != nil {
 		return nil, err
@@ -241,7 +268,7 @@ func alignTokenSpans(known, outside map[string]struct{}, text string, spans []to
 	seen := make(map[spanKey]struct{}, len(spans))
 	entities := make([]tasks.TokenEntity, 0, len(spans))
 	for i, sp := range spans {
-		entity, err := alignTokenSpan(i, sp, input, known, outside, truncatedAt)
+		entity, err := alignTokenSpan(i, sp, input, known, outside, truncatedAt, requireScore)
 		if err != nil {
 			return nil, err
 		}
@@ -281,6 +308,13 @@ func newSpanInput(text string) spanInput {
 	return spanInput{runes: runes, byteAt: byteAt}
 }
 
+// codePointAt converts a byte offset on a code-point boundary to its code-point
+// index; a byte offset inside a multi-byte sequence maps to the code point that
+// contains it.
+func (in spanInput) codePointAt(byteOffset int) int {
+	return sort.SearchInts(in.byteAt, byteOffset)
+}
+
 func (in spanInput) checkTruncatedAt(truncatedAt *int) error {
 	if truncatedAt != nil && (*truncatedAt < 0 || *truncatedAt > len(in.runes)) {
 		return fmt.Errorf("token_spans truncated_at %d is outside a %d code-point input", *truncatedAt, len(in.runes))
@@ -289,7 +323,7 @@ func (in spanInput) checkTruncatedAt(truncatedAt *int) error {
 }
 
 // alignTokenSpan validates one span and converts it to a TokenEntity.
-func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map[string]struct{}, truncatedAt *int) (tasks.TokenEntity, error) {
+func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map[string]struct{}, truncatedAt *int, requireScore bool) (tasks.TokenEntity, error) {
 	label, err := spanLabel(i, sp, known, outside)
 	if err != nil {
 		return tasks.TokenEntity{}, err
@@ -302,7 +336,7 @@ func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map
 	if err != nil {
 		return tasks.TokenEntity{}, err
 	}
-	score, err := spanScore(i, label, sp)
+	score, err := spanScore(i, label, sp, requireScore)
 	if err != nil {
 		return tasks.TokenEntity{}, err
 	}
@@ -384,7 +418,10 @@ func spanText(i int, label string, sp tokenSpanWire, input spanInput, start, end
 	return text, nil
 }
 
-func spanScore(i int, label string, sp tokenSpanWire) (float32, error) {
+func spanScore(i int, label string, sp tokenSpanWire, required bool) (float32, error) {
+	if sp.Score == nil && !required {
+		return 0, nil
+	}
 	if sp.Score == nil || math.IsNaN(float64(*sp.Score)) || math.IsInf(float64(*sp.Score), 0) || *sp.Score < 0 || *sp.Score > 1 {
 		return 0, fmt.Errorf("token_spans span %d (%s) score is missing or outside [0,1]", i, label)
 	}

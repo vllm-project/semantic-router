@@ -1951,6 +1951,7 @@ global:
             - ready.read
             - docs.read
             - metrics.read
+            - audit.read
             - classify.invoke
             - config.read
             - replay.read
@@ -1962,6 +1963,7 @@ global:
             - ready.read
             - docs.read
             - metrics.read
+            - audit.read
             - classify.invoke
             - config.read
             - config.write
