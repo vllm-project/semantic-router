@@ -39,6 +39,8 @@ on:
         value: ${{ jobs.classify.outputs.router_learning }}
       recipe_conformance:
         value: ${{ jobs.classify.outputs.recipe_conformance }}
+      riscv_qemu:
+        value: ${{ jobs.classify.outputs.riscv_qemu }}
       docs_only:
         value: ${{ jobs.classify.outputs.docs_only }}
       security:
@@ -72,6 +74,7 @@ jobs:
       performance: ${{ steps.classify.outputs.performance }}
       router_learning: ${{ steps.classify.outputs.router_learning }}
       recipe_conformance: ${{ steps.classify.outputs.recipe_conformance }}
+      riscv_qemu: ${{ steps.classify.outputs.riscv_qemu }}
       docs_only: ${{ steps.classify.outputs.docs_only }}
       security: ${{ steps.classify.outputs.security }}
       full: ${{ steps.classify.outputs.full }}

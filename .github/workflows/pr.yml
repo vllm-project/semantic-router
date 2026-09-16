@@ -132,6 +132,16 @@ jobs:
       && needs.changes.outputs.openvino == 'true'
     uses: ./.github/workflows/openvino-binding-ci.yml
 
+  riscv-qemu:
+    name: RISC-V QEMU
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.riscv_qemu == 'true'
+    uses: ./.github/workflows/riscv-qemu.yml
+    secrets: inherit
+
   images:
     name: Images
     needs: changes
@@ -187,6 +197,7 @@ jobs:
       - memory
       - recipe-conformance
       - openvino
+      - riscv-qemu
       - images
       - performance
       - router-learning
