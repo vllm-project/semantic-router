@@ -12,7 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
 // stubInClusterConfigMapWriter forces resolvedConfigMapWriter's lazy init to
@@ -172,6 +174,40 @@ func TestWriteConfigAtomicallyKeepsLocalFileWithoutADeclaredTarget(t *testing.T)
 	}
 	if string(got) != "routing: {}\n" {
 		t.Fatalf("configPath content = %q, want the written document", got)
+	}
+}
+
+// TestWaitForRuntimeConfigActivationReportsPersistedNotActiveOnKubernetesTarget
+// covers the review on #3814: the mounted runtimePath file is a read-only
+// ConfigMap mount that a Kubernetes-target write never touches, so its hash
+// staying unchanged (and coincidentally matching the currently active
+// document) must not be read as proof the new document activated.
+func TestWaitForRuntimeConfigActivationReportsPersistedNotActiveOnKubernetesTarget(t *testing.T) {
+	dir := t.TempDir()
+	runtimePath := filepath.Join(dir, "config.yaml")
+	staleContent := []byte("routing: {stale: true}\n")
+	if err := os.WriteFile(runtimePath, staleContent, 0o644); err != nil {
+		t.Fatalf("seed stale runtime file: %v", err)
+	}
+
+	t.Setenv(configwriter.ConfigMapNameEnv, "semantic-router-config")
+	t.Setenv(configwriter.ConfigMapNamespaceEnv, "vllm-semantic-router-system")
+	restoreWriter := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(fakeclientset.NewSimpleClientset()))
+	defer restoreWriter()
+
+	// The active runtime's document hash coincidentally matches the stale
+	// local file's hash: this is exactly the state that produced a false
+	// "active" report before this fix, since nothing ever changed on disk.
+	old := &config.RouterConfig{DocumentHash: configDocumentETagHash(staleContent)}
+	server := &ClassificationAPIServer{runtimeRegistry: routerruntime.NewRegistry(old)}
+
+	newDocument := []byte("routing: {new: true}\n")
+	hash, status := server.waitForRuntimeConfigActivation(runtimePath, newDocument)
+	if status != "persisted" {
+		t.Fatalf("status = %q, want persisted", status)
+	}
+	if hash != configDocumentETagHash(newDocument) {
+		t.Fatalf("hash = %q, want the hash of the document that was actually written, not the stale mounted file", hash)
 	}
 }
 

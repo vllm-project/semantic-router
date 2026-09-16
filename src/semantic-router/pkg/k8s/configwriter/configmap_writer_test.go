@@ -142,6 +142,49 @@ func TestConfigMapWriterRetriesOnConflict(t *testing.T) {
 	}
 }
 
+func TestConfigMapWriterRead(t *testing.T) {
+	target := ConfigMapTarget{Namespace: "ns", Name: "config", Key: "config.yaml"}
+	existing := newConfigMap(target.Namespace, target.Name, map[string]string{"config.yaml": "version: v0.3\n"}, nil)
+	clientset := fakeclientset.NewSimpleClientset(existing)
+	writer := NewConfigMapWriter(clientset)
+
+	data, found, err := writer.Read(context.Background(), target)
+	if err != nil {
+		t.Fatalf("Read() error = %v, want nil", err)
+	}
+	if !found {
+		t.Fatal("Read() found = false, want true")
+	}
+	if string(data) != "version: v0.3\n" {
+		t.Errorf("Read() data = %q, want the stored document", data)
+	}
+}
+
+func TestConfigMapWriterReadMissingKey(t *testing.T) {
+	target := ConfigMapTarget{Namespace: "ns", Name: "config", Key: "config.yaml"}
+	existing := newConfigMap(target.Namespace, target.Name, map[string]string{"tools_db.json": "{}"}, nil)
+	clientset := fakeclientset.NewSimpleClientset(existing)
+	writer := NewConfigMapWriter(clientset)
+
+	data, found, err := writer.Read(context.Background(), target)
+	if err != nil {
+		t.Fatalf("Read() error = %v, want nil for a key that has never been written", err)
+	}
+	if found {
+		t.Fatalf("Read() found = true, want false; data = %q", data)
+	}
+}
+
+func TestConfigMapWriterReadMissingConfigMap(t *testing.T) {
+	target := ConfigMapTarget{Namespace: "ns", Name: "missing", Key: "config.yaml"}
+	clientset := fakeclientset.NewSimpleClientset()
+	writer := NewConfigMapWriter(clientset)
+
+	if _, _, err := writer.Read(context.Background(), target); err == nil {
+		t.Fatal("Read() = nil error, want a not-found error")
+	}
+}
+
 func TestConfigMapTargetFromEnv(t *testing.T) {
 	t.Setenv(ConfigMapNameEnv, "")
 	t.Setenv(ConfigMapNamespaceEnv, "")

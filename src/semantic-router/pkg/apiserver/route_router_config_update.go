@@ -403,7 +403,7 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	}
 
 	etag := configDocumentETag(yamlBytes)
-	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath)
+	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath, yamlBytes)
 	responseStatus := "success"
 	responseCode := statusCode
 	switch runtimeStatus {
@@ -411,6 +411,10 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		responseStatus = "accepted"
 		responseCode = http.StatusAccepted
 		message += " The config is persisted but runtime activation is still pending; poll /api/v1/config/hash until activation_status is active."
+	case "persisted":
+		responseStatus = "accepted"
+		responseCode = http.StatusAccepted
+		message += " The config is durably saved to the Kubernetes ConfigMap; it takes effect on the router's next restart. Live activation without a restart is not yet supported for Kubernetes deployments."
 	case "active":
 		message += " Runtime activation is complete."
 	default:
@@ -465,7 +469,18 @@ func (s *ClassificationAPIServer) activeConfigDocumentHash() string {
 // hash only after the new router and classification service are atomically
 // available. Legacy/test servers without a runtime registry keep their
 // asynchronous behavior.
-func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string) (string, string) {
+//
+// generatedDocument is the document this write just persisted. On a
+// Kubernetes ConfigMap target, runtimePath is a read-only mount that this
+// write never touches, so hashing it and comparing against the active
+// runtime would find the old, unrelated match and falsely report "active"
+// (review on #3814). Report the honest "persisted" status instead, hashing
+// the document that was actually written rather than the untouched file.
+func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string, generatedDocument []byte) (string, string) {
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		return configDocumentETagHash(generatedDocument), "persisted"
+	}
+
 	runtimeHash, err := configFileHash(runtimePath)
 	if err != nil {
 		return "", "unknown"
@@ -485,6 +500,13 @@ func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath str
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// configDocumentETagHash is configDocumentETag without the quoting an ETag
+// header needs, for reuse anywhere a plain hex digest is expected instead.
+func configDocumentETagHash(data []byte) string {
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
 }
 
 func syncRuntimeConfigOrRestore(paths configPersistencePaths, previousData []byte) error {

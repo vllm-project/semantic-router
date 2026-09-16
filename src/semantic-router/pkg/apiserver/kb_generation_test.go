@@ -116,7 +116,7 @@ func TestKnowledgeBasePersistenceWaitsForWholeGenerationPublication(t *testing.T
 	if err != nil || string(persisted) != string(candidate) {
 		t.Fatalf("candidate was not persisted: %v", err)
 	}
-	state, status := server.knowledgeBaseActivationStatus(paths.runtimePath, http.StatusCreated)
+	state, status := server.knowledgeBaseActivationStatus(paths.runtimePath, candidate, http.StatusCreated)
 	if status != http.StatusAccepted || state.ActivationStatus != "pending" || state.GeneratedRuntimeHash == "" {
 		t.Fatalf("pending state=%+v status=%d", state, status)
 	}
@@ -124,7 +124,7 @@ func TestKnowledgeBasePersistenceWaitsForWholeGenerationPublication(t *testing.T
 	newConfig.DocumentHash = state.GeneratedRuntimeHash
 	nextService := services.NewClassificationService(nil, newConfig)
 	registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: newConfig, ClassificationService: nextService})
-	state, status = server.knowledgeBaseActivationStatus(paths.runtimePath, http.StatusCreated)
+	state, status = server.knowledgeBaseActivationStatus(paths.runtimePath, candidate, http.StatusCreated)
 	if status != http.StatusCreated || state.ActivationStatus != "active" || registry.ClassificationService() != nextService {
 		t.Fatalf("published state=%+v status=%d", state, status)
 	}

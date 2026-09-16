@@ -672,7 +672,11 @@ func TestWaitForRuntimeConfigActivationRecognizesPublishedDocument(t *testing.T)
 	registry := routerruntime.NewRegistry(activeCfg)
 	apiServer := &ClassificationAPIServer{configPath: configPath, runtimeRegistry: registry}
 
-	runtimeHash, status := apiServer.waitForRuntimeConfigActivation(configPath)
+	generatedDocument, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read generated document: %v", err)
+	}
+	runtimeHash, status := apiServer.waitForRuntimeConfigActivation(configPath, generatedDocument)
 	if status != "active" || runtimeHash != activeCfg.DocumentHash {
 		t.Fatalf("activation result = (%q, %q), want (%q, active)", runtimeHash, status, activeCfg.DocumentHash)
 	}

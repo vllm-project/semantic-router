@@ -124,6 +124,26 @@ func (w *ConfigMapWriter) Write(ctx context.Context, target ConfigMapTarget, dat
 	})
 }
 
+// Read returns target.Key's current value. found is false when the ConfigMap
+// exists but has no such key, which is the state before the first write.
+func (w *ConfigMapWriter) Read(ctx context.Context, target ConfigMapTarget) (data []byte, found bool, err error) {
+	if w == nil || w.clientset == nil {
+		return nil, false, errors.New("k8s: nil ConfigMapWriter")
+	}
+	current, err := w.clientset.CoreV1().ConfigMaps(target.Namespace).Get(ctx, target.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, false, fmt.Errorf("ConfigMap %s/%s not found: %w", target.Namespace, target.Name, err)
+		}
+		return nil, false, fmt.Errorf("get ConfigMap %s/%s: %w", target.Namespace, target.Name, err)
+	}
+	value, ok := current.Data[target.Key]
+	if !ok {
+		return nil, false, nil
+	}
+	return []byte(value), true, nil
+}
+
 // isControllerOwned reports whether cm names a controller in its owner
 // references, the same field controllerutil.SetControllerReference sets.
 func isControllerOwned(cm *corev1.ConfigMap) bool {
