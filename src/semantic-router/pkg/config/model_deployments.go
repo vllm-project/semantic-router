@@ -31,7 +31,8 @@ type ModelInputBudget struct {
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
 }
 
-// ModelBinding is a recipe-local use of a deployment. Head and MappingPath
+// ModelBinding declares a shared task default or a recipe-local deployment use.
+// Head and MappingPath
 // describe task interpretation and never imply physical resource compatibility.
 type ModelBinding struct {
 	Deployment     string                   `yaml:"deployment" json:"deployment"`
@@ -58,6 +59,7 @@ type ResolvedModelBinding struct {
 // exact: absence never falls back to a binding from a different recipe.
 type ModelBindingPlan struct {
 	recipes map[RecipeName]map[string]ResolvedModelBinding
+	global  map[string]ResolvedModelBinding
 }
 
 func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModelBinding, bool) {
@@ -167,9 +169,13 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 // compileModelBindings assumes global deployment contracts were already
-// validated by the caller and resolves only recipe-local binding contracts.
+// validated by the caller, then resolves global defaults and recipe overrides.
 func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
-	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding)}
+	global, err := resolveGlobalModelBindings(cfg)
+	if err != nil {
+		return nil, err
+	}
+	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding), global: global}
 	profiles := cfg.Recipes
 	if len(profiles) == 0 {
 		recipe := cfg.RoutingScope
@@ -179,9 +185,10 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 		profiles = []RoutingRecipe{{Name: recipe, Profile: RoutingProfile{ModelBindings: cfg.ModelBindings, Signals: cfg.Signals}}}
 	}
 	for _, recipe := range profiles {
-		bindings := make(map[string]ResolvedModelBinding, len(recipe.Profile.ModelBindings))
-		for _, name := range sortedModelKeys(recipe.Profile.ModelBindings) {
-			decl := recipe.Profile.ModelBindings[name]
+		declarations := cfg.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings)
+		bindings := make(map[string]ResolvedModelBinding, len(declarations))
+		for _, name := range sortedModelKeys(declarations) {
+			decl := declarations[name]
 			deployment, exists := cfg.ModelDeployments[decl.Deployment]
 			if !exists {
 				return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown deployment %q", recipe.Name, name, decl.Deployment)

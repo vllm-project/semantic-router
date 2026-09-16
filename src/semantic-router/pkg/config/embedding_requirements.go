@@ -17,6 +17,7 @@ type EmbeddingRequirement struct {
 }
 
 func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices bool) []EmbeddingRequirement {
+	cacheNeeded := sharedServices && cfg.NeedsSemanticResponseCache()
 	cfg = cfg.ModelConsumerScope()
 	var result []EmbeddingRequirement
 	if len(cfg.EmbeddingRules) > 0 {
@@ -46,7 +47,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 	if !sharedServices {
 		return result
 	}
-	if cfg.SemanticCache.Enabled {
+	if cacheNeeded {
 		requirement := EmbeddingRequirement{Model: SemanticCacheEmbeddingModel(cfg), Consumer: "response cache", Windows: true, SharedService: true}
 		if cfg.SemanticCache.BackendType == "" || cfg.SemanticCache.BackendType == "memory" {
 			switch requirement.Model {

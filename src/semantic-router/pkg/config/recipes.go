@@ -278,7 +278,7 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped := *c
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
-		ModelBindings:         cloneModelMap(recipe.Profile.ModelBindings),
+		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings),
 		CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
 		DataPolicy:            recipe.Profile.DataPolicy.Clone(),
 		Signals:               recipe.Profile.Signals,
