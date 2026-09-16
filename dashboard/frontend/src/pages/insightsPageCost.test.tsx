@@ -149,4 +149,59 @@ describe('Insights configured-rate estimates', () => {
     expect(historical).toEqual(before)
     expect(buildInsightsSummary([historical]).costRecordCount).toBe(0)
   })
+
+  it('explains missing prices and usage directly in record detail fields', () => {
+    const historical = {
+      ...complete,
+      actual_cost: undefined,
+      baseline_cost: undefined,
+      cost_savings: undefined,
+      currency: undefined,
+      baseline_model: undefined,
+    }
+    for (const [record, label] of [
+      [historical, 'Price not recorded'],
+      [{ ...historical, total_tokens: undefined }, 'Usage not recorded'],
+      [{ ...historical, lifecycle_state: 'failed' }, 'Not completed'],
+    ] as const) {
+      const usage = buildInsightsRecordSections(record, { isReadonly: false }).find(
+        (section) => section.title === 'Usage & Cost',
+      )!
+      for (const field of [
+        'Estimated model cost',
+        'Estimated baseline cost',
+        'Estimated savings',
+      ]) {
+        expect(usage.fields).toContainEqual({ label: field, value: label })
+      }
+      expect(usage.fields).toContainEqual({
+        label: 'Baseline model',
+        value: 'Baseline not recorded',
+      })
+      expect(usage.fields).toContainEqual({ label: 'Prompt tokens', value: 'Not recorded' })
+      expect(usage.fields).not.toContainEqual(expect.objectContaining({ value: 'N/A' }))
+    }
+  })
+
+  it('keeps a recorded free cost visible when only the baseline is missing', () => {
+    const partial = {
+      ...complete,
+      actual_cost: 0,
+      baseline_cost: undefined,
+      baseline_model: undefined,
+      cost_savings: undefined,
+    }
+    const usage = buildInsightsRecordSections(partial, { isReadonly: false }).find(
+      (section) => section.title === 'Usage & Cost',
+    )!
+    expect(usage.fields).toContainEqual({ label: 'Estimated model cost', value: '$0.0000' })
+    expect(usage.fields).toContainEqual({
+      label: 'Estimated baseline cost',
+      value: 'Baseline not recorded',
+    })
+    expect(usage.fields).toContainEqual({
+      label: 'Estimated savings',
+      value: 'Baseline not recorded',
+    })
+  })
 })

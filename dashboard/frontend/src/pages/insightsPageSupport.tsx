@@ -359,7 +359,7 @@ export function buildInsightsRecordSections(
       { label: 'Prompt tokens', value: formatTokenValue(record.prompt_tokens) },
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
-      { label: 'Baseline model', value: record.baseline_model || '-' },
+      { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
       {
         label: 'Cost basis',
         value:
@@ -373,15 +373,15 @@ export function buildInsightsRecordSections(
       },
       {
         label: 'Estimated model cost',
-        value: formatCurrencyOrNA(record.actual_cost, record.currency),
+        value: formatRecordedCost(record, record.actual_cost),
       },
       {
         label: 'Estimated baseline cost',
-        value: formatCurrencyOrNA(record.baseline_cost, record.currency),
+        value: formatRecordedCost(record, record.baseline_cost),
       },
       {
         label: 'Estimated savings',
-        value: formatCurrencyOrNA(record.cost_savings, record.currency),
+        value: formatRecordedCost(record, record.cost_savings),
       },
     ],
   })
@@ -724,8 +724,8 @@ function formatNumericMetric(value: number) {
 }
 
 function renderCostValue(value?: number, currency?: string) {
-  if (typeof value !== 'number' || !currency) {
-    return <span className={styles.costValueMuted}>N/A</span>
+  if (!Number.isFinite(value) || !currency?.trim()) {
+    return <span className={styles.costValueMuted}>Price not recorded</span>
   }
 
   return (
@@ -747,12 +747,17 @@ function formatJson(jsonStr: string | undefined) {
   }
 }
 
-function formatCurrencyOrNA(value?: number, currency?: string) {
-  return formatCurrency(value, currency)
+function formatRecordedCost(record: InsightsRecord, value?: number) {
+  if (!Number.isFinite(value) || !record.currency?.trim()) {
+    return getUnavailableCost(record)?.label || 'Price not recorded'
+  }
+  return formatCurrency(value, record.currency)
 }
 
 function formatTokenValue(value?: number) {
-  return typeof value === 'number' ? value.toLocaleString('en-US') : '-'
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('en-US')
+    : 'Not recorded'
 }
 
 function formatSimilarityValue(value?: number) {
