@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -37,7 +38,7 @@ func TestReloadRouterFromConfig_FailedWarmupDoesNotApplyFileTTL(t *testing.T) {
 		return fmt.Errorf("warmup failed")
 	}
 
-	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err == nil {
+	if err := server.reloadRouterFromConfig("file", workflowReloadConfigPath(t, oldRouter.Config), oldRouter.Config); err == nil {
 		t.Fatal("reloadRouterFromConfig succeeded; want warmup failure")
 	}
 	if server.service.GetRouter() != oldRouter {
@@ -77,7 +78,7 @@ func TestReloadRouterFromConfig_SuccessfulReloadCommitsFileTTL(t *testing.T) {
 	}
 
 	time.Sleep(1500 * time.Millisecond)
-	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err != nil {
+	if err := server.reloadRouterFromConfig("file", workflowReloadConfigPath(t, oldRouter.Config), oldRouter.Config); err != nil {
 		t.Fatalf("reloadRouterFromConfig: %v", err)
 	}
 
@@ -106,7 +107,7 @@ func TestReloadRouterFromConfig_WorkflowMemoryStateDoesNotSurvive(t *testing.T) 
 		t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
 	}
 
-	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err != nil {
+	if err := server.reloadRouterFromConfig("file", workflowReloadConfigPath(t, oldRouter.Config), oldRouter.Config); err != nil {
 		t.Fatalf("reloadRouterFromConfig: %v", err)
 	}
 	newRouter := server.service.GetRouter()
@@ -139,7 +140,7 @@ func TestReloadRouterFromConfig_WorkflowFileStateSurvives(t *testing.T) {
 		t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
 	}
 
-	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err != nil {
+	if err := server.reloadRouterFromConfig("file", workflowReloadConfigPath(t, oldRouter.Config), oldRouter.Config); err != nil {
 		t.Fatalf("reloadRouterFromConfig: %v", err)
 	}
 
@@ -185,7 +186,7 @@ func TestReloadRouterFromConfig_WorkflowFileStateConcurrentPutTake(t *testing.T)
 		return newRouter, nil
 	}
 
-	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err != nil {
+	if err := server.reloadRouterFromConfig("file", workflowReloadConfigPath(t, oldRouter.Config), oldRouter.Config); err != nil {
 		t.Fatalf("reloadRouterFromConfig: %v", err)
 	}
 	close(errCh)
@@ -228,7 +229,7 @@ func TestReloadRouterFromConfig_WorkflowRedisStateSurvives(t *testing.T) {
 		t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
 	}
 
-	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err != nil {
+	if err := server.reloadRouterFromConfig("file", workflowReloadConfigPath(t, oldRouter.Config), oldRouter.Config); err != nil {
 		t.Fatalf("reloadRouterFromConfig: %v", err)
 	}
 
@@ -292,6 +293,13 @@ func TestRouterServiceCloseDrainsWorkflowGenerationBeforeStoreClose(t *testing.T
 	if svc.Acquire() {
 		t.Fatal("workflow state service still acquirable after Close")
 	}
+}
+
+func workflowReloadConfigPath(t *testing.T, cfg *config.RouterConfig) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "workflow-reload.yaml")
+	writeReloadTestDocument(t, path, "workflow-reload", cfg)
+	return path
 }
 
 func stubWorkflowReloadSeams(t *testing.T, looperCfg config.LooperConfig) {
