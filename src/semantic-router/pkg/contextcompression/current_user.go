@@ -11,7 +11,9 @@ import (
 // currentUserTextBlock never broadens tool, media, citation or instruction
 // permissions. Only the final plain user message can opt into losing text.
 func (request *RequestIR) currentUserTextBlock(message *MessageIR, block *TextBlockIR) bool {
-	if message.Role != "user" || block.JSON || json.Valid([]byte(block.Text)) || block.Source != TargetHistory {
+	// The tool-output JSON prefix heuristic also matches ordinary bracketed
+	// headings. Only a complete JSON document protects opted-in user text.
+	if message.Role != "user" || json.Valid([]byte(block.Text)) || block.Source != TargetHistory {
 		return false
 	}
 	last := -1

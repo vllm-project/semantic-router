@@ -45,8 +45,15 @@ func overflowFixture(t *testing.T, text string) (*OpenAIRouter, *RequestContext)
 }
 
 func TestContextOverflowSelectionAndEncodedDispatchUseReducedRequest(t *testing.T) {
-	for _, filler := range []string{strings.Repeat(" a", 40000), strings.Repeat(" padding", 40000), strings.Repeat("中文🙂", 20000), strings.Repeat("x", 160000)} {
-		original := "HEAD instruction\n" + filler + "\nTAIL instruction"
+	for _, item := range []struct{ heading, filler string }{
+		{"HEAD instruction", strings.Repeat(" a", 40000)},
+		{"HEAD instruction", strings.Repeat(" padding", 40000)},
+		{"HEAD instruction", strings.Repeat("中文🙂", 20000)},
+		{"HEAD instruction", strings.Repeat("x", 160000)},
+		{"[Request heading]", strings.Repeat("archive text ", 30000)},
+		{"{Request heading}", strings.Repeat("archive text ", 30000)},
+	} {
+		original := item.heading + "\n" + item.filler + "\nTAIL instruction"
 		r, ctx := overflowFixture(t, original)
 		d := ctx.VSRSelectedDecision
 		name, _, _, model, err := r.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: d, Confidence: 1}, "auto", original, ctx)
@@ -69,7 +76,7 @@ func TestContextOverflowSelectionAndEncodedDispatchUseReducedRequest(t *testing.
 			t.Fatal(err)
 		}
 		got := outbound.Messages[0].Content[0].Text
-		if !utf8.ValidString(got) || !strings.HasPrefix(got, "HEAD instruction\n") || !strings.HasSuffix(got, "\nTAIL instruction") || !strings.Contains(got, "context omitted by route compression") || got == original {
+		if !utf8.ValidString(got) || !strings.HasPrefix(got, item.heading+"\n") || !strings.HasSuffix(got, "\nTAIL instruction") || !strings.Contains(got, "context omitted by route compression") || got == original {
 			t.Fatalf("invalid outbound truncation: bytes=%d", len(got))
 		}
 		bound, _ := (overflowTokenCounter{}).CountRequest(model, &contextcompression.RequestIR{Semantic: &outbound})
