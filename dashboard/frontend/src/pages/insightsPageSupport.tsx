@@ -289,12 +289,13 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '160px',
       render: (row) => (
         <div className={styles.indicators}>
-          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>
-            Cache
-          </span>
-          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>
-            Stream
-          </span>
+          {row.from_cache && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Cache hit</span>
+          )}
+          {row.streaming && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Streaming</span>
+          )}
+          {!row.from_cache && !row.streaming && <span>No flags</span>}
         </div>
       ),
     },
