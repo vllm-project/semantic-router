@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 func TestApplySelectedToolsPreservesGenerationForUnchangedDefinitions(t *testing.T) {
@@ -67,5 +68,30 @@ func TestApplySelectedToolsVersionsDefinitionAndOrderChanges(t *testing.T) {
 				t.Fatalf("generation=%d, want 8", request.Generation)
 			}
 		})
+	}
+}
+
+func TestApplySelectedToolsVersionsProviderVisibleSchemaBytes(t *testing.T) {
+	request := &llmprotocol.Request{
+		Generation: 7,
+		Tools: []llmprotocol.Tool{{
+			Name:        "lookup",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}}}`),
+		}},
+	}
+	selected := []llmprotocol.Tool{{
+		Name:        "lookup",
+		InputSchema: json.RawMessage("{\n  \"properties\": {\"id\": {\"type\": \"string\"}},\n  \"type\": \"object\"\n}"),
+	}}
+
+	if tools.ToolDefinitionFingerprint(request.Tools[0]) != tools.ToolDefinitionFingerprint(selected[0]) {
+		t.Fatal("test schemas must remain semantically equivalent")
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	if err := router.applySelectedTools(request, selected, "sticky", 1, 0, "", nil); err != nil {
+		t.Fatalf("apply selected tools: %v", err)
+	}
+	if request.Generation != 8 {
+		t.Fatalf("generation=%d, want 8 for changed provider-visible schema bytes", request.Generation)
 	}
 }
