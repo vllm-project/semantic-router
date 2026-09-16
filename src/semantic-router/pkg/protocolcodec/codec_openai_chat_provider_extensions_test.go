@@ -89,6 +89,25 @@ func TestOpenAIChatResponseStillRejectsUnknownProviderFields(t *testing.T) {
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 }
 
+func TestChatStreamReportsProviderUsageInFinalChunk(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	payload := []byte(
+		"data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model\",\"choices\":[],\"usage\":{\"prompt_tokens\":18,\"completion_tokens\":5,\"total_tokens\":23,\"queue_time\":0.037,\"prompt_time\":0.0007,\"completion_time\":0.46,\"total_time\":0.46,\"cost_in_usd_ticks\":123000}}\n\n",
+	)
+	_, diagnostics, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("final usage chunk was rejected: %v", err)
+	}
+	assertDiagnosticFields(
+		t, diagnostics,
+		"stream.usage.queue_time", "stream.usage.prompt_time", "stream.usage.completion_time",
+		"stream.usage.total_time", "stream.usage.cost_in_usd_ticks",
+	)
+}
+
 func TestChatStreamAcceptsGroqChunkMetadata(t *testing.T) {
 	decoder := OpenAIChatCodec{}.NewDecoder(
 		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},

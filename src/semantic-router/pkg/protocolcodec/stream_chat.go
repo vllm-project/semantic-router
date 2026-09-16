@@ -191,6 +191,12 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"stream.moderation", "moderation metadata has no protocol-neutral representation",
 		)
 	}
+	if chunk.Usage != nil {
+		appendProviderFieldOmissions(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			chatUsageFieldOmissions(*chunk.Usage, "stream.usage."), chatUsageOmissionReason,
+		)
+	}
 	return diagnostics
 }
 
