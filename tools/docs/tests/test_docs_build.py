@@ -162,8 +162,22 @@ assert args == ['install'], args
             timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        shutil.copyfile(
+            ROOT / "tools/make/model-catalog.mk", self.root / "model-catalog.mk"
+        )
         result = subprocess.run(
-            ["make", "-f", "docs.mk", "docs-cli-check"],
+            [
+                "make",
+                "-f",
+                "docs.mk",
+                "-f",
+                "model-catalog.mk",
+                "--assume-old=model-catalog-boundary-check",
+                "--assume-old=docs-config-check",
+                "--assume-old=docs-community-check",
+                "--assume-old=agent-skill-check",
+                "docs-generated-check",
+            ],
             cwd=self.root,
             env=self.environment,
             capture_output=True,
@@ -173,7 +187,11 @@ assert args == ['install'], args
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         checks = [call for call in self.calls() if call[0] == "python"]
-        self.assertEqual(len(checks), 4)
+        self.assertEqual(len(checks), 5)
+        self.assertIn(
+            ["tools/catalog/generate_model_catalog.py", "--check"],
+            [call[1] for call in checks[3:]],
+        )
         self.assertTrue(
             all(
                 call[2] == str(self.root / "website/.venv/bin/python")

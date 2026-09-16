@@ -26,6 +26,7 @@ docs-community-check: ## Check source provenance of the published GitHub statist
 docs-community-test: ## Test offline snapshot provenance and stale-refresh rejection
 	@node --test website/scripts/lib/generated-source.test.mjs
 
+docs-generated-check: MODEL_CATALOG_PYTHON = $(DOCS_PYTHON)
 docs-generated-check: model-catalog-generated-check docs-cli-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
 
 .PHONY: docs-python-install docs-install docs-build
