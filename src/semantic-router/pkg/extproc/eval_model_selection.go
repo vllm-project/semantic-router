@@ -88,7 +88,20 @@ func (r *OpenAIRouter) SelectModelForEval(
 			Reason: "selector depends on request-time state that Eval does not mutate",
 		}
 	}
-	return r.selectEvalCandidate(input, decision, method)
+	result := r.selectEvalCandidate(input, decision, method)
+	// Learning can change a feasible base choice, but cannot make a selector's
+	// hard rejection executable. Surface that failure before deferring the
+	// final model choice to request-time adaptation or protection.
+	if result.Status != services.EvalSelectionUnavailable &&
+		result.Status != services.EvalSelectionFailed &&
+		r.evalSelectionCanChangeAtExecution(decision) {
+		return services.EvalModelSelection{
+			Status: services.EvalSelectionExecutionRequired,
+			Method: algorithmType,
+			Reason: "Router Learning can adapt or protect the base selector only during request execution",
+		}
+	}
+	return result
 }
 
 func evalAlgorithmType(decision *config.Decision) string {
@@ -115,13 +128,6 @@ func (r *OpenAIRouter) evalSelectionBeforeDryRun(
 			Status: services.EvalSelectionExecutionRequired,
 			Method: algorithmType,
 			Reason: "final model is produced only when the multi-model algorithm executes",
-		}, true
-	}
-	if r.evalSelectionCanChangeAtExecution(decision) {
-		return services.EvalModelSelection{
-			Status: services.EvalSelectionExecutionRequired,
-			Method: algorithmType,
-			Reason: "Router Learning can adapt or protect the base selector only during request execution",
 		}, true
 	}
 	return services.EvalModelSelection{}, false
