@@ -11,6 +11,7 @@ import (
 type PreparedBinding struct {
 	Identity   Identity
 	Artifact   string
+	Revision   string
 	Capability Capability
 }
 
@@ -36,7 +37,7 @@ func (i *Inventory) Observe(event Event) {
 		return
 	}
 	i.bindings[event.instance] = PreparedBinding{
-		Identity: event.Identity, Artifact: event.Artifact,
+		Identity: event.Identity, Artifact: event.Artifact, Revision: event.Revision,
 		Capability: cloneCapability(event.Capability),
 	}
 }

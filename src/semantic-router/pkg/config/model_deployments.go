@@ -160,14 +160,15 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("model bindings require router configuration")
 	}
-	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
-			return nil, fmt.Errorf("model deployment name must be non-empty and trimmed")
-		}
-		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
-			return nil, fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
-		}
+	if err := validateModelDeploymentContracts(cfg); err != nil {
+		return nil, err
 	}
+	return compileModelBindings(cfg)
+}
+
+// compileModelBindings assumes global deployment contracts were already
+// validated by the caller and resolves only recipe-local binding contracts.
+func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding)}
 	profiles := cfg.Recipes
 	if len(profiles) == 0 {
@@ -201,6 +202,18 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 				}
 			}
 			bindings[name] = ResolvedModelBinding{Recipe: recipe.Name, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
+		}
+		// The legacy `backend: endpoint` scalar is shorthand for a binding the
+		// recipe did not write out. Desugar it here so the runtime has one
+		// selection mechanism; an explicit binding for the consumer wins.
+		if _, declared := bindings["hallucination_detector"]; !declared {
+			decl, deployment, legacy, err := LegacyHallucinationBinding(&cfg.HallucinationMitigation.HallucinationModel)
+			if err != nil {
+				return nil, fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
+			}
+			if legacy {
+				bindings["hallucination_detector"] = ResolvedModelBinding{Recipe: recipe.Name, Name: "hallucination_detector", Binding: decl, Deployment: deployment.WithDefaults(), Admission: cfg.ModelAdmission[decl.Deployment]}
+			}
 		}
 		plan.recipes[recipe.Name] = bindings
 	}
@@ -283,8 +296,8 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
 			return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
 		}
-		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat {
-			return fmt.Errorf("hallucination detector requires http_chat adapter")
+		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
+			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
 		}
 	}
 	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {
@@ -316,6 +329,21 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 }
 
 func validateModelDeploymentContracts(cfg *RouterConfig) error {
-	_, err := CompileModelBindings(cfg)
+	if cfg == nil {
+		return fmt.Errorf("model bindings require router configuration")
+	}
+	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
+			return fmt.Errorf("model deployment name must be non-empty and trimmed")
+		}
+		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
+			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateModelBindingContracts(cfg *RouterConfig) error {
+	_, err := compileModelBindings(cfg)
 	return err
 }
