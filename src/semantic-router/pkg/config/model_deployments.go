@@ -203,6 +203,18 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 			}
 			bindings[name] = ResolvedModelBinding{Recipe: recipe.Name, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
 		}
+		// The legacy `backend: endpoint` scalar is shorthand for a binding the
+		// recipe did not write out. Desugar it here so the runtime has one
+		// selection mechanism; an explicit binding for the consumer wins.
+		if _, declared := bindings["hallucination_detector"]; !declared {
+			decl, deployment, legacy, err := LegacyHallucinationBinding(&cfg.HallucinationMitigation.HallucinationModel)
+			if err != nil {
+				return nil, fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
+			}
+			if legacy {
+				bindings["hallucination_detector"] = ResolvedModelBinding{Recipe: recipe.Name, Name: "hallucination_detector", Binding: decl, Deployment: deployment.WithDefaults(), Admission: cfg.ModelAdmission[decl.Deployment]}
+			}
+		}
 		plan.recipes[recipe.Name] = bindings
 	}
 	return plan, nil
@@ -284,8 +296,8 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
 			return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
 		}
-		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat {
-			return fmt.Errorf("hallucination detector requires http_chat adapter")
+		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
+			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
 		}
 	}
 	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {
