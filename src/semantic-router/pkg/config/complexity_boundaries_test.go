@@ -327,7 +327,7 @@ func TestComplexityRule_WrittenZeroThresholdSurvivesMarshal(t *testing.T) {
 		}
 
 		var reloaded ComplexityRule
-		if err := yaml.Unmarshal(out, &reloaded); err != nil {
+		if err = yaml.Unmarshal(out, &reloaded); err != nil {
 			t.Fatalf("%s: unmarshal: %v", name, err)
 		}
 		if !reloaded.ThresholdSet {
