@@ -390,19 +390,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
-      ],
-    },
-    {
-      type: 'category',
       label: 'Proposals',
       collapsed: false,
       link: {
@@ -517,6 +504,7 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       collapsed: false,
       items: [
+        'api/cli',
         'api/router',
         'api/configuration-schema',
         'api/apiserver',
@@ -524,6 +512,19 @@ const sidebars: SidebarsConfig = {
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Fleet Simulator',
+      collapsed: false,
+      items: [
+        'fleet-sim/overview',
+        'fleet-sim/getting-started',
+        'fleet-sim/use-cases',
+        'fleet-sim/sim-algorithms',
+        'fleet-sim/power-model',
+        'fleet-sim/guide',
       ],
     },
     {

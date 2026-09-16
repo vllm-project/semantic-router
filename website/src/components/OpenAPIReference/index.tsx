@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import CodeBlock from '@theme/CodeBlock'
 
 import openAPIDocument from '../../../static/openapi/apiserver/apiserver.openapi.json'
 import styles from './styles.module.css'
@@ -243,28 +244,28 @@ export default function OpenAPIReference() {
                       )
                     : null}
 
-                  <div className={styles.accessContract}>
+                  <dl className={styles.accessContract} aria-label="Operation access policy">
                     <div>
-                      <span>Authentication</span>
-                      <code>{selected.operation.security?.length ? 'runtime-configured bearer' : 'public'}</code>
+                      <dt>Authentication</dt>
+                      <dd>{selected.operation.security?.length ? 'Runtime-configured bearer' : 'Public'}</dd>
                     </div>
                     <div>
-                      <span>Permission</span>
-                      <code>{selected.operation['x-vllm-sr-permission'] ?? 'unspecified'}</code>
+                      <dt>Permission</dt>
+                      <dd><code>{selected.operation['x-vllm-sr-permission'] ?? 'unspecified'}</code></dd>
                     </div>
                     <div>
-                      <span>Sensitivity</span>
-                      <code>{selected.operation['x-vllm-sr-sensitivity'] ?? 'unspecified'}</code>
+                      <dt>Sensitivity</dt>
+                      <dd><code>{selected.operation['x-vllm-sr-sensitivity'] ?? 'unspecified'}</code></dd>
                     </div>
                     {selected.operation['x-vllm-sr-audit-action']
                       ? (
                           <div>
-                            <span>Audit action</span>
-                            <code>{selected.operation['x-vllm-sr-audit-action']}</code>
+                            <dt>Audit action</dt>
+                            <dd><code>{selected.operation['x-vllm-sr-audit-action']}</code></dd>
                           </div>
                         )
                       : null}
-                  </div>
+                  </dl>
 
                   <section className={styles.block}>
                     <h4>Request</h4>
@@ -316,7 +317,7 @@ export default function OpenAPIReference() {
                           </>
                         )
                       : null}
-                    <pre><code>{curlExample(selected)}</code></pre>
+                    <CodeBlock language="bash" title="Example request">{curlExample(selected)}</CodeBlock>
                   </section>
 
                   <section className={styles.block}>
@@ -328,9 +329,11 @@ export default function OpenAPIReference() {
                           .filter(Boolean)
                         return (
                           <div key={status}>
-                            <strong>{status}</strong>
-                            <span>{response.description}</span>
-                            {schemas.length ? <code>{schemas.join(', ')}</code> : null}
+                            <strong data-status={status[0]}>{status}</strong>
+                            <div>
+                              <p>{response.description}</p>
+                              {schemas.length ? <code>{schemas.join(', ')}</code> : null}
+                            </div>
                           </div>
                         )
                       })}

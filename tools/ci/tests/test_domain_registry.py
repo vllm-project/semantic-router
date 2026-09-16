@@ -105,6 +105,27 @@ class DomainRegistryTests(unittest.TestCase):
             "make generated-contract-check", commands_for_domains(domains, "checks")
         )
 
+    def test_reference_sources_select_checks_without_editing_outputs(self) -> None:
+        cases = {
+            "config/recipes/built-in/latest/mom-v1/recipe.dsl": "make model-catalog-generated-check",
+            "config/catalog/resources/models/virtual/vllm-sr.yaml": "make model-catalog-generated-check",
+            "website/static/model-catalog/catalog.json": "make model-catalog-generated-check",
+            "src/vllm-sr/cli/commands/request.py": "make docs-cli-check",
+            "website/docs/api/cli.md": "make docs-cli-check",
+            "config/fragments/signals/heuristic/keyword.yaml": "make docs-config-check",
+            "website/docs/tutorials/signal/heuristic/keyword.md": "make docs-config-check",
+            "deploy/operator/api/v1alpha1/semanticrouter_types.go": "make docs-crd-check",
+            "website/docs/api/crd-reference.md": "make docs-crd-check",
+            "website/scripts/generate-contributor-rank.mjs": "make docs-community-check",
+            "website/src/data/teamMembers.tsx": "make docs-community-check",
+            "website/src/data/committerActivity.generated.ts": "make docs-community-check",
+        }
+        for path, command in cases.items():
+            with self.subTest(path=path):
+                self.assertIn(
+                    command, commands_for_domains(matching_domains((path,)), "checks")
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
