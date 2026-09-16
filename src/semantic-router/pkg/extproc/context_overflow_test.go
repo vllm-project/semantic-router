@@ -310,7 +310,8 @@ func TestContextOverflowCompressesMultipleOldUserAndAssistantTurns(t *testing.T)
 			llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Older user context " + strings.Repeat(" a", 4000)}}},
 			llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Older assistant context " + strings.Repeat(" a", 4000)}}})
 	}
-	ctx.SemanticRequest.Messages = append(messages, latest)
+	ctx.SemanticRequest.Messages = messages
+	ctx.SemanticRequest.Messages = append(ctx.SemanticRequest.Messages, latest)
 	before, err := selection.EffectiveCandidateRequest(ctx.SemanticRequest, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -321,9 +322,10 @@ func TestContextOverflowCompressesMultipleOldUserAndAssistantTurns(t *testing.T)
 	userChanged, assistantChanged := false, false
 	for i, message := range ctx.SemanticRequest.Messages[:len(messages)-1] {
 		if message.Content[0].Text != before.Messages[i].Content[0].Text {
-			if message.Role == llmprotocol.RoleUser {
+			switch message.Role {
+			case llmprotocol.RoleUser:
 				userChanged = true
-			} else if message.Role == llmprotocol.RoleAssistant {
+			case llmprotocol.RoleAssistant:
 				assistantChanged = true
 			}
 		}
