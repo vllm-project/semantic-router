@@ -53,6 +53,9 @@ jobs:
   paper:
     workflow: .github/workflows/paper-build.yml
     output: paper
+  riscv-qemu:
+    workflow: .github/workflows/riscv-qemu.yml
+    output: riscv_qemu
 
 domains:
   harness:
@@ -226,6 +229,19 @@ domains:
     checks: [make test-binding-minimal]
     verify: [make test-binding-lora]
     ci_jobs: [core-tests]
+
+  riscv-qemu:
+    owner: native-bindings
+    paths:
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - tools/make/rust.mk
+      - tools/docker/check-native-abi.sh
+      - tools/ci/riscv-qemu-router-smoke.sh
+      - e2e/config/config.riscv-qemu.yaml
+    checks: []
+    ci_jobs: [riscv-qemu]
 
   onnx-artifact-tools:
     owner: native-bindings
