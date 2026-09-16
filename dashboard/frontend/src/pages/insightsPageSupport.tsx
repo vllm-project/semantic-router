@@ -6,7 +6,12 @@ import { formatDateTime } from '../utils/dateTime'
 import { Link } from 'react-router-dom'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 
-import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
+import type {
+  InsightsCostSummary,
+  InsightsCurrencyCostSummary,
+  InsightsRecord,
+  Signal,
+} from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
@@ -57,31 +62,35 @@ export function getUniqueModels(records: InsightsRecord[]) {
 }
 
 export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSummary {
-  let totalSaved = 0
-  let baselineSpend = 0
-  let actualSpend = 0
-  let currency: string | undefined
+  const groups = new Map<string, InsightsCurrencyCostSummary>()
   let costRecordCount = 0
-
   records.forEach((record) => {
-    if (!hasCompleteCostData(record)) {
-      return
+    if (!hasCompleteCostData(record)) return
+    const currency = record.currency!.trim().toUpperCase()
+    const group = groups.get(currency) ?? {
+      totalSaved: 0,
+      baselineSpend: 0,
+      actualSpend: 0,
+      currency,
+      costRecordCount: 0,
     }
-
-    totalSaved += record.cost_savings ?? 0
-    baselineSpend += record.baseline_cost ?? 0
-    actualSpend += record.actual_cost ?? 0
-    currency = currency || record.currency
+    group.totalSaved += record.cost_savings!
+    group.baselineSpend += record.baseline_cost!
+    group.actualSpend += record.actual_cost!
+    group.costRecordCount += 1
+    groups.set(currency, group)
     costRecordCount += 1
   })
-
+  const byCurrency = [...groups.values()].sort((a, b) => a.currency.localeCompare(b.currency))
+  const single = byCurrency.length === 1 ? byCurrency[0] : undefined
   return {
-    totalSaved,
-    baselineSpend,
-    actualSpend,
-    currency,
+    totalSaved: single?.totalSaved ?? 0,
+    baselineSpend: single?.baselineSpend ?? 0,
+    actualSpend: single?.actualSpend ?? 0,
+    currency: single?.currency,
     costRecordCount,
     excludedRecordCount: records.length - costRecordCount,
+    byCurrency,
   }
 }
 
@@ -216,19 +225,30 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     },
     {
       key: 'actual_cost',
-      header: 'Actual Cost',
+      header: 'Estimated Cost',
       width: '160px',
       sortable: true,
-      render: (row) => renderCostValue(row.actual_cost, row.currency),
+      render: (row) =>
+        hasCompleteCostData(row) ? (
+          renderCostValue(row.actual_cost, row.currency)
+        ) : (
+          <span className={styles.costValueMuted} title={getInsightsCostUnavailableReason(row)}>
+            N/A
+          </span>
+        ),
     },
     {
       key: 'cost_savings',
-      header: 'Saved vs Baseline',
+      header: 'Estimated Savings',
       width: '180px',
       sortable: true,
       render: (row) => {
         if (!hasCompleteCostData(row)) {
-          return <span className={styles.costValueMuted}>N/A</span>
+          return (
+            <span className={styles.costValueMuted} title={getInsightsCostUnavailableReason(row)}>
+              N/A
+            </span>
+          )
         }
 
         return (
@@ -347,10 +367,27 @@ export function buildInsightsRecordSections(
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
       { label: 'Baseline model', value: record.baseline_model || '-' },
-      { label: 'Actual cost', value: formatCurrencyOrNA(record.actual_cost, record.currency) },
-      { label: 'Baseline cost', value: formatCurrencyOrNA(record.baseline_cost, record.currency) },
       {
-        label: 'Saved vs baseline',
+        label: 'Cost basis',
+        value:
+          getInsightsCostUnavailableReason(record) ||
+          'Recorded tokens × configured model rates; excludes infrastructure charges and invoice adjustments.',
+      },
+      {
+        label: 'Baseline basis',
+        value:
+          'New records compare the decision’s configured candidates in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+      },
+      {
+        label: 'Estimated model cost',
+        value: formatCurrencyOrNA(record.actual_cost, record.currency),
+      },
+      {
+        label: 'Estimated baseline cost',
+        value: formatCurrencyOrNA(record.baseline_cost, record.currency),
+      },
+      {
+        label: 'Estimated savings',
         value: formatCurrencyOrNA(record.cost_savings, record.currency),
       },
     ],
@@ -411,16 +448,24 @@ export function collectSignals(signals: Signal): string[] {
   )
 }
 
+export function getInsightsCostUnavailableReason(record: InsightsRecord): string | undefined {
+  if (record.lifecycle_state !== 'completed') return 'Request not completed'
+  if (!Number.isFinite(record.total_tokens)) return 'Token usage unavailable'
+  if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
+    return 'Model pricing estimate unavailable'
+  }
+  if (
+    !Number.isFinite(record.baseline_cost) ||
+    !Number.isFinite(record.cost_savings) ||
+    !record.baseline_model
+  ) {
+    return 'Baseline estimate unavailable'
+  }
+  return undefined
+}
+
 export function hasCompleteCostData(record: InsightsRecord) {
-  return (
-    (record.lifecycle_state === undefined || record.lifecycle_state === 'completed') &&
-    typeof record.actual_cost === 'number' &&
-    typeof record.baseline_cost === 'number' &&
-    typeof record.cost_savings === 'number' &&
-    typeof record.total_tokens === 'number' &&
-    Boolean(record.currency) &&
-    Boolean(record.baseline_model)
-  )
+  return getInsightsCostUnavailableReason(record) === undefined
 }
 
 function buildSignalFields(signals: Signal): ViewField[] {

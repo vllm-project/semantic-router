@@ -188,6 +188,34 @@ as `—`, while a recorded zero remains zero. Missing identity or evidence
 is displayed explicitly. A recipe's `data_policy.replay: false` prevents its
 requests from appearing in Replay, including rejected requests.
 
+### Configured-rate cost estimates
+
+Insights estimates model costs from recorded token usage and the selected model's
+configured input, cached-input, cache-write, and output rates. These estimates
+exclude infrastructure charges and invoice adjustments. Missing usage or pricing
+stays unknown (`N/A`); an explicitly configured free rate remains zero.
+
+For each new record, the baseline is the highest estimated cost among the selected
+decision's configured model candidates and the selected model, using the same
+recorded usage and currency. Unpriced candidates and other currencies are ignored;
+no exchange-rate conversion is performed. Equal-cost candidates use model-name
+order for a stable baseline. A direct model request without a decision compares
+against itself. Candidate eligibility and tokenization on an alternative model
+are not re-evaluated: this is a configured-rate comparison, not a second inference.
+Cache hits record zero additional model-inference cost; storage and lookup costs
+are outside this estimate. Existing records retain their captured baseline.
+
+The aggregate response's `summary.by_currency` contains a sorted array of
+`currency`, `total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count`
+for each currency. Complete estimates are retained in their own group. With one
+currency, the existing flat summary fields retain those same values. With several
+currencies, flat `currency` is omitted and flat amounts are zero placeholders;
+clients must use `by_currency` rather than display or combine those placeholders.
+No cross-currency total is reported. `cost_record_count` counts complete estimates
+across groups, while `excluded_record_count` counts non-completed requests and
+records without complete usage, price, currency, or baseline data. Details
+distinguish those unavailable-data reasons.
+
 When bearer authentication is enabled, replay callers need `replay.read`.
 Prompt, response, tool, and other sensitive details remain redacted unless the
 principal also has `replay.detail`. Treat replay storage as potentially

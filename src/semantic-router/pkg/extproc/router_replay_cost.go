@@ -1,6 +1,10 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+import (
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+)
 
 func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseUsageMetrics) routerreplay.UsageCost {
 	totalTokens := usage.promptTokens + usage.completionTokens
@@ -25,21 +29,9 @@ func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseU
 		return snapshot
 	}
 
-	baselineModel, baselinePricing, ok := r.Config.GetMostExpensiveFullModelPricing()
-	if !ok {
-		return snapshot
-	}
-
-	currency := selectedPricing.Currency
-	if currency == "" {
-		currency = baselinePricing.Currency
-	}
-	if currency == "" {
-		currency = "USD"
-	}
-
 	actualCost := costForResponseUsage(usage, selectedPricing)
-	baselineCost := costForResponseUsage(usage, baselinePricing)
+	currency := normalizeReplayCurrency(selectedPricing.Currency)
+	baselineModel, baselineCost := r.replayBaselineCost(ctx, usage, currency, actualCost)
 	costSavings := baselineCost - actualCost
 
 	snapshot.ActualCost = replayFloat64Ptr(actualCost)
@@ -49,6 +41,36 @@ func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseU
 	snapshot.BaselineModel = replayStringPtr(baselineModel)
 
 	return snapshot
+}
+
+// replayBaselineCost compares this request's recorded usage at the configured
+// rates of its decision candidates. Other recipes and currencies cannot inflate
+// savings. A passthrough request has only its selected model as a baseline.
+func (r *OpenAIRouter) replayBaselineCost(
+	ctx *RequestContext,
+	usage responseUsageMetrics,
+	currency string,
+	selectedCost float64,
+) (string, float64) {
+	model, cost := ctx.RequestModel, selectedCost
+	if ctx.VSRSelectedDecision == nil {
+		return model, cost
+	}
+	for _, candidate := range ctx.VSRSelectedDecision.ModelRefs {
+		pricing, ok := r.Config.GetFullModelPricing(candidate.Model)
+		if !ok || normalizeReplayCurrency(pricing.Currency) != currency {
+			continue
+		}
+		candidateCost := costForResponseUsage(usage, pricing)
+		if candidateCost > cost || (candidateCost == cost && candidate.Model < model) {
+			model, cost = candidate.Model, candidateCost
+		}
+	}
+	return model, cost
+}
+
+func normalizeReplayCurrency(currency string) string {
+	return strings.ToUpper(strings.TrimSpace(currency))
 }
 
 func replayIntPtr(value int) *int {

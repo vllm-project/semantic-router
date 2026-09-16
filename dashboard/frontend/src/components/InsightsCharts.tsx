@@ -15,6 +15,7 @@ import {
 import type {
   InsightsAggregateResponse,
   InsightsAggregateSummary,
+  InsightsAggregateCurrencySummary,
   InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
 import styles from './InsightsCharts.module.css'
@@ -165,15 +166,15 @@ function TokenBreakdownChart({ title, data }: TokenBreakdownChartProps) {
   )
 }
 
-const summaryCards = (summary: InsightsAggregateSummary) => [
+const summaryCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) => [
   {
-    label: 'Total Saved',
+    label: 'Estimated Savings',
     value: formatCurrency(summary.total_saved, summary.currency),
     accentClassName: styles.summaryValuePositive,
     cardClassName: '',
   },
   {
-    label: 'Saved %',
+    label: 'Estimated Saved %',
     value:
       summary.cost_record_count > 0 && summary.baseline_spend > 0
         ? formatPercent(summary.total_saved / summary.baseline_spend)
@@ -182,13 +183,13 @@ const summaryCards = (summary: InsightsAggregateSummary) => [
     cardClassName: styles.summaryCardHighlight,
   },
   {
-    label: 'Baseline Spend',
+    label: 'Estimated Baseline',
     value: formatCurrency(summary.baseline_spend, summary.currency),
     accentClassName: '',
     cardClassName: '',
   },
   {
-    label: 'Actual Spend',
+    label: 'Estimated Model Cost',
     value: formatCurrency(summary.actual_spend, summary.currency),
     accentClassName: styles.summaryValueNeutral,
     cardClassName: '',
@@ -197,6 +198,7 @@ const summaryCards = (summary: InsightsAggregateSummary) => [
 
 export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   const summary = aggregate.summary
+  const costGroups = summary.by_currency?.length ? summary.by_currency : [summary]
   const modelData = aggregate.model_selection
   const decisionData = aggregate.decision_distribution
   const signalData = aggregate.signal_distribution
@@ -215,25 +217,48 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
 
   return (
     <section className={styles.container}>
-      <div className={styles.summaryGrid}>
-        {summaryCards(summary).map((card) => (
-          <article
-            key={card.label}
-            className={`${styles.summaryCard} ${card.cardClassName}`.trim()}
-          >
-            <span className={styles.summaryLabel}>{card.label}</span>
-            <strong className={`${styles.summaryValue} ${card.accentClassName}`.trim()}>
-              {card.value}
-            </strong>
-          </article>
-        ))}
+      <div className={styles.estimateContext}>
+        <p className={styles.summaryHint}>Estimates from recorded tokens and configured rates.</p>
+        <details className={styles.estimateDetails}>
+          <summary>How estimates work</summary>
+          <p>
+            New records use the highest estimate among the decision’s configured candidates in the
+            same currency as baseline, using the same recorded tokens. Direct requests use the
+            selected model as baseline. Older records retain their captured baseline.
+          </p>
+          <p>
+            Infrastructure charges and invoice adjustments are excluded. Currencies are shown
+            separately; no exchange-rate conversion is applied. Requests that are not completed or
+            lack token usage, model pricing, or baseline data are excluded. Missing data is shown as
+            N/A, with the reason in record details.
+          </p>
+        </details>
       </div>
-
+      {costGroups.map((group) => (
+        <div key={group.currency || 'unavailable'}>
+          {costGroups.length > 1 ? (
+            <h3 className={styles.chartTitle}>{group.currency} estimates</h3>
+          ) : null}
+          <div className={styles.summaryGrid}>
+            {summaryCards(group).map((card) => (
+              <article
+                key={card.label}
+                className={`${styles.summaryCard} ${card.cardClassName}`.trim()}
+              >
+                <span className={styles.summaryLabel}>{card.label}</span>
+                <strong className={`${styles.summaryValue} ${card.accentClassName}`.trim()}>
+                  {card.value}
+                </strong>
+              </article>
+            ))}
+          </div>
+        </div>
+      ))}
       {summary.excluded_record_count > 0 ? (
         <p className={styles.summaryHint}>
           {summary.excluded_record_count} filtered record
-          {summary.excluded_record_count === 1 ? '' : 's'} excluded from cost totals because usage
-          or pricing data is incomplete.
+          {summary.excluded_record_count === 1 ? '' : 's'} excluded from estimates; see record
+          details for the reason.
         </p>
       ) : null}
 
