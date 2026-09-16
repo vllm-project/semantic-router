@@ -27,3 +27,27 @@ responses. The provider contract itself remains in `provider_contract.py`.
 `classify.py` serves the `prompt_guard` `http_classify` stand-in on `/classify`;
 it scores only the first window of the posted text, so the response-jailbreak E2E
 can tell a whole-response scan from a first-chunk-only one.
+
+## Shadow failure fixture
+
+`MOCK_VLLM_SHADOW_CONTROL=true` enables the `router-replay` profile's controlled
+Chat Completions fixture. Normal requests return `Hello from <model>.` through
+the existing response builder. Other profiles keep the normal request echo.
+
+`POST /debug/shadow/{scenario}/reset` accepts `{"mode":"healthy"}`,
+`{"mode":"hold"}`, or `{"mode":"malformed"}`. Scenarios are `timeout`, `malformed`,
+and `queue`, corresponding to `openai/shadow-<scenario>` models.
+`GET /debug/shadow/{scenario}` reports received and active requests, barrier
+expirations, and the last eight request IDs. A reset fails while a request is
+active.
+
+`hold` waits on an asynchronous release event, so the fixture can still serve
+primary requests and status reads. `POST /debug/shadow/{scenario}/release`
+releases the held requests and restores healthy responses. A forgotten barrier
+expires after 60 seconds with HTTP 504 and an expiration count; E2E cases reject
+that result. `malformed` returns HTTP 200 with a JSON object where the Chat
+Completions response requires a `choices` array.
+
+Run the fixture tests with the existing pytest suite, without setting
+`MOCK_VLLM_SHADOW_CONTROL` in the test process. The tests create an isolated
+controlled app and also exercise the default app with controls disabled.
