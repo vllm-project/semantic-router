@@ -7,7 +7,19 @@ outputs cost more tokens than the answer needs. It changes the conversation sent
 to the answer model; routing signals still evaluate the original request.
 Compression is lossy, so test representative questions before enabling it.
 
-## Reduce large tool outputs
+## What Problem Does It Solve?
+
+Long histories and tool outputs can fill the model's context window with text
+that is less relevant to the current question.
+
+## When to Use
+
+Enable compression when shorter context is acceptable. Preserve content that
+must reach the model unchanged, and test answer quality with your own requests.
+
+## Configuration
+
+### Reduce large tool outputs
 
 Add this fragment to the decision's `plugins`. It reduces tool outputs above
 2,000 estimated tokens toward 1,000 tokens, keeping text relevant to the task:

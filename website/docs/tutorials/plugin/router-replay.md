@@ -6,7 +6,19 @@ Use Router Replay to inspect requests in Dashboard Insights: the selected route,
 model, token usage, response, and tool trajectory. Configure storage globally;
 use the `router_replay` plugin only when a decision needs different capture settings.
 
-## Keep records across restarts
+## What Problem Does It Solve?
+
+Replay keeps request-level evidence together so you can understand a routing
+choice and follow a conversation across requests.
+
+## When to Use
+
+Enable Replay when you need request history for inspection or troubleshooting.
+Choose retention and capture limits that match the data you are allowed to keep.
+
+## Configuration
+
+### Keep records across restarts
 
 All five built-in MoM recipes, including Vault, enable PostgreSQL Replay by
 default. Local `vllm-sr serve` manages PostgreSQL and its persistent volume.
@@ -17,7 +29,7 @@ The generic `memory` store is useful for temporary inspection but loses records
 when the Router restarts or reloads configuration. Use PostgreSQL or Redis when
 you need durable history. Set retention for the data you intend to keep.
 
-## Limit capture on a decision
+### Limit capture on a decision
 
 Add this fragment to the decision's `plugins` to record bounded excerpts:
 
@@ -41,7 +53,7 @@ To opt one decision out of capture, use `configuration: {enabled: false}`.
 To change the deployment-wide default, set
 `global.services.router_replay.enabled: false`; a decision can still opt in.
 
-## Forbid capture for a recipe
+### Forbid capture for a recipe
 
 Set `routing.data_policy.replay: false` inside the recipe. This blocks all Replay
 capture for that recipe, including rejected requests and decisions that otherwise
