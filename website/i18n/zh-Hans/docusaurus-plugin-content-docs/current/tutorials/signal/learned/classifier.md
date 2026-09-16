@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "bce357c513f391824e8320267d03977794c20f76"
+  source_commit: "e500b0a1ff80177b9f0baa8979970ec1e6877338"
   source_file: "docs/tutorials/signal/learned/classifier.md"
   outdated: false
 ---
@@ -9,7 +9,7 @@ translation:
 
 ## 概览 {#overview}
 
-`classifier` 暴露本地原生序列分类器、远程序列分类器或已配置外部 LLM 的可复用标签分数。决策用必需的数值谓词测试已声明标签。
+`classifier` 暴露本地原生序列分类器、远程序列分类器或已配置外部 LLM 的可复用标签分数。决策通过数值谓词或显式绑定的工作点测试已声明标签。
 
 专用的 domain、PII、jailbreak、fact-check、KB 与 preference 信号仍是各自领域的首选接口。
 
@@ -65,7 +65,72 @@ LLM 分类器引用命名的 `global.model_catalog.external` 条目，并添加 
 
 本地分类器使用 `model_path`，并支持两个或更多已声明标签。每条规则拥有一个已准备的模型句柄，因此一个配方可以声明多个本地分类器。本地决策谓词保留 `gte: 0.5` 或更高。模型或标签变更会在激活前准备候选代；失败的候选会留下当前代可用。
 
-配方可以用 `model_bindings` 中的 `classifier.<rule name>` 条目显式选择执行；这会替换规则的 `model` 或 `model_path` 选择器。本地与序列规则支持本地序列部署或 HTTP `http_classify`，而 LLM 规则保留其计分提取指令并要求 HTTP `http_chat`。全部使用 `label_distribution.v1`，以规则的有序 `labels` 作为映射。见[进程内模型](../../../installation/runtime/in-process)。
+配方可以用 `model_bindings` 中的 `classifier.<rule name>` 条目显式选择执行；这会替换规则的 `model` 或 `model_path` 选择器。本地与序列规则支持本地序列部署或 HTTP `http_classify`，而 LLM 规则保留其计分提取指令并要求 HTTP `http_chat`。这些类型使用 `label_distribution.v1`，以规则的有序 `labels` 作为映射。见[进程内模型](../../../installation/runtime/in-process)。
+
+## 使用固定工作点的独立标签
+
+Hazard 等多标签分类器可独立于 Safety 信号运行。绑定 `label_scores.v1` 并显式指定版本 2 的工作点文件。绑定中仅需文件路径和 SHA256；模型、分词器、执行方式、标签顺序、窗口及阈值由该文件绑定。运行时不会自动发现工作点文件，相对路径从部署产物目录解析。
+
+```yaml
+routing:
+  model_bindings:
+    classifier.content-risk:
+      deployment: content-risk-cpu
+      adapter: modernbert
+      contract: label_scores.v1
+      operating_point:
+        path: operating_point.json
+        sha256: <SHA256 of the exact version-2 sidecar>
+  signals:
+    classifiers:
+      - name: content-risk
+        type: local
+        labels: [violence, criminal_activity, sexual_content, child_exploitation,
+                 hate, harassment_abuse, regulated_substances, weapons, self_harm,
+                 privacy, specialized_advice, misinformation]
+  decisions:
+    - name: weapon-risk
+      priority: 100
+      rules:
+        operator: AND
+        on_unknown: fail_request
+        conditions:
+          - type: classifier
+            name: content-risk
+            label: weapons
+      modelRefs:
+        - model: answer-model
+global:
+  model_catalog:
+    deployments:
+      content-risk-cpu:
+        provider: candle
+        artifact: models/content-risk
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+```
+
+替换 SHA256 占位符，并使用产物声明的完整有序标签。文档 token 预算必须与工作点文件一致。省略 `predicate` 时，使用该标签的固定阈值（`score >= threshold`）；可同时匹配多个标签，也可全部不匹配。显式谓词查询原始独立分数，分数不要求合计为一。单标签分类器和未绑定工作点的分类器仍要求数值谓词。
+
+支持 Candle float32 或已明确验证的 ORT 原生图。工作点文件以 SHA256 绑定图及全部外部张量文件，并声明执行提供方与物理窗口容量。更换图、转换精度或使用未声明的提供方会被拒绝。文档总预算与每个窗口的执行预算相互独立。
+
+模型只分词一次，按声明的重叠窗口覆盖原始内容 token，恢复特殊 token 并重置位置，然后对每个标签取各窗口 sigmoid 分数的最大值。文档超长、扫描不完整、产物变化或执行方式不受支持时会报错。版本 1 缺少必要的身份信息，因此不能直接使用；现有 Safety/Hazard 组合方式不变。
+
+Eval 的 `metrics.classifier.rules` 包含工作点 SHA256、实际提供方、设备、精度、token 用量、内容窗口偏移、阈值和耗时。当前执行器逐窗口运行，延迟包含完整扫描。工作点中的参考 batch size 记录校准条件，不代表运行时批大小。执行错误保持为 `Unknown`（包括在 `NOT` 下），并遵循 `on_unknown`。
+
+如需将已经选定的评分策略绑定到最终原生文件，在 `src/semantic-router` 下运行打包工具：
+
+```bash
+go run ./cmd/classifier-operating-point \
+  --model /path/to/native-model \
+  --policy /path/to/selected-score-policy.json \
+  --output /path/to/new-operating-point.json
+```
+
+工具输出工作点文件的 SHA256，保留评分和窗口设置，并核验已有权重身份。它为版本 1 补齐最终配置、分词器哈希与 Candle 执行身份；对于版本 2，则保留执行声明并核验所引用的文件。工具不选择阈值、不验证模型能力，且拒绝覆盖已有文件。请将工作点与对应的原生文件一起发布，不要跨 checkpoint 复制阈值。
 
 本地路径在 Router 内处理请求文本。`llm` 与 `sequence_classifier` 都会把该文本发给已配置的外部模型，因此请相应选择提供方与保留策略。标签与阈值必须作为同一版本化约定一起评估。完整示例见
 [`llm`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)

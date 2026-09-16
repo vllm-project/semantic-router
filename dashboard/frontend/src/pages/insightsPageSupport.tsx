@@ -4,9 +4,11 @@ import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDateTime } from '../utils/dateTime'
 import { Link } from 'react-router-dom'
+import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 
 import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
+import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
@@ -328,8 +330,14 @@ export function buildInsightsRecordSections(
       { label: 'Original model', value: record.original_model || '-' },
       { label: 'Selected model', value: record.selected_model || '-' },
       { label: 'Selection method', value: record.selection_method || '-' },
+      {
+        label: 'Selection rationale',
+        value: record.route_diagnostics?.selection_reasoning || 'Not recorded',
+      },
     ],
   })
+
+  sections.push(...buildRoutingExplanationSections(record))
 
   sections.push({
     title: 'Usage & Cost',
@@ -396,34 +404,11 @@ export function buildInsightsRecordSections(
 }
 
 export function collectSignals(signals: Signal): string[] {
-  const allSignals: string[] = []
-  const append = (key: keyof Signal) => {
-    allSignals.push(
-      ...(signals[key] ?? []).map((value) =>
-        formatRoutingMetadataValue(`x-vsr-matched-${key.replace(/_/g, '-')}`, value),
-      ),
-    )
-  }
-  const signalKeys: Array<keyof Signal> = [
-    'keyword',
-    'embedding',
-    'domain',
-    'fact_check',
-    'user_feedback',
-    'reask',
-    'preference',
-    'language',
-    'context',
-    'structure',
-    'complexity',
-    'modality',
-    'authz',
-    'jailbreak',
-    'pii',
-    'kb',
-  ]
-  signalKeys.forEach(append)
-  return allSignals
+  return ROUTER_CONFIG_EXTENSION.signals.flatMap(({ type }) =>
+    (signals[type] ?? []).map((value) =>
+      formatRoutingMetadataValue(`x-vsr-matched-${type.replace(/_/g, '-')}`, value),
+    ),
+  )
 }
 
 export function hasCompleteCostData(record: InsightsRecord) {
@@ -439,31 +424,13 @@ export function hasCompleteCostData(record: InsightsRecord) {
 }
 
 function buildSignalFields(signals: Signal): ViewField[] {
-  const signalEntries: Array<[keyof Signal, string]> = [
-    ['keyword', 'Keyword matches'],
-    ['embedding', 'Embedding matches'],
-    ['domain', 'Domain matches'],
-    ['fact_check', 'Fact check results'],
-    ['user_feedback', 'User feedback'],
-    ['reask', 'Reask'],
-    ['preference', 'Preference signals'],
-    ['language', 'Language signals'],
-    ['context', 'Context signals'],
-    ['structure', 'Structure signals'],
-    ['complexity', 'Complexity signals'],
-    ['modality', 'Modality signals'],
-    ['authz', 'Authz signals'],
-    ['jailbreak', 'Jailbreak signals'],
-    ['pii', 'PII signals'],
-    ['kb', 'Knowledge base signals'],
-  ]
-
-  return signalEntries.flatMap(([key, label]) => {
+  return ROUTER_CONFIG_EXTENSION.signals.flatMap(({ type: key, display_name }) => {
     const values = signals[key]
     if (!values?.length) {
       return []
     }
 
+    const label = `${display_name} signals`
     return [
       {
         label,
@@ -505,9 +472,11 @@ function buildGuardrailsValue(record: InsightsRecord) {
         {record.jailbreak_detected ? (
           <span className={styles.alertDanger}>
             Jailbreak: {record.jailbreak_type || 'detected'} (
-            {record.jailbreak_score_available === true && typeof record.jailbreak_confidence === 'number'
+            {record.jailbreak_score_available === true &&
+            typeof record.jailbreak_confidence === 'number'
               ? `${(record.jailbreak_confidence * 100).toFixed(1)}%`
-              : 'Score unavailable'})
+              : 'Score unavailable'}
+            )
           </span>
         ) : null}
         {record.pii_detected ? (

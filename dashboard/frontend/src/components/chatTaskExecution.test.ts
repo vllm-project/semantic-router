@@ -16,6 +16,7 @@ const probeTool: ToolDefinition = {
 describe('runPlaygroundTask', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('sends the server materialized probe request without injecting or executing tools', async () => {
@@ -59,6 +60,7 @@ describe('runPlaygroundTask', () => {
         messages: [{ role: 'user', content: 'Check the policy.' }],
         tools: [probeTool],
         temperature: 0,
+        max_completion_tokens: 512,
       },
     }
     const buildTaskTools = vi.fn(() => [probeTool])
@@ -94,8 +96,8 @@ describe('runPlaygroundTask', () => {
       messages: [{ role: 'user', content: 'Check the policy.' }],
       tools: [probeTool],
       temperature: 0,
+      max_completion_tokens: 512,
       stream: true,
-      max_completion_tokens: 2048,
     })
     expect(requestInit.headers).toMatchObject({ 'x-session-id': 'conversation-1' })
     expect(messages[messages.length - 1]).toMatchObject({
@@ -319,4 +321,197 @@ describe('runPlaygroundTask', () => {
     expect(failure.message).not.toContain(rawResponse)
     expect(messages).toHaveLength(1)
   })
+  it.each([false, true])(
+    'preserves and marks truncated output (tool follow-up: %s)',
+    async (toolFollowUp) => {
+      const response = (payloads: unknown[]) => {
+        const encoder = new TextEncoder()
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              payloads.forEach((payload) =>
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)),
+              )
+              controller.close()
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        )
+      }
+      const fetchMock = vi.fn()
+      if (toolFollowUp) {
+        fetchMock.mockResolvedValueOnce(
+          response([
+            {
+              choices: [
+                {
+                  index: 0,
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'call-1',
+                        function: { name: 'lookup_policy', arguments: '{}' },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            },
+          ]),
+        )
+      }
+      fetchMock.mockResolvedValueOnce(
+        response([
+          {
+            choices: [
+              {
+                index: 0,
+                delta: { content: 'Partial answer.', reasoning_content: 'Partial reasoning.' },
+              },
+            ],
+          },
+          { choices: [{ index: 0, delta: {}, finish_reason: 'length' }] },
+        ]),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const task: PlaygroundTask = {
+        id: 'task-incomplete',
+        conversationId: 'conversation-incomplete',
+        prompt: 'Explain.',
+        createdAt: 1,
+        requestOptions: {
+          enableClawMode: false,
+          enableWebSearch: false,
+          model: 'vllm-sr/balance',
+        },
+      }
+      let messages: Message[] = []
+      const setConversationError = vi.fn()
+      const executeTools = vi.fn(async () => [
+        { callId: 'call-1', name: 'lookup_policy', content: 'Evidence.' },
+      ])
+      await runPlaygroundTask({
+        buildTaskTools: () => [probeTool],
+        clawManagementDisabled: false,
+        clearConversationActiveTask: vi.fn(),
+        endpoint: '/api/router/v1/chat/completions',
+        executeTools,
+        expandedToolCardCount: 0,
+        generateId: () => crypto.randomUUID(),
+        getConversationMessagesSnapshot: () => messages,
+        registerAbortController: vi.fn(),
+        setConversationError,
+        setConversationThinking: vi.fn(),
+        setExpandedToolCards: vi.fn(),
+        task,
+        updateConversationMessages: (_id, updater) => {
+          messages = updater(messages)
+        },
+      })
+      expect(messages[messages.length - 1]).toMatchObject({
+        role: 'assistant',
+        content: 'Partial answer.',
+        thinkingProcess: 'Partial reasoning.',
+        isStreaming: false,
+        incomplete: expect.stringContaining('backend output limit was reached'),
+      })
+      expect(setConversationError).toHaveBeenLastCalledWith(
+        task.conversationId,
+        expect.objectContaining({
+          message: expect.stringContaining('backend output limit was reached'),
+        }),
+      )
+      expect(executeTools).toHaveBeenCalledTimes(toolFollowUp ? 1 : 0)
+      if (toolFollowUp) {
+        expect(messages[messages.length - 1]?.toolCalls).toEqual([
+          expect.objectContaining({ id: 'call-1', status: 'completed' }),
+        ])
+      }
+      for (const [, requestInit] of fetchMock.mock.calls) {
+        expect(JSON.parse(requestInit.body)).not.toHaveProperty('max_completion_tokens')
+        expect(JSON.parse(requestInit.body)).not.toHaveProperty('max_tokens')
+      }
+    },
+  )
+  it.each(['complete', 'cancel'])(
+    'does not impose a chat deadline and can %s after the old timeout',
+    async (outcome) => {
+      vi.useFakeTimers()
+      let completeResponse: (response: Response) => void = () => undefined
+      const requestState: { signal?: AbortSignal } = {}
+      const fetchMock = vi.fn((_endpoint: string, request: RequestInit) => {
+        requestState.signal = request.signal as AbortSignal
+        return new Promise<Response>((resolve, reject) => {
+          completeResponse = resolve
+          requestState.signal?.addEventListener('abort', () =>
+            reject(new DOMException('User stopped generation.', 'AbortError')),
+          )
+        })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      const task: PlaygroundTask = {
+        id: 'long-chat',
+        conversationId: 'long-conversation',
+        prompt: 'Think carefully.',
+        createdAt: 1,
+        requestOptions: { enableClawMode: false, enableWebSearch: false, model: 'vllm-sr/balance' },
+      }
+      let messages: Message[] = []
+      const controllers: AbortController[] = []
+      const setConversationError = vi.fn()
+      const clearConversationActiveTask = vi.fn()
+      const execution = runPlaygroundTask({
+        buildTaskTools: () => [],
+        clawManagementDisabled: false,
+        clearConversationActiveTask,
+        endpoint: '/api/router/v1/chat/completions',
+        executeTools: vi.fn(async () => []),
+        expandedToolCardCount: 0,
+        generateId: () => crypto.randomUUID(),
+        getConversationMessagesSnapshot: () => messages,
+        registerAbortController: (_conversationId, controller) => {
+          if (controller) controllers.push(controller)
+        },
+        setConversationError,
+        setConversationThinking: vi.fn(),
+        setExpandedToolCards: vi.fn(),
+        task,
+        updateConversationMessages: (_id, updater) => {
+          messages = updater(messages)
+        },
+      })
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(requestState.signal?.aborted).toBe(false)
+      const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1].body))
+      expect(requestBody).not.toHaveProperty('max_tokens')
+      expect(requestBody).not.toHaveProperty('max_completion_tokens')
+      if (outcome === 'cancel') controllers[0].abort()
+      else
+        completeResponse(
+          new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  index: 0,
+                  message: { content: 'Completed after thinking.' },
+                  finish_reason: 'stop',
+                },
+              ],
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+        )
+      await execution
+      if (outcome === 'cancel') expect(requestState.signal?.aborted).toBe(true)
+      else
+        expect(messages[messages.length - 1]).toMatchObject({
+          content: 'Completed after thinking.',
+          isStreaming: false,
+        })
+      expect(setConversationError).toHaveBeenCalledTimes(1)
+      expect(clearConversationActiveTask).toHaveBeenCalledWith(task.conversationId, task.id)
+    },
+  )
 })

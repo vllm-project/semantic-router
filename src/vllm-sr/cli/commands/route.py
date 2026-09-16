@@ -15,6 +15,7 @@ import requests
 from cli.chat_client import chat_completions_url, resolve_chat_base_url
 from cli.commands.common import exit_with_logged_error
 from cli.commands.eval_rendering import render_route_preview_summary
+from cli.commands.route_probe import delivery_assertion
 from cli.router_management_client import RouterManagementClient
 from cli.terminal import echo
 from cli.url_display import redact_url
@@ -325,6 +326,8 @@ def _probe_assertions(
             "passed": response.status_code == expected_status,
         }
     ]
+    if HTTPStatus.OK <= expected_status < HTTPStatus.MULTIPLE_CHOICES:
+        assertions.append(delivery_assertion(response_body))
     expectations = {
         "x-vsr-selected-recipe": expected_recipe,
         "x-vsr-selected-decision": expected_decision,
@@ -383,6 +386,12 @@ def _probe_assertions(
     help="Environment variable containing the bearer token; omitted when unset.",
 )
 @click.option("--temperature", type=float, default=None)
+@click.option(
+    "--max-completion-tokens",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Completion token budget, including reasoning; omitted uses the backend default.",
+)
 @click.option("--timeout", type=float, default=120.0, show_default=True)
 @click.option(
     "--target", default=None, help="Deployment target used for URL resolution."
@@ -411,6 +420,7 @@ def probe(
     base_url: str | None,
     api_key_env: str,
     temperature: float | None,
+    max_completion_tokens: int | None,
     timeout: float,
     target: str | None,
     debug: bool,
@@ -421,7 +431,7 @@ def probe(
     expect_selected_model: str | None,
     expect_response_model: str | None,
 ) -> None:
-    """Send one real routed request and emit a machine-readable evidence receipt."""
+    """Probe a real route and assert complete assistant delivery for expected 2xx."""
 
     if (prompt is None) == (messages_json is None):
         raise ValueError("Provide exactly one of --prompt or --messages")
@@ -439,6 +449,8 @@ def probe(
     payload: dict[str, Any] = {"model": model, "messages": messages}
     if temperature is not None:
         payload["temperature"] = temperature
+    if max_completion_tokens is not None:
+        payload["max_completion_tokens"] = max_completion_tokens
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if debug:
@@ -482,6 +494,8 @@ def probe(
         },
         "assertions": assertions,
     }
+    if max_completion_tokens is not None:
+        receipt["request"]["max_completion_tokens"] = max_completion_tokens
     click.echo(json.dumps(receipt, indent=2, ensure_ascii=False, sort_keys=True))
     if not passed:
         raise click.exceptions.Exit(2)

@@ -678,7 +678,9 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     }
     response.json.return_value = {
         "model": "Qwen/Qwen3.8-Flash-Next",
-        "choices": [{"message": {"content": "ok"}}],
+        "choices": [
+            {"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}
+        ],
     }
     post = MagicMock(return_value=response)
     monkeypatch.setattr(requests, "post", post)
@@ -693,6 +695,8 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
             "http://localhost:8801",
             "--api-key-env",
             "PROBE_TOKEN",
+            "--max-completion-tokens",
+            "8192",
             "--expect-recipe",
             "balanced",
             "--expect-decision",
@@ -712,6 +716,8 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     assert receipt["response"]["routing"]["x-vsr-selected-model"] == "qwen"
     assert "probe-secret" not in result.output
     assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer probe-secret"
+    assert post.call_args.kwargs["json"]["max_completion_tokens"] == 8192
+    assert receipt["request"]["max_completion_tokens"] == 8192
 
 
 def test_route_probe_accepts_openai_v1_base_url(
@@ -720,7 +726,11 @@ def test_route_probe_accepts_openai_v1_base_url(
     response = MagicMock()
     response.status_code = 200
     response.headers = {}
-    response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+    response.json.return_value = {
+        "choices": [
+            {"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}
+        ]
+    }
     post = MagicMock(return_value=response)
     monkeypatch.setattr(requests, "post", post)
 
@@ -736,6 +746,8 @@ def test_route_probe_accepts_openai_v1_base_url(
 
     assert result.exit_code == 0, result.output
     assert post.call_args.args[0] == "http://localhost:8801/v1/chat/completions"
+    assert "max_completion_tokens" not in post.call_args.kwargs["json"]
+    assert "max_completion_tokens" not in json.loads(result.output)["request"]
 
 
 def test_route_probe_exits_two_when_an_assertion_fails(
@@ -797,6 +809,257 @@ def test_route_probe_exits_two_when_response_model_is_not_selected_backend(
     }
 
 
+@pytest.mark.parametrize(
+    ("message", "finish_reason", "expected_kind"),
+    [
+        (
+            {"content": "Final answer", "reasoning_content": "private reasoning"},
+            "stop",
+            "text",
+        ),
+        ({"content": [{"type": "text", "text": "Final answer"}]}, "stop", "text"),
+        ({"content": None, "refusal": "I cannot help with that."}, "stop", "refusal"),
+        ({"refusal": "I cannot help with that."}, "content_filter", "refusal"),
+        (
+            {"content": [{"type": "refusal", "refusal": "Cannot comply."}]},
+            "stop",
+            "refusal",
+        ),
+        (
+            {
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "weather", "arguments": "{}"},
+                    }
+                ]
+            },
+            "tool_calls",
+            "tool_calls",
+        ),
+        (
+            {"function_call": {"name": "weather", "arguments": "{}"}},
+            "function_call",
+            "function_call",
+        ),
+        (
+            {
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "weather", "arguments": "{}"},
+                    }
+                ]
+            },
+            "stop",
+            "tool_calls",
+        ),
+    ],
+)
+def test_route_probe_accepts_complete_assistant_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    message: dict[str, Any],
+    finish_reason: str,
+    expected_kind: str,
+) -> None:
+    response = MagicMock(status_code=200, headers={})
+    response.json.return_value = {
+        "choices": [
+            {
+                "message": {"role": "assistant", **message},
+                "finish_reason": finish_reason,
+            }
+        ]
+    }
+    monkeypatch.setattr(requests, "post", MagicMock(return_value=response))
+
+    result = CliRunner().invoke(
+        route_probe_command,
+        ["--prompt", "hello", "--base-url", "http://localhost:8801"],
+    )
+
+    assert result.exit_code == 0, result.output
+    receipt = json.loads(result.output)
+    delivery = next(
+        assertion
+        for assertion in receipt["assertions"]
+        if assertion["field"] == "response.body.delivery"
+    )
+    assert delivery["passed"] is True
+    assert delivery["actual"]["choices"] == [
+        {"index": 0, "finish_reason": finish_reason, "delivery": expected_kind}
+    ]
+    assert "private reasoning" not in json.dumps(delivery)
+
+
+@pytest.mark.parametrize(
+    ("message", "finish_reason", "expected_error"),
+    [
+        (
+            {"content": None, "reasoning_content": "Still thinking"},
+            "length",
+            "truncated",
+        ),
+        (
+            {"content": None, "reasoning_content": "Thinking finished"},
+            "stop",
+            "No final assistant",
+        ),
+        ({"content": "Partial answer"}, "length", "truncated"),
+        ({"content": "Answer"}, None, "terminal finish reason"),
+        ({"content": "Answer"}, [], "terminal finish reason"),
+        ({"content": "Partial answer"}, "content_filter", "without a refusal"),
+        ({"content": "   "}, "stop", "No final assistant"),
+        (
+            {"role": "user", "content": "Not an assistant answer"},
+            "stop",
+            "No final assistant",
+        ),
+        ({"tool_calls": [{}]}, "tool_calls", "No final assistant"),
+        (
+            {"function_call": {"name": "weather", "arguments": "{broken"}},
+            "function_call",
+            "No final assistant",
+        ),
+    ],
+)
+def test_route_probe_rejects_incomplete_assistant_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    message: dict[str, Any],
+    finish_reason: Any,
+    expected_error: str,
+) -> None:
+    response = MagicMock(status_code=200, headers={})
+    response.json.return_value = {
+        "choices": [
+            {
+                "message": {"role": "assistant", **message},
+                "finish_reason": finish_reason,
+            }
+        ]
+    }
+    monkeypatch.setattr(requests, "post", MagicMock(return_value=response))
+
+    result = CliRunner().invoke(
+        route_probe_command,
+        ["--prompt", "hello", "--base-url", "http://localhost:8801"],
+    )
+
+    assert result.exit_code == 2, result.output
+    receipt = json.loads(result.output)
+    assert receipt["passed"] is False
+    delivery = next(
+        assertion
+        for assertion in receipt["assertions"]
+        if assertion["field"] == "response.body.delivery"
+    )
+    assert delivery["passed"] is False
+    assert delivery["actual"]["choices"][0]["finish_reason"] == finish_reason
+    assert expected_error in delivery["actual"]["choices"][0]["error"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "not a completion",
+        {},
+        {"choices": []},
+        {"choices": [None]},
+        {"choices": "invalid"},
+    ],
+)
+def test_route_probe_rejects_missing_or_malformed_choices(
+    monkeypatch: pytest.MonkeyPatch, body: Any
+) -> None:
+    response = MagicMock(status_code=200, headers={})
+    response.json.return_value = body
+    monkeypatch.setattr(requests, "post", MagicMock(return_value=response))
+
+    result = CliRunner().invoke(
+        route_probe_command,
+        ["--prompt", "hello", "--base-url", "http://localhost:8801"],
+    )
+
+    assert result.exit_code == 2, result.output
+    assert json.loads(result.output)["passed"] is False
+
+
+def test_route_probe_requires_delivery_in_every_choice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = MagicMock(status_code=200, headers={})
+    response.json.return_value = {
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": "Complete"},
+                "finish_reason": "stop",
+            },
+            {
+                "message": {"role": "assistant", "content": "Partial"},
+                "finish_reason": "length",
+            },
+        ]
+    }
+    monkeypatch.setattr(requests, "post", MagicMock(return_value=response))
+
+    result = CliRunner().invoke(
+        route_probe_command,
+        ["--prompt", "hello", "--base-url", "http://localhost:8801"],
+    )
+
+    assert result.exit_code == 2, result.output
+    delivery = next(
+        item
+        for item in json.loads(result.output)["assertions"]
+        if item["field"] == "response.body.delivery"
+    )
+    assert "error" not in delivery["actual"]["choices"][0]
+    assert delivery["actual"]["choices"][1]["finish_reason"] == "length"
+
+
+@pytest.mark.parametrize("status", [403, 429, 503])
+def test_route_probe_expected_error_does_not_require_assistant_delivery(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    response = MagicMock(status_code=status, headers={})
+    response.json.return_value = {"error": {"message": "Expected rejection"}}
+    monkeypatch.setattr(requests, "post", MagicMock(return_value=response))
+
+    result = CliRunner().invoke(
+        route_probe_command,
+        [
+            "--prompt",
+            "hello",
+            "--base-url",
+            "http://localhost:8801",
+            "--expect-status",
+            str(status),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    receipt = json.loads(result.output)
+    assert receipt["passed"] is True
+    assert [item["field"] for item in receipt["assertions"]] == ["status"]
+
+
+@pytest.mark.parametrize("budget", ["0", "-1", "invalid"])
+def test_route_probe_rejects_invalid_completion_budget_before_request(
+    monkeypatch: pytest.MonkeyPatch, budget: str
+) -> None:
+    post = MagicMock()
+    monkeypatch.setattr(requests, "post", post)
+
+    result = CliRunner().invoke(
+        route_probe_command, ["--prompt", "hello", "--max-completion-tokens", budget]
+    )
+
+    assert result.exit_code == 2
+    post.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # Integration tests: real HTTP server, no mocks
 # ---------------------------------------------------------------------------
@@ -808,7 +1071,15 @@ def test_route_probe_exits_two_when_response_model_is_not_selected_backend(
         {
             "status": 200,
             "headers": {"x-vsr-selected-model": "qwen"},
-            "body": {"model": "Qwen/Qwen3.8-Flash-Next", "choices": []},
+            "body": {
+                "model": "Qwen/Qwen3.8-Flash-Next",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "Hello!"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
         }
     ],
     indirect=True,
@@ -832,6 +1103,61 @@ def test_route_probe_integration_verifies_router_and_upstream_models(
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["passed"] is True
+
+
+@pytest.mark.parametrize(
+    "router_server",
+    [
+        {
+            "status": 200,
+            "headers": {
+                "x-vsr-selected-recipe": "balance",
+                "x-vsr-selected-decision": "complex",
+            },
+            "body": {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "reasoning_content": "Still reasoning after all tokens",
+                        },
+                        "finish_reason": "length",
+                    }
+                ],
+                "usage": {"completion_tokens": 2048},
+            },
+        }
+    ],
+    indirect=True,
+)
+def test_route_probe_http_success_with_reasoning_only_is_failed_delivery(
+    router_server: str,
+) -> None:
+    result = CliRunner().invoke(
+        route_probe_command,
+        [
+            "--prompt",
+            "Explain the proof",
+            "--base-url",
+            router_server,
+            "--expect-recipe",
+            "balance",
+            "--expect-decision",
+            "complex",
+        ],
+    )
+
+    assert result.exit_code == 2, result.output
+    receipt = json.loads(result.output)
+    assert receipt["response"]["status"] == 200
+    assert receipt["response"]["body"]["usage"]["completion_tokens"] == 2048
+    failed = [
+        assertion for assertion in receipt["assertions"] if not assertion["passed"]
+    ]
+    assert len(failed) == 1
+    assert failed[0]["field"] == "response.body.delivery"
+    assert failed[0]["actual"]["choices"][0]["finish_reason"] == "length"
 
 
 @pytest.mark.parametrize(

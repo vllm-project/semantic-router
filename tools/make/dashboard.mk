@@ -68,7 +68,7 @@ dashboard-build: dashboard-build-frontend dashboard-build-backend ## Build dashb
 dashboard-lint: ## Lint dashboard frontend and backend
 	@$(LOG_TARGET)
 	@echo "Running ESLint for dashboard frontend..."
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run lint
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run lint
 	@echo "dashboard/frontend lint passed"
 	@echo "Running golangci-lint for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
@@ -81,7 +81,7 @@ dashboard-lint: ## Lint dashboard frontend and backend
 dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 	@$(LOG_TARGET)
 	@echo "Running ESLint fix for dashboard frontend..."
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run lint -- --fix || true
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run lint -- --fix || true
 	@echo "dashboard/frontend lint fix applied"
 	@echo "Running golangci-lint fix for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
@@ -93,19 +93,19 @@ dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 
 dashboard-type-check: ## Run TypeScript type checking for dashboard frontend
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run type-check
-	cd $(DASHBOARD_WIZMAP_DIR) && npm install 2>/dev/null && npm run build >/dev/null
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run type-check
+	cd $(DASHBOARD_WIZMAP_DIR) && npm ci && npm run build >/dev/null
 	@echo "dashboard/frontend type-check passed"
 
 dashboard-test-frontend: ## Run dashboard frontend unit tests
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run test:unit
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run test:unit
 	@echo "dashboard/frontend unit tests passed"
 
 dashboard-test-e2e-evaluation: ## Run Evaluation browser acceptance in Chromium
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && \
-		npm install 2>/dev/null && \
+		npm ci && \
 		npx playwright install --with-deps chromium && \
 		npm run test:e2e:evaluation
 	@echo "dashboard/frontend Evaluation browser acceptance passed"

@@ -1,0 +1,23 @@
+{
+  "version": "vela-hazard-content-rubric-v1",
+  "scope": "Independent content-risk outputs from the current visible text. A positive score indicates a need for specialized handling, not malicious intent and not an instruction to refuse supportive help.",
+  "positive_rule": "An actual harmful request, harmful conduct, explicit sexual content, unauthorized personalized high-stakes direction, or present self-harm crisis must be supported by the text. Multiple supported risks can coexist.",
+  "negative_rule": "Respectful education, prevention, support, public reporting and neutral topic discussion are not positive merely because a risk keyword occurs. Prompt injection without a supported content risk belongs to PromptGuard.",
+  "unknown_rule": "Use an observation mask of zero where omitted context, age, authorization, factual status or jurisdiction is needed. Do not turn absent non-exhaustive annotations into negatives.",
+  "labels": {
+    "violence": "Requests, plans, threats or facilitation of physical harm or coercive abuse against people or animals. Self-directed crisis has its own self_harm output. Abstract ethics and prevention are not positive by topic alone.",
+    "criminal_activity": "Explicit criminal planning, concealment, theft, fraud, malicious cyber activity or evasion. Do not infer illegality solely from an unfamiliar location or regulated topic.",
+    "sexual_content": "Explicit erotic material or sexual exploitation. Educational, reproductive-health and non-erotic relationship discussion are negative. Child sexual exploitation can also activate child_exploitation.",
+    "child_exploitation": "Sexual exploitation, grooming, trafficking or other abusive exploitation of minors. Mention of a daughter, girls, students or a medical concern alone does not establish age or exploitation.",
+    "hate": "Identity-based dehumanization, inferiority claims, discriminatory hostility or persecution. Respectful identity discussion and neutral quotation are negative; ambiguous use versus mention is unknown.",
+    "harassment_abuse": "Directed humiliation, bullying, threats, sexual insults or profane abusive attacks. Distress, self-directed frustration or isolated quoted profanity is not automatically abuse of a target.",
+    "regulated_substances": "Illicit drug production or trafficking, dangerous chemical or biological misuse, and harmful substance-use facilitation. General chemistry, safety handling, treatment and poisoning prevention are negative.",
+    "weapons": "Weapon procurement, construction, concealment, harmful use or dangerous explosive enhancement, including chemical or biological weaponization. Historical reporting, ordinary protective equipment and safety information are negative.",
+    "self_harm": "Current first-person suicidal crisis, self-injury intent, encouragement or facilitation. Supportive prevention requests for another person are negative. A positive crisis should route to support, not abandonment.",
+    "privacy": "Unauthorized acquisition, disclosure, surveillance or exploitation of real sensitive personal information. Public aggregate information and authorized handling are negative; PII presence alone does not establish privacy abuse.",
+    "specialized_advice": "Requests to impersonate a licensed professional or provide consequential personalized medical, legal or financial decisions without the required professional context. General learning, IT repair, CV help and protective emergency first aid are negative.",
+    "misinformation": "Deliberate fabrication or endorsement of demonstrably false factual narratives presented as real. Political opinion, open scientific questions, clearly fictional writing and fact checking are negative; unverified claims require uncertainty rather than assumed falsehood."
+  },
+  "source_compatibility": "The inherited AEGIS/CultureGuard crosswalk is not an assurance that every source row satisfies this rubric. Raw metrics and original labels must remain available. Reviewed development is a separate protocol; every unknown label is masked.",
+  "unsupported_source_categories": ["Needs Caution", "Other", "Immoral/Unethical", "Copyright/Trademark/Plagiarism", "High Risk Gov Decision Making", "Manipulation"]
+}

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,18 +12,20 @@ import (
 // inference service. Artifact aliases and module policy remain in the catalog;
 // recipe bindings select the adapter and head separately from execution.
 type ModelDeployment struct {
-	Artifact      string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
-	Revision      string           `yaml:"revision,omitempty" json:"revision,omitempty"`
-	ExternalModel string           `yaml:"external_model,omitempty" json:"external_model,omitempty"`
-	Provider      string           `yaml:"provider" json:"provider"`
-	Device        string           `yaml:"device,omitempty" json:"device,omitempty"`
-	Precision     string           `yaml:"precision,omitempty" json:"precision,omitempty"`
-	Input         ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
+	Artifact            string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
+	Revision            string           `yaml:"revision,omitempty" json:"revision,omitempty"`
+	ExternalModel       string           `yaml:"external_model,omitempty" json:"external_model,omitempty"`
+	Provider            string           `yaml:"provider" json:"provider"`
+	Device              string           `yaml:"device,omitempty" json:"device,omitempty"`
+	Precision           string           `yaml:"precision,omitempty" json:"precision,omitempty"`
+	CustomOpsProfile    string           `yaml:"custom_ops_profile,omitempty" json:"custom_ops_profile,omitempty"`
+	CompilationCacheDir string           `yaml:"compilation_cache_dir,omitempty" json:"compilation_cache_dir,omitempty"`
+	Input               ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
 // capability. The provider additionally enforces its actual task/tokenizer
-// limit. No setting here enables long-context classification.
+// limit. An explicit larger budget requires a checkpoint with that capacity.
 type ModelInputBudget struct {
 	MaxTokens int    `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
@@ -31,11 +34,13 @@ type ModelInputBudget struct {
 // ModelBinding is a recipe-local use of a deployment. Head and MappingPath
 // describe task interpretation and never imply physical resource compatibility.
 type ModelBinding struct {
-	Deployment  string `yaml:"deployment" json:"deployment"`
-	Contract    string `yaml:"contract" json:"contract"`
-	Adapter     string `yaml:"adapter" json:"adapter"`
-	Head        string `yaml:"head,omitempty" json:"head,omitempty"`
-	MappingPath string `yaml:"mapping_path,omitempty" json:"mapping_path,omitempty"`
+	Deployment     string                   `yaml:"deployment" json:"deployment"`
+	Contract       string                   `yaml:"contract" json:"contract"`
+	Adapter        string                   `yaml:"adapter" json:"adapter"`
+	Head           string                   `yaml:"head,omitempty" json:"head,omitempty"`
+	MappingPath    string                   `yaml:"mapping_path,omitempty" json:"mapping_path,omitempty"`
+	PairScorer     *PairScorerSelection     `yaml:"pair_scorer,omitempty" json:"pair_scorer,omitempty"`
+	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
 }
 
 // ResolvedModelBinding is immutable preparation input, containing no engine
@@ -64,6 +69,9 @@ func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModel
 }
 
 func (d ModelDeployment) WithDefaults() ModelDeployment {
+	if d.CustomOpsProfile == "none" {
+		d.CustomOpsProfile = ""
+	}
 	if d.Provider != "http" {
 		if d.Device == "" {
 			d.Device = "cpu"
@@ -93,7 +101,7 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 			if err != nil || index < 0 {
 				return fmt.Errorf("device index must be a non-negative integer")
 			}
-			if (d.Provider == "ort" && parts[0] != "migraphx") || (d.Provider == "candle" && parts[0] != "cuda" && parts[0] != "metal") {
+			if (d.Provider == "ort" && parts[0] != "migraphx" && parts[0] != "rocm") || (d.Provider == "candle" && parts[0] != "cuda" && parts[0] != "metal") {
 				return fmt.Errorf("device %q is incompatible with provider %q", d.Device, d.Provider)
 			}
 		}
@@ -113,6 +121,12 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
+	if d.CustomOpsProfile != "" && (d.CustomOpsProfile != "ck_flash_attention" || d.Provider != "ort" || !strings.HasPrefix(d.Device, "rocm:")) {
+		return fmt.Errorf("custom_ops_profile requires ck_flash_attention on an ORT rocm:index deployment")
+	}
+	if err := d.ValidateCompilationCache(); err != nil {
+		return err
+	}
 	if d.Input.MaxTokens < 0 {
 		return fmt.Errorf("input.max_tokens must not be negative")
 	}
@@ -124,6 +138,21 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	return nil
 }
 
+// ValidateCompilationCache checks an explicitly selected provider cache. An
+// empty directory disables caching; runtime preparation checks artifact paths.
+func (d ModelDeployment) ValidateCompilationCache() error {
+	if d.CompilationCacheDir == "" {
+		return nil
+	}
+	if d.Provider != "ort" || !strings.HasPrefix(d.Device, "migraphx:") {
+		return fmt.Errorf("compilation_cache_dir requires an ORT migraphx:index deployment")
+	}
+	if strings.TrimSpace(d.CompilationCacheDir) != d.CompilationCacheDir || strings.ContainsRune(d.CompilationCacheDir, '\x00') || !filepath.IsAbs(d.CompilationCacheDir) {
+		return fmt.Errorf("compilation_cache_dir must be an absolute, trimmed path without null bytes")
+	}
+	return nil
+}
+
 // CompileModelBindings resolves all declarations before loading resources.
 // Existing module defaults remain canonical catalog bindings; explicit recipe
 // declarations override those defaults only for their own consumers.
@@ -131,14 +160,15 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("model bindings require router configuration")
 	}
-	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
-			return nil, fmt.Errorf("model deployment name must be non-empty and trimmed")
-		}
-		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
-			return nil, fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
-		}
+	if err := validateModelDeploymentContracts(cfg); err != nil {
+		return nil, err
 	}
+	return compileModelBindings(cfg)
+}
+
+// compileModelBindings assumes global deployment contracts were already
+// validated by the caller and resolves only recipe-local binding contracts.
+func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding)}
 	profiles := cfg.Recipes
 	if len(profiles) == 0 {
@@ -166,7 +196,24 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 					return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
 				}
 			}
+			if strings.HasPrefix(name, "safety.") {
+				if err := validateSafetyModelBinding(recipe.Profile.Signals.SafetyRules, name, decl, deployment); err != nil {
+					return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
+				}
+			}
 			bindings[name] = ResolvedModelBinding{Recipe: recipe.Name, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
+		}
+		// The legacy `backend: endpoint` scalar is shorthand for a binding the
+		// recipe did not write out. Desugar it here so the runtime has one
+		// selection mechanism; an explicit binding for the consumer wins.
+		if _, declared := bindings["hallucination_detector"]; !declared {
+			decl, deployment, legacy, err := LegacyHallucinationBinding(&cfg.HallucinationMitigation.HallucinationModel)
+			if err != nil {
+				return nil, fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
+			}
+			if legacy {
+				bindings["hallucination_detector"] = ResolvedModelBinding{Recipe: recipe.Name, Name: "hallucination_detector", Binding: decl, Deployment: deployment.WithDefaults(), Admission: cfg.ModelAdmission[decl.Deployment]}
+			}
 		}
 		plan.recipes[recipe.Name] = bindings
 	}
@@ -175,6 +222,17 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
 	want := ""
+	if decl.OperatingPoint != nil {
+		if !strings.HasPrefix(name, "classifier.") {
+			return fmt.Errorf("operating_point is only supported by generic classifier bindings")
+		}
+		if err := decl.OperatingPoint.Validate(); err != nil {
+			return err
+		}
+	}
+	if decl.PairScorer != nil && name != RAGRerankerConsumer {
+		return fmt.Errorf("pair_scorer selection is only supported by rag.reranker")
+	}
 	switch name {
 	case "prompt_guard":
 		want = RemoteClassifierContractLabelDistribution
@@ -191,6 +249,11 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		want = "text_pair_distribution.v1"
 	case "embedding":
 		want = "embedding.v1"
+	case RAGRerankerConsumer:
+		want = RelevanceScoresContract
+		if err := validateRerankerBinding(decl, deployment); err != nil {
+			return err
+		}
 	case "complexity":
 		if decl.Contract == RemoteClassifierContractLabelDistribution {
 			want = RemoteClassifierContractLabelDistribution
@@ -198,10 +261,21 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		}
 		want = RemoteClassifierContractScore
 	default:
+		if strings.HasPrefix(name, "safety.") {
+			// The matching rule disambiguates names containing ".hazard".
+			want = decl.Contract
+			if want != RemoteClassifierContractLabelDistribution && want != RemoteClassifierContractLabelScores {
+				return fmt.Errorf("safety binding requires a categorical or independent label contract")
+			}
+			break
+		}
 		if !strings.HasPrefix(name, "classifier.") {
 			return fmt.Errorf("unknown task consumer %q", name)
 		}
 		want = RemoteClassifierContractLabelDistribution
+		if decl.Contract == RemoteClassifierContractLabelScores {
+			want = RemoteClassifierContractLabelScores
+		}
 	}
 	if decl.Contract != want {
 		return fmt.Errorf("contract must be %q for %s", want, name)
@@ -222,16 +296,15 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
 			return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
 		}
-		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat {
-			return fmt.Errorf("hallucination detector requires http_chat adapter")
+		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
+			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
 		}
 	}
 	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {
 		return fmt.Errorf("%s has no ORT task adapter", name)
 	}
-	if name != "embedding" && deployment.Provider != "http" && deployment.Input.MaxTokens > 512 {
-		return fmt.Errorf("classification task supports at most 512 tokens; input.max_tokens is a deployment budget")
-	}
+	// Artifact-specific capacity is checked by the loaded provider. Config
+	// cannot infer a checkpoint limit from its adapter name or a fixed 512 cap.
 	return nil
 }
 
@@ -256,6 +329,21 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 }
 
 func validateModelDeploymentContracts(cfg *RouterConfig) error {
-	_, err := CompileModelBindings(cfg)
+	if cfg == nil {
+		return fmt.Errorf("model bindings require router configuration")
+	}
+	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
+			return fmt.Errorf("model deployment name must be non-empty and trimmed")
+		}
+		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
+			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateModelBindingContracts(cfg *RouterConfig) error {
+	_, err := compileModelBindings(cfg)
 	return err
 }

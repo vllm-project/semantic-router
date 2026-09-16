@@ -1090,9 +1090,8 @@ spec:
                             description: |-
                               Backend names a remote token classifier speaking token_spans.v1. Its
                               absence keeps local PII inference. The local selectors this replaces are
-                              model_id, use_modernbert and use_cpu above; the router also refuses a
-                              backend combined with the use_mmbert_32k selector that this CRD does not
-                              expose, so that combination cannot be written here.
+                              model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit
+                              token windows are only supported by the local mmbert32k model.
                             properties:
                               contract:
                                 description: |-
@@ -1128,6 +1127,12 @@ spec:
                             - model
                             - protocol
                             type: object
+                          max_sequence_length:
+                            description: |-
+                              MaxSequenceLength is the total tokenized input budget, including special
+                              tokens. Omission or zero preserves the 512-token legacy limit.
+                            minimum: 0
+                            type: integer
                           model_id:
                             type: string
                           on_error:
@@ -1148,14 +1153,55 @@ spec:
                             type: string
                           use_cpu:
                             type: boolean
+                          use_mmbert_32k:
+                            description: UseMmBERT32K selects the local model that
+                              supports token windows.
+                            type: boolean
                           use_modernbert:
                             type: boolean
+                          window:
+                            description: |-
+                              Window scans original content tokens with explicit overlap. Omission or
+                              null leaves window selection unchanged; no CRD defaults are injected.
+                            nullable: true
+                            properties:
+                              overlap:
+                                description: Overlap counts content tokens shared
+                                  by consecutive windows.
+                                minimum: 0
+                                type: integer
+                              size:
+                                description: Size is the inference window budget,
+                                  including special tokens.
+                                minimum: 1
+                                type: integer
+                            required:
+                            - size
+                            type: object
+                            x-kubernetes-validations:
+                            - message: window.overlap must be smaller than window.size
+                              rule: '!has(self.overlap) || self.overlap < self.size'
                         type: object
                         x-kubernetes-validations:
                         - message: PII reads token_spans.v1 only; omit backend.contract
                             or set it to token_spans.v1
                           rule: '!has(self.backend) || !has(self.backend.contract)
                             || self.backend.contract == ''token_spans.v1'''
+                        - message: backend cannot be combined with local use_mmbert_32k
+                          rule: '!has(self.backend) || !has(self.use_mmbert_32k) ||
+                            !self.use_mmbert_32k'
+                        - message: max_sequence_length requires local use_mmbert_32k
+                          rule: '!has(self.max_sequence_length) || self.max_sequence_length
+                            == 0 || (!has(self.backend) && has(self.use_mmbert_32k)
+                            && self.use_mmbert_32k)'
+                        - message: window requires local use_mmbert_32k
+                          rule: '!has(self.window) || (!has(self.backend) && has(self.use_mmbert_32k)
+                            && self.use_mmbert_32k)'
+                        - message: window.size must not exceed max_sequence_length
+                            (512 when omitted or zero)
+                          rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
+                            && self.max_sequence_length > 0 ? self.max_sequence_length
+                            : 512)'
                     type: object
                   complexity_model:
                     description: |-
@@ -1330,6 +1376,41 @@ spec:
                           description: Name of the complexity rule (e.g., "code-complexity",
                             "reasoning-complexity")
                           type: string
+                        prototype_scoring:
+                          description: |-
+                            PrototypeScoring replaces the family prototype-scoring configuration for
+                            this rule. Absence inherits the family; a present object is a complete
+                            override, including an empty object. Defaults remain Router-owned.
+                          properties:
+                            best_weight:
+                              description: BestWeight weights the best prototype against
+                                the top-M mean.
+                              pattern: ^-?[0-9]+(\.[0-9]+)?$
+                              type: string
+                            cluster_similarity_threshold:
+                              description: |-
+                                ClusterSimilarityThreshold is the clustering similarity threshold.
+                                Stored as a numeric string, like other fractional operator config fields.
+                              pattern: ^-?[0-9]+(\.[0-9]+)?$
+                              type: string
+                            enabled:
+                              description: Enabled controls prototype clustering.
+                                False retains every candidate.
+                              type: boolean
+                            margin_threshold:
+                              description: MarginThreshold is the minimum winner-versus-runner-up
+                                score margin.
+                              pattern: ^-?[0-9]+(\.[0-9]+)?$
+                              type: string
+                            max_prototypes:
+                              description: MaxPrototypes caps the number of cluster
+                                representatives.
+                              type: integer
+                            top_m:
+                              description: TopM is the number of highest-scoring prototypes
+                                included in the mean.
+                              type: integer
+                          type: object
                         threshold:
                           description: |-
                             Threshold for the local prototype-scoring path (0.0-1.0), stored as a
@@ -1520,9 +1601,9 @@ spec:
                             - openai_compatible
                             type: string
                           enable_soft_matching:
-                            default: true
-                            description: EnableSoftMatching enables soft matching
-                              mode
+                            default: false
+                            description: EnableSoftMatching allows below-threshold
+                              matches when no rule meets its threshold.
                             type: boolean
                           min_score_threshold:
                             default: "0.5"
@@ -1798,8 +1879,15 @@ spec:
                         type: boolean
                       jailbreak_mapping_path:
                         type: string
+                      max_sequence_length:
+                        description: |-
+                          MaxSequenceLength limits the total tokenized input, including special
+                          tokens. Omission or zero retains the 512-token budget. The model loader
+                          validates the requested budget against the loaded model's capacity.
+                        minimum: 0
+                        type: integer
                       model_id:
-                        default: models/mmbert32k-jailbreak-detector-merged
+                        default: models/Vela-1.0-Encoder-307M-Guard
                         type: string
                       on_error:
                         description: |-
@@ -1830,7 +1918,7 @@ spec:
                         - http_classify
                         type: string
                       threshold:
-                        default: "0.7"
+                        default: "0.5"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
                           as string to avoid float precision issues.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
@@ -1846,7 +1934,44 @@ spec:
                         - candle
                         - mmbert32k
                         type: string
+                      window:
+                        description: |-
+                          Window enables explicit scanning of all input tokens. Omission or null
+                          keeps whole-input inference. Only the local mmbert32k variant supports it.
+                        nullable: true
+                        properties:
+                          overlap:
+                            description: Overlap counts content tokens shared by consecutive
+                              windows.
+                            minimum: 0
+                            type: integer
+                          size:
+                            description: Size is the inference window budget, including
+                              special tokens.
+                            minimum: 1
+                            type: integer
+                        required:
+                        - size
+                        type: object
+                        x-kubernetes-validations:
+                        - message: window.overlap must be smaller than window.size
+                          rule: '!has(self.overlap) || self.overlap < self.size'
                     type: object
+                    x-kubernetes-validations:
+                    - message: max_sequence_length requires the local mmbert32k variant
+                      rule: '!has(self.max_sequence_length) || self.max_sequence_length
+                        == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol)
+                        == 0) && (!has(self.variant) || size(self.variant) == 0 ||
+                        self.variant == ''mmbert32k''))'
+                    - message: window requires the local mmbert32k variant
+                      rule: '!has(self.window) || (!has(self.backend) && (!has(self.protocol)
+                        || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant)
+                        == 0 || self.variant == ''mmbert32k''))'
+                    - message: window.size must not exceed max_sequence_length (512
+                        when omitted or zero)
+                      rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
+                        && self.max_sequence_length > 0 ? self.max_sequence_length
+                        : 512)'
                   reasoning_effort:
                     description: |-
                       ReasoningEffort is the default reasoning effort for model bindings that do

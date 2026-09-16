@@ -2,6 +2,7 @@ package evaluationplane
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,8 +21,10 @@ func TestReportExecutionTimestampSeparatesReplayFromLiveEvidence(t *testing.T) {
 	}{
 		{name: "replay deterministic creation timestamp", mode: ModeReplay, generated: createdAt},
 		{name: "replay completion timestamp", mode: ModeReplay, generated: startedAt},
+		{name: "replay future timestamp", mode: ModeReplay, generated: sealedAt.Add(time.Nanosecond), wantErr: true},
 		{name: "replay predates manifest", mode: ModeReplay, generated: createdAt.Add(-time.Nanosecond), wantErr: true},
 		{name: "live predates start", mode: ModeLive, generated: createdAt, wantErr: true},
+		{name: "live one nanosecond before start", mode: ModeLive, generated: startedAt.Add(-time.Nanosecond), wantErr: true},
 		{name: "live starts at server transition", mode: ModeLive, generated: startedAt},
 		{name: "future timestamp", mode: ModeLive, generated: sealedAt.Add(time.Nanosecond), wantErr: true},
 		{name: "unknown mode", mode: Mode("unknown"), generated: startedAt, wantErr: true},
@@ -35,6 +38,13 @@ func TestReportExecutionTimestampSeparatesReplayFromLiveEvidence(t *testing.T) {
 			)
 			if test.wantErr && !errors.Is(err, ErrInvalid) {
 				t.Fatalf("error=%v, want ErrInvalid", err)
+			}
+			if test.wantErr {
+				for _, timestamp := range []time.Time{test.generated, createdAt, startedAt, sealedAt} {
+					if !strings.Contains(err.Error(), timestamp.Format(time.RFC3339Nano)) {
+						t.Fatalf("diagnostic %q omits timestamp %s", err, timestamp)
+					}
+				}
 			}
 			if !test.wantErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)

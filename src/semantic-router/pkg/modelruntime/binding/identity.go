@@ -113,6 +113,13 @@ type Capability struct {
 	Limits    Limits
 	Labels    []string
 	Embedding *EmbeddingCapability
+	Window    *WindowCapability
+}
+
+// WindowCapability fixes the scan geometry selected during preparation.
+type WindowCapability struct {
+	Size    int
+	Overlap int
 }
 
 // EmbeddingCapability describes actual vector semantics. Empty strings and
@@ -127,6 +134,10 @@ type EmbeddingCapability struct {
 
 func cloneCapability(capability Capability) Capability {
 	capability.Labels = append([]string(nil), capability.Labels...)
+	if capability.Window != nil {
+		window := *capability.Window
+		capability.Window = &window
+	}
 	if capability.Embedding != nil {
 		value := *capability.Embedding
 		value.Modalities = append([]string(nil), value.Modalities...)
