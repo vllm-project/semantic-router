@@ -181,7 +181,39 @@ func RecentTurnOutcomesWithPolicy(sessionID string, now time.Time, size int, ttl
 	}
 	window := cloneTurnOutcomes(st.recentOutcomes)
 	s.mu.Unlock()
+	// Another replica may own outcomes this process never served, so the gate
+	// decides on the union both replicas persisted. Kept outside the lock
+	// because it reaches the shared store.
+	if shared, ok := sharedTurnOutcomes(sessionID, now); ok {
+		window = mergeTurnOutcomeWindows(shared, window, size, ttl, now)
+	}
 	return trimTurnOutcomes(pruneTurnOutcomes(window, ttl, now), size)
+}
+
+// sharedTurnOutcomes reads the window another replica persisted, without
+// hydrating it: the caller already owns a local session for this id, and
+// hydration would overwrite that session.
+func sharedTurnOutcomes(sessionID string, now time.Time) ([]TurnOutcome, bool) {
+	store, release, acquired := acquireCurrentRouterSessionStateStore()
+	if !acquired {
+		return nil, false
+	}
+	defer release()
+	snapshot, found, err := store.Load(sessionID)
+	if err != nil || !found || snapshot.SessionID != sessionID {
+		return nil, false
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	idleFor := now.Sub(snapshot.LastSeen)
+	if idleFor < 0 {
+		idleFor = 0
+	}
+	if idleFor > routerMemoryTTL {
+		return nil, false
+	}
+	return snapshot.RecentOutcomes, true
 }
 
 // sharedRecentTurnOutcomes recovers the window from the shared store on a

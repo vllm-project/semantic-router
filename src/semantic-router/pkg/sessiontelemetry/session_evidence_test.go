@@ -199,6 +199,56 @@ func TestRecentOutcomesPersistRoundTrip(t *testing.T) {
 	}
 }
 
+// A replica that already holds a local session must still see outcomes another
+// replica persisted, or both would decide on different evidence.
+func TestRecentOutcomesMergeSharedUnionOnLocalHit(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	store := newFakeSessionStateStore()
+	SetRouterSessionStateStore(store)
+	defer SetRouterSessionStateStore(nil)
+
+	const sessionID = "two-replicas"
+
+	// Replica A serves two turns, both persisted. RequestID is what identifies a
+	// turn, so the shared and local copy of one turn collapse instead of
+	// doubling.
+	first := outcomeAt(fixedBase, 0, 1, TurnNoProgress, true)
+	first.RequestID = "replica-a-1"
+	RecordTurnOutcome(sessionID, first, fixedBase)
+	second := outcomeAt(fixedBase, 1, 2, TurnNoProgress, true)
+	second.RequestID = "replica-a-2"
+	RecordTurnOutcome(sessionID, second, fixedBase.Add(time.Minute))
+
+	// Replica B starts cold and recovers that window as its own local session.
+	ResetRouterSessionMemoryForTesting()
+	if window := mustWindow(t, sessionID, fixedBase.Add(2*time.Minute)); len(window) != 2 {
+		t.Fatalf("replica B did not recover the shared window: %+v", window)
+	}
+
+	// Replica A serves a third turn. Write it straight to the shared store, the
+	// way another replica's persistence arrives, leaving B's local copy alone.
+	snapshot, found, err := store.Load(sessionID)
+	if err != nil || !found {
+		t.Fatalf("shared store lost the session: found=%t err=%v", found, err)
+	}
+	third := outcomeAt(fixedBase, 3, 3, TurnRegression, true)
+	third.RequestID = "replica-a-3"
+	snapshot.RecentOutcomes = append(snapshot.RecentOutcomes, third)
+	if err := store.Save(snapshot, routerMemoryTTL); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	// B only reads from here on, so it proves the union reaches a replica that
+	// never wrote the missing outcome itself.
+	window := mustWindow(t, sessionID, fixedBase.Add(4*time.Minute))
+	if len(window) != 3 {
+		t.Fatalf("replica B read %d outcomes, want all 3: %+v", len(window), window)
+	}
+	if window[2].TurnIndex != 3 || window[2].Category != TurnRegression {
+		t.Fatalf("replica B missed the other replica's outcome: %+v", window)
+	}
+}
+
 // 7. Legacy shared-store payloads without the window field hydrate cleanly.
 func TestLegacySnapshotWithoutWindowField(t *testing.T) {
 	legacy := `{"session_id":"legacy","current_model":"model-a","last_seen":"2026-09-03T12:00:00Z"}`
