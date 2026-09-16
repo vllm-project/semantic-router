@@ -10,13 +10,13 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
-const fallbackRouterEvalEndpoint = "http://localhost:8080/api/v1/eval"
+const fallbackRouterEvalEndpoint = "http://localhost:8080/api/v1/routing/preview"
 
 func defaultRouterEvalEndpoint(routerAPIURL string) string {
 	if routerAPIURL == "" {
 		return fallbackRouterEvalEndpoint
 	}
-	return strings.TrimSuffix(routerAPIURL, "/") + "/api/v1/eval"
+	return strings.TrimSuffix(routerAPIURL, "/") + "/api/v1/routing/preview"
 }
 
 // SettingsResponse represents the dashboard settings returned to frontend

@@ -23,13 +23,12 @@ import (
 // request-path image extractor + the embedding signal evaluator's
 // image-modality dispatch wired through PRs #1867 and #1868.
 
-// minAccuracyThreshold is the floor for the overall image-routing accuracy.
-// Calibrated to the current multi-modal-embed-small baseline against the
-// three shipped pack rules (identifier_document_imagery,
-// code_or_terminal_imagery, ambient_office_imagery) and the three real-image
-// fixtures under e2e/testcases/testdata/image-fixtures/. Raises as the
-// encoder upgrades.
-const minAccuracyThreshold = 0.33
+// minAccuracyThreshold is the acceptance floor for image-routing accuracy.
+// The pinned model, fixtures, and profile thresholds form a deterministic
+// contract: all three positive matches and all six cross-rule negatives must
+// pass. Any miss means either image extraction, classifier dispatch, evidence
+// headers, or calibrated rule discrimination regressed.
+const minAccuracyThreshold = 1.0
 
 func init() {
 	pkgtestcases.Register("embedding-signal-image-routing", pkgtestcases.TestCase{
@@ -240,6 +239,10 @@ func testSingleEmbeddingSignalImage(ctx context.Context, testCase EmbeddingSigna
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Matched signal headers are intentionally opt-in. This test asserts the
+	// signal state independently of the selected decision, so it must request
+	// the debug evidence surface explicitly.
+	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)

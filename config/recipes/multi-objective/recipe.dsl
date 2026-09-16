@@ -19,7 +19,6 @@ MODEL local/deepseek-v4-flash-analyst {
   description: "Latest MIT-licensed sparse analyst tier, retained behind a stable judge after correctness calibration."
   capabilities: ["independent_analysis", "long_context", "tool_use", "reasoning_diversity"]
   tags: ["tier:experimental_frontier", "cost:high", "deployment:self_hosted", "physical:deepseek-v4-flash-0731"]
-  quality_score: 0.88
   modality: "text"
 }
 
@@ -28,7 +27,6 @@ MODEL local/gemma4-26b-balanced {
   description: "Fast architecture-diverse MoE tier for balanced general reasoning."
   capabilities: ["reasoning", "multilingual", "structured_output", "long_context"]
   tags: ["tier:balanced", "cost:medium", "latency:fastest_measured", "deployment:self_hosted", "physical:gemma4-26b-a4b"]
-  quality_score: 0.89
   modality: "text"
 }
 
@@ -42,7 +40,6 @@ MODEL local/qwen3.5-122b-frontier {
   description: "Large local MoE tier for accuracy-first synthesis and review."
   capabilities: ["legal_analysis", "high_risk_review", "deep_synthesis"]
   tags: ["tier:premium", "cost:highest", "deployment:self_hosted", "physical:qwen3.5-122b-a10b-fp8"]
-  quality_score: 0.94
   modality: "text"
 }
 
@@ -51,7 +48,6 @@ MODEL local/qwen3.5-9b-economy {
   description: "Small dense local tier for low-cost and short interactive workloads."
   capabilities: ["fast_qa", "explanation", "general_chat"]
   tags: ["tier:economy", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  quality_score: 0.68
   modality: "text"
 }
 
@@ -60,7 +56,6 @@ MODEL local/qwen3.5-9b-economy-replica {
   description: "Independent replica of the economy tier for latency and load-aware selection."
   capabilities: ["fast_qa", "explanation", "general_chat"]
   tags: ["tier:economy_replica", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  quality_score: 0.68
   modality: "text"
 }
 
@@ -69,7 +64,6 @@ MODEL local/qwen3.5-9b-private {
   description: "Isolated alias of the local 9B tier for privacy-policy routes."
   capabilities: ["privacy_locality", "sensitive_data", "general_chat"]
   tags: ["tier:private", "cost:low", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  quality_score: 0.68
   modality: "text"
 }
 
@@ -78,7 +72,6 @@ MODEL local/qwen3.6-27b-coder {
   description: "Dense Qwen3.6 tier for coding, structured output, and verification."
   capabilities: ["reasoning", "coding", "structured_output", "tool_use"]
   tags: ["tier:coder", "cost:upper_mid", "deployment:self_hosted", "physical:qwen3.6-27b"]
-  quality_score: 0.9
   modality: "text"
 }
 
@@ -87,7 +80,6 @@ MODEL local/qwen3.6-35b-flash {
   description: "Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning."
   capabilities: ["fast_qa", "coding", "reasoning"]
   tags: ["tier:flash", "cost:medium", "latency:fast", "deployment:self_hosted", "physical:qwen3.6-35b-a3b-fp8"]
-  quality_score: 0.84
   modality: "text"
 }
 
@@ -161,13 +153,13 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   SIGNAL keyword unified_balance_reasoning_markers {
     operator: "OR"
-    keywords: ["analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "consistency tradeoffs", "competing production failure", "分析取舍", "第一性原理", "根因分析", "逐步推理", "取舍", "根因", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "トレードオフ", "根本原因", "トレードオフを分析", "根本原因と", "kompromisse analysieren"]
+    keywords: ["\\bprove\\b", "\\bproof\\b", "formal derivation", "严格证明", "数学证明", "analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "consistency tradeoffs", "competing production failure", "分析取舍", "第一性原理", "根因分析", "逐步推理", "取舍", "根因", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "トレードオフ", "根本原因", "トレードオフを分析", "根本原因と", "kompromisse analysieren"]
     method: "regex"
   }
 
   SIGNAL keyword unified_balance_verification_markers {
     operator: "OR"
-    keywords: ["verify the answer", "cite sources", "fact-check", "check the evidence", "provide evidence", "核实答案", "引用来源", "检查证据", "verificar la respuesta", "citer les sources", "答えを検証", "quellen zitieren"]
+    keywords: ["\\bverify\\b", "\\bcite\\b", "\\bcitations?\\b", "verify the answer", "cite sources", "fact-check", "check the evidence", "provide evidence", "核实答案", "引用来源", "检查证据", "verificar la respuesta", "citer les sources", "答えを検証", "quellen zitieren"]
     method: "regex"
   }
 
@@ -248,7 +240,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   PROJECTION score unified_balance_effort_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "keyword", weight: -0.1, name: "unified_balance_terse_markers", value_source: "confidence" }, { type: "keyword", weight: -1, name: "unified_balance_negated_reasoning", value_source: "confidence" }, { type: "keyword", weight: 0.85, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.45, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.05, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
+    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "keyword", weight: -0.1, name: "unified_balance_terse_markers", value_source: "confidence" }, { type: "keyword", weight: -1, name: "unified_balance_negated_reasoning", value_source: "confidence" }, { type: "keyword", weight: 0.85, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.1, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.05, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
   }
 
   PROJECTION mapping unified_balance_effort_band {
@@ -479,8 +471,8 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     PRIORITY 200
     TIER 1
     WHEN projection("unified_cost_reasoning")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium"),
-          "local/qwen3.5-9b-economy-replica" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = true, mode = "enabled"),
+          "local/qwen3.5-9b-economy-replica" (reasoning = true, mode = "enabled")
     ALGORITHM multi_factor {
       on_no_candidates: "first"
       weights: { cost: 0.6, load: 0.4 }
@@ -705,7 +697,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 375
     TIER 2
     WHEN conversation("unified_frontier_active_tool_loop") AND NOT keyword("unified_frontier_workflow_markers")
-    MODEL "local/qwen3.5-122b-frontier" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-122b-frontier" (reasoning = true, mode = "enabled")
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -756,9 +748,9 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 300
     TIER 5
     WHEN projection("unified_frontier_deliberate")
-    MODEL "local/qwen3.6-27b-coder" (reasoning = true, effort = "high"),
+    MODEL "local/qwen3.6-27b-coder" (reasoning = true, mode = "enabled"),
           "local/deepseek-v4-flash-analyst" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+          "local/qwen3.5-122b-frontier" (reasoning = true, mode = "enabled")
     ALGORITHM remom {
       breadth_schedule: [3, 2]
       compaction_strategy: "last_n_tokens"
@@ -838,6 +830,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
 
   SIGNAL pii unified_privacy_pii_strict {
     threshold: 0.7
+    pii_types_allowed: ["GPE"]
     description: "Detect personally identifiable information that must remain local."
   }
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from cli.commands.eval import eval
+from cli.commands.benchmark import benchmark
 from cli.evaluation.constants import SCHEMA_VERSION, TRACK_IDS
 from cli.evaluation.contracts import RunManifest
 from cli.evaluation.store import LocalArtifactStore
@@ -22,7 +22,7 @@ def _manifest_payload() -> dict[str, object]:
 
 def test_eval_group_keeps_prompt_mode_and_registers_plane_commands() -> None:
     runner = CliRunner()
-    result = runner.invoke(eval, ["catalog"])
+    result = runner.invoke(benchmark, ["catalog"])
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -40,25 +40,25 @@ def test_validate_run_report_and_gate_commands(tmp_path: Path) -> None:
     manifest_path.write_text(json.dumps(_manifest_payload()), encoding="utf-8")
     store_path = tmp_path / "store"
 
-    validated = runner.invoke(eval, ["validate", "--manifest", str(manifest_path)])
+    validated = runner.invoke(benchmark, ["validate", "--manifest", str(manifest_path)])
     assert validated.exit_code == 0, validated.output
     assert json.loads(validated.output)["valid"] is True
 
     executed = runner.invoke(
-        eval,
+        benchmark,
         ["run", "--manifest", str(manifest_path), "--store", str(store_path)],
     )
     assert executed.exit_code == 0, executed.output
     assert json.loads(executed.output)["run"]["status"] == "completed"
 
     rendered = runner.invoke(
-        eval, ["report", _GOLDEN_RUN_ID, "--store", str(store_path)]
+        benchmark, ["report", _GOLDEN_RUN_ID, "--store", str(store_path)]
     )
     assert rendered.exit_code == 0, rendered.output
     assert json.loads(rendered.output)["run"]["id"] == _GOLDEN_RUN_ID
 
     gated = runner.invoke(
-        eval,
+        benchmark,
         [
             "gate",
             _GOLDEN_RUN_ID,
@@ -82,9 +82,11 @@ def test_worker_emits_strict_lines_without_overwriting_server_control_state(
     staged_bytes = (json.dumps(payload, separators=(",", ":")) + "\n").encode()
     manifest_path = run_dir / "run-manifest.json"
     manifest_path.write_bytes(staged_bytes)
+    manifest_path.chmod(0o600)
     status_path = run_dir / "status.json"
     status_bytes = b'{"owner":"go","status":"running"}\n'
     status_path.write_bytes(status_bytes)
+    status_path.chmod(0o600)
     suite_store = NormalizedSuiteStore(tmp_path / "suites")
 
     exit_code = worker_main(
@@ -171,13 +173,13 @@ def test_compare_command_rejects_unpaired_workloads(tmp_path: Path) -> None:
     candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
     for manifest_path in (baseline_path, candidate_path):
         result = runner.invoke(
-            eval,
+            benchmark,
             ["run", "--manifest", str(manifest_path), "--store", str(store_path)],
         )
         assert result.exit_code == 0, result.output
 
     compared = runner.invoke(
-        eval,
+        benchmark,
         [
             "compare",
             "--baseline",

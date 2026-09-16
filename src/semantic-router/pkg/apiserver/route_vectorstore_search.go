@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -54,6 +55,14 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	if err = manager.CheckEmbeddingCompatibility(params.storeID); err != nil {
+		if errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+			s.writeErrorResponse(w, http.StatusConflict, "EMBEDDING_REINDEX_REQUIRED", err.Error())
+		} else {
+			s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", "vector store not found")
+		}
+		return
+	}
 
 	queryEmbedding, err := embedder.Embed(r.Context(), params.request.Query)
 	if err != nil {
@@ -75,7 +84,7 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 }
 
 func (s *ClassificationAPIServer) parseVectorStoreSearchParams(r *http.Request) (vectorStoreSearchParams, error) {
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	path := strings.TrimPrefix(r.URL.Path, apiStorageVectorStoresPath+"/")
 	storeID := strings.TrimSuffix(path, "/search")
 	if storeID == "" || storeID == path {
 		return vectorStoreSearchParams{}, fmt.Errorf("vector store ID is required")
@@ -133,7 +142,7 @@ func performVectorStoreSearch(
 	queryEmbedding []float32,
 ) ([]vectorstore.SearchResult, error) {
 	if params.request.Hybrid == nil {
-		return manager.Backend().Search(
+		return manager.Search(
 			ctx,
 			params.storeID,
 			queryEmbedding,
@@ -143,23 +152,8 @@ func performVectorStoreSearch(
 		)
 	}
 
-	backend := manager.Backend()
-	if searcher, ok := backend.(vectorstore.HybridSearcher); ok {
-		return searcher.HybridSearch(
-			ctx,
-			params.storeID,
-			params.request.Query,
-			queryEmbedding,
-			params.topK,
-			params.threshold,
-			params.request.Filters,
-			params.request.Hybrid,
-		)
-	}
-
-	return vectorstore.GenericHybridRerank(
+	return manager.HybridSearch(
 		ctx,
-		backend,
 		params.storeID,
 		params.request.Query,
 		queryEmbedding,

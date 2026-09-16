@@ -10,6 +10,11 @@ DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io/vllm-project/semantic-router}"
 DOCKER_TAG="${DOCKER_TAG:-latest}"
 VLLM_SR_IMAGE="${VLLM_SR_IMAGE:-ghcr.io/vllm-project/semantic-router/vllm-sr:latest}"
 VLLM_SR_STACK_NAME="${VLLM_SR_STACK_NAME:-vllm-sr}"
+VLLM_SR_PORT_OFFSET="${VLLM_SR_PORT_OFFSET:-0}"
+if ! [[ "${VLLM_SR_PORT_OFFSET}" =~ ^[0-9]+$ ]]; then
+    echo "VLLM_SR_PORT_OFFSET must be a non-negative integer" >&2
+    exit 1
+fi
 if [[ "${VLLM_SR_STACK_NAME}" == "vllm-sr" ]]; then
     VLLM_SR_NETWORK="${VLLM_SR_NETWORK:-vllm-sr-network}"
 else
@@ -21,7 +26,8 @@ PID_FILE="${TEST_DIR}/serve.pid"
 SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
-ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/ready}"
+ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:$((8080 + VLLM_SR_PORT_OFFSET))/ready}"
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT:-http://localhost:$((8888 + VLLM_SR_PORT_OFFSET))}"
 LLM_KATAN_HOST_PORT="${LLM_KATAN_HOST_PORT:-8000}"
 MODEL_DIR="${MEMORY_TEST_MODEL_DIR:-${TEST_DIR}/models}"
 if [[ "${MODEL_DIR}" != /* ]]; then
@@ -99,11 +105,7 @@ trap cleanup EXIT INT TERM
 
 echo "Using memory integration temp dir: ${TEST_DIR}"
 
-if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
-    python3 -m pip install -U requests pymilvus
-else
-    python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
-fi
+python3 -m pip install -U requests pymilvus
 
 prepare_model_dir() {
     mkdir -p "${MODEL_DIR}"
@@ -115,94 +117,13 @@ prepare_model_dir() {
     ln -s "${MODEL_DIR}" "${MODEL_MOUNT_DIR}"
 }
 
-download_hf_snapshot() {
-    local repo_id="$1"
-    local local_dir="$2"
-    local required="${3:-required}"
-    local max_attempts="${HF_DOWNLOAD_ATTEMPTS:-6}"
-    local attempt delay exit_code marker
-
-    if ! [[ "${max_attempts}" =~ ^[0-9]+$ ]] || (( max_attempts < 1 )); then
-        max_attempts=6
-    fi
-
-    marker="${local_dir}/.vsr-download-complete"
-    if [[ -f "${marker}" ]]; then
-        echo "Using cached Hugging Face model ${repo_id} from ${local_dir}"
-        return 0
-    fi
-
-    mkdir -p "${local_dir}"
-    exit_code=1
-    for attempt in $(seq 1 "${max_attempts}"); do
-        echo "Downloading Hugging Face model ${repo_id} to ${local_dir} (attempt ${attempt}/${max_attempts})"
-        if HF_HUB_ENABLE_HF_TRANSFER=1 python3 - "${repo_id}" "${local_dir}" <<'PY'
-import sys
-
-from huggingface_hub import snapshot_download
-
-repo_id, local_dir = sys.argv[1], sys.argv[2]
-snapshot_download(repo_id, local_dir=local_dir, local_dir_use_symlinks=False)
-PY
-        then
-            touch "${marker}"
-            return 0
-        else
-            exit_code=$?
-        fi
-
-        if (( attempt == max_attempts )); then
-            break
-        fi
-
-        delay=$((attempt * attempt * 10))
-        if (( delay > 120 )); then
-            delay=120
-        fi
-        echo "Hugging Face download failed for ${repo_id}; retrying in ${delay}s" >&2
-        sleep "${delay}"
-    done
-
-    if [[ "${required}" == "optional" ]]; then
-        echo "Warning: ${repo_id} download failed; router will skip it" >&2
-        return 0
-    fi
-
-    echo "ERROR: failed to download required Hugging Face model ${repo_id}" >&2
-    return "${exit_code}"
-}
-
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
-# Detect requested embedding model from the e2e config so we can make a best-effort
-# attempt to ensure a compatible model is available during CI runs. This avoids
-# silent mismatches between the config and the model the test script downloads.
-CONFIG_EMBEDDING_MODEL="$(grep -m1 '^ *embedding_model:' "${REPO_ROOT}/e2e/config/config.memory-user.yaml" 2>/dev/null | awk -F: '{print $2}' | tr -d ' \"')"
-if [[ -z "${CONFIG_EMBEDDING_MODEL}" ]]; then
-    CONFIG_EMBEDDING_MODEL="mmbert"
-fi
-if [[ "${CONFIG_EMBEDDING_MODEL}" != "mmbert" ]]; then
-    echo "Note: config requests embedding_model='${CONFIG_EMBEDDING_MODEL}'. For CI stability we will still ensure the mmbert embeddings model is present unless deterministic mode is explicitly requested."
-fi
 if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
     export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
-    echo "Using deterministic memory embeddings for CI; skipping Hugging Face model download"
+    echo "Using deterministic memory embeddings"
 else
-    echo "Attempting to download Hugging Face model for embeddings (will fall back to deterministic on failure)"
-    # Ensure the mmbert model used by the CI harness is available. Tests and
-    # configs may accidentally request a different model; providing mmbert keeps
-    # the CI stable and compatible with the rest of the harness (collection dims, etc.).
-    if download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"; then
-        echo "Hugging Face model downloaded successfully"
-    else
-        if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
-            echo "Warning: Hugging Face model download failed; using deterministic embeddings due to USE_DETERMINISTIC_MEMORY_EMBEDDINGS=1"
-            export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
-        else
-            echo "ERROR: Hugging Face model download failed and deterministic fallback is disabled for CI. Exiting." >&2
-            exit 1
-        fi
-    fi
+    echo "Router startup will download the configured Vela model at its registered revision"
 fi
 make -C "${REPO_ROOT}" start-milvus
 
@@ -305,10 +226,43 @@ if [[ "${http_code}" != "200" ]]; then
     exit 1
 fi
 
+# The running model determines the physical vector namespace. Read the store
+# that actually initialized instead of recomputing its identity in the test or
+# querying the old logical collection. This fresh stack must have one store;
+# missing or conflicting initialization events are a failed prerequisite.
+router_container="$(python3 -c 'from cli.runtime_stack import resolve_runtime_stack; print(resolve_runtime_stack().router_container_name)')"
+router_startup_log="${TEST_DIR}/router-startup.log"
+"${CONTAINER_RUNTIME}" logs "${router_container}" >"${router_startup_log}" 2>&1
+memory_collection="$(python3 - "${router_startup_log}" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+collections = set()
+for line in Path(sys.argv[1]).read_text().splitlines():
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if not isinstance(event, dict):
+        continue
+    if event.get("component") != "memory" or event.get("event") != "milvus_store_initialized":
+        continue
+    name = event.get("collection_name")
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+        raise SystemExit("Invalid initialized memory collection")
+    collections.add(name)
+if len(collections) != 1:
+    raise SystemExit("Expected exactly one initialized Milvus memory collection")
+print(collections.pop())
+PY
+)"
+
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
-ROUTER_ENDPOINT=http://localhost:8888 \
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
 ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS=localhost:19530 \
-MILVUS_COLLECTION=memory_test_ci \
+MILVUS_COLLECTION="${memory_collection}" \
 python3 09-memory-features-test.py

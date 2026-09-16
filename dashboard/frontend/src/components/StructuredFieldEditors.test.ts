@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { KeyValueEditor } from './KeyValueEditor'
 import { ObjectListEditor, type ObjectEditorField } from './ObjectListEditor'
 import { StringListEditor } from './StringListEditor'
-import { normalizeStringList } from './structuredFieldEditorSupport'
+import { normalizeStringList, updateStructuredObjectField } from './structuredFieldEditorSupport'
 
-describe('structured field editors', () => {
+describe('string field editors', () => {
   it('normalizes legacy delimited values while preserving list order', () => {
     expect(normalizeStringList(' premium, fast\npremium, long-context ')).toEqual([
       'premium',
@@ -50,7 +50,9 @@ describe('structured field editors', () => {
     expect(markup).toContain('Checkpoint must be numeric.')
     expect(markup).toContain('aria-invalid="true"')
   })
+})
 
+describe('structured object field editors', () => {
   it('renders key/value entries as labelled controls', () => {
     const markup = renderToStaticMarkup(
       createElement(KeyValueEditor, {
@@ -89,5 +91,35 @@ describe('structured field editors', () => {
     expect(markup).toContain('Provide an endpoint.')
     expect(markup).toContain('X-Tenant')
     expect(markup).toContain('Add item')
+  })
+
+  it('preserves empty strings only for presence-aware object fields', () => {
+    type Backend = { auth_prefix?: string }
+    const presenceAware: ObjectEditorField<Backend> = {
+      key: 'auth_prefix',
+      label: 'Authentication prefix',
+      preserveEmpty: true,
+    }
+    const ordinary: ObjectEditorField<Backend> = {
+      key: 'auth_prefix',
+      label: 'Authentication prefix',
+    }
+
+    const explicitEmpty = updateStructuredObjectField(
+      { auth_prefix: 'Bearer' },
+      presenceAware.key,
+      '',
+      presenceAware.preserveEmpty,
+    )
+    const omitted = updateStructuredObjectField(
+      { auth_prefix: 'Bearer' },
+      ordinary.key,
+      '',
+      ordinary.preserveEmpty,
+    )
+
+    expect(explicitEmpty).toEqual({ auth_prefix: '' })
+    expect(Object.prototype.hasOwnProperty.call(explicitEmpty, 'auth_prefix')).toBe(true)
+    expect(omitted).toEqual({})
   })
 })

@@ -37,7 +37,7 @@ func builtinExecutorContracts() []executorContract {
 		{
 			ID: normalizedSuiteLiveExecutorID, Mode: ModeLive, SuiteClass: executorSuiteNormalized,
 			TargetProfile: targetProfileRuntime, LineageProfile: lineageRuntime,
-			NormalizedSuite: true, CaseBudgetPerSuite: true, EvidenceLevelCeiling: "E4",
+			NormalizedSuite: true, CaseBudgetPerSuite: true, EvidenceLevelCeiling: "E5",
 			TrackIDs: []TrackID{"routing", "model_pool", "joint", "multimodal", "capacity"},
 		},
 	}

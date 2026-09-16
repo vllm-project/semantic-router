@@ -21,11 +21,11 @@ func r2Outcome(caseID, actionID string, budget int, score float64) CompoundModel
 }
 
 func TestR2CompoundModelBudgetPreservesActionIdentityAndSharedCurve(t *testing.T) {
-	plugin := R2CompoundModelBudgetPlugin()
-	if err := ValidateEvaluationMethodPlugin(plugin); err != nil {
-		t.Fatalf("plugin should be admissible: %v", err)
+	method := R2CompoundModelBudgetMethod()
+	if err := ValidateEvaluationMethodDefinition(method); err != nil {
+		t.Fatalf("method should be admissible: %v", err)
 	}
-	report, err := ReduceCompoundModelBudget(plugin, []CompoundModelBudgetOutcome{
+	report, err := ReduceCompoundModelBudget(method, []CompoundModelBudgetOutcome{
 		r2Outcome("case-a", "small", 100, .4), r2Outcome("case-a", "small", 200, .6),
 		r2Outcome("case-a", "large", 100, .6), r2Outcome("case-a", "large", 200, .8),
 		r2Outcome("case-b", "small", 100, .2), r2Outcome("case-b", "small", 200, .4),
@@ -50,12 +50,12 @@ func TestR2CompoundModelBudgetPreservesActionIdentityAndSharedCurve(t *testing.T
 }
 
 func TestR2ReducersFailClosedOnDuplicateAndRaggedDomains(t *testing.T) {
-	plugin := R2CompoundModelBudgetPlugin()
+	method := R2CompoundModelBudgetMethod()
 	duplicate := r2Outcome("case-a", "small", 100, .5)
-	if _, err := ReduceCompoundModelBudget(plugin, []CompoundModelBudgetOutcome{duplicate, duplicate}); err == nil || !strings.Contains(err.Error(), "duplicate case×action×budget") {
+	if _, err := ReduceCompoundModelBudget(method, []CompoundModelBudgetOutcome{duplicate, duplicate}); err == nil || !strings.Contains(err.Error(), "duplicate case×action×budget") {
 		t.Fatalf("compound reducer accepted duplicate case×action×budget: %v", err)
 	}
-	if _, err := ReduceCompoundModelBudget(plugin, []CompoundModelBudgetOutcome{
+	if _, err := ReduceCompoundModelBudget(method, []CompoundModelBudgetOutcome{
 		r2Outcome("case-a", "small", 100, .4), r2Outcome("case-a", "small", 200, .5),
 		r2Outcome("case-a", "large", 100, .6),
 	}); err == nil || !strings.Contains(err.Error(), "exact shared") {
@@ -115,21 +115,17 @@ func TestEmptyMethodSlicesDoNotTurnOrdinaryRecordsIntoV2Coordinates(t *testing.T
 	}
 }
 
-func TestInstalledMethodPluginsDeclareAllBenchmarkReadinessBoundaries(t *testing.T) {
-	adapterIDs := []string{
-		"routerarena", "routejudge-orbit", "coderouterbench", "llmrouterbench", "routereval", "routerbench",
-		"xroutebench", "twinrouterbench", "mmr-bench", "acebench", "continuity-bench", "fusionfactory", "r2-router",
-	}
+func TestResearchMethodDefinitionsDeclareAllReadinessBoundaries(t *testing.T) {
 	exploratory, blocked, dataRequired := 0, 0, 0
-	for _, adapterID := range adapterIDs {
-		plugin, ok := InstalledMethodPlugin(adapterID)
-		if !ok || ValidateEvaluationMethodPlugin(plugin) != nil {
-			t.Fatalf("adapter %q lacks a valid v2 plugin: %#v", adapterID, plugin)
+	for _, benchmark := range ResearchBenchmarkInventory() {
+		method := researchBenchmarkMethod(benchmark)
+		if ValidateEvaluationMethodDefinition(method) != nil {
+			t.Fatalf("adapter %q lacks a valid v2 method: %#v", benchmark.AdapterID, method)
 		}
-		if len(plugin.ApplicableTracks) == 0 || len(plugin.RequiredArtifactIDs) == 0 || len(plugin.ProducedMetricIDs) == 0 {
-			t.Fatalf("adapter %q lacks explicit applicability, artifacts, or metrics", adapterID)
+		if len(method.ApplicableTracks) == 0 || len(method.RequiredArtifactIDs) == 0 || len(method.ProducedMetricIDs) == 0 {
+			t.Fatalf("adapter %q lacks explicit applicability, artifacts, or metrics", benchmark.AdapterID)
 		}
-		switch plugin.Status {
+		switch method.Status {
 		case "exploratory-import":
 			exploratory++
 		case "blocked":
@@ -140,21 +136,6 @@ func TestInstalledMethodPluginsDeclareAllBenchmarkReadinessBoundaries(t *testing
 	}
 	if exploratory != 8 || blocked != 2 || dataRequired != 3 {
 		t.Fatalf("v2 research inventory exploratory=%d blocked=%d data-required=%d", exploratory, blocked, dataRequired)
-	}
-}
-
-func TestSupplementalInstalledAdaptersAreSeparateFromResearchInventory(t *testing.T) {
-	for _, adapterID := range []string{"lcr", "swe-bench", "agentbench"} {
-		plugin, ok := InstalledMethodPlugin(adapterID)
-		if !ok || plugin.Status != "data-required" || plugin.NativeParity != "none" || len(plugin.LiveTracks) != 0 {
-			t.Fatalf("supplemental adapter %q must remain non-live data-required: %#v", adapterID, plugin)
-		}
-		if _, research := researchBenchmarkByAdapter(adapterID); research {
-			t.Fatalf("supplemental adapter %q leaked into the research inventory", adapterID)
-		}
-	}
-	if _, ok := InstalledMethodPlugin("unregistered-import"); ok {
-		t.Fatal("supplemental registry acted as an implicit adapter fallback")
 	}
 }
 
@@ -313,14 +294,14 @@ func TestMethodV2AdmissionMatchesSharedCrossLanguageConformance(t *testing.T) {
 			if marshalErr != nil {
 				t.Fatalf("encode method descriptor: %v", marshalErr)
 			}
-			var descriptor EvaluationMethodPlugin
+			var descriptor EvaluationMethodDefinition
 			descriptorDecoder := json.NewDecoder(bytes.NewReader(descriptorPayload))
 			descriptorDecoder.DisallowUnknownFields()
 			decodeErr := descriptorDecoder.Decode(&descriptor)
 			if decodeErr == nil {
 				decodeErr = ensureJSONEOF(descriptorDecoder)
 			}
-			accepted := decodeErr == nil && ValidateEvaluationMethodPlugin(descriptor) == nil
+			accepted := decodeErr == nil && ValidateEvaluationMethodDefinition(descriptor) == nil
 			if accepted != *testCase.ExpectedValid {
 				t.Fatalf("method descriptor accepted=%t, want %t (decode error: %v)", accepted, *testCase.ExpectedValid, decodeErr)
 			}

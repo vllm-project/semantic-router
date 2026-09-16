@@ -3,11 +3,13 @@ package extproc
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -19,6 +21,7 @@ func (reloadMemoryStore) Store(_ context.Context, _ *memory.Memory) error { retu
 func (reloadMemoryStore) Retrieve(_ context.Context, _ memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
 	return nil, nil
 }
+
 func (reloadMemoryStore) Get(_ context.Context, _ string) (*memory.Memory, error)    { return nil, nil }
 func (reloadMemoryStore) Update(_ context.Context, _ string, _ *memory.Memory) error { return nil }
 func (reloadMemoryStore) List(_ context.Context, _ memory.ListOptions) (*memory.ListResult, error) {
@@ -58,7 +61,7 @@ func TestReloadRouterFromConfigSkipsReplaceForKubernetesSource(t *testing.T) {
 	}
 
 	buildCalls := 0
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		buildCalls++
 		if cfg != candidateCfg {
 			t.Fatalf("buildReloadRouter() cfg = %p, want %p", cfg, candidateCfg)
@@ -111,15 +114,16 @@ func TestReloadRouterFromConfigDoesNotSwapWhenRuntimePreparationFails(t *testing
 		BackendModels: config.BackendModels{DefaultModel: "old"},
 	}}
 	server := &Server{
-		configPath: "/tmp/router-config.yaml",
+		configPath: filepath.Join(t.TempDir(), "router-config.yaml"),
 		service:    NewRouterService(oldRouter),
 	}
+	writeReloadTestDocument(t, server.configPath, "candidate", candidateCfg)
 
 	ensureReloadConfigModels = func(cfg *config.RouterConfig) error { return nil }
 	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
 		return modelruntime.EmbeddingRuntimeState{}, errors.New("modality init failed")
 	}
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		t.Fatalf("buildReloadRouter() should not be called when runtime prep fails")
 		return nil, nil
 	}
@@ -166,19 +170,20 @@ func TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap(t *testing.T) {
 	registry.PublishRouterRuntime(oldCfg, oldService, nil)
 
 	server := &Server{
-		configPath: "/tmp/router-config.yaml",
+		configPath: filepath.Join(t.TempDir(), "router-config.yaml"),
 		service: NewRouterService(&OpenAIRouter{
 			Config:                oldCfg,
 			ClassificationService: oldService,
 		}),
 		runtime: registry,
 	}
+	writeReloadTestDocument(t, server.configPath, "new", newCfg)
 
 	ensureReloadConfigModels = func(cfg *config.RouterConfig) error { return nil }
 	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
 		return modelruntime.EmbeddingRuntimeState{AnyReady: true, ToolsReady: true}, nil
 	}
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		return &OpenAIRouter{
 			Config:                newCfg,
 			ClassificationService: newService,

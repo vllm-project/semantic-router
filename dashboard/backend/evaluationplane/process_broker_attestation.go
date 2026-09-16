@@ -77,7 +77,7 @@ func (broker *workerHTTPBroker) attestResponse(
 	// Router diagnostics expose both the configured decision algorithm and the
 	// method that actually selected this request. Execution evidence is bound to
 	// the realized method; the configured algorithm remains in routing traces.
-	if request.Operation == workerBrokerRouterEvaluate {
+	if request.Operation == workerBrokerRoutingPreview {
 		entry.Algorithm = copyString(entry.SelectionMethod)
 	}
 	if entry.SelectedModel == nil && (request.Operation == workerBrokerRoutedChatCompletion ||
@@ -107,7 +107,7 @@ func (broker *workerHTTPBroker) attestResponse(
 		entry.DecisionName = nonEmptyStringPointer(response.Headers["x-vsr-selected-decision"])
 	}
 	if entry.Recipe == nil && (request.Operation == workerBrokerRoutedChatCompletion ||
-		request.Operation == workerBrokerRouterEvaluate) && broker.manifest.Target.Mixture != nil {
+		request.Operation == workerBrokerRoutingPreview) && broker.manifest.Target.Mixture != nil {
 		recipe := broker.manifest.Target.Mixture.RecipeName
 		entry.Recipe = &recipe
 	}
@@ -118,6 +118,10 @@ func (broker *workerHTTPBroker) attestResponse(
 	if content := brokerResponseContent(response.Payload); content != nil {
 		digest := digestString(normalizedAnswer(*content))
 		entry.ResponseContentDigest = &digest
+	}
+	if request.Operation == workerBrokerRoutedChatCompletion || request.Operation == workerBrokerArmChatCompletion {
+		complete := response.Success && brokerFinalAnswerComplete(response.Payload)
+		entry.FinalAnswerComplete = &complete
 	}
 	receipt, err := brokerEntryReceipt(entry)
 	if err == nil {
@@ -147,7 +151,7 @@ func brokerLedgerSealedAt(operation string, payload map[string]any) *time.Time {
 
 func brokerRequestedModel(operation string, payload []byte) *string {
 	switch operation {
-	case workerBrokerRoutedChatCompletion, workerBrokerArmChatCompletion, workerBrokerRouterEvaluate:
+	case workerBrokerRoutedChatCompletion, workerBrokerArmChatCompletion, workerBrokerRoutingPreview:
 	default:
 		return nil
 	}

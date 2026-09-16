@@ -329,7 +329,7 @@ VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
 VLLM_SR_PROJECT_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' src/vllm-sr/pyproject.toml | head -n1)
 VLLM_SR_GIT_REVISION := $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo local)
-VLLM_SR_SOURCE_REVISION ?= $(shell if test -z "$$(git status --porcelain --untracked-files=all 2>/dev/null)"; then git rev-parse HEAD 2>/dev/null || echo unavailable; else echo unavailable; fi)
+VLLM_SR_SOURCE_REVISION ?= $(shell tools/ci/source-tree-revision.sh)
 VLLM_SR_DASHBOARD_VERSION_SOURCE := $(origin VLLM_SR_DASHBOARD_VERSION)
 VLLM_SR_DASHBOARD_VERSION ?= $(VLLM_SR_PROJECT_VERSION)-dev.$(VLLM_SR_GIT_REVISION)
 ifeq ($(VLLM_SR_DASHBOARD_VERSION_SOURCE),undefined)
@@ -337,7 +337,8 @@ ifneq ($(shell git status --porcelain -- dashboard/backend dashboard/frontend sr
 VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
-VLLM_SR_DASHBOARD_BUILD_ARGS := $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
+# Hash the source only when a build consumes these arguments.
+VLLM_SR_DASHBOARD_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:
@@ -365,7 +366,7 @@ vllm-sr-dev:
 	@echo "1. Cleaning up old containers..."
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
 	@echo ""
-	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+	@set -e; if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
 		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
 		echo "   Only use this when the local router image already includes your latest code changes."; \
 		echo ""; \
@@ -383,7 +384,7 @@ vllm-sr-dev:
 		echo "Router image built: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
 	fi
-	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+	@set -e; if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
 		echo "3. Ensuring official Envoy image is available..."; \
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
@@ -476,11 +477,11 @@ vllm-sr-start: vllm-sr-dev
 # Tests are located in e2e/testing/vllm-sr-cli/
 
 vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
-vllm-sr-install-cli: agent-venv-install
+vllm-sr-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e src/vllm-sr
 
 vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
-vllm-sr-sim-install-cli: agent-venv-install
+vllm-sr-sim-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
 
 vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
@@ -504,6 +505,22 @@ vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_container_log_spool.py \
+		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
+		src/vllm-sr/tests/test_evaluation_live.py \
+		src/vllm-sr/tests/test_evaluation_worker_task_limit.py \
+		src/vllm-sr/tests/test_evaluation_worker_sandbox.py \
+		src/vllm-sr/tests/test_install_package_resolution.py \
+		src/vllm-sr/tests/test_install_script_surface.py \
+		src/vllm-sr/tests/test_recipe_builtin.py \
+		src/vllm-sr/tests/test_reasoning_controls.py \
+		src/vllm-sr/tests/test_route_command.py \
+		src/vllm-sr/tests/test_runtime_lifecycle.py \
+		src/vllm-sr/tests/test_runtime_observability.py \
+		src/vllm-sr/tests/test_setup_bootstrap.py \
+		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
+		src/vllm-sr/tests/test_split_runtime_stack.py
 
 vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli

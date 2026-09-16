@@ -14,8 +14,8 @@ from cli.evaluation.execution_contract import (
     MOM_REPLAY_EXECUTOR_ID,
     NORMALIZED_LIVE_EXECUTOR_ID,
     NORMALIZED_REPLAY_EXECUTOR_ID,
+    ExecutionPlan,
 )
-from cli.evaluation.execution_plan import ExecutionPlan
 from cli.evaluation.executor_contracts import BUILTIN_EXECUTOR_CONTRACTS
 from cli.evaluation.executor_registry import CollectedEvidence, ExecutorRegistry
 from cli.evaluation.fixture_executor import execute_fixture

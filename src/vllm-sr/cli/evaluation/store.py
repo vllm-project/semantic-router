@@ -10,7 +10,6 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from cli.evaluation.artifact_store_error import StoreError as _StoreError
 from cli.evaluation.bundle import (
     REPORT_BUNDLE_OPTIONAL_NAMES,
     REPORT_BUNDLE_REQUIRED_NAMES,
@@ -27,7 +26,8 @@ from cli.evaluation.canonical import (
 from cli.evaluation.contract_primitives import ArtifactRef
 from cli.evaluation.contract_validation import validate_canonical_uuid
 from cli.evaluation.contracts import RunManifest
-from cli.evaluation.private_filesystem import (
+from cli.evaluation.errors import StoreError as _StoreError
+from cli.evaluation.private_filesystem_publication import (
     DurablePrivateFilesystem,
 )
 from cli.evaluation.report_transaction import (

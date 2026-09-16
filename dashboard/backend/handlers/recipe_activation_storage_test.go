@@ -15,11 +15,12 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
-        - endpoint: 127.0.0.1:8000
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
 routing:
   modelCards:
     - name: test-model

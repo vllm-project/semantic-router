@@ -8,17 +8,20 @@ import (
 	"strings"
 )
 
-const normalizedMultimodalLiveMethodID = "multimodal.hidden-answer.server-live.v1"
+const (
+	normalizedMultimodalLiveMethodID = "multimodal.hidden-answer.server-live.v1"
+	benchmarkPackLiveMethodPrefix    = "benchmark-pack.server-live"
+)
 
-// installedFirstPartyNormalizedLiveMethods is the only admission registry for
+// installedNormalizedLiveMethods is the admission boundary for
 // installed-suite live execution. Source imports remain replay-only E0
 // evidence; these methods merely make a fresh server-owned protocol runnable.
-func installedFirstPartyNormalizedLiveMethods(
+func installedNormalizedLiveMethods(
 	root string,
 	manifest suiteManifestProjection,
 ) ([]CatalogMethod, error) {
 	document := installedSuiteDocument{Manifest: manifest}
-	methods := make([]CatalogMethod, 0, 2)
+	methods := make([]CatalogMethod, 0, len(manifest.TrackIDs)+2)
 	declaredShift, err := installedDeclaredShiftSourceEligible(root, document)
 	if err != nil {
 		return nil, fmt.Errorf("%w: installed suite declared-shift qualification is invalid", err)
@@ -29,46 +32,177 @@ func installedFirstPartyNormalizedLiveMethods(
 			QualifiedGateIDs: []string{"G4"}, EvidenceSource: CatalogMethodEvidenceSourceServerBrokeredLive, Status: "configured",
 		})
 	}
-	multimodal, err := installedMultimodalLiveSourceEligible(root, document)
+	isPack, err := installedSuiteIsBenchmarkPack(manifest)
 	if err != nil {
-		return nil, fmt.Errorf("%w: installed suite multimodal live qualification is invalid", err)
+		return nil, err
 	}
-	if multimodal {
+	if !isPack {
+		multimodal, multimodalErr := installedMultimodalLiveSourceEligible(root, document)
+		if multimodalErr != nil {
+			return nil, fmt.Errorf("%w: installed suite multimodal live qualification is invalid", multimodalErr)
+		}
+		if multimodal {
+			methods = append(methods, CatalogMethod{
+				ID: normalizedMultimodalLiveMethodID, TrackID: "multimodal",
+				QualifiedGateIDs: []string{}, EvidenceSource: CatalogMethodEvidenceSourceLiveRuntime, Status: "configured",
+			})
+		}
+	}
+	packTracks, err := installedBenchmarkPackLiveTracks(root, document)
+	if err != nil {
+		return nil, fmt.Errorf("%w: installed benchmark pack live qualification is invalid", err)
+	}
+	for _, trackID := range manifest.TrackIDs {
+		if _, admitted := packTracks[trackID]; !admitted {
+			continue
+		}
 		methods = append(methods, CatalogMethod{
-			ID: normalizedMultimodalLiveMethodID, TrackID: "multimodal",
+			ID: benchmarkPackLiveMethodID(trackID), TrackID: trackID,
 			QualifiedGateIDs: []string{}, EvidenceSource: CatalogMethodEvidenceSourceLiveRuntime, Status: "configured",
 		})
 	}
 	return methods, nil
 }
 
-// installedMultimodalLiveSourceEligible admits only the maintained MMR
-// parser's exact hidden-answer image cohort. The imported observations remain
-// E0; a live run earns E4 only later from complete broker receipts and the
-// server-side hidden grader.
+func benchmarkPackLiveMethodID(trackID TrackID) string {
+	return benchmarkPackLiveMethodPrefix + "." + string(trackID) + ".v1"
+}
+
+func benchmarkPackLiveTrack(trackID TrackID) bool {
+	switch trackID {
+	case "routing", "model_pool", "joint", "multimodal", "capacity":
+		return true
+	default:
+		return false
+	}
+}
+
+func installedSuiteIsBenchmarkPack(manifest suiteManifestProjection) (bool, error) {
+	var source suiteSourceReceiptProjection
+	if err := decodeExactJSON(manifest.SourceReceipt, &source); err != nil {
+		return false, fmt.Errorf("%w: normalized suite source receipt is invalid", ErrInvalid)
+	}
+	return source.SourceKind == "benchmark_pack", nil
+}
+
+func installedBenchmarkPackLiveTracks(
+	root string,
+	document installedSuiteDocument,
+) (map[TrackID]struct{}, error) {
+	isPack, err := installedSuiteIsBenchmarkPack(document.Manifest)
+	if err != nil || !isPack {
+		return nil, err
+	}
+	plans, err := installedVisibleCasePlans(root, document)
+	if err != nil {
+		return nil, err
+	}
+	labels := make(map[string]gradingCaseEvidence, len(plans))
+	if err := scanInstalledSuiteRole(root, document.Manifest, "grading_cases", true, func(line []byte, lineNumber int) error {
+		row, decodeErr := decodeInstalledGradingCase(line)
+		if decodeErr != nil {
+			return fmt.Errorf("%w: installed grading case line %d is invalid", ErrInvalid, lineNumber)
+		}
+		if _, planned := plans[row.CaseID]; !planned {
+			return fmt.Errorf("%w: installed grading case is not present in the visible plan", ErrInvalid)
+		}
+		if _, duplicate := labels[row.CaseID]; duplicate {
+			return fmt.Errorf("%w: installed grading case identity is duplicated", ErrInvalid)
+		}
+		labels[row.CaseID] = row
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if len(labels) != len(plans) {
+		return nil, fmt.Errorf("%w: installed grading cases do not cover the visible plan", ErrInvalid)
+	}
+
+	allTrackCases := func(trackID TrackID, qualified func(gradingCaseEvidence) bool) bool {
+		count := 0
+		for caseID, plan := range plans {
+			if !containsTrack(plan.TrackIDs, trackID) {
+				continue
+			}
+			count++
+			if !qualified(labels[caseID]) {
+				return false
+			}
+		}
+		return count > 0
+	}
+	admitted := make(map[TrackID]struct{}, len(document.Manifest.TrackIDs))
+	for _, trackID := range document.Manifest.TrackIDs {
+		if !benchmarkPackLiveTrack(trackID) {
+			continue
+		}
+		switch trackID {
+		case "routing":
+			if allTrackCases(trackID, func(label gradingCaseEvidence) bool {
+				return label.ExpectedRoute != nil && strings.TrimSpace(*label.ExpectedRoute) != ""
+			}) {
+				admitted[trackID] = struct{}{}
+			}
+		case "model_pool", "joint":
+			if allTrackCases(trackID, func(label gradingCaseEvidence) bool {
+				return label.ExpectedAnswer != nil && strings.TrimSpace(*label.ExpectedAnswer) != ""
+			}) {
+				admitted[trackID] = struct{}{}
+			}
+		case "capacity":
+			if allTrackCases(trackID, func(gradingCaseEvidence) bool { return true }) {
+				admitted[trackID] = struct{}{}
+			}
+		case "multimodal":
+			if !allTrackCases(trackID, func(label gradingCaseEvidence) bool {
+				return label.ExpectedAnswer != nil && strings.TrimSpace(*label.ExpectedAnswer) != ""
+			}) {
+				continue
+			}
+			eligible, eligibilityErr := installedMultimodalLiveSourceEligible(root, document)
+			if eligibilityErr != nil {
+				return nil, eligibilityErr
+			}
+			if eligible {
+				admitted[trackID] = struct{}{}
+			}
+		}
+	}
+	return admitted, nil
+}
+
+// installedMultimodalLiveSourceEligible admits a complete hidden-answer image
+// cohort from either the maintained MMR parser or a declarative Benchmark Pack.
+// Imported observations remain E0; only a fresh brokered run can earn E4.
 func installedMultimodalLiveSourceEligible(
 	root string,
 	document installedSuiteDocument,
 ) (bool, error) {
 	manifest := document.Manifest
-	if manifest.AdapterID != "mmr-bench" || !containsTrack(manifest.TrackIDs, "multimodal") {
+	if !containsTrack(manifest.TrackIDs, "multimodal") {
 		return false, nil
 	}
+	isPack, err := installedSuiteIsBenchmarkPack(manifest)
+	if err != nil {
+		return false, err
+	}
 	var provenance unqualifiedSuiteEvidence
-	if err := decodeExactJSON(manifest.QualificationReceipt.Qualification, &provenance); err != nil {
+	if decodeErr := decodeExactJSON(manifest.QualificationReceipt.Qualification, &provenance); decodeErr != nil {
 		return false, fmt.Errorf("%w: normalized suite parser qualification is invalid", ErrInvalid)
 	}
-	if !provenance.ParserVerified {
+	registeredMMR := manifest.AdapterID == "mmr-bench" && provenance.ParserVerified
+	if !registeredMMR && !isPack {
 		return false, nil
 	}
 	var artifacts map[string]json.RawMessage
-	if err := json.Unmarshal(manifest.Artifacts, &artifacts); err != nil {
+	if decodeErr := json.Unmarshal(manifest.Artifacts, &artifacts); decodeErr != nil {
 		return false, fmt.Errorf("%w: normalized suite artifact set is invalid", ErrInvalid)
 	}
-	for _, role := range []string{"media_manifest", "multimodal_observations"} {
-		if _, present := artifacts[role]; !present {
-			return false, nil
-		}
+	if _, present := artifacts["media_manifest"]; !present {
+		return false, nil
+	}
+	if _, present := artifacts["multimodal_observations"]; registeredMMR && !present {
+		return false, nil
 	}
 
 	caseImages, err := installedMultimodalCaseImages(root, document)
@@ -79,7 +213,7 @@ func installedMultimodalLiveSourceEligible(
 	if err != nil {
 		return false, err
 	}
-	if len(caseImages) != manifest.CaseCount || len(media) == 0 {
+	if len(caseImages) == 0 || (registeredMMR && len(caseImages) != manifest.CaseCount) || len(media) == 0 {
 		return false, fmt.Errorf("%w: normalized multimodal live cohort is incomplete", ErrInvalid)
 	}
 	usedMedia := make(map[string]struct{}, len(caseImages))
@@ -93,7 +227,7 @@ func installedMultimodalLiveSourceEligible(
 	if len(usedMedia) != len(media) {
 		return false, fmt.Errorf("%w: normalized multimodal media manifest contains an unused object", ErrInvalid)
 	}
-	if err := validateInstalledMultimodalLabels(root, document); err != nil {
+	if err := validateInstalledMultimodalLabels(root, document, registeredMMR); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -119,7 +253,13 @@ func installedMultimodalCaseImages(
 			return fmt.Errorf("%w: installed multimodal visible line %d is invalid", ErrInvalid, lineNumber)
 		}
 		plan, planned := plans[row.ID]
-		if !planned || plan.Modality != "image" || !containsTrack(plan.TrackIDs, "multimodal") {
+		if !planned {
+			return fmt.Errorf("%w: installed multimodal live cohort contains an unknown case", ErrInvalid)
+		}
+		if !containsTrack(plan.TrackIDs, "multimodal") {
+			return nil
+		}
+		if plan.Modality != "image" {
 			return fmt.Errorf("%w: installed multimodal live cohort contains a non-image case", ErrInvalid)
 		}
 		var image *installedImageSubject
@@ -228,19 +368,35 @@ type installedMultimodalObservation struct {
 	SourceRecordDigest string   `json:"source_record_digest"`
 }
 
-func validateInstalledMultimodalLabels(root string, document installedSuiteDocument) error {
+func validateInstalledMultimodalLabels(
+	root string,
+	document installedSuiteDocument,
+	requireObservations bool,
+) error {
 	plans, err := installedVisibleCasePlans(root, document)
 	if err != nil {
 		return err
 	}
-	grading := make(map[string]struct{}, len(plans))
+	multimodalCases := make(map[string]struct{})
+	for caseID, plan := range plans {
+		if containsTrack(plan.TrackIDs, "multimodal") {
+			multimodalCases[caseID] = struct{}{}
+		}
+	}
+	grading := make(map[string]struct{}, len(multimodalCases))
 	if err := scanInstalledSuiteRole(root, document.Manifest, "grading_cases", true, func(line []byte, lineNumber int) error {
 		row, err := decodeInstalledGradingCase(line)
-		if err != nil || row.ExpectedAnswer == nil || strings.TrimSpace(*row.ExpectedAnswer) == "" {
-			return fmt.Errorf("%w: installed multimodal grading line %d lacks an exact hidden answer", ErrInvalid, lineNumber)
+		if err != nil {
+			return fmt.Errorf("%w: installed multimodal grading line %d is invalid", ErrInvalid, lineNumber)
 		}
 		if _, planned := plans[row.CaseID]; !planned {
 			return fmt.Errorf("%w: installed multimodal grading identity is unplanned", ErrInvalid)
+		}
+		if _, selected := multimodalCases[row.CaseID]; !selected {
+			return nil
+		}
+		if row.ExpectedAnswer == nil || strings.TrimSpace(*row.ExpectedAnswer) == "" {
+			return fmt.Errorf("%w: installed multimodal grading line %d lacks an exact hidden answer", ErrInvalid, lineNumber)
 		}
 		if _, duplicate := grading[row.CaseID]; duplicate {
 			return fmt.Errorf("%w: installed multimodal grading identity is duplicated", ErrInvalid)
@@ -250,27 +406,32 @@ func validateInstalledMultimodalLabels(root string, document installedSuiteDocum
 	}); err != nil {
 		return err
 	}
-	observations := make(map[string]struct{}, len(plans))
-	if err := scanInstalledSuiteRole(root, document.Manifest, "multimodal_observations", true, func(line []byte, lineNumber int) error {
-		var row installedMultimodalObservation
-		if err := decodeStrictJSONLine(line, &row); err != nil || row.SchemaVersion != normalizedSuiteSchemaVersion ||
-			row.Modality != "image" || row.PrivacyViolations < 0 || !digestPattern.MatchString(row.SourceRecordDigest) ||
-			(row.Quality != nil && (!finiteFloat(*row.Quality) || *row.Quality < 0 || *row.Quality > 1)) {
-			return fmt.Errorf("%w: installed multimodal observation line %d is invalid", ErrInvalid, lineNumber)
-		}
-		if _, planned := plans[row.CaseID]; !planned {
-			return fmt.Errorf("%w: installed multimodal observation identity is unplanned", ErrInvalid)
-		}
-		if _, duplicate := observations[row.CaseID]; duplicate {
-			return fmt.Errorf("%w: installed multimodal observation identity is duplicated", ErrInvalid)
-		}
-		observations[row.CaseID] = struct{}{}
-		return nil
-	}); err != nil {
-		return err
-	}
-	if len(grading) != len(plans) || len(observations) != len(plans) {
+	if len(grading) != len(multimodalCases) {
 		return fmt.Errorf("%w: installed multimodal labels do not cover the exact case cohort", ErrInvalid)
+	}
+	if requireObservations {
+		observations := make(map[string]struct{}, len(multimodalCases))
+		if err := scanInstalledSuiteRole(root, document.Manifest, "multimodal_observations", true, func(line []byte, lineNumber int) error {
+			var row installedMultimodalObservation
+			if err := decodeStrictJSONLine(line, &row); err != nil || row.SchemaVersion != normalizedSuiteSchemaVersion ||
+				row.Modality != "image" || row.PrivacyViolations < 0 || !digestPattern.MatchString(row.SourceRecordDigest) ||
+				(row.Quality != nil && (!finiteFloat(*row.Quality) || *row.Quality < 0 || *row.Quality > 1)) {
+				return fmt.Errorf("%w: installed multimodal observation line %d is invalid", ErrInvalid, lineNumber)
+			}
+			if _, planned := multimodalCases[row.CaseID]; !planned {
+				return fmt.Errorf("%w: installed multimodal observation identity is unplanned", ErrInvalid)
+			}
+			if _, duplicate := observations[row.CaseID]; duplicate {
+				return fmt.Errorf("%w: installed multimodal observation identity is duplicated", ErrInvalid)
+			}
+			observations[row.CaseID] = struct{}{}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if len(observations) != len(multimodalCases) {
+			return fmt.Errorf("%w: installed multimodal observations do not cover the exact case cohort", ErrInvalid)
+		}
 	}
 	return nil
 }
@@ -285,6 +446,10 @@ func normalizedSuiteLiveMethodTracks(suite CatalogSuite) map[TrackID]struct{} {
 		case method.ID == normalizedMultimodalLiveMethodID && method.TrackID == "multimodal" && method.Status == "configured" &&
 			method.EvidenceSource == CatalogMethodEvidenceSourceLiveRuntime && len(method.QualifiedGateIDs) == 0:
 			tracks["multimodal"] = struct{}{}
+		case benchmarkPackLiveTrack(method.TrackID) && method.ID == benchmarkPackLiveMethodID(method.TrackID) &&
+			method.Status == "configured" && method.EvidenceSource == CatalogMethodEvidenceSourceLiveRuntime &&
+			len(method.QualifiedGateIDs) == 0:
+			tracks[method.TrackID] = struct{}{}
 		}
 	}
 	return tracks

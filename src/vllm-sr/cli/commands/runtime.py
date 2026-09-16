@@ -14,7 +14,7 @@ from cli.bootstrap import (
 )
 from cli.commands.common import exit_with_logged_error
 from cli.commands.runtime_config_mutation import (
-    ALGORITHM_TYPES,
+    ALGORITHM_OVERRIDE_TYPES,
 )
 from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
@@ -32,6 +32,7 @@ from cli.commands.runtime_support import (
 )
 from cli.consts import (
     DEFAULT_IMAGE_PULL_POLICY,
+    HEALTH_CHECK_TIMEOUT,
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
@@ -41,7 +42,8 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
-from cli.terminal import fields, heading, success
+from cli.runtime_lifecycle import validate_startup_timeout
+from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -63,7 +65,7 @@ RUNTIME_HELP = (
 
 
 def _build_backend(target: str | None, **k8s_kwargs):
-    """Instantiate the right DeploymentBackend for *target*."""
+    """Instantiate the deployment backend for *target*."""
     resolved = resolve_target(target)
     if resolved == "k8s":
         from cli.k8s_backend import K8sBackend  # noqa: PLC0415
@@ -137,6 +139,7 @@ def _deploy_serve_backend(
     image_pull_policy: str,
     minimal: bool,
     readonly: bool,
+    startup_timeout: int | None,
 ) -> None:
     """Deploy one prepared runtime."""
 
@@ -162,11 +165,13 @@ def _deploy_serve_backend(
         enable_observability=not minimal,
         minimal=minimal,
         readonly=readonly,
+        **({"startup_timeout": startup_timeout} if startup_timeout is not None else {}),
     )
 
 
 def _execute_serve(
     config: str,
+    replace_active_config: bool,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
@@ -184,9 +189,16 @@ def _execute_serve(
     chart_dir: str | None,
     runtime: str | None,
     recipe_env_names: tuple[str, ...] = (),
+    startup_timeout: int | None = None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     resolved_target = resolve_target(target)
+    if startup_timeout is not None:
+        validate_startup_timeout(startup_timeout)
+        if resolved_target != "docker":
+            raise ValueError(
+                "--startup-timeout is supported only for local Docker deployments"
+            )
     _validate_target_platform(resolved_target, platform)
     apply_container_runtime_override(runtime)
     config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
@@ -205,6 +217,9 @@ def _execute_serve(
                 source_setup_mode=source_setup_mode,
                 platform=platform,
                 recipe_env_bindings=recipe_env_bindings,
+                replace_active_config=replace_active_config,
+                minimal=minimal,
+                readonly=readonly,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -241,6 +256,7 @@ def _execute_serve(
             image_pull_policy=image_pull_policy,
             minimal=minimal,
             readonly=readonly,
+            startup_timeout=startup_timeout,
         )
     finally:
         if runtime_lock is not None:
@@ -253,6 +269,14 @@ def _execute_serve(
     default="config.yaml",
     show_default=True,
     help="Path to the Router configuration.",
+)
+@click.option(
+    "--replace-active-config",
+    is_flag=True,
+    help=(
+        "Replace this local Docker stack's active runtime config from --config, "
+        "discarding Dashboard edits."
+    ),
 )
 @click.option(
     "--image",
@@ -288,6 +312,16 @@ def _execute_serve(
     help=f"Image pull policy: always, ifnotpresent, never (default: {DEFAULT_IMAGE_PULL_POLICY})",
 )
 @click.option(
+    "--startup-timeout",
+    type=click.IntRange(min=1),
+    default=None,
+    metavar="SECONDS",
+    help=(
+        "Local Docker startup readiness budget in seconds, including model loading "
+        f"and compilation (default: {HEALTH_CHECK_TIMEOUT})."
+    ),
+)
+@click.option(
     "--readonly",
     is_flag=True,
     default=False,
@@ -313,20 +347,25 @@ def _execute_serve(
     default=None,
     help="Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, "
     "'nvidia' enables NVIDIA GPU passthrough (--gpus all). "
-    "When set to amd or nvidia, serve defaults to the matching GPU image "
-    "(ROCm / CUDA) and flips use_cpu to false for router internal models under "
-    "global.model_catalog, unless --image or VLLM_SR_IMAGE is provided. "
+    "Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or "
+    "VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD "
+    "semantic embeddings retain their configured use_cpu value (default true). "
+    "MIGraphX mmBERT embeddings require an explicit model binding and deployment "
+    "with an input token budget. "
     "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings. "
     "For Kubernetes, configure GPU images and resources through a Helm profile "
     "or the operator.",
 )
 @click.option(
     "--algorithm",
-    type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
+    type=click.Choice(ALGORITHM_OVERRIDE_TYPES, case_sensitive=False),
     default=None,
-    help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
-    "workflows, latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
-    "Cross-request learning uses global.router.learning.adaptation/protection.",
+    help=(
+        "Request-time base algorithm override for payload-safe algorithms: "
+        f"{', '.join(ALGORITHM_OVERRIDE_TYPES)}. Algorithms that require an "
+        "authored payload remain available in config.yaml. Cross-request learning "
+        "uses global.router.learning.adaptation/protection."
+    ),
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -362,6 +401,7 @@ def _execute_serve(
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
     config: str,
+    replace_active_config: bool,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
@@ -379,9 +419,11 @@ def serve(
     chart_dir: str | None,
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
+    startup_timeout: int | None,
 ) -> None:
     _execute_serve(
         config,
+        replace_active_config,
         image,
         router_image,
         envoy_image,
@@ -399,6 +441,7 @@ def serve(
         chart_dir,
         runtime,
         recipe_env_names,
+        startup_timeout,
     )
 
 
@@ -547,7 +590,7 @@ def dashboard(
 
     Examples:
         vllm-sr dashboard                   # Docker dashboard
-        vllm-sr dashboard --target k8s      # Show K8s dashboard URL
+        vllm-sr dashboard --target k8s      # Show K8s address and port forward
         vllm-sr dashboard --no-open
     """
     apply_container_runtime_override(runtime)
@@ -558,6 +601,17 @@ def dashboard(
     dashboard_url = backend.get_dashboard_url()
     if dashboard_url is None:
         raise ValueError("Dashboard URL could not be determined")
+
+    if resolve_target(target) == "k8s":
+        # The Kubernetes address is a ClusterIP, reachable from inside the
+        # cluster only, so a browser on this machine cannot open it.
+        heading("Dashboard")
+        fields((("In cluster", dashboard_url),))
+        port_forward = backend.get_dashboard_port_forward()
+        if port_forward is not None:
+            heading("Local access")
+            echo(f"  {port_forward}")
+        return
 
     if no_open:
         heading("Dashboard")

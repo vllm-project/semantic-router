@@ -89,7 +89,7 @@ def _endpoint(base: str, suffix: str) -> str:
 
 
 def _route_url(base: str) -> str:
-    return _endpoint(base, "/api/v1/eval") + "?trace=true"
+    return _endpoint(base, "/api/v1/routing/preview") + "?trace=true"
 
 
 def _accounting_for_arm(
@@ -215,7 +215,6 @@ def _route_records(
             {
                 "model": mixture.entrypoint_model,
                 "messages": message_payloads(case),
-                "evaluate_all_signals": True,
             },
             track_id="routing",
             case_id=case.id,

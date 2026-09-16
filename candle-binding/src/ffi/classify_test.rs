@@ -7,6 +7,20 @@ use rstest::*;
 use std::ffi::{CStr, CString};
 use std::ptr;
 
+#[test]
+fn test_mmbert_pii_invalid_input_is_not_a_clean_scan() {
+    let null_result = classify_mmbert_32k_pii_tokens(ptr::null());
+    assert_eq!(null_result.num_entities, -1);
+    assert!(null_result.entities.is_null());
+    super::memory::free_modernbert_token_result(null_result);
+
+    let invalid_utf8 = [0xff_u8, 0];
+    let result = classify_mmbert_32k_pii_tokens(invalid_utf8.as_ptr().cast());
+    assert_eq!(result.num_entities, -1);
+    assert!(result.entities.is_null());
+    super::memory::free_modernbert_token_result(result);
+}
+
 /// Test load_id2label_from_config function with real model
 #[rstest]
 fn test_classify_load_id2label_from_config(traditional_pii_token_model_path: String) {
@@ -28,7 +42,7 @@ fn test_classify_load_id2label_from_config(traditional_pii_token_model_path: Str
             }
 
             // Test specific label mappings for PII model
-            for (_, label) in id2label.iter() {
+            for label in id2label.values() {
                 assert!(!label.is_empty(), "Label should not be empty");
             }
 
@@ -164,25 +178,6 @@ fn test_classify_null_pointer_safety() {
     assert_eq!(entity.confidence, 0.0);
 
     println!("Null pointer safety test passed");
-}
-
-#[test]
-fn test_classification_result_preserves_probabilities() {
-    let probabilities = [0.2_f32, 0.8_f32];
-    let result = super::classify::classification_result_with_probabilities(
-        1,
-        probabilities[1],
-        &probabilities,
-    );
-
-    assert_eq!(result.predicted_class, 1);
-    assert_eq!(result.confidence, 0.8);
-    assert_eq!(result.num_classes, 2);
-    assert!(!result.probabilities.is_null());
-    let returned =
-        unsafe { std::slice::from_raw_parts(result.probabilities, result.num_classes as usize) };
-    assert_eq!(returned, probabilities);
-    super::memory::free_probabilities(result.probabilities, result.num_classes);
 }
 
 /// Test FFI classification workflow with real model integration

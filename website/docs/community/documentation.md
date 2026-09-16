@@ -51,10 +51,10 @@ npm test
 npm run build:en
 ```
 
-From the repository root, the docs-only CI path is:
+From the repository root, run the same changed-file path as CI:
 
 ```bash
-make agent-docs-ci-gate AGENT_BASE_REF=origin/main
+make check BASE_REF=origin/main
 ```
 
 The build treats broken internal links as errors. Check external links that are

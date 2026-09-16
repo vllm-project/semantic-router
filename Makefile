@@ -20,6 +20,7 @@ _run:
 		-f tools/make/valkey.mk \
 		-f tools/make/llama-stack.mk \
 		-f tools/make/models.mk \
+		-f tools/make/model-catalog.mk \
 		-f tools/make/pre-commit.mk \
 		-f tools/make/security.mk \
 		-f tools/make/docker.mk \

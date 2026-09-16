@@ -1,4 +1,4 @@
-"""Trusted normalization plugins for all audited benchmark adapters."""
+"""Built-in normalization definitions for audited benchmark adapters."""
 
 from __future__ import annotations
 
@@ -38,8 +38,8 @@ NativeParser = Callable[[Path, BenchmarkNormalizerDescriptor], NormalizedAdapter
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkNormalizerPlugin:
-    """One immutable native-export contract and its only executable parser."""
+class BenchmarkNormalizerDefinition:
+    """One immutable native-export contract and its trusted parser."""
 
     descriptor: BenchmarkNormalizerDescriptor
     parser: NativeParser | None
@@ -49,23 +49,25 @@ class BenchmarkNormalizerPlugin:
         if self.descriptor.executable != has_parser:
             state = "executable" if self.descriptor.executable else "non-executable"
             requirement = "must have" if self.descriptor.executable else "must not have"
-            raise ValueError(f"{state} normalizer plugin {requirement} a parser")
+            raise ValueError(f"{state} normalizer definition {requirement} a parser")
         if self.parser is not None and not callable(self.parser):
-            raise ValueError("normalizer plugin parser must be callable")
+            raise ValueError("normalizer definition parser must be callable")
 
 
-class BenchmarkNormalizerRegistry:
-    """Immutable plugin lookup with fail-closed adapter contract parity."""
+class BenchmarkNormalizerCatalog:
+    """Immutable built-in lookup with fail-closed adapter contract parity."""
 
     __slots__ = ("_by_id",)
 
-    def __init__(self, plugins: Iterable[BenchmarkNormalizerPlugin]):
-        by_id: dict[str, BenchmarkNormalizerPlugin] = {}
-        for plugin in plugins:
-            adapter_id = plugin.descriptor.adapter_id
+    def __init__(self, definitions: Iterable[BenchmarkNormalizerDefinition]):
+        by_id: dict[str, BenchmarkNormalizerDefinition] = {}
+        for definition in definitions:
+            adapter_id = definition.descriptor.adapter_id
             if adapter_id in by_id:
-                raise ValueError(f"duplicate benchmark normalizer plugin: {adapter_id}")
-            by_id[adapter_id] = plugin
+                raise ValueError(
+                    f"duplicate benchmark normalizer definition: {adapter_id}"
+                )
+            by_id[adapter_id] = definition
 
         adapters = get_benchmark_registry().adapters
         adapters_by_id = {adapter.id: adapter for adapter in adapters}
@@ -82,27 +84,29 @@ class BenchmarkNormalizerRegistry:
                 "benchmark normalizer descriptor parity mismatch: "
                 f"missing={missing}, unexpected={unexpected}"
             )
-        for adapter_id, plugin in by_id.items():
+        for adapter_id, definition in by_id.items():
             adapter = adapters_by_id[adapter_id]
-            if not set(plugin.descriptor.track_ids).issubset(adapter.track_ids):
+            if not set(definition.descriptor.track_ids).issubset(adapter.track_ids):
                 raise ValueError(
                     "benchmark normalizer descriptor parity mismatch: "
                     f"{adapter_id} declares tracks outside its adapter contract"
                 )
-        self._by_id: Mapping[str, BenchmarkNormalizerPlugin] = MappingProxyType(by_id)
+        self._by_id: Mapping[str, BenchmarkNormalizerDefinition] = MappingProxyType(
+            by_id
+        )
 
     @property
     def descriptors(self) -> tuple[BenchmarkNormalizerDescriptor, ...]:
-        return tuple(plugin.descriptor for plugin in self._by_id.values())
+        return tuple(definition.descriptor for definition in self._by_id.values())
 
-    def require(self, adapter_id: str) -> BenchmarkNormalizerPlugin:
+    def require(self, adapter_id: str) -> BenchmarkNormalizerDefinition:
         try:
             return self._by_id[adapter_id]
         except KeyError as exc:
             raise ValueError(f"unknown benchmark normalizer: {adapter_id}") from exc
 
 
-def _plugin(
+def _definition(
     adapter_id: str,
     parser: NativeParser,
     schema: str,
@@ -110,8 +114,8 @@ def _plugin(
     artifacts: tuple[NativeArtifactRequirement, ...],
     metrics: tuple[NativeMetricMapping, ...],
     limitations: tuple[str, ...],
-) -> BenchmarkNormalizerPlugin:
-    return BenchmarkNormalizerPlugin(
+) -> BenchmarkNormalizerDefinition:
+    return BenchmarkNormalizerDefinition(
         descriptor=BenchmarkNormalizerDescriptor(
             adapter_id=adapter_id,
             export_schema_id=schema,
@@ -125,8 +129,8 @@ def _plugin(
     )
 
 
-_REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
-    _plugin(
+_BUILTIN_NORMALIZERS: tuple[BenchmarkNormalizerDefinition, ...] = (
+    _definition(
         "routerarena",
         normalize_routerarena,
         "routerarena.predictions-and-robustness.v2",
@@ -154,7 +158,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "The robustness method attests RouterArena action stability under its pinned paraphrase split; it does not infer contamination or arbitrary OOD coverage.",
         ),
     ),
-    BenchmarkNormalizerPlugin(
+    BenchmarkNormalizerDefinition(
         descriptor=BenchmarkNormalizerDescriptor(
             adapter_id="routejudge-orbit",
             export_schema_id="routejudge-orbit.unavailable.v1",
@@ -171,7 +175,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
         ),
         parser=None,
     ),
-    _plugin(
+    _definition(
         "coderouterbench",
         normalize_coderouterbench,
         "coderouterbench.id-results.v1",
@@ -193,7 +197,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "This path excludes the sandboxed OOD agent stream and does not claim agentic evidence.",
         ),
     ),
-    _plugin(
+    _definition(
         "llmrouterbench",
         normalize_llmrouterbench,
         "llmrouterbench.result-documents.v1",
@@ -209,7 +213,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "Gain-at-budget, Pareto-distance, and pricing-drift reducers are not attested.",
         ),
     ),
-    BenchmarkNormalizerPlugin(
+    BenchmarkNormalizerDefinition(
         descriptor=BenchmarkNormalizerDescriptor(
             adapter_id="routereval",
             export_schema_id="routereval.unavailable.v1",
@@ -225,7 +229,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
         ),
         parser=None,
     ),
-    _plugin(
+    _definition(
         "routerbench",
         normalize_routerbench,
         "routerbench.wide-csv.v1",
@@ -243,7 +247,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "AIQ and zero-router convex-hull reducers are not attested.",
         ),
     ),
-    _plugin(
+    _definition(
         "xroutebench",
         normalize_xroutebench,
         "xroutebench.standardized-csv.v1",
@@ -259,7 +263,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "Preference, multimodal media, hidden-call costs, and weighted-frontier reducers require separate native artifacts.",
         ),
     ),
-    _plugin(
+    _definition(
         "twinrouterbench",
         normalize_twinrouterbench,
         "twinrouterbench.static-summary.v1",
@@ -278,7 +282,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "Cost savings and full-trajectory resolved/bill metrics are not attested.",
         ),
     ),
-    _plugin(
+    _definition(
         "mmr-bench",
         normalize_mmr_bench,
         "mmrbench.merged-csv.v1",
@@ -301,7 +305,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "Normalized AUC, peak, and deployability/capability-mask reducers are not attested.",
         ),
     ),
-    _plugin(
+    _definition(
         "acebench",
         normalize_acebench,
         "acebench.run-summary.v1",
@@ -321,7 +325,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "Privacy score is not converted into a privacy-exposure count or safety gate.",
         ),
     ),
-    _plugin(
+    _definition(
         "continuity-bench",
         normalize_continuitybench,
         "continuitybench.labeled-failover.v3",
@@ -360,7 +364,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "Latency and concurrency columns remain source-bound; this path does not claim capacity qualification.",
         ),
     ),
-    _plugin(
+    _definition(
         "fusionfactory",
         normalize_fusionfactory,
         "fusionfactory.aligned-csv.v1",
@@ -380,7 +384,7 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
             "Composite-quality and full-call-ledger reducers are not attested.",
         ),
     ),
-    _plugin(
+    _definition(
         "r2-router",
         normalize_r2_router,
         "r2bench.model-budget-csv.v1",
@@ -398,16 +402,18 @@ _REGISTERED_PLUGINS: tuple[BenchmarkNormalizerPlugin, ...] = (
     ),
 )
 
-_REGISTRY = BenchmarkNormalizerRegistry(_REGISTERED_PLUGINS)
+_REGISTRY = BenchmarkNormalizerCatalog(_BUILTIN_NORMALIZERS)
 
 
 def get_benchmark_normalizers() -> tuple[BenchmarkNormalizerDescriptor, ...]:
     return _REGISTRY.descriptors
 
 
-def get_benchmark_normalizer_plugin(adapter_id: str) -> BenchmarkNormalizerPlugin:
+def get_benchmark_normalizer_definition(
+    adapter_id: str,
+) -> BenchmarkNormalizerDefinition:
     return _REGISTRY.require(adapter_id)
 
 
 def get_benchmark_normalizer(adapter_id: str) -> BenchmarkNormalizerDescriptor:
-    return get_benchmark_normalizer_plugin(adapter_id).descriptor
+    return get_benchmark_normalizer_definition(adapter_id).descriptor

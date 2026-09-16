@@ -46,8 +46,8 @@ type ClassResultWithProbs struct {
 // TokenEntity represents a single detected entity in token classification
 type TokenEntity struct {
 	EntityType string  // Type of entity (e.g., "PERSON", "EMAIL", "PHONE")
-	Start      int     // Start character position in original text
-	End        int     // End character position in original text
+	Start      int     // Start byte offset in original text (UTF-8 bytes, not characters)
+	End        int     // End byte offset in original text (exclusive)
 	Text       string  // Actual entity text
 	Confidence float32 // Confidence score (0.0 to 1.0)
 }
@@ -160,6 +160,21 @@ func TokenizeText(text string, maxLength int) (TokenizeResult, error) {
 
 func TokenizeTextDefault(text string) (TokenizeResult, error) {
 	return TokenizeResult{}, ErrBackendUnavailable
+}
+
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	return false, ErrBackendUnavailable
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns the byte ranges a text has to be split into to be embedded
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	return nil, ErrBackendUnavailable
 }
 
 // GetEmbedding gets the embedding vector for a text
@@ -569,8 +584,19 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return ClassResult{}, ErrBackendUnavailable
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text with mmBERT-32K feedback
+// classifier and returns the full probability distribution
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
+}
+
 // InitMmBert32KPIIClassifier initializes mmBERT-32K PII classifier
 func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
+	return ErrBackendUnavailable
+}
+
+// InitMmBert32KModalityClassifier is unavailable without the native backend.
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
 }
 
@@ -627,6 +653,12 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies feedback text
 func ClassifyFeedbackText(text string) (FeedbackResult, error) {
 	return FeedbackResult{}, ErrBackendUnavailable
+}
+
+// ClassifyFeedbackTextWithProbs classifies feedback text and returns the full
+// probability distribution
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // DetectHallucinations detects hallucinations

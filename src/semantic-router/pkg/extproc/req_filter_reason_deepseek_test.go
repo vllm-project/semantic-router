@@ -143,11 +143,11 @@ func newDeepSeekOfficialReasoningRouter() *OpenAIRouter {
 }
 
 func deepSeekOfficialProviderProfile() *config.ProviderProfile {
-	return &config.ProviderProfile{Type: "openai", BaseURL: "https://api.deepseek.com"}
+	return &config.ProviderProfile{Type: "deepseek", BaseURL: "https://api.deepseek.com"}
 }
 
 func localVLLMProviderProfile() *config.ProviderProfile {
-	return &config.ProviderProfile{Type: "openai", BaseURL: "http://localhost:8000/v1"}
+	return &config.ProviderProfile{Type: "vllm", BaseURL: "http://localhost:8000/v1"}
 }
 
 func assertDeepSeekOfficialReasoningRequest(t *testing.T, request map[string]interface{}, thinkingType string, effort string) {

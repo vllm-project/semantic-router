@@ -89,15 +89,24 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 	otel.SetTracerProvider(tracerProvider)
 
 	// Set global propagator for trace context propagation
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+	otel.SetTextMapPropagator(DefaultPropagator())
 
 	// Create named tracer for the router
 	tracer = tracerProvider.Tracer("semantic-router")
 
 	return nil
+}
+
+// DefaultPropagator is the text-map propagator InitTracing installs
+// globally: W3C trace context plus baggage. Baggage members a client sends
+// are therefore extracted into the request's trace context, which is why
+// outbound calls to less trusted targets must inject with
+// InjectSpanContextToSlice rather than the global propagator.
+func DefaultPropagator() propagation.TextMapPropagator {
+	return propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	)
 }
 
 func samplerFromConfig(cfg TracingConfig) sdktrace.Sampler {
@@ -246,13 +255,17 @@ func StartDecisionSpan(ctx context.Context, decisionName string) (context.Contex
 }
 
 // EndDecisionSpan ends a decision span with evaluation results
-func EndDecisionSpan(span trace.Span, confidence float64, matchedRules []string, strategy string) {
+func EndDecisionSpan(span trace.Span, confidence float64, matchedRules []string, strategy string, scored ...bool) {
 	if span == nil {
 		return
 	}
 
+	available := len(scored) == 0 || scored[0]
+	if available {
+		SetSpanAttributes(span, attribute.Float64(AttrDecisionConfidence, confidence))
+	}
 	SetSpanAttributes(span,
-		attribute.Float64(AttrDecisionConfidence, confidence),
+		attribute.Bool(AttrDecisionConfidence+"_available", available),
 		attribute.StringSlice(AttrDecisionMatchedRules, matchedRules),
 		attribute.String(AttrDecisionStrategy, strategy))
 

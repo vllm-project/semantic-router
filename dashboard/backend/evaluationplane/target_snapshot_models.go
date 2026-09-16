@@ -10,8 +10,15 @@ import (
 type modelArmResolver struct {
 	config          *routerconfig.RouterConfig
 	providersByBase map[string]routerconfig.CanonicalProviderModel
-	cardsByBase     map[string]routerconfig.RoutingModel
+	modelsByBase    map[string]modelArmMetadata
 	runtimeRevision string
+}
+
+type modelArmMetadata struct {
+	capabilities        []string
+	modalities          []string
+	contextWindowTokens int
+	parameterSize       string
 }
 
 func newModelArmResolver(
@@ -23,19 +30,35 @@ func newModelArmResolver(
 	for _, provider := range canonical.Providers.Models {
 		providers[strings.TrimSpace(provider.Name)] = provider
 	}
-	cards := make(map[string]routerconfig.RoutingModel, len(canonical.Routing.ModelCards))
-	for _, card := range canonical.Routing.ModelCards {
-		cards[strings.TrimSpace(card.Name)] = card
+	models := make(map[string]modelArmMetadata, len(cfg.ModelConfig))
+	for name, model := range cfg.ModelConfig {
+		models[strings.TrimSpace(name)] = modelArmMetadata{
+			capabilities:        normalizedCapabilities(model.Capabilities),
+			modalities:          normalizedModalities(model.Modality, model.Capabilities, nil),
+			contextWindowTokens: model.ContextWindowSize,
+			parameterSize:       model.ParamSize,
+		}
+	}
+	if cfg.EffectiveModelRegistry != nil {
+		for _, effective := range cfg.EffectiveModelRegistry.Models() {
+			card := effective.Card.Card
+			models[strings.TrimSpace(effective.Alias)] = modelArmMetadata{
+				capabilities:        normalizedCapabilities(card.Capabilities),
+				modalities:          normalizedModalities(effective.Card.RuntimeModality, card.Capabilities, card.Modalities.Input),
+				contextWindowTokens: card.Limits.ContextWindowSize,
+				parameterSize:       card.ParameterSize,
+			}
+		}
 	}
 	return modelArmResolver{
-		config: cfg, providersByBase: providers, cardsByBase: cards,
+		config: cfg, providersByBase: providers, modelsByBase: models,
 		runtimeRevision: runtimeRevision,
 	}
 }
 
 func (resolver modelArmResolver) resolve(binding mixtureModelBinding) (ModelArm, bool) {
 	provider, providerExists := resolver.providersByBase[binding.BaseModel]
-	card, cardExists := resolver.cardsByBase[binding.BaseModel]
+	model, modelExists := resolver.modelsByBase[binding.BaseModel]
 	if binding.EffectiveModel != binding.BaseModel {
 		if direct, exists := resolver.providersByBase[binding.EffectiveModel]; exists && len(direct.BackendRefs) > 0 {
 			return ModelArm{}, false
@@ -45,7 +68,7 @@ func (resolver modelArmResolver) resolve(binding mixtureModelBinding) (ModelArm,
 	if !configured {
 		pricing.Currency = "USD"
 	}
-	if !providerExists || !cardExists || !validProviderArm(provider, binding, pricing) {
+	if !providerExists || !modelExists || !validProviderArm(provider, binding, pricing) {
 		return ModelArm{}, false
 	}
 
@@ -62,10 +85,10 @@ func (resolver modelArmResolver) resolve(binding mixtureModelBinding) (ModelArm,
 		ProviderModelIDDigest:         providerDigest,
 		InputCostPerMillionTokensUSD:  pricing.PromptPer1M,
 		OutputCostPerMillionTokensUSD: pricing.CompletionPer1M,
-		Capabilities:                  normalizedCapabilities(card.Capabilities),
-		Modalities:                    normalizedModalities(card),
-		ContextWindowTokens:           positiveInt(card.ContextWindowSize),
-		ParameterSize:                 boundedOptionalString(card.ParamSize, 64),
+		Capabilities:                  append([]string(nil), model.capabilities...),
+		Modalities:                    append([]string(nil), model.modalities...),
+		ContextWindowTokens:           positiveInt(model.contextWindowTokens),
+		ParameterSize:                 boundedOptionalString(model.parameterSize, 64),
 		RuntimeRevision:               runtimeRevisionPointer(resolver.runtimeRevision),
 	}
 	arm.ConfigDigest = stringPointer(modelArmConfigDigest(provider, arm, pricing))
@@ -110,9 +133,13 @@ func modelArmConfigDigest(
 	if len(provider.ExternalModelIDs) > 0 {
 		externalDigest = digestJSON(provider.ExternalModelIDs)
 	}
+	reasoningFamily := ""
+	if provider.Reasoning != nil {
+		reasoningFamily = provider.Reasoning.Family
+	}
 	return digestJSON(armConfigFingerprint{
 		Model: arm.Model, ProviderModelIDDigest: arm.ProviderModelIDDigest,
-		ReasoningFamily: provider.ReasoningFamily, APIFormat: provider.APIFormat,
+		ReasoningFamily: reasoningFamily, APIFormat: provider.APIFormat,
 		InputCostPerMillionTokensUSD:   arm.InputCostPerMillionTokensUSD,
 		OutputCostPerMillionTokensUSD:  arm.OutputCostPerMillionTokensUSD,
 		CachedInputPerMillionTokensUSD: pricing.CachedInputPer1M,

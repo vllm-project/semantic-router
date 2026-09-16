@@ -109,6 +109,7 @@ export function canAccessDashboardPath(
   }
   if (
     normalizedPath.startsWith('/builder') ||
+    normalizedPath.startsWith('/models') ||
     normalizedPath.startsWith('/config') ||
     normalizedPath.startsWith('/knowledge-bases') ||
     normalizedPath.startsWith('/taxonomy')

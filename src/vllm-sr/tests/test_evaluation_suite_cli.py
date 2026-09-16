@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from cli.commands.eval import eval
+from cli.commands.benchmark import benchmark
 from cli.evaluation.benchmark_registry import get_benchmark_adapter
 from cli.evaluation.canonical import canonical_json_bytes
 from cli.evaluation.constants import SCHEMA_VERSION
@@ -84,6 +84,7 @@ def _artifact(root: Path, role: SuiteArtifactRole) -> SuiteArtifactInstall:
 def _request(root: Path) -> BenchmarkSuiteInstallRequest:
     descriptor = get_benchmark_adapter("routerarena")
     receipt = BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id=descriptor.id,
         expected_source_revision=descriptor.source_revision,
         observed_source_revision=descriptor.source_revision,
@@ -137,7 +138,7 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     )
 
     installed_result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-install",
             "--request",
@@ -161,7 +162,7 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     }
 
     listed_result = runner.invoke(
-        eval, ["suite-list", "--suite-store", str(store_path)]
+        benchmark, ["suite-list", "--suite-store", str(store_path)]
     )
     assert listed_result.exit_code == 0, listed_result.output
     listed = json.loads(listed_result.output)
@@ -174,7 +175,9 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     assert "private-route" not in encoded_list
     assert "PRIVATE PROMPT" not in encoded_list
 
-    catalog_result = runner.invoke(eval, ["catalog", "--suite-store", str(store_path)])
+    catalog_result = runner.invoke(
+        benchmark, ["catalog", "--suite-store", str(store_path)]
+    )
     assert catalog_result.exit_code == 0, catalog_result.output
     catalog = json.loads(catalog_result.output)
     installed_catalog = next(
@@ -194,7 +197,7 @@ def test_suite_install_list_and_show_keep_output_boundaries(
     assert "PRIVATE PROMPT" not in catalog_result.output
 
     shown_result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-show",
             "routerarena-cli-test",
@@ -223,7 +226,7 @@ def test_suite_install_strictly_rejects_unknown_request_fields(
     request_path.write_text(json.dumps(payload), encoding="utf-8")
 
     result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-install",
             "--request",
@@ -248,7 +251,7 @@ def test_suite_list_uses_private_default_store(
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
-    result = CliRunner().invoke(eval, ["suite-list"])
+    result = CliRunner().invoke(benchmark, ["suite-list"])
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["suites"] == []
@@ -259,7 +262,7 @@ def test_suite_list_uses_private_default_store(
 
 def test_suite_show_reports_missing_suite_as_user_error(tmp_path: Path) -> None:
     result = CliRunner().invoke(
-        eval,
+        benchmark,
         [
             "suite-show",
             "missing-suite",

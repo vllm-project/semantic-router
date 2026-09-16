@@ -39,11 +39,23 @@ plugins:
 warning to the response body, while `none` records the result without changing
 the response.
 
+With a [hallucination signal](../signal/learned/hallucination) declared under
+`routing.signals.hallucination`, detection runs as a response-stage signal and
+this plugin only enforces on it: it applies `hallucination_action` when the rule
+matched, `unverified_factual_action` when the answer had no grounding context
+to be checked against, and nothing when the rule was unavailable or did not
+apply. The rule then decides whether NLI explanations are produced, and the
+plugin's `use_nli` is reported as ignored at load. Without a rule the plugin
+classifies the answer itself, which is the compatibility path and is reported
+at load as such.
+
 The plugin depends on
 `global.model_catalog.modules.hallucination_mitigation`; `use_nli: true` also
 uses the configured explainer/NLI model. Model responses and supplied grounding
-context are processed by those modules. Detection can identify unsupported
-text, but it cannot establish truth without authoritative evidence.
+context are processed by those modules. Grounding context longer than the
+detector's token window is trimmed from the end so the answer always reaches
+the model. Detection can identify unsupported text, but it cannot establish
+truth without authoritative evidence.
 
 See a complete example:
 [`config/fragments/plugin/hallucination/fact-check.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/hallucination/fact-check.yaml).

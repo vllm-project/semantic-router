@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from cli.consts import HEALTH_CHECK_TIMEOUT
 from cli.container_cli import container_status
 from cli.container_runtime import get_container_runtime
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
+from cli.runtime_lifecycle import validate_startup_timeout
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import resolve_runtime_stack
 from cli.utils import get_logger
@@ -15,7 +17,7 @@ log = get_logger(__name__)
 
 
 class ContainerBackend:
-    """DeploymentBackend implementation for local Docker workflows."""
+    """Local Docker deployment backend."""
 
     def deploy(
         self,
@@ -32,8 +34,10 @@ class ContainerBackend:
         pull_policy: str | None = None,
         enable_observability: bool = True,
         runtime_config_lock: Any = None,
+        startup_timeout: int = HEALTH_CHECK_TIMEOUT,
         **kwargs: Any,
     ) -> None:
+        validate_startup_timeout(startup_timeout)
         if source_config_file is None:
             source_config_file = kwargs.get("source_config_file")
         if runtime_config_file is None:
@@ -52,6 +56,7 @@ class ContainerBackend:
                 pull_policy=pull_policy,
                 enable_observability=enable_observability,
                 runtime_config_lock=runtime_config_lock,
+                startup_timeout=startup_timeout,
             )
 
     def teardown(self) -> None:

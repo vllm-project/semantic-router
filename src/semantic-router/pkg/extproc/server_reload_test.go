@@ -2,21 +2,87 @@ package extproc
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
 var expectedAMDModelPaths = []string{
-	"models/mmbert-embed-32k-2d-matryoshka",
-	"models/mmbert32k-intent-classifier-merged",
-	"models/mmbert32k-factcheck-classifier-merged",
-	"models/mmbert32k-feedback-detector-merged",
+	"models/Vela-1.0-Encoder-307M-Embedding",
+	"models/Vela-1.0-Encoder-307M-Domain",
+	"models/Vela-1.0-Encoder-307M-FactCheck",
+	"models/Vela-1.0-Encoder-307M-Feedback",
+}
+
+func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+	previous := &OpenAIRouter{Config: &config.RouterConfig{}}
+	server := &Server{service: NewRouterService(previous)}
+	limit := 8
+	candidate := &config.RouterConfig{}
+	candidate.API.RoutingPreview.MaxConcurrency = &limit
+	ensureReloadConfigModels = func(*config.RouterConfig) error {
+		t.Fatal("restart-only change reached model download")
+		return nil
+	}
+	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		t.Fatal("restart-only change reached runtime preparation")
+		return modelruntime.EmbeddingRuntimeState{}, nil
+	}
+	for _, source := range []string{"file", "kubernetes"} {
+		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
+		if err == nil || !strings.Contains(err.Error(), "routing_preview.max_concurrency") {
+			t.Fatalf("%s reload error = %v", source, err)
+		}
+		if server.service.GetRouter() != previous || server.CurrentConfig() != previous.Config {
+			t.Fatal("restart-only candidate replaced the live generation")
+		}
+	}
+}
+
+func TestReloadRejectsLiveArtifactMutationBeforeDownload(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+	artifact := t.TempDir()
+	weights := filepath.Join(artifact, "model.safetensors")
+	if err := os.WriteFile(weights, []byte("live weights"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	makeConfig := func(revision string) *config.RouterConfig {
+		cfg := &config.RouterConfig{MoMRegistry: map[string]string{artifact: "test/model"}}
+		cfg.CategoryModel.ModelID = artifact
+		cfg.CategoryMappingPath = filepath.Join(artifact, "labels.json")
+		cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
+		cfg.ModelDeployments = map[string]config.ModelDeployment{"intent": {Provider: "candle", Artifact: artifact, Revision: revision}}
+		cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "intent", Contract: "label_distribution.v1", Adapter: "mmbert32k"}}
+		return cfg
+	}
+	previous := &OpenAIRouter{Config: makeConfig(strings.Repeat("a", 40))}
+	server := &Server{service: NewRouterService(previous)}
+	ensureReloadConfigModels = func(*config.RouterConfig) error {
+		t.Fatal("download may mutate live weights and must not run")
+		return nil
+	}
+	err := server.reloadRouterFromConfig("file", "config.yaml", makeConfig(strings.Repeat("b", 40)))
+	if err == nil || !strings.Contains(err.Error(), "in use") {
+		t.Fatalf("reload error = %v, want live artifact rejection", err)
+	}
+	if server.service.GetRouter() != previous || server.CurrentConfig() != previous.Config {
+		t.Fatal("rejected artifact candidate replaced the live generation")
+	}
+	data, readErr := os.ReadFile(weights)
+	if readErr != nil || string(data) != "live weights" {
+		t.Fatalf("live artifact changed: %q %v", data, readErr)
+	}
 }
 
 func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
@@ -52,7 +118,7 @@ func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 }
 
 func TestReloadRouterFromFileDoesNotSwapWhenModelEnsureFails(t *testing.T) {
-	const configPath = "/tmp/router-config.yaml"
+	configPath := filepath.Join(t.TempDir(), "router-config.yaml")
 
 	restoreReloadSeams := stubReloadSeams(t)
 	defer restoreReloadSeams()
@@ -60,6 +126,7 @@ func TestReloadRouterFromFileDoesNotSwapWhenModelEnsureFails(t *testing.T) {
 	candidateCfg := &config.RouterConfig{
 		BackendModels: config.BackendModels{DefaultModel: "candidate"},
 	}
+	writeReloadTestDocument(t, configPath, "candidate", candidateCfg)
 	oldRouter := &OpenAIRouter{Config: &config.RouterConfig{
 		BackendModels: config.BackendModels{DefaultModel: "old"},
 	}}
@@ -77,7 +144,7 @@ func TestReloadRouterFromFileDoesNotSwapWhenModelEnsureFails(t *testing.T) {
 		order = append(order, "ensure")
 		return errors.New("download unavailable")
 	}
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		t.Fatalf("buildReloadRouter() should not be called on ensure failure")
 		return nil, nil
 	}
@@ -181,7 +248,7 @@ func stubReloadPrepare(t *testing.T, candidateCfg *config.RouterConfig, order *[
 func stubReloadBuild(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
 	t.Helper()
 
-	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		appendReloadStep(order, "build")
 		if cfg != candidateCfg {
 			t.Fatalf("buildReloadRouter() cfg = %p, want %p", cfg, candidateCfg)

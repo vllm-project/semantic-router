@@ -38,8 +38,8 @@ func applyRoutingModelNumericFields(
 	if v, ok := getIntField(fields, "context_window_size"); ok {
 		params.ContextWindowSize = v
 	}
-	if v, ok := getFloat64Field(fields, "quality_score"); ok {
-		params.QualityScore = v
+	if v, ok := getIntField(fields, "max_output_tokens"); ok {
+		params.MaxOutputTokens = v
 	}
 }
 

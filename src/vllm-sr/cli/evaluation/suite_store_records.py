@@ -9,6 +9,7 @@ from typing import TypeAlias
 from cli.evaluation.canonical import strict_json_load, strict_json_loads
 from cli.evaluation.contract_primitives import ArtifactRef, StrictModel
 from cli.evaluation.contracts import CaseGrading, CaseVisible
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.suite_contract import (
     BenchmarkSuiteManifest,
     NormalizedCapacityObservation,
@@ -28,7 +29,6 @@ from cli.evaluation.suite_install_contract import (
     SuiteLicenseManifest,
 )
 from cli.evaluation.suite_store_cas import SuiteCAS
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 _MAX_JSONL_LINE_BYTES = 16 * 1024 * 1024
 _MAX_LICENSE_BYTES = 1024 * 1024

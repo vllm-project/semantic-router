@@ -114,10 +114,15 @@ func (graph *routingRecipePlanGraph) collectRuleNode(node *routerconfig.RuleNode
 	}
 	if node.IsLeaf() {
 		signalType := strings.ToLower(strings.TrimSpace(node.Type))
-		if signalType == routerconfig.SignalTypeProjection {
-			return graph.collectProjectionOutput(strings.TrimSpace(node.Name))
+		name := strings.TrimSpace(node.Name)
+		label := strings.TrimSpace(node.Label)
+		if signalType == "" && name == "" && label == "" {
+			return nil
 		}
-		graph.signals[routingRecipeRuntimeInputID(signalType, strings.TrimSpace(node.Name), strings.TrimSpace(node.Label))] = struct{}{}
+		if signalType == routerconfig.SignalTypeProjection {
+			return graph.collectProjectionOutput(name)
+		}
+		graph.signals[routingRecipeRuntimeInputID(signalType, name, label)] = struct{}{}
 		return nil
 	}
 	for index := range node.Conditions {

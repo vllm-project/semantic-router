@@ -23,6 +23,7 @@ func TestRoutingRecipePlanFromSnapshotFreezesOnlyReachableDecisionGraph(t *testi
 				{Type: routerconfig.SignalTypeKeyword, Name: "alpha"},
 				{Type: routerconfig.SignalTypeLanguage, Name: "en"},
 			}}},
+			{Name: "fallback", Rules: routerconfig.RuleNode{}},
 		},
 		Projections: routerconfig.CanonicalProjections{
 			Scores: []routerconfig.ProjectionScore{

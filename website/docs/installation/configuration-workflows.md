@@ -15,9 +15,20 @@ Use YAML when configuration belongs in source control or an existing deployment
 pipeline:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config init --output config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
+
+`config init` writes the packaged minimal canonical template and refuses to
+replace an existing file unless `--force` is explicit. When a Router is already
+running, start from `vllm-sr config get` instead so unrelated active settings
+are preserved. Declare physical models in `providers.models` and reference their
+names in the applicable decision's `modelRefs`. For named recipes, decisions
+live under `recipes[].routing.decisions`; reusable built-in recipes receive
+model assignments when an Entrypoint is published. Optional model metadata
+stays in the shared top-level `routing.modelCards`. Add the metadata required by
+the selected algorithm or capability, such as context limits or LoRA adapters.
 
 The local runtime derives stack-specific service addresses in runtime-owned
 state without rewriting the source file. Concurrent `serve` and `stop`
@@ -68,7 +79,7 @@ configOverride:
       timeout: 300s
   providers:
     defaults:
-      default_model: local/general
+      model: local/general
     models:
       - name: local/general
         provider_model_id: my-served-model
@@ -76,6 +87,7 @@ configOverride:
           - name: primary
             endpoint: model-server.default.svc.cluster.local:8000
             protocol: http
+            provider: vllm
             weight: 100
   routing:
     strategy: priority
@@ -101,7 +113,7 @@ configOverride:
 ```
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 
 helm upgrade --install semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
@@ -111,12 +123,26 @@ helm upgrade --install semantic-router \
 `vllm-sr serve --target k8s --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command
 rejects an empty or setup-only document and does not inject local-Docker service
-addresses or knowledge-base paths. Run `vllm-sr validate` first so schema and
+addresses or knowledge-base paths. Run `vllm-sr config validate` first so schema and
 reference errors fail before deployment.
 
 Choose Kubernetes GPU images, resources, and device plugins through Helm or the
 Operator. The local `--platform amd` and `--platform nvidia` shortcuts do not
 configure Kubernetes scheduling.
+
+The chart runs the Dashboard as its own Deployment and Service, and that
+Deployment is disabled by default. The Router Service carries the gRPC and HTTP
+API ports only, so port 8700 appears in the cluster only after the Dashboard is
+enabled.
+
+```bash
+helm upgrade --install semantic-router \
+  oci://ghcr.io/vllm-project/charts/semantic-router \
+  -f values.yaml --set dashboard.enabled=true
+
+kubectl --namespace vllm-semantic-router-system port-forward \
+  svc/semantic-router-dashboard 8700:8700
+```
 
 ## Operator
 

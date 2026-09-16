@@ -2,25 +2,19 @@ package classification
 
 import (
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// semanticSignalRuneLimit bounds one embedding/classifier forward pass. The
+// semanticSignalUnitLimit bounds one embedding/classifier forward pass. The
 // request's full text still reaches exact-match, structure, and context signals;
 // semantic signals receive representative head, middle, and tail views so a
 // model with a large context window cannot force internal routing models to
-// allocate against that same unbounded window.
-const semanticSignalRuneLimit = 2 * 1024
-
-// Classification tokenizers currently cap PII and jailbreak inference at 512
-// tokens even when the underlying mmBERT model supports a longer context. PII
-// is local token classification and loses entity confidence in long windows;
-// jailbreak detection benefits from broader semantic context. Keep separate
-// budgets instead of forcing both security signals through one compromise.
-// Units are quarter-token estimates: ordinary runes cost one, word starts add
-// one, and CJK runes cost six in total (about 1.5 tokens).
+// allocate against that same unbounded window. Units are quarter-token
+// estimates calibrated on the mmBERT tokenizer.
 const (
+	semanticSignalUnitLimit     = 440 * 4
 	piiSignalChunkBudget        = 128 * 4
 	piiSignalChunkOverlapRunes  = 64
 	jailbreakSignalChunkBudget  = 384 * 4
@@ -47,23 +41,26 @@ func textForRoutingSignal(signalType, text string) string {
 	if _, bounded := boundedSemanticSignalTypes[signalType]; !bounded {
 		return text
 	}
-	return representativeSignalText(text, semanticSignalRuneLimit)
+	return representativeSignalText(text, semanticSignalUnitLimit)
 }
 
-func representativeSignalText(text string, maxRunes int) string {
+func representativeSignalText(text string, maxUnits int) string {
 	runes := []rune(text)
-	if maxRunes <= 0 || len(runes) <= maxRunes {
+	prefix := signalUnitPrefix(runes)
+	if maxUnits <= 0 || prefix[len(runes)] <= maxUnits {
 		return text
 	}
-	headRunes := maxRunes / 3
-	middleRunes := maxRunes / 3
-	tailRunes := maxRunes - headRunes - middleRunes
-	middleStart := (len(runes) - middleRunes) / 2
-	return string(runes[:headRunes]) +
+	part := maxUnits / 3
+	headEnd := signalUnitsForward(prefix, 0, part)
+	tailStart := signalUnitsBackward(prefix, len(runes), part)
+	center := len(runes) / 2
+	middleStart := max(signalUnitsBackward(prefix, center, part/2), headEnd)
+	middleEnd := min(signalUnitsForward(prefix, center, part-part/2), tailStart)
+	return string(runes[:headEnd]) +
 		signalWindowOmissionMarker +
-		string(runes[middleStart:middleStart+middleRunes]) +
+		string(runes[middleStart:middleEnd]) +
 		signalWindowOmissionMarker +
-		string(runes[len(runes)-tailRunes:])
+		string(runes[tailStart:])
 }
 
 func piiSignalChunks(text string) []string {
@@ -72,74 +69,145 @@ func piiSignalChunks(text string) []string {
 	)
 }
 
+// piiSignalChunkSpans is piiSignalChunks with offsets, for callers that report
+// entity positions. It does not de-duplicate: two identical chunks are at
+// different offsets, and both of those positions are real.
+func piiSignalChunkSpans(text string) []signalChunkSpan {
+	return securitySignalChunkSpans(text, piiSignalChunkBudget, piiSignalChunkOverlapRunes)
+}
+
 func jailbreakSignalChunks(text string) []string {
 	return uniqueSignalChunks(
 		securitySignalChunks(text, jailbreakSignalChunkBudget, jailbreakSignalOverlapRunes),
 	)
 }
 
+// signalChunkSpan is one chunk together with its byte offset in the text it was
+// cut from. Callers that report positions back to a client need the offset to
+// map a chunk-relative entity onto the original text.
+type signalChunkSpan struct {
+	Text      string
+	StartByte int
+}
+
 // securitySignalChunks scans the entire input in bounded, overlapping pieces.
 // Unlike semantic intent signals, security detection cannot safely discard the
 // middle of a long prompt.
 func securitySignalChunks(text string, budget, overlapRunes int) []string {
+	spans := securitySignalChunkSpans(text, budget, overlapRunes)
+	if spans == nil {
+		return nil
+	}
+	chunks := make([]string, len(spans))
+	for i, span := range spans {
+		chunks[i] = span.Text
+	}
+	return chunks
+}
+
+// securitySignalChunkSpans is securitySignalChunks with each chunk's byte
+// offset in text. An entity found at offset e in span s sits at
+// s.StartByte + e in the original text.
+func securitySignalChunkSpans(text string, budget, overlapRunes int) []signalChunkSpan {
 	runes := []rune(text)
 	if len(runes) == 0 {
 		return nil
 	}
-	if securitySignalChunkUnits(runes) <= budget {
-		return []string{text}
+	prefix := signalUnitPrefix(runes)
+	if prefix[len(runes)] <= budget {
+		return []signalChunkSpan{{Text: text, StartByte: 0}}
 	}
 
-	chunks := make([]string, 0, (len(runes)/1024)+1)
+	spans := make([]signalChunkSpan, 0, (len(runes)/1024)+1)
+	// Chunk starts only ever move forward, so one cursor converts them to byte
+	// offsets without a per-rune index.
+	startByte, counted := 0, 0
 	for start := 0; start < len(runes); {
-		end := securitySignalChunkEnd(runes, start, budget)
-		chunks = append(chunks, string(runes[start:end]))
+		for ; counted < start; counted++ {
+			startByte += utf8.RuneLen(runes[counted])
+		}
+		end := securitySignalChunkEnd(runes, prefix, start, budget)
+		spans = append(spans, signalChunkSpan{
+			Text:      string(runes[start:end]),
+			StartByte: startByte,
+		})
 		if end == len(runes) {
 			break
 		}
 		start = max(start+1, end-overlapRunes)
 	}
-	return chunks
+	return spans
 }
 
-func securitySignalChunkEnd(runes []rune, start, budget int) int {
-	units := 0
-	inWord := false
-	end := start
-	for end < len(runes) {
-		nextUnits, nextInWord := securitySignalRuneUnits(runes[end], inWord)
-		if end > start && units+nextUnits > budget {
-			break
+func securitySignalChunkEnd(runes []rune, prefix []int, start, budget int) int {
+	end := max(signalUnitsForward(prefix, start, budget-1), start+1)
+	if end >= len(runes) || unicode.IsSpace(runes[end]) {
+		return end
+	}
+	for i := end; i > start+1 && i > end-64; i-- {
+		if unicode.IsSpace(runes[i-1]) {
+			return i
 		}
-		units += nextUnits
-		inWord = nextInWord
-		end++
 	}
 	return end
 }
 
 func securitySignalChunkUnits(runes []rune) int {
-	units := 0
-	inWord := false
-	for _, r := range runes {
-		var runeUnits int
-		runeUnits, inWord = securitySignalRuneUnits(r, inWord)
-		units += runeUnits
-	}
-	return units
+	return signalUnitPrefix(runes)[len(runes)]
 }
 
-func securitySignalRuneUnits(r rune, inWord bool) (int, bool) {
-	if isCJK(r) {
-		return 6, false
+func signalUnitPrefix(runes []rune) []int {
+	prefix := make([]int, len(runes)+1)
+	inWord, wordHasDigit := false, false
+	for i, r := range runes {
+		var units int
+		units, inWord, wordHasDigit = signalRuneUnits(r, inWord, wordHasDigit)
+		prefix[i+1] = prefix[i] + units
 	}
-	if unicode.IsLetter(r) || unicode.IsDigit(r) {
-		if !inWord {
-			return 2, true
+	return prefix
+}
+
+func signalRuneUnits(r rune, inWord, wordHasDigit bool) (int, bool, bool) {
+	switch {
+	case unicode.IsSpace(r):
+		return 0, false, false
+	case isCJK(r):
+		return 4, false, false
+	case unicode.IsDigit(r):
+		return 5, true, true
+	case unicode.IsLetter(r):
+		if inWord && wordHasDigit {
+			return 4, true, true
 		}
-		return 1, true
+		units := 1
+		if !unicode.Is(unicode.Latin, r) {
+			units = 2
+		}
+		if !inWord {
+			units++
+		}
+		return units, true, false
+	case unicode.IsSymbol(r):
+		return 5, false, false
+	default:
+		return 4, false, false
 	}
-	return 1, false
+}
+
+func signalUnitsForward(prefix []int, start, budget int) int {
+	end := start
+	for end < len(prefix)-1 && prefix[end+1]-prefix[start] <= budget {
+		end++
+	}
+	return end
+}
+
+func signalUnitsBackward(prefix []int, end, budget int) int {
+	start := end
+	for start > 0 && prefix[end]-prefix[start-1] <= budget {
+		start--
+	}
+	return start
 }
 
 // uniqueSignalChunks removes exact duplicate inference work while preserving
@@ -160,4 +228,95 @@ func uniqueSignalChunks(chunks []string) []string {
 		unique = append(unique, chunk)
 	}
 	return unique
+}
+
+// Explicit native budgets above 512 opt the trained task into full-context
+// inference. Other signals keep their own established input policies.
+func (c *Classifier) hasLongContextClassifier(signalType string) bool {
+	if c == nil || c.Config == nil {
+		return false
+	}
+	consumer := classifierInputConsumer(signalType)
+	if binding, exists := c.Config.ModelBindings[consumer]; exists {
+		deployment, exists := c.Config.ModelDeployments[binding.Deployment]
+		return exists && deployment.Provider != "http" && deployment.Input.MaxTokens > 512
+	}
+	switch signalType {
+	case config.SignalTypeEmbedding:
+		return c.Config.EmbeddingConfig.FullContext
+	case config.SignalTypeComplexity:
+		// Local Complexity uses the semantic embedding provider's input policy.
+		// An independent remote scorer retains its existing bounded input.
+		return c.Config.ComplexityModel.Backend == nil && c.Config.EmbeddingConfig.FullContext
+	case config.SignalTypeDomain:
+		variant, _ := c.Config.CategoryModel.EffectiveVariant()
+		return c.Config.CategoryModel.Backend == nil && variant == config.CategoryVariantMmBERT32K && c.Config.CategoryModel.MaxSequenceLength > 512
+	case config.SignalTypeFactCheck:
+		return c.Config.HallucinationMitigation.FactCheckModel.UseMmBERT32K && c.Config.HallucinationMitigation.FactCheckModel.MaxSequenceLength > 512
+	case config.SignalTypeUserFeedback:
+		return c.Config.FeedbackDetector.UseMmBERT32K && c.Config.FeedbackDetector.MaxSequenceLength > 512
+	case config.SignalTypePII:
+		return c.Config.PIIModel.Backend == nil && c.Config.PIIModel.UseMmBERT32K && c.Config.PIIModel.MaxSequenceLength > 512
+	case config.SignalTypeJailbreak:
+		return c.Config.PromptGuard.Protocol == "" && c.Config.PromptGuard.Variant == config.PromptGuardVariantMmBERT32K && c.Config.PromptGuard.MaxSequenceLength > 512
+	case config.SignalTypeModality:
+		return c.Config.ModalityDetector.Classifier != nil && c.Config.ModalityDetector.Classifier.MaxSequenceLength > 512
+	}
+	return false
+}
+
+func (c *Classifier) piiInputSpans(text string) []signalChunkSpan {
+	if ((c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII)) && text != "" {
+		return []signalChunkSpan{{Text: text}}
+	}
+	return piiSignalChunkSpans(text)
+}
+
+func (c *Classifier) piiInputs(text string) []string {
+	if (c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII) {
+		return []string{text}
+	}
+	return piiSignalChunks(text)
+}
+
+func (c *Classifier) jailbreakInputs(text string) []string {
+	fullContext := c.hasLongContextClassifier(config.SignalTypeJailbreak)
+	if c != nil && c.models != nil && c.models.jailbreakContrastiveFullContext != nil {
+		fullContext = *c.models.jailbreakContrastiveFullContext
+	}
+	if fullContext {
+		return []string{text}
+	}
+	return jailbreakSignalChunks(text)
+}
+
+// Native token windows own tokenization and the total input limit. Decoded
+// text chunks would change both windows and overflow checks. Contrastive rules
+// continue using their existing text-window policy.
+func (c *Classifier) jailbreakModelInputs(text string) []string {
+	if text == "" {
+		return nil
+	}
+	if c != nil && c.Config != nil && c.Config.PromptGuard.Window != nil {
+		return []string{text}
+	}
+	return c.jailbreakInputs(text)
+}
+
+func classifierInputConsumer(signalType string) string {
+	switch signalType {
+	case config.SignalTypeDomain:
+		return "domain_classifier"
+	case config.SignalTypeFactCheck:
+		return "fact_check_classifier"
+	case config.SignalTypeUserFeedback:
+		return "feedback_detector"
+	case config.SignalTypePII:
+		return "pii_classifier"
+	case config.SignalTypeJailbreak:
+		return "prompt_guard"
+	case config.SignalTypeModality:
+		return "modality_detector"
+	}
+	return ""
 }

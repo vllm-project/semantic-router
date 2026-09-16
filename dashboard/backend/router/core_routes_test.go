@@ -2,11 +2,15 @@ package router
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,6 +20,91 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
+
+func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
+	directory := filepath.Join("..", "..", "..", "config", "recipes", "accuracy")
+	configPath := filepath.Join(directory, "config.yaml")
+	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", directory)
+	t.Setenv(recipe.ManagementCredentialEnv, "")
+
+	store := recipe.NewStore(recipe.StoreOptions{
+		Root:       filepath.Join(t.TempDir(), "recipe-store"),
+		ConfigPath: configPath,
+	})
+	token, err := store.EnsureManagementCredential()
+	if err != nil {
+		t.Fatalf("EnsureManagementCredential(): %v", err)
+	}
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile(config): %v", err)
+	}
+	hash := sha256.Sum256(configBytes)
+	var authenticated []string
+	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			http.Error(w, "missing service credential", http.StatusUnauthorized)
+			return
+		}
+		authenticated = append(authenticated, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/v1/config/hash":
+			_, _ = fmt.Fprintf(w, `{"source_config_hash":%q,"generated_runtime_hash":%q,"active_runtime_hash":%q,"activation_status":"active"}`, hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]))
+		case "/api/v1/routing/preview":
+			_, _ = w.Write([]byte(`{
+  "requested_model":"vllm-sr/auto",
+  "selected_model":"gpt55-worker",
+  "selection_status":"selected",
+  "selection_method":"static",
+  "recipe":"default",
+  "routing_decision":"accuracy_direct",
+  "decision_result":{
+    "decision_name":"accuracy_direct",
+    "algorithm":"static",
+    "plugins":[],
+    "matched_signals":{}
+  },
+  "recommended_models":["gpt55-worker"],
+  "eval_trace":[{"decision_name":"accuracy_direct","matched":true}]
+}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer router.Close()
+
+	mux := http.NewServeMux()
+	registerRecipeRoutes(mux, &config.Config{
+		AbsConfigPath: configPath,
+		ConfigDir:     filepath.Dir(directory),
+		RouterAPIURL:  router.URL,
+	}, store)
+
+	descriptorResponse := httptest.NewRecorder()
+	mux.ServeHTTP(descriptorResponse, httptest.NewRequest(http.MethodGet, "/api/recipe", nil))
+	if descriptorResponse.Code != http.StatusOK {
+		t.Fatalf("GET /api/recipe status=%d body=%s", descriptorResponse.Code, descriptorResponse.Body.String())
+	}
+	var descriptor struct {
+		Digests struct {
+			Recipe string `json:"recipe"`
+		} `json:"digests"`
+	}
+	if err := json.NewDecoder(descriptorResponse.Body).Decode(&descriptor); err != nil {
+		t.Fatalf("decode descriptor: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/recipe/probes/accuracy_direct/direct_explanation/validate", nil)
+	request.Header.Set("If-Match", `"`+descriptor.Digests.Recipe+`"`)
+	validationResponse := httptest.NewRecorder()
+	mux.ServeHTTP(validationResponse, request)
+	if validationResponse.Code != http.StatusOK {
+		t.Fatalf("POST /api/recipe/probes/.../validate status=%d body=%s", validationResponse.Code, validationResponse.Body.String())
+	}
+	if got, want := authenticated, []string{"/api/v1/config/hash", "/api/v1/routing/preview", "/api/v1/config/hash"}; !slices.Equal(got, want) {
+		t.Fatalf("authenticated Router requests = %v, want %v", got, want)
+	}
+}
 
 func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
@@ -211,7 +300,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		t.Fatal(err)
 	}
 	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/config/kbs/example" || r.Method != http.MethodPost {
+		if r.URL.Path != "/api/v1/storage/knowledge-bases/example" || r.Method != http.MethodPost {
 			t.Fatalf("unexpected KBS proxy request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -239,7 +328,6 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/config/rollback"},
 		{method: http.MethodPost, path: "/api/router/config/global/update"},
 		{method: http.MethodPost, path: "/api/router/config/global/raw/update"},
-		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, strings.NewReader(`{}`)))
@@ -248,8 +336,22 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		}
 	}
 
+	for _, target := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/router/config/defaults"},
+		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("removed alias %s %s status=%d want=%d", target.method, target.path, response.Code, http.StatusNotFound)
+		}
+	}
+
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/router/config/kbs/example", strings.NewReader(`{}`)))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/router/api/v1/storage/knowledge-bases/example", strings.NewReader(`{}`)))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("KBS proxy status=%d want=%d body=%s", response.Code, http.StatusNoContent, response.Body.String())
 	}
@@ -259,7 +361,7 @@ func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(`
-version: "0.3"
+version: v0.3
 global:
   integrations:
     tools:
@@ -415,12 +517,12 @@ global:
     auto_model_names: [test-mom]
 providers:
   defaults:
-    default_model: model-fast
+    model: model-fast
   models:
     - name: model-fast
-      backend_refs: [{endpoint: fast.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: fast.models.test:8000}]
     - name: model-strong
-      backend_refs: [{endpoint: strong.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: strong.models.test:8000}]
 routing:
   modelCards:
     - {name: model-fast, modality: text}

@@ -4,6 +4,34 @@
 
 ##@ Models
 
+test-model-selection-parity: ## Compare Python-trained selectors with the current Rust C ABI
+	@cargo test --locked --manifest-path ml-binding/Cargo.toml
+	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
+
+.PHONY: test-model-selection-parity
+
+.PHONY: onnx-artifact-test
+onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with real CPU inference
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_pack_shared_weights.py'
+
+test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/user_feedback_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/pii_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/sequence_repair/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m pytest -q \
+		src/training/model_eval/test_provenance.py \
+		src/training/model_eval/test_artifact_inventory.py \
+		src/training/model_eval/test_baseline_artifact.py \
+		src/training/model_classifier/prompt_guard_fine_tuning_lora/test_jailbreak_provenance.py
+
 # Models are automatically downloaded by the router at startup in production.
 # For testing, we use the router's --download-only flag to download models and exit.
 
@@ -74,13 +102,28 @@ download-models: ## Download models using router's built-in download logic
 	@echo ""
 	@echo "Running router with --download-only flag..."
 	@echo "This may take a few minutes depending on your network speed..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		./bin/router -config=config/config.yaml --download-only
 	@echo ""
 	@echo "Models downloaded successfully"
 
-download-models-lora: ## Download LoRA models (same as download-models now)
+QWEN3_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
+QWEN3_EMBEDDING_DIR := mom-embedding-pro
+
+download-qwen3-embedding: ## Download the Qwen3 embedding model for binding tests and benchmarks
+	@echo "⬇️  Downloading $(QWEN3_EMBEDDING_REPO)..."
+	@mkdir -p "$(MODELS_DIR)"
+	@hf download $(QWEN3_EMBEDDING_REPO) --local-dir "$(MODELS_DIR)/$(QWEN3_EMBEDDING_DIR)"
+
+download-models-lora: ## Download models for LoRA and advanced embedding tests
 	@$(MAKE) download-models
+	@$(MAKE) download-qwen3-embedding
+
+# The evaluation registry pins current Vela native snapshots. The MMBERT lists
+# below and their download targets intentionally remain explicit legacy tools.
+.PHONY: download-eval-models
+download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
+	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
 
 .PHONY: qualify-candle-cpu check-candle-qualification-source
 
@@ -122,9 +165,6 @@ PERF_BENCH_CLASSIFIER_MODELS := \
 	mmbert32k-pii-detector-merged \
 	mmbert32k-jailbreak-detector-merged
 
-PERF_BENCH_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
-PERF_BENCH_EMBEDDING_DIR := mom-embedding-pro
-
 download-models-perf: ## Download the minimal model set for performance benchmarks
 	@echo "📦 Downloading perf benchmark models..."
 	@mkdir -p $(MODELS_DIR)
@@ -134,8 +174,7 @@ download-models-perf: ## Download the minimal model set for performance benchmar
 		hf download $(HF_ORG)/$$model --exclude "onnx/*" --local-dir $(MODELS_DIR)/$$model; \
 	done
 	@echo ""
-	@echo "⬇️  Downloading $(PERF_BENCH_EMBEDDING_REPO)..."
-	@hf download $(PERF_BENCH_EMBEDDING_REPO) --local-dir $(MODELS_DIR)/$(PERF_BENCH_EMBEDDING_DIR)
+	@$(MAKE) download-qwen3-embedding
 	@echo ""
 	@echo "Perf benchmark models downloaded to $(MODELS_DIR)/"
 
@@ -343,7 +382,6 @@ clean-mmbert: ## Remove downloaded mmBERT models
 # Training configuration (optimized for mmBERT-32K LoRA fine-tuning)
 # Hyperparameters validated on 2026-02-02:
 #   - Intent Classifier: 92% accuracy (MMLU-Pro + supplement data)
-#   - Jailbreak Detector: 97.7% training accuracy (toxic-chat + salad-data)
 #   - PII Detector: 97.2% training accuracy (AI4Privacy + Presidio combined dataset)
 #   - Feedback Detector: 98.8% accuracy (4-class, requires higher rank)
 TRAIN_EPOCHS ?= 5
@@ -383,7 +421,7 @@ LORA_DIR := $(TRAINING_DIR)/model_classifier
 # Output directories for 32K models
 MMBERT32K_MODELS_DIR := models/mmbert32k
 
-train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
+train-mmbert32k-all: ## Train remaining legacy mmBERT-32K tasks (Guard retired)
 	@echo "🚀 Training all mmBERT-32K models..."
 	@echo "   Base model: llm-semantic-router/mmbert-32k-yarn"
 	@echo "   Epochs: $(TRAIN_EPOCHS), Batch size: $(TRAIN_BATCH_SIZE)"
@@ -391,7 +429,6 @@ train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
 	@$(MAKE) train-mmbert32k-feedback
 	@$(MAKE) train-mmbert32k-intent
 	@$(MAKE) train-mmbert32k-pii
-	@$(MAKE) train-mmbert32k-jailbreak
 	@$(MAKE) train-mmbert32k-factcheck
 	@echo ""
 	@echo "All mmBERT-32K models trained successfully!"
@@ -491,23 +528,12 @@ train-mmbert32k-pii-presidio-only: ## Train PII Detector with Presidio only (leg
 		--no-ai4privacy
 	@echo "Presidio-only PII training complete"
 
-train-mmbert32k-jailbreak: ## Train Jailbreak Detector (toxic-chat + salad-data)
-	@echo "Training Jailbreak Detector with mmBERT-32K..."
-	@mkdir -p $(MMBERT32K_MODELS_DIR)
-	python $(LORA_DIR)/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py \
-		--mode train \
-		--model mmbert-32k \
-		--lora-rank $(LORA_RANK) \
-		--lora-alpha $(LORA_ALPHA) \
-		--epochs $(TRAIN_EPOCHS) \
-		--batch-size $(TRAIN_BATCH_SIZE) \
-		--learning-rate $(TRAIN_LR) \
-		--max-samples $(MAX_SAMPLES)
-	@echo "Jailbreak Detector training complete (97.7% accuracy expected)"
-	@# Move to organized directory
-	@if [ -d "lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
-		mv lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora; \
-	fi
+train-mmbert32k-jailbreak: ## Retired: use the explicit Vela Guard sequence trainer
+	@echo "Legacy Guard training is retired. Use the Vela Base with:"
+	@echo "  python -m src.training.model_classifier.sequence_repair.train --method full --fresh-head"
+	@echo "Supply --base, --base-id, --base-revision, --contract, --train, --dev, and --output explicitly."
+	@echo "See src/training/model_classifier/prompt_guard_fine_tuning_lora/README.md."
+	@exit 2
 
 train-mmbert32k-factcheck: ## Train Fact Check Classifier
 	@echo "Training Fact Check Classifier with mmBERT-32K..."

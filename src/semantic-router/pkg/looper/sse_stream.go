@@ -39,8 +39,7 @@ func buildSimulatedChatCompletionSSE(
 	created int64,
 	model string,
 	contentChunks []string,
-	toolName, toolArgs, toolCallID string,
-	hasToolCall bool,
+	toolCalls []map[string]interface{},
 ) []byte {
 	var body []byte
 	roleChoice := map[string]interface{}{
@@ -50,38 +49,25 @@ func buildSimulatedChatCompletionSSE(
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
 
-	if hasToolCall {
+	for _, chunk := range contentChunks {
+		contentChoice := map[string]interface{}{
+			"index":         0,
+			"delta":         map[string]interface{}{"content": chunk},
+			"finish_reason": nil,
+		}
+		body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, contentChoice, nil))
+	}
+	if len(toolCalls) > 0 {
 		toolChoice := map[string]interface{}{
-			"index": 0,
-			"delta": map[string]interface{}{
-				"tool_calls": []map[string]interface{}{
-					{
-						"index": 0,
-						"id":    toolCallID,
-						"type":  "function",
-						"function": map[string]interface{}{
-							"name":      toolName,
-							"arguments": toolArgs,
-						},
-					},
-				},
-			},
+			"index":         0,
+			"delta":         map[string]interface{}{"tool_calls": toolCalls},
 			"finish_reason": nil,
 		}
 		body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, toolChoice, nil))
-	} else {
-		for _, chunk := range contentChunks {
-			contentChoice := map[string]interface{}{
-				"index":         0,
-				"delta":         map[string]interface{}{"content": chunk},
-				"finish_reason": nil,
-			}
-			body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, contentChoice, nil))
-		}
 	}
 
 	finalReason := "stop"
-	if hasToolCall {
+	if len(toolCalls) > 0 {
 		finalReason = "tool_calls"
 	}
 	finalChoice := map[string]interface{}{

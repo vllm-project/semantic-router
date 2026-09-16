@@ -1,0 +1,254 @@
+- id: nvidia/nemotron-3.5-lightning
+  display_name: NVIDIA Nemotron 3.5 Lightning
+  description: Efficient open-weight NVIDIA reasoning model for fast agentic inference.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+    license: OpenMDW-1.1
+  family: nemotron-3.5
+  reasoning_family: nemotron-thinking-toggle
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+  tags:
+  - open_weights
+  - efficient
+  - reasoning
+  - moe
+  released_at: '2026-08-11'
+- id: nvidia/nemotron-3-ultra
+  display_name: NVIDIA Nemotron 3 Ultra
+  description: NVIDIA open-weight frontier model for reasoning and complex agentic workflows.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    license: OpenMDW-1.1
+  family: nemotron-3
+  reasoning_family: nemotron-ultra
+  parameter_size: 550B (55B active)
+  released_at: '2026-06-04'
+  knowledge_cutoff: May 2026 post-training; September 2025 pre-training
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - agentic
+- id: nvidia/nemotron-3-super
+  display_name: NVIDIA Nemotron 3 Super
+  description: Open-weight NVIDIA MoE model for reasoning, coding, and agentic workflows.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    license: NVIDIA-Nemotron-Open-Model-License
+  family: nemotron-3
+  reasoning_family: nemotron-super
+  parameter_size: 120B (12B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
+  released_at: '2026-03-11'
+- id: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  display_name: Nemotron 3 Nano Omni 30B A3B Reasoning
+  description: Efficient multimodal NVIDIA MoE reasoning model.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+    license: NVIDIA-Open-Model-Agreement
+  family: nemotron-3-omni
+  reasoning_family: nemotron-thinking-toggle
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - vision
+  - audio
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  released_at: '2026-04-29'
+- id: nvidia/nemotron-cascade-2-30b-a3b
+  display_name: Nemotron Cascade 2 30B A3B
+  description: NVIDIA's sparse open-weight reasoning model for coding, terminal, and long-context agentic work.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B
+    license: NVIDIA-Open-Model-License
+  family: nemotron-cascade-2
+  reasoning_family: nemotron-thinking-toggle
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - coding
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - agentic
+  - moe
+  - efficient
+  released_at: '2026-03-19'
+- id: nvidia/nemotron-3-nano-30b-a3b
+  display_name: NVIDIA Nemotron 3 Nano 30B A3B
+  description: Compact text-only Nemotron 3 reasoning model with open evaluation recipes.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+    license: NVIDIA-Nemotron-Open-Model-License
+  family: nemotron-3
+  reasoning_family: nemotron-thinking-toggle
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2025-12-15'

@@ -44,6 +44,49 @@ def _golden(name: str) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def test_routing_recipe_input_accepts_labeled_runtime_keys() -> None:
+    for input_id in (
+        "complexity:needs_reasoning:hard",
+        "classifier:intent:code",
+    ):
+        spec = RoutingRecipeInputSpec(id=input_id, value_kind="numeric")
+        assert spec.id == input_id
+
+
+def test_routing_recipe_signal_types_follow_router_contract() -> None:
+    input_modality = RoutingRecipeInputSpec(
+        id="input_modality:image_input",
+        value_kind="numeric",
+    )
+    assert input_modality.id == "input_modality:image_input"
+
+    with pytest.raises(
+        ValueError, match="routing recipe input specification is invalid"
+    ):
+        RoutingRecipeInputSpec(
+            id="hallucination:response",
+            value_kind="numeric",
+        )
+
+    with pytest.raises(
+        ValueError, match="routing recipe input specification is invalid"
+    ):
+        RoutingRecipeInputSpec(
+            id="complexity:needs_reasoning:extreme",
+            value_kind="numeric",
+        )
+
+
+def test_routing_recipe_input_rejects_labels_for_unlabeled_signal_types() -> None:
+    with pytest.raises(
+        ValueError, match="routing recipe input specification is invalid"
+    ):
+        RoutingRecipeInputSpec(
+            id="metadata:source:trusted",
+            value_kind="numeric",
+        )
+
+
 def _mixture(arms: tuple[EvaluationTargetArm, ...]) -> ManifestMixture:
     recipe_name = "contract-recipe"
     recipe_digest = digest_value("contract-mixture-policy")

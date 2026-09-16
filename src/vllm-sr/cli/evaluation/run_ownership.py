@@ -6,9 +6,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from cli.evaluation.artifact_store_error import StoreError
 from cli.evaluation.contract_primitives import ArtifactRef
 from cli.evaluation.contracts import RunManifest
+from cli.evaluation.errors import StoreError
 from cli.evaluation.store import LocalArtifactStore, WorkerArtifactStore
 from cli.evaluation.worker_report import (
     WorkerEvent,

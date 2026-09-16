@@ -362,7 +362,7 @@ def test_http_client_never_reads_environment_credentials_and_redacts_failures(
     monkeypatch.setenv("ENVOY_EVAL_KEY", "envoy-secret")
     session = FakeSession()
     EvaluationHTTPClient(session=session).post(
-        "http://router:8080/api/v1/eval",
+        "http://router:8080/api/v1/routing/preview",
         {"model": "auto"},
         track_id="routing",
         case_id="case-1",
@@ -509,7 +509,7 @@ def _assert_live_report_artifacts(
         "capacity": "E0",
     }
     assert report.run.evidence_level == "E0"
-    assert report.summary.quality_score is None
+    assert report.summary.primary_metric is None
 
     persisted_metrics = store.read_run_json(report.run.id, "metrics.json")["metrics"]
     assert persisted_metrics == [

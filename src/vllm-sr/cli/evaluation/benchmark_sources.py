@@ -67,6 +67,67 @@ def _verify_checkout(
     return observed, clean, observed == expected_revision and clean
 
 
+def verify_benchmark_pack_source(
+    benchmark_id: str,
+    source_root: str | Path,
+) -> BenchmarkSourceReceipt:
+    """Verify a declarative pack checkout without consulting built-in catalogs."""
+
+    root = Path(source_root).expanduser()
+    if root.is_symlink():
+        raise SourceVerificationError("benchmark pack root must not be a symlink")
+    try:
+        resolved = root.resolve(strict=True)
+    except OSError as exc:
+        raise SourceVerificationError("benchmark pack root is missing") from exc
+    if not resolved.is_dir():
+        raise SourceVerificationError("benchmark pack root is not a directory")
+    top_level = Path(_git(resolved, "rev-parse", "--show-toplevel")).resolve()
+    if top_level != resolved:
+        raise SourceVerificationError("benchmark pack root must be a Git checkout root")
+    observed = _git(resolved, "rev-parse", "HEAD")
+    if not re.fullmatch(r"[0-9a-f]{40}", observed):
+        raise SourceVerificationError("benchmark pack returned an invalid Git revision")
+    checkout_changes = _git(
+        resolved,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+    )
+    pack_changes = _git(
+        resolved,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+        "--ignored=matching",
+        "--",
+        "benchmark.yaml",
+        "bundle",
+    )
+    clean = checkout_changes == "" and pack_changes == ""
+    return BenchmarkSourceReceipt(
+        source_kind="benchmark_pack",
+        adapter_id=benchmark_id,
+        expected_source_revision=observed,
+        observed_source_revision=observed,
+        source_clean=clean,
+        verified=clean,
+    )
+
+
+def require_verified_benchmark_pack_source(
+    benchmark_id: str,
+    source_root: str | Path,
+) -> BenchmarkSourceReceipt:
+    receipt = verify_benchmark_pack_source(
+        benchmark_id,
+        source_root,
+    )
+    if not receipt.verified:
+        raise SourceVerificationError("benchmark pack must be a clean Git checkout")
+    return receipt
+
+
 def verify_benchmark_source(
     adapter_id: str, source_root: str | Path
 ) -> BenchmarkSourceReceipt:
@@ -87,6 +148,7 @@ def verify_benchmark_source(
             root, descriptor.dataset_cache_key, descriptor.dataset_revision
         )
     return BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id=descriptor.id,
         expected_source_revision=descriptor.source_revision,
         observed_source_revision=observed_source,
