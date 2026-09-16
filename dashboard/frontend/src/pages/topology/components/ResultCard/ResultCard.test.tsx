@@ -16,6 +16,20 @@ const result = (score: number | null, available: boolean): TestQueryResult => ({
 })
 
 describe('unavailable routing confidence', () => {
+  it('does not present a failed Preview as a default route', () => {
+    const unavailable: TestQueryResult = {
+      ...result(null, false),
+      isAccurate: false,
+      matchedSignals: [],
+      matchedDecision: null,
+      warning: 'Preview unavailable: request timed out',
+    }
+    const html = renderToStaticMarkup(<ResultCard result={unavailable} onClose={() => {}} />)
+    expect(html).toContain('Unavailable')
+    expect(html).not.toContain('Default')
+    expect(html).toContain('request timed out')
+  })
+
   it('renders unknown score without a fabricated percentage', () => {
     const html = renderToStaticMarkup(<ResultCard result={result(null, false)} onClose={() => {}} />)
     expect(html).toContain('Score unavailable')

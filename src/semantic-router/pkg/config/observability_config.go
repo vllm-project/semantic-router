@@ -2,6 +2,7 @@ package config
 
 type APIConfig struct {
 	BatchClassification BatchClassificationConfig `yaml:"batch_classification"`
+	RoutingPreview      RoutingPreviewConfig      `yaml:"routing_preview,omitempty"`
 }
 
 type ObservabilityConfig struct {

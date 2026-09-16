@@ -124,12 +124,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	// Back up current config before rollback.
 	recordConfigBackup(backupDir, nextConfigVersion(backupDir, time.Now()), existingData, configVersionSourceRollback)
 
-	if err := writeConfigAtomically(paths.sourcePath, backupData); err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write config: %v", err))
-		return
-	}
-
-	if !s.syncRollbackRuntime(w, paths, existingData) {
+	if !s.writeRouterConfigFiles(w, paths, existingData, backupData) {
 		return
 	}
 
@@ -238,21 +233,6 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 		GeneratedRuntimeHash: runtimeHash,
 		Message:              message,
 	})
-}
-
-func (s *ClassificationAPIServer) syncRollbackRuntime(
-	w http.ResponseWriter,
-	paths configPersistencePaths,
-	previousData []byte,
-) bool {
-	if !paths.usesRuntimeOverride() {
-		return true
-	}
-	if err := syncRuntimeConfigOrRestore(paths, previousData); err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "RUNTIME_SYNC_ERROR", err.Error())
-		return false
-	}
-	return true
 }
 
 func (s *ClassificationAPIServer) parseRollbackVersion(w http.ResponseWriter, r *http.Request) (string, bool) {

@@ -10,7 +10,7 @@ import (
 )
 
 func TestLoadEvaluationDeploymentRegistryFreezesDistinctTargetSnapshots(t *testing.T) {
-	root := t.TempDir()
+	root := deploymentRegistryTestRoot(t)
 	baselineConfig := []byte(modelArmTestYAML)
 	candidateConfig := []byte(strings.Replace(
 		modelArmTestYAML,
@@ -137,7 +137,7 @@ func TestEvaluationDeploymentRegistryFailsClosed(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := deploymentRegistryTestRoot(t)
 			test.prepare(t, root)
 			if _, err := LoadEvaluationDeploymentRegistry(root, ""); err == nil ||
 				!strings.Contains(err.Error(), test.match) {
@@ -148,7 +148,7 @@ func TestEvaluationDeploymentRegistryFailsClosed(t *testing.T) {
 }
 
 func TestRegistryRejectsDuplicateResultingDeploymentTargetIDs(t *testing.T) {
-	root := t.TempDir()
+	root := deploymentRegistryTestRoot(t)
 	writeDeploymentRegistryFixture(t, root, []evaluationDeploymentDefinition{{
 		ID: "baseline", Name: "Baseline", ConfigFile: "config.yaml",
 		RouterOrigin: "https://router.internal", EnvoyOrigin: "https://envoy.internal",
@@ -165,9 +165,9 @@ func TestRegistryRejectsDuplicateResultingDeploymentTargetIDs(t *testing.T) {
 }
 
 func TestEvaluationDeploymentRegistryRejectsSymlinkRootAndRegistry(t *testing.T) {
-	realRoot := t.TempDir()
+	realRoot := deploymentRegistryTestRoot(t)
 	writeRawDeploymentRegistry(t, realRoot, `{"schema_version":"evaluation-deployments.v1","deployments":[]}`)
-	linkedRoot := filepath.Join(t.TempDir(), "registry-link")
+	linkedRoot := filepath.Join(deploymentRegistryTestRoot(t), "registry-link")
 	if err := os.Symlink(realRoot, linkedRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestEvaluationDeploymentRegistryRejectsSymlinkRootAndRegistry(t *testing.T)
 		t.Fatalf("symlink root error=%v", err)
 	}
 
-	root := t.TempDir()
+	root := deploymentRegistryTestRoot(t)
 	linkedRegistry := filepath.Join(root, evaluationDeploymentRegistryFile)
 	if err := os.Symlink(filepath.Join(realRoot, evaluationDeploymentRegistryFile), linkedRegistry); err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestEvaluationDeploymentRegistryRejectsSymlinkRootAndRegistry(t *testing.T)
 }
 
 func TestDeploymentCatalogIsPrivateAndManifestUsesTargetConfigDigest(t *testing.T) {
-	root := t.TempDir()
+	root := deploymentRegistryTestRoot(t)
 	configBytes := []byte(modelArmTestYAML)
 	writeDeploymentRegistryFixture(t, root, []evaluationDeploymentDefinition{{
 		ID: "candidate", Name: "Candidate", Description: "Review candidate",
@@ -261,7 +261,7 @@ func TestDeploymentCatalogIsPrivateAndManifestUsesTargetConfigDigest(t *testing.
 }
 
 func TestLoadedDeploymentsMakeOneLogicalMixtureControlledPairAddressable(t *testing.T) {
-	root := t.TempDir()
+	root := deploymentRegistryTestRoot(t)
 	writeDeploymentRegistryFixture(t, root, []evaluationDeploymentDefinition{
 		{
 			ID: "baseline", Name: "Baseline", ConfigFile: "baseline.yaml",
@@ -397,4 +397,16 @@ func writeRawDeploymentRegistry(t *testing.T, root, data string) {
 	if err := os.WriteFile(filepath.Join(root, evaluationDeploymentRegistryFile), []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Canonicalize only the newly allocated trusted fixture directory. macOS
+// commonly exposes its temporary directory through the /var symlink; the
+// production reader deliberately rejects any symlink in an authored root.
+func deploymentRegistryTestRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }

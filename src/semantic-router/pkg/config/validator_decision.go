@@ -10,6 +10,12 @@ import (
 )
 
 func validateDecisionContracts(cfg *RouterConfig) error {
+	if err := validateClassifierContextLimits(cfg); err != nil {
+		return err
+	}
+	if err := validateSafetySignalContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateMetadataContracts(cfg); err != nil {
 		return err
 	}
@@ -173,6 +179,11 @@ func validateClassifierDecisionLeaf(
 			decisionName,
 			node.Name,
 		)
+	}
+	if bound, ok := cfg.ModelBindings["classifier."+node.Name]; ok && bound.OperatingPoint != nil && bound.Contract == RemoteClassifierContractLabelScores {
+		// A prepared operating point supplies the default label threshold. An
+		// explicit predicate remains a query of the raw independent score.
+		return nil
 	}
 	if node.Predicate == nil {
 		return fmt.Errorf(
@@ -445,6 +456,11 @@ func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) 
 	if ragCfg != nil {
 		if err := ragCfg.Validate(); err != nil {
 			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
+		}
+		if ragCfg.Enabled && ragCfg.Rerank != nil {
+			if _, ok := cfg.ModelBindings[RAGRerankerConsumer]; !ok {
+				return fmt.Errorf("decision %q: rerank requires recipe-local model_bindings.%s", decision.Name, RAGRerankerConsumer)
+			}
 		}
 	}
 
@@ -721,6 +737,11 @@ func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorS
 	}
 	if cfg.LatencyPercentile < 0 || cfg.LatencyPercentile > 100 {
 		return fmt.Errorf("%s.latency_percentile must be within [1, 100] when declared", path)
+	}
+	switch cfg.LatencyMetric {
+	case "", "ttft", "tpot":
+	default:
+		return fmt.Errorf("%s.latency_metric must be %q or %q", path, "ttft", "tpot")
 	}
 	switch cfg.OnNoCandidates {
 	case "", "cheapest", "first", "fail":
