@@ -80,7 +80,9 @@ func TestHandleCaching_ReplayUsesSelectedBackendProvenance(t *testing.T) {
 					SemanticRequest:     testNeutralRequest("public-entrypoint", "hello"),
 					VSRSelectedDecision: &decision, RouterReplayPluginConfig: &replayConfig,
 				}
-				ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "recipe"})
+				ctx.Routing.SelectRecipe(&config.RoutingRecipe{
+					Name: "recipe", Profile: config.RoutingProfile{Decisions: []config.Decision{decision}},
+				})
 
 				response, hit := router.handleCaching(ctx, decision.Name, "backend")
 
