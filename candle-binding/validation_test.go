@@ -543,13 +543,13 @@ func TestCrossArch32BitCompileGate(t *testing.T) {
 	compileWithEnv := func(t *testing.T, baseEnv []string) {
 		outputBinary := filepath.Join(t.TempDir(), "candle_binding_32bit.test")
 		cmd := exec.Command(goBin, "test", "-c", "-o", outputBinary, ".")
-		var env []string
+		cmd.Env = make([]string, 0, len(baseEnv)+3)
 		for _, e := range baseEnv {
 			if !strings.HasPrefix(e, "GOOS=") && !strings.HasPrefix(e, "GOARCH=") && !strings.HasPrefix(e, "CGO_ENABLED=") {
-				env = append(env, e)
+				cmd.Env = append(cmd.Env, e)
 			}
 		}
-		cmd.Env = append(env, "CGO_ENABLED=0", "GOOS=linux", "GOARCH=386")
+		cmd.Env = append(cmd.Env, "CGO_ENABLED=0", "GOOS=linux", "GOARCH=386")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("cross-compilation for 32-bit (linux/386) failed: %v\nOutput:\n%s", err, string(out))
