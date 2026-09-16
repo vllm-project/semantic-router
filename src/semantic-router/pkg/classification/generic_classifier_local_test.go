@@ -34,7 +34,7 @@ func TestLocalClassifierMaintainedCPU(t *testing.T) {
 	var metadata struct {
 		ID2Label map[string]string `json:"id2label"`
 	}
-	if err := json.Unmarshal(data, &metadata); err != nil {
+	if err = json.Unmarshal(data, &metadata); err != nil {
 		t.Fatal(err)
 	}
 	labels := make([]string, len(metadata.ID2Label))
