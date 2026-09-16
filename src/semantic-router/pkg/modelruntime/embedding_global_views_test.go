@@ -17,15 +17,15 @@ func TestGlobalEmbeddingViewDoesNotChangeOtherModelFamilies(t *testing.T) {
 	if provider != "ort" || os.Getenv("ORT_DYLIB_PATH") == "" {
 		t.Skip("requires ORT build-default and real ONNX Runtime")
 	}
-	fixture, err := filepath.Abs(filepath.Join("..", "..", "..", "..", "onnx-binding", "instance", "testdata", "embedding"))
-	if err != nil {
-		t.Fatal(err)
+	fixture, pathErr := filepath.Abs(filepath.Join("..", "..", "..", "..", "onnx-binding", "instance", "testdata", "embedding"))
+	if pathErr != nil {
+		t.Fatal(pathErr)
 	}
 	primary := t.TempDir()
 	for _, name := range []string{"config.json", "tokenizer.json", "onnx/layer-1/model.onnx", "onnx/layer-2/model.onnx"} {
-		data, err := os.ReadFile(filepath.Join(fixture, filepath.Base(name)))
-		if err != nil {
-			t.Fatal(err)
+		data, readErr := os.ReadFile(filepath.Join(fixture, filepath.Base(name)))
+		if readErr != nil {
+			t.Fatal(readErr)
 		}
 		target := filepath.Join(primary, name)
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {

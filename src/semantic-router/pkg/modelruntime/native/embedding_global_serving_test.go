@@ -44,16 +44,16 @@ func TestORTGlobalServingSharesEngineAcrossConsumerViews(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = first.Close() })
 	var serviceEngine io.Closer
-	if err := service.resource.Use(context.Background(), func(engine io.Closer) error { serviceEngine = engine; return nil }); err != nil {
-		t.Fatal(err)
+	if useErr := service.resource.Use(context.Background(), func(engine io.Closer) error { serviceEngine = engine; return nil }); useErr != nil {
+		t.Fatal(useErr)
 	}
-	if err := first.resource.Use(context.Background(), func(engine io.Closer) error {
+	if useErr := first.resource.Use(context.Background(), func(engine io.Closer) error {
 		if engine != serviceEngine {
 			t.Fatal("different consumer views loaded separate embedding engines")
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
+	}); useErr != nil {
+		t.Fatal(useErr)
 	}
 	entries := current.PreparedBindings()
 	if len(entries) != 2 || entries[0].ResourceID == "" || entries[0].ResourceID != entries[1].ResourceID {
@@ -64,15 +64,15 @@ func TestORTGlobalServingSharesEngineAcrossConsumerViews(t *testing.T) {
 	}
 	// A failed new view releases only its reference, even across generations.
 	secondSpec, _ := plan.Lookup("second", "embedding")
-	if bad, err := candidate.Embedding(context.Background(), secondSpec, 3, 99); err == nil {
+	if bad, prepareErr := candidate.Embedding(context.Background(), secondSpec, 3, 99); prepareErr == nil {
 		_ = bad.Close()
 		t.Fatal("unsupported layer was admitted")
 	}
 	if len(candidate.PreparedBindings()) != 0 {
 		t.Fatal("failed consumer appeared ready")
 	}
-	if err := service.Close(); err != nil {
-		t.Fatal(err)
+	if closeErr := service.Close(); closeErr != nil {
+		t.Fatal(closeErr)
 	}
 	vector, err := first.EmbedWithOptions(context.Background(), "hello world", embedding.Options{Dimension: 3, Layer: 2})
 	if err != nil || len(vector) != 3 {
