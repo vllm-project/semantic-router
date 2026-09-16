@@ -1517,6 +1517,21 @@ routing:
           latency_metric: ttft
           on_no_candidates: cheapest
 
+    - name: random_route
+      description: Uniform random baseline for routing experiments and evaluations.
+      priority: 122
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: qwen3-8b
+        - model: qwen3-32b
+      algorithm:
+        type: random
+        minimum_candidates: 2
+
     - name: fallback_knn_route
       description: KNN fallback route for general traffic with OpenAI vector-store RAG.
       priority: 120
