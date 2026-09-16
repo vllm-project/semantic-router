@@ -167,6 +167,25 @@ class PRChangeClassifierTests(unittest.TestCase):
                 "security",
                 "riscv-qemu",
             ),
+            "src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/cache/valkey_cache_unavailable.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/extproc/router_memory_valkey.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "memory",
+                "riscv-qemu",
+            ),
         }
         for path, jobs in fixtures.items():
             with self.subTest(path=path):

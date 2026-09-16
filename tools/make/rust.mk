@@ -467,8 +467,8 @@ test-riscv-qemu: ## Cross-compile Candle CPU classifiers and smoke the Candle-on
 		RISCV_ROUTER_API_PORT="$(RISCV_ROUTER_API_PORT)" \
 		bash tools/ci/riscv-qemu-router-smoke.sh
 
-# Candle-only linux/riscv64 router. Skips the ORT ABI check and does not
-# link onnx/nlp/ml native libraries.
+# Candle-only linux/riscv64 router. Skips the ORT ABI check, does not
+# link onnx/nlp/ml native libraries, and stubs valkey-glide (no libglide_ffi).
 build-router-riscv: ## Cross-compile a Candle-only linux/riscv64 router
 	@$(LOG_TARGET)
 	@if ! command -v $(RISCV_GNU_CC) >/dev/null 2>&1; then \

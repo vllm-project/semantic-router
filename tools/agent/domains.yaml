@@ -240,6 +240,14 @@ domains:
       - tools/docker/check-native-abi.sh
       - tools/ci/riscv-qemu-router-smoke.sh
       - e2e/config/config.riscv-qemu.yaml
+      - src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go
+      - src/semantic-router/pkg/cache/valkey_*.go
+      - src/semantic-router/pkg/cache/exact_cache_valkey.go
+      - src/semantic-router/pkg/memory/valkey_*.go
+      - src/semantic-router/pkg/vectorstore/valkey_*.go
+      - src/semantic-router/pkg/extproc/router_memory.go
+      - src/semantic-router/pkg/extproc/router_memory_valkey.go
+      - src/semantic-router/pkg/extproc/router_memory_valkey_unavailable.go
     checks: []
     ci_jobs: [riscv-qemu]
 
