@@ -865,7 +865,14 @@ class ContextCompressionTargetConfig(BaseModel):
         return self
 
 
+class ContextCompressionCurrentUserConfig(BaseModel):
+    mode: Literal["preserve", "truncate"] = "preserve"
+
+
 class ContextCompressionTargetsConfig(BaseModel):
+    current_user: ContextCompressionCurrentUserConfig = Field(
+        default_factory=ContextCompressionCurrentUserConfig
+    )
     tool_outputs: ContextCompressionTargetConfig = Field(
         default_factory=lambda: ContextCompressionTargetConfig(
             mode="extractive", min_tokens=2000, target_tokens=1000
