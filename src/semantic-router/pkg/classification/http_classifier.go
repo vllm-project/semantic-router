@@ -141,7 +141,7 @@ func isNilMapping(mapping sequenceLabelMapping) bool {
 		return true
 	}
 	v := reflect.ValueOf(mapping)
-	return v.Kind() == reflect.Ptr && v.IsNil()
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
 type httpClassifyRequest struct {
@@ -170,26 +170,34 @@ var httpClassifyOperation = connector.Operation{
 // caller gives up first) bounded by h.timeout, rather than always running to
 // its own internal timeout regardless of the caller's lifecycle.
 func (h *HTTPClassifierInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
+	scores, err := h.fetchLabelScores(ctx, text)
+	if err != nil {
+		return SequenceClassificationResult{}, err
+	}
+	return alignScoresToMapping(h.mapping, scores)
+}
+
+func (h *HTTPClassifierInference) fetchLabelScores(ctx context.Context, text string) ([]httpClassifyLabelScore, error) {
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
 	if err != nil {
-		return SequenceClassificationResult{}, fmt.Errorf("failed to marshal http_classify request: %w", err)
+		return nil, fmt.Errorf("failed to marshal http_classify request: %w", err)
 	}
 	responseBody, err := h.connector.Do(ctx, httpClassifyOperation, reqBody)
 	if err != nil {
-		return SequenceClassificationResult{}, formatHTTPClassifyConnectorError(err)
+		return nil, formatHTTPClassifyConnectorError(err)
 	}
 
 	var scores []httpClassifyLabelScore
 	if err := json.Unmarshal(responseBody, &scores); err != nil {
-		return SequenceClassificationResult{}, fmt.Errorf("failed to parse http_classify response: %w", err)
+		return nil, fmt.Errorf("failed to parse http_classify response: %w", err)
 	}
 	if len(scores) == 0 {
-		return SequenceClassificationResult{}, fmt.Errorf("http_classify response contained no labels")
+		return nil, fmt.Errorf("http_classify response contained no labels")
 	}
-	return alignScoresToMapping(h.mapping, scores)
+	return scores, nil
 }
 
 const maxClassifyErrorBodyBytes int64 = 8 * 1024
@@ -239,37 +247,41 @@ func (h *HTTPClassifierInference) Close() error {
 // be any classifier's label mapping (JailbreakMapping, CategoryMapping, ...)
 // that satisfies sequenceLabelMapping.
 func alignScoresToMapping(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) (SequenceClassificationResult, error) {
-	numClasses := mapping.LabelCount()
-	probabilities := make([]float32, numClasses)
-	seenIdx := make([]bool, numClasses)
-	seenLabels := make([]string, 0, len(scores))
+	probabilities, err := alignIndependentLabelScores(mapping, scores)
+	if err != nil {
+		return SequenceClassificationResult{}, err
+	}
 	var sum float32
-
-	for _, s := range scores {
-		seenLabels = append(seenLabels, s.Label)
-		idx, err := assignScoreToMapping(mapping, seenIdx, s)
-		if err != nil {
-			return SequenceClassificationResult{}, err
-		}
-		probabilities[idx] = s.Score
-		sum += s.Score
+	for _, probability := range probabilities {
+		sum += probability
 	}
-
-	for idx, present := range seenIdx {
-		if present {
-			continue
-		}
-		missingLabel, _ := mapping.LabelFromIndex(idx)
-		return SequenceClassificationResult{}, fmt.Errorf(
-			"http_classify response is missing label %q from the configured label mapping (got %v)", missingLabel, seenLabels)
+	if math.Abs(float64(sum)-1) > probabilitySumTolerance {
+		return SequenceClassificationResult{}, fmt.Errorf("http_classify response scores sum to %v, want ~1.0", sum)
 	}
-
-	if math.Abs(float64(sum)-1.0) > probabilitySumTolerance {
-		return SequenceClassificationResult{}, fmt.Errorf(
-			"http_classify response scores sum to %v, want ~1.0 (labels: %v)", sum, seenLabels)
-	}
-
 	return SequenceClassificationResult{Probabilities: probabilities}, nil
+}
+
+// Independent probabilities use the same exhaustive label validation, without
+// creating a categorical result or changing the supplied values.
+func alignIndependentLabelScores(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) ([]float32, error) {
+	probabilities := make([]float32, mapping.LabelCount())
+	seenIdx := make([]bool, len(probabilities))
+	seenLabels := make([]string, 0, len(scores))
+	for _, score := range scores {
+		seenLabels = append(seenLabels, score.Label)
+		idx, err := assignScoreToMapping(mapping, seenIdx, score)
+		if err != nil {
+			return nil, err
+		}
+		probabilities[idx] = score.Score
+	}
+	for idx, present := range seenIdx {
+		if !present {
+			missing, _ := mapping.LabelFromIndex(idx)
+			return nil, fmt.Errorf("http_classify response is missing label %q from the configured label mapping (got %v)", missing, seenLabels)
+		}
+	}
+	return probabilities, nil
 }
 
 // assignScoreToMapping validates a single response label/score pair against

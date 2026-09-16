@@ -36,9 +36,10 @@ func apiRouterReplayRoutes() []apiRoute {
 			EndpointMetadata{
 				Path:        apiObservabilityReplaysPath + "/trajectory",
 				Method:      "GET",
-				Description: "Build a Router Replay session trajectory",
+				Description: "Build a recipe-scoped session trajectory with each recorded routing result",
 				Parameters: []OpenAPIParameter{
 					requiredQueryParameter("session_id", "Logical session whose tool trajectory should be returned.", "string"),
+					queryParameter("recipe", "Exact recipe scope; an empty value selects legacy unscoped records. Required when the session ID occurs in multiple recipes.", "string"),
 				},
 			},
 			policy,

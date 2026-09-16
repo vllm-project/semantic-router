@@ -1,55 +1,15 @@
-"""
-ModernBERT Dissatisfaction Classifier Pipeline.
+"""Four-class user feedback training and inference.
 
-A complete fine-tuning pipeline for training a binary classifier
-to detect user dissatisfaction from follow-up or re-send prompts.
-
-Usage:
-    from modernbert_dissat_pipeline import DissatisfactionClassifier, classify_dissatisfaction
-
-    # Load classifier
-    classifier = DissatisfactionClassifier("modernbert_dissat_resend_classifier")
-
-    # Classify
-    result = classifier.classify(
-        original_query="What is X?",
-        system_answer="X is...",
-        user_followup="Can you explain more simply?"
-    )
-
-    print(result.label)  # "DISSAT" or "SAT"
-    print(result.confidence)  # 0.0 to 1.0
+Inference dependencies are imported lazily so dataset contracts can be checked
+without PyTorch. The historical binary dissatisfaction module is not included.
 """
 
-__version__ = "1.0.0"
+__all__ = ["FeedbackDetector", "FeedbackResult"]
 
-from .inference import (
-    DissatisfactionClassifier,
-    ClassificationResult,
-    classify_dissatisfaction,
-    classify_dissatisfaction_detailed,
-)
 
-from .configs.config import (
-    PipelineConfig,
-    DataConfig,
-    ModelConfig,
-    TrainingConfig,
-    get_default_config,
-    get_large_model_config,
-)
+def __getattr__(name):
+    if name in __all__:
+        from . import inference_feedback  # noqa: PLC0415
 
-__all__ = [
-    # Inference
-    "DissatisfactionClassifier",
-    "ClassificationResult",
-    "classify_dissatisfaction",
-    "classify_dissatisfaction_detailed",
-    # Config
-    "PipelineConfig",
-    "DataConfig",
-    "ModelConfig",
-    "TrainingConfig",
-    "get_default_config",
-    "get_large_model_config",
-]
+        return getattr(inference_feedback, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -231,6 +231,7 @@ func (c *ComplexityClassifier) storeCandidateEmbeddingResult(result complexityCa
 
 func (c *ComplexityClassifier) rebuildPrototypeBanks() {
 	for _, rule := range c.rules {
+		prototypeCfg := rule.PrototypeScoring.Resolve(c.prototypeCfg)
 		hardExamples := make([]prototypeExample, 0, len(c.hardEmbeddings[rule.Name]))
 		for candidate, embedding := range c.hardEmbeddings[rule.Name] {
 			hardExamples = append(hardExamples, prototypeExample{Key: rule.Name + ":hard:" + candidate, Text: candidate, Embedding: embedding})
@@ -247,10 +248,10 @@ func (c *ComplexityClassifier) rebuildPrototypeBanks() {
 		for candidate, embedding := range c.imageEasyEmbeddings[rule.Name] {
 			imageEasyExamples = append(imageEasyExamples, prototypeExample{Key: rule.Name + ":image-easy:" + candidate, Text: candidate, Embedding: embedding})
 		}
-		hardBank := newPrototypeBank(hardExamples, c.prototypeCfg)
-		easyBank := newPrototypeBank(easyExamples, c.prototypeCfg)
-		imageHardBank := newPrototypeBank(imageHardExamples, c.prototypeCfg)
-		imageEasyBank := newPrototypeBank(imageEasyExamples, c.prototypeCfg)
+		hardBank := newPrototypeBank(hardExamples, prototypeCfg)
+		easyBank := newPrototypeBank(easyExamples, prototypeCfg)
+		imageHardBank := newPrototypeBank(imageHardExamples, prototypeCfg)
+		imageEasyBank := newPrototypeBank(imageEasyExamples, prototypeCfg)
 		c.hardPrototypeBanks[rule.Name] = hardBank
 		c.easyPrototypeBanks[rule.Name] = easyBank
 		c.imageHardPrototypeBanks[rule.Name] = imageHardBank

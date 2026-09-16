@@ -203,6 +203,11 @@ type SelectionContext struct {
 	// Used to track within-session model performance
 	SessionID string
 
+	// SessionStateKey is the canonical recipe-scoped router memory key. It is
+	// separate from SessionID so client identity text cannot be mistaken for an
+	// encoded session/conversation tuple. An empty key uses the raw SessionID.
+	SessionStateKey string
+
 	// AgenticSession carries request-time session facts used by
 	// session_aware selection. The flat SessionID remains the shared
 	// correlation key for selectors that do not need richer session facts.

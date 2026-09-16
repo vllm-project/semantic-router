@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -163,9 +164,12 @@ func (c *Classifier) embeddingRuleCentroid(
 	return centroid, nil
 }
 
-func (c *EmbeddingClassifier) ensureCandidateEmbeddings() error {
+func (c *EmbeddingClassifier) ensureCandidateEmbeddings(ctx context.Context) error {
 	c.preloadMu.Lock()
 	defer c.preloadMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if c.preloadComplete {
 		return nil
@@ -177,7 +181,7 @@ func (c *EmbeddingClassifier) ensureCandidateEmbeddings() error {
 		c.preloadComplete = true
 		return nil
 	}
-	if err := c.preloadCandidateEmbeddings(); err != nil {
+	if err := c.preloadCandidateEmbeddings(ctx); err != nil {
 		c.candidateEmbeddings = make(map[string][]float32)
 		c.rulePrototypeBanks = make(map[string]*prototypeBank)
 		c.preloadComplete = false
@@ -191,7 +195,7 @@ func (c *EmbeddingClassifier) ruleCentroid(rule config.EmbeddingRule) ([]float32
 	if centroid, ok := prototypeBankCentroid(c.rulePrototypeBanks[rule.Name]); ok {
 		return centroid, nil
 	}
-	if err := c.ensureCandidateEmbeddings(); err != nil {
+	if err := c.ensureCandidateEmbeddings(context.Background()); err != nil {
 		return nil, err
 	}
 	return c.candidateRuleCentroid(rule)

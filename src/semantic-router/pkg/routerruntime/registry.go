@@ -17,6 +17,7 @@ import (
 // reload, extproc, and the API server.
 type Registry struct {
 	modelPool             *binding.Pool
+	configPublicationMu   sync.Mutex
 	mu                    sync.RWMutex
 	config                *config.RouterConfig
 	classificationService *services.ClassificationService

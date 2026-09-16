@@ -1,3 +1,4 @@
+use super::sequence::Distribution;
 use super::*;
 use crate::core::device::run_on_inference_pool;
 use crate::ffi::embedding::truncate_embedding_to_dimension;
@@ -8,15 +9,6 @@ pub(super) struct InputMetadata {
     pub(super) input_tokens: usize,
     pub(super) processed_tokens: usize,
     pub(super) truncated: bool,
-}
-
-#[derive(Serialize)]
-pub(super) struct Distribution {
-    class: usize,
-    confidence: f32,
-    probabilities: Vec<f32>,
-    labels: Vec<String>,
-    input: InputMetadata,
 }
 
 #[derive(Serialize)]
@@ -36,6 +28,14 @@ pub(super) struct TokenOutput {
 }
 
 #[derive(Serialize)]
+pub(super) struct TokenWindowsOutput {
+    #[serde(flatten)]
+    output: TokenOutput,
+    content_tokens: usize,
+    windows: Vec<[usize; 2]>,
+}
+
+#[derive(Serialize)]
 pub(super) struct HallucinationOutput {
     has_hallucination: bool,
     confidence: f32,
@@ -51,13 +51,34 @@ pub(super) struct EmbeddingOutput {
 }
 
 impl Instance {
-    fn tokenizer(&self) -> Result<&Tokenizer> {
+    pub(super) fn embedding_runtime_descriptor(
+        &self,
+        layer: usize,
+        dimension: usize,
+    ) -> Result<crate::model_architectures::embedding::runtime_identity::RuntimeIdentity> {
+        ensure!(
+            self.info.task == "embedding",
+            "capability: wrong task handle"
+        );
+        let Model::Embedding(factory) = &self.model else {
+            bail!("capability: embedding content descriptor requires mmbert")
+        };
+        ensure!(
+            factory.get_mmbert_model().is_some(),
+            "capability: embedding content descriptor requires mmbert"
+        );
+        factory
+            .mmbert_runtime_descriptor(layer, dimension)
+            .map_err(|error| anyhow!("capability: {error}"))
+    }
+
+    pub(super) fn tokenizer(&self) -> Result<&Tokenizer> {
         self.tokenizer
             .as_ref()
             .ok_or_else(|| anyhow!("capability: headless backbone has no task tokenizer"))
     }
 
-    fn count_tokens(&self, text: &str) -> Result<usize> {
+    pub(super) fn count_tokens(&self, text: &str) -> Result<usize> {
         Ok(self
             .tokenizer()?
             .encode(text, true)
@@ -65,7 +86,7 @@ impl Instance {
             .len())
     }
 
-    fn prepare_text<'a>(&self, text: &'a str) -> Result<(&'a str, InputMetadata)> {
+    pub(super) fn prepare_text<'a>(&self, text: &'a str) -> Result<(&'a str, InputMetadata)> {
         let count = self.count_tokens(text)?;
         let max = self.info.max_input_tokens;
         if count <= max {
@@ -119,47 +140,6 @@ impl Instance {
                 truncated: true,
             },
         ))
-    }
-
-    fn sequence_on_text(&self, text: &str, input: InputMetadata) -> Result<Distribution> {
-        let (class, confidence, probabilities) = match &self.model {
-            Model::Sequence(model) => model.classify_text_with_probabilities(text)?,
-            Model::Bert(model) => model.classify_text_with_probabilities(text)?,
-            Model::MergedBert(model) => model.classify_text_with_probabilities(text)?,
-            Model::Deberta(model) => model.classify_text_with_probabilities(text)?,
-            _ => bail!("capability: handle is not a sequence classifier"),
-        };
-        ensure!(
-            !probabilities.is_empty()
-                && probabilities
-                    .iter()
-                    .all(|v| v.is_finite() && *v >= 0.0 && *v <= 1.0),
-            "result_invalid: invalid probability values"
-        );
-        ensure!(
-            (probabilities.iter().sum::<f32>() - 1.0).abs() <= 1e-4,
-            "result_invalid: probability distribution does not sum to one"
-        );
-        ensure!(
-            self.info.labels.len() == probabilities.len(),
-            "result_invalid: label distribution shape mismatch"
-        );
-        Ok(Distribution {
-            class,
-            confidence,
-            probabilities,
-            labels: self.info.labels.clone(),
-            input,
-        })
-    }
-
-    pub(super) fn sequence(&self, text: &str) -> Result<Distribution> {
-        ensure!(
-            self.info.task == "sequence",
-            "capability: wrong task handle"
-        );
-        let (text, input) = self.prepare_text(text)?;
-        self.sequence_on_text(text, input)
     }
 
     pub(super) fn nli(&self, premise: &str, hypothesis: &str) -> Result<Distribution> {
@@ -224,6 +204,52 @@ impl Instance {
                 .collect(),
             _ => bail!("capability: handle is not a token classifier"),
         };
+        self.token_output(text, input, predictions)
+    }
+
+    pub(super) fn token_windows(
+        &self,
+        text: &str,
+        size: usize,
+        overlap: usize,
+    ) -> Result<TokenWindowsOutput> {
+        ensure!(self.info.task == "token", "capability: wrong task handle");
+        let Model::Token(model) = &self.model else {
+            bail!("capability: token windows require ModernBERT")
+        };
+        let input_tokens = self.count_tokens(text)?;
+        ensure!(
+            input_tokens <= self.info.max_input_tokens,
+            "input_limit: input has {input_tokens} tokens, task budget is {}",
+            self.info.max_input_tokens
+        );
+        let plan = crate::core::sequence_windows::encode_token_windows(
+            self.tokenizer()?,
+            text,
+            self.info.max_input_tokens,
+            size,
+            overlap,
+        )
+        .map_err(|e| anyhow!("configuration: {e}"))?;
+        let predictions = model.classify_token_windows(text, &plan)?;
+        let input = InputMetadata {
+            input_tokens: plan.input_tokens,
+            processed_tokens: plan.input_tokens,
+            truncated: false,
+        };
+        Ok(TokenWindowsOutput {
+            output: self.token_output(text, input, predictions)?,
+            content_tokens: plan.offsets.len(),
+            windows: plan.windows.iter().map(|w| [w.start, w.end]).collect(),
+        })
+    }
+
+    fn token_output(
+        &self,
+        text: &str,
+        input: InputMetadata,
+        predictions: Vec<(String, usize, f32, usize, usize)>,
+    ) -> Result<TokenOutput> {
         let spans = predictions
             .into_iter()
             .filter(|(_, _, _, start, end)| end > start)
