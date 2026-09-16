@@ -180,6 +180,7 @@ describe('router model presentation', () => {
     expect(
       filterAndSortRouterModels(models, 'Vela-1.0-Encoder-307M-Domain', 'all', 'name'),
     ).toEqual([models[0]])
+    expect(filterAndSortRouterModels(models, 'Vela Domain', 'all', 'name')).toEqual([models[0]])
   })
 })
 

@@ -1,5 +1,5 @@
 import { getRouterModelState, type RouterModelInfo } from '../utils/routerRuntime'
-import { getRouterModelDisplayName } from './routerModelPresentation'
+import { getRouterModelDisplayName, getRouterModelPreviewName } from './routerModelPresentation'
 
 export type ModelInventoryStateFilter = 'all' | 'ready' | 'loading' | 'not_loaded'
 export type ModelInventorySort = 'state' | 'name' | 'type'
@@ -10,6 +10,7 @@ function modelSearchText(model: RouterModelInfo): string {
   return [
     model.name,
     getRouterModelDisplayName(model),
+    getRouterModelPreviewName(model).title,
     model.recipe,
     model.type,
     model.model_path,
