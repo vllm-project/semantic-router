@@ -26,6 +26,7 @@ AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_PYTHON ?= $(AGENT_VENV)/bin/python
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 AGENT_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.agent-requirements.txt
+AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
 AGENT_NODEENV ?= $(AGENT_VENV)/nodeenv
 AGENT_NODE_TOOLS ?= $(AGENT_VENV)/node-tools
 AGENT_MARKDOWNLINT ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/markdownlint
@@ -77,9 +78,11 @@ harness-venv-install: ## Install the repository check dependencies
 		python3 -m venv "$(AGENT_VENV)"; \
 	fi
 	@if [ ! -f "$(AGENT_REQUIREMENTS_STAMP)" ] || \
-		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; then \
+		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" || \
+		! cmp -s tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; then \
 		"$(AGENT_PYTHON)" -m pip install -r tools/agent/requirements.txt && \
-		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; \
+		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" && \
+		cp tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; \
 	fi
 	@if [ "$(abspath $(AGENT_WORKTREE_VENV))" != "$(abspath $(AGENT_VENV))" ]; then \
 		if [ -e "$(AGENT_WORKTREE_VENV)" ] && [ ! -L "$(AGENT_WORKTREE_VENV)" ]; then \

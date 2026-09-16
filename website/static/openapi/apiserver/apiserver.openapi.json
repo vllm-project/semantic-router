@@ -21233,6 +21233,37 @@
                         "baseline_spend": {
                           "type": "number"
                         },
+                        "by_currency": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "actual_spend": {
+                                "type": "number"
+                              },
+                              "baseline_spend": {
+                                "type": "number"
+                              },
+                              "cost_record_count": {
+                                "type": "integer"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "total_saved": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "total_saved",
+                              "baseline_spend",
+                              "actual_spend",
+                              "cost_record_count"
+                            ]
+                          }
+                        },
                         "cost_record_count": {
                           "type": "integer"
                         },

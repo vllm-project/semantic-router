@@ -93,3 +93,59 @@ func TestNormalizedBackend_DefaultsWhenEmpty(t *testing.T) {
 		t.Errorf("NormalizedBackend() = %q, want candle", got)
 	}
 }
+
+func TestCompileModelBindingsDesugarsLegacyHallucinationEndpoint(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.HallucinationMitigation.HallucinationModel = HallucinationModelConfig{Backend: "endpoint", Endpoint: "http://127.0.0.1:8077/v1", ModelID: "detector"}
+	plan, err := CompileModelBindings(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, ok := plan.Lookup(DefaultRecipeName, "hallucination_detector")
+	if !ok {
+		t.Fatal("legacy backend: endpoint must compile into a hallucination_detector binding")
+	}
+	if spec.Deployment.Provider != "http" || spec.Deployment.ExternalModel != LegacyHallucinationEndpointModel ||
+		spec.Binding.Adapter != RemoteClassifierProtocolHTTPChat || spec.Binding.Contract != RemoteClassifierContractTokenSpans {
+		t.Fatalf("desugared binding = %+v", spec)
+	}
+	if got := LegacyHallucinationExternalModel(&cfg.HallucinationMitigation.HallucinationModel); got.ModelName != "detector" || got.ModelEndpoint.Address != "http://127.0.0.1:8077/v1" {
+		t.Fatalf("external = %+v", got)
+	}
+}
+
+func TestCompileModelBindingsCandleLeavesHallucinationUnbound(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.HallucinationMitigation.HallucinationModel = HallucinationModelConfig{ModelID: "models/mom-halugate-detector"}
+	plan, err := CompileModelBindings(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := plan.Lookup(DefaultRecipeName, "hallucination_detector"); ok {
+		t.Fatal("the candle default is the module's canonical local binding, not a plan entry")
+	}
+}
+
+func TestCompileModelBindingsExplicitHallucinationBindingWins(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.HallucinationMitigation.HallucinationModel = HallucinationModelConfig{Backend: "endpoint", Endpoint: "http://127.0.0.1:8077/v1", ModelID: "detector"}
+	cfg.ExternalModels = []ExternalModelConfig{{Name: "grounding", ModelName: "grounding-spans", ModelRole: ModelRoleClassification, ModelEndpoint: ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 9000}}}
+	cfg.ModelDeployments = map[string]ModelDeployment{"grounding": {Provider: "http", ExternalModel: "grounding"}}
+	cfg.ModelBindings = map[string]ModelBinding{"hallucination_detector": {Deployment: "grounding", Adapter: RemoteClassifierProtocolHTTPClassify, Contract: RemoteClassifierContractTokenSpans}}
+	plan, err := CompileModelBindings(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := plan.Lookup(DefaultRecipeName, "hallucination_detector")
+	if spec.Deployment.ExternalModel != "grounding" || spec.Binding.Adapter != RemoteClassifierProtocolHTTPClassify {
+		t.Fatalf("explicit binding must win over the legacy scalar, got %+v", spec)
+	}
+}
+
+func TestCompileModelBindingsRejectsUnknownLegacyHallucinationBackend(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.HallucinationMitigation.HallucinationModel = HallucinationModelConfig{Backend: "grpc", ModelID: "detector"}
+	if _, err := CompileModelBindings(cfg); err == nil || !strings.Contains(err.Error(), "hallucination detector backend") {
+		t.Fatalf("err = %v", err)
+	}
+}

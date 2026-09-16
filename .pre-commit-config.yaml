@@ -30,7 +30,21 @@ repos:
         entry: make model-catalog-check
         language: system
         pass_filenames: false
-        files: ^(config/catalog/|config/recipes/built-in/latest/catalog\.yaml$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+        files: ^(config/catalog/|config/recipes/built-in/|src/vllm-sr/cli/model_bundle\.py$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+
+      - id: cli-reference-generated
+        name: CLI command reference
+        entry: make docs-cli-check
+        language: system
+        pass_filenames: false
+        files: ^(src/vllm-sr/cli/.*\.py$|tools/docs/|website/docs/api/cli\.md$)
+
+      - id: configuration-reference-generated
+        name: configuration reference catalog
+        entry: make docs-config-check
+        language: system
+        pass_filenames: false
+        files: ^(config/fragments/|website/docs/tutorials/|website/docs/installation/configuration\.md$|website/scripts/(generate-configuration-catalog\.mjs|lib/configuration-catalog\.mjs)$)
 
   - repo: local
     hooks:

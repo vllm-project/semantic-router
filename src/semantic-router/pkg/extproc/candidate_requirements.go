@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -29,8 +30,10 @@ func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequire
 		return nil
 	}
 	params, _ := selection.CandidateModelParams(r.Config.ModelConfig, nil, model)
-	if err := selection.ValidateCandidateRequirements(requirements, model, params, demand); err != nil {
-		return err
+	requirementErr := selection.ValidateCandidateRequirements(requirements, model, params, demand)
+	var budgetError *selection.RequestBudgetError
+	if requirementErr != nil && !errors.As(requirementErr, &budgetError) {
+		return requirementErr
 	}
 	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
 	if err != nil {
@@ -40,20 +43,40 @@ func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequire
 	if !ok {
 		return fmt.Errorf("%w: model %q has no request codec", selection.ErrNoEligibleCandidates, model)
 	}
-	return selection.ValidateCandidateCodec(requirements, model, supported, demand)
+	if err := selection.ValidateCandidateCodec(requirements, model, supported, demand); err != nil {
+		return err
+	}
+	// A caller budget error must not hide an unavailable or incompatible codec.
+	return requirementErr
 }
 
 func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand selection.CandidateDemand) ([]config.ModelRef, error) {
 	eligible := make([]config.ModelRef, 0, len(refs))
+	var budgetError *selection.RequestBudgetError
+	allBudgetErrors := true
 	for _, ref := range refs {
 		if strings.TrimSpace(ref.Model) == "" {
 			continue
 		}
 		if err := r.validateModelDemand(requirements, ref.Model, demand); err == nil {
 			eligible = append(eligible, ref)
+		} else {
+			var candidateBudget *selection.RequestBudgetError
+			if errors.As(err, &candidateBudget) {
+				if budgetError == nil {
+					budgetError = candidateBudget
+				}
+			} else {
+				allBudgetErrors = false
+			}
 		}
 	}
 	if len(eligible) == 0 {
+		// Only an entirely budget-rejected pool proves that changing the request
+		// can resolve this failure; mixed capability/inventory failures stay 503.
+		if allBudgetErrors && budgetError != nil {
+			return nil, budgetError
+		}
 		return nil, fmt.Errorf("%w: no assigned model satisfies the effective request capabilities and budget", selection.ErrNoEligibleCandidates)
 	}
 	return eligible, nil

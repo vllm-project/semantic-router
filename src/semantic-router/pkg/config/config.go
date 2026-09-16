@@ -271,6 +271,7 @@ type InlineModels struct {
 	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
 	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
+	GlobalModelBindings     map[string]ModelBinding       `yaml:"global_model_bindings,omitempty"`
 	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
 }
 
