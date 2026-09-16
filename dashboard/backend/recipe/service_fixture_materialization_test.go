@@ -496,16 +496,16 @@ func TestMoMGeneratedTextPreservesPortableTextReceipt(t *testing.T) {
 		t.Fatalf("decodeProbes(%s): %v", path, err)
 	}
 	receipt := materializeMoMFixtureReceipt(t, manifest)
-	// The original 269 probes retain their portable message/image payloads;
+	// Pin the original 269 probes, including the bounded Vault context fixtures;
 	// the 11 earlier, five authorization, two intent, 10 responsible-assistance and
 	// 10 personal-attribute controls use plain text requests.
-	if receipt.probeCount != 269+11+5+2+10+10 || receipt.messageProbes != 90 || receipt.generatedProbes != 45 ||
-		receipt.imageParts != 53 || receipt.textBytes != 20_730_898 {
+	if receipt.probeCount != 269+11+5+2+10+10 || receipt.messageProbes != 90 || receipt.generatedProbes != 42 ||
+		receipt.imageParts != 53 || receipt.textBytes != 18_741_471 {
 		t.Fatalf("receipt counts: probes=%d messages=%d generated=%d image_parts=%d text_bytes=%d",
 			receipt.probeCount, receipt.messageProbes, receipt.generatedProbes, receipt.imageParts, receipt.textBytes)
 	}
 	// The digest also includes current group/variant IDs, including the visual-description group.
-	if receipt.textDigest != "71bafa6752760592bbcaf15e37adb99eaaae2ee6c894317e94d3cd23b45a3837" {
+	if receipt.textDigest != "9a7d3c6b91e2441b6f3148b74e128cb37830ea43330b9aa6e1a71258b04c351d" {
 		t.Fatalf("materialized text digest = %s", receipt.textDigest)
 	}
 	assertMoMImageFixtureReceipt(t, manifest, receipt.imageURLs)

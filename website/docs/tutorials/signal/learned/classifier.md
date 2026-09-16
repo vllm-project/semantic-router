@@ -92,6 +92,10 @@ They require at least two labels and do not accept `instructions`, `model_path`,
 or `use_cpu`.
 
 Local classifiers use `model_path` and support two or more declared labels.
+The native Candle backend reads `model_type` from the checkpoint's `config.json`
+and supports classic BERT and ModernBERT, including mmBERT. Set `use_cpu: true`
+for CPU execution. The declared labels must match the checkpoint's numeric
+`id2label` order.
 Each rule owns a prepared model handle, so a recipe can declare multiple local
 classifiers. Local decision predicates retain `gte: 0.5` or higher. Model or
 label changes prepare a candidate generation before activation; a failed

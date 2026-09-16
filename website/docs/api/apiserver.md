@@ -110,6 +110,11 @@ configured inference budget. Check the effective model and deployment limits
 before retrying. Other inference failures retain their bounded signal error
 codes; the configured unknown-signal policy determines the route outcome.
 
+Standalone classification, embedding, and similarity diagnostics return
+`400 INVALID_INPUT` when inference reports that a model's input budget was
+exceeded. The error retains the model's limit details; other inference failures
+remain server errors.
+
 ## Inspect models and metrics
 
 | Method | Path | Use |
@@ -122,6 +127,14 @@ codes; the configured unknown-signal policy determines the route outcome.
 
 Secrets in classifier information are redacted unless the caller has
 `secret_view`.
+
+The model inventory reports successfully prepared task bindings in the active
+runtime generation, including each binding's `recipe` and effective provider,
+device, precision, and input limit in `metadata`. Shared artifacts may appear
+under several recipe bindings. Configured but unused models are not marked ready.
+During startup, the inventory can instead report pending artifact downloads.
+`system.gpu_available` means an active prepared binding uses local GPU execution;
+it does not indicate whether the host has unused GPU hardware.
 
 ## Read and change router configuration
 
@@ -161,6 +174,11 @@ runtime identity fields: `source_config_hash`, `generated_runtime_hash`,
 create a backup, and trigger reload; an active config still does not prove that
 upstream model backends are healthy. Check `/ready` and send a representative
 request after a change.
+
+Tracing settings are initialized at process startup. Config plans, updates,
+and rollbacks that change `global.services.observability.tracing` return
+`409 RESTART_REQUIRED` without persisting the candidate. Apply those changes
+through the deployment workflow and restart the Router.
 
 ## Manage knowledge bases and stored data
 

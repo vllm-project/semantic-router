@@ -16,6 +16,11 @@ import tempfile
 from pathlib import Path
 
 from cli.bootstrap import is_setup_mode_config
+from cli.commands.runtime_observability import (
+    reconcile_runtime_tracing,
+    recover_runtime_tracing_projection,
+    validate_package_tracing_mode,
+)
 from cli.commands.runtime_paths import (
     _runtime_config_output_path,
     materialize_runtime_config,
@@ -101,6 +106,7 @@ def _prepare_docker_runtime_config(
         package_active = active_recipe_package_for_stack(
             state_root_dir=state_root_dir, stack_name=stack_layout.stack_name
         )
+        source_candidate_selected = False
         if package_active:
             if replace_active_config:
                 raise ValueError(
@@ -124,7 +130,11 @@ def _prepare_docker_runtime_config(
                 or effective_config_path,
                 recipe_env_bindings,
             )
+            validate_package_tracing_mode(
+                effective_config_path, stack_layout, minimal=minimal
+            )
         else:
+            recover_runtime_tracing_projection(effective_config_path)
             effective_config_bytes = build_effective_config_bytes(
                 config_path, algorithm, source_setup_mode, platform
             )
@@ -141,7 +151,20 @@ def _prepare_docker_runtime_config(
                     readonly=readonly,
                 ),
             )
+            source_candidate_selected = (
+                effective_config_path.read_bytes() == effective_config_bytes
+            )
         setup_mode = is_setup_mode_config(effective_config_path)
+        if not setup_mode and not package_active:
+            reconcile_runtime_tracing(
+                effective_config_path,
+                stack_layout,
+                enable_observability=not minimal,
+                reset_projection=source_candidate_selected,
+                before_replace=lambda data: _prepare_runtime_config_replacement(
+                    data, stack_layout, minimal=minimal, readonly=readonly
+                ),
+            )
         return effective_config_path, setup_mode, runtime_lock
     except Exception:
         runtime_lock.close()
