@@ -126,3 +126,23 @@ def test_printed_commands_include_runtime_flag() -> None:
 
     next_steps_section = out.split("[PRINT_NEXT_STEPS]")[1]
     assert "--runtime podman" in next_steps_section
+
+
+def test_first_launch_reuses_runtime_for_dashboard_check() -> None:
+    """The first-launch dashboard availability check must reuse the selected
+    runtime. Otherwise a Podman stack that serve just started is probed as
+    Docker and the installer aborts after a successful start (#3441)."""
+    out = _run_harness("first-launch-podman")
+
+    assert "SELECTED_RUNTIME=podman" in out
+
+    invocations = [
+        line.strip()
+        for line in out.split("[FIRST_LAUNCH_ARGS]")[1].splitlines()
+        if line.strip()
+    ]
+    serve = next(line for line in invocations if line.startswith("serve"))
+    dashboard = next(line for line in invocations if line.startswith("dashboard"))
+
+    assert "--runtime podman" in serve, invocations
+    assert "--runtime podman" in dashboard, invocations

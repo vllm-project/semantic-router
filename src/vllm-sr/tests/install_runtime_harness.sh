@@ -19,6 +19,11 @@
 #   print-command-podman         --runtime podman with both stubs ready
 #                                -> asserts printed restart/start commands
 #                                   include `--runtime podman`.
+#   first-launch-podman          --runtime podman with both stubs ready
+#                                -> exercises the complete first-launch sequence
+#                                   (serve + dashboard check) with a stubbed
+#                                   launcher and asserts both invocations carry
+#                                   `--runtime podman`.
 
 set -u
 
@@ -59,6 +64,16 @@ write_stub() {
   chmod +x "$path"
 }
 
+# Stub for the installed `vllm-sr` launcher. It records its full argv on each
+# invocation (one line per call) so the first-launch scenario can assert the
+# exact arguments serve and dashboard received.
+ARGV_TRACE="$INSTALL_ROOT_TMP/argv.log"
+write_vllm_sr_stub() {
+  local path="$STUB_BIN/vllm-sr"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\nexit 0\n' "$ARGV_TRACE" > "$path"
+  chmod +x "$path"
+}
+
 # Map scenario -> (docker state, podman state, VLLM_SR_RUNTIME env value).
 # VLLM_SR_RUNTIME is used because install.sh reads it at source time to set
 # REQUESTED_RUNTIME, so setting it before sourcing is the cleanest way to
@@ -90,6 +105,11 @@ case "$SCENARIO" in
     export VLLM_SR_RUNTIME="skip"
     ;;
   print-command-podman)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="podman"
+    ;;
+  first-launch-podman)
     write_stub docker ready
     write_stub podman ready
     export VLLM_SR_RUNTIME="podman"
@@ -153,6 +173,25 @@ if [ "$SCENARIO" = "print-command-podman" ]; then
   printf '[PRINT_NEXT_STEPS]\n'
   AUTO_LAUNCH_RAN=0
   print_next_steps
+fi
+
+# Exercise the complete first-launch sequence (serve + dashboard availability
+# check) through a stubbed launcher. Platform/dir resolution and the browser
+# step are stubbed inert so the scenario stays deterministic.
+if [ "$SCENARIO" = "first-launch-podman" ]; then
+  # Route the installer's launcher lookups at the stub dir, and keep platform,
+  # directory, and browser resolution inert so the sequence is deterministic.
+  BIN_DIR="$STUB_BIN"
+  write_vllm_sr_stub
+  resolve_launch_platform() { printf '\n'; }
+  resolve_launch_dir() { printf '%s\n' "$INSTALL_ROOT_TMP"; }
+  open_dashboard_url() { return 0; }
+  printf '[FIRST_LAUNCH]\n'
+  launch_first_session
+  printf '[FIRST_LAUNCH_ARGS]\n'
+  if [ -f "$ARGV_TRACE" ]; then
+    cat "$ARGV_TRACE"
+  fi
 fi
 
 # Accumulated trace for every scenario, taken after the print path has run.

@@ -419,14 +419,16 @@ print_restart_command() {
     LAUNCH_PLATFORM="$(resolve_launch_platform)"
   fi
   local cmd="vllm-sr serve"
+  local dashboard_cmd="vllm-sr dashboard"
   if [ -n "$LAUNCH_PLATFORM" ]; then
     cmd+=" --platform $LAUNCH_PLATFORM"
   fi
   if [ -n "${SELECTED_RUNTIME:-}" ]; then
     cmd+=" --runtime $SELECTED_RUNTIME"
+    dashboard_cmd+=" --runtime $SELECTED_RUNTIME"
   fi
   printf '  %s\n' "$cmd"
-  printf '  vllm-sr dashboard\n'
+  printf '  %s\n' "$dashboard_cmd"
 }
 
 python_supports_vllm_sr() {
@@ -896,12 +898,23 @@ launch_first_session() {
   if [ -n "$SELECTED_RUNTIME" ]; then
     serve_args+=(--runtime "$SELECTED_RUNTIME")
   fi
+  # The dashboard check below talks to the same stack serve just started, so it
+  # must reuse the explicit runtime; otherwise it re-detects Docker and the
+  # install fails after a Podman stack has already come up.
+  local dashboard_args=()
+  if [ -n "$SELECTED_RUNTIME" ]; then
+    dashboard_args+=(--runtime "$SELECTED_RUNTIME")
+  fi
   if [ ${#serve_args[@]} -gt 0 ]; then
     info "First-run serve command: vllm-sr serve ${serve_args[*]}"
   else
     info "First-run serve command: vllm-sr serve"
   fi
-  info "First-run dashboard command: vllm-sr dashboard"
+  if [ ${#dashboard_args[@]} -gt 0 ]; then
+    info "First-run dashboard command: vllm-sr dashboard ${dashboard_args[*]}"
+  else
+    info "First-run dashboard command: vllm-sr dashboard"
+  fi
   info "Starting the first local session. This can take a few minutes on the first image pull."
 
   step "Running first-time serve flow"
@@ -923,7 +936,7 @@ launch_first_session() {
   fi
 
   step "Checking dashboard availability"
-  if "$BIN_DIR/vllm-sr" dashboard --no-open >/dev/null 2>&1; then
+  if "$BIN_DIR/vllm-sr" dashboard --no-open "${dashboard_args[@]}" >/dev/null 2>&1; then
     done_step "Dashboard is available"
   else
     warn "The dashboard command could not confirm a running session."
@@ -1009,7 +1022,11 @@ print_next_steps() {
         printf ' --runtime %s' "$SELECTED_RUNTIME"
       fi
       printf '\n'
-      printf '  open         vllm-sr dashboard\n'
+      printf '  open         vllm-sr dashboard'
+      if [ -n "${SELECTED_RUNTIME:-}" ]; then
+        printf ' --runtime %s' "$SELECTED_RUNTIME"
+      fi
+      printf '\n'
     fi
   fi
   printf '\n'
