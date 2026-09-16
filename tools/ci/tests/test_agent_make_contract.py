@@ -102,8 +102,6 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertFalse(any("pip install -e" in command for command in commands))
 
     def test_website_builds_reject_drift_before_generating_runtime_assets(self) -> None:
-        import json
-
         scripts = json.loads((REPO_ROOT / "website/package.json").read_text())[
             "scripts"
         ]

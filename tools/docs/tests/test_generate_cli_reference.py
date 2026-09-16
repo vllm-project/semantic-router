@@ -16,7 +16,7 @@ from unittest.mock import patch
 import click
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import generate_cli_reference as reference  # noqa: E402
+import generate_cli_reference as reference
 
 
 class CLIReferenceTests(unittest.TestCase):

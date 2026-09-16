@@ -4,9 +4,13 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const localPython = resolve(repoRoot, '.venv-agent/bin/python')
+const localPython = [
+  resolve(repoRoot, 'website/.venv/bin/python'),
+  resolve(repoRoot, '.venv-agent/bin/python'),
+].find(existsSync)
 const python = process.env.VLLM_SR_DOCS_PYTHON
-  || (existsSync(localPython) ? localPython : 'python3')
+  || localPython
+  || 'python3'
 
 // Check committed artifacts before any build-time generators can run.
 // Keep using the authoritative generators, rather than a second JS compiler.
@@ -23,8 +27,8 @@ for (const [command, ...args] of commands) {
   const result = spawnSync(command, args, { cwd: repoRoot, stdio: 'inherit' })
   if (result.error || result.status !== 0) {
     console.error(
-      'Generated reference check failed. Install Python 3.10+ dependencies with '
-      + '`python3 -m pip install -r website/requirements.txt`, then regenerate '
+      'Generated reference check failed. Provision Python 3.10+ dependencies with '
+      + '`make docs-python-install` if needed, then regenerate '
       + 'the reported artifact and commit it with its source.',
     )
     if (result.error) console.error(result.error.message)

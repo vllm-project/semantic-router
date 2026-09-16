@@ -20,7 +20,7 @@ OUTPUT = ROOT / "website/docs/api/cli.md"
 def load_cli() -> click.Group:
     """Import source directly, without package build hooks or command invocation."""
     sys.path.insert(0, str(ROOT / "src/vllm-sr"))
-    from cli.main import main
+    from cli.main import main  # noqa: PLC0415 - load only after setting the source path
 
     return main
 

@@ -5,7 +5,9 @@
 ##@ Docs
 
 DOCS_TRANSLATION_LOCALE ?= zh-Hans
-DOCS_PYTHON ?= $(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3)
+DOCS_VENV ?= $(CURDIR)/website/.venv
+DOCS_VENV_PYTHON = $(DOCS_VENV)/bin/python
+DOCS_PYTHON ?= $(if $(wildcard $(DOCS_VENV_PYTHON)),$(DOCS_VENV_PYTHON),$(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3))
 
 .PHONY: docs-cli docs-cli-check docs-cli-test docs-community-check docs-community-test docs-generated-check
 docs-cli: ## Generate the CLI command reference from the registered Click command tree
@@ -26,21 +28,28 @@ docs-community-test: ## Test offline snapshot provenance and stale-refresh rejec
 
 docs-generated-check: model-catalog-generated-check docs-cli-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
 
-docs-install: ## Install documentation website dependencies
+.PHONY: docs-python-install docs-install docs-build
+docs-python-install: ## Install generated-reference dependencies in an isolated documentation environment
+	@if [ ! -x "$(DOCS_VENV_PYTHON)" ]; then \
+		"$(DOCS_PYTHON)" -m venv "$(DOCS_VENV)"; \
+	fi
+	@"$(DOCS_VENV_PYTHON)" -m pip install --disable-pip-version-check -r tools/docs/requirements.txt
+
+docs-install: docs-python-install ## Install documentation website dependencies
 	@$(LOG_TARGET)
 	cd website && npm install
 
 docs-dev: docs-install ## Start documentation website in dev mode
 	@$(LOG_TARGET)
-	cd website && npm start
+	cd website && VLLM_SR_DOCS_PYTHON="$(DOCS_VENV_PYTHON)" npm start
 
 docs-dev-zh: docs-install ## Start documentation website in dev mode
 	@$(LOG_TARGET)
-	cd website && npm run start:zh
+	cd website && VLLM_SR_DOCS_PYTHON="$(DOCS_VENV_PYTHON)" npm run start:zh
 
 docs-build: docs-install ## Build static documentation website
 	@$(LOG_TARGET)
-	cd website && npm run build
+	cd website && VLLM_SR_DOCS_PYTHON="$(DOCS_VENV_PYTHON)" npm run build
 
 docs-serve: docs-build ## Serve built documentation website
 	@$(LOG_TARGET)
