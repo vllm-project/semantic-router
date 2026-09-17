@@ -57,6 +57,7 @@ class TestAlgorithmConfigTypes:
             "mlp",
             "multi_factor",
             "latency_aware",
+            "random",
         ]
 
         for algo_type in selection_types:
