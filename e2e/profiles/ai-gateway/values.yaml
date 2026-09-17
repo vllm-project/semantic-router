@@ -974,6 +974,41 @@ config:
             protocol: http
           llm_timeout_seconds: 5
           access_key: e2e-classifier-key
+      # Keep the baseline acceptance datasets on the artifacts they measure.
+      # Repository defaults may advance independently to newly qualified models.
+      system:
+        prompt_guard: models/mmbert32k-jailbreak-detector-merged
+        domain_classifier: models/mmbert32k-intent-classifier-merged
+        pii_classifier: models/mmbert32k-pii-detector-merged
+      modules:
+        prompt_guard:
+          enabled: true
+          model_ref: prompt_guard
+          model_id: models/mmbert32k-jailbreak-detector-merged
+          threshold: 0.7
+          use_cpu: true
+          variant: mmbert32k
+          max_sequence_length: 0
+          jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        classifier:
+          domain:
+            enabled: true
+            model_ref: domain_classifier
+            model_id: models/mmbert32k-intent-classifier-merged
+            threshold: 0.5
+            use_cpu: true
+            variant: mmbert32k
+            max_sequence_length: 0
+            category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          pii:
+            enabled: true
+            model_ref: pii_classifier
+            model_id: models/mmbert32k-pii-detector-merged
+            use_mmbert_32k: true
+            threshold: 0.9
+            use_cpu: true
+            max_sequence_length: 0
+            pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
     services:
       response_api:
         enabled: true
