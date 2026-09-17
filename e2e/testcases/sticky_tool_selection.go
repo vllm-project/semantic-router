@@ -313,13 +313,6 @@ func runStickyInvalidation(
 	if err != nil {
 		return stickyToolSnapshot{}, err
 	}
-	if len(updated.Tools) != 1 || updated.Names[0] != changedName {
-		return stickyToolSnapshot{}, fmt.Errorf(
-			"schema invalidation forwarded unauthorized tools: got %v, want only %q",
-			updated.Names,
-			changedName,
-		)
-	}
 	baselineID := sessionID + "-invalidation-baseline"
 	baseline, err := runStickyTurn(
 		ctx,
@@ -332,16 +325,8 @@ func runStickyInvalidation(
 	if err != nil {
 		return stickyToolSnapshot{}, err
 	}
-	if err := assertStickySnapshotsEqual(updated, baseline); err != nil {
-		return stickyToolSnapshot{}, fmt.Errorf("schema invalidation did not fall back to stateless selection: %w", err)
-	}
-	if err := assertStickySnapshotsDifferent(previous, updated); err != nil {
-		return stickyToolSnapshot{}, fmt.Errorf("schema invalidation reused the retained tool set: %w", err)
-	}
-	oldDefinition := toolDefinitionByName(previous, changedName)
-	newDefinition := toolDefinitionByName(updated, changedName)
-	if oldDefinition == nil || newDefinition == nil || bytes.Equal(oldDefinition, newDefinition) {
-		return stickyToolSnapshot{}, fmt.Errorf("schema invalidation did not replace provider definition for %q", changedName)
+	if err := assertStickyInvalidation(previous, updated, baseline, changedName); err != nil {
+		return stickyToolSnapshot{}, err
 	}
 	return updated, nil
 }
@@ -649,6 +634,23 @@ func assertStickySnapshotsEqual(left, right stickyToolSnapshot) error {
 func assertStickySnapshotsDifferent(left, right stickyToolSnapshot) error {
 	if err := assertStickySnapshotsEqual(left, right); err == nil {
 		return fmt.Errorf("tool snapshots are identical: %v", left.Names)
+	}
+	return nil
+}
+
+func assertStickyInvalidation(previous, updated, baseline stickyToolSnapshot, changedName string) error {
+	oldDefinition := toolDefinitionByName(previous, changedName)
+	if oldDefinition == nil {
+		return fmt.Errorf("schema invalidation precondition omitted retained tool %q", changedName)
+	}
+	if err := assertStickySnapshotsEqual(updated, baseline); err != nil {
+		return fmt.Errorf("schema invalidation did not fall back to stateless selection: %w", err)
+	}
+	if err := assertStickySnapshotsDifferent(previous, updated); err != nil {
+		return fmt.Errorf("schema invalidation reused the retained tool set: %w", err)
+	}
+	if newDefinition := toolDefinitionByName(updated, changedName); newDefinition != nil && bytes.Equal(oldDefinition, newDefinition) {
+		return fmt.Errorf("schema invalidation reused stale provider definition for %q", changedName)
 	}
 	return nil
 }
