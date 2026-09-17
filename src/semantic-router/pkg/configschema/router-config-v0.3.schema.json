@@ -1396,6 +1396,9 @@
         },
         "vector_store": {
           "$ref": "#/$defs/VectorStoreConfig"
+        },
+        "tool_sessions": {
+          "$ref": "#/$defs/ToolSessionStoreConfig"
         }
       },
       "additionalProperties": false,
@@ -6262,6 +6265,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "StickyToolSelectionConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_tools": {
+          "type": "integer"
+        },
+        "max_new_tools_per_turn": {
+          "type": "integer"
+        },
+        "pin_called_tools": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "StructureFeature": {
       "properties": {
         "type": {
@@ -6401,6 +6422,54 @@
         },
         "preserve_count": {
           "type": "integer"
+        },
+        "sticky": {
+          "$ref": "#/$defs/StickyToolSelectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "database": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionStoreConfig": {
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "max_sessions": {
+          "type": "integer"
+        },
+        "max_sessions_per_identity": {
+          "type": "integer"
+        },
+        "max_state_bytes": {
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "redis": {
+          "$ref": "#/$defs/ToolSessionRedisConfig"
         }
       },
       "additionalProperties": false,
@@ -7582,6 +7651,15 @@
         "path": [
           "stores",
           "vector_store"
+        ]
+      },
+      {
+        "key": "tool_sessions",
+        "layer": "stores",
+        "display_name": "Tool Sessions",
+        "path": [
+          "stores",
+          "tool_sessions"
         ]
       },
       {
