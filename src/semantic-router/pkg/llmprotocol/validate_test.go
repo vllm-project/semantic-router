@@ -410,6 +410,7 @@ func TestValidateUsageRequiresExplicitStateAndSafeTotals(t *testing.T) {
 		"mismatch": {
 			State: UsageAvailable, InputTotal: authoritativeTestCount(4),
 			InputUncached: authoritativeTestCount(1), InputCacheRead: authoritativeTestCount(1),
+			InputCacheWrite: authoritativeTestCount(0),
 		},
 		"overflow": {
 			State: UsageAvailable, Total: authoritativeTestCount(1),
