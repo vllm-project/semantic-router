@@ -2,10 +2,13 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 func TestNewRedisCache_NilConfig_ReturnsNil(t *testing.T) {
@@ -65,14 +68,16 @@ func TestRedisCache_InvalidateByUser_NilReceiver_NoPanic(t *testing.T) {
 	c.InvalidateByUser(context.Background(), "u1")
 }
 
+// StorageIntegration: redis
 func TestRedisCache_InvalidateByUser_EmptyUser_NoPanic(t *testing.T) {
 	// When Redis is not available we can't create a cache; so test only the empty user path
 	// by calling on a nil cache (already tested) or we need a real Redis. For empty user,
 	// the implementation does nothing when userID == "".
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379"}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress()}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	cache.InvalidateByUser(context.Background(), "")
@@ -86,11 +91,13 @@ func TestRedisCache_Close_NilReceiver_NoError(t *testing.T) {
 // TestRedisCache_InvalidateByUser_DeletesTrackedKeys verifies that Set registers
 // each value key in the user's index set and that InvalidateByUser deletes every
 // tracked value key plus the index set itself (no keyspace scan).
+// StorageIntegration: redis
 func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress(), TTLSeconds: 60}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
@@ -133,11 +140,13 @@ func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
 
 // TestRedisCache_InvalidateByUser_ScopedToUser verifies that invalidating one
 // user leaves another user's cached entries intact.
+// StorageIntegration: redis
 func TestRedisCache_InvalidateByUser_ScopedToUser(t *testing.T) {
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress(), TTLSeconds: 60}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
@@ -159,11 +168,13 @@ func TestRedisCache_InvalidateByUser_ScopedToUser(t *testing.T) {
 	cache.InvalidateByUser(ctx, optsB.UserID) // cleanup
 }
 
+// StorageIntegration: redis
 func TestRedisCache_SetThenGet_RoundTrip(t *testing.T) {
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress(), TTLSeconds: 60}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	ctx := context.Background()

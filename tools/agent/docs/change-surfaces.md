@@ -12,7 +12,7 @@ This document defines the project-level surfaces used by skills, reports, and va
   Dashboard frontend imports it directly. Do not maintain a parallel field or
   discriminator inventory.
 - Typical paths: `src/semantic-router/pkg/config/**`,
-  `src/semantic-router/pkg/configschema/**`, `tools/configschema/**`,
+  `src/semantic-router/pkg/configschema/**`, `tools/codegen/configschema/**`,
   `config/**/*.yaml`
 - Task rules: `router-core`, `repo-docs`
 
@@ -147,7 +147,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `training_stack`
 
 - Training-stack workflows, selector or embedding artifacts, evaluation scripts, and runtime-facing training outputs under `src/training`.
-- Typical paths: `src/training/**`, `tools/make/models.mk`, `tools/models/train-mmbert32k-gpu.sh`, `website/docs/training/**`
+- Typical paths: `src/training/**`, `tools/make/models.mk`, `src/training/model_classifier/train-mmbert32k-gpu.sh`, `website/docs/training/**`
 - Task rules: `training-stack`, `repo-docs`
 
 ## `docs_examples`

@@ -49,6 +49,61 @@ describe('Insights configured-rate estimates', () => {
     expect(usage?.fields).toContainEqual({ label: 'Estimated model cost', value: '<$0.0001' })
   })
 
+  it.each([
+    ['baseline', 'Baseline model selected'],
+    ['another-model', 'Equal estimated cost'],
+  ])('explains exact zero savings when %s was selected', (selected_model, reason) => {
+    const record = {
+      ...complete,
+      selected_model,
+      actual_cost: complete.baseline_cost,
+      cost_savings: 0,
+    }
+    const before = { ...record }
+    const column = createInsightsTableColumns().find((item) => item.key === 'cost_savings')!
+    const html = renderToStaticMarkup(<>{column.render!(record)}</>)
+    expect(html).toContain('No savings')
+    expect(html).toContain(reason)
+    expect(html).toContain('Baseline (configured rates):')
+    expect(html).not.toContain('$0.0000')
+    const usage = buildInsightsRecordSections(record, { isReadonly: false }).find(
+      (section) => section.title === 'Usage & Cost',
+    )!
+    expect(usage.fields).toContainEqual({
+      label: 'Estimated savings',
+      value: `No savings — ${reason}`,
+    })
+    expect(record).toEqual(before)
+  })
+
+  it('never describes tiny nonzero savings as no savings', () => {
+    const record = { ...complete, selected_model: 'cheaper', cost_savings: 0.000001 }
+    const column = createInsightsTableColumns().find((item) => item.key === 'cost_savings')!
+    const html = renderToStaticMarkup(<>{column.render!(record)}</>)
+    expect(html).toContain('&lt;$0.0001')
+    expect(html).not.toContain('No savings')
+    const usage = buildInsightsRecordSections(record, { isReadonly: false }).find(
+      (section) => section.title === 'Usage & Cost',
+    )!
+    expect(usage.fields).toContainEqual({ label: 'Estimated savings', value: '<$0.0001' })
+  })
+
+  it('links current model configuration without presenting it as historical pricing', () => {
+    const usage = buildInsightsRecordSections(complete, { isReadonly: false }).find(
+      (section) => section.title === 'Usage & Cost',
+    )!
+    const field = usage.fields.find((item) => item.label === 'Current pricing')!
+    const html = renderToStaticMarkup(<>{field.value}</>)
+    expect(html).toContain('href="/config/models"')
+    expect(html).toContain('View current configured model rates')
+    expect(html).toContain('Current rates may differ from this record')
+    expect(html).toContain('historical records are not repriced')
+    expect(usage.fields).toContainEqual({
+      label: 'Cost basis',
+      value: expect.stringContaining('not a GPU bill or provider invoice'),
+    })
+  })
+
   it('distinguishes incomplete requests, missing usage, pricing and baseline', () => {
     expect(getInsightsCostUnavailableReason({ ...complete, lifecycle_state: 'in_progress' })).toBe(
       'Request not completed',
@@ -142,6 +197,7 @@ describe('Insights configured-rate estimates', () => {
       const cell = columns.find((column) => column.key === key)!
       const markup = renderToStaticMarkup(<>{cell.render!(historical)}</>)
       expect(markup).toContain('Price not recorded')
+      expect(markup).not.toContain('No savings')
       expect(markup).toContain('current model rates')
       expect(markup).not.toContain('>N/A<')
       expect(markup).not.toContain('$0')

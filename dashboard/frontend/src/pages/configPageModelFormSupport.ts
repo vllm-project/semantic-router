@@ -5,6 +5,7 @@ import type {
   EvaluationRecordConfig,
   ModelPricing,
   ModelReasoningConfig,
+  NormalizedModel,
   ProviderReliability,
 } from './configPageSupport'
 
@@ -326,4 +327,23 @@ export function buildProviderModelPayload(
     pricing: normalizeModelPricing(data.pricing),
     reliability: normalizeModelReliability(data.reliability),
   }
+}
+
+export function effectiveModelCardFormData(model: NormalizedModel): Record<string, unknown> {
+  return {
+    param_size: model.param_size ?? '',
+    context_window_size: model.context_window_size ?? '',
+    description: model.description ?? '',
+    capabilities: model.capabilities ?? [],
+    loras: model.loras ?? [],
+    tags: model.tags ?? [],
+    modality: model.modality ?? '',
+  }
+}
+
+// Selecting a catalog model replaces the hidden custom reasoning form. Do not
+// submit stale custom controls that the user can no longer see or edit.
+export function modelFormDataForSave(data: Record<string, unknown>): Record<string, unknown> {
+  if (typeof data.catalog !== 'string' || !data.catalog.trim()) return data
+  return { ...data, ...modelReasoningFormData() }
 }

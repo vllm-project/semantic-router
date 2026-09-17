@@ -38,7 +38,8 @@ flowchart TD
     F --> G
     G --> H[Compute weighted composite score]
     H --> I[Apply cost and cache-affinity adjustments]
-    I --> J[Return top-scored model]
+    I --> J[Compare typed candidate scores]
+    J --> K[Return the exact winning candidate]
 ```
 
 ## Component Selectors
@@ -52,6 +53,16 @@ The Hybrid selector internally instantiates three sub-selectors:
 | `AutoMixSelector` | One-shot request path | Cost-quality value estimate |
 
 Each component shares the same `SelectionContext` and runs independently.
+Composition uses typed scores attached to the complete candidate reference, not
+model-name or display-label lookups. Two references to the same model at `low`
+and `high` reasoning effort therefore remain separate through normalization,
+comparison, Router Learning protection, and provider request encoding.
+
+Elo, description similarity, and cache observations can remain model-level
+signals; their values are explicitly applied to each candidate variant. AutoMix
+contributes its raw expected value, before its separate cost-aware starting-model
+adjustment. Neither those model-level priors nor learned feedback are presented
+as effort-specific benchmark measurements.
 
 ## What Problem Does It Solve?
 

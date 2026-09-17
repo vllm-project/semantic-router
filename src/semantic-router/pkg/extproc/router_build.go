@@ -318,6 +318,7 @@ func (components *routerComponents) buildEarlyResources() error {
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
+	components.classificationSvc.SetGlobalEmbeddings(components.serviceEmbeddings)
 	components.resources.add(components.recipeClassifiers.Close)
 	components.resources.add(components.classificationSvc.Close)
 	if target, ok := components.semanticCache.(interface {

@@ -372,6 +372,7 @@ const sidebars: SidebarsConfig = {
               label: 'Run models',
               items: [
                 'installation/runtime/in-process',
+                'installation/runtime/openvino',
                 'installation/runtime/external',
               ],
             },

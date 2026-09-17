@@ -17,6 +17,8 @@ DATETIME = $(shell date +"%Y%m%d%H%M%S")
 
 # REV is the short git sha of latest commit.
 REV=$(shell git rev-parse --short HEAD)
+PREBUILT_NATIVE_LIBS ?= 0
+NATIVE_ARTIFACT_DIR ?= $(CURDIR)/.agent-harness/native-input
 
 # The router links all native providers in one process. Keep the build and
 # runtime search paths independent of each recipe's working directory, while

@@ -221,3 +221,27 @@ def test_unregistered_custom_local_artifact_remains_valid():
         "artifact"
     ] = "/mounted/custom/checkpoint"
     assert validate_model_runtime_references(UserConfig.model_validate(document)) == []
+
+
+@pytest.mark.parametrize(
+    "consumer,contract",
+    [("embedding", "embedding.v1"), ("domain_classifier", "label_distribution.v1")],
+)
+def test_openvino_binding_uses_canonical_deployment(consumer, contract):
+    document = binding_document()
+    document["recipes"] = []
+    document["routing"]["model_bindings"] = {
+        consumer: {
+            "deployment": "shared",
+            "contract": contract,
+            "adapter": "bert",
+            "head": "openvino_model.xml",
+        }
+    }
+    deployment = document["global"]["model_catalog"]["deployments"]["shared"]
+    deployment.update(provider="openvino", device="CPU", precision="native")
+    assert validate_config_structure(document) == []
+    assert validate_model_runtime_references(UserConfig.model_validate(document)) == []
+    deployment["input"]["overflow"] = "window"
+    errors = validate_model_runtime_references(UserConfig.model_validate(document))
+    assert any("reject or truncate" in e.message for e in errors)
