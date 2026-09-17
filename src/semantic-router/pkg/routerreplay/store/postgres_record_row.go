@@ -235,7 +235,7 @@ func scanPostgresRecordList(rows *sql.Rows) (_ []Record, err error) {
 	for rows.Next() {
 		record, scanErr := scanPostgresRecord(rows)
 		if scanErr != nil {
-			continue
+			return nil, scanErr
 		}
 		records = append(records, record)
 	}
