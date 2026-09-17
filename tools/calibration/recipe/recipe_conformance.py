@@ -23,6 +23,19 @@ from recipe_conformance_report import (
     render_coverage_markdown,
     render_tag_acceptance_markdown,
 )
+from recipe_conformance_runtime import (
+    bind_runtime_entrypoints,
+    management_auth_bindings,
+    prepare_builtin_runtime,
+    verify_composed_policy,
+)
+from recipe_conformance_sources import (
+    discover_recipe_sources,
+    discover_source_inventories,
+    matrix_payload,
+    render_source_rows,
+    source_matrix_payload,
+)
 from recipe_metadata_schema import (
     load_recipe_metadata_document,
     validate_recipe_metadata_schema,
@@ -613,35 +626,6 @@ def coverage_payload(inventory: list[RecipeInventory]) -> dict[str, Any]:
     }
 
 
-def shard_inventory(
-    inventory: list[RecipeInventory], shard_count: int
-) -> list[list[RecipeInventory]]:
-    if shard_count < 1:
-        raise ValueError("shard count must be positive")
-    shards: list[list[RecipeInventory]] = [[] for _ in range(shard_count)]
-    weights = [0] * shard_count
-    for recipe in sorted(inventory, key=lambda item: (-item.variants, item.name)):
-        index = min(range(shard_count), key=lambda item: (weights[item], item))
-        shards[index].append(recipe)
-        weights[index] += recipe.variants
-    return [shard for shard in shards if shard]
-
-
-def matrix_payload(
-    inventory: list[RecipeInventory], shard_count: int
-) -> dict[str, Any]:
-    return {
-        "include": [
-            {
-                "shard": index,
-                "recipes": ",".join(recipe.name for recipe in shard),
-                "variants": sum(recipe.variants for recipe in shard),
-            }
-            for index, shard in enumerate(shard_inventory(inventory, shard_count))
-        ]
-    }
-
-
 def write_github_output(path: Path, name: str, value: str) -> None:
     with path.open("a", encoding="utf-8") as output:
         output.write(f"{name}={value}\n")
@@ -702,12 +686,82 @@ def command_check_cpu(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_static_all(args: argparse.Namespace) -> int:
+    for source in discover_recipe_sources(args.recipes_root):
+        source_args = argparse.Namespace(**vars(args))
+        source_args.recipes_root = source.recipes_root
+        source_args.output_dir = args.output_dir / source.report_subdir
+        source_args.skip_catalog_readme = not source.validate_readme
+        command_static(source_args)
+    return 0
+
+
+def cpu_sources(args: argparse.Namespace) -> list:
+    inventories = discover_source_inventories(args.recipes_root, discover_inventory)
+    for source_inventory in inventories:
+        output_dir = args.output_dir / source_inventory.source.report_subdir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        write_json(
+            output_dir / "cpu-eligibility.json",
+            cpu_eligibility(list(source_inventory.recipes)),
+        )
+    return [
+        replace(item, recipes=tuple(cpu_inventory(list(item.recipes))))
+        for item in inventories
+    ]
+
+
+def command_plan_all(args: argparse.Namespace) -> int:
+    matrix = source_matrix_payload(cpu_sources(args), args.shards, REPO_ROOT)
+    if not matrix["include"]:
+        raise ValueError("no CPU recipes selected")
+    if args.github_output:
+        write_github_output(
+            args.github_output, "matrix", json.dumps(matrix, separators=(",", ":"))
+        )
+    else:
+        print(json.dumps(matrix, indent=2))
+    return 0
+
+
+def command_sources(args: argparse.Namespace) -> int:
+    print(render_source_rows(cpu_sources(args), REPO_ROOT, args.format))
+    return 0
+
+
+def command_prepare_runtime(args: argparse.Namespace) -> int:
+    recipe_path = args.recipes_root / args.recipe
+    build_recipe_inventory(recipe_path)
+    authored = load_yaml_mapping(recipe_path / "config.yaml")
+    if not any(key in authored for key in ("providers", "routing", "entrypoints")):
+        composed = prepare_builtin_runtime(recipe_path, args.config, REPO_ROOT)
+        verify_composed_policy(authored, composed)
+    else:
+        args.config.parent.mkdir(parents=True, exist_ok=True)
+        with args.config.open("x", encoding="utf-8") as output:
+            output.write((recipe_path / "config.yaml").read_text(encoding="utf-8"))
+    return 0
+
+
+def command_runtime_auth(args: argparse.Namespace) -> int:
+    for name, can_read_ready in management_auth_bindings(
+        load_yaml_mapping(args.config)
+    ):
+        print(f"{name}|{'ready' if can_read_ready else 'token'}")
+    return 0
+
+
 def command_eval(args: argparse.Namespace) -> int:
     recipe_path = args.recipes_root / args.recipe
     inventory = build_recipe_inventory(recipe_path)
     config = load_yaml_mapping(recipe_path / "config.yaml")
     manifest, probes = load_probe_manifest(recipe_path / "probes.yaml")
     probes = bind_default_entrypoints(config, probes)
+    runtime_config = getattr(args, "runtime_config", None)
+    if runtime_config:
+        config = load_yaml_mapping(runtime_config)
+        probes = bind_runtime_entrypoints(config, probes)
+        validate_probe_references(recipe_path / "probes.yaml", config, manifest, probes)
     evaluation = evaluate_probes(
         args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
     )
@@ -716,6 +770,23 @@ def command_eval(args: argparse.Namespace) -> int:
     )
     evaluation["coverage_acceptance"] = tag_acceptance
     evaluation["passed"] = bool(evaluation["passed"]) and tag_acceptance["passed"]
+    expected_ids = [probe.probe_id for probe in probes]
+    executed_ids = [result["id"] for result in evaluation["results"]]
+    execution_complete = bool(expected_ids) and sorted(executed_ids) == sorted(
+        expected_ids
+    )
+    expected_entrypoints = sorted({probe.model for probe in probes if probe.model})
+    executed_entrypoints = sorted(
+        {result["model"] for result in evaluation["results"] if result.get("model")}
+    )
+    evaluation["execution"] = {
+        "expected_probes": len(expected_ids),
+        "executed_probes": len(executed_ids),
+        "expected_entrypoints": expected_entrypoints,
+        "executed_entrypoints": executed_entrypoints,
+        "complete": execution_complete and expected_entrypoints == executed_entrypoints,
+    }
+    evaluation["passed"] = evaluation["passed"] and evaluation["execution"]["complete"]
     for scope, summary in evaluation.get("scopes", {}).items():
         scoped_results = [
             {**result, "matched": bool(result.get(f"{scope}_matched"))}
@@ -763,7 +834,16 @@ def command_report(args: argparse.Namespace) -> int:
         render_consolidated_markdown(payload), encoding="utf-8"
     )
     print(json.dumps(payload["summary"], indent=2, ensure_ascii=False))
-    return 0
+    return 0 if payload["summary"]["cpu_compatible_passed"] else 1
+
+
+def command_report_all(args: argparse.Namespace) -> int:
+    result = 0
+    for source in discover_recipe_sources(args.recipes_root):
+        source_args = argparse.Namespace(**vars(args))
+        source_args.output_dir = args.output_dir / source.report_subdir
+        result = max(result, command_report(source_args))
+    return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -792,11 +872,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     static = subparsers.add_parser("static")
     static.set_defaults(func=command_static)
+    subparsers.add_parser("static-all").set_defaults(func=command_static_all)
 
     plan = subparsers.add_parser("plan", help="plan compatible live CPU shards")
     plan.add_argument("--shards", type=int, default=3)
     plan.add_argument("--github-output", type=Path)
     plan.set_defaults(func=command_plan)
+    plan_all = subparsers.add_parser("plan-all")
+    plan_all.add_argument("--shards", type=int, default=3)
+    plan_all.add_argument("--github-output", type=Path)
+    plan_all.set_defaults(func=command_plan_all)
+    sources = subparsers.add_parser("sources")
+    sources.add_argument("--format", choices=("json", "pipe"), default="json")
+    sources.set_defaults(func=command_sources)
+    prepare = subparsers.add_parser("prepare-runtime")
+    prepare.add_argument("--recipe", required=True)
+    prepare.add_argument("--config", type=Path, required=True)
+    prepare.set_defaults(func=command_prepare_runtime)
+    runtime_auth = subparsers.add_parser("runtime-auth")
+    runtime_auth.add_argument("--config", type=Path, required=True)
+    runtime_auth.set_defaults(func=command_runtime_auth)
 
     check_cpu = subparsers.add_parser("check-cpu")
     check_cpu.add_argument("--recipes", required=True)
@@ -805,6 +900,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = subparsers.add_parser("eval")
     evaluate.add_argument("--recipe", required=True)
     evaluate.add_argument("--router-url", required=True)
+    evaluate.add_argument("--runtime-config", type=Path)
     evaluate.add_argument(
         "--scope",
         choices=EVALUATION_SCOPES,
@@ -815,6 +911,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     report = subparsers.add_parser("report")
     report.set_defaults(func=command_report)
+    subparsers.add_parser("report-all").set_defaults(func=command_report_all)
     return parser
 
 

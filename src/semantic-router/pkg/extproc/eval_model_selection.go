@@ -191,6 +191,9 @@ func (r *OpenAIRouter) selectEvalCandidate(
 		return fallbackEvalModel(defaultCandidate, method, "selector failed during dry-run")
 	}
 	if err := selection.ValidateSelectionResult(selectionContext, result); err != nil {
+		if errors.Is(err, selection.ErrNoEligibleCandidates) {
+			return evalSelectionUnavailable(err.Error())
+		}
 		return fallbackEvalModel(defaultCandidate, method, "selector returned an invalid candidate")
 	}
 	selectionContext, err = applySelectionEligibility(selectionContext, result, requestContext)

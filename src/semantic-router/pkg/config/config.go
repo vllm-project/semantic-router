@@ -222,6 +222,8 @@ type Listener struct {
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
 	Timeout string `yaml:"timeout,omitempty"`
+	// APIKeys are client bearer credentials enforced by the CLI-managed Envoy listener.
+	APIKeys []string `yaml:"api_keys,omitempty"`
 }
 
 type APIServer struct {

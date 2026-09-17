@@ -1499,6 +1499,9 @@
         "instructions": {
           "type": "string"
         },
+        "disable_rationale": {
+          "type": "boolean"
+        },
         "use_cpu": {
           "type": "boolean"
         }
@@ -3190,6 +3193,12 @@
         },
         "timeout": {
           "type": "string"
+        },
+        "api_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

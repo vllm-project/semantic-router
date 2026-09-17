@@ -90,17 +90,19 @@ def make_model(kind: str, variant: str) -> ov.Model:
         count = ops.reduce_sum(weights, [1], keep_dims=True)
         zero = ops.multiply(total, ops.constant(np.float32(0)))
         one = ops.add(zero, ops.constant(np.float32(1)))
+        # Binary fractions keep the tested logits exact when CPU inference uses
+        # reduced precision; ownership and token budgets remain the test oracle.
         values = (
             [
-                ops.multiply(total, ops.constant(np.float32(0.01))),
-                ops.multiply(count, ops.constant(np.float32(0.1))),
+                ops.multiply(total, ops.constant(np.float32(1 / 64))),
+                ops.multiply(count, ops.constant(np.float32(1 / 8))),
                 one,
             ]
             if variant == "a"
             else [
                 one,
-                ops.multiply(total, ops.constant(np.float32(-0.02))),
-                ops.multiply(count, ops.constant(np.float32(0.05))),
+                ops.multiply(total, ops.constant(np.float32(-1 / 32))),
+                ops.multiply(count, ops.constant(np.float32(1 / 16))),
             ]
         )
         output = ops.concat(values, 1)

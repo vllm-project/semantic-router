@@ -233,7 +233,8 @@ export interface RecipeProbeDetail extends RecipeProbeSummary {
     message_index: number
     content_index: number
     target_text_bytes: number
-    character: string
+    character?: string
+    text?: string
   }
   image_fixtures?: Record<
     string,

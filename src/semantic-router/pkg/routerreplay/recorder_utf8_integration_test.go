@@ -8,14 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
+// StorageIntegration: postgres
 func TestRecorderUTF8PostgresIntegration(t *testing.T) {
+	storagetest.Require(t, "postgres")
 	raw := os.Getenv("ROUTER_REPLAY_TEST_POSTGRES_CONFIG")
 	if raw == "" {
-		t.Skip("set ROUTER_REPLAY_TEST_POSTGRES_CONFIG to run against PostgreSQL")
+		storagetest.Unavailable(t, "postgres", "set ROUTER_REPLAY_TEST_POSTGRES_CONFIG to run against PostgreSQL")
 	}
 	var cfg store.PostgresConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
