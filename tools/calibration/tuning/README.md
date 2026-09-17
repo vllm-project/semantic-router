@@ -105,7 +105,7 @@ Run it without a live router:
 
 ```bash
 PYTHONPATH=tools/calibration \
-python tools/calibration/tuning/verify_confidence.py \
+python tools/calibration/tuning/build_confidence_artifact.py \
   --manifest path/to/confidence-manifest.json \
   --output confidence-calibration-artifact.json
 ```

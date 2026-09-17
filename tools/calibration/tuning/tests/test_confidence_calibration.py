@@ -315,3 +315,28 @@ def test_retained_and_baseline_thresholds_survive_json_round_trip(tmp_path):
         assert metrics == restored["baseline"]["metrics"]["held_out"]
         assert metrics["escalated"] == 1
         assert saved_threshold == threshold
+
+
+def test_manifest_cli_builds_artifact_from_outside_repository(tmp_path):
+    import subprocess
+    import sys
+
+    command = Path(__file__).resolve().parents[1] / "build_confidence_artifact.py"
+    output = tmp_path / "reports" / "artifact.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(command),
+            "--manifest",
+            str(FIXTURE_MANIFEST.resolve()),
+            "--output",
+            str(output),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    artifact = json.loads(output.read_text())
+    assert artifact == build_artifact(FIXTURE_MANIFEST)
+    assert artifact["artifact_id"] in result.stdout
