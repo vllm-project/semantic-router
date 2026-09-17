@@ -1500,6 +1500,7 @@ routing:
       algorithm:
         type: multi_factor
         multi_factor:
+          expected_output_tokens: 4096
           objective:
             strategy: weighted
           quality:
