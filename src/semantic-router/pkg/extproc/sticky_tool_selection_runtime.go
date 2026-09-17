@@ -252,11 +252,16 @@ func stickyCalledToolNames(request *llmprotocol.Request, limit int) []string {
 		return nil
 	}
 	names := make([]string, 0, limit)
-	for _, message := range request.Messages {
+	seen := make(map[string]struct{}, limit)
+	// Scan newest calls first so the bounded result retains the latest distinct
+	// names, then restore their original chronological order below.
+	for messageIndex := len(request.Messages) - 1; messageIndex >= 0 && len(names) < limit; messageIndex-- {
+		message := request.Messages[messageIndex]
 		if message.Role != llmprotocol.RoleAssistant {
 			continue
 		}
-		for _, content := range message.Content {
+		for contentIndex := len(message.Content) - 1; contentIndex >= 0 && len(names) < limit; contentIndex-- {
+			content := message.Content[contentIndex]
 			if content.Kind != llmprotocol.ContentToolCall || content.ToolCall == nil {
 				continue
 			}
@@ -264,13 +269,15 @@ func stickyCalledToolNames(request *llmprotocol.Request, limit int) []string {
 			if name == "" {
 				continue
 			}
-			if len(names) == limit {
-				copy(names, names[1:])
-				names[len(names)-1] = name
+			if _, exists := seen[name]; exists {
 				continue
 			}
+			seen[name] = struct{}{}
 			names = append(names, name)
 		}
+	}
+	for left, right := 0, len(names)-1; left < right; left, right = left+1, right-1 {
+		names[left], names[right] = names[right], names[left]
 	}
 	return names
 }

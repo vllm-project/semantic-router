@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -181,6 +182,142 @@ func TestHandleToolSelectionDecisionPluginDefaultsChoiceForStickyModes(t *testin
 				t.Fatalf("tool choice = %q, want %q", request.ToolChoice.Mode, tt.wantChoice)
 			}
 		})
+	}
+}
+
+func TestStickyCalledToolNamesKeepsLatestDistinctCallsInOrder(t *testing.T) {
+	toolCall := func(name string) llmprotocol.Content {
+		return llmprotocol.Content{
+			Kind:     llmprotocol.ContentToolCall,
+			ToolCall: &llmprotocol.ToolCall{Name: name},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		request *llmprotocol.Request
+		limit   int
+		want    []string
+	}{
+		{
+			name: "duplicate calls retain the latest distinct window",
+			request: &llmprotocol.Request{Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{toolCall("A")}},
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{toolCall("B"), toolCall("B")}},
+			}},
+			limit: 2,
+			want:  []string{"A", "B"},
+		},
+		{
+			name: "empty and non assistant calls are ignored",
+			request: &llmprotocol.Request{Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{toolCall("user-call")}},
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+					toolCall(""),
+					toolCall("  "),
+					toolCall("search"),
+				}},
+			}},
+			limit: 2,
+			want:  []string{"search"},
+		},
+		{
+			name: "limit keeps newest distinct names",
+			request: &llmprotocol.Request{Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+					toolCall("A"),
+					toolCall("B"),
+					toolCall("C"),
+					toolCall("D"),
+				}},
+			}},
+			limit: 2,
+			want:  []string{"C", "D"},
+		},
+		{
+			name: "repeated consecutive calls are returned once",
+			request: &llmprotocol.Request{Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+					toolCall("lookup"),
+					toolCall("lookup"),
+					toolCall("lookup"),
+				}},
+			}},
+			limit: 3,
+			want:  []string{"lookup"},
+		},
+		{
+			name: "nonconsecutive repeats keep their latest position",
+			request: &llmprotocol.Request{Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+					toolCall("A"),
+					toolCall("B"),
+					toolCall("A"),
+					toolCall("C"),
+				}},
+			}},
+			limit: 3,
+			want:  []string{"B", "A", "C"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := stickyCalledToolNames(tt.request, tt.limit); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("called tool names = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestApplyStickyToolSelectionDoesNotAdmitUnauthorizedCalledTool(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "runtime-test-secret")
+	store := sessiontools.NewMemoryStore(config.ToolSessionStoreConfig{}, nil)
+	manager, err := sessiontools.NewManager(store, sessiontools.DefaultManagerOptions())
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	router := &OpenAIRouter{
+		Config:                     &config.RouterConfig{},
+		stickyToolSelectionManager: manager,
+	}
+	selection := &config.ToolSelectionPluginConfig{
+		Enabled: true,
+		Sticky:  &config.StickyToolSelectionConfig{Enabled: true},
+	}
+	ctx := stickyRuntimeTestContext()
+	ctx.VSRSelectedModel = "selected-model"
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{{
+			Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{
+				Kind:     llmprotocol.ContentToolCall,
+				ToolCall: &llmprotocol.ToolCall{Name: "not-authorized"},
+			}},
+		}},
+		ToolChoice: llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto},
+	}
+	search := llmprotocol.Tool{Name: "search", InputSchema: []byte(`{"type":"object"}`)}
+	got, committed := router.applyStickyToolSelectionWithStatus(
+		request,
+		[]llmprotocol.Tool{search},
+		[]llmprotocol.Tool{search},
+		selection,
+		nil,
+		"default",
+		ctx,
+	)
+	if !committed || len(got) != 1 || got[0].Name != "search" {
+		t.Fatalf("selection = %#v, committed=%v", got, committed)
+	}
+	identity := ResolveStickyToolIdentity(ctx, string(ctx.Routing.RecipeName()), tools.EffectiveToolPolicyFingerprint(selection, nil))
+	loaded, err := store.Load(context.Background(), identity.StorageKey)
+	if err != nil {
+		t.Fatalf("load sticky state: %v", err)
+	}
+	if len(loaded.State.Tools) != 1 || loaded.State.Tools[0].Name != "search" {
+		t.Fatalf("sticky state = %#v, want only authorized search tool", loaded.State.Tools)
 	}
 }
 
