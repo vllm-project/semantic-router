@@ -109,6 +109,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'svm',
     'mlp',
     'multi_factor',
+    'random',
   ],
 
   booleans: ['true', 'false'],
@@ -148,7 +149,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|fusion|workflows|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor)\b/,
+        /\b(confidence|ratings|remom|fusion|workflows|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor|random)\b/,
         'type.algorithm',
       ],
 
@@ -323,6 +324,7 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'svm', detail: 'SVM model-selection classifier' },
   { label: 'mlp', detail: 'MLP model-selection classifier' },
   { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
+  { label: 'random', detail: 'Uniform pick among eligible candidates' },
 ]
 
 /**
