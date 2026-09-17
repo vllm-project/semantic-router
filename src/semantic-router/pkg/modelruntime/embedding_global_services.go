@@ -24,6 +24,9 @@ func PrepareOwnedGlobalServiceEmbeddings(ctx context.Context, cfg *config.Router
 
 func globalEmbeddingConsumerName(cfg *config.RouterConfig, model, primary string) string {
 	var consumers []string
+	if cfg.API.Embeddings.Enabled && model == primary {
+		consumers = append(consumers, "api")
+	}
 	if cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == model {
 		consumers = append(consumers, "response_cache")
 	}
