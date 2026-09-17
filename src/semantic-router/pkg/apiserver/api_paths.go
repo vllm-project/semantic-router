@@ -5,6 +5,7 @@ package apiserver
 const (
 	apiRootPath = "/api/v1"
 
+	apiStatusPath         = apiRootPath + "/status"
 	apiConfigPath         = apiRootPath + "/config"
 	apiConfigSchemaPath   = apiConfigPath + "/schema"
 	apiConfigValidatePath = apiConfigPath + "/validate"
