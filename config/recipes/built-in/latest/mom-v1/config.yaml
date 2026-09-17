@@ -1,5 +1,11 @@
 version: v0.3
 global:
+  services:
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      ttl_seconds: 604800
+      async_writes: false
   router:
     learning:
       enabled: true
@@ -3294,7 +3300,7 @@ recipes:
         retention:
           drop: true
     data_policy:
-      replay: false
+      replay: true
     model_bindings:
       classifier.content-risk:
         deployment: hazard

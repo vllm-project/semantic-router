@@ -31,6 +31,8 @@ type Runtime struct {
 	Pool            *binding.Pool
 	registry        *binding.Registry
 	inventory       *binding.Inventory
+	prepared        *binding.PreparedTasks
+	operatingPoints map[*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelScores]]*OperatingPointScorer
 	sequence        *binding.Task[string, tasks.LabelDistribution]
 	scores          *binding.Task[string, tasks.LabelScores]
 	sequenceWindows *binding.Task[tasks.TextWindowsRequest, tasks.WindowedLabelDistribution]
@@ -48,8 +50,10 @@ func New(pool *binding.Pool) *Runtime {
 		pool = binding.NewPool()
 	}
 	inventory := binding.NewInventory()
+	prepared := binding.NewPreparedTasks()
 	registry := binding.NewRegistry(func(event binding.Event) {
 		inventory.Observe(event)
+		prepared.Observe(event)
 		diagnostics.Observe(event)
 	})
 	sequence, _ := binding.Register(registry, config.RemoteClassifierContractLabelDistribution, validateText, validateDistribution)
@@ -74,13 +78,14 @@ func New(pool *binding.Pool) *Runtime {
 	}, func(_ tasks.TextPairRequest, output tasks.LabelDistribution) error {
 		return validateDistribution("", output)
 	})
-	return &Runtime{Pool: pool, registry: registry, inventory: inventory, sequence: sequence, scores: scores, sequenceWindows: sequenceWindows, scoreWindows: scoreWindows, tokens: tokens, tokenWindows: tokenWindows, grounded: grounded, pair: pair, artifacts: make(map[string]string)}
+	return &Runtime{Pool: pool, registry: registry, inventory: inventory, prepared: prepared, operatingPoints: make(map[*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelScores]]*OperatingPointScorer), sequence: sequence, scores: scores, sequenceWindows: sequenceWindows, scoreWindows: scoreWindows, tokens: tokens, tokenWindows: tokenWindows, grounded: grounded, pair: pair, artifacts: make(map[string]string)}
 }
 
 // ObserveBinding also admits typed external connectors to this generation's
 // inventory without exposing their endpoint or resource compatibility key.
 func (r *Runtime) ObserveBinding(event binding.Event) {
 	r.inventory.Observe(event)
+	r.prepared.Observe(event)
 	diagnostics.Observe(event)
 }
 

@@ -76,9 +76,9 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	response := map[string]interface{}{
-		"object": "vector_store.search_results.page",
-		"data":   results,
+	response := objectListResponse[vectorstore.SearchResult]{
+		Object: "vector_store.search_results.page",
+		Data:   results,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }

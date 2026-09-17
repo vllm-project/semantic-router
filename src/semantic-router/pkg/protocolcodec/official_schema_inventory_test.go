@@ -145,7 +145,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
 				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
-				"remote_host", "remote_port",
+				"remote_host", "remote_port", "usage_breakdown", "x_groq",
 			),
 		},
 		{
@@ -185,9 +185,10 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 
 func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 	tests := []struct {
-		name     string
-		wire     any
-		official []string
+		name       string
+		wire       any
+		official   []string
+		extensions []string
 	}{
 		{
 			name: "OpenAI Chat Completions",
@@ -195,6 +196,10 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			official: fields(
 				"completion_tokens", "completion_tokens_details", "compute_units", "prompt_tokens",
 				"prompt_tokens_details", "total_tokens",
+			),
+			// xAI and Groq accounting fields on their OpenAI-compatible endpoints.
+			extensions: fields(
+				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "total_time",
 			),
 		},
 		{
@@ -217,8 +222,10 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := jsonFieldNames(reflect.TypeOf(test.wire)); !reflect.DeepEqual(got, test.official) {
-				t.Fatalf("usage field inventory drifted\n got: %v\nwant: %v", got, test.official)
+			want := append(append([]string(nil), test.official...), test.extensions...)
+			sort.Strings(want)
+			if got := jsonFieldNames(reflect.TypeOf(test.wire)); !reflect.DeepEqual(got, want) {
+				t.Fatalf("usage field inventory drifted\n got: %v\nwant: %v", got, want)
 			}
 		})
 	}

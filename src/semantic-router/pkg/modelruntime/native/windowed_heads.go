@@ -173,6 +173,7 @@ func finishWindowTask[O any](ctx context.Context, spec config.ResolvedModelBindi
 		return nil, fmt.Errorf("%w: window exceeds effective token budget", binding.ErrCapability)
 	}
 	capability.Limits.Overflow = "window"
+	capability.Window = &binding.WindowCapability{Size: window.Size, Overlap: window.Overlap}
 	warmup := window
 	warmup.Text = "warmup"
 	return finishNativeTask(ctx, spec, task, capability, resource,

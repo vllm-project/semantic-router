@@ -30,6 +30,9 @@ func NewRegistry(observers ...Observer) *Registry {
 // Event contains execution facts only, never prompts, credentials or results.
 type Event struct {
 	instance      *bindingLifecycle
+	prepared      any
+	ResourceID    string
+	Revision      string
 	Artifact      string
 	Identity      Identity
 	Capability    Capability
@@ -203,6 +206,9 @@ func (b *Resolved[Input, Output]) observe(event Event) {
 	}
 	event.Identity = b.identity
 	event.instance = b.lifecycle
+	event.prepared = b
+	event.ResourceID = b.resource.key
+	event.Revision = b.resource.identity.Revision
 	if b.capability.Device != "external" {
 		event.Artifact = b.resource.identity.Artifact
 	}

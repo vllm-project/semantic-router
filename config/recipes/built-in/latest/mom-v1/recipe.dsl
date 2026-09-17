@@ -899,7 +899,7 @@ RECIPE vault (description = "Keep private traffic inside the assigned deployment
 
   ROUTING {
     candidate_requirements: { capabilities: "declared", context: "known_limits" }
-    data_policy: { replay: false }
+    data_policy: { replay: true }
     strategy: priority
     model_bindings: { classifier.content-risk: { adapter: "modernbert", contract: "label_scores.v1", deployment: "hazard", operating_point: { path: "operating_point.json", sha256: "e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5" } } }
   }

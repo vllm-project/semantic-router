@@ -33,7 +33,6 @@ func (c *Classifier) PreloadKnowledgeBases() error {
 type Classifier struct {
 	closeOnce         sync.Once
 	closeErr          error
-	polarityNLI       *HallucinationDetector
 	modalityInference *ownedModalityClassifier
 	embeddingProvider embedding.Provider
 	embeddingSet      *embedding.Set

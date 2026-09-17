@@ -855,6 +855,8 @@ routing:
               target_tokens: auto
               reserve_output_tokens: auto
             targets:
+              current_user:
+                mode: preserve
               tool_outputs:
                 mode: extractive
                 min_tokens: 2000
@@ -1853,6 +1855,8 @@ global:
       routing_preview:
         request_timeout_seconds: 120
         max_concurrency: 16
+      embeddings:
+        enabled: false
       batch_classification:
         max_batch_size: 100
         max_concurrency: 8
@@ -1966,6 +1970,7 @@ global:
             - ready.read
             - docs.read
             - metrics.read
+            - audit.read
             - classify.invoke
             - config.read
             - replay.read
@@ -1977,6 +1982,7 @@ global:
             - ready.read
             - docs.read
             - metrics.read
+            - audit.read
             - classify.invoke
             - config.read
             - config.write
@@ -2290,6 +2296,8 @@ global:
             key_prefix: "vllm-sr:flow:state:"
 
   model_catalog:
+    # Shared task defaults. Recipe model_bindings may override their own consumers.
+    bindings: {}
     # Named physical deployments and their shared admission budgets.
     deployments:
       content-risk:
