@@ -2,75 +2,79 @@
 
 ## Overview
 
-`router_replay` is a route-local plugin for overriding replay/debug capture on one route.
-
-A recipe's `routing.data_policy.replay: false` takes precedence over global and
-route-local replay settings. It prevents capture even for rejected requests;
-`router_replay.enabled: true` cannot override it. Vault uses this policy, so its
-requests are intentionally absent from Dashboard Insights. See the
-[Replay API and privacy controls](../../api/router#router-replay).
-
-The default `memory` store loses records when configuration is reloaded or the
-router restarts. To keep session history available while changing recipes,
-configure a durable store such as Postgres or Redis in the
-[shared replay service](../learning/memory-and-replay#configuration).
-
-## Key Advantages
-
-- Lets one route override the router-wide replay default.
-- Supports request and response body controls.
-- Makes storage limits explicit instead of hidden.
+Use Router Replay to inspect requests in Dashboard Insights: the selected route,
+model, token usage, response, and tool trajectory. Configure storage globally;
+use the `router_replay` plugin only when a decision needs different capture settings.
 
 ## What Problem Does It Solve?
 
-Replay capture is useful, but some routes need different capture policy than the router-wide default. `router_replay` lets one route opt out or override request/response body capture limits without changing global replay storage settings.
+Replay keeps request-level evidence together so you can understand a routing
+choice and follow a conversation across requests.
 
 ## When to Use
 
-- one route should override the router-wide replay policy
-- capture limits should be explicit per route
-- replay should be disabled for a specific route while staying on elsewhere
+Enable Replay when you need request history for inspection or troubleshooting.
+Choose retention and capture limits that match the data you are allowed to keep.
 
 ## Configuration
 
-To disable replay for a route, add:
+### Keep records across restarts
 
-```yaml
-plugins:
-  - type: router_replay
-    configuration:
-      enabled: false
-```
+All five built-in MoM recipes, including Vault, enable PostgreSQL Replay by
+default. Local `vllm-sr serve` manages PostgreSQL and its persistent volume.
+For another deployment method, configure the PostgreSQL connection in the
+[shared Replay service](../learning/memory-and-replay#configuration).
 
-To customize capture for a route, add:
+The generic `memory` store is useful for temporary inspection but loses records
+when the Router restarts or reloads configuration. Use PostgreSQL or Redis when
+you need durable history. Set retention for the data you intend to keep.
+
+### Limit capture on a decision
+
+Add this fragment to the decision's `plugins` to record bounded excerpts:
 
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
-      max_records: 10000
       capture_request_body: true
       capture_response_body: true
       max_body_bytes: 4096
       max_tool_trace_steps: 100
 ```
 
-## Looper diagnostics
+Body limits and structured-text limits count UTF-8 bytes. Excerpts end on
+complete characters, so they can be slightly shorter than the limit. A truncated
+raw body may no longer be complete JSON; check its truncation flag. Tool traces
+have separate limits from raw request and response bodies.
 
-Confidence Looper records include a versioned `route_diagnostics.looper`
-object. It contains bounded attempt metadata, token and cost accounting,
-latencies, disposition reason codes, the OpenTelemetry trace ID when tracing is
-active, and `final_attempt_ordinal`. Attempt details are omitted from
-viewer-redacted responses and remain available to principals with replay-detail
-permission.
+To opt one decision out of capture, use `configuration: {enabled: false}`.
+To change the deployment-wide default, set
+`global.services.router_replay.enabled: false`; a decision can still opt in.
 
-Looper diagnostics never contain prompts, responses, hidden reasoning, tool
-arguments, endpoint URLs, credentials, or raw errors. Attempt count and encoded
-size are capped; truncation is explicit and dropped token usage remains
-accounted for.
+### Forbid capture for a recipe
 
-Request bodies, response bodies, and tool traces can contain secrets or personal
-data. Capture the minimum needed, set retention in the shared replay service,
-and restrict replay read permissions. See a complete example:
+Set `routing.data_policy.replay: false` inside the recipe. This blocks all Replay
+capture for that recipe, including rejected requests and decisions that otherwise
+opt in. It does not change provider-side retention or delete existing records.
+
+Request bodies, responses, and tool traces can contain secrets or personal data.
+Capture only what you need and restrict access with `replay.read` and
+`replay.detail`. See the [Replay API and privacy controls](../../api/router#router-replay).
+
+## Read the results
+
+Open **Insights** in the Dashboard, or use the
+[Replay API](../../api/router#router-replay) to filter records and inspect a session.
+Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
+not invoices. Missing prices and usage remain unknown.
+
+Confidence Looper requests also include `route_diagnostics.looper`: bounded
+attempts, token and cost accounting, timings, disposition reasons, and the final
+attempt. This diagnostic object excludes prompts, tool arguments, credentials,
+and raw errors. Attempt details require replay-detail permission, and any
+truncation is marked.
+
+For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

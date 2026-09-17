@@ -50,6 +50,7 @@ export interface StatusHistory {
 export interface RouterModelRegistryInfo {
   local_path?: string
   repo_id?: string
+  revision?: string
   purpose?: string
   description?: string
   parameter_size?: string
@@ -201,20 +202,77 @@ export function getRouterModelStateLabel(model: RouterModelInfo): string {
   }
 }
 
+export interface RouterModelResource {
+  model: RouterModelInfo
+  consumers: RouterModelInfo[]
+}
+
+// Resource identity comes from the runtime pool. Names and artifact paths alone
+// cannot establish execution compatibility or ownership of a shared engine.
+export function getRouterModelResources(models: RouterModelInfo[]): RouterModelResource[] {
+  const resources: RouterModelResource[] = []
+  const shared = new Map<string, RouterModelResource>()
+  for (const model of models) {
+    const identity = model.metadata?.resource_id?.trim()
+    const existing = identity ? shared.get(identity) : undefined
+    if (existing) {
+      existing.consumers.push(model)
+    } else {
+      const resource = { model, consumers: [model] }
+      resources.push(resource)
+      if (identity) shared.set(identity, resource)
+    }
+  }
+  return resources.map((resource) => {
+    if (resource.consumers.length === 1) return resource
+    // A ready consumer must not hide a pending or failed consumer of the same
+    // resource. Preserve every consumer's own state for the detail view.
+    const leastReady = [...resource.consumers].sort(
+      (left, right) =>
+        (ROUTER_MODEL_STATE_ORDER[getRouterModelState(right)] ?? 99) -
+        (ROUTER_MODEL_STATE_ORDER[getRouterModelState(left)] ?? 99),
+    )[0]
+    return {
+      model: {
+        ...resource.model,
+        loaded: resource.consumers.every((consumer) => consumer.loaded),
+        state: getRouterModelState(leastReady),
+      },
+      consumers: resource.consumers,
+    }
+  })
+}
+
+export function getRouterModelConsumers(
+  models: RouterModelInfo[],
+  selected: RouterModelInfo,
+): RouterModelInfo[] {
+  const identity = selected.metadata?.resource_id?.trim()
+  if (!identity) return [selected]
+  const consumers = models.filter((model) => model.metadata?.resource_id?.trim() === identity)
+  return consumers.length ? consumers : [selected]
+}
+
 export function getLoadedModelCount(modelsInfo?: RouterModelsInfo | null): number {
   if (!modelsInfo) return 0
-  if (typeof modelsInfo.summary?.loaded_models === 'number') {
-    return modelsInfo.summary.loaded_models
-  }
-  return (modelsInfo.models ?? []).filter((model) => model.loaded).length
+  const models = modelsInfo.models ?? []
+  const resources = getRouterModelResources(models)
+  const duplicates =
+    models.filter((model) => model.loaded).length -
+    resources.filter(({ model }) => model.loaded).length
+  return Math.max(
+    0,
+    (modelsInfo.summary?.loaded_models ?? models.filter((model) => model.loaded).length) -
+      duplicates,
+  )
 }
 
 export function getTotalKnownModelCount(modelsInfo?: RouterModelsInfo | null): number {
   if (!modelsInfo) return 0
-  if (typeof modelsInfo.summary?.total_models === 'number') {
-    return modelsInfo.summary.total_models
-  }
-  return modelsInfo.models?.length ?? 0
+  const models = modelsInfo.models ?? []
+  const resourceCount = getRouterModelResources(models).length
+  const duplicates = models.length - resourceCount
+  return Math.max(resourceCount, (modelsInfo.summary?.total_models ?? models.length) - duplicates)
 }
 
 export function sortRouterModels(models: RouterModelInfo[]): RouterModelInfo[] {
@@ -237,7 +295,9 @@ export function getPreviewRouterModels(
     return []
   }
 
-  const sorted = sortRouterModels(modelsInfo.models)
+  const sorted = sortRouterModels(
+    getRouterModelResources(modelsInfo.models).map(({ model }) => model),
+  )
   const loaded = sorted.filter((model) => model.loaded)
   if (loaded.length > 0) {
     return loaded.slice(0, limit)

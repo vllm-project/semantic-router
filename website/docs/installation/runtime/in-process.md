@@ -48,12 +48,6 @@ providers:
           endpoint: vllm:8000
           protocol: http
 routing:
-  model_bindings:
-    domain_classifier:
-      deployment: vela-domain
-      contract: label_distribution.v1
-      adapter: modernbert
-      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
   signals:
     domains:
       - name: computer science
@@ -72,6 +66,12 @@ routing:
         - model: answer-model
 global:
   model_catalog:
+    bindings:
+      domain_classifier:
+        deployment: vela-domain
+        contract: label_distribution.v1
+        adapter: modernbert
+        mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
     deployments:
       vela-domain:
         artifact: models/Vela-1.0-Encoder-307M-Domain
@@ -84,7 +84,8 @@ global:
 ```
 
 A **deployment** selects the model, engine, device, and input budget. A
-**binding** connects it to a feature in the recipe. Here, `domain_classifier`
+**binding** connects that deployment to a routing feature. Global bindings can
+be reused by every recipe that needs the feature. Here, `domain_classifier`
 uses `vela-domain`; both matched and unmatched requests use `answer-model`.
 Change the decision's backend or plugins to apply your routing policy.
 
@@ -107,6 +108,51 @@ curl -fsS http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"auto","messages":[{"role":"user","content":"Explain Python tuples briefly."}],"max_tokens":128}'
 ```
+
+## Share model serving across recipes and services
+
+Use `global.model_catalog` as the common source for in-process models. Declare
+execution settings once in `deployments`, then connect features through
+`bindings`. For example, merge this embedding setup into your configuration:
+
+```yaml
+global:
+  model_catalog:
+    bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+    deployments:
+      vela-embedding:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: ort
+        device: cpu
+        precision: native
+        input:
+          max_tokens: 512
+          overflow: reject
+```
+
+Recipes and shared services use these bindings when they need a model. Declaring
+a model does not load it by itself. For example, semantic response caching needs
+an embedding, while exact-match caching does not. Enable caching on the routes
+that should use it; see [response caching](../../tutorials/plugin/response-cache.md).
+
+Use a recipe's `routing.model_bindings` only when that recipe intentionally
+needs a different model or execution policy. Top-level `routing.model_bindings`
+overrides the default recipe, not shared services. A recipe override does not
+change the global catalog used by caches, tools, memory, or vector stores.
+Matching deployments can share physical model resources while recipe data and
+cache entries remain isolated.
+The shared cache also uses the global `hallucination_explainer` binding for NLI
+verification; a recipe override changes only that recipe's checks.
+
+Inspect the Dashboard model inventory after startup. Shared consumers appear
+under `@global`; `metadata.resource_id` identifies a shared physical resource.
+Different embedding layers or dimensions can be views of that resource. Device,
+graph, precision, or input-policy differences require separate resources; they
+do not cause an automatic CPU fallback. See [embedding views](embeddings.md#share-embeddings-with-services).
 
 ## Run Vela on AMD
 
@@ -137,16 +183,46 @@ All limits include special tokens. The complete AMD pipeline currently has an
 
 ## Choose an input budget
 
-Local classifiers default to 512 tokens. Set a deployment's `input.max_tokens`
-to increase the budget for a compatible checkpoint and graph; for example,
-`32768` enables a 32K budget on the native Vela CPU path. `overflow: reject`
-returns an error for oversized inputs.
+Choose the smallest input budget that covers your routing task. Local
+classifiers default to 512 tokens. A larger budget also requires a compatible
+model and graph; see the [AMD 32K options](../amd-rocm.md#optional-32k-domain-and-factcheck-on-rocm)
+when using ROCm.
 
-Long-input CPU inference can be substantially slower. Choose the smallest
-budget that covers your workload and measure both quality and latency. For
-scanning local risks across a long request, see
-[Safety input policies](safety.md#native-classifier-context). Embedding signals
-also have a separate [full-context setting](embeddings.md#input-policy).
+For Domain, FactCheck, Feedback, or ordinary embedding inference, edit the
+existing deployment's `input` block:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela-domain:
+        # Keep the existing artifact, provider, device, and precision.
+        input:
+          max_tokens: 32768
+          overflow: truncate
+```
+
+This fragment processes up to 32,768 encoder tokens, including special tokens.
+`truncate` keeps the beginning and preserves the tokenizer's special-token
+envelope; the result reports the original and processed counts and whether it
+was truncated. `reject`, the default, returns an error when the input is too long.
+Inputs within the limit remain complete.
+
+**Encoder limits and generation limits are separate.** This setting only changes
+the text seen by the encoder. It does not edit chat messages, system instructions,
+or tool calls sent to the answer model. A 32K generation backend must fit its
+prompt, chat/tool formatting, and requested output within 32K. To shorten that
+conversation, configure [context compression](../../tutorials/plugin/context-compression.md).
+
+Safety scans and rerankers have separate completeness requirements. Keep their
+required windowing or rejection policy; a truncated scan is not a complete
+safety result. See [safety input policies](safety.md#native-classifier-context).
+Embedding signals also have a separate [full-context option](embeddings.md#input-policy).
+
+After validation and activation, test short, at-limit, and over-limit input with
+the encoder's tokenizer. Use [Route Preview](lifecycle-diagnostics.md#inspect-the-executed-path)
+to check the signals, then send a real chat request to check the answer model.
+Measure latency and quality: long-input support alone does not establish either.
 
 ## Add another model or task
 
@@ -162,13 +238,19 @@ complete weights, tokenizer, configuration, task labels, and any ONNX external
 tensor files. LoRA deployments need merged weights. An architecture name such
 as `modernbert` identifies the adapter; a compatible task head is still required.
 
+For a locally rewritten graph, use a separate artifact directory and keep its
+compatible tokenizer, configuration, and label mappings. Record the source
+revision, export settings, precision, and file hashes there. Omit the upstream
+`revision` pin for changed bytes: it verifies the published snapshot, not your
+local derivative. Keep the original snapshot unchanged.
+
 For ONNX classifiers, use `provider: ort`, select the device, and set the
 binding's `head` to the graph path, such as `onnx/model.onnx`. For GPU-specific
 graphs, follow the model's runtime configuration. The Router rejects unavailable
 GPU providers and CPU fallback.
 
-Bindings belong to a recipe. Put them in that recipe's `routing` block to change
-its models independently. See the [configuration reference](../../api/configuration-schema.mdx)
+Start with global bindings. Add a recipe override only when independent model
+configuration is required. See the [configuration reference](../../api/configuration-schema.mdx)
 and [model update guide](lifecycle-diagnostics.md#update-a-running-model).
 
 ## Advanced MIGraphX settings

@@ -11,36 +11,64 @@ func reportedConfidence(value float64, available *bool) *float64 {
 	return &value
 }
 
-// The internal numeric field remains available to existing routing callers;
-// JSON consumers receive null when the producer explicitly reports no score.
-func (c Classification) MarshalJSON() ([]byte, error) {
-	type alias Classification
-	return json.Marshal(struct {
-		alias
+// These representations preserve internal numeric fields for routing callers
+// while JSON and its schema report null when the producer has no model score.
+type (
+	classificationJSONFields Classification
+	classificationJSON       struct {
+		classificationJSONFields
 		Confidence *float64 `json:"confidence"`
-	}{alias: alias(c), Confidence: reportedConfidence(c.Confidence, c.ConfidenceAvailable)})
+	}
+)
+
+// JSONWire is the representation used by both serialization and schema discovery.
+func (c Classification) JSONWire() any {
+	return classificationJSON{classificationJSONFields: classificationJSONFields(c), Confidence: reportedConfidence(c.Confidence, c.ConfidenceAvailable)}
 }
 
-func (d DecisionResult) MarshalJSON() ([]byte, error) {
-	type alias DecisionResult
-	return json.Marshal(struct {
-		alias
+func (c Classification) MarshalJSON() ([]byte, error) { return json.Marshal(c.JSONWire()) }
+
+type (
+	decisionResultJSONFields DecisionResult
+	decisionResultJSON       struct {
+		decisionResultJSONFields
 		Confidence *float64 `json:"confidence"`
-	}{alias: alias(d), Confidence: reportedConfidence(d.Confidence, d.ConfidenceAvailable)})
+	}
+)
+
+// JSONWire is the representation used by both serialization and schema discovery.
+func (d DecisionResult) JSONWire() any {
+	return decisionResultJSON{decisionResultJSONFields: decisionResultJSONFields(d), Confidence: reportedConfidence(d.Confidence, d.ConfidenceAvailable)}
 }
 
-func (r FactCheckResponse) MarshalJSON() ([]byte, error) {
-	type alias FactCheckResponse
-	return json.Marshal(struct {
-		alias
+func (d DecisionResult) MarshalJSON() ([]byte, error) { return json.Marshal(d.JSONWire()) }
+
+type (
+	factCheckResponseJSONFields FactCheckResponse
+	factCheckResponseJSON       struct {
+		factCheckResponseJSONFields
 		Confidence *float64 `json:"confidence"`
-	}{alias: alias(r), Confidence: reportedConfidence(r.Confidence, &r.ConfidenceAvailable)})
+	}
+)
+
+// JSONWire is the representation used by both serialization and schema discovery.
+func (r FactCheckResponse) JSONWire() any {
+	return factCheckResponseJSON{factCheckResponseJSONFields: factCheckResponseJSONFields(r), Confidence: reportedConfidence(r.Confidence, &r.ConfidenceAvailable)}
 }
 
-func (r UserFeedbackResponse) MarshalJSON() ([]byte, error) {
-	type alias UserFeedbackResponse
-	return json.Marshal(struct {
-		alias
+func (r FactCheckResponse) MarshalJSON() ([]byte, error) { return json.Marshal(r.JSONWire()) }
+
+type (
+	userFeedbackResponseJSONFields UserFeedbackResponse
+	userFeedbackResponseJSON       struct {
+		userFeedbackResponseJSONFields
 		Confidence *float64 `json:"confidence"`
-	}{alias: alias(r), Confidence: reportedConfidence(r.Confidence, &r.ConfidenceAvailable)})
+	}
+)
+
+// JSONWire is the representation used by both serialization and schema discovery.
+func (r UserFeedbackResponse) JSONWire() any {
+	return userFeedbackResponseJSON{userFeedbackResponseJSONFields: userFeedbackResponseJSONFields(r), Confidence: reportedConfidence(r.Confidence, &r.ConfidenceAvailable)}
 }
+
+func (r UserFeedbackResponse) MarshalJSON() ([]byte, error) { return json.Marshal(r.JSONWire()) }

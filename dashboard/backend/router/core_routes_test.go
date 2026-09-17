@@ -300,7 +300,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		t.Fatal(err)
 	}
 	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/storage/knowledge-bases/example" || r.Method != http.MethodPost {
+		if r.URL.Path != "/api/v1/storage/knowledge-bases/example" || r.Method != http.MethodPut {
 			t.Fatalf("unexpected KBS proxy request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -351,7 +351,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 	}
 
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/router/api/v1/storage/knowledge-bases/example", strings.NewReader(`{}`)))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/router/api/v1/storage/knowledge-bases/example", strings.NewReader(`{}`)))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("KBS proxy status=%d want=%d body=%s", response.Code, http.StatusNoContent, response.Body.String())
 	}

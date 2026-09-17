@@ -31,7 +31,8 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 			ModelPath: entry.Artifact,
 			Metadata: map[string]string{
 				"binding": id.Name, "deployment": id.Deployment,
-				"contract": id.Contract, "model_type": id.Adapter,
+				"resource_id": entry.ResourceID,
+				"contract":    id.Contract, "model_type": id.Adapter,
 				"provider": capability.Provider, "device": capability.Device,
 				"precision":           capability.Precision,
 				"max_sequence_length": fmt.Sprint(capability.Limits.EffectiveTokens()),
@@ -44,6 +45,7 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 		if capability.Embedding != nil {
 			embedding := capability.Embedding
 			model.Metadata["default_dimension"] = fmt.Sprint(embedding.Dimension)
+			model.Metadata["default_layer"] = fmt.Sprint(embedding.Layer)
 			model.Metadata["pooling"] = embedding.Pooling
 			model.Metadata["normalization"] = embedding.Normalization
 			model.Metadata["modalities"] = strings.Join(embedding.Modalities, ",")
