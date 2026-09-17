@@ -13,6 +13,10 @@ import (
 // These tests drive finishFindSimilarSearch directly with a hand-built
 // candidate so the NLI polarity tier is exercised without an embedding model.
 // polarity_nli_regression_test.go covers the model-backed path.
+//
+// The incoming query is a paraphrase the lexical tier (#2691) passes, so these
+// tests isolate the NLI tier: the fake verifier alone decides the outcome.
+// polarity_wiring_test.go covers the lexical tier and the order of the two.
 
 const polarityTestThreshold = float32(0.80)
 
@@ -66,7 +70,7 @@ func TestPolarityNLIGuardRejectsContradiction(t *testing.T) {
 		return 0.97, nil
 	})
 
-	const query = "How do I disable two-factor authentication?"
+	const query = "How can I enable two-factor authentication?"
 	result, err := finishWithCandidate(c, context.Background(), query, entry)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -128,12 +132,12 @@ func TestPolarityNLIGuardDisabledNeverCallsVerifier(t *testing.T) {
 		return 0, nil
 	})
 
-	result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
+	result, err := finishWithCandidate(c, context.Background(), "How can I enable two-factor authentication?", entry)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.Found {
-		t.Fatal("with the NLI tier off the above-threshold candidate is served (lexical tier is #2728's scope)")
+		t.Fatal("with the NLI tier off a lexically compatible candidate is served")
 	}
 }
 
@@ -143,7 +147,7 @@ func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 		installVerifier(t, c, func(context.Context, string, string) (float32, error) {
 			return 0, errors.New("nli backend unavailable")
 		})
-		result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
+		result, err := finishWithCandidate(c, context.Background(), "How can I enable two-factor authentication?", entry)
 		if err != nil {
 			t.Fatalf("verifier errors must not surface to the caller: %v", err)
 		}
@@ -155,7 +159,7 @@ func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 	t.Run("nil verifier serves the hit", func(t *testing.T) {
 		c, entry := newPolarityTestCache(t, true)
 		installVerifier(t, c, nil)
-		result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
+		result, err := finishWithCandidate(c, context.Background(), "How can I enable two-factor authentication?", entry)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -174,7 +178,7 @@ func TestPolarityNLIGuardHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result, err := finishWithCandidate(c, ctx, "How do I disable two-factor authentication?", entry)
+	result, err := finishWithCandidate(c, ctx, "How can I enable two-factor authentication?", entry)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got result=%+v err=%v", result, err)
 	}
