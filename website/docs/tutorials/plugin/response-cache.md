@@ -99,10 +99,10 @@ to dry-run. Flush requires the explicit confirmation phrase
 
 The in-memory backend can verify a semantic hit against opposite-meaning
 queries before serving it (`global.stores.response_cache.polarity_guard`; see
-[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With the
-optional NLI tier enabled, a rejected candidate is logged as
-`cache_negation_reject` with `tier: nli`, is reported as a miss, and its
-similarity still appears on `x-vsr-cache-similarity` so near-threshold
+[Stores and Tools](../global/stores-and-tools.md#negation-guard)). A rejected
+candidate is logged as `cache_negation_reject` with the tier that rejected it
+(`lexical` always, `nli` when that tier is enabled), is reported as a miss, and
+its similarity still appears on `x-vsr-cache-similarity` so near-threshold
 rejections stay diagnosable.
 
 Cached responses can contain user or tenant data. Choose an appropriate scope,

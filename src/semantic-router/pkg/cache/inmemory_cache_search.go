@@ -223,10 +223,10 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 	}
 
 	if bestSimilarity >= threshold {
-		// NLI polarity tier (#2751): verify the single winning candidate once,
-		// outside the cache lock, before it is served or its access info is
-		// touched.
-		if result, handled, err := c.applyPolarityNLI(ctx, start, model, query, bestEntry, bestSimilarity, threshold); handled {
+		// Polarity guard (#2691 lexical floor, #2751 NLI tier): verify the
+		// single winning candidate once, outside the cache lock, before it is
+		// served or its access info is touched.
+		if result, handled, err := c.applyPolarityGuard(ctx, start, model, query, bestEntry, bestSimilarity, threshold); handled {
 			return result, err
 		}
 

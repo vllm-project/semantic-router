@@ -21,6 +21,9 @@ type PolarityGuardOptions struct {
 	ContradictionThreshold float32
 }
 
-// polarityGuardTierNLI labels NLI-tier telemetry so it can be told apart from
-// the lexical tier's events.
-const polarityGuardTierNLI = "nli"
+// Polarity tier labels keep the two tiers' telemetry apart on the shared
+// cache_negation_reject event.
+const (
+	polarityGuardTierLexical = "lexical"
+	polarityGuardTierNLI     = "nli"
+)
