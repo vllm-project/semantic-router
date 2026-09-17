@@ -231,6 +231,22 @@ def _binding_error(
             )
         if consumer == "hallucination_detector" and binding.adapter != "http_chat":
             return "Hallucination detector requires http_chat adapter"
+    if provider == "openvino":
+        if binding.contract not in {"embedding.v1", "label_distribution.v1"}:
+            return (
+                "OpenVINO supports text embedding and sequence label distributions only"
+            )
+        if binding.adapter not in {
+            "auto",
+            "bert",
+            "modernbert",
+            "mmbert",
+            "mmbert32k",
+            "mmbert-32k",
+        }:
+            return f"Unsupported OpenVINO adapter '{binding.adapter}'"
+        if binding.head and not binding.head.endswith(".xml"):
+            return "OpenVINO head must identify a complete IR XML graph"
     if provider == "ort" and consumer in {
         "hallucination_detector",
         "hallucination_explainer",
@@ -277,6 +293,18 @@ def _deployment_error(name, deployment, external_names):
                 return f"Device '{device}' is incompatible with provider '{provider}'"
         if (deployment.get("precision") or "native") not in {"native", "fp32", "fp16"}:
             return "Precision must be native, fp32 or fp16"
+    elif provider == "openvino":
+        if not (deployment.get("artifact") or "").strip() or deployment.get(
+            "external_model"
+        ):
+            return "Local deployment requires artifact and cannot set external_model"
+        device = deployment.get("device") or "CPU"
+        if device.strip() != device or "\x00" in device:
+            return "OpenVINO device must be non-empty and trimmed"
+        if (deployment.get("precision") or "native") != "native":
+            return "OpenVINO executes the exported IR with native precision"
+        if (deployment.get("input") or {}).get("overflow") == "window":
+            return "OpenVINO supports reject or truncate input policy"
     elif provider == "http":
         if (
             deployment.get("artifact")

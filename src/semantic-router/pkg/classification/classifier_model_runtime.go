@@ -80,6 +80,9 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 		limit = maxTokens[0]
 	}
 	provider, device := config.DefaultModelExecution(useCPU)
+	if name == "domain_classifier" {
+		provider, device = config.DefaultCategoryExecution(useCPU)
+	}
 	return config.ResolvedModelBinding{
 		Recipe: m.recipe, Name: name,
 		Binding:    config.ModelBinding{Deployment: name, Adapter: adapter, Contract: contract},

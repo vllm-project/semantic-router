@@ -12,9 +12,12 @@ namespace classifiers {
 bool TextClassifier::initialize(
     const std::string& model_path,
     int num_classes,
-    const std::string& device
+    const std::string& device,
+    int pad_token_id
 ) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (pad_token_id < 0) return false;
+    pad_token_id_ = pad_token_id;
     
     try {
         auto& manager = core::ModelManager::getInstance();
@@ -97,7 +100,7 @@ bool TextClassifier::initialize(
         if (last_slash != std::string::npos) {
             model_dir = model_dir.substr(0, last_slash);
         }
-        tokenizer_.loadVocab(model_dir);
+        if (!tokenizer_.loadVocab(model_dir)) return false;
 
           // Detect attention_mask input name at init time to avoid per-inference try-catch.
           attention_mask_name_ = "attention_mask";
@@ -155,11 +158,10 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
             return result;
         }
         
-        // Create attention mask (ModernBERT uses 50283 as PAD token)
-        const int MODERNBERT_PAD = 50283;
+        // Use this artifact's padding token for its attention mask.
         std::vector<int64_t> attention_mask(token_ids.size());
         for (size_t i = 0; i < token_ids.size(); ++i) {
-            attention_mask[i] = (token_ids[i] != MODERNBERT_PAD) ? 1 : 0;
+            attention_mask[i] = (token_ids[i] != pad_token_id_) ? 1 : 0;
         }
         
         // Convert to i64 for ModernBERT
@@ -177,7 +179,8 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
         // Acquire an InferRequest slot and keep it locked for the full inference.
         auto& manager = core::ModelManager::getInstance();
         auto* slot = manager.acquireInferRequest(*model_);
-        
+        if (!slot) return result;
+
         // Keep the slot locked until tensors and inference are complete.
         std::unique_lock<std::mutex> request_lock(slot->mutex, std::adopt_lock);
         
@@ -210,7 +213,9 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
     return result;
 }
 
-core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(const std::string& text) {
+core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(const std::string& text, int max_length,
+                                                                               bool reject_overflow, int* original_tokens,
+                                                                               const std::vector<int>& end_tokens) {
     core::ClassificationResultWithProbs result;
     result.predicted_class = -1;
     result.confidence = 0.0f;
@@ -222,18 +227,17 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
     
     try {
         // Tokenize input
-        std::vector<int> token_ids = tokenizer_.tokenize(text, 8192);
-        
+        auto token_ids = tokenizer_.tokenizeWithBudget(text, max_length, reject_overflow, original_tokens, end_tokens);
+
         if (token_ids.empty()) {
             std::cerr << "Tokenization failed or returned empty" << std::endl;
             return result;
         }
         
-        // Create attention mask (ModernBERT uses 50283 as PAD token)
-        const int MODERNBERT_PAD = 50283;
+        // Use this artifact's padding token for its attention mask.
         std::vector<int64_t> attention_mask(token_ids.size());
         for (size_t i = 0; i < token_ids.size(); ++i) {
-            attention_mask[i] = (token_ids[i] != MODERNBERT_PAD) ? 1 : 0;
+            attention_mask[i] = (token_ids[i] != pad_token_id_) ? 1 : 0;
         }
         
         // Convert to i64
@@ -251,7 +255,8 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
         // Acquire an InferRequest slot and keep it locked for the full inference.
         auto& manager = core::ModelManager::getInstance();
         auto* slot = manager.acquireInferRequest(*model_);
-        
+        if (!slot) return result;
+
         // Keep the slot locked until tensors and inference are complete.
         std::unique_lock<std::mutex> request_lock(slot->mutex, std::adopt_lock);
         
