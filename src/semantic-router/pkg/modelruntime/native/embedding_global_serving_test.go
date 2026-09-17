@@ -55,6 +55,31 @@ func TestORTGlobalServingSharesEngineAcrossConsumerViews(t *testing.T) {
 	}); useErr != nil {
 		t.Fatal(useErr)
 	}
+	// The shared engine owns one session per distinct early-exit graph, not
+	// one session per consumer or output dimension. Reloading an identical
+	// execution with another dimension must retain the actual native owner.
+	dimensionSpec := serviceSpec
+	dimensionSpec.Name = "memory.embedding"
+	dimensionView, err := candidate.Embedding(context.Background(), dimensionSpec, 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dimensionView.Close() })
+	if useErr := dimensionView.resource.Use(context.Background(), func(engine io.Closer) error {
+		if engine != serviceEngine {
+			t.Fatal("dimension/reload view loaded another native engine")
+		}
+		info, infoErr := engine.(*embeddingEngine).ort.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		if len(info.Sessions) != 2 {
+			t.Fatalf("two graph artifact has %d sessions for three consumer views", len(info.Sessions))
+		}
+		return nil
+	}); useErr != nil {
+		t.Fatal(useErr)
+	}
 	entries := current.PreparedBindings()
 	if len(entries) != 2 || entries[0].ResourceID == "" || entries[0].ResourceID != entries[1].ResourceID {
 		t.Fatalf("resource identity does not expose actual sharing: %+v", entries)
@@ -68,7 +93,7 @@ func TestORTGlobalServingSharesEngineAcrossConsumerViews(t *testing.T) {
 		_ = bad.Close()
 		t.Fatal("unsupported layer was admitted")
 	}
-	if len(candidate.PreparedBindings()) != 0 {
+	if len(candidate.PreparedBindings()) != 1 {
 		t.Fatal("failed consumer appeared ready")
 	}
 	if closeErr := service.Close(); closeErr != nil {

@@ -10,14 +10,28 @@ Merge configuration fragments into an existing Router configuration.
 
 ## Local embeddings
 
-Select the full Vela representation: layer 22 and 768 dimensions.
+Declare Vela once in the global catalog so recipes and services can reuse it.
+This CPU example uses layer 22 and 768 dimensions for semantic routing:
 
 ```yaml
 global:
   model_catalog:
+    bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+    deployments:
+      vela-embedding:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: candle
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 512
+          overflow: reject
     embeddings:
       semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         embedding_config:
           model_type: mmbert
           preload_embeddings: true
@@ -26,8 +40,8 @@ global:
 ```
 
 Use the CPU image for Candle inference. The name `mmbert` selects the compatible
-inference architecture; the model path selects Vela. The normal serve workflow
-downloads the registered model.
+inference architecture; the deployment selects Vela. The normal serve workflow
+downloads the registered model when an enabled feature needs it.
 
 ### AMD GPU
 
@@ -36,6 +50,12 @@ To run Vela Embedding on AMD, add an explicit ROCm deployment and binding:
 ```yaml
 global:
   model_catalog:
+    bindings:
+      embedding:
+        deployment: local-embedding
+        contract: embedding.v1
+        adapter: mmbert
+        head: onnx/model_fa.onnx
     deployments:
       local-embedding:
         artifact: models/Vela-1.0-Encoder-307M-Embedding
@@ -47,13 +67,6 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-routing:
-  model_bindings:
-    embedding:
-      deployment: local-embedding
-      contract: embedding.v1
-      adapter: mmbert
-      head: onnx/model_fa.onnx
 ```
 
 Start with `vllm-sr serve --platform amd --config config.yaml`. The AMD image
@@ -67,9 +80,41 @@ configuration including classifiers and reranking, use the
 [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md).
 Its complete classifier pipeline has an 8K input limit.
 
+## Share embeddings with services
+
+The global embedding binding is also used by enabled caches, tools, memory,
+and vector stores. Reuse that deployment rather than declaring another copy
+for each service. A recipe can override its own binding when isolation is needed;
+it does not change the shared services' model.
+
+Services may need different representations. The in-memory semantic cache uses
+`mmbert` layer 6 with 256 dimensions, while the routing example above uses layer
+22 with 768 dimensions. Keep the model's companion graphs and weights available
+for every required view, and keep the cache's `embedding_model` consistent with
+the global model and adapter. Startup checks compatibility. Use only layer views
+supported by the selected artifact; a layer-22 vector is not a substitute for a
+layer-6 vector. Exact-match caching does not need an embedding.
+
 ## Test an embedding
 
-After starting the Router, check readiness and generate two vectors:
+To use embedding and similarity diagnostics without a routing consumer, opt in
+to the global embedding service:
+
+```yaml
+global:
+  services:
+    api:
+      embeddings:
+        enabled: true
+```
+
+Requests without an explicit recipe use the global embedding binding. Requests
+that select a recipe keep that recipe's binding. The setting defaults to `false`,
+which preserves diagnostics backed by an already prepared default recipe;
+`preload_embeddings` alone does not enable this standalone service.
+
+Restart or reload the Router after merging the fragment, then check readiness
+and generate two vectors:
 
 ```bash
 curl -fsS http://localhost:8080/ready

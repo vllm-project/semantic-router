@@ -25,6 +25,8 @@ Install vLLM Semantic Router, start the local stack, and send one request.
 - Linux, macOS, or WSL2
 - Python 3.10 or newer
 - Docker; Linux can fall back to Podman
+  - Pass `--runtime podman` to force Podman even when Docker is also available
+  - Pass `--runtime skip` to skip runtime preparation entirely
 
 ## Install
 

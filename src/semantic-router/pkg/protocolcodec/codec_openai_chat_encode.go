@@ -80,7 +80,8 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 		MaxCompletionTokens: request.Sampling.MaxOutputTokens, Seed: request.Sampling.Seed,
 		FrequencyPenalty: request.Sampling.FrequencyPenalty, PresencePenalty: request.Sampling.PresencePenalty,
 		ReasoningEffort: request.ReasoningEffort, ReasoningBudget: request.ReasoningBudgetTokens,
-		ChatTemplateKwargs: request.ChatTemplateKwargs,
+		ChatTemplateKwargs: request.ChatTemplateKwargs, CacheSalt: request.CacheSalt,
+		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, RepetitionPenalty: request.Sampling.RepetitionPenalty,
 	}
 	if request.Stream && (request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil) {
 		wire.StreamOptions = &chatStreamOptionsWire{

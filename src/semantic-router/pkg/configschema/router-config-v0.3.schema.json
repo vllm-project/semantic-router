@@ -4,6 +4,9 @@
   "$defs": {
     "APIConfig": {
       "properties": {
+        "embeddings": {
+          "$ref": "#/$defs/EmbeddingAPIConfig"
+        },
         "batch_classification": {
           "$ref": "#/$defs/BatchClassificationConfig"
         },
@@ -1496,6 +1499,9 @@
         "instructions": {
           "type": "string"
         },
+        "disable_rationale": {
+          "type": "boolean"
+        },
         "use_cpu": {
           "type": "boolean"
         }
@@ -2354,6 +2360,15 @@
         },
         "repetition_penalty": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EmbeddingAPIConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

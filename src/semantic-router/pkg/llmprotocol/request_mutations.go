@@ -74,6 +74,18 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 		changed := request.Sampling.TopP != nil
 		request.Sampling.TopP = nil
 		return changed, nil
+	case "min_p":
+		changed := request.Sampling.MinP != nil
+		request.Sampling.MinP = nil
+		return changed, nil
+	case "repetition_penalty":
+		changed := request.Sampling.RepetitionPenalty != nil
+		request.Sampling.RepetitionPenalty = nil
+		return changed, nil
+	case "cache_salt":
+		changed := request.CacheSalt != nil
+		request.CacheSalt = nil
+		return changed, nil
 	case "top_k":
 		changed := request.Sampling.TopK != nil
 		request.Sampling.TopK = nil

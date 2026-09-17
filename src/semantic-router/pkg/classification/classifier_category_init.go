@@ -76,26 +76,8 @@ type MmBERT32KCategoryInitializerImpl struct {
 }
 
 func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	backend := embeddingBackendOverride()
-	if backend == "openvino" {
-		if c.maxSequenceLength != 0 && c.maxSequenceLength != 512 {
-			return fmt.Errorf("the OpenVINO classifier bridge supports only the default 512-token budget")
-		}
-		nc := 0
-		if len(numClasses) > 0 {
-			nc = numClasses[0]
-		}
-		if ovErr := initOpenVINOClassifier(modelID, nc, useCPU); ovErr == nil { //nolint:staticcheck
-			c.usedMmBERT32K = true
-			logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
-				"backend":   "openvino",
-				"model_ref": modelID,
-				"classes":   nc,
-			})
-			return nil
-		} else {
-			logging.Warnf("OpenVINO classifier init failed, falling back to candle: %v", ovErr)
-		}
+	if embeddingBackendOverride() == "openvino" {
+		return fmt.Errorf("OpenVINO requires an owned model binding")
 	}
 
 	err := candle_binding.InitMmBert32KIntentClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
@@ -240,15 +222,7 @@ func (c *MmBERT32KCategoryInferenceImpl) Classify(_ context.Context, text string
 
 	switch backend {
 	case "openvino":
-		ovResult, ovErr := classifyOpenVINO(text) //nolint:staticcheck
-		if ovErr != nil {                         //nolint:staticcheck
-			err = ovErr
-		} else {
-			result = tasks.ClassResult{
-				Class:      ovResult.Class,
-				Confidence: ovResult.Confidence,
-			}
-		}
+		return tasks.ClassResult{}, fmt.Errorf("OpenVINO requires an owned model binding")
 	default:
 		result, err = nativeClassResult(candle_binding.ClassifyMmBert32KIntent(text))
 	}
