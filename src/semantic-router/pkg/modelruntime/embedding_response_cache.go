@@ -25,20 +25,18 @@ func PrepareOwnedResponseCacheEmbeddings(ctx context.Context, cfg *config.Router
 		return nil, err
 	}
 	spec, ok := plan.LookupGlobal("embedding")
-	if !ok {
-		return nil, fmt.Errorf("response cache requires global.model_catalog.bindings.embedding")
-	}
 	model := config.SemanticCacheEmbeddingModel(cfg)
 	primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
 	if primary == "" {
 		primary = "qwen3"
 	}
-	if model != primary || (spec.Deployment.Provider != "http" && spec.Binding.Adapter != model) {
+	if ok && (model != primary || (spec.Deployment.Provider != "http" && spec.Binding.Adapter != model)) {
 		return nil, fmt.Errorf("response cache embedding_model %q must match the global embedding model %q and adapter %q", model, primary, spec.Binding.Adapter)
 	}
 	// An empty routing profile carries service settings without routing signals,
 	// selectors, KBs, or recipe overrides. Prepare only the response-cache demand.
 	scoped := cfg.ConfigForGlobalModelServices()
+	scoped.API.Embeddings.Enabled = false
 	scoped.Tools.Enabled = false
 	scoped.Memory.Enabled = false
 	scoped.VectorStore = nil

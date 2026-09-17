@@ -63,6 +63,12 @@ exact-label validation, and a 1 MiB default response limit. Set
 `max_response_bytes` on the external model entry to override that limit.
 Because the runtime owns the output schema, `parser_type` on that entry
 must be `json` or unset; other values are rejected at config load.
+Set `disable_rationale: true` on an `llm` classifier rule to request only
+`{"scores": {...}}`. The response may omit `rationale` or include an empty
+string; if present, it must still be a string. Other response fields are
+rejected. When the flag is omitted or `false`, the prompt requests both
+`scores` and `rationale`, and the response must include a nonempty rationale.
+The flag does not apply to `local` or `sequence_classifier` rules.
 The model must report a score for every declared
 label; each score must be between `0` and `1`, and the complete distribution
 must sum to approximately `1.0`. These are model-reported confidence scores,
@@ -111,7 +117,7 @@ ordered `labels` as the mapping. See [In-process models](../../../installation/r
 ## Independent labels with a frozen operating point
 
 A multi-label classifier, such as Hazard, can run independently of the Safety
-signal. Bind `label_scores.v1` and an explicit version-2 operating-point file.
+signal. Bind `label_scores.v1` and an explicit version-2 or version-3 operating-point file.
 The binding has only its path and SHA256; model, tokenizer, execution, label
 order, window geometry and thresholds are bound inside that file. There is no
 implicit file discovery. Relative paths resolve inside the deployment artifact.
@@ -182,14 +188,46 @@ Eval's `metrics.classifier.rules` records policy SHA256, actual provider, device
 precision, token usage, content-window offsets, thresholds and elapsed time.
 The current owned executor runs one window at a time; its latency includes the
 complete scan. A reference batch size in the sidecar describes calibration
-provenance, not the runtime batch size. Execution errors remain `Unknown`,
+provenance for version 2. Version 3 requires a B1 reference matching the owned
+executor. Execution errors remain `Unknown`,
 including under `NOT`, and follow the existing `on_unknown` policy.
+
+Version 3 supports a separately qualified CK Flash Attention execution on ROCm.
+Its ONNX execution declaration requires these fields in addition to the graph,
+artifact digests and physical window capacity:
+
+| Field | Required value |
+| --- | --- |
+| `execution_provider` | `ROCMExecutionProvider` |
+| `custom_ops_profile` | `ck_flash_attention` |
+| `execution_mode` | `dynamic_sequence_b1` |
+| `runtime_build` | Exact build string from the qualified owned ORT session |
+| `artifacts` | Complete graph/external-file digests and one `custom-ops` SHA256 |
+
+The custom-op digest binds the installed trusted library
+`/usr/local/lib/libort_ck_flash_attn.so.1`; the policy cannot select a library
+path. Startup verifies that digest before and after model preparation, then
+matches the owned session's graph, library, runtime build and provider evidence.
+CPU fallback is forbidden. The actual input schema must contain rank-two int64
+IDs and attention mask, a dynamic sequence dimension, and a batch dimension
+compatible with B1. Optional position IDs require one broadcast row. A fixed
+sequence graph is rejected, including one that would pad beyond the window cap.
+
+Version 3 also requires `reference_window_batch_size: 1` and
+`batch_order: "ascending original window start"`. A separately calibrated policy
+can bind a 32768-token physical window and a 262144-token document budget; every
+covering window is scored before the per-label maximum is compared to its
+threshold. Changing geometry, document budget, graph or CK library requires a
+new qualified operating point. A matching sidecar proves execution identity,
+not classifier quality: retain separate DEV selection and held-out evaluation
+receipts for the exact document-level aggregation. Existing version-2 policies
+retain their frozen limits and reject version-3 fields.
 
 To bind an already selected runtime-only score policy to final native files,
 run the packaging tool from `src/semantic-router`:
 
 ```bash
-go run ./cmd/classifier-operating-point \
+go run ../../tools/models/classifier-operating-point/main.go \
   --model /path/to/native-model \
   --policy /path/to/selected-score-policy.json \
   --output /path/to/new-operating-point.json
@@ -198,7 +236,10 @@ go run ./cmd/classifier-operating-point \
 It prints the sidecar SHA256, preserves score/window fields and verifies the
 existing weight identity. It adds final config/tokenizer hashes and the
 Candle execution identity for version 1; version-2 execution declarations are
-preserved and their files verified. It neither selects thresholds nor qualifies a
+preserved and their files verified. An explicitly supplied version-3 policy is
+verified and returned byte-for-byte, including its existing config/tokenizer
+identities. Older policies are never implicitly converted to version 3.
+The tool neither selects thresholds nor qualifies a
 model, and refuses to overwrite an existing file. Publish this sidecar with the
 exact native files; do not copy thresholds between checkpoints.
 

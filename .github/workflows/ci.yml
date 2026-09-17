@@ -1,0 +1,330 @@
+name: Product Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      verification:
+        description: Verification ID from tools/ci/verification_catalog.yaml (or e2e.PROFILE) to run on the selected branch or tag.
+        type: string
+        default: native.image-calibration-cpu
+        required: true
+  workflow_call:
+    inputs:
+      profile:
+        type: string
+        default: pr
+      full:
+        type: boolean
+        default: false
+      draft:
+        type: boolean
+        default: false
+      tag:
+        type: string
+        default: ''
+      performance-base-ref:
+        type: string
+        default: ''
+    outputs:
+      plan:
+        value: ${{ jobs.plan.outputs.plan }}
+      publish_images:
+        value: ${{ jobs.plan.outputs.publish_images }}
+      publish_helm:
+        value: ${{ jobs.plan.outputs.publish_helm }}
+      publish_python:
+        value: ${{ jobs.plan.outputs.publish_python }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    name: Plan
+    uses: ./.github/workflows/ci-changes.yml
+    with:
+      profile: ${{ inputs.profile || 'pr' }}
+      full: ${{ inputs.full || false }}
+      draft: ${{ inputs.draft || false }}
+      verification: ${{ github.event_name == 'workflow_dispatch' && inputs.verification || '' }}
+
+  images:
+    name: Build / Images
+    needs: plan
+    if: needs.plan.outputs.images != '[]'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      images: ${{ needs.plan.outputs.images }}
+      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
+      tag: ${{ inputs.tag }}
+      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
+    secrets: inherit
+
+  native-build:
+    name: Build
+    needs: plan
+    if: needs.plan.outputs.build_native == 'true'
+    uses: ./.github/workflows/build-native.yml
+
+  quality:
+    name: Quality
+    needs: plan
+    if: needs.plan.outputs.quality != '[]'
+    uses: ./.github/workflows/pre-commit.yml
+    with:
+      verifications: ${{ needs.plan.outputs.quality }}
+      docs_only: ${{ fromJSON(needs.plan.outputs.plan).quality_context.docs_only && !inputs.full }}
+      website: ${{ fromJSON(needs.plan.outputs.plan).quality_context.website }}
+
+  generated:
+    name: Quality
+    needs: [plan, native-build]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.generated != '[]'
+      && needs.native-build.result == 'success'
+    uses: ./.github/workflows/check-generated.yml
+    with:
+      verifications: ${{ needs.plan.outputs.generated }}
+      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
+
+  security:
+    name: Quality / ${{ matrix.verification.display_name }}
+    needs: [plan]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.security != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.security) }}
+    uses: ./.github/workflows/security-scan.yml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+    secrets: inherit
+
+  core:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, native-build]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.core != '[]'
+      && needs.native-build.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.core) }}
+    uses: ./.github/workflows/test-and-build.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
+    secrets: inherit
+
+  storage:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, native-build]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.storage != '[]'
+      && needs.native-build.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.storage) }}
+    uses: ./.github/workflows/test-storage.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
+    secrets: inherit
+
+  dashboard:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, native-build]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.dashboard != '[]'
+      && needs.native-build.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.dashboard) }}
+    uses: ./.github/workflows/dashboard-test.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
+    secrets: inherit
+
+  operator:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, images]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.operator != '[]'
+      && needs.images.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.operator) }}
+    uses: ./.github/workflows/operator-ci.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      prebuilt-images: true
+      run_integration: true
+      integration_matrix: ${{ toJSON(matrix.verification.integration_matrix) }}
+    secrets: inherit
+
+  local:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, images]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.local != '[]'
+      && needs.images.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.local) }}
+    uses: ./.github/workflows/test-local.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      prebuilt-images: true
+    secrets: inherit
+
+  recipes:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, images]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.recipes != '[]'
+      && needs.images.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.recipes) }}
+    uses: ./.github/workflows/recipe-conformance.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      prebuilt-images: true
+    secrets: inherit
+
+  native:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, native-build]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.native != '[]'
+      && (needs.native-build.result == 'success' || needs.native-build.result == 'skipped')
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.native) }}
+    uses: ./.github/workflows/test-native.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      native-artifact: ${{ matrix.verification.native && needs.native-build.outputs.artifact-name || '' }}
+    secrets: inherit
+
+  performance:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, native-build]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.performance != '[]'
+      && needs.native-build.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.performance) }}
+    uses: ./.github/workflows/performance-test.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
+      base-ref: ${{ inputs.performance-base-ref || github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+    secrets: inherit
+
+  package:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.package != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.package) }}
+    uses: ./.github/workflows/package-check.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
+      tag: ${{ inputs.tag }}
+    secrets: inherit
+
+  tools:
+    name: Tests / ${{ matrix.batch.display_name }}
+    needs: [plan]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.component_batches != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        batch: ${{ fromJSON(needs.plan.outputs.component_batches) }}
+    uses: ./.github/workflows/test-tools.yml
+    with:
+      batch: ${{ toJSON(matrix.batch) }}
+    secrets: inherit
+
+  e2e:
+    name: Tests / ${{ matrix.verification.display_name }}
+    needs: [plan, images]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.e2e != '[]'
+      && needs.images.result == 'success'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        verification: ${{ fromJSON(needs.plan.outputs.e2e) }}
+    uses: ./.github/workflows/integration-test-k8s.yml
+    with:
+      verification: ${{ toJSON(matrix.verification) }}
+      prebuilt-images: true
+      profiles: ${{ format('["{0}"]', matrix.verification.profile) }}
+      baseline-suite: ${{ matrix.verification.baseline_suite }}
+    secrets: inherit
+
+  gate:
+    name: Gate
+    if: always()
+    needs: [plan, images, native-build, quality, generated, security, core, storage, dashboard, operator, local, recipes, native, performance, package, tools, e2e]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install PyYAML==6.0.3
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-plan
+          path: .agent-harness/ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ci-result-*
+          path: .agent-harness/ci/results
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ci-build-*
+          path: .agent-harness/ci/results
+      - name: Reconcile source, dependencies, qualified combinations and cases
+        env:
+          EXECUTOR_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 tools/ci/check_ci_gate.py \
+            --plan .agent-harness/ci/plan.json \
+            --results .agent-harness/ci/results

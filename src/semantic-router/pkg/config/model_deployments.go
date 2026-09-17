@@ -24,8 +24,9 @@ type ModelDeployment struct {
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
-// capability. The provider additionally enforces its actual task/tokenizer
-// limit. An explicit larger budget requires a checkpoint with that capacity.
+// capability. With window overflow, MaxTokens admits the complete document;
+// the consumer's window must fit the provider's actual task/tokenizer limit.
+// Other overflow policies require the budget to fit that single-forward limit.
 type ModelInputBudget struct {
 	MaxTokens int    `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
@@ -77,6 +78,9 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 	if d.Provider != "http" {
 		if d.Device == "" {
 			d.Device = "cpu"
+			if d.Provider == "openvino" {
+				d.Device = "CPU"
+			}
 		}
 		if d.Precision == "" {
 			d.Precision = "native"
@@ -109,6 +113,19 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 		}
 		if d.Precision != "native" && d.Precision != "fp32" && d.Precision != "fp16" {
 			return fmt.Errorf("precision must be native, fp32 or fp16")
+		}
+	case "openvino":
+		if strings.TrimSpace(d.Artifact) == "" || d.ExternalModel != "" {
+			return fmt.Errorf("local deployment requires artifact and cannot set external_model")
+		}
+		if strings.TrimSpace(d.Device) != d.Device || d.Device == "" || strings.ContainsRune(d.Device, 0) {
+			return fmt.Errorf("OpenVINO device must be non-empty and trimmed")
+		}
+		if d.Precision != "native" {
+			return fmt.Errorf("OpenVINO executes the exported IR with native precision")
+		}
+		if d.Input.Overflow == "window" {
+			return fmt.Errorf("OpenVINO supports reject or truncate input policy")
 		}
 	case "http":
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
@@ -309,6 +326,19 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	}
 	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {
 		return fmt.Errorf("%s has no ORT task adapter", name)
+	}
+	if deployment.Provider == "openvino" {
+		if want != "embedding.v1" && want != RemoteClassifierContractLabelDistribution {
+			return fmt.Errorf("OpenVINO supports text embedding and sequence label distributions only")
+		}
+		switch decl.Adapter {
+		case "auto", "bert", "modernbert", "mmbert", "mmbert32k", "mmbert-32k":
+		default:
+			return fmt.Errorf("unsupported OpenVINO adapter %q", decl.Adapter)
+		}
+		if decl.Head != "" && filepath.Ext(decl.Head) != ".xml" {
+			return fmt.Errorf("OpenVINO head must identify a complete IR XML graph")
+		}
 	}
 	// Artifact-specific capacity is checked by the loaded provider. Config
 	// cannot infer a checkpoint limit from its adapter name or a fixed 512 cap.

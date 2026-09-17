@@ -91354,7 +91354,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:2e386c85b3adc2548222d66721cf106315829da9aa56dfdeb3e0f03d946aa01a",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91444,7 +91444,7 @@
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:2e386c85b3adc2548222d66721cf106315829da9aa56dfdeb3e0f03d946aa01a",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91537,7 +91537,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:2e386c85b3adc2548222d66721cf106315829da9aa56dfdeb3e0f03d946aa01a",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91649,7 +91649,7 @@
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:2e386c85b3adc2548222d66721cf106315829da9aa56dfdeb3e0f03d946aa01a",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91719,7 +91719,7 @@
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:2e386c85b3adc2548222d66721cf106315829da9aa56dfdeb3e0f03d946aa01a",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }

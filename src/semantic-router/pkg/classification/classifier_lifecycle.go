@@ -224,7 +224,6 @@ func (c *Classifier) closeResources() error {
 	if c.ownsEmbeddingSet {
 		closeResource("embeddings", c.embeddingSet)
 	}
-	closeResource("cache NLI", c.polarityNLI)
 	closeResource("modality classifier", c.modalityInference)
 	closeResource("fact-check classifier", c.factCheckClassifier)
 	closeResource("feedback detector", c.feedbackDetector)
@@ -277,9 +276,6 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", false, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", false, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
-	// Not best-effort: an NLI polarity mode with an unloadable model must fail
-	// startup rather than silently serve unverified cache hits.
-	appendTask("classifier.semantic_cache_nli", false, c.needsSemanticCacheNLIForRuntime(), c.initializeSemanticCacheNLI)
 	appendTask("classifier.feedback", false, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
 
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)

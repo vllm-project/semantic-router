@@ -25,22 +25,24 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	scopes := []*config.RouterConfig{}
 	defaultScope := *cfg.ModelConsumerScope()
 	defaultScope.Recipes, defaultScope.Entrypoints = nil, nil
-	defaultScope.SemanticCache.Enabled = cfg.NeedsSemanticResponseCache()
-	if _, ok := plan.LookupGlobal("embedding"); ok {
-		defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
-		defaultScope.VectorStore = nil
-		serviceScope := cfg.ConfigForGlobalModelServices()
-		// The NLI verifier still belongs to the classification/API owner.
-		// This additional scope owns only service embedding requirements.
-		serviceScope.SemanticCache.PolarityGuard = nil
-		if err := inventory.addScope(serviceScope, plan); err != nil {
-			return nil, err
-		}
+	defaultScope.SemanticCache.Enabled = false
+	defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
+	defaultScope.VectorStore = nil
+	serviceScope := cfg.ConfigForGlobalModelServices()
+	projectedServices, err := config.ProjectRecipeModelBindings(serviceScope, plan, config.GlobalModelScope)
+	if err != nil {
+		return nil, err
 	}
+	if err := inventory.addScope(projectedServices, plan); err != nil {
+		return nil, err
+	}
+
 	scopes = append(scopes, &defaultScope)
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
 		if recipe.Name != config.DefaultRecipeName {
-			scopes = append(scopes, cfg.ConfigForRecipe(recipe))
+			scoped := cfg.ConfigForRecipe(recipe)
+			scoped.SemanticCache.Enabled = false
+			scopes = append(scopes, scoped)
 		}
 	}
 	for _, scope := range scopes {
@@ -75,7 +77,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		primary = "qwen3"
 	}
 	global := cfg.RoutingScope == config.GlobalModelScope
-	sharedServices := global || (cfg.RoutingScope == config.DefaultRecipeName && cfg.GlobalModelBindings["embedding"].Deployment == "")
+	sharedServices := global
 	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
 	scoped := *cfg
 	scoped.Recipes, scoped.Entrypoints = nil, nil
@@ -113,6 +115,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	}
 	required := ExtractRequiredFilesByModel(&scoped)
 	defaultProvider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
+	embeddingProvider, _ := config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
 	if defaultProvider == "candle" {
 		for path, files := range candleEmbeddingModelRequiredFiles(&scoped) {
 			required[path] = append(required[path], files...)
@@ -141,23 +144,39 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 		explicitPaths[config.ResolveModelPath(head.ModelID)] = true
 	}
-	if defaultProvider == "ort" && scoped.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendCandle {
+	if defaultProvider == "ort" || embeddingProvider == "openvino" {
 		// Resolve implicit embeddings with the same provider artifact contract
 		// as explicit bindings. In particular, ROCm requires ONNX graphs and
 		// their external tensors rather than Candle safetensors.
 		for model, path := range paths {
+			provider := defaultProvider
+			if model == primary {
+				provider = embeddingProvider
+			}
+			if provider == "candle" {
+				continue
+			}
 			if *path == "" {
 				continue
 			}
 			spec := config.ResolvedModelBinding{
 				Recipe: cfg.RoutingScope, Name: "embedding",
 				Binding:    config.ModelBinding{Adapter: model, Contract: "embedding.v1"},
-				Deployment: config.ModelDeployment{Provider: defaultProvider, Artifact: *path},
+				Deployment: config.ModelDeployment{Provider: provider, Artifact: *path},
 			}
 			if err := i.addDefaultDeployment(cfg, spec); err != nil {
 				return err
 			}
 			explicitPaths[config.ResolveModelPath(*path)] = true
+		}
+	}
+	if provider, device := config.DefaultCategoryExecution(cfg.CategoryModel.UseCPU); provider == "openvino" && active["domain_classifier"] {
+		if _, explicit := plan.Lookup(cfg.RoutingScope, "domain_classifier"); !explicit {
+			spec := config.ResolvedModelBinding{Recipe: cfg.RoutingScope, Name: "domain_classifier", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelDistribution, Adapter: "auto"}, Deployment: config.ModelDeployment{Provider: provider, Device: device, Artifact: cfg.CategoryModel.ModelID}}
+			if err := i.addDefaultDeployment(cfg, spec); err != nil {
+				return err
+			}
+			explicitPaths[config.ResolveModelPath(cfg.CategoryModel.ModelID)] = true
 		}
 	}
 	for name := range cfg.ModelBindings {
@@ -217,7 +236,24 @@ func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.Res
 	groups := [][]string{}
 	var rerankerSelections []config.PairScorerSelection
 	excludes := []string(nil)
-	if spec.Deployment.Provider == "ort" {
+	switch spec.Deployment.Provider {
+	case "openvino":
+		if spec.Binding.Head != "" {
+			graph := spec.Binding.Head
+			if !filepath.IsAbs(graph) {
+				graph = filepath.Join(path, graph)
+			}
+			for _, file := range []string{graph, strings.TrimSuffix(graph, ".xml") + ".bin", filepath.Join(filepath.Dir(graph), "openvino_tokenizer.xml"), filepath.Join(filepath.Dir(graph), "openvino_tokenizer.bin")} {
+				if err := i.addFile(file, path, spec.Deployment.Revision); err != nil {
+					return err
+				}
+			}
+		} else {
+			for _, file := range []string{"openvino_model.xml", "openvino_model.bin", "openvino_tokenizer.xml", "openvino_tokenizer.bin"} {
+				groups = append(groups, []string{file, "openvino/" + file})
+			}
+		}
+	case "ort":
 		if spec.Binding.OperatingPoint != nil {
 			// A calibrated policy also binds its native source checkpoint.
 			// An existing graph-only cache cannot satisfy that identity check.
@@ -263,7 +299,7 @@ func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.Res
 				}
 			}
 		}
-	} else {
+	default:
 		// A registered Candle snapshot must contain native weights, even if an
 		// ONNX export already exists. Sharded safetensors remain valid.
 		groups = append(groups, []string{"*.safetensors", "*.safetensors.index.json", "pytorch_model*.bin"})

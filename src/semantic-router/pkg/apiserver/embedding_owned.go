@@ -154,7 +154,7 @@ func ownedBatchSimilarity(ctx context.Context, set *embedding.Set, request Batch
 // diagnostics. The default helper stays available for shared storage consumers.
 func (s *ClassificationAPIServer) acquireEmbeddingRuntimeForRecipe(recipe string) (*config.RouterConfig, *embedding.Set, func(), error) {
 	if recipe == "" {
-		return s.acquireEmbeddingRuntime()
+		return s.acquireEmbeddingAPIRuntime()
 	}
 	_, service, release := s.acquireClassificationRuntime()
 	source, ok := service.(interface {
@@ -177,4 +177,19 @@ func (s *ClassificationAPIServer) acquireEmbeddingRuntimeForRecipe(recipe string
 func (s *ClassificationAPIServer) acquireEmbeddingsForRecipe(recipe string) (*embedding.Set, func(), error) {
 	_, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(recipe)
 	return prepared, release, err
+}
+
+// Both leases span the complete operation: the outer generation can retire
+// only after its borrowed global embedding view is no longer in use.
+func (s *ClassificationAPIServer) acquireEmbeddingAPIRuntime() (*config.RouterConfig, *embedding.Set, func(), error) {
+	_, service, release := s.acquireClassificationRuntime()
+	if source, ok := service.(interface {
+		AcquireEmbeddingAPISnapshot() (*config.RouterConfig, *embedding.Set, func(), error)
+	}); ok {
+		cfg, prepared, snapshotRelease, err := source.AcquireEmbeddingAPISnapshot()
+		var once sync.Once
+		return cfg, prepared, func() { once.Do(func() { snapshotRelease(); release() }) }, err
+	}
+	release()
+	return s.acquireEmbeddingRuntime()
 }

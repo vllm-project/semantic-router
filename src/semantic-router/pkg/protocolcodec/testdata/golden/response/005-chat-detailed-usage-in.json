@@ -15,6 +15,8 @@
     "prompt_tokens_details": {
       "cached_tokens": 3,
       "cache_write_tokens": 2,
+      "created_cache_tokens": 2,
+      "multimodal_tokens": null,
       "audio_tokens": 0,
       "image_tokens": 0,
       "text_tokens": 10

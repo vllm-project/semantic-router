@@ -80,7 +80,8 @@ func TestOwnedTypedScoresAndWindowsUseActualHeadBudget(t *testing.T) {
 	if _, err = scores.Call(ctx, "one", strings.Repeat("hello ", 1025)); !errors.Is(err, binding.ErrInputLimit) {
 		t.Fatalf("whole input budget not enforced: %v", err)
 	}
-	window := tasks.TextWindowsRequest{Text: strings.Repeat("hello ", 1024), Size: 128, Overlap: 16}
+	scoreSpec.Deployment.Input.MaxTokens = 4096
+	window := tasks.TextWindowsRequest{Text: strings.Repeat("hello ", 4096), Size: 128, Overlap: 16}
 	scoreWindows, err := runtime.ScoreWindows(ctx, scoreSpec, window)
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +91,7 @@ func TestOwnedTypedScoresAndWindowsUseActualHeadBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if windows.ContentTokens != 1024 || windows.Input.ProcessedTokens != 1024 || len(windows.Windows) < 2 || scoreWindows.Capability().Limits.Overflow != "window" {
+	if windows.ContentTokens != 4096 || windows.Input.ProcessedTokens != 4096 || len(windows.Windows) < 2 || scoreWindows.Capability().Limits.Overflow != "window" {
 		t.Fatalf("window coverage/usage lost: %+v", windows)
 	}
 	changed := window
@@ -98,6 +99,7 @@ func TestOwnedTypedScoresAndWindowsUseActualHeadBudget(t *testing.T) {
 	if _, err = scoreWindows.Call(ctx, "one", changed); !errors.Is(err, binding.ErrInvalidInput) {
 		t.Fatalf("prepared window policy changed: %v", err)
 	}
+	spec.Deployment.Input.MaxTokens = 4096
 	categoricalWindows, err := runtime.SequenceWindows(ctx, spec, window)
 	if err != nil {
 		t.Fatal(err)
@@ -107,6 +109,7 @@ func TestOwnedTypedScoresAndWindowsUseActualHeadBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalid := scoreSpec
+	invalid.Deployment.Input.MaxTokens = 1024
 	invalid.Binding.Contract = config.RemoteClassifierContractLabelDistribution
 	if head, err := runtime.Sequence(ctx, invalid); err == nil {
 		head.Close()
@@ -163,8 +166,10 @@ func TestOwnedTypedORTScoresAndWindowsUseActualSession(t *testing.T) {
 	if got.Input.ProcessedTokens != 32768 || got.Input.Truncated || got.Scores[1] < .73 || got.Scores[1] > .74 {
 		t.Fatalf("incorrect actual sigmoid/context: %+v", got)
 	}
-	request := tasks.TextWindowsRequest{Text: input, Size: 1024, Overlap: 128}
-	windows, err := runtime.ScoreWindows(ctx, spec, request)
+	windowSpec := spec
+	windowSpec.Deployment.Input.MaxTokens = 65536
+	request := tasks.TextWindowsRequest{Text: strings.Repeat("hello ", 42000), Size: 32768, Overlap: 16383}
+	windows, err := runtime.ScoreWindows(ctx, windowSpec, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +178,7 @@ func TestOwnedTypedORTScoresAndWindowsUseActualSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.ContentTokens != 32768 || out.Input.ProcessedTokens != 32768 || len(out.Windows) < 2 {
+	if out.ContentTokens != 42000 || out.Input.ProcessedTokens != 42000 || len(out.Windows) < 2 {
 		t.Fatalf("incomplete actual window coverage: %+v", out)
 	}
 	if _, err = scores.Call(ctx, "one", input+"hello"); !errors.Is(err, binding.ErrInputLimit) {

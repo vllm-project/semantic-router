@@ -258,13 +258,17 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
         if (!hasCompleteCostData(row)) {
           return renderUnavailableCost(row)
         }
+        const zeroSavingsReason = getZeroSavingsReason(row)
 
         return (
           <div className={styles.costCell}>
-            <strong className={styles.costValuePositive}>
-              {formatCurrency(row.cost_savings ?? 0, row.currency)}
+            <strong className={zeroSavingsReason ? styles.costValue : styles.costValuePositive}>
+              {zeroSavingsReason ? 'No savings' : formatCurrency(row.cost_savings, row.currency)}
             </strong>
-            <span className={styles.costSubtle}>Baseline: {row.baseline_model}</span>
+            {zeroSavingsReason && <span className={styles.costSubtle}>{zeroSavingsReason}</span>}
+            <span className={styles.costSubtle}>
+              Baseline (configured rates): {row.baseline_model}
+            </span>
           </div>
         )
       },
@@ -289,12 +293,13 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '160px',
       render: (row) => (
         <div className={styles.indicators}>
-          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>
-            Cache
-          </span>
-          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>
-            Stream
-          </span>
+          {row.from_cache && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Cache hit</span>
+          )}
+          {row.streaming && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Streaming</span>
+          )}
+          {!row.from_cache && !row.streaming && <span>No recorded flags</span>}
         </div>
       ),
     },
@@ -369,12 +374,21 @@ export function buildInsightsRecordSections(
         label: 'Cost basis',
         value:
           getInsightsCostUnavailableReason(record) ||
-          'Recorded tokens × configured model rates; excludes infrastructure charges and invoice adjustments.',
+          'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.',
       },
       {
         label: 'Baseline basis',
         value:
-          'New records compare the recipe’s complete model pool across all decisions in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+          'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+      },
+      {
+        label: 'Current pricing',
+        value: (
+          <>
+            <a href="/config/models">View current configured model rates</a>. Current rates may
+            differ from this record; historical records are not repriced.
+          </>
+        ),
       },
       {
         label: 'Estimated model cost',
@@ -386,7 +400,9 @@ export function buildInsightsRecordSections(
       },
       {
         label: 'Estimated savings',
-        value: formatRecordedCost(record, record.cost_savings),
+        value: getZeroSavingsReason(record)
+          ? `No savings — ${getZeroSavingsReason(record)}`
+          : formatRecordedCost(record, record.cost_savings),
       },
     ],
   })
@@ -726,6 +742,19 @@ function formatDecisionNumber(value: number | undefined) {
 
 function formatNumericMetric(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(3)
+}
+
+function getZeroSavingsReason(record: InsightsRecord): string | null {
+  if (
+    !hasCompleteCostData(record) ||
+    record.cost_savings !== 0 ||
+    record.actual_cost !== record.baseline_cost
+  ) {
+    return null
+  }
+  return record.selected_model && record.selected_model === record.baseline_model
+    ? 'Baseline model selected'
+    : 'Equal estimated cost'
 }
 
 function renderCostValue(value?: number, currency?: string) {

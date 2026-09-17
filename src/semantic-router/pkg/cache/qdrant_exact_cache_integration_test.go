@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// StorageIntegration: qdrant
 func TestQdrantExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T) {
-	if os.Getenv("SKIP_QDRANT_TESTS") == "true" {
-		t.Skip("Qdrant integration tests disabled")
-	}
+	storagetest.Require(t, "qdrant")
 	host := os.Getenv("QDRANT_HOST")
 	if host == "" {
 		host = "localhost"
@@ -46,7 +46,7 @@ func TestQdrantExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 		},
 	})
 	if err != nil {
-		t.Skipf("Qdrant unavailable: %v", err)
+		storagetest.Unavailable(t, "qdrant", fmt.Sprintf("Qdrant unavailable: %v", err))
 	}
 	t.Cleanup(func() {
 		_ = cache.client.DeleteCollection(context.Background(), cache.collectionName)
