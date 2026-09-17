@@ -12,6 +12,7 @@ build: $(if $(CI),rust-ci,rust) build-router
 # Development build: Use DEV=true to enable untrusted metadata["user_id"] fallback for testing
 # Example: make build-router DEV=true
 # Production builds (default) only accept user_id from auth headers (x-authz-user-id)
+# Candle-only linux/riscv64: make build-router-riscv (see tools/make/rust.mk).
 build-router: ## Build the router binary
 build-router: $(if $(CI),rust-ci,rust)
 	@bash tools/docker/check-native-abi.sh candle-binding/target/release/libcandle_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so) onnx-binding/target/release/libonnx_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so)
@@ -80,6 +81,7 @@ test-semantic-router: build-router
 		fi && \
 		CGO_ENABLED=1 \
 		go test -v $$TEST_PACKAGES
+	@$(NATIVE_ENV) $(MAKE) go-tools-test go-tools-vet
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
@@ -425,7 +427,7 @@ demo-hallucination-auto: build-router download-models
 test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
 test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
-	@./tools/smoke/test-image-gen.sh
+	@./tools/test/smoke/test-image-gen.sh
 
 # ============== Modality Routing Tests ==============
 

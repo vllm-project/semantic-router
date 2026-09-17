@@ -24,7 +24,7 @@ if [[ -z "${ROUTER_IMAGE}" ]]; then
 fi
 
 # Validate the complete selection before installing cleanup traps or touching a stack.
-python3 "${ROOT_DIR}/tools/dev/router-calibration/recipe_conformance.py" \
+python3 "${ROOT_DIR}/tools/calibration/recipe/recipe_conformance.py" \
   check-cpu --recipes "${RECIPES}"
 
 cleanup() {
@@ -90,7 +90,7 @@ for recipe in "${recipe_names[@]}"; do
     collect_logs "${recipe}"
     exit 1
   fi
-  if ! python3 "${ROOT_DIR}/tools/dev/router-calibration/recipe_conformance.py" \
+  if ! python3 "${ROOT_DIR}/tools/calibration/recipe/recipe_conformance.py" \
     --output-dir "${REPORT_ROOT}" \
     eval \
     --recipe "${recipe}" \
