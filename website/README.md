@@ -6,8 +6,9 @@ This directory contains the Docusaurus-based documentation website for the vLLM 
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - npm or yarn
+- Python 3.10+ with `venv` support
 
 ### Development
 
@@ -32,8 +33,20 @@ Build the static site for production:
 make docs-build
 
 # Or manually
+make docs-install
 cd website && npm run build
 ```
+
+`make docs-install` installs Node dependencies and creates an isolated Python
+environment at `website/.venv` for generated-reference checks. `make docs-build`
+runs this setup automatically, including when a deployment service builds from
+the repository root. The checks run before build-time generators and reject
+stale committed references.
+
+Direct `npm` builds reuse `website/.venv` when present. CI may instead install
+`website/requirements.txt` in its Python environment or select an interpreter
+with `VLLM_SR_DOCS_PYTHON`. The documentation setup never installs the runtime
+CLI package or invokes its package build hooks.
 
 ### Preview Production Build
 

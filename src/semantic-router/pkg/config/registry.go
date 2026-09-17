@@ -6,6 +6,7 @@ import "strings"
 type ModelPurpose string
 
 const (
+	PurposeEncoder                ModelPurpose = "encoder"                 // Base encoder for task adaptation
 	PurposeDomainClassification   ModelPurpose = "domain-classification"   // Classify text into domains/categories
 	PurposePIIDetection           ModelPurpose = "pii-detection"           // Detect personally identifiable information
 	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"     // Detect prompt injection/jailbreak attempts
@@ -15,6 +16,9 @@ const (
 	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
 	PurposeModalityDetection      ModelPurpose = "modality-detection"      // Classify prompts into text/image/both modalities
 	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
+	PurposeSafety                 ModelPurpose = "safety"                  // Detect unsafe content
+	PurposeHazard                 ModelPurpose = "hazard"                  // Identify independent content hazards
+	PurposeReranking              ModelPurpose = "reranking"               // Rank query-document pairs
 	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
 )
 
@@ -25,6 +29,13 @@ type ModelSpec struct {
 
 	// HuggingFace repository ID
 	RepoID string `json:"repo_id" yaml:"repo_id"`
+
+	// Immutable release revision, when the built-in artifact is pinned.
+	Revision string `json:"revision,omitempty" yaml:"revision,omitempty"`
+
+	// Built-in artifact download policy; this is not a user configuration field.
+	// Only applied when the resolved repository still matches this entry.
+	DownloadExcludePatterns []string `json:"-" yaml:"-"`
 
 	// Alternative names/aliases for this model
 	Aliases []string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
@@ -62,9 +73,155 @@ type ModelSpec struct {
 	Tags []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 }
 
+var velaTrainingArtifactPatterns = []string{"reproduction/*", "reproducibility/*", "lora/*"}
+
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
+	// Vela releases use immutable revisions. Legacy aliases below retain their
+	// original repositories so an explicit old configuration stays reproducible.
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M",
+		Revision:                "fe9ccc074b781bc0e2e13c2c8d26f2640410636a",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M"},
+		Purpose:                 PurposeEncoder,
+		Description:             "Build specialized, multilingual routing capabilities with up to 32K context. Use the Embedding model for search and retrieval.",
+		ParameterSize:           "307M encoder",
+		EmbeddingDim:            768,
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "encoder", "multilingual", "long-context"},
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-FactCheck",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck",
+		Revision:                "99ede1aba1563e59e416f744d25b3f6b7e9d8274",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-FactCheck"},
+		Purpose:                 PurposeHallucinationSentinel,
+		Description:             "Identify requests that need factual verification, with up to 32K input. It does not verify factual claims.",
+		ParameterSize:           "307M encoder + classifier",
+		NumClasses:              2,
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "factcheck", "classification", "multilingual", "long-context"},
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Domain",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Domain",
+		Revision:                "f6354f54adcf38770f635ad903be2b00577f6c11",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Domain"},
+		Purpose:                 PurposeDomainClassification,
+		Description:             "Identify a request's subject across 14 domains for routing to relevant expertise. Supports up to 32K input.",
+		ParameterSize:           "307M encoder + classifier",
+		NumClasses:              14,
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "domain", "classification", "merged", "multilingual", "long-context"},
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-PII",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-PII",
+		Revision:                "6d3300c4bd7975f30a664503f6c725cf1fbbad48",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-PII"},
+		Purpose:                 PurposePIIDetection,
+		Description:             "Locate personal information across 17 entity types with 35 BIO labels. Supports up to 32K input, with overlapping windows for long scans.",
+		ParameterSize:           "307M encoder + classifier",
+		NumClasses:              35,
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "pii", "privacy", "token-classification", "merged", "multilingual", "long-context"},
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Modality",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Modality",
+		Revision:                "5384b8997e3cbb79ca3a670e869577f4e4f4997e",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Modality"},
+		Purpose:                 PurposeModalityDetection,
+		Description:             "Classify written requests into text generation, image generation, or both. This is a text classifier. Supports up to 32K input.",
+		ParameterSize:           "307M encoder + classifier",
+		NumClasses:              3,
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "modality", "text-only", "classification", "merged", "multilingual", "long-context"},
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Feedback",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Feedback",
+		Revision:                "47434a7fd7c245c0c7c17564a000b3c56ccfec41",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Feedback"},
+		Purpose:                 PurposeFeedbackDetection,
+		Description:             "Recognize satisfaction, clarification, corrections, alternative requests, and messages without feedback. Supports up to 32K input.",
+		ParameterSize:           "307M encoder + classifier",
+		NumClasses:              5,
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "feedback", "classification", "merged", "multilingual", "long-context"},
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Embedding",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Embedding",
+		Revision:                "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Embedding"},
+		Purpose:                 PurposeEmbedding,
+		Description:             "Find relevant multilingual context with flexible embedding dimensions and encoder depths. Supports up to 32K input; retrieval quality varies with representation size.",
+		ParameterSize:           "307M encoder",
+		EmbeddingDim:            768,
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "embedding", "multilingual", "long-context", "2d-matryoshka", "early-exit"},
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Guard",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Guard",
+		Revision:                "087f9e401012df839c83717b746967ac7aebfa3e",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Guard"},
+		Purpose:                 PurposeJailbreakDetection,
+		Description:             "Detect prompt injection and jailbreak attacks across multilingual requests.",
+		ParameterSize:           "307M encoder + classifier",
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "multilingual", "long-context", "guard", "prompt-injection", "classification"},
+		NumClasses:              2,
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Safety",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Safety",
+		Revision:                "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Safety"},
+		Purpose:                 PurposeSafety,
+		Description:             "Identify unsafe content independently of prompt attacks.",
+		ParameterSize:           "307M encoder + classifier",
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "multilingual", "long-context", "safety", "classification"},
+		NumClasses:              2,
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Hazard",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Hazard",
+		Revision:                "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Hazard"},
+		Purpose:                 PurposeHazard,
+		Description:             "Identify 12 independent content hazards using the published operating point and overlapping windows.",
+		ParameterSize:           "307M encoder + classifier",
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "multilingual", "long-context", "hazard", "multi-label-classification"},
+		NumClasses:              12,
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Reranker",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Reranker",
+		Revision:                "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Reranker"},
+		Purpose:                 PurposeReranking,
+		Description:             "Rank multilingual query-document pairs with selectable encoder depth and representation size.",
+		ParameterSize:           "307M encoder + reranker",
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "multilingual", "long-context", "reranker", "2d-matryoshka", "early-exit"},
+	},
 	// Domain/Intent Classification
 	{
 		LocalPath:           "models/mom-domain-classifier",
@@ -191,15 +348,16 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Modality Detection - mmBERT-32K Router Classifier
 	{
-		LocalPath:        "models/mmbert32k-modality-router-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-modality-router-merged",
-		Aliases:          []string{"modality-classifier", "modality-router", "mmbert32k-modality-router"},
-		Purpose:          PurposeModalityDetection,
-		Description:      "mmBERT-32K classifier for AR, DIFFUSION, and BOTH modality routing decisions",
-		ParameterSize:    "307M",
-		NumClasses:       3, // AR / DIFFUSION / BOTH
-		MaxContextLength: 32768,
-		Tags:             []string{"modality", "classification", "mmbert-32k", "multimodal", "routing"},
+		LocalPath:           "models/mmbert32k-modality-router-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-modality-router-merged",
+		Aliases:             []string{"modality-classifier", "modality-router", "mmbert32k-modality-router"},
+		Purpose:             PurposeModalityDetection,
+		Description:         "mmBERT-32K classifier for AR, DIFFUSION, and BOTH modality routing decisions",
+		ParameterSize:       "307M",
+		NumClasses:          3, // AR / DIFFUSION / BOTH
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"modality", "classification", "mmbert-32k", "multimodal", "routing"},
 	},
 
 	// Embedding Models - Pro (High Quality)
@@ -330,72 +488,77 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// mmBERT-32K Feedback Detector (Merged - for Rust/Go inference)
 	{
-		LocalPath:        "models/mmbert32k-feedback-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-feedback-detector-merged",
-		Aliases:          []string{"mmbert32k-feedback-merged", "feedback-detector-32k-merged"},
-		Purpose:          PurposeFeedbackDetection,
-		Description:      "Merged 4-class user feedback classifier based on mmbert-32k-yarn for direct inference without PEFT.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
-		MaxContextLength: 32768,
-		Tags:             []string{"feedback", "classification", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-feedback-detector-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-feedback-detector-merged",
+		Aliases:             []string{"mmbert32k-feedback-merged", "feedback-detector-32k-merged"},
+		Purpose:             PurposeFeedbackDetection,
+		Description:         "Merged 4-class user feedback classifier based on mmbert-32k-yarn for direct inference without PEFT.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"feedback", "classification", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K Intent Classifier (Merged)
 	{
-		LocalPath:        "models/mmbert32k-intent-classifier-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-intent-classifier-merged",
-		Aliases:          []string{"mmbert32k-intent-merged", "intent-classifier-32k-merged"},
-		Purpose:          PurposeDomainClassification,
-		Description:      "Merged intent classifier for 14 MMLU-Pro style categories based on mmbert-32k-yarn, ready for direct inference.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       14,
-		MaxContextLength: 32768,
-		Tags:             []string{"classification", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-intent-classifier-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-intent-classifier-merged",
+		Aliases:             []string{"mmbert32k-intent-merged", "intent-classifier-32k-merged"},
+		Purpose:             PurposeDomainClassification,
+		Description:         "Merged intent classifier for 14 MMLU-Pro style categories based on mmbert-32k-yarn, ready for direct inference.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          14,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"classification", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K Fact-Check Classifier (Merged)
 	{
-		LocalPath:        "models/mmbert32k-factcheck-classifier-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
-		Aliases:          []string{"mmbert32k-factcheck-merged", "factcheck-classifier-32k-merged"},
-		Purpose:          PurposeHallucinationSentinel,
-		Description:      "Merged two-label fact-check classifier based on mmbert-32k-yarn for direct inference without PEFT.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       2,
-		MaxContextLength: 32768,
-		Tags:             []string{"factcheck", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-factcheck-classifier-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
+		Aliases:             []string{"mmbert32k-factcheck-merged", "factcheck-classifier-32k-merged"},
+		Purpose:             PurposeHallucinationSentinel,
+		Description:         "Merged two-label fact-check classifier based on mmbert-32k-yarn for direct inference without PEFT.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          2,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"factcheck", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K Jailbreak Detector (Merged)
 	{
-		LocalPath:        "models/mmbert32k-jailbreak-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
-		Aliases:          []string{"mmbert32k-jailbreak-merged", "jailbreak-detector-32k-merged"},
-		Purpose:          PurposeJailbreakDetection,
-		Description:      "Merged jailbreak and prompt-injection detector based on mmbert-32k-yarn with 32K context support.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       2,
-		MaxContextLength: 32768,
-		Tags:             []string{"safety", "jailbreak", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-jailbreak-detector-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+		Aliases:             []string{"mmbert32k-jailbreak-merged", "jailbreak-detector-32k-merged"},
+		Purpose:             PurposeJailbreakDetection,
+		Description:         "Merged jailbreak and prompt-injection detector based on mmbert-32k-yarn with 32K context support.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          2,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"safety", "jailbreak", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K PII Detector (Merged)
 	{
-		LocalPath:        "models/mmbert32k-pii-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-pii-detector-merged",
-		Aliases:          []string{"mmbert32k-pii-merged", "pii-detector-32k-merged"},
-		Purpose:          PurposePIIDetection,
-		Description:      "Merged PII detector for 17 entity types and 35 BIO labels, based on mmbert-32k-yarn.",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       35,
-		MaxContextLength: 32768,
-		Tags:             []string{"pii", "privacy", "merged", "mmbert-32k", "yarn", "multilingual"},
+		LocalPath:           "models/mmbert32k-pii-detector-merged",
+		RepoID:              "llm-semantic-router/mmbert32k-pii-detector-merged",
+		Aliases:             []string{"mmbert32k-pii-merged", "pii-detector-32k-merged"},
+		Purpose:             PurposePIIDetection,
+		Description:         "Merged PII detector for 17 entity types and 35 BIO labels, based on mmbert-32k-yarn.",
+		ParameterSize:       "307M",
+		UsesLoRA:            false,
+		NumClasses:          35,
+		MaxContextLength:    512,
+		BaseModelMaxContext: 32768,
+		Tags:                []string{"pii", "privacy", "merged", "mmbert-32k", "yarn", "multilingual"},
 	},
 
 	// mmBERT-32K PII Detector

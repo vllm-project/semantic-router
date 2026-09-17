@@ -1,4 +1,4 @@
-//go:build windows || !cgo || (!amd64 && !arm64)
+//go:build windows || !cgo || (!amd64 && !arm64 && !riscv64)
 
 package candle_binding
 
@@ -28,6 +28,10 @@ func nativeInstanceHallucination(uint64, string, string, string, float32) (Hallu
 
 func nativeInstanceEmbedding(uint64, string, int, int) (InstanceEmbeddingOutput, error) {
 	return InstanceEmbeddingOutput{}, ErrBackendUnavailable
+}
+
+func nativeInstanceEmbeddingDescriptor(uint64, int, int) (string, error) {
+	return "", ErrBackendUnavailable
 }
 
 func nativeInstanceImage(uint64, []byte, int) (InstanceEmbeddingOutput, error) {

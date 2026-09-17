@@ -133,9 +133,6 @@ func TestValidateCategoryModelBackend(t *testing.T) {
 		{name: "invalid endpoint protocol", mutate: func(cfg *RouterConfig) {
 			cfg.ExternalModels[0].ModelEndpoint.Protocol = "ftp"
 		}, want: "http or https"},
-		{name: "missing external model name", mutate: func(cfg *RouterConfig) {
-			cfg.ExternalModels[0].ModelName = ""
-		}, want: "llm_model_name"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -251,8 +248,8 @@ global:
           variant: modernbert
           use_mmbert_32k: true
 `)
-	if _, err := ParseYAMLBytes(conflictingOverride); err == nil || !strings.Contains(err.Error(), "conflicts") {
-		t.Fatalf("expected explicit canonical/legacy conflict, got %v", err)
+	if _, parseErr := ParseYAMLBytes(conflictingOverride); parseErr == nil || !strings.Contains(parseErr.Error(), "conflicts") {
+		t.Fatalf("expected explicit canonical/legacy conflict, got %v", parseErr)
 	}
 
 	agreeingOverride := []byte(`
@@ -330,13 +327,13 @@ global:
 func TestReferenceConfigCategoryBackendReplacesDefaultVariant(t *testing.T) {
 	data := string(readReferenceConfigYAML(t))
 	data = strings.Replace(data,
-		"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n",
+		"          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json\n",
 		"          backend:\n"+
 			"            protocol: http_classify\n"+
 			"            contract: label_distribution.v1\n"+
 			"            model: external-classifier\n"+
 			"            deadline_ms: 5000\n"+
-			"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n", 1)
+			"          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json\n", 1)
 	if data == string(readReferenceConfigYAML(t)) {
 		t.Fatal("reference config category block was not found")
 	}
@@ -610,5 +607,18 @@ func TestIsPIIClassifierEnabledAcceptsRemoteBackend(t *testing.T) {
 	cfg.PIIModel.Backend = nil
 	if cfg.IsPIIClassifierEnabled() {
 		t.Fatal("PII config with neither model_id nor backend reported enabled")
+	}
+}
+
+func TestFixedHTTPClassifierDoesNotRequireAnUnusedModelSelector(t *testing.T) {
+	cfg := categoryBackendTestConfig(&RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-category"})
+	cfg.ExternalModels[0].ModelName = ""
+	if err := ValidateCategoryModelBackend(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg.ExternalModels[0].ModelRole = ModelRoleGuardrail
+	backend := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPChat, Model: "named-category", Contract: RemoteClassifierContractLabelDecision}
+	if _, err := ResolveRemoteClassifierBackend(cfg, backend, ModelRoleGuardrail, RemoteClassifierContractLabelDecision); err == nil {
+		t.Fatal("chat request accepted without its model selector")
 	}
 }

@@ -45,6 +45,7 @@ tokenizers = { version = "0.21.0", default-features = false, features = ["http",
 hf-hub = { version = "0.4.1", default-features = false, features = ["rustls-tls"] }
 safetensors = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
 serde_json = "1.0.93"
 tracing = "0.1.37"
 libc = "0.2.147"

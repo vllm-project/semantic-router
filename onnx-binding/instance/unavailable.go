@@ -31,6 +31,8 @@ func (*EmbeddingModel) Encode(string, int, int) (EmbeddingResult, error) {
 	return EmbeddingResult{}, unavailable
 }
 
+func (*EmbeddingModel) RuntimeDescriptor(int, int) (string, error) { return "", unavailable }
+
 func (*MultiModalModel) EncodeText(string, int) (EmbeddingResult, error) {
 	return EmbeddingResult{}, unavailable
 }

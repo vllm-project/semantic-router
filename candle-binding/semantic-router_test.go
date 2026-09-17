@@ -1,4 +1,4 @@
-//go:build !windows && cgo && (amd64 || arm64)
+//go:build !windows && cgo && (amd64 || arm64 || riscv64)
 
 // This suite exercises the native Candle backend's behavioral contract and only
 // runs under the CGO build. The non-CGO stub's fail-closed contract is verified

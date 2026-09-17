@@ -60,7 +60,7 @@ func protectionScenarioInput(router *OpenAIRouter, scenario protectionScenario, 
 	selCtx := &selection.SelectionContext{SessionID: scenario.ID, DecisionName: "protection-benchmark", CandidateModels: candidates}
 	identity, _ := router.protectionIdentity(ctx, router.Config.RouterLearning.Protection)
 	// Preflight sees the same accumulated session state as the subsequent guard.
-	selCtx.AgenticSession = router.buildAgenticSessionContext(ctx, candidates, identity.memoryKey, "")
+	selCtx.AgenticSession = router.protectionSelectionContext(selCtx, ctx, identity).AgenticSession
 	proposal := &selection.SelectionResult{SelectedModel: step.Proposal, Score: step.Scores[step.Proposal], AllScores: step.Scores, Method: selection.MethodStatic}
 	ref := modelRefForName(candidates, step.Proposal)
 	return routerLearningInput{selCtx: selCtx, baseResult: proposal, selectedModelRef: ref, ctx: ctx}

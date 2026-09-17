@@ -43,14 +43,14 @@ assertion. Repeat with other cases from the selected manifest.
 The completion budget is separate from the HTTP timeout. `8192` is an example,
 not a guarantee: choose a limit that fits the backend context window after the
 actual input, and allows both reasoning tokens and the final answer. Omitting
-`--max-completion-tokens` leaves the backend default unchanged. A reasoning model
-can exhaust that default while returning HTTP 200, correct routing headers,
+`--max-completion-tokens` leaves the request field unset: the matched decision's
+`request_params.default_max_tokens` applies when configured; otherwise the backend
+supplies its default. A reasoning model can exhaust that budget while returning
+HTTP 200, correct routing headers,
 `content: null`, and `finish_reason: length`. Keep this failed receipt; repeat
 with an explicitly larger supported budget when the test scope permits. Do not
 disable reasoning to hide incomplete delivery or claim the first request passed.
-This explicit budget applies to CLI probes. Ordinary Playground requests omit
-token-limit fields and use backend defaults; when those defaults truncate an
-answer, inspect the backend generation settings and available context budget.
+Inspect the effective decision and backend budget when an answer is truncated.
 
 `route probe` makes a real OpenAI-compatible request through Envoy. Its receipt
 contains status, latency, routing headers, response body, and assertions. Use
@@ -131,6 +131,63 @@ config/DSL, Recipe, and entrypoint. Keep adapted probes separate, record the cas
 IDs and actual assertions exercised, and report baseline and adapted coverage.
 Do not rewrite digest-bound resources or claim full bundle conformance from a
 filtered result.
+
+## Token boundaries and public errors
+
+Test below, at, and above each relevant limit independently: learned input
+capacity and overflow handling, candidate context/output eligibility, and the
+backend's combined prompt-plus-generation context. Record the counting method
+at each layer; tokenizers, chat templates, and Router estimates can differ.
+Keep the other budgets within their limits to identify which boundary acted.
+
+For learned overflow, inspect signal status, `rules.on_unknown`, the applied
+unknown-policy header/trace when available, and the final selected decision.
+An overflow rejected by a binding can still yield a successful request through
+another decision under `no_match`; do not infer API rejection or input truncation
+from the binding limit alone. Check output budgets against Model Card
+`max_output_tokens` and `known_limits` eligibility separately from the backend's
+actual capacity. Compare direct backend and public entrypoint responses, keeping
+their HTTP status, error body, and any fallback or degradation; their errors need
+not be identical. Report the observed public contract, including incomplete
+delivery, instead of counting every HTTP 200 as a boundary pass.
+
+## Repeated API and UI checks
+
+When stability is requested, define a bounded matrix before running it: relevant
+Recipe branches, task types, repetitions, duration, concurrency, input/output
+budgets, and pass criteria. Include ordinary questions, reasoning, structured
+output, multi-turn chat, and the configured modalities. Exercise the actual
+virtual entrypoint through the inference API, with streaming and non-streaming
+requests where supported. Direct backend tests isolate a fault; they do not
+replace routed tests.
+
+For tool calls, check tool name, JSON arguments, required fields, and terminal
+status. Include an automatic tool-selection case and a continuation carrying
+the assistant tool call plus a matching `tool` result. Use a deterministic local
+fixture for that result unless actual tool execution is in scope; report this
+distinction. Verify a final answer after the result, not only the first tool call.
+
+If Dashboard testing is requested, log in and select the same published entrypoint
+in Playground. Run representative repeated chats and multi-turn continuations,
+observe stream completion and errors, and confirm the active Recipe. Exercise
+tool or modality UI controls when available; report unsupported UI shapes and
+test those through the API without claiming UI coverage for them.
+
+Keep each attempt, including timeouts, malformed/empty outputs, truncation,
+unexpected rejections, and retries. Report per-branch and per-task pass/total,
+latency, elapsed test duration, concurrency, active revision, and any service
+restart or accelerator error. Distinguish expected unsupported-input rejections
+from failed supported requests. A missing-quality branch remains blocked even if
+other branches pass. Label short runs as smoke evidence and state the tested
+context/load envelope; repeat the same matrix after a configuration or serving
+change before claiming improved stability.
+
+## Tune a Recipe
+
+Read [recipe tuning](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md) when improving a policy. It covers signal
+selection, projections, compact decisions, session continuity, and retrieval.
+Keep the original probes and compare the same requests before and after the
+change. A successful configuration edit is the start of verification.
 
 ## Requested workloads and benchmarks
 

@@ -65,7 +65,7 @@ func (s *blockingMemoryStore) Close() error {
 func TestScheduleResponseMemoryStore_NoOpWithoutMemoryExtractor(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{AutoStore: true},
+			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
 		},
 		MemoryExtractor: nil,
 	}
@@ -98,7 +98,7 @@ func TestScheduleResponseMemoryStore_SkippedWhenAutoStoreDisabled(t *testing.T) 
 func TestScheduleResponseMemoryStore_SkippedWhenJailbreakDetected(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{AutoStore: true},
+			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
 		},
 		MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}),
 	}
@@ -115,7 +115,7 @@ func TestScheduleResponseMemoryStore_SkippedWhenJailbreakDetected(t *testing.T) 
 func TestScheduleResponseMemoryStore_FallsBackToRouterAutoStore(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{AutoStore: true},
+			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
 		},
 		// Non-nil extractor so the function reaches past the nil check
 		MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}),
@@ -156,7 +156,7 @@ func TestResponseMemoryStoreHoldsGenerationUntilBackgroundWriteCompletes(t *test
 	resources := newResourceScope()
 	resources.add(store.Close)
 	router := &OpenAIRouter{
-		Config:          &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+		Config:          &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 		MemoryExtractor: memory.NewMemoryChunkStore(store),
 		resources:       resources,
 	}

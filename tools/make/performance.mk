@@ -55,8 +55,8 @@ perf-bench-looper: ## Run Looper family (ReMoM/Fusion/Flow/Base) benchmarks
 perf-bench-looper: build-router ensure-reports-dir
 	@$(LOG_TARGET)
 	@export $(NATIVE_ENV) && \
-	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=10s ./pkg/looper/... \
-	  | tee ../../reports/bench-results-looper.txt
+	cd src/semantic-router && bash -o pipefail -c \
+	  'go test -bench="^Benchmark(ReMoM|Fusion|Flow|Base)" -benchmem -benchtime=10s ./pkg/looper/... | tee ../../reports/bench-results-looper.txt'
 
 # Run E2E performance tests
 perf-e2e: ## Run E2E performance tests
@@ -115,12 +115,12 @@ perf-baseline-update: ensure-reports-dir
 	@$(LOG_TARGET)
 	@echo "Running benchmarks to update baseline..."
 	@export $(NATIVE_ENV) && \
-	cd perf && go test -bench=. -benchmem -benchtime=30s ./benchmarks/... \
-	  | tee ../reports/bench-results.txt
+	cd perf && bash -o pipefail -c \
+	  'go test -bench=. -benchmem -benchtime=30s ./benchmarks/... | tee ../reports/bench-results.txt'
 	@echo "Running Looper family benchmarks to update baseline..."
 	@export $(NATIVE_ENV) && \
-	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=30s ./pkg/looper/... \
-	  | tee -a ../../reports/bench-results.txt
+	cd src/semantic-router && bash -o pipefail -c \
+	  'go test -bench="^Benchmark(ReMoM|Fusion|Flow|Base)" -benchmem -benchtime=30s ./pkg/looper/... | tee -a ../../reports/bench-results.txt'
 	@echo "Updating baselines..."
 	@cd perf/scripts && ./update-baseline.sh
 
@@ -169,9 +169,11 @@ perf-check: build-router ensure-reports-dir
 	@$(LOG_TARGET)
 	@echo "Running benchmarks for regression check..."
 	@export $(NATIVE_ENV) && \
-	cd perf && go test -bench=. -benchmem -benchtime=10s ./benchmarks/... | tee ../reports/bench-output.txt
+	cd perf && bash -o pipefail -c \
+	  'go test -bench=. -benchmem -benchtime=10s ./benchmarks/... | tee ../reports/bench-output.txt'
 	@export $(NATIVE_ENV) && \
-	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=10s ./pkg/looper/... | tee -a ../../reports/bench-output.txt
+	cd src/semantic-router && bash -o pipefail -c \
+	  'go test -bench="^Benchmark(ReMoM|Fusion|Flow|Base)" -benchmem -benchtime=10s ./pkg/looper/... | tee -a ../../reports/bench-output.txt'
 	@echo "Building current results and comparing against baseline..."
 	@cd perf && go run cmd/perftest/main.go \
 	  --parse-bench=../reports/bench-output.txt \

@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -113,9 +114,10 @@ func TestReloadRouterFromConfigDoesNotSwapWhenRuntimePreparationFails(t *testing
 		BackendModels: config.BackendModels{DefaultModel: "old"},
 	}}
 	server := &Server{
-		configPath: "/tmp/router-config.yaml",
+		configPath: filepath.Join(t.TempDir(), "router-config.yaml"),
 		service:    NewRouterService(oldRouter),
 	}
+	writeReloadTestDocument(t, server.configPath, "candidate", candidateCfg)
 
 	ensureReloadConfigModels = func(cfg *config.RouterConfig) error { return nil }
 	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
@@ -168,13 +170,14 @@ func TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap(t *testing.T) {
 	registry.PublishRouterRuntime(oldCfg, oldService, nil)
 
 	server := &Server{
-		configPath: "/tmp/router-config.yaml",
+		configPath: filepath.Join(t.TempDir(), "router-config.yaml"),
 		service: NewRouterService(&OpenAIRouter{
 			Config:                oldCfg,
 			ClassificationService: oldService,
 		}),
 		runtime: registry,
 	}
+	writeReloadTestDocument(t, server.configPath, "new", newCfg)
 
 	ensureReloadConfigModels = func(cfg *config.RouterConfig) error { return nil }
 	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {

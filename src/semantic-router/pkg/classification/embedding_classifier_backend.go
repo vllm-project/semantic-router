@@ -93,17 +93,7 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 		})
 		return nil
 	case "openvino":
-		if err := initOpenVINOModel(modelType, mmBertModelPath, qwen3ModelPath, useCPU); err != nil {
-			return err
-		}
-		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
-			"backend":          "openvino",
-			"model_type":       modelType,
-			"mmbert_model_ref": mmBertModelPath,
-			"qwen3_model_ref":  qwen3ModelPath,
-			"use_cpu":          useCPU,
-		})
-		return nil
+		return fmt.Errorf("OpenVINO requires an owned model binding")
 	case "candle":
 		err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
 		if err != nil {
@@ -193,23 +183,26 @@ func (c *EmbeddingClassifier) inferenceBackend() string {
 	return c.getBackend()
 }
 
-func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, phases ...string) ([]float32, error) {
+func (c *EmbeddingClassifier) computeEmbedding(ctx context.Context, text string, modelType string, phases ...string) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	backend := c.inferenceBackend()
 	start := time.Now()
 	var embedding []float32
 	var err error
 
 	if c.provider != nil {
-		embedding, err = embeddingprovider.Embed(context.Background(), c.provider, text, embeddingprovider.Options{Dimension: c.optimizationConfig.TargetDimension, Layer: c.optimizationConfig.TargetLayer})
+		embedding, err = embeddingprovider.Embed(ctx, c.provider, text, embeddingprovider.Options{Dimension: c.optimizationConfig.TargetDimension, Layer: c.optimizationConfig.TargetLayer})
 	} else {
 		switch backend {
 		case config.EmbeddingBackendOpenAICompatible:
 			if c.provider == nil {
 				return nil, fmt.Errorf("embedding provider is required for backend %q", backend)
 			}
-			embedding, err = c.provider.Embed(context.Background(), text)
+			embedding, err = c.provider.Embed(ctx, text)
 		case "openvino":
-			embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
+			return nil, fmt.Errorf("OpenVINO requires an owned model binding")
 		case "candle":
 			var output *tasks.EmbeddingResult
 			output, err = getEmbedding2DMatryoshka(text, modelType, c.optimizationConfig.TargetLayer, c.optimizationConfig.TargetDimension)
@@ -232,5 +225,8 @@ func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, ph
 	logging.Infof("[Perf] embedding inference (phase=%s, backend=%s, model=%s, dim=%d): %.3fms",
 		phase, backend, modelType, dim, float64(elapsed.Microseconds())/1000.0)
 
+	if err == nil {
+		err = ctx.Err()
+	}
 	return embedding, err
 }

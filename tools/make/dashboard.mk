@@ -6,7 +6,7 @@ DASHBOARD_DIR := dashboard
 DASHBOARD_FRONTEND_DIR := $(DASHBOARD_DIR)/frontend
 DASHBOARD_BACKEND_DIR := $(DASHBOARD_DIR)/backend
 DASHBOARD_WIZMAP_DIR := $(DASHBOARD_DIR)/wizmap
-DASHBOARD_WASM_DIR := src/semantic-router/cmd/wasm
+DASHBOARD_WASM_DIR := $(DASHBOARD_DIR)/wasm
 
 ##@ Dashboard
 
@@ -27,6 +27,9 @@ dashboard-build-wasm: ## Build dashboard DSL compiler WASM assets
 	@echo "Building dashboard WASM assets..."
 	@$(MAKE) -C $(DASHBOARD_WASM_DIR) build
 	@echo "dashboard WASM assets completed"
+
+dashboard-test-wasm: ## Test the dashboard DSL compiler in the Go and Node WASM runtimes
+	@$(MAKE) -C $(DASHBOARD_WASM_DIR) test
 
 dashboard-dev-frontend: dashboard-install dashboard-build-wasm ## Start dashboard frontend in dev mode
 	@$(LOG_TARGET)
@@ -147,7 +150,7 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 	@echo "dashboard cleaned"
 
 .PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
-	dashboard-build dashboard-build-wasm dashboard-build-frontend dashboard-build-backend \
+	dashboard-build dashboard-build-wasm dashboard-test-wasm dashboard-build-frontend dashboard-build-backend \
 	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
 	dashboard-evaluation-catalog-check \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \

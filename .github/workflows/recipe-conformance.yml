@@ -32,7 +32,7 @@ jobs:
       - id: plan
         name: Materialize live CPU shards
         run: |
-          python tools/dev/router-calibration/recipe_conformance.py \
+          python tools/calibration/recipe/recipe_conformance.py \
             plan \
             --shards 3 \
             --github-output "$GITHUB_OUTPUT"

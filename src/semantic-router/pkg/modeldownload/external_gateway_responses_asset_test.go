@@ -29,8 +29,8 @@ func TestExternalGatewayResponsesProfileRequiresNoLocalModelDownloads(t *testing
 		Config         interface{} `yaml:"config"`
 		ConfigOverride interface{} `yaml:"configOverride"`
 	}
-	if err := yamlv3.Unmarshal(data, &values); err != nil {
-		t.Fatalf("decode Helm values: %v", err)
+	if decodeErr := yamlv3.Unmarshal(data, &values); decodeErr != nil {
+		t.Fatalf("decode Helm values: %v", decodeErr)
 	}
 	routerConfig := values.ConfigOverride
 	if routerConfig == nil {
