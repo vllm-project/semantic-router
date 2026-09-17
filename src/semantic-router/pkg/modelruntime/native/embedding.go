@@ -29,6 +29,7 @@ type EmbeddingProvider struct {
 	backend         string
 	dimension       int
 	options         embedding.Options
+	contract        *embedding.DimensionContract
 }
 
 func validateEmbeddingResult(input embedding.TextRequest, result tasks.EmbeddingResult) error {
@@ -98,7 +99,15 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 		return nil, err
 	}
 	key, _ := id.Key()
-	provider := &EmbeddingProvider{identity: key, resource: resource, text: text, recipe: string(spec.Recipe), backend: spec.Deployment.Provider, options: embedding.Options{Dimension: dimension, Layer: layer}}
+	provider := &EmbeddingProvider{
+		identity: key,
+		resource: resource,
+		text:     text,
+		recipe:   string(spec.Recipe),
+		backend:  spec.Deployment.Provider,
+		options:  embedding.Options{Dimension: dimension, Layer: layer},
+		contract: model.dimensionContract,
+	}
 	provider.contentIdentity = contentIdentity
 	provider.descriptors = make(map[embedding.Options]string)
 	policy, _ := json.Marshal(struct {
@@ -122,9 +131,23 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 	provider.info = embedding.ModelInfo{Layers: layers, Artifact: id.Artifact, Backend: provider.backend, Dimension: provider.dimension, MaxTokens: capability.Limits.EffectiveTokens(), Pooling: capability.Embedding.Pooling, Normalization: capability.Embedding.Normalization, Modalities: append([]string(nil), capability.Embedding.Modalities...)}
 	return provider, nil
 }
+
 func (p *EmbeddingProvider) Close() error    { return p.text.Close() }
 func (p *EmbeddingProvider) Backend() string { return p.backend }
 func (p *EmbeddingProvider) Dimension() int  { return p.dimension }
+
+// EmbeddingDimensionContract returns the dimensions declared by the prepared
+// model instance. Callers must use this contract instead of maintaining a
+// second model-specific dimension table.
+func (p *EmbeddingProvider) EmbeddingDimensionContract() (embedding.DimensionContract, error) {
+	if p.contract == nil {
+		return embedding.DimensionContract{}, fmt.Errorf("embedding provider does not expose a dimension contract")
+	}
+	contract := *p.contract
+	contract.SupportedDimensions = append([]int(nil), p.contract.SupportedDimensions...)
+	return contract, nil
+}
+
 func (p *EmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	return p.EmbedWithOptions(ctx, text, p.options)
 }
@@ -156,11 +179,12 @@ func (p *EmbeddingProvider) EmbeddingInfo() embedding.ModelInfo {
 // Provider preparation returns an already warmed model and its effective
 // capabilities. Publication and representation identities stay provider-neutral.
 type preparedEmbedding struct {
-	resource        *binding.Resource
-	identity        binding.ResourceIdentity
-	capability      binding.Capability
-	layers          []int
-	contentIdentity bool
+	resource          *binding.Resource
+	identity          binding.ResourceIdentity
+	capability        binding.Capability
+	layers            []int
+	contentIdentity   bool
+	dimensionContract *embedding.DimensionContract
 }
 
 // ORT exits own separate graphs. Every advertised graph must execute before

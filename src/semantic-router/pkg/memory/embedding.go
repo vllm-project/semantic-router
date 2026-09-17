@@ -23,7 +23,7 @@ const (
 type EmbeddingConfig struct {
 	Provider  embedding.Provider // Prepared by the generation owner; never closed by the store.
 	Model     EmbeddingModelType
-	Dimension int // Target dimension for Matryoshka models (default: 256 for mmbert)
+	Dimension int // Target dimension; <= 0 resolves to the model contract's native dimension.
 	Layer     int // Target layer for 2D Matryoshka early exit (0 = full model, recommended for search/RAG)
 }
 
@@ -47,8 +47,14 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
 	options := embedding.Options{}
 	switch modelName {
-	case "qwen3", "gemma", "bert", "":
-		// These paths have always requested the provider's full output.
+	case "qwen3", "gemma":
+		// The store resolves Dimension from the model contract before inference.
+		// Pass supported reduced widths through so the vectors match the
+		// Milvus schema instead of silently returning the native width.
+		options.Dimension = cfg.Dimension
+	case "bert", "":
+		// BERT keeps its native-width provider behavior and does not accept a
+		// reduced dimension option.
 	case "mmbert":
 		options = embedding.Options{Dimension: cfg.Dimension, Layer: cfg.Layer}
 		if options.Dimension <= 0 {

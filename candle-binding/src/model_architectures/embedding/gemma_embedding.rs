@@ -390,6 +390,12 @@ pub struct GemmaEmbeddingModel {
     device: Device,
 }
 
+/// Dimensions declared by the maintained EmbeddingGemma checkpoint.
+///
+/// Keep this next to the implementation that validates and produces these
+/// widths so callers can consume the model contract without another allowlist.
+pub const SUPPORTED_EMBEDDING_DIMENSIONS: &[usize] = &[768, 512, 256, 128];
+
 impl GemmaEmbeddingModel {
     /// Load GemmaEmbedding model from pretrained weights
     ///
@@ -443,6 +449,14 @@ impl GemmaEmbeddingModel {
     /// Get model configuration
     pub fn config(&self) -> &GemmaEmbeddingConfig {
         &self.config
+    }
+
+    /// Return the model's native width and its declared Matryoshka widths.
+    pub fn embedding_dimension_contract(&self) -> (usize, Vec<usize>) {
+        (
+            self.config.hidden_size,
+            SUPPORTED_EMBEDDING_DIMENSIONS.to_vec(),
+        )
     }
 
     /// Get access to Gemma3 Transformer backbone (for testing)
@@ -570,8 +584,7 @@ impl GemmaEmbeddingModel {
         embedding_dim: usize,
     ) -> UnifiedResult<Tensor> {
         // Validate embedding dimension
-        const SUPPORTED_DIMS: &[usize] = &[768, 512, 256, 128];
-        if !SUPPORTED_DIMS.contains(&embedding_dim) {
+        if !SUPPORTED_EMBEDDING_DIMENSIONS.contains(&embedding_dim) {
             return Err(UnifiedError::Validation {
                 field: "embedding_dim".to_string(),
                 expected: "768, 512, 256, or 128".to_string(),

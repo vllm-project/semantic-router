@@ -50,6 +50,14 @@ func (r *Runtime) candleEmbedding(ctx context.Context, spec config.ResolvedModel
 			Embedding: candleEmbeddingSemantics(info.ModelType, view.Layer),
 		}
 		capability.Embedding.Modalities = append([]string(nil), info.Modalities...)
+		contract, contractErr := engine.candle.DimensionContract()
+		if contractErr != nil {
+			return contractErr
+		}
+		prepared.dimensionContract = &embedding.DimensionContract{
+			NativeDimension:     contract.NativeDimension,
+			SupportedDimensions: append([]int(nil), contract.SupportedDimensions...),
+		}
 		if info.ModelType == "mmbert" || info.ModelType == "mmbert_embedding" {
 			prepared.layers = candleEmbeddingLayers(options.ModelPath)
 			prepared.contentIdentity = true

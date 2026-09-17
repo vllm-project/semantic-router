@@ -18,32 +18,47 @@ const (
 
 // LocalEmbeddingSettings mirrors the backend's actual embedding call. Unsupported
 // providers do not acquire a guessed content identity during this migration.
-func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, bool) {
+func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, bool, error) {
 	var model string
 	var layer, dimension int
 	switch value := backend.(type) {
 	case *InMemoryCache:
 		model, layer, dimension = value.embeddingModel, mmbertMemoryCacheLayer, mmbertMemoryCacheDimension
 	case *RedisCache:
-		model, dimension = value.embeddingModel, value.embeddingDimension()
+		model = value.embeddingModel
+		var err error
+		dimension, err = value.embeddingDimension()
+		if err != nil {
+			return embedding.ConsumerSettings{}, false, fmt.Errorf("resolve redis cache embedding dimension: %w", err)
+		}
 	case *ValkeyCache:
-		model, dimension = value.embeddingModel, value.embeddingDimension()
+		model = value.embeddingModel
+		var err error
+		dimension, err = value.embeddingDimension()
+		if err != nil {
+			return embedding.ConsumerSettings{}, false, fmt.Errorf("resolve valkey cache embedding dimension: %w", err)
+		}
 	case *MilvusCache:
 		model, dimension = value.embeddingModel, value.embeddingDimension()
 	case *QdrantCache:
-		model, dimension = value.embeddingModel, value.embeddingDimension()
+		model = value.embeddingModel
+		var err error
+		dimension, err = value.embeddingDimension()
+		if err != nil {
+			return embedding.ConsumerSettings{}, false, fmt.Errorf("resolve qdrant cache embedding dimension: %w", err)
+		}
 	case *HybridCache:
 		if value.milvusCache == nil {
-			return embedding.ConsumerSettings{}, false
+			return embedding.ConsumerSettings{}, false, nil
 		}
 		return LocalEmbeddingSettings(value.milvusCache)
 	default:
-		return embedding.ConsumerSettings{}, false
+		return embedding.ConsumerSettings{}, false, nil
 	}
 	if model != "mmbert" {
-		return embedding.ConsumerSettings{}, false
+		return embedding.ConsumerSettings{}, false, nil
 	}
-	return embedding.ConsumerSettings{ModelType: model, Layer: layer, Dimension: dimension, InputPolicy: semanticCacheInputPolicy}, true
+	return embedding.ConsumerSettings{ModelType: model, Layer: layer, Dimension: dimension, InputPolicy: semanticCacheInputPolicy}, true, nil
 }
 
 // PrepareEmbeddingNamespace runs before any persistent index is opened. The
@@ -65,23 +80,26 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 	case InMemoryCacheType:
 		view = &InMemoryCache{embeddingModel: "mmbert"}
 	case RedisCacheType:
-		view = &RedisCache{embeddingModel: "mmbert", config: cfg.Redis}
+		view = &RedisCache{embeddingModel: "mmbert", config: cfg.Redis, embeddingProvider: cfg.EmbeddingProvider}
 		logical = []string{cfg.Redis.Index.Name, cfg.Redis.Index.Prefix}
 	case ValkeyCacheType:
-		view = &ValkeyCache{embeddingModel: "mmbert", config: cfg.Valkey}
+		view = &ValkeyCache{embeddingModel: "mmbert", config: cfg.Valkey, embeddingProvider: cfg.EmbeddingProvider}
 		logical = []string{cfg.Valkey.Index.Name, cfg.Valkey.Index.Prefix}
 	case MilvusCacheType, HybridCacheType:
 		view = &MilvusCache{embeddingModel: "mmbert", config: cfg.Milvus}
 		logical = []string{cfg.Milvus.Collection.Name}
 	case QdrantCacheType:
-		view = &QdrantCache{embeddingModel: "mmbert"}
+		view = &QdrantCache{embeddingModel: "mmbert", embeddingProvider: cfg.EmbeddingProvider}
 		name := cfg.Qdrant.CollectionName
 		if name == "" {
 			name = "semantic_cache"
 		}
 		logical = []string{name}
 	}
-	settings, supported := LocalEmbeddingSettings(view)
+	settings, supported, err := LocalEmbeddingSettings(view)
+	if err != nil {
+		return cfg, "", fmt.Errorf("resolve cache embedding settings: %w", err)
+	}
 	if !supported {
 		return cfg, "", fmt.Errorf("unsupported local embedding cache backend %s", backend)
 	}

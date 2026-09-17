@@ -292,6 +292,8 @@ pub struct MmBertEmbeddingModel {
     tokenizer: Arc<Tokenizer>,
     /// Model configuration
     config: MmBertEmbeddingConfig,
+    /// Model-declared Matryoshka widths and early-exit layers.
+    matryoshka_config: MatryoshkaConfig,
     /// Model path
     model_path: String,
     /// Layer represented by the primary graph; that graph is loaded only once.
@@ -465,6 +467,7 @@ impl MmBertEmbeddingModel {
             identity,
             tokenizer: Arc::new(tokenizer),
             config,
+            matryoshka_config,
             model_path: model_path_str,
             primary_layer,
             layer_sessions,
@@ -1069,6 +1072,17 @@ impl MmBertEmbeddingModel {
     /// Get the model configuration
     pub fn config(&self) -> &MmBertEmbeddingConfig {
         &self.config
+    }
+
+    /// Return the output width declared by the loaded checkpoint.
+    pub fn embedding_dimension(&self) -> usize {
+        self.config.hidden_size
+    }
+
+    /// Return the dimensions supported by the loaded model's Matryoshka
+    /// configuration.
+    pub fn matryoshka_dimensions(&self) -> Vec<usize> {
+        self.matryoshka_config.dimensions.clone()
     }
 
     /// Get the tokenizer

@@ -14,7 +14,7 @@ WORKDIR /workspace
 RUN mkdir -p deploy/operator src/semantic-router candle-binding ml-binding nlp-binding
 COPY deploy/operator/go.mod deploy/operator/go.sum deploy/operator/
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
-COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/embedding_contract.go candle-binding/errors.go candle-binding/
 COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
 

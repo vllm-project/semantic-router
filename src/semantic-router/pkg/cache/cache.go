@@ -10,6 +10,9 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // extractUserContent returns the text portion of a user message's content.
@@ -180,21 +183,34 @@ func normalizeEmbeddingModel(model string) string {
 	return normalized
 }
 
-func semanticCacheEmbeddingDimension(configured int, embeddingModel string) int {
+func semanticCacheEmbeddingDimension(provider embedding.Provider, configured int, embeddingModel string) (int, error) {
+	if provider != nil {
+		contractProvider, ok := provider.(embedding.DimensionContractProvider)
+		if !ok {
+			return 0, fmt.Errorf("prepared embedding provider does not expose a dimension contract")
+		}
+		contract, err := contractProvider.EmbeddingDimensionContract()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get embedding dimension contract: %w", err)
+		}
+		return contract.Resolve(configured)
+	}
+	// Preserve the legacy explicit-dimension path for callers that do not have
+	// a prepared provider, such as standalone configuration validation.
 	if configured > 0 {
-		return configured
+		return configured, nil
 	}
 
-	switch normalizeEmbeddingModel(embeddingModel) {
-	case "qwen3":
-		return 1024
-	case "gemma":
-		return 768
-	case "mmbert":
-		return 768
-	case "multimodal":
-		return 384
-	default:
-		return 384
+	dimension, err := candle_binding.ResolveEmbeddingDimension(
+		normalizeEmbeddingModel(embeddingModel),
+		configured,
+	)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"failed to resolve semantic cache embedding dimension for model %q: %w",
+			normalizeEmbeddingModel(embeddingModel),
+			err,
+		)
 	}
+	return dimension, nil
 }

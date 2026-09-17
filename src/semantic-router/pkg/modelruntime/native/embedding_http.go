@@ -73,7 +73,13 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 		return nil, err
 	}
 	key, _ := identity.Key()
-	p := &EmbeddingProvider{identity: key, resource: resource, text: text, recipe: string(spec.Recipe), backend: config.EmbeddingBackendOpenAICompatible}
+	p := &EmbeddingProvider{
+		identity: key, resource: resource, text: text, recipe: string(spec.Recipe),
+		backend: config.EmbeddingBackendOpenAICompatible,
+		contract: &embedding.DimensionContract{
+			NativeDimension: len(warm), SupportedDimensions: []int{len(warm)},
+		},
+	}
 	p.text.Ready()
 	p.dimension = len(warm)
 	p.info = embedding.ModelInfo{Artifact: cfg.Model, Backend: p.backend, Dimension: p.dimension, Modalities: []string{"text"}}

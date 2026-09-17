@@ -268,3 +268,27 @@ func TestEnsureCollectionLoadedWithHooks_OnExisting(t *testing.T) {
 		t.Fatalf("onExistsRuns=%d", onExistsRuns)
 	}
 }
+
+func TestEnsureCollectionLoadedWithHooks_ValidationErrorSkipsLoad(t *testing.T) {
+	t.Parallel()
+
+	f := &fakeLifecycleClient{
+		hasCollectionFn: func(context.Context, string) (bool, error) {
+			return true, nil
+		},
+	}
+
+	err := EnsureCollectionLoadedWithHooks(
+		context.Background(),
+		f,
+		"t",
+		func(context.Context) error { return errors.New("should not create") },
+		func(context.Context) error { return errors.New("dimension mismatch") },
+	)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if f.loadCalls != 0 {
+		t.Fatalf("expected validation failure to skip LoadCollection, got %d calls", f.loadCalls)
+	}
+}

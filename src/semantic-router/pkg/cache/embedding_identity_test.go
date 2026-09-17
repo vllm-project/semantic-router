@@ -3,9 +3,13 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 type persistedSemanticRecord struct {
@@ -105,16 +109,60 @@ func TestEmbeddingIdentityIsolatesPersistentSemanticCacheWithoutDeletingLegacy(t
 
 func TestCacheEmbeddingSettingsReflectActualBackend(t *testing.T) {
 	memory := NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "mmbert"})
-	settings, ok := LocalEmbeddingSettings(memory)
-	if !ok || settings.Layer != 6 || settings.Dimension != 256 {
-		t.Fatalf("inmemory actual settings: %#v %v", settings, ok)
+	settings, ok, err := LocalEmbeddingSettings(memory)
+	if err != nil || !ok || settings.Layer != 6 || settings.Dimension != 256 {
+		t.Fatalf("inmemory actual settings: %#v %v %v", settings, ok, err)
 	}
 	persistent := &QdrantCache{embeddingModel: "mmbert"}
-	settings, ok = LocalEmbeddingSettings(persistent)
-	if !ok || settings.Layer != 0 || settings.Dimension != 768 {
-		t.Fatalf("persistent actual settings: %#v %v", settings, ok)
+	settings, ok, err = LocalEmbeddingSettings(persistent)
+	if err != nil || !ok || settings.Layer != 0 || settings.Dimension != 768 {
+		t.Fatalf("persistent actual settings: %#v %v %v", settings, ok, err)
 	}
-	if _, ok := LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "bert"})); ok {
+	if _, ok, err := LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "bert"})); err != nil || ok {
 		t.Fatal("unsupported provider received guessed identity")
+	}
+}
+
+type cacheIdentityContractProvider struct {
+	err error
+}
+
+func (p *cacheIdentityContractProvider) Embed(context.Context, string) ([]float32, error) {
+	return nil, errors.New("embedding not used")
+}
+
+func (p *cacheIdentityContractProvider) EmbedBatch(context.Context, []string) ([][]float32, error) {
+	return nil, errors.New("embedding not used")
+}
+
+func (*cacheIdentityContractProvider) Dimension() int { return 768 }
+
+func (*cacheIdentityContractProvider) Backend() string { return "cache-identity-test" }
+
+func (p *cacheIdentityContractProvider) EmbeddingDimensionContract() (embedding.DimensionContract, error) {
+	if p.err != nil {
+		return embedding.DimensionContract{}, p.err
+	}
+	return embedding.DimensionContract{NativeDimension: 768, SupportedDimensions: []int{256, 768}}, nil
+}
+
+func TestCacheIdentityAndNamespacePropagateDimensionErrors(t *testing.T) {
+	provider := &cacheIdentityContractProvider{err: errors.New("model is not loaded")}
+	backend := &RedisCache{
+		embeddingModel:    "mmbert",
+		embeddingProvider: provider,
+		config:            &config.RedisConfig{},
+	}
+	if _, supported, err := LocalEmbeddingSettings(backend); err == nil || supported {
+		t.Fatalf("dimension error was not returned: supported=%v err=%v", supported, err)
+	}
+
+	cfg := namespaceFixture(RedisCacheType, 0)
+	cfg.EmbeddingProvider = provider
+	if _, _, err := PrepareEmbeddingNamespace(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+		t.Fatal("identity resolver called after dimension failure")
+		return embedding.ContentIdentity{}, nil
+	}); err == nil {
+		t.Fatal("namespace preparation swallowed dimension error")
 	}
 }

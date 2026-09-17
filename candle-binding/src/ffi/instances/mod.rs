@@ -79,6 +79,8 @@ struct Info {
     modalities: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pair_scorer: Option<PairScorerSelection>,
+    native_dimension: usize,
+    supported_dimensions: Vec<usize>,
 }
 
 // Internal storage only: each FFI inference entry point has a distinct request
@@ -98,6 +100,24 @@ enum Model {
     LoRAToken(Box<LoRATokenClassifier>),
     Guard(Box<Mutex<Qwen3GuardModel>>),
     Generative(Box<Mutex<Qwen3MultiLoRAClassifier>>),
+}
+
+fn embedding_dimension_contract(model: &Model) -> (usize, Vec<usize>) {
+    let contract = match model {
+        Model::BertEmbedding(model) => (model.embedding_dimension(), vec![]),
+        Model::Embedding(factory) => factory.embedding_dimension_contract().unwrap_or_default(),
+        _ => (0, vec![]),
+    };
+    if contract.0 == 0 {
+        return contract;
+    }
+
+    let mut supported = contract.1;
+    supported.retain(|dimension| *dimension > 0);
+    if !supported.contains(&contract.0) {
+        supported.push(contract.0);
+    }
+    (contract.0, supported)
 }
 
 struct Instance {
@@ -435,6 +455,11 @@ fn load_selected(
         }
         _ => bail!("capability: model type does not implement requested task"),
     };
+    let (native_dimension, supported_dimensions) = if task == "embedding" {
+        embedding_dimension_contract(&model)
+    } else {
+        (0, vec![])
+    };
     let overflow = if options.overflow.is_empty() {
         if generative || task == "pair_scores" {
             "reject".to_owned()
@@ -526,6 +551,8 @@ fn load_selected(
             labels,
             modalities,
             pair_scorer,
+            native_dimension,
+            supported_dimensions,
         },
     }))
 }

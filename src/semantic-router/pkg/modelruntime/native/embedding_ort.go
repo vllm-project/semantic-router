@@ -3,6 +3,7 @@ package native
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"path/filepath"
 
@@ -68,6 +69,13 @@ func (r *Runtime) ortEmbedding(ctx context.Context, spec config.ResolvedModelBin
 		}
 		if infoErr != nil {
 			return infoErr
+		}
+		if info.NativeDimension <= 0 {
+			return fmt.Errorf("embedding instance did not report a native dimension")
+		}
+		prepared.dimensionContract = &embedding.DimensionContract{
+			NativeDimension:     info.NativeDimension,
+			SupportedDimensions: append([]int(nil), info.SupportedDimensions...),
 		}
 		capability, infoErr := ortCapability(spec, info)
 		if infoErr != nil {

@@ -28,6 +28,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
+type classifierMappings struct {
+	categoryMapping  *classification.CategoryMapping
+	piiMapping       *classification.PIIMapping
+	jailbreakMapping *classification.JailbreakMapping
+}
+
 type routerComponents struct {
 	embeddings            *embedding.Set
 	serviceEmbeddings     *embedding.Set
@@ -269,9 +275,10 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg, components.serviceEmbeddings)
-	if components.memoryStore != nil {
-		components.resources.add(components.memoryStore.Close)
+	if err := components.buildMemoryRuntime(func(memoryCfg *config.RouterConfig) (memory.Store, error) {
+		return createMemoryStore(memoryCfg, components.serviceEmbeddings)
+	}); err != nil {
+		return nil, err
 	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
@@ -293,6 +300,35 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 }
 
 func (components *routerComponents) buildEarlyResources() error {
+	mappings, err := loadClassifierMappings(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+
+	return components.buildEarlyResourcesWith(
+		mappings,
+		func(cfg *config.RouterConfig, mappings *classifierMappings) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error) {
+			return createRouterClassifierWithMappings(cfg, mappings, classification.RecipeRuntimeOptions{
+				Runtime:    components.modelRuntime,
+				Embeddings: components.embeddings,
+			})
+		},
+		func(cfg *config.RouterConfig) (cache.CacheBackend, error) {
+			semanticCache, identity, err := createSemanticCache(cfg, components.cacheEmbeddings)
+			components.semanticCacheIdentity = identity
+			return semanticCache, err
+		},
+	)
+}
+
+func (components *routerComponents) buildEarlyResourcesWith(
+	mappings *classifierMappings,
+	buildClassifier func(
+		*config.RouterConfig,
+		*classifierMappings,
+	) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error),
+	buildCache func(*config.RouterConfig) (cache.CacheBackend, error),
+) error {
 	verifier, err := modelruntime.PrepareOwnedResponseCacheNLI(context.Background(), components.cfg, components.modelRuntime)
 	if err != nil {
 		return rollbackResources(components.resources, err)
@@ -301,26 +337,27 @@ func (components *routerComponents) buildEarlyResources() error {
 		// The cache drains and closes before its borrowed verifier is released.
 		components.resources.add(verifier.Close)
 	}
-	components.semanticCache, components.semanticCacheIdentity, err = createSemanticCache(components.cfg, components.cacheEmbeddings)
-	if err != nil {
-		return rollbackResources(components.resources, err)
-	}
-	if components.semanticCache != nil {
-		components.resources.add(components.semanticCache.Close)
-	}
 
 	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.serviceEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.modelRuntime, Embeddings: components.embeddings})
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = buildClassifier(components.cfg, mappings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 	components.classificationSvc.SetGlobalEmbeddings(components.serviceEmbeddings)
 	components.resources.add(components.recipeClassifiers.Close)
 	components.resources.add(components.classificationSvc.Close)
+
+	components.semanticCache, err = buildCache(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+	if components.semanticCache != nil {
+		components.resources.add(components.semanticCache.Close)
+	}
 	if target, ok := components.semanticCache.(interface {
 		SetPolarityVerifier(cache.PolarityVerifyFunc)
 	}); ok {
