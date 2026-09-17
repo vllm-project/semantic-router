@@ -169,11 +169,70 @@ func TestAutomaticOutputExplicitCallerHasNoRenderCalls(t *testing.T) {
 	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 	ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
 	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	_, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
+	require.NoError(t, err)
 	name := ctx.VSRSelectedDecision.ModelRefs[0].Model
-	_, err := r.prepareProviderDispatch(ctx.SemanticRequest, name, ctx.VSRSelectedDecision.Name, false, ctx)
+	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, name, ctx.VSRSelectedDecision.Name, false, ctx)
+	require.NoError(t, err)
+	response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
+	_, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, calls)
 	require.EqualValues(t, 12, *ctx.SemanticRequest.Sampling.MaxOutputTokens)
+}
+
+func TestAutomaticOutputBlockedCallerBudgetUsesRenderer(t *testing.T) {
+	for _, field := range []string{"max_tokens", "max_completion_tokens", " max_output_tokens "} {
+		t.Run(strings.TrimSpace(field), func(t *testing.T) {
+			calls := 0
+			r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
+			ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
+			setAutomaticBlockedParams(t, ctx, []string{field})
+			require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+			refs, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
+			require.NoError(t, err)
+			require.Len(t, refs, 1)
+			demand := ctx.AutomaticCandidateDemands[refs[0].Model]
+			require.Equal(t, 22, demand.InputTokens)
+			require.EqualValues(t, 32746, *demand.MaxOutputTokens)
+			require.Equal(t, 1, calls)
+			require.EqualValues(t, 12, *ctx.SemanticRequest.Sampling.MaxOutputTokens, "selection must not mutate ingress")
+			require.False(t, ctx.SemanticRequest.Sampling.AutomaticOutput)
+			dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, refs[0].Model, ctx.VSRSelectedDecision.Name, false, ctx)
+			require.NoError(t, err)
+			response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
+			_, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+			require.NoError(t, err)
+			require.Equal(t, 3, calls)
+			require.EqualValues(t, 32746, *ctx.SemanticRequest.Sampling.MaxOutputTokens)
+		})
+	}
+}
+
+func TestAutomaticOutputBlockedCallerBudgetRejectsInvalidPolicyBeforeRender(t *testing.T) {
+	calls := 0
+	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
+	ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
+	setAutomaticBlockedParams(t, ctx, []string{"max_tokens", "messages"})
+	err := r.prepareDecisionContextOverflow(ctx, "auto")
+	require.ErrorContains(t, err, "required semantic field")
+	require.Equal(t, 0, calls)
+	require.Nil(t, ctx.AutomaticCandidateDemands)
+	require.False(t, ctx.ContextCompressionApplied)
+	require.EqualValues(t, 12, *ctx.SemanticRequest.Sampling.MaxOutputTokens)
+}
+
+func setAutomaticBlockedParams(t *testing.T, ctx *RequestContext, fields []string) {
+	t.Helper()
+	payload, err := config.NewStructuredPayload(map[string]any{"default_max_tokens": "auto", "blocked_params": fields})
+	require.NoError(t, err)
+	for i := range ctx.VSRSelectedDecision.Plugins {
+		if ctx.VSRSelectedDecision.Plugins[i].Type == "request_params" {
+			ctx.VSRSelectedDecision.Plugins[i].Configuration = payload
+			return
+		}
+	}
+	t.Fatal("automatic fixture requires request_params")
 }
 
 func TestAutomaticOutputCapabilityFilterAndFastResponse(t *testing.T) {

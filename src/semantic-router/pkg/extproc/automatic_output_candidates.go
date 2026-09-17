@@ -3,6 +3,7 @@ package extproc
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -17,7 +18,22 @@ func decisionUsesAutomaticOutput(request *llmprotocol.Request, decision *config.
 		return true
 	}
 	params := decision.GetRequestParamsConfig()
-	return request.Sampling.MaxOutputTokens == nil && params != nil && params.DefaultMaxTokens.IsAuto()
+	if params == nil || !params.DefaultMaxTokens.IsAuto() {
+		return false
+	}
+	if request.Sampling.MaxOutputTokens == nil {
+		return true
+	}
+	// Request params remove blocked fields before applying defaults. Recognize
+	// that policy here without mutating ingress; EffectiveCandidateRequest still
+	// validates and applies the complete policy before any provider render.
+	for _, field := range params.BlockedParams {
+		switch strings.TrimSpace(field) {
+		case "max_tokens", "max_completion_tokens", "max_output_tokens":
+			return true
+		}
+	}
+	return false
 }
 
 // prepareAutomaticCandidates preserves the full input whenever any candidate
