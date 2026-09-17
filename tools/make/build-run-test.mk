@@ -81,6 +81,7 @@ test-semantic-router: build-router
 		fi && \
 		CGO_ENABLED=1 \
 		go test -v $$TEST_PACKAGES
+	@$(NATIVE_ENV) $(MAKE) go-tools-test go-tools-vet
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
@@ -426,7 +427,7 @@ demo-hallucination-auto: build-router download-models
 test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
 test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
-	@./tools/smoke/test-image-gen.sh
+	@./tools/test/smoke/test-image-gen.sh
 
 # ============== Modality Routing Tests ==============
 
