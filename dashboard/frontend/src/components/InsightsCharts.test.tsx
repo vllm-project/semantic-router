@@ -48,7 +48,9 @@ describe('Insights cost charts', () => {
   it('keeps missing pricing unknown and states the estimate and lifecycle scope', () => {
     const html = renderToStaticMarkup(<InsightsCharts aggregate={aggregate} />)
     expect(html).toContain('Estimated Model Cost')
-    expect(html).toContain('Estimates from recorded tokens and configured rates.')
+    expect(html).toContain(
+      'Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.',
+    )
     expect(html).toContain('<summary>How estimates work</summary>')
     expect(html).not.toMatch(/<details[^>]*\sopen(?:[\s=>]|$)/)
     expect(html.indexOf('<details')).toBeLessThan(html.indexOf('New records use'))
