@@ -57,8 +57,8 @@ func TestModelArtifactFileLoad(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
-				if err := selector.(io.Closer).Close(); err != nil {
-					t.Errorf("close %s selector: %v", algorithm, err)
+				if closeErr := selector.(io.Closer).Close(); closeErr != nil {
+					t.Errorf("close %s selector: %v", algorithm, closeErr)
 				}
 			})
 			ctx := &SelectionContext{QueryEmbedding: []float64{0.25, 0.25}, CategoryName: "math"}
