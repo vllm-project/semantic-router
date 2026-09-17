@@ -132,6 +132,71 @@ class PRChangeClassifierTests(unittest.TestCase):
 
         self.assertNotIn("image-calibration", result.selected_jobs)
 
+    def test_candle_binding_selects_riscv_qemu_smoke(self) -> None:
+        self.assert_classification(
+            "candle-binding/src/lib.rs",
+            ("quality", "security", "core-tests", "image-calibration", "riscv-qemu"),
+        )
+
+    def test_riscv_make_target_selects_qemu_smoke(self) -> None:
+        self.assert_classification(
+            "tools/make/rust.mk",
+            ("quality", "security", "image-calibration", "riscv-qemu"),
+        )
+
+    def test_riscv_router_smoke_inputs_select_qemu_job(self) -> None:
+        fixtures = {
+            "nlp-binding/nlp_binding.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "riscv-qemu",
+            ),
+            "e2e/config/config.riscv-qemu.yaml": (
+                "quality",
+                "security",
+                "riscv-qemu",
+            ),
+            "tools/ci/riscv-qemu-router-smoke.sh": (
+                "quality",
+                "security",
+                "riscv-qemu",
+            ),
+            "tools/docker/check-native-abi.sh": (
+                "quality",
+                "security",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "image-calibration",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/cache/valkey_cache_unavailable.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/extproc/router_memory_valkey.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "memory",
+                "riscv-qemu",
+            ),
+        }
+        for path, jobs in fixtures.items():
+            with self.subTest(path=path):
+                self.assert_classification(path, jobs)
+        self.assert_classification(
+            "ml-binding/ml_binding.go",
+            ("quality", "security", "core-tests", "e2e", "riscv-qemu"),
+            profiles=("ml-model-selection",),
+        )
+
     def test_runtime_cli_surface_has_explicit_integration_escalation(self) -> None:
         self.assert_classification(
             "src/vllm-sr/cli/commands/runtime.py",
@@ -157,6 +222,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             ".github/workflows/operator-ci.yml": "operator",
             ".github/workflows/integration-test-memory.yml": "memory",
             ".github/workflows/openvino-binding-ci.yml": "openvino",
+            ".github/workflows/riscv-qemu.yml": "riscv-qemu",
         }
         for path, selected in fixtures.items():
             with self.subTest(path=path):

@@ -53,6 +53,9 @@ jobs:
   paper:
     workflow: .github/workflows/paper-build.yml
     output: paper
+  riscv-qemu:
+    workflow: .github/workflows/riscv-qemu.yml
+    output: riscv_qemu
 
 domains:
   harness:
@@ -226,6 +229,27 @@ domains:
     checks: [make test-binding-minimal]
     verify: [make test-binding-lora]
     ci_jobs: [core-tests]
+
+  riscv-qemu:
+    owner: native-bindings
+    paths:
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - tools/make/rust.mk
+      - tools/docker/check-native-abi.sh
+      - tools/ci/riscv-qemu-router-smoke.sh
+      - e2e/config/config.riscv-qemu.yaml
+      - src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go
+      - src/semantic-router/pkg/cache/valkey_*.go
+      - src/semantic-router/pkg/cache/exact_cache_valkey.go
+      - src/semantic-router/pkg/memory/valkey_*.go
+      - src/semantic-router/pkg/vectorstore/valkey_*.go
+      - src/semantic-router/pkg/extproc/router_memory.go
+      - src/semantic-router/pkg/extproc/router_memory_valkey.go
+      - src/semantic-router/pkg/extproc/router_memory_valkey_unavailable.go
+    checks: []
+    ci_jobs: [riscv-qemu]
 
   onnx-artifact-tools:
     owner: native-bindings
@@ -538,6 +562,15 @@ profiles:
       - src/semantic-router/pkg/config/complexity_boundaries.go
       - src/semantic-router/pkg/classification/complexity_remote_backend.go
       - src/semantic-router/pkg/classification/complexity_remote_eval.go
+  local-classifier-backend:
+    owner: e2e
+    coverage_role: local-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/local-classifier-backend/**
+      - e2e/testcases/local_classifier_routing.go
+      - src/semantic-router/pkg/classification/generic_classifier_local.go
+      - src/semantic-router/pkg/classification/native_labels.go
   external-gateway-responses:
     owner: e2e
     coverage_role: responses-state-with-external-dispatch
