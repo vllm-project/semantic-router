@@ -46,7 +46,10 @@ func runProtectionOrchestration(t *testing.T, scenario protectionScenario) {
 		}
 		input := protectionScenarioInput(router, scenario, step, turn, request)
 		before := calls
-		ctx, result, ref, _ := router.applyRouterLearning(input.selCtx, input.baseResult, input.selectedModelRef, input.ctx)
+		ctx, result, ref, _, learningErr := router.applyRouterLearning(input.selCtx, input.baseResult, input.selectedModelRef, input.ctx)
+		if learningErr != nil {
+			t.Fatal(learningErr)
+		}
 		wantSampling := scenario.Mode == "bypass" || step.Expected.Sampling
 		assertAdaptationSampled(t, input.ctx, wantSampling)
 		if (calls > before) != wantSampling {

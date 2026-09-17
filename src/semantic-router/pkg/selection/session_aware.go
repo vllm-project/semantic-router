@@ -2,6 +2,7 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -176,13 +177,19 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	current := strings.TrimSpace(session.PreviousModel)
 	driftDetected := s.decisionDriftDetected(selCtx, session)
 	trace := s.newPolicyTrace(selCtx, base, session, current, false, driftDetected)
+	owner := CurrentSessionCandidate(selCtx, base, current)
+	if current != "" && owner == nil &&
+		((session.ActiveToolLoop && s.config.ToolLoopHardLock) || (session.HasNonPortableContext && s.config.ContextPortabilityHardLock)) {
+		return nil, fmt.Errorf("%w: excluded exact session owner %q", ErrNoEligibleCandidates, current)
+	}
 	if signal, reason := currentModelIssue(selCtx.CandidateModels, current); signal != "" {
 		trace.MissingSignals = append(trace.MissingSignals, signal)
 		return s.wrapBaseSelection(base, reason, trace), nil
 	}
 
-	if CurrentSessionCandidate(selCtx, base, current) == nil {
-		return nil, fmt.Errorf("%w: ambiguous session candidate %q", ErrNoEligibleCandidates, current)
+	if owner == nil {
+		trace.MissingSignals = append(trace.MissingSignals, "previous_candidate_not_in_candidates")
+		return s.wrapBaseSelection(base, "previous_candidate_not_in_candidates", trace), nil
 	}
 
 	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
@@ -283,6 +290,9 @@ func (s *SessionAwareSelector) decisionDriftDetected(selCtx *SelectionContext, s
 func (s *SessionAwareSelector) selectBase(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if s.baseSelector != nil && s.baseSelector.Method() != MethodSessionAware {
 		result, err := s.baseSelector.Select(ctx, selCtx)
+		if errors.Is(err, ErrNoEligibleCandidates) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		if err == nil && result != nil {
 			copy := *result
 			// Session bonuses are higher-is-better utilities. Convert a latency

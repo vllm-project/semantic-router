@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -120,7 +122,7 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 	input routerLearningInput,
 	preflight routerLearningProtectionPreflight,
 	proposal routerLearningDecision,
-) routerLearningDecision {
+) (routerLearningDecision, error) {
 	baseResult := firstNonNilSelectionResult(proposal.selectionResult, input.baseResult)
 	baseCtx := firstNonNilSelectionContext(proposal.selectionContext, input.selCtx)
 	baseRef := firstNonNilModelRef(proposal.selectedModelRef, input.selectedModelRef)
@@ -132,25 +134,37 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 	if !preflight.enabled || preflight.mode == config.DecisionAdaptationModeBypass {
 		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
 		decision.policy = preflight.policy
-		return decision
+		return decision, nil
 	}
 	learningCtx := r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
 	if rescue, ok := r.protectionRescueDecision(input, learningCtx, preflight, proposal); ok {
-		return rescue
+		return rescue, nil
 	}
 	if protected, ok := sessionScopeProtectedResult(preflight.config, baseResult, learningCtx, preflight.identity); ok {
-		return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal)
+		return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal), nil
 	}
 
-	result, ok := r.selectProtectionResult(preflight.config, baseResult, learningCtx)
-	if !ok {
+	result, err := r.selectProtectionResult(selectionRequestContext(input.ctx), preflight.config, baseResult, learningCtx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return routerLearningDecision{}, err
+		}
+		session := learningCtx.AgenticSession
+		hardOwnership := session != nil && (session.ActiveToolLoop || session.HasNonPortableContext)
+		if preflight.mode == config.DecisionAdaptationModeApply && (errors.Is(err, selection.ErrNoEligibleCandidates) || hardOwnership) {
+			return routerLearningDecision{}, fmt.Errorf("router learning protection: %w", err)
+		}
 		decision.selectionContext = input.selCtx
 		decision.selectionResult = input.baseResult
 		decision.selectedModelRef = input.selectedModelRef
 		decision.policy = newProtectionPolicy(input.ctx, preflight.config, preflight.mode, routerLearningActionHoldCurrent, "protection_unavailable", preflight.scope)
-		return decision
+		if preflight.mode == config.DecisionAdaptationModeObserve {
+			decision.policy.Action = routerLearningActionObserve
+			decision.policy.Reason = "observe_only"
+		}
+		return decision, nil
 	}
-	return r.protectionDecisionFromResult(input, learningCtx, result, preflight, proposal)
+	return r.protectionDecisionFromResult(input, learningCtx, result, preflight, proposal), nil
 }
 
 func (r *OpenAIRouter) protectionRescueDecision(
@@ -336,10 +350,11 @@ func protectionMode(ctx *RequestContext) string {
 }
 
 func (r *OpenAIRouter) selectProtectionResult(
+	ctx context.Context,
 	cfg config.RouterLearningProtectionConfig,
 	baseResult *selection.SelectionResult,
 	learningCtx *selection.SelectionContext,
-) (*selection.SelectionResult, bool) {
+) (*selection.SelectionResult, error) {
 	selector := selection.NewSessionAwareSelector(protectionSelectionConfig(cfg))
 	selector.SetBaseSelector(learningSelectionResult{result: baseResult})
 	if r.Config.ModelConfig != nil {
@@ -349,16 +364,14 @@ func (r *OpenAIRouter) selectProtectionResult(
 		selector.SetLookupTable(r.LookupTable)
 	}
 
-	result, err := selector.Select(context.Background(), learningCtx)
+	result, err := selector.Select(ctx, learningCtx)
 	if err != nil {
-		logging.Warnf("[RouterLearning] protection failed: %v", err)
-		return nil, false
+		return nil, err
 	}
 	if err := selection.ValidateSelectionResult(learningCtx, result); err != nil {
-		logging.Warnf("[RouterLearning] protection produced invalid result: %v", err)
-		return nil, false
+		return nil, err
 	}
-	return result, true
+	return result, nil
 }
 
 func (r *OpenAIRouter) protectionIdentity(

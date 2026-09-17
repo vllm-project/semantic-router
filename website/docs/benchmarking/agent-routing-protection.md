@@ -67,7 +67,8 @@ Covered contracts include:
 - Provider-bound response state and release with portable history.
 - Small score advantages being held and clear advantages allowing a switch.
 - Warm-cache sampling suppression.
-- Candidate-set changes preventing restoration of an ineligible previous model.
+- Candidate-set changes preventing restoration of an ineligible previous model;
+  a hard-bound continuation with an excluded owner is rejected, not rerouted.
 - Session-scope continuity and conversation-scope isolation.
 - Missing identity, observe mode and bypass mode retaining their current semantics.
 
@@ -79,7 +80,9 @@ cache-cost and history-penalty tuning; it is not a production tuning recommendat
 
 The report identifies its schema and the SHA-256 of the exact corpus bytes.
 It contains every proposed/final model, preflight reason, Replay action/reason,
-hard-lock result, scripted cache warmth and assertion failure.
+hard-lock result, scripted cache warmth and assertion failure. Rejected steps
+use `rejected: true`, an empty final model, and a terminal rejection outcome.
+They do not write a new session owner and are not counted as model switches.
 
 Metrics include contract pass rate, switches, blocked-switch violations, unsafe
 sampling violations, unnecessary switches, missed **scripted** opportunities and

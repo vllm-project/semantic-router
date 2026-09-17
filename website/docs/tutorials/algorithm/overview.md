@@ -123,7 +123,11 @@ traffic before using them for production routing.
   to the first reference.
 - Router Learning session memory retains the selected candidate's controls.
   Protection can hold that exact choice across tool-loop continuations even
-  when a later base selection prefers another effort of the same model.
+  when a later base selection prefers another effort of the same model. If that
+  exact owner is excluded during an active tool loop or nonportable continuation,
+  routing rejects the request rather than restoring the owner or falling back
+  to a different effort. Portable turns may select a new eligible candidate;
+  observe and bypass modes do not enforce the protection decision.
 - Candidate model names must resolve through `routing.modelCards` and
   `providers.models` in a complete config.
 - Learned selectors need artifacts produced for the same embedding dimension

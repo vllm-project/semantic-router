@@ -10,7 +10,10 @@ func (r *OpenAIRouter) applyRouterLearning(
 	baseResult *selection.SelectionResult,
 	selectedModelRef *config.ModelRef,
 	ctx *RequestContext,
-) (*selection.SelectionContext, *selection.SelectionResult, *config.ModelRef, bool) {
+) (*selection.SelectionContext, *selection.SelectionResult, *config.ModelRef, bool, error) {
+	if err := r.validateProtectedCandidateOwnership(selCtx, ctx); err != nil {
+		return nil, nil, nil, false, err
+	}
 	input := routerLearningInput{
 		selCtx:           selCtx,
 		baseResult:       baseResult,
@@ -20,14 +23,20 @@ func (r *OpenAIRouter) applyRouterLearning(
 
 	preflight := r.applyProtectionPreflight(input)
 	adaptation := r.applyLearningAdaptation(input, preflight)
-	protection := r.applyProtectionSwitch(input, preflight, adaptation)
+	protection, err := r.applyProtectionSwitch(input, preflight, adaptation)
+	if err != nil {
+		if ctx != nil {
+			ctx.VSRSelectionReasoning = err.Error()
+		}
+		return nil, nil, nil, false, err
+	}
 	recordRouterLearningPolicies(ctx, preflight, adaptation, protection)
 
 	finalCtx := firstNonNilSelectionContext(protection.selectionContext, adaptation.selectionContext, selCtx)
 	finalResult := firstNonNilSelectionResult(protection.selectionResult, adaptation.selectionResult, baseResult)
 	finalRef := firstNonNilModelRef(protection.selectedModelRef, adaptation.selectedModelRef, selectedModelRef)
 	applied := learningChangesModel(baseResult, finalResult)
-	return finalCtx, finalResult, finalRef, applied
+	return finalCtx, finalResult, finalRef, applied, nil
 }
 
 func (r *OpenAIRouter) applyLearningAdaptation(

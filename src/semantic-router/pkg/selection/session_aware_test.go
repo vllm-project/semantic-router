@@ -2,12 +2,25 @@ package selection
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
+
+func TestSessionAwareSelectorPropagatesBasePolicyRejection(t *testing.T) {
+	for _, cause := range []error{fmt.Errorf("wrapped policy denial: %w", ErrNoEligibleCandidates), context.Canceled, context.DeadlineExceeded} {
+		selector := NewSessionAwareSelector(nil)
+		selector.SetBaseSelector(stubSelector{err: cause})
+		result, err := selector.Select(context.Background(), &SelectionContext{CandidateModels: []config.ModelRef{{Model: "fallback"}}})
+		if !errors.Is(err, cause) || result != nil {
+			t.Fatalf("base denial became a static fallback: result=%+v err=%v", result, err)
+		}
+	}
+}
 
 func TestSessionAwareSelectorPreservesLatencyScoreDirection(t *testing.T) {
 	selector := NewSessionAwareSelector(nil)

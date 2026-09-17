@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -69,7 +70,31 @@ func protectionScenarioInput(router *OpenAIRouter, scenario protectionScenario, 
 func executeProtectionStep(t *testing.T, router *OpenAIRouter, input routerLearningInput, scenarioID string, step protectionStep, turn int) protectionRow {
 	t.Helper()
 	preflight := router.applyProtectionPreflight(input)
-	decision := router.applyProtectionSwitch(input, preflight, routerLearningDecision{})
+	decision, protectionErr := router.applyProtectionSwitch(input, preflight, routerLearningDecision{})
+	if protectionErr != nil {
+		if !errors.Is(protectionErr, selection.ErrNoEligibleCandidates) {
+			t.Fatalf("%s/%s: %v", scenarioID, step.ID, protectionErr)
+		}
+		if decision.selectedModelRef != nil || decision.selectionResult != nil {
+			t.Fatal("rejected protection returned a routable candidate")
+		}
+		response := router.respondSelectionRejected(input.ctx, "public", protectionErr)
+		if response.GetImmediateResponse().GetStatus().GetCode() != 503 || response.GetRequestBody() != nil {
+			t.Fatal("protection rejection did not terminate the request")
+		}
+		// A rejection has no selected-candidate policy to record. Report the
+		// terminal outcome and do not publish a new session owner.
+		session := input.selCtx.AgenticSession
+		row := protectionRow{
+			Scenario: scenarioID, Step: step.ID, Turn: turn, Category: step.Expected.Category,
+			Previous: session.PreviousModel, Proposal: step.Proposal, Rejected: true,
+			CandidateCount: len(input.selCtx.CandidateModels), SamplingAllowed: preflight.samplingAllowed,
+			PreflightReason: preflight.policy.Reason, Action: "reject", Reason: "selection_rejected",
+			HardLocked: session.ActiveToolLoop || session.HasNonPortableContext, CacheWarmth: session.CacheWarmth,
+		}
+		row.Failures = protectionFailures(row, step.Expected)
+		return row
+	}
 	recordRouterLearningPolicies(input.ctx, preflight, routerLearningDecision{}, decision)
 	finalCtx := firstNonNilSelectionContext(decision.selectionContext, input.selCtx)
 	finalResult := firstNonNilSelectionResult(decision.selectionResult, input.baseResult)
