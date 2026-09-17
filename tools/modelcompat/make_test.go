@@ -24,9 +24,21 @@ func TestQualificationMakeRequiresCommittedSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = append(data, []byte("\nrust-ci:\n\t@:\n")...)
+	toolRegistry, err := os.ReadFile("../../tools/make/go-tools.mk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(append(toolRegistry, '\n'), data...)
+	data = append(data, []byte("\nrust rust-ci:\n\t@:\n")...)
 	writeMakeFixtureFile(t, filepath.Join(repo, "Makefile"), data)
-	runGit("add", "Makefile")
+	toolDir := filepath.Join(repo, "tools/modelcompat")
+	if mkdirErr := os.MkdirAll(toolDir, 0o700); mkdirErr != nil {
+		t.Fatal(mkdirErr)
+	}
+	for _, name := range []string{"main.go", "main_test.go", "make_test.go", "main_integration_test.go"} {
+		writeMakeFixtureFile(t, filepath.Join(toolDir, name), []byte("package main\n"))
+	}
+	runGit("add", ".")
 	runGit("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
 		"commit", "-q", "-s", "-m", "Test fixture")
 	runMake := func(args ...string) ([]byte, error) {
@@ -34,16 +46,27 @@ func TestQualificationMakeRequiresCommittedSources(t *testing.T) {
 		command.Dir = repo
 		return command.CombinedOutput()
 	}
-	if output, err := runMake("check-candle-qualification-source"); err != nil {
-		t.Fatalf("clean source rejected: %v\n%s", err, output)
+	if output, sourceErr := runMake("check-candle-qualification-source"); sourceErr != nil {
+		t.Fatalf("clean source rejected: %v\n%s", sourceErr, output)
 	}
 	for target, command := range map[string]string{
-		"qualify-candle-cpu": "go run ../../tools/modelcompat/main.go qualify-candle-cpu",
-		"test":               "go test -race -count=1 -v ../../tools/modelcompat/*.go",
+		"qualify-candle-cpu":      "go run ../../tools/modelcompat/main.go qualify-candle-cpu",
+		"test-modelcompat":        "go test -race",
+		"test-modelcompat-native": "go test -race -count=1 -v -run '^TestNativeCandleCPUCommandRoundTrip$'",
 	} {
-		if output, err := runMake("--dry-run", target); err != nil || !strings.Contains(string(output), command) {
-			t.Fatalf("make %s must run the tools entrypoint: %v\n%s", target, err, output)
+		if output, dryRunErr := runMake("--dry-run", target); dryRunErr != nil || !strings.Contains(string(output), command) {
+			t.Fatalf("make %s must run the tools entrypoint: %v\n%s", target, dryRunErr, output)
 		}
+	}
+	output, err := runMake("--dry-run", "test-modelcompat")
+	if err != nil || strings.Contains(string(output), "main_integration_test.go") ||
+		!strings.Contains(string(output), "../../tools/modelcompat/main_test.go") ||
+		!strings.Contains(string(output), "../../tools/modelcompat/make_test.go") {
+		t.Fatalf("offline command must include hermetic tests only: %v\n%s", err, output)
+	}
+	if output, err := runMake("test-modelcompat-native", "CANDLE_MODEL_PATH="); err == nil ||
+		!strings.Contains(string(output), "CANDLE_MODEL_PATH is required") {
+		t.Fatalf("native test must reject missing checkpoint before building: %v\n%s", err, output)
 	}
 	writeMakeFixtureFile(t, filepath.Join(repo, "Makefile"), append(data, []byte("\n# dirty\n")...))
 	if output, err := runMake("qualify-candle-cpu"); err == nil || !strings.Contains(string(output), "tracked changes found") {

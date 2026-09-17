@@ -63,7 +63,7 @@ class RecipeConformanceTest(unittest.TestCase):
             },
         )
         self.assertEqual(len(mom.decisions), 16)
-        self.assertEqual(mom.variants, 307)
+        self.assertEqual(mom.variants, 315)
         self.assertEqual(
             mom.coverage["signals"]["by_family"]["classifier"]["asserted"],
             ["classifier:content-risk"],

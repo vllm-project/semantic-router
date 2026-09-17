@@ -1,8 +1,10 @@
 import os
+import shlex
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PERFORMANCE_MAKE = REPO_ROOT / "tools/make/performance.mk"
@@ -24,6 +26,9 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
                 self.assertIn("injected benchmark failure", result.stderr)
                 self.assertEqual(len(invocations), calls, invocations)
                 self.assertTrue(all(line.startswith("test ") for line in invocations))
+                for invocation in invocations:
+                    arguments = shlex.split(invocation)
+                    self.assertEqual(arguments[arguments.index("-run") + 1], "^$")
                 self.assertIn("BenchmarkCaptured", output)
 
     def test_successful_benchmarks_continue_to_consumers(self) -> None:
@@ -41,6 +46,21 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
                     output.count("BenchmarkCaptured"), expected.count("test")
                 )
 
+    def test_fixture_ignores_parent_make_execution_flags(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            MAKEFLAGS="n",
+            MFLAGS="-n",
+            MAKEOVERRIDES="SHELL=/nonexistent-shell",
+            MAKEFILES="/nonexistent-parent-makefile",
+        ):
+            result, calls, _ = self._run_target(
+                "perf-bench-looper", "src/semantic-router", "bench-results-looper.txt"
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("injected benchmark failure", result.stderr)
+        self.assertEqual(len(calls), 1)
+
     def _run_target(
         self, target: str, failed_suite: str, report: str
     ) -> tuple[subprocess.CompletedProcess[str], list[str], str]:
@@ -50,7 +70,7 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
                 (root / name).mkdir(parents=True)
             fixture = root / "fixture.mk"
             fixture.write_text(
-                "LOG_TARGET = :\nNATIVE_ENV = PERF_TEST_NATIVE=1\nbuild-router:\n\t@:\n"
+                "LOG_TARGET = :\nNATIVE_ENV = PERF_TEST_NATIVE=1\nrust rust-ci:\n\t@:\ndownload-models-perf:\n\t@:\nperf-model-baseline:\n\t@:\n"
             )
             go = root / "bin/go"
             go.write_text(
@@ -68,7 +88,11 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
             updater.write_text('#!/bin/sh\necho baseline >> "$PERF_TEST_CALLS"\n')
             updater.chmod(0o755)
             calls = root / "calls.txt"
-            environment = dict(os.environ)
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in {"MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKEFILES"}
+            }
             environment.update(
                 PATH=str(root / "bin") + os.pathsep + environment.get("PATH", ""),
                 PERF_TEST_CALLS=str(calls),

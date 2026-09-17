@@ -25,7 +25,7 @@ func (r *Runtime) SequenceWindows(ctx context.Context, spec config.ResolvedModel
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: window provider unavailable", binding.ErrCapability)
 	}
-	resource, model, err := r.prepareCandleSequence(ctx, windowLoadSpec(spec))
+	resource, model, err := r.prepareCandleSequence(ctx, windowLoadSpec(spec), window.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -35,6 +35,7 @@ func (r *Runtime) SequenceWindows(ctx context.Context, spec config.ResolvedModel
 		return nil, err
 	}
 	capability := candleCapability(spec, info)
+	capability.Limits.DocumentTokens = info.DocumentMaxInputTokens
 	return finishWindowTask(ctx, spec, r.sequenceWindows, capability, resource, window,
 		func(_ context.Context, _ io.Closer, input tasks.TextWindowsRequest) (tasks.WindowedLabelDistribution, error) {
 			result, err := model.ClassifyWindows(input.Text, candle.SequenceWindowOptions{Size: input.Size, Overlap: input.Overlap})
@@ -62,6 +63,7 @@ func (r *Runtime) ortSequenceWindows(ctx context.Context, spec config.ResolvedMo
 	var capability binding.Capability
 	if err == nil {
 		capability, err = ortCapability(spec, info)
+		capability.Limits.DocumentTokens = info.DocumentMaxInputTokens
 	}
 	if err != nil {
 		_ = resource.Close()
@@ -96,7 +98,7 @@ func (r *Runtime) ScoreWindows(ctx context.Context, spec config.ResolvedModelBin
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: window provider unavailable", binding.ErrCapability)
 	}
-	resource, model, err := r.prepareCandleScores(ctx, windowLoadSpec(spec))
+	resource, model, err := r.prepareCandleScores(ctx, windowLoadSpec(spec), window.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +108,7 @@ func (r *Runtime) ScoreWindows(ctx context.Context, spec config.ResolvedModelBin
 		return nil, err
 	}
 	capability := candleCapability(spec, info)
+	capability.Limits.DocumentTokens = info.DocumentMaxInputTokens
 	return finishWindowTask(ctx, spec, r.scoreWindows, capability, resource, window,
 		func(_ context.Context, _ io.Closer, input tasks.TextWindowsRequest) (tasks.WindowedLabelScores, error) {
 			result, err := model.ScoreWindows(input.Text, candle.SequenceWindowOptions{Size: input.Size, Overlap: input.Overlap})
@@ -137,6 +140,7 @@ func (r *Runtime) ortScoreWindowsWithPolicy(ctx context.Context, spec config.Res
 	var capability binding.Capability
 	if err == nil {
 		capability, err = ortCapability(spec, info)
+		capability.Limits.DocumentTokens = info.DocumentMaxInputTokens
 	}
 	if err != nil {
 		_ = resource.Close()
@@ -168,9 +172,9 @@ func (r *Runtime) ortScoreWindowsWithPolicy(ctx context.Context, spec config.Res
 // finishWindowTask owns the shared window contract across providers and head
 // types. Providers execute complete windows; routing policy reduces the output.
 func finishWindowTask[O any](ctx context.Context, spec config.ResolvedModelBinding, task *binding.Task[tasks.TextWindowsRequest, O], capability binding.Capability, resource *binding.Resource, window tasks.TextWindowsRequest, infer func(context.Context, io.Closer, tasks.TextWindowsRequest) (O, error)) (*binding.Resolved[tasks.TextWindowsRequest, O], error) {
-	if window.Size > capability.Limits.EffectiveTokens() {
+	if err := validateWindowCapability(spec, capability, window); err != nil {
 		_ = resource.Close()
-		return nil, fmt.Errorf("%w: window exceeds effective token budget", binding.ErrCapability)
+		return nil, err
 	}
 	capability.Limits.Overflow = "window"
 	capability.Window = &binding.WindowCapability{Size: window.Size, Overlap: window.Overlap}
@@ -182,15 +186,35 @@ func finishWindowTask[O any](ctx context.Context, spec config.ResolvedModelBindi
 				var zero O
 				return zero, fmt.Errorf("%w: window settings differ from the prepared consumer", binding.ErrInvalidInput)
 			}
-			return infer(ctx, value, input)
+			output, err := infer(ctx, value, input)
+			if err == nil {
+				if usage, ok := any(output).(interface{ InputMetadata() *tasks.InputUsage }); ok && usage.InputMetadata() != nil {
+					err = capability.Limits.CheckInput(usage.InputMetadata().OriginalTokens)
+				}
+			}
+			return output, err
 		}, warmup)
+}
+
+// A native scan capability is distinct from the position capacity of one forward.
+// Neither a configured document budget nor a large model name proves coverage.
+func validateWindowCapability(spec config.ResolvedModelBinding, capability binding.Capability, window tasks.TextWindowsRequest) error {
+	limits := capability.Limits
+	if limits.ForwardTokens() < window.Size {
+		return fmt.Errorf("%w: window exceeds native forward capacity", binding.ErrCapability)
+	}
+	if spec.Deployment.Input.MaxTokens <= 0 || limits.DocumentTokens < spec.Deployment.Input.MaxTokens {
+		return fmt.Errorf("%w: native window task cannot cover the document budget", binding.ErrCapability)
+	}
+	if window.Size > spec.Deployment.Input.MaxTokens {
+		return fmt.Errorf("%w: window exceeds document budget", binding.ErrCapability)
+	}
+	return nil
 }
 
 // The window operation owns scanning. Individual windows must fit; the native
 // loader's single-input overflow option never truncates a windowed request.
 func windowLoadSpec(spec config.ResolvedModelBinding) config.ResolvedModelBinding {
-	if spec.Deployment.Input.Overflow == "window" {
-		spec.Deployment.Input.Overflow = "reject"
-	}
+	spec.Deployment.Input.Overflow = "reject"
 	return spec
 }
