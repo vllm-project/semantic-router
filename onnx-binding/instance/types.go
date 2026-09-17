@@ -10,6 +10,7 @@ type Options struct {
 	DeviceID                int    `json:"device_id,omitempty"`
 	Precision               string `json:"precision,omitempty"` // native (default) or MIGraphX fp16 conversion
 	MaxInputTokens          int    `json:"max_input_tokens,omitempty"`
+	DocumentMaxInputTokens  int    `json:"document_max_input_tokens,omitempty"` // typed window tasks only
 	ExecutionMaxInputTokens int    `json:"execution_max_input_tokens,omitempty"`
 	CompilationCacheDir     string `json:"compilation_cache_dir,omitempty"`
 	Overflow                string `json:"overflow,omitempty"` // reject (default) or truncate_right
@@ -111,17 +112,18 @@ type CompilationCacheEvidence struct {
 }
 
 type Info struct {
-	PairScorer          *PairScorerSelection `json:"pair_scorer,omitempty"`
-	Task                string               `json:"task"`
-	ModelLimit          int                  `json:"model_limit"`
-	TaskLimit           int                  `json:"task_limit"`
-	EffectiveLimit      int                  `json:"effective_limit"`
-	Overflow            string               `json:"overflow"`
-	Labels              []string             `json:"labels"`
-	Dimension           int                  `json:"dimension"`
-	AvailableLayers     []int                `json:"available_layers"`
-	Sessions            []SessionEvidence    `json:"sessions"`
-	CompletedInferences uint64               `json:"completed_inferences"`
+	PairScorer             *PairScorerSelection `json:"pair_scorer,omitempty"`
+	Task                   string               `json:"task"`
+	ModelLimit             int                  `json:"model_limit"`
+	TaskLimit              int                  `json:"task_limit"`
+	EffectiveLimit         int                  `json:"effective_limit"`
+	DocumentMaxInputTokens int                  `json:"document_max_input_tokens"`
+	Overflow               string               `json:"overflow"`
+	Labels                 []string             `json:"labels"`
+	Dimension              int                  `json:"dimension"`
+	AvailableLayers        []int                `json:"available_layers"`
+	Sessions               []SessionEvidence    `json:"sessions"`
+	CompletedInferences    uint64               `json:"completed_inferences"`
 }
 
 // TextWindow is a UTF-8 byte range in the original input (End exclusive).

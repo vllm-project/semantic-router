@@ -75,7 +75,10 @@ pub struct InstanceOptions {
     /// promise that the CPU nodes are limited to shape/control operations.
     pub allow_cpu_fallback: bool,
     pub max_input_tokens: Option<usize>,
-    /// Physical execution window; cannot raise the document input budget.
+    /// Whole-document budget used only by typed sequence/token window tasks.
+    /// Omission preserves the physical input budget.
+    pub document_max_input_tokens: Option<usize>,
+    /// Physical execution window; cannot raise the single-forward input budget.
     pub execution_max_input_tokens: Option<usize>,
     /// Optional owned MIGraphX compiled-program storage root.
     pub compilation_cache_dir: Option<PathBuf>,
@@ -148,6 +151,7 @@ impl InstanceOptions {
             ));
         }
         if self.max_input_tokens == Some(0)
+            || self.document_max_input_tokens == Some(0)
             || self.execution_max_input_tokens == Some(0)
             || self.intra_threads == Some(0)
         {
@@ -284,13 +288,35 @@ impl InstanceOptions {
         Ok(limit)
     }
 
+    pub fn document_limit(
+        &self,
+        physical_limit: usize,
+        supports_windows: bool,
+    ) -> UnifiedResult<usize> {
+        if self.document_max_input_tokens.is_some() && !supports_windows {
+            return Err(errors::config_error(
+                "document_max_input_tokens",
+                "requires a typed sequence or token window task",
+            ));
+        }
+        let limit = self.document_max_input_tokens.unwrap_or(physical_limit);
+        if limit == 0 || limit < physical_limit {
+            return Err(errors::validation(
+                "document_max_input_tokens",
+                &format!("at least {physical_limit}"),
+                &limit.to_string(),
+            ));
+        }
+        Ok(limit)
+    }
+
     pub fn execution_limit(&self, task_limit: usize) -> UnifiedResult<usize> {
-        let document_limit = self.effective_limit(task_limit)?;
-        let limit = self.execution_max_input_tokens.unwrap_or(document_limit);
-        if limit == 0 || limit > document_limit {
+        let physical_limit = self.effective_limit(task_limit)?;
+        let limit = self.execution_max_input_tokens.unwrap_or(physical_limit);
+        if limit == 0 || limit > physical_limit {
             return Err(errors::validation(
                 "execution_max_input_tokens",
-                &format!("1..={document_limit}"),
+                &format!("1..={physical_limit}"),
                 &limit.to_string(),
             ));
         }
@@ -797,6 +823,31 @@ mod tests {
             ..Default::default()
         };
         assert!(options.effective_limit(512).is_err());
+    }
+
+    #[test]
+    fn document_budget_does_not_raise_physical_execution_capacity() {
+        let mut options = InstanceOptions {
+            model_path: "unused".into(),
+            max_input_tokens: Some(32768),
+            document_max_input_tokens: Some(262144),
+            execution_max_input_tokens: Some(32768),
+            ..Default::default()
+        };
+        assert_eq!(options.document_limit(32768, true).unwrap(), 262144);
+        assert_eq!(options.effective_limit(32768).unwrap(), 32768);
+        assert_eq!(options.execution_limit(32768).unwrap(), 32768);
+        assert!(options.document_limit(32768, false).is_err());
+        options.execution_max_input_tokens = Some(32769);
+        assert!(options.execution_limit(32768).is_err());
+        options.execution_max_input_tokens = None;
+        options.document_max_input_tokens = Some(32767);
+        assert!(options.document_limit(32768, true).is_err());
+        options.document_max_input_tokens = Some(0);
+        assert!(options.validate_configuration().is_err());
+        options.document_max_input_tokens = None;
+        assert_eq!(options.document_limit(32768, true).unwrap(), 32768);
+        assert_eq!(options.document_limit(32768, false).unwrap(), 32768);
     }
 
     #[test]

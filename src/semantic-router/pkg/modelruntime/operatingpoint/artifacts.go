@@ -176,7 +176,7 @@ func (p *Policy) validateMetadata(root string) error {
 	if err = json.Unmarshal(data, &metadata); err != nil {
 		return err
 	}
-	if metadata.ProblemType != "multi_label_classification" || (metadata.Pooling != "mean" && metadata.Pooling != "cls") || metadata.MaxPositions < p.MaxTokens() || metadata.PadTokenID == nil || *metadata.PadTokenID != *p.definition.Input.PadTokenID {
+	if metadata.ProblemType != "multi_label_classification" || (metadata.Pooling != "mean" && metadata.Pooling != "cls") || metadata.MaxPositions < p.Window().Size || metadata.PadTokenID == nil || *metadata.PadTokenID != *p.definition.Input.PadTokenID {
 		return fmt.Errorf("model config does not declare the operating point's independent head, pooling or input contract")
 	}
 	if len(metadata.ID2Label) != len(p.definition.Labels) || len(metadata.Label2ID) != len(p.definition.Labels) {

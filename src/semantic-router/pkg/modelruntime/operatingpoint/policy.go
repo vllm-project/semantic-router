@@ -206,7 +206,7 @@ func (p *Policy) Window() tasks.TextWindowsRequest {
 func (p *Policy) MaxTokens() int { return p.definition.Input.MaxDocumentTokens }
 
 func (p *Policy) ValidateCapability(c binding.Capability) error {
-	if c.Contract != "label_scores.v1" || !slices.Equal(c.Labels, p.definition.Labels) || c.Limits.EffectiveTokens() != p.MaxTokens() || c.Limits.Overflow != "window" {
+	if c.Contract != "label_scores.v1" || !slices.Equal(c.Labels, p.definition.Labels) || c.Limits.EffectiveTokens() != p.MaxTokens() || c.Limits.Overflow != "window" || c.Limits.ForwardTokens() < p.Window().Size {
 		return fmt.Errorf("%w: actual owned head/execution differs from operating point", binding.ErrCapability)
 	}
 	if _, err := p.selectExecution(c.Provider, c.Precision, c.Device); err != nil {
