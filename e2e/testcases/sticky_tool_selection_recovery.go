@@ -46,7 +46,7 @@ func testStickyToolSelectionRecovery(
 		return fmt.Errorf("restart recovery precondition retained %d tools, want %d", len(retained.Tools), stickyToolSelectionMaxTools)
 	}
 
-	if err := deleteSemanticRouterPod(ctx, client, opts); err != nil {
+	if err := restartStickySemanticRouterContainer(ctx, client, opts); err != nil {
 		return err
 	}
 	if err := waitForSemanticRouterReady(ctx, client, opts); err != nil {
