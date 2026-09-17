@@ -68,7 +68,10 @@ func TestRedisStoreLuaContractsKeepCASAndInvalidationAtomic(t *testing.T) {
 	casFragments := []string{
 		`redis.call("HGET", state_key, "revision")`,
 		`revision ~= expected_revision`,
-		`redis.call("INCR", generation_key)`,
+		`increment_sequence(generation_key)`,
+		`local revision_key = KEYS[7]`,
+		`increment_sequence(revision_key)`,
+		`redis.pcall("INCR", key)`,
 		`ensure_slot(requested_quota_lru`,
 		`ensure_slot(global_lru`,
 		`redis.call("PEXPIRE", state_key, ttl_ms)`,
@@ -78,8 +81,10 @@ func TestRedisStoreLuaContractsKeepCASAndInvalidationAtomic(t *testing.T) {
 			t.Fatalf("CAS script is missing %q", fragment)
 		}
 	}
-	if strings.Contains(redisCompareAndSwapScript, "tonumber(expected_revision)") {
-		t.Fatal("revision comparison must stay string-based to preserve uint64 precision")
+	for _, forbidden := range []string{"tonumber(expected_revision)", "next_revision = ARGV"} {
+		if strings.Contains(redisCompareAndSwapScript, forbidden) {
+			t.Fatalf("revision allocation must stay server-side and string-based; found %q", forbidden)
+		}
 	}
 	for _, fragment := range []string{
 		`revision ~= ARGV[1]`,
@@ -90,40 +95,52 @@ func TestRedisStoreLuaContractsKeepCASAndInvalidationAtomic(t *testing.T) {
 			t.Fatalf("conditional-delete script is missing %q", fragment)
 		}
 	}
-	for _, fragment := range []string{
-		`local function ensure_zset`,
-		`local function remove_index_member`,
-		`redis.call("TYPE", key)`,
-	} {
-		if !strings.Contains(redisLoadScript, fragment) ||
-			!strings.Contains(redisCompareAndSwapScript, fragment) ||
-			!strings.Contains(redisDeleteScript, fragment) {
-			t.Fatalf("Redis scripts must guard index operations with %q", fragment)
+	for _, mutation := range []string{`redis.call("DEL"`, `redis.call("HSET"`, `redis.call("PEXPIRE"`, `redis.call("ZADD"`, `redis.call("ZREM"`} {
+		if strings.Contains(redisLoadScript, mutation) {
+			t.Fatalf("load script must remain read-only; found %q", mutation)
+		}
+	}
+	for _, script := range []string{redisCompareAndSwapScript, redisDeleteScript, redisDeleteIfTokenScript, redisDeleteRawIfCurrentScript} {
+		if !strings.Contains(script, `local function remove_index_member`) ||
+			!strings.Contains(script, `redis.call("TYPE", index_key).ok ~= "zset"`) {
+			t.Fatal("mutation scripts must leave wrong-type shared indexes untouched")
 		}
 	}
 	for _, fragment := range []string{
 		`local function remove_slot_member`,
-		`not owns_key(member)`,
+		`not valid_state_key(member)`,
 		`member_lru ~= lru_key`,
 		`member_expiry ~= expiry_key`,
 		`member_lru == member`,
-		`remove_index_member(lru_key, member, state_key)`,
-		`string.match(generation_value, "^%d+$")`,
+		`remove_index_member(lru_key, member)`,
+		`not (expected_revision == "0" or canonical_positive_decimal(expected_revision))`,
+		`not canonical_positive_decimal(generation_value)`,
+		`not canonical_positive_decimal(revision_value)`,
+		`local cleanup_budget = 64`,
+		`string.len(digest) == 64`,
 	} {
 		if !strings.Contains(redisCompareAndSwapScript, fragment) {
 			t.Fatalf("CAS script is missing corruption/ABA guard %q", fragment)
 		}
 	}
 	for _, fragment := range []string{
-		`quota_lru == state_key`,
-		`quota_expiry == state_key`,
-		`quota_lru == quota_expiry`,
-		`not owns_key(quota_lru)`,
-		`not owns_key(quota_expiry)`,
+		`local function valid_quota_indexes`,
+		`identity_prefix = key_prefix .. "identity:"`,
+		`string.match(digest, "^[0-9a-f]+$")`,
+		`not valid_quota_indexes(quota_lru, quota_expiry)`,
 	} {
 		if !strings.Contains(redisLoadScript, fragment) ||
 			!strings.Contains(redisCompareAndSwapScript, fragment) {
 			t.Fatalf("Redis scripts must reject malformed quota pointers %q", fragment)
+		}
+	}
+	for _, script := range []string{redisLoadScript, redisCompareAndSwapScript} {
+		if !strings.Contains(script, `local function canonical_positive_decimal`) ||
+			!strings.Contains(script, `string.match(value, "^[1-9]%d*$")`) {
+			t.Fatal("Redis scripts must reject zero and non-canonical state tokens")
+		}
+		if strings.Contains(script, `"^%d+$"`) {
+			t.Fatal("Redis scripts must not accept zero or leading-zero state tokens")
 		}
 	}
 }

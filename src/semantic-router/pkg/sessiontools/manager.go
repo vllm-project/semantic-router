@@ -294,8 +294,17 @@ func (m *Manager) selectWithStore(
 			return result
 		}
 
-		applied, casErr := m.store.CompareAndSwap(ctx, input.Key, loaded.expected, next, m.options.TTL, input.Quota)
+		committedRevision, applied, casErr := compareAndSwapWithRevision(
+			m.store,
+			ctx,
+			input.Key,
+			loaded.expected,
+			next,
+			m.options.TTL,
+			input.Quota,
+		)
 		if applied && casErr == nil {
+			next.Revision = committedRevision
 			result.State = next.Clone()
 			result.Selected = candidatesFromState(next)
 			result.Receipt.Merge = merged.Receipt
@@ -325,6 +334,25 @@ func (m *Manager) selectWithStore(
 	result.Receipt.Fallback = true
 	result.Receipt.Reason = SelectionReasonCASConflict
 	return result
+}
+
+func compareAndSwapWithRevision(
+	store Store,
+	ctx context.Context,
+	key string,
+	expectedRevision uint64,
+	next State,
+	ttl time.Duration,
+	quota QuotaKey,
+) (uint64, bool, error) {
+	if revisioned, ok := store.(RevisionedCompareAndSwapStore); ok {
+		return revisioned.CompareAndSwapWithRevision(ctx, key, expectedRevision, next, ttl, quota)
+	}
+	applied, err := store.CompareAndSwap(ctx, key, expectedRevision, next, ttl, quota)
+	if !applied || err != nil {
+		return 0, applied, err
+	}
+	return next.Revision, true, nil
 }
 
 func (m *Manager) loadState(ctx context.Context, input SelectionInput) stateLoadResult {

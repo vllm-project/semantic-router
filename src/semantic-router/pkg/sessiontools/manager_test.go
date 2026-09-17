@@ -20,6 +20,11 @@ type managerTestStore struct {
 	casCalls    int
 }
 
+type revisionedManagerTestStore struct {
+	managerTestStore
+	committedRevision uint64
+}
+
 func (s *managerTestStore) Load(context.Context, string) (VersionedState, error) {
 	s.loadCalls++
 	if s.loadErr != nil {
@@ -80,6 +85,27 @@ func (s *managerTestStore) DeleteIfToken(ctx context.Context, key string, token 
 }
 
 func (s *managerTestStore) Close() error { return nil }
+
+func (s *revisionedManagerTestStore) CompareAndSwapWithRevision(
+	_ context.Context,
+	_ string,
+	expectedRevision uint64,
+	next State,
+	_ time.Duration,
+	_ QuotaKey,
+) (uint64, bool, error) {
+	s.casCalls++
+	if s.found && expectedRevision != s.state.Revision {
+		return 0, false, ErrRevisionMismatch
+	}
+	if !s.found && expectedRevision != 0 {
+		return 0, false, ErrRevisionMismatch
+	}
+	next.Revision = s.committedRevision
+	s.state = next.Clone()
+	s.found = true
+	return s.committedRevision, true, nil
+}
 
 func managerTestInput() SelectionInput {
 	return SelectionInput{
@@ -186,6 +212,22 @@ func TestManagerSelect_SeedsReusesAndGrowsDeterministically(t *testing.T) {
 	third := manager.Select(context.Background(), input)
 	if want := []string{"search", "lookup", "math"}; !reflect.DeepEqual(managerToolNames(third.Selected), want) {
 		t.Fatalf("second growth = %v, want %v", managerToolNames(third.Selected), want)
+	}
+}
+
+func TestManagerSelect_UsesStoreAssignedRevision(t *testing.T) {
+	store := &revisionedManagerTestStore{committedRevision: 41}
+	manager := newManagerForTest(t, store, func() time.Time { return time.Unix(100, 0) })
+
+	result := manager.Select(context.Background(), managerTestInput())
+	if !result.Receipt.Committed {
+		t.Fatalf("receipt = %+v, want committed", result.Receipt)
+	}
+	if result.State.Revision != store.committedRevision {
+		t.Fatalf("result revision = %d, want store revision %d", result.State.Revision, store.committedRevision)
+	}
+	if store.state.Revision != store.committedRevision {
+		t.Fatalf("persisted revision = %d, want %d", store.state.Revision, store.committedRevision)
 	}
 }
 

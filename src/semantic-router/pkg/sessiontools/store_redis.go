@@ -45,9 +45,10 @@ type RedisStore struct {
 }
 
 var (
-	_ Store                  = (*RedisStore)(nil)
-	_ LoadMetadataStore      = (*RedisStore)(nil)
-	_ ConditionalDeleteStore = (*RedisStore)(nil)
+	_ Store                         = (*RedisStore)(nil)
+	_ LoadMetadataStore             = (*RedisStore)(nil)
+	_ ConditionalDeleteStore        = (*RedisStore)(nil)
+	_ RevisionedCompareAndSwapStore = (*RedisStore)(nil)
 )
 
 // NewRedisStore constructs a shared store from the resolved
@@ -112,6 +113,10 @@ func (s *RedisStore) generationKey() string {
 	return s.keyPrefix + "generation"
 }
 
+func (s *RedisStore) revisionKey() string {
+	return s.keyPrefix + "revision"
+}
+
 func redisOpaqueKey(value string) string {
 	digest := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(digest[:])
@@ -123,10 +128,10 @@ func (s *RedisStore) Load(ctx context.Context, key string) (VersionedState, erro
 	return result, err
 }
 
-// LoadWithMetadata atomically retrieves and touches one live state. Redis
-// server time is authoritative for shared LRU ordering and expiry across
-// replicas; the returned copy receives the refreshed timestamps without
-// rewriting the caller-neutral JSON representation in Lua.
+// LoadWithMetadata atomically retrieves one live state without extending its
+// lifetime. A successful manager turn refreshes the state and every quota
+// index together through CompareAndSwap; failed authorization or validation
+// must not keep a session alive merely because it was read.
 func (s *RedisStore) LoadWithMetadata(ctx context.Context, key string) (VersionedState, LoadMetadata, error) {
 	s.lifecycleMu.RLock()
 	defer s.lifecycleMu.RUnlock()
@@ -157,7 +162,7 @@ func (s *RedisStore) LoadWithMetadata(ctx context.Context, key string) (Versione
 	case redisLoadStatusMissing:
 		return VersionedState{}, LoadMetadata{}, nil
 	case redisLoadStatusCorrupted:
-		return VersionedState{}, LoadMetadata{}, ErrStateCorrupted
+		return s.corruptedLoad(ctx, stateKey, values, ErrStateCorrupted)
 	case redisLoadStatusExpired:
 		metadata, metadataErr := redisLoadMetadata(values)
 		if metadataErr != nil {
@@ -202,13 +207,14 @@ func (s *RedisStore) decodeLoadedState(
 	if err := json.Unmarshal([]byte(payload), &state); err != nil {
 		return s.corruptedLoad(ctx, stateKey, values, fmt.Errorf("invalid state JSON: %w", err))
 	}
-	if state.Revision != metadata.ObservedRevision {
+	if state.Revision != 0 && state.Revision != metadata.ObservedRevision {
 		return s.corruptedLoad(ctx, stateKey, values, fmt.Errorf(
 			"payload revision %d does not match stored revision %d",
 			state.Revision,
 			metadata.ObservedRevision,
 		))
 	}
+	state.Revision = metadata.ObservedRevision
 	nowMillis, err := redisReplyInt64(values[4])
 	if err != nil {
 		return s.corruptedLoad(ctx, stateKey, values, fmt.Errorf("invalid last-seen timestamp: %w", err))
@@ -274,30 +280,44 @@ func (s *RedisStore) CompareAndSwap(
 	ttl time.Duration,
 	quota QuotaKey,
 ) (bool, error) {
+	_, applied, err := s.CompareAndSwapWithRevision(ctx, key, expectedRevision, next, ttl, quota)
+	return applied, err
+}
+
+// CompareAndSwapWithRevision implements RevisionedCompareAndSwapStore.
+func (s *RedisStore) CompareAndSwapWithRevision(
+	ctx context.Context,
+	key string,
+	expectedRevision uint64,
+	next State,
+	ttl time.Duration,
+	quota QuotaKey,
+) (uint64, bool, error) {
 	s.lifecycleMu.RLock()
 	defer s.lifecycleMu.RUnlock()
 	if s.closed {
-		return false, ErrStoreClosed
+		return 0, false, ErrStoreClosed
 	}
 	if ttl <= 0 {
 		ttl = s.ttl
 	}
 	if expectedRevision == ^uint64(0) {
-		return false, fmt.Errorf("sessiontools: state revision overflow")
+		return 0, false, fmt.Errorf("sessiontools: state revision overflow")
 	}
 
-	nextRevision := expectedRevision + 1
 	stored := next.Clone()
-	stored.Revision = nextRevision
+	// The Lua script assigns the store-wide revision at the commit point.
+	// Zero in the payload marks the hash revision field as authoritative.
+	stored.Revision = 0
 	now := time.Now().UTC()
 	stored.LastSeenAt = now
 	stored.ExpiresAt = now.Add(ttl)
 	payload, err := json.Marshal(stored)
 	if err != nil {
-		return false, fmt.Errorf("sessiontools: failed to encode Redis state: %w", err)
+		return 0, false, fmt.Errorf("sessiontools: failed to encode Redis state: %w", err)
 	}
 	if s.maxStateBytes > 0 && len(payload) > s.maxStateBytes {
-		return false, fmt.Errorf(
+		return 0, false, fmt.Errorf(
 			"sessiontools: encoded Redis state is %d bytes, exceeds the bound of %d",
 			len(payload),
 			s.maxStateBytes,
@@ -315,9 +335,9 @@ func (s *RedisStore) CompareAndSwap(
 			quotaLRUKey,
 			quotaExpiryKey,
 			s.generationKey(),
+			s.revisionKey(),
 		},
 		strconv.FormatUint(expectedRevision, 10),
-		strconv.FormatUint(nextRevision, 10),
 		string(payload),
 		durationMilliseconds(ttl),
 		s.maxSessions,
@@ -325,25 +345,32 @@ func (s *RedisStore) CompareAndSwap(
 		s.keyPrefix,
 	).Slice()
 	if err != nil {
-		return false, fmt.Errorf("sessiontools: Redis compare-and-swap failed: %w", err)
+		return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap failed: %w", err)
 	}
 	if len(values) == 0 {
-		return false, fmt.Errorf("sessiontools: Redis compare-and-swap returned an empty response")
+		return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap returned an empty response")
 	}
 	status, err := redisReplyString(values[0])
 	if err != nil {
-		return false, fmt.Errorf("sessiontools: Redis compare-and-swap returned an invalid status: %w", err)
+		return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap returned an invalid status: %w", err)
 	}
 	if status == redisCASStatusApplied {
-		return true, nil
+		if len(values) < 2 {
+			return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap omitted the committed revision")
+		}
+		revision, revisionErr := redisReplyUint64(values[1])
+		if revisionErr != nil || revision == 0 {
+			return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap returned an invalid revision: %v", revisionErr)
+		}
+		return revision, true, nil
 	}
 	if status == redisCASStatusMismatch {
-		return false, ErrRevisionMismatch
+		return 0, false, ErrRevisionMismatch
 	}
 	if status == redisCASStatusCorrupted {
-		return false, ErrStateCorrupted
+		return 0, false, ErrStateCorrupted
 	}
-	return false, fmt.Errorf("sessiontools: Redis compare-and-swap returned unknown status %q", status)
+	return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap returned unknown status %q", status)
 }
 
 // Delete implements Store.
