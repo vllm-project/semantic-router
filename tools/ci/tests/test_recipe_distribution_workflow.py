@@ -45,7 +45,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
             "src/vllm-sr/cli/model_catalog_validation.py",
             "src/vllm-sr/pyproject.toml",
             "config/schemas/recipe-probes-v1.schema.json",
-            "tools/dev/router-calibration/**",
+            "tools/calibration/recipe/**",
             "tools/make/recipe-conformance.mk",
             "tools/release/stage_model_catalog_package.py",
             "tools/release/snapshot_model_catalog.py",

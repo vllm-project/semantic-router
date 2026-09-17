@@ -65,18 +65,18 @@ ignore = [
   "SIM108",
   "SIM115",
 ]
-"tools/agent/scripts/tuning/engine.py" = [
+"tools/calibration/tuning/engine.py" = [
   "E402",     # re-exports at bottom of module (after all definitions)
   "F401",     # re-exported names appear unused locally
   "PLR2004",  # threshold/weight magic numbers are readable inline
   "SIM102",   # nested ifs mirror the trace-tree dispatch pattern
 ]
-"tools/agent/scripts/tuning/engine_selection.py" = [
+"tools/calibration/tuning/engine_selection.py" = [
   "PLR2004",  # threshold/weight magic numbers are readable inline
 ]
-"tools/agent/scripts/tuning/scenarios/*.py" = ["PLR2004"]
-"tools/agent/scripts/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
-"tools/mcp-classifier-server/server_*.py" = [
+"tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
+"tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"tools/test/services/mcp-classifier-server/server_*.py" = [
   "N812",     # torch.nn.functional as F is the PyTorch convention
   "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode
 ]
@@ -88,8 +88,8 @@ ignore = [
 "bench/reasoning/router_reason_bench_multi_dataset.py" = [
   "PLR2004",  # answer-parsing and token thresholds are readable inline
 ]
-"tools/mock-vllm/tests/*.py" = ["PLR2004"]
-"tools/mock-vllm/app.py" = [
+"tools/test/services/mock-vllm/tests/*.py" = ["PLR2004"]
+"tools/test/services/mock-vllm/app.py" = [
   "PLR0911",  # endpoint dispatch keeps one response path per request outcome
 ]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]

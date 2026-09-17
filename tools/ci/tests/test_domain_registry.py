@@ -64,6 +64,20 @@ class DomainRegistryTests(unittest.TestCase):
             ),
         )
 
+    def test_modelcompat_tool_keeps_test_and_ci_coverage(self) -> None:
+        for path in (
+            "tools/modelcompat/main.go",
+            "tools/modelcompat/main_test.go",
+            "src/semantic-router/pkg/modelruntime/compatibility/receipt.go",
+            "tools/make/models.mk",
+        ):
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(
+                    "make check-modelcompat", commands_for_domains(domains, "checks")
+                )
+                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+
     def test_every_domain_job_is_declared_once(self) -> None:
         jobs = job_records()
         for name, domain in domain_records().items():
@@ -77,9 +91,9 @@ class DomainRegistryTests(unittest.TestCase):
             "src/semantic-router/pkg/config/canonical.go",
             "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
             "dashboard/frontend/src/generated/routerConfigContract.ts",
-            "tools/configschema/main.go",
-            "tools/openapi-gen/main.go",
-            "tools/agent/scripts/embed_generated_index.py",
+            "tools/codegen/configschema/main.go",
+            "tools/codegen/openapi/main.go",
+            "tools/codegen/embed_generated_index.py",
             "tools/make/docs.mk",
             "tools/make/golang.mk",
             "website/static/openapi/apiserver/apiserver.openapi.json",
@@ -104,6 +118,21 @@ class DomainRegistryTests(unittest.TestCase):
         self.assertNotIn(
             "make generated-contract-check", commands_for_domains(domains, "checks")
         )
+
+    def test_relocated_tools_retain_unit_check_ownership(self) -> None:
+        cases = {
+            "tools/dev/dsl/main.go": "make go-tools-test",
+            "tools/models/classifier-operating-point/main.go": "make go-tools-test",
+            "tools/calibration/image-routing/main.go": "make go-tools-test",
+            "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
+            "tools/calibration/tuning/engine.py": "make test-calibration",
+            "tools/test/services/mock-vllm/app.py": "make test-provider-simulator",
+        }
+        for path, command in cases.items():
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(command, commands_for_domains(domains, "checks"))
+                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
 
     def test_reference_sources_select_checks_without_editing_outputs(self) -> None:
         cases = {

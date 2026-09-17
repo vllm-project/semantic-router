@@ -72,7 +72,7 @@ run-redis-example: start-redis rust ## Run the Redis cache example
 	@echo "Running Redis cache example..."
 	@cd src/semantic-router && \
 		export $(NATIVE_ENV) && \
-		go run ../../tools/redis/redis-cache.go
+		go run ../../tools/dev/examples/redis/redis-cache.go
 	@echo ""
 	@echo "Example complete! Check Redis using:"
 	@echo "  • redis-cli (command line)"

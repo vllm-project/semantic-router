@@ -11,7 +11,7 @@ SOAK_STREAM_FRAMES ?= 64
 SOAK_LOG_DIR ?= /tmp/soak-logs
 SOAK_ARGS ?=
 
-SOAK_SCRIPT := tools/soak/run-soak-local.sh
+SOAK_SCRIPT := tools/test/soak/run-soak-local.sh
 SOAK_ENV := SOAK_CONFIG=$(SOAK_CONFIG) \
 	SOAK_DELAY_MS=$(SOAK_DELAY_MS) \
 	SOAK_DELAY_JITTER_MS=$(SOAK_DELAY_JITTER_MS) \
