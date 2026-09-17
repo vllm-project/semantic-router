@@ -69,6 +69,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		return nil, err
 	}
 
+	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+		return nil, err
+	}
 	required := llmprotocol.RequiredCapabilities(*request)
 	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
 		if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.isLooperRequest(ctx) {
@@ -79,6 +82,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 			return nil, protocolErr
 		}
 		dispatch = rerouted
+		if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+			return nil, err
+		}
 		ctx.ImmediateProtocolError = nil
 		// The reasoning mode is model-scoped (family/effort come from the
 		// model's reasoning config), so a reroute must re-apply it against the
@@ -395,6 +401,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 ) (*ext_proc.ProcessingResponse, error) {
 	if dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
+	}
+	if err := r.prepareAutomaticDispatch(ctx, ctx.SemanticRequest, dispatch); err != nil {
+		return nil, err
 	}
 	if err := r.validateDispatchRequirements(ctx.SemanticRequest, dispatch, ctx); err != nil {
 		return nil, err

@@ -17,7 +17,7 @@ import (
 // These tests pin the shadow trust boundary for headers. A decision's
 // header_mutation runs for the primary backend and may carry its credential,
 // so nothing it sets reaches the shadow unless forward_headers names it, and
-// credential carriers never do. Only shadowAuthorizer sets the shadow's key.
+// credential carriers never do. Only configuredProviderAuthorizer sets the shadow's key.
 // Client headers never reach the shadow either, including baggage the trace
 // propagator extracts from the client: only the span context crosses.
 

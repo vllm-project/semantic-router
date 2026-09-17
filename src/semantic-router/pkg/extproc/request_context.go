@@ -17,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
@@ -55,6 +56,8 @@ type EnhancedHallucinationInfo struct {
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
+	AutomaticCandidateDemands map[string]selection.CandidateDemand
+
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
 	RAGRerankerIdentity string

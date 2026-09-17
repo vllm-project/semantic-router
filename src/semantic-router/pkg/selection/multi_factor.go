@@ -33,16 +33,17 @@ import (
 // quality / latency / cost / load signals with either a weighted or ordered
 // objective. Optional hard ceilings prune candidates before optimization.
 type MultiFactorConfig struct {
-	Objective          MultiFactorObjective
-	Weights            MultiFactorWeights
-	SLO                MultiFactorSLO
-	QualityIndex       string
-	QualityOnMissing   string
-	QualityMinCoverage float64
-	QualityMinScore    *float64
-	LatencyPercentile  int
-	LatencyMetric      string
-	OnNoCandidates     string
+	ExpectedOutputTokens *int
+	Objective            MultiFactorObjective
+	Weights              MultiFactorWeights
+	SLO                  MultiFactorSLO
+	QualityIndex         string
+	QualityOnMissing     string
+	QualityMinCoverage   float64
+	QualityMinScore      *float64
+	LatencyPercentile    int
+	LatencyMetric        string
+	OnNoCandidates       string
 }
 
 // MultiFactorObjective selects weighted or ordered lexicographic comparison.
@@ -163,6 +164,9 @@ func (s *MultiFactorSelector) UpdateFeedback(_ context.Context, _ *Feedback) err
 
 // Select applies hard eligibility filters, then the configured objective.
 func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+	if len(selCtx.CandidateDemands) > 0 && s.config.ExpectedOutputTokens == nil {
+		return nil, fmt.Errorf("automatic output requires multi_factor.expected_output_tokens as a cost forecast")
+	}
 	if len(selCtx.CandidateModels) == 0 {
 		return nil, fmt.Errorf("no candidate models provided")
 	}
@@ -263,7 +267,7 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx
 				sig.quality = *result.Score
 				sig.hasQ = true
 			}
-			if cost, available := estimatedRequestCost(params.Pricing, selCtx); available {
+			if cost, available := estimatedRequestCost(params.Pricing, s.costContext(c.Model, selCtx)); available {
 				sig.cost = cost
 				sig.hasCost = true
 			}
@@ -391,7 +395,7 @@ func (s *MultiFactorSelector) exceedsSLO(model string, selCtx *SelectionContext)
 	}
 	if slo.MaxCostPer1M > 0 {
 		if params, ok := s.modelParams[model]; ok {
-			if rate, available := effectiveCostPer1M(params.Pricing, selCtx); available && rate > slo.MaxCostPer1M {
+			if rate, available := effectiveCostPer1M(params.Pricing, s.costContext(model, selCtx)); available && rate > slo.MaxCostPer1M {
 				return fmt.Sprintf("cost=$%.2f>$%.2f per 1M", rate, slo.MaxCostPer1M), true
 			}
 		}
@@ -428,7 +432,7 @@ func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef, se
 	for _, c := range candidates {
 		cost := math.Inf(1)
 		if params, ok := s.modelParams[c.Model]; ok {
-			if estimate, available := estimatedRequestCost(params.Pricing, selCtx); available {
+			if estimate, available := estimatedRequestCost(params.Pricing, s.costContext(c.Model, selCtx)); available {
 				cost = estimate
 			}
 		}
@@ -438,6 +442,26 @@ func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef, se
 		}
 	}
 	return best
+}
+
+// costContext uses the configured output forecast, bounded by executable
+// capacity. It never makes the model's maximum output its expected output.
+func (s *MultiFactorSelector) costContext(model string, ctx *SelectionContext) *SelectionContext {
+	if ctx == nil || s.config.ExpectedOutputTokens == nil {
+		return ctx
+	}
+	view := *ctx
+	view.ExpectedOutputTokens = *s.config.ExpectedOutputTokens
+	if ctx.ExpectedOutputTokens > 0 {
+		view.ExpectedOutputTokens = min(view.ExpectedOutputTokens, ctx.ExpectedOutputTokens)
+	}
+	if demand, ok := ctx.CandidateDemands[model]; ok {
+		view.InputTokens = demand.InputTokens
+		if demand.MaxOutputTokens != nil {
+			view.ExpectedOutputTokens = min(view.ExpectedOutputTokens, int(*demand.MaxOutputTokens))
+		}
+	}
+	return &view
 }
 
 func estimatedRequestCost(pricing config.ModelPricing, selCtx *SelectionContext) (float64, bool) {

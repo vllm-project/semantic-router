@@ -27746,8 +27746,19 @@
                         }
                       },
                       "default_max_tokens": {
-                        "nullable": true,
-                        "type": "integer"
+                        "oneOf": [
+                          {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "auto"
+                            ]
+                          }
+                        ],
+                        "nullable": true
                       },
                       "max_n": {
                         "nullable": true,
@@ -50537,6 +50548,10 @@
                                 "nullable": true,
                                 "type": "object"
                               },
+                              "minimum": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
                               "nullable": {
                                 "type": "boolean"
                               },
@@ -50677,6 +50692,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -50748,6 +50767,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -50829,6 +50852,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -50896,6 +50923,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51074,6 +51105,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51145,6 +51180,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -51226,6 +51265,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -51293,6 +51336,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51471,6 +51518,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51542,6 +51593,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -51623,6 +51678,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -51690,6 +51749,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51868,6 +51931,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51939,6 +52006,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -52020,6 +52091,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -52087,6 +52162,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -52265,6 +52344,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -52336,6 +52419,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -52417,6 +52504,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -52484,6 +52575,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"

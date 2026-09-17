@@ -28,6 +28,9 @@ func (r *OpenAIRouter) SelectModelForEval(
 			Reason: "the router returns an immediate response without selecting or invoking a generation backend",
 		}
 	}
+	if params := decision.GetRequestParamsConfig(); params != nil && params.DefaultMaxTokens.IsAuto() && (input.Demand.MaxOutputTokens == nil || input.Demand.AutomaticOutput) {
+		return services.EvalModelSelection{Status: services.EvalSelectionExecutionRequired, Method: evalAlgorithmType(decision), Reason: "automatic output budgets require the complete provider-rendered request"}
+	}
 	requestContext := &RequestContext{}
 	if recipe, ok := r.Config.RecipeByName(input.Recipe); ok {
 		requestContext.Routing.SelectRecipe(recipe)

@@ -186,6 +186,8 @@ type SelectionContext struct {
 	// Cost-aware selectors use both to compare request-shaped estimated cost.
 	InputTokens          int
 	ExpectedOutputTokens int
+	// CandidateDemands contains provider-rendered budgets for automatic output.
+	CandidateDemands map[string]CandidateDemand
 
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models

@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var (
@@ -35,6 +37,13 @@ func openAPISchemaFromType(valueType reflect.Type, visiting map[reflect.Type]boo
 		schema := openAPISchemaFromType(valueType.Elem(), visiting)
 		schema.Nullable = true
 		return schema
+	}
+	if valueType == reflect.TypeOf(config.OutputTokenDefault{}) {
+		minimum := int64(1)
+		return OpenAPISchema{OneOf: []OpenAPISchema{
+			{Type: "integer", Minimum: &minimum},
+			{Type: "string", Enum: []string{"auto"}},
+		}}
 	}
 	if valueType == jsonRawMessageType {
 		return OpenAPISchema{}
