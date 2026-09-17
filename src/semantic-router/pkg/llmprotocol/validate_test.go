@@ -40,6 +40,7 @@ func TestCapabilityNamesAndParserStayClosed(t *testing.T) {
 		CapabilityReasoningAdaptive, CapabilityReasoningSignature, CapabilityReasoningDisplay,
 		CapabilityMatchedStopSequence,
 		CapabilityImageGeneration,
+		CapabilitySamplingMinP, CapabilityRepetitionPenalty, CapabilityCacheIsolation,
 	)
 	names := all.Names()
 	seen := make(map[string]struct{}, len(names))
@@ -274,6 +275,8 @@ func TestValidateRequestRejectsNonFiniteSamplingValues(t *testing.T) {
 	}{
 		{name: "temperature NaN", mutate: func(sampling *Sampling) { sampling.Temperature = Float64(math.NaN()) }},
 		{name: "temperature positive infinity", mutate: func(sampling *Sampling) { sampling.Temperature = Float64(math.Inf(1)) }},
+		{name: "min p NaN", mutate: func(sampling *Sampling) { sampling.MinP = Float64(math.NaN()) }},
+		{name: "repetition penalty infinity", mutate: func(sampling *Sampling) { sampling.RepetitionPenalty = Float64(math.Inf(1)) }},
 		{name: "top p negative infinity", mutate: func(sampling *Sampling) { sampling.TopP = Float64(math.Inf(-1)) }},
 		{name: "frequency penalty NaN", mutate: func(sampling *Sampling) { sampling.FrequencyPenalty = Float64(math.NaN()) }},
 		{name: "presence penalty infinity", mutate: func(sampling *Sampling) { sampling.PresencePenalty = Float64(math.Inf(1)) }},
