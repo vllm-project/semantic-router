@@ -825,6 +825,7 @@ profiles:
       - dashboard/backend/handlers/deploy.go
       - dashboard/backend/handlers/canonical_transport.go
   no-model:
+    display_name: No Model Readiness
     owner: e2e
     coverage_role: classifier-free-startup-and-readiness
     selection: pr
