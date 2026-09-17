@@ -63,3 +63,49 @@ func TestFileStateStore_SameDirectoryTTLChangeOnReload(t *testing.T) {
 		t.Fatalf("sweeper used the previous generation TTL, leftover err=%v", err)
 	}
 }
+
+func TestFileStateStore_RegistryRemovesClosedDirectories(t *testing.T) {
+	workflowFileStoreRegistryMu.Lock()
+	baseline := len(workflowFileStoreRegistry)
+	workflowFileStoreRegistryMu.Unlock()
+
+	for i := 0; i < 8; i++ {
+		s := newWorkflowFileToolStateStore(filepath.Join(t.TempDir(), "state"), time.Hour)
+		if err := s.Close(); err != nil {
+			t.Fatalf("Close[%d]: %v", i, err)
+		}
+	}
+
+	workflowFileStoreRegistryMu.Lock()
+	got := len(workflowFileStoreRegistry)
+	workflowFileStoreRegistryMu.Unlock()
+	if got != baseline {
+		t.Fatalf("registry size = %d, want baseline %d", got, baseline)
+	}
+}
+
+func TestFileStateStore_CloseDoesNotDeleteReplacementRegistration(t *testing.T) {
+	dir := t.TempDir()
+	old := newWorkflowFileToolStateStore(dir, time.Hour)
+	if err := old.Close(); err != nil {
+		t.Fatalf("Close old: %v", err)
+	}
+
+	replacement := newWorkflowFileToolStateStore(dir, time.Minute)
+	t.Cleanup(func() { _ = replacement.Close() })
+	if replacement == old {
+		t.Fatal("replacement reused a closed store instance")
+	}
+	if err := old.Close(); err != nil {
+		t.Fatalf("second Close old: %v", err)
+	}
+
+	ctx := context.Background()
+	if _, err := replacement.Put(ctx, makeTestState("still-alive")); err != nil {
+		t.Fatalf("Put on replacement after stale Close: %v", err)
+	}
+	got, ok, err := consumeWorkflowState(replacement, "still-alive")
+	if err != nil || !ok || got == nil {
+		t.Fatalf("replacement consume: ok=%v err=%v", ok, err)
+	}
+}

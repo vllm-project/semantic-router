@@ -1,6 +1,8 @@
 package classification
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,6 +61,42 @@ func createMockModelTree(t testing.TB, tempDir string) {
 	}
 }
 
+func TestNormalizeModelDiscoveryDir(t *testing.T) {
+	t.Parallel()
+
+	missing := filepath.Join(t.TempDir(), "absent")
+	_, err := normalizeModelDiscoveryDir(missing)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing directory error = %v, want fs.ErrNotExist", err)
+	}
+
+	existing := t.TempDir()
+	got, err := normalizeModelDiscoveryDir(existing)
+	if err != nil {
+		t.Fatalf("existing directory: %v", err)
+	}
+	if got == "" {
+		t.Fatal("existing directory returned empty path")
+	}
+
+	loopDir := t.TempDir()
+	a := filepath.Join(loopDir, "a")
+	b := filepath.Join(loopDir, "b")
+	if symlinkErr := os.Symlink(b, a); symlinkErr != nil {
+		t.Fatalf("symlink a: %v", symlinkErr)
+	}
+	if symlinkErr := os.Symlink(a, b); symlinkErr != nil {
+		t.Fatalf("symlink b: %v", symlinkErr)
+	}
+	_, err = normalizeModelDiscoveryDir(a)
+	if err == nil {
+		t.Fatal("symlink loop succeeded")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("symlink loop classified as missing: %v", err)
+	}
+}
+
 func TestAutoDiscoverModels(t *testing.T) {
 	tempDir := t.TempDir()
 	createMockModelTree(t, tempDir)
@@ -78,6 +116,7 @@ func TestAutoDiscoverModels(t *testing.T) {
 			name:      "nonexistent directory",
 			modelsDir: "/nonexistent/path",
 			wantErr:   true,
+			checkFunc: func(paths *ModelPaths) bool { return paths == nil },
 		},
 		{
 			name:      "empty directory",
@@ -93,6 +132,9 @@ func TestAutoDiscoverModels(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AutoDiscoverModels() error = %v, wantErr %v", err, tt.wantErr)
 				return
+			}
+			if tt.wantErr && tt.name == "nonexistent directory" && !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("AutoDiscoverModels() error = %v, want fs.ErrNotExist", err)
 			}
 			if tt.checkFunc != nil && !tt.checkFunc(paths) {
 				t.Errorf("AutoDiscoverModels() check function failed for paths: %+v", paths)

@@ -1,6 +1,7 @@
 package looper
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,19 +21,7 @@ func normalizeWorkflowRecipeName(recipe config.RecipeName) config.RecipeName {
 
 func workflowStateNamespace(recipe config.RecipeName) string {
 	name := string(normalizeWorkflowRecipeName(recipe))
-	var b strings.Builder
-	b.Grow(len(name))
-	for _, ch := range name {
-		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' {
-			b.WriteRune(ch)
-			continue
-		}
-		b.WriteByte('_')
-	}
-	if b.Len() == 0 {
-		return string(config.DefaultRecipeName)
-	}
-	return b.String()
+	return base64.RawURLEncoding.EncodeToString([]byte(name))
 }
 
 func workflowNamespacedStateID(recipe config.RecipeName, id string) (string, error) {

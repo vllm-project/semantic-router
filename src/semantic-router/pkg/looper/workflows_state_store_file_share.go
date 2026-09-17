@@ -11,7 +11,6 @@ import (
 // WorkflowStateService before the previous generation has drained Put/Take, so
 // overlapping constructors must share the store, its lock, and currentBytes.
 type workflowFileStoreRegistration struct {
-	mu    sync.Mutex
 	store *workflowFileToolStateStore
 	refs  int
 }
@@ -30,23 +29,11 @@ func resolvedWorkflowFileStoreDir(dir string) string {
 	return abs
 }
 
-func workflowFileStoreRegistrationFor(key string) *workflowFileStoreRegistration {
-	workflowFileStoreRegistryMu.Lock()
-	defer workflowFileStoreRegistryMu.Unlock()
-	reg := workflowFileStoreRegistry[key]
-	if reg == nil {
-		reg = &workflowFileStoreRegistration{}
-		workflowFileStoreRegistry[key] = reg
-	}
-	return reg
-}
-
 func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileToolStateStore {
 	key := resolvedWorkflowFileStoreDir(dir)
-	reg := workflowFileStoreRegistrationFor(key)
-	reg.mu.Lock()
-	defer reg.mu.Unlock()
-	if reg.store != nil {
+	workflowFileStoreRegistryMu.Lock()
+	defer workflowFileStoreRegistryMu.Unlock()
+	if reg := workflowFileStoreRegistry[key]; reg != nil && reg.store != nil {
 		reg.refs++
 		return reg.store
 	}
@@ -59,8 +46,7 @@ func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileT
 	}
 	s.wg.Add(1)
 	go s.sweepLoop()
-	reg.store = s
-	reg.refs = 1
+	workflowFileStoreRegistry[key] = &workflowFileStoreRegistration{store: s, refs: 1}
 	return s
 }
 
@@ -68,10 +54,11 @@ func (s *workflowFileToolStateStore) Close() error {
 	if s == nil {
 		return nil
 	}
-	reg := workflowFileStoreRegistrationFor(resolvedWorkflowFileStoreDir(s.dir))
-	reg.mu.Lock()
-	defer reg.mu.Unlock()
-	if reg.store != s {
+	key := resolvedWorkflowFileStoreDir(s.dir)
+	workflowFileStoreRegistryMu.Lock()
+	defer workflowFileStoreRegistryMu.Unlock()
+	reg := workflowFileStoreRegistry[key]
+	if reg == nil || reg.store != s {
 		return nil
 	}
 	if reg.refs > 0 {
@@ -80,7 +67,6 @@ func (s *workflowFileToolStateStore) Close() error {
 	if reg.refs > 0 {
 		return nil
 	}
-	err := s.stopSweeper()
-	reg.store = nil
-	return err
+	delete(workflowFileStoreRegistry, key)
+	return s.stopSweeper()
 }

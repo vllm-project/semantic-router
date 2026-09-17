@@ -623,14 +623,23 @@ func writeWorkflowStateJSONFile(t *testing.T, dir, name string, state *workflowP
 	return data
 }
 
-func writeStartupOrphanArtifacts(t *testing.T, dir string) {
+func writeStartupOrphanArtifacts(t *testing.T, dir, namespacedJSON string) {
 	t.Helper()
-	for _, name := range []string{"default__startup-1.json.take-orphan", "startup-3.json.tmp-orphan"} {
+	for _, name := range []string{namespacedJSON + ".take-orphan", "startup-3.json.tmp-orphan"} {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, []byte("orphan"), 0o600); err != nil {
 			t.Fatalf("write orphan %s: %v", path, err)
 		}
 	}
+}
+
+func workflowStateFileName(t *testing.T, recipe config.RecipeName, id string) string {
+	t.Helper()
+	namespaced, err := workflowNamespacedStateID(recipe, id)
+	if err != nil {
+		t.Fatalf("namespace %s: %v", id, err)
+	}
+	return namespaced + ".json"
 }
 
 func assertPathNotExist(t *testing.T, path string) {
@@ -673,15 +682,17 @@ func TestFileStateStore_ReclamationAndRaceSafety(t *testing.T) {
 
 func TestFileStateStore_StartupRecovery(t *testing.T) {
 	dir := t.TempDir()
-	d1 := writeWorkflowStateJSONFile(t, dir, "default__startup-1.json", makeTestState("startup-1"))
-	d2 := writeWorkflowStateJSONFile(t, dir, "default__startup-2.json", makeTestState("startup-2"))
-	writeStartupOrphanArtifacts(t, dir)
+	name1 := workflowStateFileName(t, config.DefaultRecipeName, "startup-1")
+	name2 := workflowStateFileName(t, config.DefaultRecipeName, "startup-2")
+	d1 := writeWorkflowStateJSONFile(t, dir, name1, makeTestState("startup-1"))
+	d2 := writeWorkflowStateJSONFile(t, dir, name2, makeTestState("startup-2"))
+	writeStartupOrphanArtifacts(t, dir, name1)
 
 	store := newWorkflowFileToolStateStore(dir, time.Hour)
 	defer store.Close()
 
 	assertFileStoreCurrentBytes(t, store, int64(len(d1)+len(d2)))
-	assertPathNotExist(t, filepath.Join(dir, "default__startup-1.json.take-orphan"))
+	assertPathNotExist(t, filepath.Join(dir, name1+".take-orphan"))
 	assertPathNotExist(t, filepath.Join(dir, "startup-3.json.tmp-orphan"))
 
 	ctx := context.Background()
@@ -1396,6 +1407,87 @@ func TestStateStore_NamespacedIDIsNotUnscoped(t *testing.T) {
 			got, ok, err := consumeWorkflowState(s, id)
 			if err != nil || !ok || got == nil {
 				t.Fatalf("raw id consume: ok=%v err=%v", ok, err)
+			}
+		})
+	}
+}
+
+func TestStateStore_StaleCommitAfterReplacementRelease(t *testing.T) {
+	setWorkflowStateClaimLease(t, 80*time.Millisecond)
+	for _, backend := range backends(t) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			assertStaleCommitAfterReplacementRelease(t, s, func() {
+				time.Sleep(120 * time.Millisecond)
+			})
+		})
+	}
+	t.Run("redis", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+			Address:   mr.Addr(),
+			KeyPrefix: "test-stale-commit:",
+		}, time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		assertStaleCommitAfterReplacementRelease(t, s, func() {
+			mr.FastForward(120 * time.Millisecond)
+		})
+	})
+}
+
+func assertStaleCommitAfterReplacementRelease(t *testing.T, s workflowToolStateStore, expire func()) {
+	t.Helper()
+	ctx := context.Background()
+	const id = "stale-commit"
+	if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	stale, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || stale == nil {
+		t.Fatalf("stale Claim: ok=%v err=%v", ok, err)
+	}
+	expire()
+	live, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || live == nil {
+		t.Fatalf("live Claim: ok=%v err=%v", ok, err)
+	}
+	if releaseErr := s.Release(ctx, config.DefaultRecipeName, id, live.Token); releaseErr != nil {
+		t.Fatalf("Release live claim: %v", releaseErr)
+	}
+	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, stale.Token); commitErr == nil {
+		t.Fatal("stale Commit succeeded after a replacement claimant released")
+	}
+	got, ok, err := consumeWorkflowState(s, id)
+	if err != nil || !ok || got == nil {
+		t.Fatalf("state missing after rejected stale Commit: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestStateStore_DistinctRecipesKeepIndependentState(t *testing.T) {
+	recipes := []config.RecipeName{"tenant/a", "tenant_a", "tenant?a"}
+	for _, backend := range append(backends(t), redisBackend(t)) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			ctx := context.Background()
+			const id = "shared"
+			for _, recipe := range recipes {
+				state := makeTestState(id)
+				state.RecipeName = string(recipe)
+				state.DecisionName = string(recipe)
+				if _, err := s.Put(ctx, state); err != nil {
+					t.Fatalf("Put %s: %v", recipe, err)
+				}
+			}
+			for _, recipe := range recipes {
+				got, ok, err := consumeWorkflowStateForRecipe(s, recipe, id)
+				if err != nil || !ok || got == nil {
+					t.Fatalf("consume %s: ok=%v err=%v", recipe, ok, err)
+				}
+				if got.DecisionName != string(recipe) {
+					t.Fatalf("recipe %s got decision %q", recipe, got.DecisionName)
+				}
 			}
 		})
 	}

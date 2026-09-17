@@ -200,6 +200,10 @@ func errWorkflowStateClaimNotHeld(id string) error {
 	return fmt.Errorf("workflow state %q claim is not held", id)
 }
 
+func workflowClaimTokenMatches(held, token string) bool {
+	return token != "" && held == token
+}
+
 func redisExpirationMillis(d time.Duration) int64 {
 	if d <= 0 {
 		return 0
@@ -450,15 +454,12 @@ func (s *workflowMemoryToolStateStore) Commit(_ context.Context, recipe config.R
 	if !ok {
 		return nil
 	}
-	if entry.claimToken == token {
-		s.currentBytes -= entry.size
-		delete(s.states, key)
-		return nil
+	if !workflowClaimTokenMatches(entry.claimToken, token) {
+		return errWorkflowStateClaimNotHeld(id)
 	}
-	if entry.claimToken == "" {
-		return nil
-	}
-	return errWorkflowStateClaimNotHeld(id)
+	s.currentBytes -= entry.size
+	delete(s.states, key)
+	return nil
 }
 
 func (s *workflowMemoryToolStateStore) Release(_ context.Context, recipe config.RecipeName, id, token string) error {
@@ -765,20 +766,17 @@ func (s *workflowFileToolStateStore) Commit(_ context.Context, recipe config.Rec
 		}
 		return err
 	}
-	if state.ClaimToken == token {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("commit workflow state: %w", err)
-		}
-		s.currentBytes -= info.Size()
-		if s.currentBytes < 0 {
-			s.currentBytes = 0
-		}
-		return nil
+	if !workflowClaimTokenMatches(state.ClaimToken, token) {
+		return errWorkflowStateClaimNotHeld(id)
 	}
-	if state.ClaimToken == "" {
-		return nil
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("commit workflow state: %w", err)
 	}
-	return errWorkflowStateClaimNotHeld(id)
+	s.currentBytes -= info.Size()
+	if s.currentBytes < 0 {
+		s.currentBytes = 0
+	}
+	return nil
 }
 
 func (s *workflowFileToolStateStore) Release(_ context.Context, recipe config.RecipeName, id, token string) error {
