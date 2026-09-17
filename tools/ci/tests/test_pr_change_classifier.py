@@ -135,13 +135,13 @@ class PRChangeClassifierTests(unittest.TestCase):
     def test_candle_binding_selects_riscv_qemu_smoke(self) -> None:
         self.assert_classification(
             "candle-binding/src/lib.rs",
-            ("quality", "security", "core-tests", "riscv-qemu"),
+            ("quality", "security", "core-tests", "image-calibration", "riscv-qemu"),
         )
 
     def test_riscv_make_target_selects_qemu_smoke(self) -> None:
         self.assert_classification(
             "tools/make/rust.mk",
-            ("quality", "security", "riscv-qemu"),
+            ("quality", "security", "image-calibration", "riscv-qemu"),
         )
 
     def test_riscv_router_smoke_inputs_select_qemu_job(self) -> None:
@@ -171,6 +171,7 @@ class PRChangeClassifierTests(unittest.TestCase):
                 "quality",
                 "security",
                 "core-tests",
+                "image-calibration",
                 "riscv-qemu",
             ),
             "src/semantic-router/pkg/cache/valkey_cache_unavailable.go": (
