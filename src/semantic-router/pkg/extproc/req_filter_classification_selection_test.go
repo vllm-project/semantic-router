@@ -231,8 +231,8 @@ func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
 		requestContext,
 	)
 
-	if !cancelled {
-		t.Fatal("selector did not observe request cancellation")
+	if cancelled {
+		t.Fatal("already-cancelled request must be rejected before invoking the selector")
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want context cancellation", err)
@@ -275,7 +275,7 @@ func TestSelectModelFromCandidatesPreservesFailClosedPolicy(t *testing.T) {
 	}
 }
 
-func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testing.T) {
+func TestSelectModelFromCandidatesStagesSingleCandidateUntilDispatch(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
@@ -294,9 +294,18 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 		t.Fatalf("expected static method, got %q", method)
 	}
 
+	if _, ok := sessiontelemetry.GetRouterSessionSnapshot("single-candidate-session", time.Now()); ok {
+		t.Fatal("selection published ownership before dispatch")
+	}
+	if err := commitAgenticSessionDecision(reqCtx); err != nil {
+		t.Fatal(err)
+	}
+	if err := commitAgenticSessionDecision(reqCtx); err != nil {
+		t.Fatal(err)
+	}
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("single-candidate-session", time.Now())
-	if !ok {
-		t.Fatal("expected router memory snapshot for single-candidate selection")
+	if !ok || snapshot.TurnCount != 1 {
+		t.Fatal("expected exactly one committed single-candidate dispatch")
 	}
 	if snapshot.CurrentModel != "model-a" {
 		t.Fatalf("expected current model model-a, got %q", snapshot.CurrentModel)

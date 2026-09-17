@@ -11,6 +11,9 @@ func (r *OpenAIRouter) applyRouterLearning(
 	selectedModelRef *config.ModelRef,
 	ctx *RequestContext,
 ) (*selection.SelectionContext, *selection.SelectionResult, *config.ModelRef, bool, error) {
+	if err := selectionRequestContext(ctx).Err(); err != nil {
+		return nil, nil, nil, false, err
+	}
 	if err := r.validateProtectedCandidateOwnership(selCtx, ctx); err != nil {
 		return nil, nil, nil, false, err
 	}
@@ -28,6 +31,9 @@ func (r *OpenAIRouter) applyRouterLearning(
 		if ctx != nil {
 			ctx.VSRSelectionReasoning = err.Error()
 		}
+		return nil, nil, nil, false, err
+	}
+	if err := selectionRequestContext(ctx).Err(); err != nil {
 		return nil, nil, nil, false, err
 	}
 	recordRouterLearningPolicies(ctx, preflight, adaptation, protection)

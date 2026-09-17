@@ -281,6 +281,12 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
 	}
+	if err := selectionRequestContext(ctx).Err(); err != nil {
+		return nil, err
+	}
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
 	if ctx != nil && ctx.SemanticRequest != nil {
 		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {
 			return nil, err
@@ -312,6 +318,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, len(body))
 	common.BodyMutation = &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{Body: body},
+	}
+	if err := commitAgenticSessionDecision(ctx); err != nil {
+		return nil, err
 	}
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_encoded", map[string]interface{}{
 		"request_id":  ctx.RequestID,

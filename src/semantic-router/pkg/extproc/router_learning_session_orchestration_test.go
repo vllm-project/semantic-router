@@ -61,6 +61,10 @@ func runProtectionOrchestration(t *testing.T, scenario protectionScenario) {
 				t.Fatalf("%s: protected continuation switched from %q to %q", step.ID, previous, ref.Model)
 			}
 		}
-		recordAgenticSessionDecision(ctx, result, ref, input.ctx)
+		// Each accepted corpus step represents a completed dispatch boundary.
+		stageAgenticSessionDecision(ctx, result, ref, input.ctx)
+		if err := commitAgenticSessionDecision(input.ctx); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

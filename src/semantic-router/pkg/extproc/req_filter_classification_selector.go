@@ -33,6 +33,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 ) (chosen *config.ModelRef, chosenMethod string, selectionErr error) {
 	if ctx != nil {
 		ctx.VSRSelectedCandidate = nil
+		ctx.pendingSessionDecision = nil
 	}
 	defer func() {
 		if ctx != nil && chosen != nil && selectionErr == nil {
@@ -40,6 +41,9 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 		}
 	}()
 	method := r.getSelectionMethod(algorithm)
+	if err := selectionRequestContext(ctx).Err(); err != nil {
+		return nil, string(method), err
+	}
 	filtered, err := r.capabilityEligibleSelectionContext(selCtx, algorithm, ctx)
 	if err != nil {
 		return nil, string(method), err
@@ -109,10 +113,10 @@ func (r *OpenAIRouter) selectWithSelector(
 		selector.Tier(),
 		time.Since(selectionStart),
 	)
+	if requestCtx.Err() != nil {
+		return nil, string(method), requestCtx.Err()
+	}
 	if err != nil {
-		if requestCtx.Err() != nil {
-			return nil, string(method), requestCtx.Err()
-		}
 		if errors.Is(err, selection.ErrNoEligibleCandidates) {
 			logging.Warnf("[ModelSelection] Selection rejected all candidates: %v", err)
 			return nil, string(method), err
@@ -189,7 +193,7 @@ func (r *OpenAIRouter) selectWithSelector(
 		result.Tier,
 		result.Score,
 	)
-	recordAgenticSessionDecision(recordCtx, result, selectedModel, ctx)
+	stageAgenticSessionDecision(recordCtx, result, selectedModel, ctx)
 	return selectedModel, string(method), nil
 }
 
@@ -259,7 +263,7 @@ func (r *OpenAIRouter) selectSingleCandidateModel(
 	}
 	ctx.VSRSelectionReasoning = boundedSelectionReasoning(result.Reasoning)
 	logSelectionResult(method, result, selectedModel, learningApplied)
-	recordAgenticSessionDecision(recordCtx, result, selectedModel, ctx)
+	stageAgenticSessionDecision(recordCtx, result, selectedModel, ctx)
 	return selectedModel, string(method), nil
 }
 
@@ -335,6 +339,6 @@ func (r *OpenAIRouter) recordSelectionFallback(
 		reason,
 	)
 	logSelectionResult(method, fallbackResult, selected, learningApplied)
-	recordAgenticSessionDecision(recordCtx, fallbackResult, selected, ctx)
+	stageAgenticSessionDecision(recordCtx, fallbackResult, selected, ctx)
 	return selected, nil
 }

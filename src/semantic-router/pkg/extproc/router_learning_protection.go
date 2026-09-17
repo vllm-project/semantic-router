@@ -57,6 +57,9 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionObserve, "observe_only", scope)
 		return preflight
 	}
+	// Sampling and the switch guard must read the same scoped identity, not
+	// the session-only state populated for the base selector.
+	input.selCtx = r.protectionSelectionContext(input.selCtx, input.ctx, identity)
 	samplingAllowed, reason := protectionSamplingDecision(input, mode)
 	preflight.samplingAllowed = samplingAllowed
 	action := routerLearningActionSuppressSampling
@@ -154,14 +157,13 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		if preflight.mode == config.DecisionAdaptationModeApply && (errors.Is(err, selection.ErrNoEligibleCandidates) || hardOwnership) {
 			return routerLearningDecision{}, fmt.Errorf("router learning protection: %w", err)
 		}
+		if preflight.mode == config.DecisionAdaptationModeObserve {
+			return r.protectionDecisionFromResult(input, learningCtx, nil, preflight, proposal), nil
+		}
 		decision.selectionContext = input.selCtx
 		decision.selectionResult = input.baseResult
 		decision.selectedModelRef = input.selectedModelRef
 		decision.policy = newProtectionPolicy(input.ctx, preflight.config, preflight.mode, routerLearningActionHoldCurrent, "protection_unavailable", preflight.scope)
-		if preflight.mode == config.DecisionAdaptationModeObserve {
-			decision.policy.Action = routerLearningActionObserve
-			decision.policy.Reason = "observe_only"
-		}
 		return decision, nil
 	}
 	return r.protectionDecisionFromResult(input, learningCtx, result, preflight, proposal), nil
@@ -261,7 +263,11 @@ func (r *OpenAIRouter) protectionRescueEvidence(
 	}
 	proposalScore, proposalKnown := scoreFromSelectionResult(proposalResult, proposal)
 	currentScore, currentKnown := scoreFromSelectionResult(proposalResult, current)
-	return proposalKnown && currentKnown && proposalScore-currentScore >= learningSwitchMargin(cfg)
+	advantage := proposalScore - currentScore
+	if proposalResult != nil && proposalResult.ScoreDirection == selection.LowerIsBetter {
+		advantage = -advantage
+	}
+	return proposalKnown && currentKnown && advantage >= learningSwitchMargin(cfg)
 }
 
 func (r *OpenAIRouter) protectionDecisionFromResult(

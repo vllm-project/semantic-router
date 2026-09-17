@@ -49,6 +49,7 @@ func (r *OpenAIRouter) handleExternalGatewayModelRouting(
 	ctx.VSREligibleModelRefs = nil
 	ctx.VSRPolicyEligibleModelRefs = nil
 	ctx.VSRSelectedCandidate = nil
+	ctx.pendingSessionDecision = nil
 	ctx.VSRReasoningMode = "off"
 
 	changed, err := r.prepareProviderRequest(request, dispatch, ctx)

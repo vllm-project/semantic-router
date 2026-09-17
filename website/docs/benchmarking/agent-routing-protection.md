@@ -58,6 +58,19 @@ between scenarios and repetitions. A companion integration test sends the mainta
 
 The model-choice proposal is scripted;
 the protection decision is not simulated or reimplemented in the runner.
+Accepted corpus steps explicitly commit the staged session decision to model a
+successful dispatch. In the request pipeline, selection only stages ownership;
+provider preparation, credential resolution and final encoding must succeed
+before ownership is committed. Cancellation and immediate rejections do not
+replace the previous owner or increment its turn and switch counters.
+
+`selection_decision_paths_test.go` separately guards component-error composition:
+observe protection preserves an applied adaptation proposal even on policy
+rejection; preflight reads protection-scoped warm state; rescue respects score
+direction; cancellation covers selector shortcuts and successful returns; Eval
+preserves ambiguous-candidate rejection. In-process dispatch tests cover late
+rejection, successful ownership commitment and an older failure arriving after a
+newer dispatch. These checks do not invoke live model backends.
 
 Covered contracts include:
 

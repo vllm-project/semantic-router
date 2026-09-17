@@ -36,7 +36,10 @@ func TestProtectionOnlyResponseFailuresReachRescueBeforeMinimumTurns(t *testing.
 			if initialErr != nil {
 				t.Fatal(initialErr)
 			}
-			recordAgenticSessionDecision(initialCtx, initialResult, initialRef, ctx)
+			stageAgenticSessionDecision(initialCtx, initialResult, initialRef, ctx)
+			if err := commitAgenticSessionDecision(ctx); err != nil {
+				t.Fatal(err)
+			}
 			ctx.RequestModel = initialRef.Model
 			base.SelectedModel = "frontier"
 			base.AllScores = map[string]float64{"cheap": .8, "frontier": .9}

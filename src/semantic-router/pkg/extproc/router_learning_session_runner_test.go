@@ -115,9 +115,12 @@ func executeProtectionStep(t *testing.T, router *OpenAIRouter, input routerLearn
 		CandidateCount: len(input.selCtx.CandidateModels),
 	}
 	row.Failures = protectionFailures(row, step.Expected)
-	// This writes the actual result, so the next turn cannot be preloaded with
-	// its expected model. No external store or model endpoint is involved.
-	recordAgenticSessionDecision(finalCtx, finalResult, finalRef, input.ctx)
+	// The corpus treats each accepted step as a successful dispatch. Commit its
+	// actual result; the next turn is never preloaded with an expected model.
+	stageAgenticSessionDecision(finalCtx, finalResult, finalRef, input.ctx)
+	if err := commitAgenticSessionDecision(input.ctx); err != nil {
+		t.Fatal(err)
+	}
 	return row
 }
 
