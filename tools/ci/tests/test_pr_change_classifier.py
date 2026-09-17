@@ -337,6 +337,16 @@ class PRChangeClassifierTests(unittest.TestCase):
             ),
         )
 
+    def test_sticky_provider_prefix_selects_anthropic_profile(self) -> None:
+        result = classify(
+            ["e2e/testcases/sticky_tool_selection_provider_prefix.go"]
+        )
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "anthropic-shim"),
+        )
+
     def test_release_and_nightly_image_lifecycles_are_distinct(self) -> None:
         self.assertEqual(
             PRODUCTION_RELEASE_IMAGES,

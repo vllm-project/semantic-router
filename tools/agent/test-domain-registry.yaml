@@ -340,6 +340,15 @@ profiles:
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
+      # Sticky selection is part of this profile's maintained contract. Keep
+      # runtime and recovery changes on the same affected-E2E path so a change
+      # cannot silently bypass the live profile.
+      - e2e/testcases/sticky_tool_selection*.go
+      - e2e/pkg/testmatrix/testcases.go
+      - src/semantic-router/pkg/extproc/sticky_tool_selection*.go
+      - src/semantic-router/pkg/sessiontools/**
+      - src/semantic-router/pkg/config/tool_session_store*.go
+      - src/semantic-router/pkg/config/tool_selection_plugin.go
   category-remote-backend:
     owner: e2e
     coverage_role: category-remote-classifier-backend
@@ -467,6 +476,8 @@ profiles:
       - e2e/testing/anthropic-shim/**
       - e2e/testcases/anthropic_*.go
       - e2e/testcases/protocol_codec_*.go
+      - e2e/testcases/sticky_tool_selection_provider_prefix.go
+      - e2e/pkg/testmatrix/testcases.go
       - deploy/kubernetes/anthropic-backend/**
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
