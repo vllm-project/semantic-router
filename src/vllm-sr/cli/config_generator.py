@@ -1,5 +1,6 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -79,10 +80,8 @@ def generate_envoy_config_from_user_config(
                 listener.timeout if hasattr(listener, "timeout") else "300s"
             )
             if listener_timeout:
-                try:
+                with contextlib.suppress(Exception):
                     listener_timeout = format_protobuf_duration(listener_timeout)
-                except Exception:
-                    pass
             listeners.append(
                 {
                     "name": listener.name,
@@ -160,12 +159,10 @@ def generate_envoy_config_from_user_config(
                 timeout_key in reliability_data
                 and reliability_data[timeout_key] is not None
             ):
-                try:
+                with contextlib.suppress(Exception):
                     reliability_data[timeout_key] = format_protobuf_duration(
                         reliability_data[timeout_key]
                     )
-                except Exception:
-                    pass
 
         models.append(
             {
