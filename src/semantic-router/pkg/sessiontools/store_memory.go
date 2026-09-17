@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -43,6 +44,10 @@ type MemoryStore struct {
 	ttl                   time.Duration
 	maxSessions           int
 	maxSessionsByIdentity int
+	// nextRevision is shared by every successful write so a recreated key
+	// cannot reuse a revision held by a stale writer from an earlier
+	// incarnation. Zero remains reserved for CompareAndSwap's create case.
+	nextRevision atomic.Uint64
 	// lifecycleMu keeps Close linearizable with every operation: an
 	// operation that acquired the read lock completes before Close returns,
 	// while one arriving afterwards observes ErrStoreClosed.
@@ -199,17 +204,30 @@ func (s *MemoryStore) deleteIfExpiredLocked(key string, observedRevision, observ
 // evict under quota/global caps and must not race the expired-readmission
 // ABA hazard documented on compareAndSwapCreate/deleteIfExpiredLocked.
 func (s *MemoryStore) CompareAndSwap(
-	_ context.Context,
+	ctx context.Context,
 	key string,
 	expectedRevision uint64,
 	next State,
 	ttl time.Duration,
 	quota QuotaKey,
 ) (bool, error) {
+	_, applied, err := s.CompareAndSwapWithRevision(ctx, key, expectedRevision, next, ttl, quota)
+	return applied, err
+}
+
+// CompareAndSwapWithRevision implements RevisionedCompareAndSwapStore.
+func (s *MemoryStore) CompareAndSwapWithRevision(
+	_ context.Context,
+	key string,
+	expectedRevision uint64,
+	next State,
+	ttl time.Duration,
+	quota QuotaKey,
+) (uint64, bool, error) {
 	s.lifecycleMu.RLock()
 	defer s.lifecycleMu.RUnlock()
 	if s.closed {
-		return false, ErrStoreClosed
+		return 0, false, ErrStoreClosed
 	}
 	if ttl <= 0 {
 		ttl = s.ttl
@@ -233,18 +251,18 @@ func (s *MemoryStore) CompareAndSwap(
 
 	entry, exists := shard.entries[key]
 	if !exists || !entry.state.ExpiresAt.After(now) {
-		return false, ErrRevisionMismatch
+		return 0, false, ErrRevisionMismatch
 	}
 	if entry.state.Revision != expectedRevision {
-		return false, ErrRevisionMismatch
+		return 0, false, ErrRevisionMismatch
 	}
 
 	stored := next.Clone()
 	stored.LastSeenAt = now
 	stored.ExpiresAt = now.Add(ttl)
-	stored.Revision = entry.state.Revision + 1
+	stored.Revision = s.nextRevision.Add(1)
 	entry.state = stored
-	return true, nil
+	return stored.Revision, true, nil
 }
 
 // compareAndSwapCreate handles CompareAndSwap's expectedRevision == 0
@@ -254,7 +272,7 @@ func (s *MemoryStore) CompareAndSwap(
 // observation from a concurrent Load can interleave and delete a
 // just-admitted live entry out from under this call (the ABA race this
 // store's expired-cleanup paths must all guard against).
-func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Duration, quota QuotaKey, now time.Time) (bool, error) {
+func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Duration, quota QuotaKey, now time.Time) (uint64, bool, error) {
 	s.admissionMu.Lock()
 	defer s.admissionMu.Unlock()
 
@@ -265,7 +283,7 @@ func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Dura
 		if entry.state.ExpiresAt.After(now) {
 			// Still live: a create cannot replace a live entry.
 			shard.mu.Unlock()
-			return false, ErrRevisionMismatch
+			return 0, false, ErrRevisionMismatch
 		}
 		// Expired: safe to reclaim here, unlike deleteIfExpiredLocked's
 		// stale-observation case, because this whole function already
@@ -285,9 +303,9 @@ func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Dura
 // concurrent creations against each other and against expired-cleanup;
 // reuse of existing keys (the hot CompareAndSwap update path) never
 // contends with this.
-func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, quota QuotaKey, now time.Time) (bool, error) {
+func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, quota QuotaKey, now time.Time) (uint64, bool, error) {
 	if _, already := s.keyQuota[key]; already {
-		return false, ErrRevisionMismatch
+		return 0, false, ErrRevisionMismatch
 	}
 
 	s.evictForIdentityLocked(quota)
@@ -296,7 +314,7 @@ func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, 
 	stored := next.Clone()
 	stored.LastSeenAt = now
 	stored.ExpiresAt = now.Add(ttl)
-	stored.Revision = 1
+	stored.Revision = s.nextRevision.Add(1)
 	s.nextGeneration++
 	generation := s.nextGeneration
 
@@ -304,7 +322,7 @@ func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, 
 	shard.mu.Lock()
 	if _, already := shard.entries[key]; already {
 		shard.mu.Unlock()
-		return false, ErrRevisionMismatch
+		return 0, false, ErrRevisionMismatch
 	}
 	shard.entries[key] = &memoryEntry{state: stored, quota: quota, generation: generation}
 	shard.mu.Unlock()
@@ -315,7 +333,7 @@ func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, 
 	}
 	s.quotaMembers[quota][key] = struct{}{}
 	s.totalCount++
-	return true, nil
+	return stored.Revision, true, nil
 }
 
 // evictForIdentityLocked evicts the least-recently-seen member of quota's

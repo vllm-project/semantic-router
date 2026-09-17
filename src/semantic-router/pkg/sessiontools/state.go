@@ -25,8 +25,10 @@ const SchemaVersion uint16 = 1
 // selection. Wire-neutral: safe to encode as JSON for either store backend.
 type State struct {
 	SchemaVersion uint16 `json:"schema_version"`
-	// Revision increments only on a successful atomic update (see
-	// Store.CompareAndSwap); it is the CAS linearization point.
+	// Revision changes only on a successful atomic update (see
+	// Store.CompareAndSwap); it is the CAS linearization point. Treat it as
+	// an opaque token, not a per-key update count: a Store implementation
+	// must not reuse a revision at the same key after expiry and recreation.
 	Revision uint64 `json:"revision"`
 	// PolicyFingerprint, CatalogFingerprint, and CapabilityFingerprint are
 	// canonical fingerprints (see pkg/tools/fingerprint.go) of the

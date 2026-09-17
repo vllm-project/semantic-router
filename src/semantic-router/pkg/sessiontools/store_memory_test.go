@@ -238,6 +238,86 @@ func TestMemoryStore_TTLSlidesOnLoad(t *testing.T) {
 	}
 }
 
+func TestMemoryStore_StaleRevisionRejectedAfterExpiryAndReadmission(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Now())
+	store := newTestStore(t, clock, 100, 10, 60)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+
+	stateA := newTestState(0)
+	stateA.PolicyFingerprint = "writer-a"
+	if applied, err := store.CompareAndSwap(ctx, "session", 0, stateA, time.Minute, quota); err != nil || !applied {
+		t.Fatalf("writer A create: applied=%v err=%v", applied, err)
+	}
+	loadedA, err := store.Load(ctx, "session")
+	if err != nil || !loadedA.Found {
+		t.Fatalf("writer A load: found=%v err=%v", loadedA.Found, err)
+	}
+
+	clock.Advance(time.Minute + time.Second)
+	stateB := newTestState(0)
+	stateB.PolicyFingerprint = "writer-b"
+	if applied, err := store.CompareAndSwap(ctx, "session", 0, stateB, time.Minute, quota); err != nil || !applied {
+		t.Fatalf("writer B create: applied=%v err=%v", applied, err)
+	}
+
+	stale := newTestState(0)
+	stale.PolicyFingerprint = "writer-a-stale"
+	applied, err := store.CompareAndSwap(ctx, "session", loadedA.State.Revision, stale, time.Minute, quota)
+	if applied || !errors.Is(err, ErrRevisionMismatch) {
+		t.Fatalf("stale CAS: applied=%v err=%v, want ErrRevisionMismatch", applied, err)
+	}
+	final, err := store.Load(ctx, "session")
+	if err != nil || !final.Found || final.State.PolicyFingerprint != "writer-b" {
+		t.Fatalf("writer B state after stale CAS: found=%v policy=%q err=%v", final.Found, final.State.PolicyFingerprint, err)
+	}
+	if final.State.Revision == loadedA.State.Revision {
+		t.Fatalf("recreated revision = %d, must differ from stale revision", final.State.Revision)
+	}
+}
+
+func TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Now())
+	store := newTestStore(t, clock, 100, 10, 60)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+
+	if _, err := store.CompareAndSwap(ctx, "session", 0, newTestState(0), time.Minute, quota); err != nil {
+		t.Fatal(err)
+	}
+	created, err := store.Load(ctx, "session")
+	if err != nil || !created.Found {
+		t.Fatalf("load after create: found=%v err=%v", created.Found, err)
+	}
+	stateA := newTestState(0)
+	stateA.PolicyFingerprint = "writer-a-updated"
+	if applied, err := store.CompareAndSwap(ctx, "session", created.State.Revision, stateA, time.Minute, quota); err != nil || !applied {
+		t.Fatalf("writer A update: applied=%v err=%v", applied, err)
+	}
+	updated, err := store.Load(ctx, "session")
+	if err != nil || !updated.Found {
+		t.Fatalf("load after update: found=%v err=%v", updated.Found, err)
+	}
+
+	clock.Advance(time.Minute + time.Second)
+	stateB := newTestState(0)
+	stateB.PolicyFingerprint = "writer-b"
+	if applied, err := store.CompareAndSwap(ctx, "session", 0, stateB, time.Minute, quota); err != nil || !applied {
+		t.Fatalf("writer B create: applied=%v err=%v", applied, err)
+	}
+
+	stale := newTestState(0)
+	stale.PolicyFingerprint = "writer-a-stale"
+	applied, err := store.CompareAndSwap(ctx, "session", updated.State.Revision, stale, time.Minute, quota)
+	if applied || !errors.Is(err, ErrRevisionMismatch) {
+		t.Fatalf("stale updated CAS: applied=%v err=%v, want ErrRevisionMismatch", applied, err)
+	}
+	final, err := store.Load(ctx, "session")
+	if err != nil || !final.Found || final.State.PolicyFingerprint != "writer-b" {
+		t.Fatalf("writer B state after stale CAS: found=%v policy=%q err=%v", final.Found, final.State.PolicyFingerprint, err)
+	}
+}
+
 func TestMemoryStore_LoadWithMetadata_ReportsExpiredRevision(t *testing.T) {
 	ctx := context.Background()
 	clock := newSyntheticClock(time.Unix(100, 0))
@@ -354,7 +434,7 @@ func TestMemoryStore_ExpiredReadmission_ABARace(t *testing.T) {
 
 func runExpiredReadmissionAttempt(t *testing.T, ctx context.Context, attempt int, quota QuotaKey, casWorkers, loadWorkers int) {
 	clock := newSyntheticClock(time.Unix(int64(attempt+1), 0))
-	store := newTestStore(t, clock, 1000, 1000, 60)
+	store := newTestStore(t, clock, 1000, 1000, 1)
 	key := fmt.Sprintf("aba-race-%d", attempt)
 
 	initial := newTestState(0)
@@ -362,6 +442,11 @@ func runExpiredReadmissionAttempt(t *testing.T, ctx context.Context, attempt int
 	if applied, err := store.CompareAndSwap(ctx, key, 0, initial, time.Second, quota); err != nil || !applied {
 		t.Fatalf("attempt %d: initial create applied=%v err=%v", attempt, applied, err)
 	}
+	initialLoaded, err := store.Load(ctx, key)
+	if err != nil || !initialLoaded.Found {
+		t.Fatalf("attempt %d: initial load found=%v err=%v", attempt, initialLoaded.Found, err)
+	}
+	initialRevision := initialLoaded.State.Revision
 
 	clock.Advance(2 * time.Second)
 
@@ -370,7 +455,7 @@ func runExpiredReadmissionAttempt(t *testing.T, ctx context.Context, attempt int
 		t.Fatal(err)
 	}
 
-	assertReadmissionState(t, ctx, store, key, attempt, appliedCAS)
+	assertReadmissionState(t, ctx, store, key, attempt, appliedCAS, initialRevision)
 }
 
 func executeReadmissionWorkers(
@@ -429,7 +514,7 @@ func executeReadmissionWorkers(
 	return appliedCAS, nil
 }
 
-func assertReadmissionState(t *testing.T, ctx context.Context, store *MemoryStore, key string, attempt, appliedCAS int) {
+func assertReadmissionState(t *testing.T, ctx context.Context, store *MemoryStore, key string, attempt, appliedCAS int, initialRevision uint64) {
 	if appliedCAS != 1 {
 		t.Fatalf("attempt %d: CAS(0) successes = %d, want exactly 1", attempt, appliedCAS)
 	}
@@ -441,8 +526,8 @@ func assertReadmissionState(t *testing.T, ctx context.Context, store *MemoryStor
 	if !final.Found {
 		t.Fatalf("attempt %d: fresh state was pruned by expired cleanup", attempt)
 	}
-	if final.State.Revision != 1 {
-		t.Fatalf("attempt %d: final revision = %d, want 1", attempt, final.State.Revision)
+	if final.State.Revision == initialRevision {
+		t.Fatalf("attempt %d: readmission reused revision %d", attempt, initialRevision)
 	}
 	if final.State.PolicyFingerprint == "expired" {
 		t.Fatalf("attempt %d: expired state survived readmission", attempt)

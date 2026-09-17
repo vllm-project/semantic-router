@@ -75,6 +75,20 @@ type ConditionalDeleteStore interface {
 	DeleteIfToken(ctx context.Context, key string, token StateToken) (bool, error)
 }
 
+// RevisionedCompareAndSwapStore is an optional Store extension for backends
+// that assign opaque revisions at commit time. Manager uses the returned
+// revision in SelectionResult instead of assuming a per-key increment.
+type RevisionedCompareAndSwapStore interface {
+	CompareAndSwapWithRevision(
+		ctx context.Context,
+		key string,
+		expectedRevision uint64,
+		next State,
+		ttl time.Duration,
+		quota QuotaKey,
+	) (revision uint64, applied bool, err error)
+}
+
 // QuotaKey identifies the cardinality bucket a session belongs to for
 // per-principal quota enforcement (config.ToolSessionStoreConfig's
 // max_sessions_per_identity). Both fields together are the bucket identity
@@ -114,6 +128,10 @@ type Store interface {
 	// creation case). ttl sets/refreshes the key's expiry on success.
 	// quota identifies the cardinality bucket this key counts against for
 	// admission/eviction purposes.
+	//
+	// Revisions must be incarnation-safe: a value must not be reused at the
+	// same key after expiry and recreation, or a stale writer could overwrite
+	// a later incarnation with an old expectedRevision.
 	//
 	// Returns (true, nil) on success. Returns (false, ErrRevisionMismatch)
 	// when expectedRevision does not match — an expected outcome under
