@@ -108,6 +108,9 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 		if name == "" {
 			return fmt.Errorf("recipes[].name cannot be empty")
 		}
+		if name == GlobalModelScope {
+			return fmt.Errorf("recipes[%s]: name is reserved for shared model services", name)
+		}
 		if string(name) != recipe.Name {
 			return fmt.Errorf(
 				"recipes[%s].name must not contain surrounding whitespace",

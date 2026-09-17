@@ -55,6 +55,19 @@ jobs:
     uses: ./.github/workflows/test-and-build.yml
     secrets: inherit
 
+  image-calibration:
+    name: Image calibration
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && (needs.changes.outputs.image_calibration == 'true'
+        || needs.changes.outputs.full == 'true')
+    uses: ./.github/workflows/image-routing-calibration.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
+
   dashboard:
     name: Dashboard
     needs: changes
@@ -180,6 +193,7 @@ jobs:
       - quality
       - security
       - core-tests
+      - image-calibration
       - dashboard
       - operator
       - e2e
