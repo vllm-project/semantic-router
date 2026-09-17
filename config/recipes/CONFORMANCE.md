@@ -13,9 +13,10 @@ The router may create a temporary `.vllm-sr/` directory while running; it is not
 part of the maintained contract.
 
 `config/recipes/built-in/` is the reserved versioned catalog container, not a
-Recipe. The default standalone inventory skips that directory and CI runs the
-same five-file conformance checks separately for every bundle under
-`built-in/latest/` and every release snapshot.
+Recipe. Live CI discovers standalone recipes and every bundle under
+`built-in/latest/` as separate sources. Their static inventories, live shards,
+and reports have distinct namespaces. Immutable release snapshots retain their
+catalog/release validation and do not multiply the live CPU matrix.
 
 ## Write the Model Card
 
@@ -126,7 +127,13 @@ Keep large request boundaries declarative and reviewable:
 
 - Use `padding` for query-shaped probes.
 - Use `generated_text` with zero-based `message_index`, `content_index`, and an
-  exact `target_text_bytes` for message-shaped probes.
+  exact `target_text_bytes` for message-shaped probes. The target counts all
+  UTF-8 text bytes in the selected message, including its explicit text parts.
+  The inserted part repeats `character` (default `x`), or a nonempty `text`
+  pattern; these two fields are mutually exclusive. `text` allows printable
+  ASCII, tabs, and line breaks. Its final repetition is truncated to meet the
+  exact target. Use representative records for meaningful long-context input;
+  the request's JSON byte limit also accounts for escaped characters.
 - Use a named `image_fixture` for repeated binary media. Declare its human
   description, media type, canonical base64 payload, and SHA-256 once under
   `fixtures.images`; materialization constructs the data URI. Admission reads
@@ -188,7 +195,31 @@ make recipe-conformance-eval \
 
 # Build the CPU router and run every CPU-compatible maintained recipe.
 make recipe-conformance-live-cpu-all
+
+# Run the current built-in bundle through the same live pipeline.
+make recipe-conformance-live-cpu \
+  RECIPE_CONFORMANCE_RECIPES_ROOT=config/recipes/built-in/latest \
+  RECIPE_CONFORMANCE_RECIPES=mom-v1 \
+  RECIPE_CONFORMANCE_REPORT_DIR=.agent-harness/recipe-conformance/built-in/latest
 ```
+
+Portable built-in bundles are composed with the CLI's
+`initialize_builtin_recipe` binding implementation. The runner binds every
+recipe to its catalog entrypoint and supplies explicit Preview-only backend
+fixtures, including capabilities, context limits, pricing, and synthetic
+benchmark records for model selection. It preserves every authored decision,
+signal, projection, algorithm, plugin, and probe. The current MoM bundle runs
+all five entrypoints and all 315 authored probes; counts are checked against the
+discovered inventory rather than used to select a smaller sample. These fixtures
+do not measure backend LLM quality or call external providers.
+
+Each invocation owns an isolated stack and runtime directory under
+`.agent-harness/recipe-conformance-runtime/`; logs and reports are collected
+before that stack is stopped. Configured bearer credentials are supplied to
+startup, readiness, and evaluation requests. Shared downloaded models live in
+the ignored `models/` cache. Use `VLLM_SR_PORT_OFFSET` to separate host ports when
+running concurrent stacks. Missing reports, zero probes, and incomplete probe
+execution fail the selected CPU gate.
 
 ### Policy and deployment scope
 

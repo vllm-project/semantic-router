@@ -43,6 +43,7 @@ struct Instance {
     model_limit: usize,
     task_limit: usize,
     effective_limit: usize,
+    document_max_input_tokens: usize,
     labels: Vec<String>,
     dimension: usize,
     available_layers: Vec<usize>,
@@ -207,6 +208,13 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
     } else {
         options.effective_limit(task_limit)?
     };
+    let document_max_input_tokens = options.document_limit(
+        effective_limit,
+        matches!(
+            &model,
+            Model::Sequence(_) | Model::LabelScores(_) | Model::Token(_)
+        ),
+    )?;
     let available_layers = match &model {
         Model::Embedding(model) => model.available_exit_layers(),
         _ => vec![],
@@ -219,6 +227,7 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
         model_limit,
         task_limit,
         effective_limit,
+        document_max_input_tokens,
         labels,
         dimension,
         available_layers,
@@ -254,6 +263,39 @@ impl Instance {
             truncated: original_tokens > self.effective_limit,
         })
     }
+    /// Admit an entire document without applying the single-forward truncation
+    /// policy. Each planned window is still bounded by the loaded execution.
+    fn window_input(&self, text: &str, size: usize) -> UnifiedResult<InputUsage> {
+        let physical_limit = self
+            .options
+            .execution_max_input_tokens
+            .unwrap_or(self.effective_limit)
+            .min(self.effective_limit);
+        if size == 0 || size > physical_limit {
+            return Err(errors::validation(
+                "window_size",
+                &format!("1..={physical_limit}"),
+                &size.to_string(),
+            ));
+        }
+        let original_tokens = self
+            .tokenizer
+            .encode(text, true)
+            .map_err(|e| errors::tokenization_error(&e.to_string()))?
+            .len();
+        if original_tokens > self.document_max_input_tokens {
+            return Err(errors::validation(
+                "input_tokens",
+                &format!("at most {}", self.document_max_input_tokens),
+                &original_tokens.to_string(),
+            ));
+        }
+        Ok(InputUsage {
+            original_tokens,
+            processed_tokens: original_tokens,
+            truncated: false,
+        })
+    }
     fn dimension(&self, target: Option<usize>) -> UnifiedResult<()> {
         if let Some(target) = target {
             if target == 0 || target > self.dimension {
@@ -280,6 +322,7 @@ pub struct InstanceInfo {
     pub model_limit: usize,
     pub task_limit: usize,
     pub effective_limit: usize,
+    pub document_max_input_tokens: usize,
     pub overflow: Overflow,
     pub labels: Vec<String>,
     pub dimension: usize,
@@ -299,6 +342,7 @@ pub fn info(handle: u64) -> UnifiedResult<InstanceInfo> {
         model_limit: instance.model_limit,
         task_limit: instance.task_limit,
         effective_limit: instance.effective_limit,
+        document_max_input_tokens: instance.document_max_input_tokens,
         overflow: instance.options.overflow,
         labels: instance.labels.clone(),
         dimension: instance.dimension,
@@ -373,18 +417,11 @@ pub fn detect_token_windows(
     overlap: usize,
 ) -> UnifiedResult<TokenWindows> {
     let instance = get(handle)?;
-    let input = instance.input(text)?;
-    if input.truncated {
-        return Err(errors::validation(
-            "input_tokens",
-            &format!("at most {}", instance.effective_limit),
-            &input.original_tokens.to_string(),
-        ));
-    }
+    let input = instance.window_input(text, size)?;
     let plan = crate::core::sequence_windows::encode_token_windows(
         &instance.tokenizer,
         text,
-        instance.effective_limit,
+        instance.document_max_input_tokens,
         size,
         overlap,
     )

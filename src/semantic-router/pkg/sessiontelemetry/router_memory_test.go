@@ -1,9 +1,12 @@
 package sessiontelemetry
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestSessionUsageObservationYieldsToDispatchOwnership(t *testing.T) {
@@ -42,6 +45,53 @@ func TestLateSessionUsagePreservesLatestDecision(t *testing.T) {
 	}
 	if snapshot.CumulativePromptTokens != 30 || math.Abs(snapshot.CumulativeCost-.03) > 1e-9 {
 		t.Fatalf("late usage must still be billed: %+v", snapshot)
+	}
+}
+
+func TestRouterSessionMemoryPreservesExactCandidate(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	t.Cleanup(ResetRouterSessionMemoryForTesting)
+	now := time.Now()
+	enabled := true
+	candidate := config.ModelRef{Model: "model", LoRAName: "adapter", ModelReasoningControl: config.ModelReasoningControl{
+		UseReasoning: &enabled, ReasoningEffort: "high",
+	}}
+	RecordSessionDecision(SessionDecisionParams{SessionID: "exact", SelectedModel: "model", SelectedCandidate: &candidate, Timestamp: now})
+	enabled = false
+	candidate.ReasoningEffort = "low"
+	snapshot, ok := GetRouterSessionSnapshot("exact", now)
+	if !ok || snapshot.CurrentCandidate == nil || snapshot.CurrentCandidate.ReasoningEffort != "high" || !*snapshot.CurrentCandidate.UseReasoning {
+		t.Fatalf("recorded candidate was mutated: %+v", snapshot.CurrentCandidate)
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored RouterSessionSnapshot
+	if err := json.Unmarshal(encoded, &restored); err != nil {
+		t.Fatal(err)
+	}
+	hydrateRouterSessionSnapshot(restored)
+	*restored.CurrentCandidate.UseReasoning = false
+	restored.CurrentCandidate.ReasoningEffort = "low"
+	snapshot, _ = GetRouterSessionSnapshot("exact", now)
+	if snapshot.CurrentCandidate == nil || snapshot.CurrentCandidate.ReasoningEffort != "high" || !*snapshot.CurrentCandidate.UseReasoning || snapshot.CurrentCandidate.LoRAName != "adapter" {
+		t.Fatalf("restored candidate lost identity: %+v", snapshot.CurrentCandidate)
+	}
+	*snapshot.CurrentCandidate.UseReasoning = false
+	snapshot, _ = GetRouterSessionSnapshot("exact", now)
+	if !*snapshot.CurrentCandidate.UseReasoning {
+		t.Fatal("snapshot mutation changed stored candidate")
+	}
+	RecordSessionUsage(SessionUsageParams{SessionID: "exact", Model: "adapter", Timestamp: now})
+	snapshot, _ = GetRouterSessionSnapshot("exact", now)
+	if snapshot.CurrentCandidate == nil || snapshot.CurrentModel != "model" {
+		t.Fatal("LoRA usage discarded the selected candidate")
+	}
+	RecordSessionUsage(SessionUsageParams{SessionID: "exact", Model: "rerouted", Timestamp: now})
+	snapshot, _ = GetRouterSessionSnapshot("exact", now)
+	if snapshot.CurrentCandidate == nil || snapshot.CurrentCandidate.ReasoningEffort != "high" || snapshot.CurrentModel != "model" {
+		t.Fatal("late response usage changed the exact dispatch owner")
 	}
 }
 

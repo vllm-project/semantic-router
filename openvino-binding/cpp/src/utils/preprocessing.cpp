@@ -1,9 +1,23 @@
 #include "../../include/utils/preprocessing.h"
 #include <cstring>
 #include <iostream>
+#include <numeric>
 
 namespace openvino_sr {
 namespace utils {
+
+void setPositionIds(ov::InferRequest& request, const ov::CompiledModel& model,
+                    size_t sequence_length) {
+    for (const auto& input : model.inputs()) {
+        if (input.get_names().count("position_ids") == 0) {
+            continue;
+        }
+        ov::Tensor positions(ov::element::i64, {1, sequence_length});
+        std::iota(positions.data<int64_t>(),
+                  positions.data<int64_t>() + sequence_length, int64_t{0});
+        request.set_tensor("position_ids", positions);
+    }
+}
 
 std::map<std::string, ov::Tensor> prepareBertInputs(
     const std::string& text,
@@ -68,4 +82,3 @@ char* strDup(const char* str) {
 
 } // namespace utils
 } // namespace openvino_sr
-

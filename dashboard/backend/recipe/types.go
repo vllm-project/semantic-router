@@ -178,7 +178,8 @@ type GeneratedText struct {
 	MessageIndex    int    `json:"message_index"`
 	ContentIndex    int    `json:"content_index"`
 	TargetTextBytes int    `json:"target_text_bytes"`
-	Character       string `json:"character"`
+	Character       string `json:"character,omitempty"`
+	Text            string `json:"text,omitempty"`
 }
 
 type ImageFixtureMetadata struct {

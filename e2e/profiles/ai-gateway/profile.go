@@ -17,6 +17,7 @@ var resourceManifests = []string{
 	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/base-model-route.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/timeout-route.yaml",
 }

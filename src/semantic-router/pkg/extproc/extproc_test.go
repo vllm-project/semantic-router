@@ -608,7 +608,7 @@ var _ = Describe("Security Checks", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("with PII token classification", func() {
+	Context("with PII token classification", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -861,7 +861,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("PII token classification edge cases", func() {
+	Context("PII token classification edge cases", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -1013,7 +1013,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("with jailbreak detection enabled", func() {
+	Context("with jailbreak detection enabled", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			modelPath := resolveExtprocTestPath("../../../../models/mmbert32k-jailbreak-detector-merged")
 			skipExtprocSpecIfModelArtifactsMissing("Jailbreak model", modelPath)

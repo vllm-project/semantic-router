@@ -17,6 +17,11 @@ spec:
         - name: mock-vllm
           image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
           imagePullPolicy: Never
+          # Preserve a positive measured millisecond latency for the looper
+          # aggregation contract even on a fast local fixture backend.
+          env:
+            - name: MOCK_RESPONSE_DELAY_MS
+              value: "5"
           ports:
             - containerPort: 8000
               name: http

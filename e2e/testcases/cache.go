@@ -42,13 +42,16 @@ type CacheTestCase struct {
 
 // CacheResult tracks the result of a cache test
 type CacheResult struct {
-	Description      string
-	Category         string
-	OriginalQuestion string
-	SimilarQuestion  string
-	CacheHit         bool
-	Similarity       float64 // this request's score: the match on a hit, the best rejected candidate on a miss (0 when absent)
-	Error            string
+	Description        string
+	Category           string
+	OriginalQuestion   string
+	SimilarQuestion    string
+	CacheHit           bool
+	Similarity         float64 // this request's score: the match on a hit, the best rejected candidate on a miss (0 when absent)
+	SimilarityReported bool
+	SelectedRecipe     string
+	SelectedDecision   string
+	Error              string
 }
 
 //nolint:cyclop,gocognit // Existing E2E orchestration branches by request outcome.
@@ -235,6 +238,10 @@ func loadCacheCases(filepath string) ([]CacheTestCase, error) {
 }
 
 func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, question, localPort string, verbose bool) CacheResult {
+	return testSingleCacheRequestForModel(ctx, testCase, question, localPort, "MoM", verbose)
+}
+
+func testSingleCacheRequestForModel(ctx context.Context, testCase CacheTestCase, question, localPort, model string, verbose bool) CacheResult {
 	result := CacheResult{
 		Description:      testCase.Description,
 		Category:         testCase.Category,
@@ -242,7 +249,7 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 		SimilarQuestion:  question,
 	}
 
-	resp, err := sendChatRequest(ctx, question, localPort, verbose)
+	resp, err := sendChatRequestForModel(ctx, question, localPort, model, verbose)
 	if err != nil {
 		result.Error = fmt.Sprintf("failed to send request: %v", err)
 		return result
@@ -252,6 +259,9 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 	// Check for cache hit header
 	cacheHitHeader := resp.Header.Get("x-vsr-cache-hit")
 	result.CacheHit = (cacheHitHeader == "true")
+	result.SelectedRecipe = resp.Header.Get("x-vsr-selected-recipe")
+	result.SelectedDecision = resp.Header.Get("x-vsr-selected-decision")
+	result.SimilarityReported = resp.Header.Get("x-vsr-cache-similarity") != ""
 
 	sim, simErr := parseCacheSimilarity(resp.Header.Get("x-vsr-cache-similarity"), result.CacheHit)
 	if simErr != "" {
@@ -310,8 +320,12 @@ func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 }
 
 func sendChatRequest(ctx context.Context, question, localPort string, verbose bool) (*http.Response, error) {
+	return sendChatRequestForModel(ctx, question, localPort, "MoM", verbose)
+}
+
+func sendChatRequestForModel(ctx context.Context, question, localPort, model string, verbose bool) (*http.Response, error) {
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": model,
 		"messages": []map[string]string{
 			{"role": "user", "content": question},
 		},
