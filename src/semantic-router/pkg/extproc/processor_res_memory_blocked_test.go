@@ -33,6 +33,7 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 				server = newJailbreakFailingServer(t)
 			}
 			router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
+			router.Config.Memory.Enabled = true
 			router.Config.Memory.AutoStore = true
 			if !tc.noExtractor {
 				router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})

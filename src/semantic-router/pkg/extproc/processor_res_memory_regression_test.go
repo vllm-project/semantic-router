@@ -60,7 +60,7 @@ func TestScheduleResponseMemoryStore_QueuedJobUsesSubmissionSnapshot(t *testing.
 
 	runner, unblock := blockedPersistenceRunner(t)
 	router := &OpenAIRouter{
-		Config:            &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 		MemoryExtractor:   memory.NewMemoryChunkStore(backend),
 		ReplayRecorder:    recorder,
 		memoryPersistence: runner,
@@ -110,7 +110,7 @@ func TestScheduleResponseMemoryStore_PartialWriteReportsFailure(t *testing.T) {
 	runner := memory.NewPersistenceRunner(10*time.Second, 1, 1)
 	t.Cleanup(func() { assert.NoError(t, runner.RetireAndWait(5*time.Second)) })
 	router := &OpenAIRouter{
-		Config:            &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 		MemoryExtractor:   memory.NewMemoryChunkStore(backend),
 		ReplayRecorder:    recorder,
 		memoryPersistence: runner,

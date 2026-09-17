@@ -2,11 +2,22 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestMemoryPersistenceBoundsAtConfigLoad(t *testing.T) {
+	for _, source := range []ConfigSource{ConfigSourceFile, ConfigSourceKubernetes} {
+		t.Run(string(source), func(t *testing.T) {
+			testMemoryPersistenceBoundsAtConfigLoad(t, source)
+		})
+	}
+}
+
+func testMemoryPersistenceBoundsAtConfigLoad(t *testing.T, source ConfigSource) {
+	t.Helper()
 	for _, field := range []struct {
 		name string
 		max  int
@@ -17,35 +28,45 @@ func TestMemoryPersistenceBoundsAtConfigLoad(t *testing.T) {
 		for _, value := range []int{-1, 0, 1, field.max, field.max + 1, int(^uint(0) >> 1)} {
 			for _, enabled := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%d/enabled=%t", field.name, value, enabled), func(t *testing.T) {
-					payload := fmt.Sprintf(`version: v0.3
-providers:
-  defaults:
-    model: test-model
-routing:
-  modelCards:
-    - name: test-model
-global:
-  stores:
-    memory:
-      enabled: %t
-      persistence:
-        %s: %d
-`, enabled, field.name, value)
+					payload := globalValidationDocument(t, source, fmt.Sprintf(`stores:
+  memory:
+    enabled: %t
+    persistence:
+      %s: %d
+`, enabled, field.name, value))
 					// Parsing is the startup/reload boundary: it must reject unsafe
-					// values before a caller can construct the persistence runner.
-					cfg, err := ParseYAMLBytes([]byte(payload))
-					if value < 0 || value > field.max {
-						want := fmt.Sprintf("persistence %s must be between 0 and %d", field.name, field.max)
-						if err == nil || !strings.Contains(err.Error(), want) || cfg != nil {
-							t.Fatalf("expected config rejection containing %q, got config=%v, err=%v", want, cfg, err)
-						}
-						return
+					// values before a caller can construct the persistence runner,
+					// including Kubernetes startup before any CRDs are available.
+					path := filepath.Join(t.TempDir(), "config.yaml")
+					if err := os.WriteFile(path, payload, 0o600); err != nil {
+						t.Fatal(err)
 					}
-					if err != nil {
-						t.Fatalf("valid persistence boundary rejected: %v", err)
-					}
-					if err := ValidateKubernetesConfigContracts(cfg); err != nil {
-						t.Fatalf("valid persistence boundary rejected by Kubernetes validation: %v", err)
+					for _, loader := range []struct {
+						name string
+						load func() (*RouterConfig, error)
+					}{
+						{"bytes", func() (*RouterConfig, error) { return ParseYAMLBytes(payload) }},
+						{"file", func() (*RouterConfig, error) { return Parse(path) }},
+					} {
+						t.Run(loader.name, func(t *testing.T) {
+							cfg, err := loader.load()
+							if value < 0 || value > field.max {
+								want := fmt.Sprintf("persistence %s must be between 0 and %d", field.name, field.max)
+								if err == nil || !strings.Contains(err.Error(), want) || cfg != nil {
+									t.Fatalf("expected config rejection containing %q, got config=%v, err=%v", want, cfg, err)
+								}
+								return
+							}
+							if err != nil {
+								t.Fatalf("valid persistence boundary rejected: %v", err)
+							}
+							if cfg.ConfigSource != source {
+								t.Fatalf("config source = %q, want %q", cfg.ConfigSource, source)
+							}
+							if err := ValidateKubernetesConfigContracts(cfg); err != nil {
+								t.Fatalf("valid persistence boundary rejected by Kubernetes validation: %v", err)
+							}
+						})
 					}
 				})
 			}

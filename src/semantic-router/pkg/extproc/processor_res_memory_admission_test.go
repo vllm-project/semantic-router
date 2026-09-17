@@ -58,7 +58,7 @@ func TestMemorySchedulingRejectsLargeHistoryBeforePreparation(t *testing.T) {
 				require.NoError(t, runner.RetireAndWait(time.Second))
 			}
 			router := &OpenAIRouter{
-				Config:          &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+				Config:          &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 				MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}), memoryPersistence: runner, ReplayRecorder: recorder,
 			}
 			ctx := persistenceRegressionContext(mode)
@@ -100,7 +100,7 @@ func TestMemorySchedulingOversizedResponseDoesNotReserveCapacity(t *testing.T) {
 			t.Cleanup(func() { assert.NoError(t, recorder.Close()) })
 			runner, unblock := blockedPersistenceRunner(t)
 			router := &OpenAIRouter{
-				Config:            &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+				Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 				MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
 				memoryPersistence: runner,
 				ReplayRecorder:    recorder,
@@ -163,6 +163,7 @@ func TestMemorySchedulingOversizedResponseDoesNotReserveCapacity(t *testing.T) {
 func TestOversizedMemoryResponseStillReachesClient(t *testing.T) {
 	server := newJailbreakScoreServer(t, 0.01, 0.99)
 	router, ctx := newResponseStageRouter(t, server, "", "block")
+	router.Config.Memory.Enabled = true
 	router.Config.Memory.AutoStore = true
 	router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
 	request := persistenceRegressionContext("oversized-response")

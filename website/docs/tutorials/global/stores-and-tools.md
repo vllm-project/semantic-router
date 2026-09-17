@@ -137,10 +137,12 @@ non-positive value uses the 1 MiB default.
 
 #### Write path bounds
 
-Automatic persistence resolves `auto_store` in this order: the Responses request
-override, the selected decision's memory plugin, then `global.stores.memory`.
-An explicit `false` disables automatic persistence at that precedence level;
-only an omitted value falls back to the next level.
+Automatic persistence first respects Memory enablement, retention policy, and
+an explicit `auto_store: false` on the selected decision's memory plugin. A
+Responses request may opt out, but cannot override these server restrictions.
+When policy permits persistence, the Responses request's `auto_store` takes
+precedence over the decision's value, followed by `global.stores.memory`.
+Only an omitted value falls back to the next level.
 
 Response handling does not wait for Memory persistence to complete. Identity
 checks and capacity reservation precede bounded history snapshots; encoding and
@@ -159,6 +161,8 @@ Configure `global.stores.memory.persistence`:
 Omit a field or set it to `0` to take the default. Negative values and values
 above these concurrency or queue limits are rejected during configuration
 validation, before workers or queue storage are allocated at startup or reload.
+This also applies to the initial `config_source: kubernetes` document, before
+the controller loads routing CRDs; global resource bounds are not deferred.
 
 Each persistence attempt has a shared 1 MiB payload budget for request history,
 retained Responses history, and the current assistant response. Assistant text

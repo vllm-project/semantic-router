@@ -79,7 +79,7 @@ func TestMemoryReceipts_SlowRecorderDoesNotBlockResponseScheduling(t *testing.T)
 				assert.NoError(t, runner.RetireAndWait(time.Second))
 			})
 			router := &OpenAIRouter{
-				Config:            &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+				Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 				MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
 				memoryPersistence: runner, ReplayRecorder: recorder,
 			}
@@ -224,7 +224,7 @@ func TestMemoryReceipts_AcceptedTerminalSurvivesSaturation(t *testing.T) {
 			})
 			requireReceiptSignal(t, started)
 			router := &OpenAIRouter{
-				Config:          &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+				Config:          &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 				MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}), memoryPersistence: runner, ReplayRecorder: recorder,
 			}
 			ctx := persistenceRegressionContext("reserved-" + verdict)

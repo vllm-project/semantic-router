@@ -151,7 +151,7 @@ func TestScheduleResponseMemoryStore_AppendsScheduledAndTerminalReplayOutcomes(t
 	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{AutoStore: true},
+			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
 		},
 		MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
 		ReplayRecorder:    recorder,
@@ -282,7 +282,7 @@ func TestScheduleResponseMemoryStore_RejectedWriteIsItsOwnMetricStatus(t *testin
 
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			Memory: config.MemoryConfig{AutoStore: true},
+			Memory: config.MemoryConfig{Enabled: true, AutoStore: true},
 		},
 		MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
 		memoryPersistence: runner,
@@ -321,7 +321,7 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 		{"true_snapshot", `,"auto_store":true`, false, true, true, nil},
 		{"decision_false_overrides_global_true", "", true, false, false, &off},
 		{"decision_true_overrides_global_false", "", false, false, true, &on},
-		{"request_true_overrides_decision_false", `,"auto_store":true`, false, true, true, &off},
+		{"decision_false_overrides_request_true", `,"auto_store":true`, false, true, false, &off},
 		{"request_false_overrides_decision_true", `,"auto_store":false`, true, true, false, &on},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -335,7 +335,7 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 				assert.NoError(t, recorder.DrainOutcomes())
 			})
 			router := &OpenAIRouter{
-				Config:            &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: tc.configAutoStore}},
+				Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: tc.configAutoStore}},
 				MemoryExtractor:   memory.NewMemoryChunkStore(backend),
 				ReplayRecorder:    recorder,
 				memoryPersistence: runner,

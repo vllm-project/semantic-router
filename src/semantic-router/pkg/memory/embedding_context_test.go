@@ -5,7 +5,27 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
+
+func TestStoreEmbeddingPreservesCancellationContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	called := false
+	provider, err := embedding.NewFuncProvider("test", 1, func(got context.Context, _ string) ([]float32, error) {
+		called = true
+		require.Same(t, ctx, got, "persistence cancellation must reach the generation provider")
+		cancel()
+		return []float32{1}, nil
+	})
+	require.NoError(t, err)
+	backend := NewInMemoryStoreWithConfig(EmbeddingConfig{Provider: provider})
+	err = backend.Store(ctx, &Memory{ID: "cancelled-embedding", Content: "turn"})
+	require.True(t, called)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, backend.memories, "a result returned after cancellation must not be persisted")
+}
 
 func TestEmbeddingCancellationDiscardsNativeResult(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

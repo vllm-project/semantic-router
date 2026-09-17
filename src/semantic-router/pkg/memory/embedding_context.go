@@ -7,7 +7,9 @@ import "context"
 // retain its slot and resources until it returns. A canceled result must never
 // advance to backend persistence.
 func GenerateEmbeddingContext(ctx context.Context, text string, cfg EmbeddingConfig) ([]float32, error) {
-	return generateEmbeddingContext(ctx, text, cfg, GenerateEmbedding)
+	return generateEmbeddingContext(ctx, text, cfg, func(text string, cfg EmbeddingConfig) ([]float32, error) {
+		return GenerateEmbeddingWithContext(ctx, text, cfg)
+	})
 }
 
 func generateEmbeddingContext(
