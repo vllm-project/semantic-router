@@ -308,6 +308,95 @@ func TestMemoryStore_StaleRevisionRejectedAfterExpiryAndReadmission(t *testing.T
 	}
 }
 
+// TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission
+// closes a coverage gap the sibling test above does not: that test only
+// exercises two creations (CompareAndSwap(0) twice), so it cannot detect a
+// regression that reintroduces the bug specifically through the *update*
+// path's revision assignment (CompareAndSwap's nonzero-expectedRevision
+// branch) while leaving admitNewLocked's creation path untouched. If the
+// update path were reverted to a per-key entry.state.Revision + 1 (not
+// drawing from nextRevision), it would silently stop advancing the shared
+// counter on every update — so a *later* fresh admission could coincidence
+// its way back to a revision number an earlier *updated* (not just
+// created) incarnation already held, and a writer holding that stale
+// updated revision could replay a CAS that incorrectly matches. This test
+// updates the key at least once before letting it expire and be
+// recreated, so it fails if either write site stops sharing the same
+// nextRevision sequence — not just if creation alone regresses.
+func TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission(t *testing.T) {
+	ctx := context.Background()
+	clock := newSyntheticClock(time.Now())
+	store := newTestStore(t, clock, 100, 10, 60)
+	quota := QuotaKey{Principal: "user-1", Namespace: "recipe-a"}
+	key := "sess-1"
+
+	// Writer A creates the key, then updates it once — the updated
+	// revision is what a regression in the update path alone would fail
+	// to keep off the shared sequence.
+	stateA := newTestState(0)
+	stateA.PolicyFingerprint = "writer-a-v1"
+	appliedCreateA, errCreateA := store.CompareAndSwap(ctx, key, 0, stateA, 60*time.Second, quota)
+	if errCreateA != nil || !appliedCreateA {
+		t.Fatalf("writer A create: applied=%v err=%v", appliedCreateA, errCreateA)
+	}
+	loadedA1, errLoadA1 := store.Load(ctx, key)
+	if errLoadA1 != nil || !loadedA1.Found {
+		t.Fatalf("writer A load after create: found=%v err=%v", loadedA1.Found, errLoadA1)
+	}
+	stateAUpdated := newTestState(0)
+	stateAUpdated.PolicyFingerprint = "writer-a-v2"
+	appliedUpdateA, errUpdateA := store.CompareAndSwap(ctx, key, loadedA1.State.Revision, stateAUpdated, 60*time.Second, quota)
+	if errUpdateA != nil || !appliedUpdateA {
+		t.Fatalf("writer A update: applied=%v err=%v", appliedUpdateA, errUpdateA)
+	}
+	loadedA2, errLoadA2 := store.Load(ctx, key)
+	if errLoadA2 != nil || !loadedA2.Found {
+		t.Fatalf("writer A load after update: found=%v err=%v", loadedA2.Found, errLoadA2)
+	}
+	staleUpdatedRevision := loadedA2.State.Revision
+
+	// The entry expires with nobody touching it.
+	clock.Advance(61 * time.Second)
+
+	// Writer B reclaims the same key with a fresh incarnation.
+	stateB := newTestState(0)
+	stateB.PolicyFingerprint = "writer-b"
+	appliedCreateB, errCreateB := store.CompareAndSwap(ctx, key, 0, stateB, 60*time.Second, quota)
+	if errCreateB != nil || !appliedCreateB {
+		t.Fatalf("writer B create: applied=%v err=%v", appliedCreateB, errCreateB)
+	}
+	loadedB, errLoadB := store.Load(ctx, key)
+	if errLoadB != nil || !loadedB.Found {
+		t.Fatalf("writer B load: found=%v err=%v", loadedB.Found, errLoadB)
+	}
+	if loadedB.State.Revision == staleUpdatedRevision {
+		t.Fatalf("writer B's fresh revision (%d) must not equal writer A's stale updated revision (%d)",
+			loadedB.State.Revision, staleUpdatedRevision)
+	}
+
+	// Writer A replays its stale, previously-updated revision against what
+	// it still believes is its own live entry. This must be rejected.
+	staleReplay := newTestState(0)
+	staleReplay.PolicyFingerprint = "writer-a-stale-overwrite"
+	appliedStale, errStale := store.CompareAndSwap(ctx, key, staleUpdatedRevision, staleReplay, 60*time.Second, quota)
+	if appliedStale {
+		t.Fatal("writer A's stale updated-revision CAS must not apply after B recreated the key")
+	}
+	if !errors.Is(errStale, ErrRevisionMismatch) {
+		t.Fatalf("err = %v, want ErrRevisionMismatch", errStale)
+	}
+
+	// Writer B's fresh state must have survived untouched.
+	final, errFinal := store.Load(ctx, key)
+	if errFinal != nil || !final.Found {
+		t.Fatalf("final load: found=%v err=%v", final.Found, errFinal)
+	}
+	if final.State.PolicyFingerprint != "writer-b" {
+		t.Fatalf("PolicyFingerprint = %q, want %q (writer A's stale CAS must not have applied)",
+			final.State.PolicyFingerprint, "writer-b")
+	}
+}
+
 // TestMemoryStore_ExpiredReadmission_ABARace guards against the ABA race
 // deleteIfExpiredLocked/compareAndSwapCreate exist to prevent: a stale
 // "this entry looked expired" observation (from Load or a losing

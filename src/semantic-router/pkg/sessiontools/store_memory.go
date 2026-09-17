@@ -263,7 +263,10 @@ func (s *MemoryStore) CompareAndSwap(
 	// branch only runs against a live, still-current entry) but the two
 	// write sites must stay on the same global sequence for admitNewLocked's
 	// guarantee to hold — a fresh admission must never coincidentally match
-	// a value this path could also produce.
+	// a value this path could also produce. (Verified: reverting only this
+	// line makes TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission
+	// fail while the sibling create-only regression test still passes —
+	// this is exactly the coverage gap that test exists to close.)
 	stored.Revision = s.nextRevision.Add(1)
 	entry.state = stored
 	return true, nil
