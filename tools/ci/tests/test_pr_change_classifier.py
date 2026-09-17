@@ -58,8 +58,8 @@ class PRChangeClassifierTests(unittest.TestCase):
         must run the calibration job, which feeds the required PR Gate."""
         for path in (
             "config/fragments/signal/embedding/image-routing.yaml",
-            "src/semantic-router/cmd/image-routing-calibration/main.go",
-            "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json",
+            "tools/calibration/image-routing/main.go",
+            "tools/calibration/image-routing/testdata/calibration-set.json",
             "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
             "e2e/profiles/multimodal-routing/crds/intelligentroute.yaml",
             # The CRD-mirror test runs only inside the gate, and e2e.mk defines
@@ -111,7 +111,7 @@ class PRChangeClassifierTests(unittest.TestCase):
         manifest = json.loads(
             (
                 REPO_ROOT
-                / "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json"
+                / "tools/calibration/image-routing/testdata/calibration-set.json"
             ).read_text()
         )
         paths = [entry["image_file"] for entry in manifest["positives"]]
@@ -131,6 +131,71 @@ class PRChangeClassifierTests(unittest.TestCase):
         result = classify(["src/semantic-router/pkg/extproc/processor.go"])
 
         self.assertNotIn("image-calibration", result.selected_jobs)
+
+    def test_candle_binding_selects_riscv_qemu_smoke(self) -> None:
+        self.assert_classification(
+            "candle-binding/src/lib.rs",
+            ("quality", "security", "core-tests", "image-calibration", "riscv-qemu"),
+        )
+
+    def test_riscv_make_target_selects_qemu_smoke(self) -> None:
+        self.assert_classification(
+            "tools/make/rust.mk",
+            ("quality", "security", "image-calibration", "riscv-qemu"),
+        )
+
+    def test_riscv_router_smoke_inputs_select_qemu_job(self) -> None:
+        fixtures = {
+            "nlp-binding/nlp_binding.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "riscv-qemu",
+            ),
+            "e2e/config/config.riscv-qemu.yaml": (
+                "quality",
+                "security",
+                "riscv-qemu",
+            ),
+            "tools/ci/riscv-qemu-router-smoke.sh": (
+                "quality",
+                "security",
+                "riscv-qemu",
+            ),
+            "tools/docker/check-native-abi.sh": (
+                "quality",
+                "security",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "image-calibration",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/cache/valkey_cache_unavailable.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "riscv-qemu",
+            ),
+            "src/semantic-router/pkg/extproc/router_memory_valkey.go": (
+                "quality",
+                "security",
+                "core-tests",
+                "memory",
+                "riscv-qemu",
+            ),
+        }
+        for path, jobs in fixtures.items():
+            with self.subTest(path=path):
+                self.assert_classification(path, jobs)
+        self.assert_classification(
+            "ml-binding/ml_binding.go",
+            ("quality", "security", "core-tests", "e2e", "riscv-qemu"),
+            profiles=("ml-model-selection",),
+        )
 
     def test_runtime_cli_surface_has_explicit_integration_escalation(self) -> None:
         self.assert_classification(
@@ -157,6 +222,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             ".github/workflows/operator-ci.yml": "operator",
             ".github/workflows/integration-test-memory.yml": "memory",
             ".github/workflows/openvino-binding-ci.yml": "openvino",
+            ".github/workflows/riscv-qemu.yml": "riscv-qemu",
         }
         for path, selected in fixtures.items():
             with self.subTest(path=path):
@@ -250,7 +316,7 @@ class PRChangeClassifierTests(unittest.TestCase):
         for path in (
             "website/docs/api/apiserver.md",
             "website/static/openapi/apiserver/apiserver.openapi.json",
-            "tools/openapi-gen/main.go",
+            "tools/codegen/openapi/main.go",
         ):
             with self.subTest(path=path):
                 self.assertIn("core-tests", classify([path]).selected_jobs)

@@ -59,6 +59,21 @@ jobs:
           cd openvino-binding
           CGO_ENABLED=1 go build -v .
 
+      - name: Generate tiny owned-model fixtures
+        run: |
+          python3 openvino-binding/scripts/create_owned_fixture.py openvino-binding/test_models/owned
+
+      - name: Verify owned model lifetimes and token budgets
+        run: |
+          OV_LIB_DIR=$(python3 -c "import openvino, os; print(os.path.join(os.path.dirname(openvino.__file__), 'libs'))")
+          export LD_LIBRARY_PATH=${{ github.workspace }}/openvino-binding/build:${OV_LIB_DIR}:$LD_LIBRARY_PATH
+          export OPENVINO_TOKENIZERS_LIB=$(python3 -c "import openvino_tokenizers, os; print(os.path.join(os.path.dirname(openvino_tokenizers.__file__), 'lib', 'libopenvino_tokenizers.so'))")
+          export OPENVINO_OWNED_FIXTURE_DIR=${{ github.workspace }}/openvino-binding/test_models/owned
+          export OPENVINO_EMBEDDING_TOTAL_THREADS=2 OPENVINO_EMBEDDING_NUM_STREAMS=1 OPENVINO_EMBEDDING_NUM_REQUESTS=2
+          export OPENVINO_CLASSIFIER_TOTAL_THREADS=2 OPENVINO_CLASSIFIER_NUM_STREAMS=1 OPENVINO_CLASSIFIER_NUM_REQUESTS=2
+          cd openvino-binding
+          CGO_ENABLED=1 go test -race -count=3 -run '^TestOwned' -timeout 5m -v .
+
       - name: Convert test models
         run: |
           export LD_LIBRARY_PATH=${{ github.workspace }}/openvino-binding/build:$LD_LIBRARY_PATH

@@ -1,7 +1,7 @@
 name: Image Routing Calibration
 
 # Exact-head trust gate for the image-routing threshold pack (issue #2165).
-# Reruns cmd/image-routing-calibration over every fixture in its calibration
+# Reruns tools/calibration/image-routing over every fixture in its calibration
 # set at the calibrated model snapshot and fails unless each shipped
 # threshold in config/fragments/signal/embedding/image-routing.yaml equals
 # the value the report selects. It also runs the multimodal-routing profile
@@ -147,14 +147,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/image-routing-calibration"
-          cd src/semantic-router
-          go run ./cmd/image-routing-calibration \
+          make build-image-routing-calibration
+          ./bin/image-routing-calibration \
             -model "${GITHUB_WORKSPACE}/${MODEL_DIR}" \
             -artifact-revision "${CALIBRATED_REVISION}" \
             -expect-artifact-revision "${CALIBRATED_REVISION}" \
-            -rules ../../config/fragments/signal/embedding/image-routing.yaml \
-            -cases ./cmd/image-routing-calibration/testdata/calibration-set.json \
-            -fixture-root ../.. \
+            -rules config/fragments/signal/embedding/image-routing.yaml \
+            -cases tools/calibration/image-routing/testdata/calibration-set.json \
+            -fixture-root . \
             -output "${RUNNER_TEMP}/image-routing-calibration/report.json" \
             -markdown "${RUNNER_TEMP}/image-routing-calibration/report.md" \
             -check -require-clean | tee "${RUNNER_TEMP}/image-routing-calibration/gate.txt"

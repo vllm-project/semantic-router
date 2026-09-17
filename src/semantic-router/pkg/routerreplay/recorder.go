@@ -403,10 +403,14 @@ func (r *Recorder) getRecord(id string) (RoutingRecord, bool, error) {
 	return rec, found, err
 }
 
-func (r *Recorder) ListAllRecords() []RoutingRecord {
+func (r *Recorder) ListRecords() ([]RoutingRecord, error) {
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
-	records, err := r.storage.List(ctx)
+	return r.storage.List(ctx)
+}
+
+func (r *Recorder) ListAllRecords() []RoutingRecord {
+	records, err := r.ListRecords()
 	if err != nil {
 		return []RoutingRecord{}
 	}

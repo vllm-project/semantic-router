@@ -12,13 +12,22 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
+type ownedEmbeddingEngine interface {
+	io.Closer
+	embed(string, embedding.Options) (tasks.EmbeddingResult, error)
+}
+
 type embeddingEngine struct {
-	candle *candle.EmbeddingModel
-	ort    *ort.EmbeddingModel
-	multi  *ort.MultiModalModel
+	openvino ownedEmbeddingEngine
+	candle   *candle.EmbeddingModel
+	ort      *ort.EmbeddingModel
+	multi    *ort.MultiModalModel
 }
 
 func (e *embeddingEngine) Close() error {
+	if e.openvino != nil {
+		return e.openvino.Close()
+	}
 	if e.candle != nil {
 		return e.candle.Close()
 	}
@@ -29,6 +38,9 @@ func (e *embeddingEngine) Close() error {
 }
 
 func (e *embeddingEngine) embed(text string, options embedding.Options) (tasks.EmbeddingResult, error) {
+	if e.openvino != nil {
+		return e.openvino.embed(text, options)
+	}
 	if e.candle != nil {
 		out, err := e.candle.EmbedAtLayer(text, options.Dimension, options.Layer)
 		return tasks.EmbeddingResult{Embedding: out.Values, Input: &tasks.InputUsage{OriginalTokens: out.Input.InputTokens, ProcessedTokens: out.Input.ProcessedTokens, Truncated: out.Input.Truncated}}, nativeError(err)

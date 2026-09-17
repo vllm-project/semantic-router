@@ -30,8 +30,8 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 	}
 	switch rule.Type {
 	case ClassifierSignalTypeLocal, ClassifierSignalTypeSequenceClassifier:
-		if len(rule.Labels) < 2 || rule.Instructions != "" {
-			return fmt.Errorf("sequence classifier bindings require at least two labels and no instructions")
+		if len(rule.Labels) < 2 || rule.Instructions != "" || rule.DisableRationale {
+			return fmt.Errorf("sequence classifier bindings require at least two labels and no instructions or disable_rationale")
 		}
 		if deployment.Provider == "http" && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
 			return fmt.Errorf("sequence classifier binding requires http_classify adapter")
