@@ -4,7 +4,7 @@ import copy
 
 import pytest
 from cli.config_schema.validation import validate_config_structure
-from cli.models import UserConfig
+from cli.models import OperatingPointReference, UserConfig
 from cli.validator_classifier import validate_classifier_contracts
 from cli.validator_model_runtime import (
     project_classifier_rule,
@@ -53,6 +53,39 @@ def generic_document(provider="http", rule_type="local", named=False):
     else:
         document["routing"] = profile
     return document
+
+
+@pytest.mark.parametrize(
+    "provider,device,directory,valid",
+    [
+        ("ort", "migraphx:0", "/var/cache/semantic-router/migraphx", True),
+        ("ort", "cpu", "", True),
+        ("ort", "cpu", "/cache", False),
+        ("ort", "rocm:0", "/cache", False),
+        ("candle", "cpu", "/cache", False),
+        ("http", "", "/cache", False),
+        ("ort", "migraphx:0", "relative", False),
+        ("ort", "migraphx:0", " /cache", False),
+        ("ort", "migraphx:0", "/cache\x00", False),
+        ("ort", "migraphx:0", 0, False),
+    ],
+)
+def test_compilation_cache_is_an_explicit_typed_deployment(
+    provider, device, directory, valid
+):
+    document = generic_document(provider)
+    deployment = document["global"]["model_catalog"]["deployments"]["selected"]
+    deployment.update(device=device, compilation_cache_dir=directory)
+    config = UserConfig.model_validate(document)
+    assert (validate_model_runtime_references(config) == []) == valid
+    if valid:
+        assert validate_config_structure(document) == []
+        assert (
+            config.model_dump(by_alias=True)["global"]["model_catalog"]["deployments"][
+                "selected"
+            ]["compilation_cache_dir"]
+            == directory
+        )
 
 
 @pytest.mark.parametrize("provider", ["candle", "ort", "http"])
@@ -145,3 +178,115 @@ def test_bound_llm_rejects_unscored_parser():
     document["global"]["model_catalog"]["external"][0]["parser_type"] = "qwen3guard"
     errors = validate_classifier_contracts(UserConfig.model_validate(document))
     assert any("parser_type must be json" in error.message for error in errors)
+
+
+@pytest.mark.parametrize("named", [False, True])
+def test_independent_policy_binding_roundtrip_and_predicate_free_leaf(named):
+    document = generic_document("candle", named=named)
+    profile = document["recipes"][0]["routing"] if named else document["routing"]
+    binding = profile["model_bindings"]["classifier.risk.tenant"]
+    binding["contract"] = "label_scores.v1"
+    binding["operating_point"] = {"path": "point.json", "sha256": "a" * 64}
+    document["global"]["model_catalog"]["deployments"]["selected"]["input"] = {
+        "max_tokens": 32768,
+        "overflow": "reject",
+    }
+    profile["decisions"] = [
+        {
+            "name": "risk-route",
+            "priority": 1,
+            "rules": {
+                "operator": "AND",
+                "on_unknown": "fail_request",
+                "conditions": [
+                    {"type": "classifier", "name": "risk.tenant", "label": "unsafe"}
+                ],
+            },
+            "modelRefs": [{"model": "route-model"}],
+        }
+    ]
+    assert validate_config_structure(document) == []
+    config = UserConfig.model_validate(document)
+    assert validate_model_runtime_references(config) == []
+    assert validate_classifier_contracts(config) == []
+    model_profile = config.recipes[0].routing if named else config.routing
+    assert (
+        model_profile.model_bindings[
+            "classifier.risk.tenant"
+        ].operating_point.model_dump()
+        == binding["operating_point"]
+    )
+    binding.pop("operating_point")
+    invalid = UserConfig.model_validate(document)
+    assert validate_model_runtime_references(invalid)
+    assert validate_classifier_contracts(invalid)
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "missing",
+        "categorical",
+        "remote",
+        "head",
+        "budget",
+        "truncate",
+        "half",
+        "other consumer",
+    ],
+)
+def test_independent_policy_ref_rejects_unsupported_execution(scenario):
+    document = generic_document("candle")
+    binding = document["routing"]["model_bindings"]["classifier.risk.tenant"]
+    binding["contract"] = "label_scores.v1"
+    binding["operating_point"] = {"path": "point.json", "sha256": "a" * 64}
+    deployment = document["global"]["model_catalog"]["deployments"]["selected"]
+    deployment["input"] = {"max_tokens": 32768, "overflow": "reject"}
+    if scenario == "missing":
+        binding.pop("operating_point")
+    elif scenario == "categorical":
+        binding["contract"] = "label_distribution.v1"
+    elif scenario == "remote":
+        deployment["provider"] = "http"
+    elif scenario == "head":
+        binding["head"] = "other"
+    elif scenario == "budget":
+        deployment["input"]["max_tokens"] = 0
+    elif scenario == "truncate":
+        deployment["input"]["overflow"] = "truncate"
+    elif scenario == "half":
+        deployment["precision"] = "fp16"
+    else:
+        document["routing"]["model_bindings"] = {"feedback_detector": binding}
+        document["routing"]["signals"]["classifiers"][0][
+            "model_path"
+        ] = "models/selected"
+    assert validate_model_runtime_references(UserConfig.model_validate(document))
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {"path": "../outside.json", "sha256": "a" * 64},
+        {"path": " point.json", "sha256": "a" * 64},
+        {"path": "point.json", "sha256": "missing"},
+        {"path": "point.json", "sha256": "A" * 64},
+        {"path": "point.json", "sha256": "a" * 64, "ignored": True},
+    ],
+)
+def test_operating_point_requires_unambiguous_immutable_reference(reference):
+    with pytest.raises(ValidationError):
+        OperatingPointReference.model_validate(reference)
+
+
+def test_independent_ort_binding_allows_explicit_qualified_graph_reference():
+    document = generic_document("ort")
+    binding = document["routing"]["model_bindings"]["classifier.risk.tenant"]
+    binding["contract"] = "label_scores.v1"
+    binding["operating_point"] = {"path": "point.json", "sha256": "a" * 64}
+    binding["head"] = "onnx/model.onnx"
+    deployment = document["global"]["model_catalog"]["deployments"]["selected"]
+    deployment["input"] = {"max_tokens": 32768, "overflow": "reject"}
+    assert not validate_model_runtime_references(UserConfig.model_validate(document))
+    deployment["precision"] = "fp16"
+    assert validate_model_runtime_references(UserConfig.model_validate(document))

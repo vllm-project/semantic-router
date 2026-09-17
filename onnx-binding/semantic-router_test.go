@@ -1,6 +1,7 @@
 package onnx_binding
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -794,8 +795,20 @@ func TestNLIStubs(t *testing.T) {
 
 	t.Run("InitNLIModel", func(t *testing.T) {
 		err := InitNLIModel("/fake/path", true)
-		if err == nil {
-			t.Fatal("Expected error for unimplemented function")
+		if !errors.Is(err, ErrBackendUnavailable) || IsNLIModelInitialized() {
+			t.Fatalf("unsupported NLI must remain unavailable: %v", err)
+		}
+	})
+
+	t.Run("LabelStrings", func(t *testing.T) {
+		for label, expected := range map[NLILabel]string{
+			NLIEntailment: "ENTAILMENT", NLINeutral: "NEUTRAL",
+			NLIContradiction: "CONTRADICTION", NLIUnknown: "UNKNOWN",
+			NLIError: "ERROR", NLILabel(42): "ERROR",
+		} {
+			if label.String() != expected {
+				t.Fatalf("label %d: got %q, expected %q", label, label.String(), expected)
+			}
 		}
 	})
 
@@ -815,8 +828,8 @@ func TestNLIStubs(t *testing.T) {
 
 	t.Run("ClassifyNLI", func(t *testing.T) {
 		result, err := ClassifyNLI("premise", "hypothesis")
-		if err == nil {
-			t.Fatalf("Expected error, got result: %v", result)
+		if !errors.Is(err, ErrBackendUnavailable) || result != nil || IsNLIModelInitialized() {
+			t.Fatalf("unsupported NLI produced a result or lost its cause: result=%v error=%v", result, err)
 		}
 	})
 }

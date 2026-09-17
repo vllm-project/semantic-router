@@ -13,20 +13,29 @@ import (
 var requiredGateIDs = canonicalReleaseGateIDs()
 
 func validateReportExecutionTimestamp(run Run, manifest RunManifest, generatedAt, sealedAt time.Time) error {
+	invalidTimestamp := func(reason string) error {
+		startedAt := "missing"
+		if run.StartedAt != nil {
+			startedAt = run.StartedAt.Format(time.RFC3339Nano)
+		}
+		return fmt.Errorf("%w: %s (generated_at=%s created_at=%s started_at=%s sealed_at=%s)",
+			ErrInvalid, reason, generatedAt.Format(time.RFC3339Nano), manifest.CreatedAt.Format(time.RFC3339Nano),
+			startedAt, sealedAt.Format(time.RFC3339Nano))
+	}
 	if run.StartedAt == nil || generatedAt.IsZero() || generatedAt.After(sealedAt) {
-		return fmt.Errorf("%w: report provenance timestamp is outside the server-owned execution window", ErrInvalid)
+		return invalidTimestamp("report provenance timestamp is outside the server-owned execution window")
 	}
 	// Replay evidence may be deterministically timestamped at manifest creation;
 	// it makes no claim about a live observation window. Live evidence must be
 	// generated after the server transitions the run to running.
 	if manifest.Mode == ModeReplay {
 		if generatedAt.Before(manifest.CreatedAt) {
-			return fmt.Errorf("%w: replay report provenance predates the immutable manifest", ErrInvalid)
+			return invalidTimestamp("replay report provenance predates the immutable manifest")
 		}
 		return nil
 	}
 	if manifest.Mode != ModeLive || generatedAt.Before(run.StartedAt.UTC()) {
-		return fmt.Errorf("%w: report provenance timestamp is outside the server-owned execution window", ErrInvalid)
+		return invalidTimestamp("report provenance timestamp is outside the server-owned execution window")
 	}
 	return nil
 }

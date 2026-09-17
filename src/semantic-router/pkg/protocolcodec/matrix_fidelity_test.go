@@ -112,8 +112,8 @@ func TestRequestOptionMatrixNeverSilentlyDropsSemantics(t *testing.T) {
 			body: `{"model":"m","messages":[{"role":"user","content":"hello"}],"reasoning_budget_tokens":512}`,
 		},
 		{
-			name:   "Anthropic top k cannot disappear in Chat",
-			source: llmprotocol.AnthropicMessagesV1, target: llmprotocol.OpenAIChatV1,
+			name:   "Anthropic top k cannot disappear in Responses",
+			source: llmprotocol.AnthropicMessagesV1, target: llmprotocol.OpenAIResponsesV1,
 			body: `{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hello"}],"top_k":8}`,
 		},
 		{

@@ -194,7 +194,7 @@ export function embeddingModelsFields(): FieldConfig[] {
       name: 'mmbert_model_path',
       label: 'mmBERT Model Path',
       type: 'text',
-      placeholder: 'models/mmbert-embed-32k-2d-matryoshka',
+      placeholder: 'models/Vela-1.0-Encoder-307M-Embedding',
       shouldHide: hideForRemote,
     },
     {

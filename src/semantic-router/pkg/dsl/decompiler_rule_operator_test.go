@@ -1,11 +1,43 @@
 package dsl
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestDecompilePreservesNegatedConjunctions(t *testing.T) {
+	for _, expression := range []string{
+		`NOT (domain("a") AND domain("b"))`,
+		`NOT (domain("a") AND (domain("b") OR domain("c")))`,
+		`NOT (domain("a") AND NOT (domain("b") AND domain("c")))`,
+		`NOT (domain("a") AND domain("b")) OR domain("c")`,
+	} {
+		t.Run(expression, func(t *testing.T) {
+			source := `SIGNAL domain a { description: "A" }
+SIGNAL domain b { description: "B" }
+SIGNAL domain c { description: "C" }
+ROUTE guarded { PRIORITY 1 WHEN ` + expression + ` MODEL "m:1b" }`
+			original, errs := Compile(source)
+			if len(errs) != 0 {
+				t.Fatalf("compile source: %v", errs)
+			}
+			text, err := Decompile(original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored, errs := Compile(text)
+			if len(errs) != 0 {
+				t.Fatalf("compile decompiled source: %v\n%s", errs, text)
+			}
+			if len(restored.Decisions) != 1 || !reflect.DeepEqual(original.Decisions[0].Rules, restored.Decisions[0].Rules) {
+				t.Fatalf("negated condition changed during round trip:\n%s", text)
+			}
+		})
+	}
+}
 
 // unnormalizedORDecision builds a decision whose rule tree uses a
 // lowercase, unnormalized "or" operator — the shape a config.RouterConfig

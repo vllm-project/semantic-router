@@ -53,6 +53,12 @@ func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 
 func (c *Compiler) compileEmbeddingSignal(s *SignalDecl) {
 	rule := config.EmbeddingRule{Name: s.Name}
+	prototypeScoring, err := prototypeScoringFromSignal(s)
+	if err != nil {
+		c.addError(s.Pos, "embedding signal %q: %v", s.Name, err)
+		return
+	}
+	rule.PrototypeScoring = prototypeScoring
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.SimilarityThreshold = v
 	}
@@ -243,6 +249,12 @@ func (c *Compiler) compileClassifierSignal(s *SignalDecl) {
 
 func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	rule := config.ComplexityRule{Name: s.Name}
+	prototypeScoring, err := prototypeScoringFromSignal(s)
+	if err != nil {
+		c.addError(s.Pos, "complexity signal %q: %v", s.Name, err)
+		return
+	}
+	rule.PrototypeScoring = prototypeScoring
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.Threshold = v
 	}
