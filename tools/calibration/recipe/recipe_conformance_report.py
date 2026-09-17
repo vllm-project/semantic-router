@@ -160,12 +160,10 @@ def build_consolidated_report(report_root: Path) -> dict[str, Any]:
             "total": sum(result["total"] for result in results),
             "complete": reported == expected,
             "passed": reported == expected and failed == 0,
-            "cpu_compatible_complete": all(
-                result["status"] != "missing" for result in cpu_results
-            ),
-            "cpu_compatible_passed": all(
-                result["status"] == "passed" for result in cpu_results
-            ),
+            "cpu_compatible_complete": bool(cpu_results)
+            and all(result["status"] != "missing" for result in cpu_results),
+            "cpu_compatible_passed": bool(cpu_results)
+            and all(result["status"] == "passed" for result in cpu_results),
         },
     }
 
@@ -177,7 +175,13 @@ def _recipe_result(
     report = reports.get(name)
     evaluation = _mapping(report.get("evaluation")) if report else {}
     is_reported = report is not None
-    is_passed = is_reported and bool(evaluation.get("passed"))
+    total = int(evaluation.get("total") or 0)
+    expected = int(recipe.get("variants") or total)
+    execution = _mapping(evaluation.get("execution"))
+    complete = total > 0 and total == expected
+    if "variants" in recipe:
+        complete = complete and bool(execution.get("complete"))
+    is_passed = is_reported and bool(evaluation.get("passed")) and complete
     scope = str(evaluation.get("evaluation_scope") or "deployment")
     devices = recipe.get("required_devices", [])
     absent_status = "requires_hardware" if devices else "missing"
@@ -200,7 +204,9 @@ def _recipe_result(
             "passed" if is_passed else "failed" if is_reported else absent_status
         ),
         "matched": int(evaluation.get("matched") or 0),
-        "total": int(evaluation.get("total") or 0),
+        "total": total,
+        "expected_probes": expected,
+        "execution": execution,
         "passed": is_passed,
         "required_devices": devices,
         "report": f"{name}/eval-report.json" if is_reported else None,

@@ -2,42 +2,28 @@
 
 Run from the repository root with numpy, scikit-learn and pytest installed:
 python -m pytest src/training/model_selection/ml_model_selection/tests/test_native_parity.py
-Cargo builds the library from this checkout; no model downloads or GPU are needed.
+Cargo builds the local library, or CI verifies its shared native artifact before
+loading it. No model downloads or GPU are needed.
 """
 
 import ctypes
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from tools.ci.native_artifact import prepare_ml_library
+
 TRAINING = Path(__file__).resolve().parents[1]
-REPO = TRAINING.parents[3]
 sys.path.insert(0, str(TRAINING))
 from models import KNNModel, SVMModel, TrainingSample  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def native():
-    target = REPO / "ml-binding" / "target"
-    subprocess.run(
-        [
-            "cargo",
-            "build",
-            "--release",
-            "--locked",
-            "--manifest-path",
-            str(REPO / "ml-binding/Cargo.toml"),
-            "--target-dir",
-            str(target),
-        ],
-        check=True,
-    )
-    suffix = "dylib" if sys.platform == "darwin" else "so"
-    lib = ctypes.CDLL(str(target / "release" / f"libml_semantic_router.{suffix}"))
+    lib = ctypes.CDLL(str(prepare_ml_library()))
     for algorithm in ("knn", "svm"):
         load = getattr(lib, f"ml_{algorithm}_from_json")
         load.argtypes = [ctypes.c_char_p]

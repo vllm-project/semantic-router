@@ -1,7 +1,7 @@
 # Repository tooling tests that do not require a running Router.
 
 test-calibration: $(HARNESS_VENV_DEPS) ## Test recipe probes and offline tuning tools
-	@PYTHONPATH="$(CURDIR)/tools/calibration:$(CURDIR)/tools/calibration/recipe" \
+	@PYTHONPATH="$(CURDIR)/tools/calibration:$(CURDIR)/tools/calibration/recipe$${PYTHONPATH:+:$${PYTHONPATH}}" \
 		"$(AGENT_PYTHON)" -m pytest tools/calibration/recipe tools/calibration/tuning/tests
 
 PROVIDER_SIMULATOR_VENV ?= $(CURDIR)/.agent-harness/provider-simulator
