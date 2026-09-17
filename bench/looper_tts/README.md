@@ -1,24 +1,44 @@
 # Looper fixed-budget experiment contracts
 
-This package implements the offline foundation of [issue #2858](https://github.com/vllm-project/semantic-router/issues/2858).
-It validates experiment inputs and freezes a reproducible matrix. It does not
-call providers, download datasets, execute algorithms, compute prices, or grade
-answers. Its fixtures are synthetic contract examples, never benchmark evidence.
+This package implements the fixed-budget benchmark harness for [issue #2858](https://github.com/vllm-project/semantic-router/issues/2858).
+It validates experiment inputs, freezes a reproducible matrix, executes the
+four maintained algorithm families through an OpenAI-compatible provider, and
+writes normalized per-call evidence. Candidate replay, repeated sampling,
+native scoring, and reports remain later phases. Its deterministic provider is
+synthetic smoke evidence, never a benchmark claim.
 
 ## Run from the repository root
 
-Only Python 3.8+ and the standard library are required:
+Python 3.8+ and the benchmark package dependencies are required:
 
 ```bash
 python -m bench.looper_tts validate --config bench/looper_tts/testdata/synthetic.json
 python -m bench.looper_tts plan --config bench/looper_tts/testdata/synthetic.json --code-revision <evaluated-revision> --output /tmp/looper-tts-plan
 python -m unittest bench.looper_tts.test_contracts bench.looper_tts.test_evidence_integrity -v
+
+# Offline PR2 smoke (writes records.json, runtime_receipt.json and raw/)
+python -m bench.looper_tts execute --manifest /tmp/looper-tts-plan/manifest.json --output /tmp/looper-tts-run --fake
+
+# Live execution (one-attempt provider calls; retries are recorded separately)
+python -m bench.looper_tts execute --manifest /tmp/looper-tts-plan/manifest.json --output /tmp/looper-tts-run --endpoint http://localhost:8000/v1 --api-key "$MODEL_API_KEY" --retries 1
+```
+
+Builds that include the native Looper bindings can run the same manifest
+through the production Go algorithms. The native endpoint is the complete
+`/chat/completions` URL; the command reads the key from an environment
+variable and writes normalized `records.json` plus a runtime receipt with budget
+events:
+
+```bash
+cd src/semantic-router && go build -o ../../bin/looper-tts ./cmd/looper-tts
+../../bin/looper-tts --manifest /tmp/looper-tts-plan/manifest.json --output /tmp/looper-tts-native --endpoint http://localhost:8000/v1/chat/completions
 ```
 
 Replace `<evaluated-revision>` with the exact evaluated code revision; the
 planner records this supplied value without claiming to verify a clean checkout.
-The output directory receives `manifest.json`; an existing manifest is never
-overwritten. No credentials or provider endpoints belong in these artifacts.
+The plan output directory receives `manifest.json`; an existing manifest is
+never overwritten. Execution writes `records.json`, `runtime_receipt.json`, and
+raw response artifacts. No credentials are stored in those artifacts.
 After installing the `bench` package, use `looper-tts` or
 `python -m looper_tts` with the same arguments.
 
@@ -53,10 +73,14 @@ this offline tool does not resolve or authenticate external versions. Calibratio
 overlap is checked by supplied IDs within this dataset, not semantic similarity.
 No secret or restricted dataset material should be placed in committed examples.
 
-Ceilings describe planned constraints, not proof of runtime enforcement or equal
-actual spend. The executor phase must reserve concurrent budgets and charge all
-generation, verification, judge, synthesis and retry calls. Configuration
-validation deliberately does not assert that any real algorithm fits a budget.
+Ceilings describe planned constraints and are enforced independently for every
+cell/item execution. The executor reserves the prompt estimate plus its
+deterministic output cap before dispatch, then settles against provider usage.
+Concurrent Fusion and ReMoM calls reserve before entering their worker pool.
+Generation, verification, judge, synthesis, failed, unusable, and retry calls
+all consume a call slot. If usage is missing or lacks a complete billable
+token pair, the reservation is charged and the receipt marks the call
+`usage_source: reservation`.
 
 ## Frozen identity
 
@@ -125,8 +149,31 @@ not dereference or verify their existence. The fixture uses `fixture://` referen
 Later accounting must separately report actual replay expenditure and complete
 algorithm cost, including original candidate generation; cached usage must not
 be counted as newly purchased tokens. Live latency and cached-policy latency are
-also separate measurements. Price calculations and budget enforcement are outside
-this phase.
+also separate measurements. PR2's `runtime_receipt.json` reports complete
+algorithm cost when both billable usage fields and model prices are known; the
+normalized `records.json` keeps the stable v1 evidence fields.
+
+## Runtime behavior
+
+`execute` expands each matrix cell/item as follows:
+
+| Algorithm | Calls |
+| --- | --- |
+| Direct | one `generate` call |
+| Confidence | `generate`, then `verify` for each candidate until the threshold is met |
+| ReMoM | parallel `generate` rounds from `breadth`, followed by a final `synthesize` round |
+| Fusion | parallel panel `generate`, `judge`, then `synthesize` |
+
+The output cap defaults to `min(1024, floor(max_total_tokens / max_calls))` and
+can be fixed with `--max-output-tokens`. The chosen cap and retry policy are
+recorded in the runtime receipt. Provider model slugs come from the manifest's
+`model` field while evidence rows use the stable local `model_id`.
+
+The Go Looper client exposes the same accounting seam through
+`looper.WithCallObserver`: native callers can reserve before dispatch and
+settle after transport or parse errors. It also propagates the four stage names
+to Base, Confidence, ReMoM, and Fusion calls, and preserves explicit usage
+field presence for streaming and non-streaming responses.
 
 ## Deterministic fixture
 

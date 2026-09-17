@@ -53,7 +53,7 @@ func (l *FusionLooper) runFusionSingleJudge(
 		prompt = prompt + "\n\n" + notes
 	}
 	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(
+	resp, err := l.callFusionModelStage(
 		ctx,
 		req,
 		finalReq,
@@ -62,6 +62,7 @@ func (l *FusionLooper) runFusionSingleJudge(
 		true,
 		false,
 		len(panelResponses)+1,
+		CallStageSynthesize,
 		config.FusionModelOverride{},
 	)
 	if err != nil {
