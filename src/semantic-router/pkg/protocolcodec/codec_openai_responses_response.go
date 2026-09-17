@@ -77,8 +77,9 @@ type responsesUsageWire struct {
 }
 
 type responsesInputUsageDetails struct {
-	CachedTokens     int64 `json:"cached_tokens"`
-	CacheWriteTokens int64 `json:"cache_write_tokens"`
+	CachedTokens       *int64 `json:"cached_tokens"`
+	CacheWriteTokens   *int64 `json:"cache_write_tokens"`
+	CreatedCacheTokens *int64 `json:"created_cache_tokens,omitempty"`
 }
 
 type responsesOutputUsageDetails struct {
@@ -164,7 +165,10 @@ func decodeResponsesResponseResource(
 	}
 	response.Output = output
 	if wire.Usage != nil {
-		response.Usage = decodeResponsesUsage(*wire.Usage)
+		response.Usage, err = decodeResponsesUsage(*wire.Usage)
+		if err != nil {
+			return llmprotocol.Response{}, err
+		}
 		appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
 			"usage.compute_units": len(wire.Usage.ComputeUnits) > 0,
 		}, "compute-unit accounting has no protocol-neutral token representation")
@@ -344,30 +348,28 @@ func responsesContentFieldPresent(raw json.RawMessage, field string) bool {
 	return false
 }
 
-func decodeResponsesUsage(wire responsesUsageWire) llmprotocol.Usage {
-	cached, cacheWrite := int64(0), int64(0)
-	if wire.InputTokensDetails != nil {
-		cached = wire.InputTokensDetails.CachedTokens
-		cacheWrite = wire.InputTokensDetails.CacheWriteTokens
-	}
+func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 	reasoning := int64(0)
 	if wire.OutputTokensDetails != nil {
 		reasoning = wire.OutputTokensDetails.ReasoningTokens
-	}
-	uncached := int64(-1)
-	if cached >= 0 && cacheWrite >= 0 && wire.InputTokens >= cached && cacheWrite <= wire.InputTokens-cached {
-		uncached = wire.InputTokens - cached - cacheWrite
 	}
 	other := int64(-1)
 	if reasoning >= 0 && wire.OutputTokens >= reasoning {
 		other = wire.OutputTokens - reasoning
 	}
-	return llmprotocol.Usage{
+	usage := llmprotocol.Usage{
 		State:         llmprotocol.UsageAvailable,
-		InputUncached: authoritative(uncached), InputCacheRead: authoritative(cached), InputCacheWrite: authoritative(cacheWrite),
+		InputUncached: unknownCount(), InputCacheRead: unknownCount(), InputCacheWrite: unknownCount(),
 		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
 		InputTotal: authoritative(wire.InputTokens), OutputTotal: authoritative(wire.OutputTokens), Total: authoritative(wire.TotalTokens),
 	}
+	if wire.InputTokensDetails != nil {
+		details := wire.InputTokensDetails
+		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens); err != nil {
+			return llmprotocol.Usage{}, err
+		}
+	}
+	return usage, nil
 }
 
 func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
@@ -498,7 +500,7 @@ func encodeResponsesUsage(usage llmprotocol.Usage) *responsesUsageWire {
 		OutputTokens: tokenValue(usage.OutputTotal),
 		TotalTokens:  tokenValue(usage.Total),
 		InputTokensDetails: &responsesInputUsageDetails{
-			CachedTokens: tokenValue(usage.InputCacheRead), CacheWriteTokens: tokenValue(usage.InputCacheWrite),
+			CachedTokens: usage.InputCacheRead.Value, CacheWriteTokens: usage.InputCacheWrite.Value,
 		},
 		OutputTokensDetails: &responsesOutputUsageDetails{ReasoningTokens: tokenValue(usage.OutputReasoning)},
 	}

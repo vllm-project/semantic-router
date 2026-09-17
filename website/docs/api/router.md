@@ -91,6 +91,23 @@ Anthropic Messages. The client may use any supported inference path; the Router
 translates once at the provider boundary and returns the client's original wire
 format.
 
+### vLLM Chat controls
+
+For Chat backends that implement these vLLM extensions, the Router preserves
+these fields through routing and request edits:
+
+| Field | Accepted values |
+| --- | --- |
+| `top_k` | Integer: `-1` or `0` disables filtering; positive values limit candidate tokens. |
+| `min_p` | Number from 0 to 1. |
+| `repetition_penalty` | Finite number greater than 0. |
+| `cache_salt` | String of 1–128 characters, excluding `@`, `/`, `\`, and NUL. |
+
+`cache_salt` selects a backend prefix-cache namespace without changing the
+prompt. Reuse a salt for requests that may share cached prefixes. The Router
+also preserves `chat_template_kwargs`, such as `enable_thinking`. These
+extensions are rejected when the target protocol cannot represent them.
+
 ### Responses API
 
 ```bash

@@ -42,8 +42,15 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 		return r.createErrorResponse(400, "session_id is required")
 	}
 
-	records := filterTrajectoryRecordsBySession(r.collectRouterReplayRecords(), sessionID)
 	recipe, scoped := values.Get("recipe"), values.Has("recipe")
+	var recipeFilter *string
+	if scoped {
+		recipeFilter = &recipe
+	}
+	records, err := r.queryRouterReplaySession(sessionID, recipeFilter)
+	if err != nil {
+		return r.createErrorResponse(500, "router replay storage query failed")
+	}
 	if !scoped {
 		for index, record := range records {
 			if index > 0 && record.Recipe != recipe {
@@ -53,7 +60,7 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 		}
 	}
 	records = filterTrajectoryRecordsByRecipe(records, recipe)
-	// collectRouterReplayRecords returns newest-first; trajectory needs chronological order.
+	// The storage query returns newest-first; trajectory needs chronological order.
 	reverseRoutingRecords(records)
 	turns := buildTrajectoryTurns(records)
 
