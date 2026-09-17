@@ -9,6 +9,7 @@ import (
 // PreparedBinding describes a successfully warmed, still-owned task. It omits
 // execution keys and remote endpoints, which may contain private connection data.
 type PreparedBinding struct {
+	ResourceID string
 	Identity   Identity
 	Artifact   string
 	Revision   string
@@ -37,7 +38,7 @@ func (i *Inventory) Observe(event Event) {
 		return
 	}
 	i.bindings[event.instance] = PreparedBinding{
-		Identity: event.Identity, Artifact: event.Artifact, Revision: event.Revision,
+		ResourceID: event.ResourceID, Identity: event.Identity, Artifact: event.Artifact, Revision: event.Revision,
 		Capability: cloneCapability(event.Capability),
 	}
 }
