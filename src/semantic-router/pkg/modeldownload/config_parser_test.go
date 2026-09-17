@@ -682,6 +682,37 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 	}
 }
 
+func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve RISC-V QEMU config path")
+	}
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "e2e", "config", "config.riscv-qemu.yaml"))
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	if !cfg.IsCategoryClassifierEnabled() {
+		t.Fatal("RISC-V QEMU config must enable the Vela Domain classifier")
+	}
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want only Vela Domain: %#v", len(specs), specs)
+	}
+	if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].Revision == "" {
+		t.Fatalf("RISC-V QEMU must download the pinned Vela Domain classifier: %#v", specs[0])
+	}
+}
+
 func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing.T) {
 	for _, relParts := range [][]string{
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user.yaml"},
