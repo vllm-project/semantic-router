@@ -45,6 +45,17 @@ type AggregateCostSummary struct {
 	Currency            string  `json:"currency,omitempty"`
 	CostRecordCount     int     `json:"cost_record_count"`
 	ExcludedRecordCount int     `json:"excluded_record_count"`
+	// ByCurrency retains every complete estimate without converting or summing
+	// currencies. Flat amounts are populated only when exactly one currency exists.
+	ByCurrency []CurrencyCostSummary `json:"by_currency,omitempty"`
+}
+
+type CurrencyCostSummary struct {
+	Currency        string  `json:"currency"`
+	TotalSaved      float64 `json:"total_saved"`
+	BaselineSpend   float64 `json:"baseline_spend"`
+	ActualSpend     float64 `json:"actual_spend"`
+	CostRecordCount int     `json:"cost_record_count"`
 }
 
 type AggregateValue struct {

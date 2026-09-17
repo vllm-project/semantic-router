@@ -43,7 +43,17 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
+		mutation := buildLooperInternalHeaderRemovalMutation()
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		response := newContinueRequestHeadersResponse(mutation)
+		if headerValueCI(ctx, headers.SelectedModel) != "" {
+			// A caller-supplied selected-model header may have selected a provider
+			// route before ext_proc ran. Skip-processing does not materialize a
+			// provider path, so remove the untrusted selector and re-evaluate onto
+			// the default route, which owns the ingress path-prefix rewrite.
+			response.GetRequestHeaders().GetResponse().ClearRouteCache = true
+		}
+		return response, nil
 	}
 
 	detectStreamingExpectation(ctx)

@@ -120,15 +120,30 @@ func TestAPIStartupBorrowsExistingRouterAndGlobalService(t *testing.T) {
 	service := services.NewPlaceholderClassificationService()
 	registry := routerruntime.NewRegistry(cfg)
 	registry.SetClassificationService(service)
-	actual, owner := classificationServiceForStartup(cfg, registry)
+	actual, owner, err := classificationServiceForStartup(cfg, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if actual != service || owner != nil {
 		t.Fatal("router-owned service was adopted by API")
 	}
 	previous := services.GetGlobalClassificationService()
 	services.SetGlobalClassificationService(service)
 	t.Cleanup(func() { services.SetGlobalClassificationService(previous) })
-	actual, owner = classificationServiceForStartup(cfg, nil)
+	actual, owner, err = classificationServiceForStartup(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if actual != service || owner != nil {
 		t.Fatal("global service was adopted by API")
+	}
+}
+
+func TestStandaloneAPIRejectsUnpreparedCanonicalModel(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "missing", Adapter: "mmbert", Contract: "embedding.v1"}}
+	service, err := ensureClassificationService(cfg, nil, nil)
+	if err == nil || service != nil {
+		t.Fatal("canonical model error became a placeholder API")
 	}
 }
