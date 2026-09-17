@@ -93,17 +93,7 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 		})
 		return nil
 	case "openvino":
-		if err := initOpenVINOModel(modelType, mmBertModelPath, qwen3ModelPath, useCPU); err != nil {
-			return err
-		}
-		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
-			"backend":          "openvino",
-			"model_type":       modelType,
-			"mmbert_model_ref": mmBertModelPath,
-			"qwen3_model_ref":  qwen3ModelPath,
-			"use_cpu":          useCPU,
-		})
-		return nil
+		return fmt.Errorf("OpenVINO requires an owned model binding")
 	case "candle":
 		err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
 		if err != nil {
@@ -212,7 +202,7 @@ func (c *EmbeddingClassifier) computeEmbedding(ctx context.Context, text string,
 			}
 			embedding, err = c.provider.Embed(ctx, text)
 		case "openvino":
-			embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
+			return nil, fmt.Errorf("OpenVINO requires an owned model binding")
 		case "candle":
 			var output *tasks.EmbeddingResult
 			output, err = getEmbedding2DMatryoshka(text, modelType, c.optimizationConfig.TargetLayer, c.optimizationConfig.TargetDimension)
