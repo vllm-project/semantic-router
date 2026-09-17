@@ -66,6 +66,10 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
+	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.logicalModel); err != nil {
+		return nil, err
+	}
+
 	required := llmprotocol.RequiredCapabilities(*request)
 	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
 		if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.isLooperRequest(ctx) {

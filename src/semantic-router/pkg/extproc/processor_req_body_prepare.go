@@ -144,17 +144,29 @@ func (r *OpenAIRouter) respondRoutingRejected(
 	routingErr error,
 	terminalReason string,
 ) *ext_proc.ProcessingResponse {
-	resp := r.createErrorResponse(503, routingErr.Error())
+	status := 503
+	var budgetError *selection.RequestBudgetError
+	if errors.As(routingErr, &budgetError) {
+		status = 400
+		terminalReason = "request_budget_exceeded"
+		ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, budgetError.Code, budgetError.Message, routingErr)
+	}
+	resp := r.createErrorResponse(status, routingErr.Error())
+	if budgetError != nil {
+		// Retain exactly the client-visible error in Replay, including streams
+		// rejected before the provider has started an SSE response.
+		resp = r.encodeImmediateResponseForClient(resp, ctx)
+	}
 	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
 		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, nil)
 	}
 	r.startRouterReplay(ctx, originalModel, "", "")
-	r.updateRouterReplayStatus(ctx, 503, false)
+	r.updateRouterReplayStatus(ctx, status, false)
 	if immediate := resp.GetImmediateResponse(); immediate != nil {
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)
 	}
 	// Failed, not aborted: the router itself rejected the request with a
-	// terminal 503; aborted is reserved for streams that end early.
+	// terminal response; aborted is reserved for streams that end early.
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, terminalReason)
 	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 	return resp

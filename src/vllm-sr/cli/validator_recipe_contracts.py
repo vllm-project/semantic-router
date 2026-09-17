@@ -78,6 +78,13 @@ def _recipe_name_contract(
     recipe_names = {"default"}
     explicit_default_seen = False
     for recipe in config.recipes:
+        if recipe.name == "@global":
+            errors.append(
+                ValidationError(
+                    "Recipe name '@global' is reserved for shared model services",
+                    field="recipes.@global",
+                )
+            )
         explicit_default_allowed = (
             recipe.name == "default"
             and not top_level_has_profile

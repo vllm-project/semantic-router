@@ -314,6 +314,12 @@ func validateContextCompressionTargets(
 	typed *ContextCompressionPluginConfig,
 	scope string,
 ) error {
+	if typed.Targets != nil {
+		mode := strings.TrimSpace(typed.Targets.CurrentUser.Mode)
+		if mode != "" && mode != ContextCompressionTargetPreserve && mode != ContextCompressionTargetTruncate {
+			return fmt.Errorf("%s: current_user.mode must be preserve or truncate", scope)
+		}
+	}
 	targets := []ContextCompressionTargetConfig{typed.EffectiveToolOutputTarget()}
 	if typed.Targets != nil {
 		targets = append(targets, typed.Targets.History, typed.Targets.RAG, typed.Targets.Memory)
