@@ -21,8 +21,15 @@ const execJsPath = process.argv[3] ||
 
 let passed = 0;
 let failed = 0;
+const eventsPath = process.env.DASHBOARD_WASM_NODE_EVENTS;
+if (eventsPath) {
+  fs.writeFileSync(eventsPath, "");
+}
 
-function assert(cond, msg) {
+function assert(id, cond, msg) {
+  if (eventsPath) {
+    fs.appendFileSync(eventsPath, JSON.stringify({ id, status: cond ? "passed" : "failed" }) + "\n");
+  }
   if (!cond) {
     failed++;
     console.error(`  FAIL: ${msg}`);
@@ -60,10 +67,10 @@ async function main() {
 
   // Verify global functions are registered
   console.log("=== Test: Global function registration ===");
-  assert(typeof globalThis.signalCompile === "function", "signalCompile should be a function");
-  assert(typeof globalThis.signalValidate === "function", "signalValidate should be a function");
-  assert(typeof globalThis.signalDecompile === "function", "signalDecompile should be a function");
-  assert(typeof globalThis.signalFormat === "function", "signalFormat should be a function");
+  assert("register_compile", typeof globalThis.signalCompile === "function", "signalCompile should be a function");
+  assert("register_validate", typeof globalThis.signalValidate === "function", "signalValidate should be a function");
+  assert("register_decompile", typeof globalThis.signalDecompile === "function", "signalDecompile should be a function");
+  assert("register_format", typeof globalThis.signalFormat === "function", "signalFormat should be a function");
 
   // Test: Compile valid DSL
   console.log("\n=== Test: signalCompile (valid DSL) ===");
@@ -86,16 +93,16 @@ ROUTE r1 {
   console.log(`  Compile time: ${compileTime.toFixed(2)}ms`);
 
   const compileResult = JSON.parse(compileRaw);
-  assert(compileResult.yaml !== "", "YAML output should not be empty");
-  assert(compileResult.crd !== "", "CRD output should not be empty");
-  assert(compileResult.yaml.includes("intent"), "YAML should contain signal name");
-  assert(compileResult.yaml.includes("keyword"), "YAML should contain signal type");
+  assert("compile_yaml", compileResult.yaml !== "", "YAML output should not be empty");
+  assert("compile_crd", compileResult.crd !== "", "CRD output should not be empty");
+  assert("compile_signal_name", compileResult.yaml.includes("intent"), "YAML should contain signal name");
+  assert("compile_signal_type", compileResult.yaml.includes("keyword"), "YAML should contain signal type");
   console.log(`  YAML length: ${compileResult.yaml.length} chars`);
 
   // Test: Compile invalid DSL
   console.log("\n=== Test: signalCompile (invalid DSL) ===");
   const badResult = JSON.parse(globalThis.signalCompile("INVALID !!!"));
-  assert(badResult.error !== "", "Should return error for invalid DSL");
+  assert("compile_invalid", badResult.error !== "", "Should return error for invalid DSL");
 
   // Test: Validate clean input
   console.log("\n=== Test: signalValidate (clean) ===");
@@ -105,7 +112,7 @@ ROUTE r1 {
   console.log(`  Validate time: ${validateTime.toFixed(2)}ms`);
 
   const validateResult = JSON.parse(validateRaw);
-  assert(validateResult.errorCount === 0, `Expected 0 errors, got ${validateResult.errorCount}`);
+  assert("validate_clean", validateResult.errorCount === 0, `Expected 0 errors, got ${validateResult.errorCount}`);
 
   // Test: Validate with constraint violation
   console.log("\n=== Test: signalValidate (constraint violation) ===");
@@ -116,33 +123,33 @@ ROUTE r1 {
   MODEL "m1"
 }`;
   const badValidate = JSON.parse(globalThis.signalValidate(badDsl));
-  assert(badValidate.diagnostics.length > 0, "Should have diagnostics for bad input");
+  assert("validate_diagnostics", badValidate.diagnostics.length > 0, "Should have diagnostics for bad input");
 
   // Test: Decompile YAML → DSL
   console.log("\n=== Test: signalDecompile ===");
   const decompileRaw = globalThis.signalDecompile(compileResult.yaml);
   const decompileResult = JSON.parse(decompileRaw);
-  assert(decompileResult.dsl !== "", "Decompiled DSL should not be empty");
-  assert(!decompileResult.error, "Decompile should not error: " + decompileResult.error);
-  assert(decompileResult.dsl.includes("MODEL qwen"), "Decompiled DSL should contain MODEL keyword");
-  assert(decompileResult.dsl.includes("SIGNAL"), "Decompiled DSL should contain SIGNAL keyword");
-  assert(decompileResult.dsl.includes("ROUTE"), "Decompiled DSL should contain ROUTE keyword");
+  assert("decompile_dsl", decompileResult.dsl !== "", "Decompiled DSL should not be empty");
+  assert("decompile_no_error", !decompileResult.error, "Decompile should not error: " + decompileResult.error);
+  assert("decompile_model", decompileResult.dsl.includes("MODEL qwen"), "Decompiled DSL should contain MODEL keyword");
+  assert("decompile_signal", decompileResult.dsl.includes("SIGNAL"), "Decompiled DSL should contain SIGNAL keyword");
+  assert("decompile_route", decompileResult.dsl.includes("ROUTE"), "Decompiled DSL should contain ROUTE keyword");
 
   // Test: Decompile invalid YAML
   console.log("\n=== Test: signalDecompile (invalid YAML) ===");
   const badDecompile = JSON.parse(globalThis.signalDecompile("{{{bad"));
-  assert(badDecompile.error !== "", "Should return error for invalid YAML");
+  assert("decompile_invalid", badDecompile.error !== "", "Should return error for invalid YAML");
 
   // Test: Format
   console.log("\n=== Test: signalFormat ===");
   const formatRaw = globalThis.signalFormat(dslSource);
   const formatResult = JSON.parse(formatRaw);
-  assert(formatResult.dsl !== "", "Formatted DSL should not be empty");
-  assert(!formatResult.error, "Format should not error: " + formatResult.error);
+  assert("format_dsl", formatResult.dsl !== "", "Formatted DSL should not be empty");
+  assert("format_no_error", !formatResult.error, "Format should not error: " + formatResult.error);
 
   // Test: Format idempotency
   const format2 = JSON.parse(globalThis.signalFormat(formatResult.dsl));
-  assert(format2.dsl === formatResult.dsl, "Format should be idempotent after first pass");
+  assert("format_idempotent", format2.dsl === formatResult.dsl, "Format should be idempotent after first pass");
 
   // Test: Round-trip (DSL → YAML → DSL → YAML)
   console.log("\n=== Test: Round-trip ===");
@@ -152,7 +159,7 @@ ROUTE r1 {
     dslSource.replace('MODEL "qwen"', 'MODEL "qwen" (reasoning = false)')));
   const rtDecompile = JSON.parse(globalThis.signalDecompile(rtCompile.yaml));
   const rtRecompile = JSON.parse(globalThis.signalCompile(rtDecompile.dsl));
-  assert(rtRecompile.yaml === rtCompile.yaml,
+  assert("round_trip", rtRecompile.yaml === rtCompile.yaml,
     "Round-trip should produce identical YAML");
 
   // Performance summary

@@ -47,6 +47,9 @@ type ONNXExecution struct {
 	ExecutionProvider  string           `json:"execution_provider"`
 	MaxExecutionTokens int              `json:"max_execution_tokens"`
 	Artifacts          []ArtifactDigest `json:"artifacts"`
+	CustomOpsProfile   string           `json:"custom_ops_profile,omitempty"`
+	ExecutionMode      string           `json:"execution_mode,omitempty"`
+	RuntimeBuild       string           `json:"runtime_build,omitempty"`
 }
 
 type ArtifactDigest struct {
@@ -91,10 +94,10 @@ func Decode(data []byte, digest string) (*Policy, error) {
 	if err := json.Unmarshal(data, &version); err != nil {
 		return nil, fmt.Errorf("decode operating point: %w", err)
 	}
-	if version.Version != 2 {
-		return nil, fmt.Errorf("operating point version %d is unsupported; version 2 requires config, tokenizer and execution identities", version.Version)
+	if version.Version != 2 && version.Version != 3 {
+		return nil, fmt.Errorf("operating point version %d is unsupported; versions 2 and 3 require config, tokenizer and execution identities", version.Version)
 	}
-	if err := requireExactFields(data, reflect.TypeOf(Definition{})); err != nil {
+	if err := requireExactFields(data, reflect.TypeOf(Definition{}), version.Version); err != nil {
 		return nil, err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -128,7 +131,7 @@ func Decode(data []byte, digest string) (*Policy, error) {
 			return nil, fmt.Errorf("operating point threshold is outside [0,1]")
 		}
 	}
-	if err := validateExecutions(d.Executions, d.Input.WindowTokens); err != nil {
+	if err := validateExecutions(d.Executions, d.Input.WindowTokens, d.Version); err != nil {
 		return nil, err
 	}
 	w := d.Input
@@ -138,16 +141,23 @@ func Decode(data []byte, digest string) (*Policy, error) {
 	if w.ContentTokens <= 0 || w.WindowTokens != w.ContentTokens+len(w.SpecialPrefixIDs)+len(w.SpecialSuffixIDs) || w.Overlap < 0 || w.Overlap >= w.ContentTokens || w.Stride != w.ContentTokens-w.Overlap || w.MaxDocumentTokens < w.WindowTokens || w.ReferenceWindowBatchSize < 1 {
 		return nil, fmt.Errorf("inconsistent operating point window geometry")
 	}
-	if w.BatchOrder != "ascending actual window token count, stable original order on ties" || w.Tokenization != "Tokenize once without truncation; slice original content token IDs and restore the tokenizer special-token envelope for each window." {
+	order := "ascending actual window token count, stable original order on ties"
+	if d.Version == 3 {
+		order = "ascending original window start"
+		if w.ReferenceWindowBatchSize != 1 {
+			return nil, fmt.Errorf("version 3 requires the qualified B1 reference execution")
+		}
+	}
+	if w.BatchOrder != order || w.Tokenization != "Tokenize once without truncation; slice original content token IDs and restore the tokenizer special-token envelope for each window." {
 		return nil, fmt.Errorf("unsupported reference window preparation")
 	}
 	return &Policy{definition: d, digest: digest}, nil
 }
 
-// All v2 fields are required, including zero overlap and empty special-token
+// All versioned fields are required, including zero overlap and empty special-token
 // envelopes. Use the schema's struct tags: encoding/json alone accepts omitted
 // fields and case-folded aliases, which other consumers may interpret differently.
-func requireExactFields(data []byte, shape reflect.Type) error {
+func requireExactFields(data []byte, shape reflect.Type, version int) error {
 	if shape.Kind() == reflect.Pointer {
 		shape = shape.Elem()
 	}
@@ -157,7 +167,7 @@ func requireExactFields(data []byte, shape reflect.Type) error {
 			return err
 		}
 		for _, entry := range entries {
-			if err := requireExactFields(entry, shape.Elem()); err != nil {
+			if err := requireExactFields(entry, shape.Elem(), version); err != nil {
 				return err
 			}
 		}
@@ -174,14 +184,18 @@ func requireExactFields(data []byte, shape reflect.Type) error {
 		field := shape.Field(i)
 		tag := strings.Split(field.Tag.Get("json"), ",")
 		key := tag[0]
+		v3Field := shape == reflect.TypeOf(ONNXExecution{}) && (key == "custom_ops_profile" || key == "execution_mode" || key == "runtime_build")
+		if v3Field && version == 2 {
+			continue // Leave any supplied key unconsumed: v2 must reject it.
+		}
 		raw, exists := fields[key]
-		if !exists && slices.Contains(tag[1:], "omitempty") {
+		if !exists && !v3Field && slices.Contains(tag[1:], "omitempty") {
 			continue
 		}
 		if !exists {
 			return fmt.Errorf("operating point requires field %q", key)
 		}
-		if err := requireExactFields(raw, field.Type); err != nil {
+		if err := requireExactFields(raw, field.Type, version); err != nil {
 			return err
 		}
 		delete(fields, key)
@@ -206,7 +220,7 @@ func (p *Policy) Window() tasks.TextWindowsRequest {
 func (p *Policy) MaxTokens() int { return p.definition.Input.MaxDocumentTokens }
 
 func (p *Policy) ValidateCapability(c binding.Capability) error {
-	if c.Contract != "label_scores.v1" || !slices.Equal(c.Labels, p.definition.Labels) || c.Limits.EffectiveTokens() != p.MaxTokens() || c.Limits.Overflow != "window" {
+	if c.Contract != "label_scores.v1" || !slices.Equal(c.Labels, p.definition.Labels) || c.Limits.EffectiveTokens() != p.MaxTokens() || c.Limits.Overflow != "window" || c.Limits.ForwardTokens() < p.Window().Size {
 		return fmt.Errorf("%w: actual owned head/execution differs from operating point", binding.ErrCapability)
 	}
 	if _, err := p.selectExecution(c.Provider, c.Precision, c.Device); err != nil {
@@ -215,7 +229,7 @@ func (p *Policy) ValidateCapability(c binding.Capability) error {
 	return nil
 }
 
-func validateExecutions(executions []Execution, window int) error {
+func validateExecutions(executions []Execution, window, version int) error {
 	if len(executions) == 0 {
 		return fmt.Errorf("operating point has no qualified execution")
 	}
@@ -227,7 +241,7 @@ func validateExecutions(executions []Execution, window int) error {
 		}
 		switch execution.Provider {
 		case "candle":
-			if execution.Precision != "float32" || execution.ONNX != nil {
+			if version != 2 || execution.Precision != "float32" || execution.ONNX != nil {
 				return fmt.Errorf("execution for Candle requires float32 without ONNX fields")
 			}
 		case "ort":
@@ -235,7 +249,11 @@ func validateExecutions(executions []Execution, window int) error {
 			if execution.Precision != "native" || graph == nil || !localArtifactPath(graph.File) || filepath.Ext(graph.File) != ".onnx" || graph.MaxExecutionTokens != window {
 				return fmt.Errorf("ORT execution requires a complete qualified native graph and exact window budget")
 			}
-			if graph.ExecutionProvider != "CPUExecutionProvider" && graph.ExecutionProvider != "MIGraphXExecutionProvider" {
+			if version == 3 {
+				if graph.ExecutionProvider != "ROCMExecutionProvider" || graph.CustomOpsProfile != "ck_flash_attention" || graph.ExecutionMode != "dynamic_sequence_b1" || strings.TrimSpace(graph.RuntimeBuild) == "" {
+					return fmt.Errorf("version 3 requires a qualified CK ROCm dynamic B1 execution and runtime build")
+				}
+			} else if graph.ExecutionProvider != "CPUExecutionProvider" && graph.ExecutionProvider != "MIGraphXExecutionProvider" {
 				return fmt.Errorf("unsupported qualified ONNX execution provider")
 			}
 			key += ":" + graph.ExecutionProvider
@@ -244,13 +262,13 @@ func validateExecutions(executions []Execution, window int) error {
 				if roles[artifact.Role] || !validSHA256(artifact.SHA256) {
 					return fmt.Errorf("duplicate or invalid ONNX artifact identity")
 				}
-				if artifact.Role != "graph" && (!strings.HasPrefix(artifact.Role, "external:") || !localArtifactPath(strings.TrimPrefix(artifact.Role, "external:"))) {
+				if artifact.Role != "graph" && (version != 3 || artifact.Role != "custom-ops") && (!strings.HasPrefix(artifact.Role, "external:") || !localArtifactPath(strings.TrimPrefix(artifact.Role, "external:"))) {
 					return fmt.Errorf("invalid ONNX artifact role")
 				}
 				roles[artifact.Role] = true
 			}
-			if !roles["graph"] {
-				return fmt.Errorf("ONNX execution requires graph content identity")
+			if !roles["graph"] || (version == 3 && !roles["custom-ops"]) {
+				return fmt.Errorf("ONNX execution requires graph and declared custom-op content identities")
 			}
 		default:
 			return fmt.Errorf("unsupported operating point execution provider")
@@ -279,6 +297,8 @@ func (p *Policy) selectExecution(provider, precision, device string) (*Execution
 				ep = "CPUExecutionProvider"
 			} else if strings.HasPrefix(device, "migraphx:") {
 				ep = "MIGraphXExecutionProvider"
+			} else if strings.HasPrefix(device, "rocm:") {
+				ep = "ROCMExecutionProvider"
 			}
 			if execution.ONNX.ExecutionProvider != ep {
 				continue

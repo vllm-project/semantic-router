@@ -3,12 +3,11 @@
 package benchmarks
 
 import (
-	"os"
-	"path/filepath"
+	"context"
 	"sync"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 var (
@@ -24,37 +23,25 @@ var (
 	classifierErr  error
 )
 
-// initClassifier initializes the global unified classifier once
-var benchClassifier *classification.UnifiedClassifier
+// The explicit catalog tasks retain independent native resources. A directory
+// scan must never substitute an unrelated model left in the download cache.
+var benchClassifier *native.LoRABatch
 
 func initClassifier(b *testing.B) {
+	b.Helper()
 	classifierOnce.Do(func() {
-		// Find the project root (semantic-router-fork)
-		wd, err := os.Getwd()
-		if err != nil {
-			classifierErr = err
-			return
-		}
-
-		// Navigate up to find the project root
-		projectRoot := filepath.Join(wd, "../..")
-
-		// Use auto-discovery to initialize classifier
-		modelsDir := filepath.Join(projectRoot, "models")
-		c, err := classification.AutoInitializeUnifiedClassifier(modelsDir)
-		if err != nil {
-			classifierErr = err
-			return
-		}
-		benchClassifier = c
+		domain := benchmarkModel(b, "domain", "label_distribution.v1")
+		pii := benchmarkModel(b, "pii", "token_spans.v1")
+		guard := benchmarkModel(b, "jailbreak", "label_distribution.v1")
+		benchClassifier, classifierErr = benchmarkRuntime.LoRABatch(context.Background(), domain, pii, guard)
 	})
-
 	if classifierErr != nil {
 		if missingBenchModels(classifierErr) {
 			b.Skipf("Failed to initialize classifier: %v", classifierErr)
 		}
-		b.Fatalf("Failed to initialize classifier: %v", classifierErr)
+		b.Fatalf("prepare owned Vela classifiers: %v", classifierErr)
 	}
+	recordModelIdentity(b, "domain", "pii", "jailbreak")
 }
 
 // BenchmarkClassifyBatch_Size1 benchmarks single text classification
@@ -67,7 +54,7 @@ func BenchmarkClassifyBatch_Size1(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		text := testTexts[i%len(testTexts)]
-		_, err := classifier.ClassifyBatch([]string{text})
+		_, err := classifier.ClassifyBatch(context.Background(), "perf", []string{text})
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -89,7 +76,7 @@ func BenchmarkClassifyBatch_Size10(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := classifier.ClassifyBatch(batch)
+		_, err := classifier.ClassifyBatch(context.Background(), "perf", batch)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -111,7 +98,7 @@ func BenchmarkClassifyBatch_Size50(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := classifier.ClassifyBatch(batch)
+		_, err := classifier.ClassifyBatch(context.Background(), "perf", batch)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -133,7 +120,7 @@ func BenchmarkClassifyBatch_Size100(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := classifier.ClassifyBatch(batch)
+		_, err := classifier.ClassifyBatch(context.Background(), "perf", batch)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -151,7 +138,7 @@ func BenchmarkClassifyBatch_Parallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			text := testTexts[0]
-			_, err := classifier.ClassifyBatch([]string{text})
+			_, err := classifier.ClassifyBatch(context.Background(), "perf", []string{text})
 			if err != nil {
 				b.Fatalf("Classification failed: %v", err)
 			}
@@ -170,7 +157,7 @@ func BenchmarkCGOOverhead(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := classifier.ClassifyBatch(texts)
+		_, err := classifier.ClassifyBatch(context.Background(), "perf", texts)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
