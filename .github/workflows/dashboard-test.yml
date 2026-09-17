@@ -68,6 +68,9 @@ jobs:
       - name: Run dashboard checks
         run: make dashboard-check
 
+      - name: Test the browser DSL compiler
+        run: make dashboard-test-wasm
+
       - name: Run Evaluation browser acceptance
         run: make dashboard-test-e2e-evaluation
 

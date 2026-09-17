@@ -264,7 +264,7 @@ if [[ "$USE_SIMULATOR" == "true" ]]; then
     # Use mock-vllm simulator (no GPU required)
     log "Simulator mode: Building mock-vllm image..."
     BACKEND_IMAGE_NAME="mock-vllm"
-    MOCK_VLLM_DIR="$SCRIPT_DIR/../../tools/mock-vllm"
+    MOCK_VLLM_DIR="$SCRIPT_DIR/../../tools/test/services/mock-vllm"
 
     if ! oc get imagestream mock-vllm -n "$NAMESPACE" &> /dev/null; then
         if [[ -f "$MOCK_VLLM_DIR/Dockerfile" ]]; then
