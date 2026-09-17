@@ -8,13 +8,16 @@ import (
 )
 
 func TestGenericBindingDownloadsOnlySelectedReachableArtifact(t *testing.T) {
-	for _, provider := range []string{"candle", "ort", "http"} {
+	for _, provider := range []string{"candle", "ort", "openvino", "http"} {
 		t.Run(provider, func(t *testing.T) {
 			cfg := &config.RouterConfig{MoMRegistry: map[string]string{"models/obsolete": "test/old", "models/new": "test/new", "models/dormant": "test/dormant"}, ExternalModels: []config.ExternalModelConfig{{Name: "selected", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "localhost", Port: 8080}}}}
 			deployment := config.ModelDeployment{Provider: provider, Artifact: "models/new", Revision: "pin"}
 			adapter, head := "modernbert", ""
 			if provider == "ort" {
 				head = "onnx/selected.onnx"
+			}
+			if provider == "openvino" {
+				head = "openvino/selected.xml"
 			}
 			if provider == "http" {
 				deployment.Artifact, deployment.ExternalModel = "", "selected"
@@ -42,6 +45,16 @@ func TestGenericBindingDownloadsOnlySelectedReachableArtifact(t *testing.T) {
 			}
 			if len(specs) != 1 || specs[0].LocalPath != "models/new" || specs[0].Revision != "pin" {
 				t.Fatalf("wrong inventory: %#v", specs)
+			}
+			if provider == "openvino" {
+				for _, file := range []string{head, "openvino/selected.bin", "openvino/openvino_tokenizer.xml", "openvino/openvino_tokenizer.bin"} {
+					if !slices.Contains(specs[0].RequiredFiles, file) {
+						t.Fatalf("OpenVINO graph dependency %s omitted: %#v", file, specs[0])
+					}
+				}
+				if specs[0].CheckONNX || len(specs[0].ExcludePatterns) > 0 {
+					t.Fatalf("OpenVINO was provisioned as another provider: %#v", specs[0])
+				}
 			}
 			if provider == "ort" && (!specs[0].CheckONNX || !slices.Contains(specs[0].RequiredFiles, head)) {
 				t.Fatalf("ORT task graph omitted: %#v", specs[0])

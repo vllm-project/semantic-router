@@ -82,7 +82,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		s.writeJSONRequestError(w, err)
 		return
 	}
-	_, prepared, release, prepareErr := s.acquireEmbeddingRuntimeForRecipe(request.Recipe)
+	cfg, prepared, release, prepareErr := s.acquireEmbeddingRuntimeForRecipe(request.Recipe)
 	defer release()
 	req, ok := s.prepareEmbeddingRequest(w, request, prepared)
 	if !ok {
@@ -101,7 +101,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 
 	avgProcessingTime := averageEmbeddingProcessingTime(totalProcessingTime, req)
 	response := EmbeddingResponse{
-		Recipe:                diagnosticRecipeName(req.Recipe),
+		Recipe:                embeddingRecipeName(req.Recipe, cfg),
 		Embeddings:            results,
 		TotalCount:            len(results),
 		TotalProcessingTimeMs: totalProcessingTime,
@@ -273,12 +273,12 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	prepared, release, err := s.acquireEmbeddingsForRecipe(req.Recipe)
+	cfg, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(req.Recipe)
+	defer release()
 	if err != nil {
 		s.writeEmbeddingRuntimeError(w, err)
 		return
 	}
-	defer release()
 	start := time.Now()
 	request := EmbeddingRequest{Model: req.Model, Dimension: req.Dimension, TargetLayer: req.TargetLayer, QualityPriority: req.QualityPriority, LatencyPriority: req.LatencyPriority}
 	first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
@@ -291,7 +291,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 			score, err = embeddingCosine(first.Embedding, second.Embedding)
 		}
 	}
-	result := SimilarityResponse{Recipe: diagnosticRecipeName(req.Recipe), Similarity: score, ModelUsed: first.ModelUsed, ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000}
+	result := SimilarityResponse{Recipe: embeddingRecipeName(req.Recipe, cfg), Similarity: score, ModelUsed: first.ModelUsed, ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000}
 
 	if err != nil {
 		if errors.Is(err, binding.ErrInputLimit) {
@@ -347,14 +347,14 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
-	prepared, release, err := s.acquireEmbeddingsForRecipe(req.Recipe)
+	cfg, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(req.Recipe)
+	defer release()
 	if err != nil {
 		s.writeEmbeddingRuntimeError(w, err)
 		return
 	}
-	defer release()
 	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
-	response.Recipe = diagnosticRecipeName(req.Recipe)
+	response.Recipe = embeddingRecipeName(req.Recipe, cfg)
 	if err != nil {
 		if errors.Is(err, binding.ErrInputLimit) {
 			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
@@ -477,4 +477,11 @@ func (s *ClassificationAPIServer) writeEmbeddingRuntimeError(w http.ResponseWrit
 		return
 	}
 	s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
+}
+
+func embeddingRecipeName(requested string, cfg *config.RouterConfig) string {
+	if requested == "" && cfg != nil && cfg.RoutingScope != "" {
+		return string(cfg.RoutingScope)
+	}
+	return diagnosticRecipeName(requested)
 }

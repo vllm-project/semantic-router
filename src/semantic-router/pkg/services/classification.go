@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
@@ -30,12 +31,13 @@ type ClassificationService struct {
 	configMutex       sync.RWMutex // Protects config access
 	// Router generations already lease this service. These locks additionally
 	// drain model calls for standalone compatibility-service replacement.
-	runtimeMutex sync.RWMutex
-	reloadMutex  sync.Mutex
-	runtimeOwner io.Closer // nil when classifiers are borrowed from the router
-	modelPool    *binding.Pool
-	closed       bool
-	evalSelector EvalModelSelector
+	runtimeMutex     sync.RWMutex
+	reloadMutex      sync.Mutex
+	runtimeOwner     io.Closer // nil when classifiers are borrowed from the router
+	modelPool        *binding.Pool
+	globalEmbeddings *embedding.Set
+	closed           bool
+	evalSelector     EvalModelSelector
 }
 
 func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
