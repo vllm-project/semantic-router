@@ -367,9 +367,9 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		Texts:           []string{req.Text1, req.Text2},
 	}
 
-	if err := checkEmbeddingReadiness(prepared, request); err != nil {
+	if checkErr := checkEmbeddingReadiness(prepared, request); checkErr != nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			fmt.Sprintf("failed to calculate similarity: %v", err))
+			fmt.Sprintf("failed to calculate similarity: %v", checkErr))
 		return
 	}
 
@@ -426,16 +426,16 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 	defer release()
-	if err := checkEmbeddingReadiness(prepared, EmbeddingRequest{
+	if checkErr := checkEmbeddingReadiness(prepared, EmbeddingRequest{
 		Model:           req.Model,
 		Dimension:       req.Dimension,
 		TargetLayer:     req.TargetLayer,
 		QualityPriority: req.QualityPriority,
 		LatencyPriority: req.LatencyPriority,
 		Texts:           []string{req.Query},
-	}); err != nil {
+	}); checkErr != nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			fmt.Sprintf("failed to calculate batch similarity: %v", err))
+			fmt.Sprintf("failed to calculate batch similarity: %v", checkErr))
 		return
 	}
 	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
