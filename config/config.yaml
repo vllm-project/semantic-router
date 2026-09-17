@@ -2413,6 +2413,19 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
+      - name: external-reasoning-classifier
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: vllm-classifier
+          port: 8000
+          protocol: http
+          use_chat_template: true
+        llm_model_name: qwen/qwen3.8-27b
+        reasoning:
+          family: qwen3.8
+          use_reasoning: true
+          reasoning_effort: low
       - name: external-sequence-classifier
         llm_provider: openai
         model_role: classification
