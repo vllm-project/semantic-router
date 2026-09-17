@@ -51,8 +51,8 @@ func cacheEmbeddingDevice() string {
 	return "cpu"
 }
 
-// initCacheEmbeddingModels prepares the owned Qwen3 embedding provider once per
-// process and returns it for cache.BenchmarkConfig.EmbeddingProvider.
+// initCacheEmbeddingModels prepares the shared response-cache Qwen3 embedding
+// provider once per process and returns it for cache.BenchmarkConfig.EmbeddingProvider.
 func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 	b.Helper()
 	cacheEmbeddingOnce.Do(func() {
@@ -65,13 +65,13 @@ func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 		cfg.EmbeddingConfig.ModelType = cacheEmbeddingModelType
 		cfg.SemanticCache.Enabled = true
 		cfg.SemanticCache.EmbeddingModel = cacheEmbeddingModelType
-		cfg.ModelBindings = map[string]config.ModelBinding{
+		cfg.GlobalModelBindings = map[string]config.ModelBinding{
 			"embedding": {Deployment: cacheEmbeddingDeployment, Contract: "embedding.v1", Adapter: cacheEmbeddingModelType},
 		}
 		cfg.ModelDeployments = map[string]config.ModelDeployment{
 			cacheEmbeddingDeployment: {Provider: "candle", Device: cacheEmbeddingDevice(), Precision: "native", Artifact: modelDir},
 		}
-		set, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+		set, err := modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, native.New(nil))
 		if err != nil {
 			cacheEmbeddingErr = fmt.Errorf("failed to prepare embedding model from %s: %w", modelDir, err)
 			return

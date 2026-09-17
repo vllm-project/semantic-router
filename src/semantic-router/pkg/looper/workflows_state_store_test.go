@@ -639,7 +639,7 @@ func workflowStateFileName(t *testing.T, recipe config.RecipeName, id string) st
 	if err != nil {
 		t.Fatalf("namespace %s: %v", id, err)
 	}
-	return namespaced + ".json"
+	return workflowStateStoreFileName(namespaced)
 }
 
 func assertPathNotExist(t *testing.T, path string) {
@@ -1490,5 +1490,40 @@ func TestStateStore_DistinctRecipesKeepIndependentState(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFileStateStore_LongRecipeNameUsesHashedFilename(t *testing.T) {
+	dir := t.TempDir()
+	store := newWorkflowFileToolStateStore(dir, time.Hour)
+	defer store.Close()
+
+	recipe := config.RecipeName(strings.Repeat("a", 170))
+	id := strings.Repeat("b", 24)
+	st := makeTestState(id)
+	st.RecipeName = string(recipe)
+	if _, err := store.Put(context.Background(), st); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	namespaced, err := workflowNamespacedStateID(recipe, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plainPath := filepath.Join(dir, namespaced+".json")
+	hashedPath := filepath.Join(dir, workflowStateStoreFileName(namespaced))
+	if hashedPath == plainPath {
+		t.Fatal("fixture did not require a hashed filename")
+	}
+	if _, statErr := os.Stat(plainPath); statErr == nil {
+		t.Fatal("wrote overlong namespaced filename")
+	}
+	if _, statErr := os.Stat(hashedPath); statErr != nil {
+		t.Fatalf("hashed state missing: %v", statErr)
+	}
+
+	got, ok, consumeErr := consumeWorkflowStateForRecipe(store, recipe, id)
+	if consumeErr != nil || !ok || got == nil {
+		t.Fatalf("consume hashed state: ok=%v err=%v", ok, consumeErr)
 	}
 }

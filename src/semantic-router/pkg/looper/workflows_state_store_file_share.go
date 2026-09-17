@@ -26,7 +26,29 @@ func resolvedWorkflowFileStoreDir(dir string) string {
 	if err != nil {
 		return storeDir
 	}
-	return abs
+	return resolveExistingDirPrefix(abs)
+}
+
+// resolveExistingDirPrefix canonicalizes directory identity across symlink
+// aliases. EvalSymlinks requires an existing path, so a missing leaf is
+// joined onto the longest existing resolved prefix.
+func resolveExistingDirPrefix(abs string) string {
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return resolved
+	}
+	var missing []string
+	cur := abs
+	for {
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return abs
+		}
+		missing = append([]string{filepath.Base(cur)}, missing...)
+		if resolved, err := filepath.EvalSymlinks(parent); err == nil {
+			return filepath.Join(append([]string{resolved}, missing...)...)
+		}
+		cur = parent
+	}
 }
 
 func newWorkflowFileToolStateStore(dir string, ttl time.Duration) *workflowFileToolStateStore {

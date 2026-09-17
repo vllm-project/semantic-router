@@ -1,13 +1,18 @@
 package looper
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+// workflowStateFileNameMaxBytes is Linux NAME_MAX. Redis keys stay unhashed.
+const workflowStateFileNameMaxBytes = 255
 
 var errWorkflowStateUnscoped = errors.New("workflow tool state is unscoped and cannot be resumed")
 
@@ -29,6 +34,18 @@ func workflowNamespacedStateID(recipe config.RecipeName, id string) (string, err
 		return "", fmt.Errorf("invalid workflow state id %q", id)
 	}
 	return workflowStateNamespace(recipe) + "__" + id, nil
+}
+
+// workflowStateStoreFileName is the on-disk name for one namespaced state.
+// Namespaced IDs always contain "__"; hashed names never do, so the two
+// forms cannot collide. Redis keys keep the namespaced ID unhashed.
+func workflowStateStoreFileName(namespaced string) string {
+	name := namespaced + ".json"
+	if len(name) <= workflowStateFileNameMaxBytes {
+		return name
+	}
+	sum := sha256.Sum256([]byte(namespaced))
+	return "sha256-" + hex.EncodeToString(sum[:]) + ".json"
 }
 
 func workflowStateClaimable(state *workflowPendingToolState, recipe config.RecipeName) error {

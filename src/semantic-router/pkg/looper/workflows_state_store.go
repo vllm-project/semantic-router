@@ -954,7 +954,7 @@ func (s *workflowFileToolStateStore) pathForID(recipe config.RecipeName, id stri
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(s.dir, namespaced+".json"), nil
+	return filepath.Join(s.dir, workflowStateStoreFileName(namespaced)), nil
 }
 
 func (s *workflowFileToolStateStore) legacyPathForID(id string) (string, error) {

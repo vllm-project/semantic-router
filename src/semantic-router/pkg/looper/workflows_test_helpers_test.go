@@ -380,7 +380,7 @@ func workflowStoredPendingState(t *testing.T, stateDir string, toolCallID string
 	if err != nil {
 		namespaced, nsErr := workflowNamespacedStateID(config.DefaultRecipeName, stateID)
 		if nsErr == nil {
-			data, err = os.ReadFile(filepath.Join(stateDir, namespaced+".json"))
+			data, err = os.ReadFile(filepath.Join(stateDir, workflowStateStoreFileName(namespaced)))
 		}
 	}
 	if err != nil {

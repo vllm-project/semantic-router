@@ -329,13 +329,38 @@ func isolateLooperWorkflowFlow(body []byte) ([]byte, json.RawMessage) {
 }
 
 func restoreLooperWorkflowTrace(body []byte, flow json.RawMessage, reqCtx *RequestContext) []byte {
-	if len(flow) == 0 || !looperIncludeIntermediateResponses(reqCtx) {
+	if len(flow) == 0 || !looperShouldRestoreWorkflowTrace(reqCtx, flow) {
 		return body
 	}
 	if isLooperSSEBody(body) {
 		return restoreFlowSSE(body, flow)
 	}
 	return restoreFlowJSON(body, flow)
+}
+
+func looperShouldRestoreWorkflowTrace(reqCtx *RequestContext, flow json.RawMessage) bool {
+	if looperIncludeIntermediateResponses(reqCtx) {
+		return true
+	}
+	return looperIsWorkflowDecision(reqCtx) && looperWorkflowTraceHasFailedModels(flow)
+}
+
+func looperIsWorkflowDecision(reqCtx *RequestContext) bool {
+	if reqCtx == nil || reqCtx.VSRSelectedDecision == nil {
+		return false
+	}
+	alg := reqCtx.VSRSelectedDecision.Algorithm
+	return alg != nil && alg.Type == config.DecisionAlgorithmWorkflows
+}
+
+func looperWorkflowTraceHasFailedModels(flow json.RawMessage) bool {
+	var trace struct {
+		FailedModels []json.RawMessage `json:"failed_models"`
+	}
+	if err := json.Unmarshal(flow, &trace); err != nil {
+		return false
+	}
+	return len(trace.FailedModels) > 0
 }
 
 func looperIncludeIntermediateResponses(reqCtx *RequestContext) bool {

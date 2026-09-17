@@ -2,6 +2,7 @@ package testcases
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -295,7 +296,7 @@ func workflowRecipeFromResponse(resp *fixtures.HTTPResponse) string {
 	return recipe
 }
 
-// workflowRedisStateKey mirrors production: prefix + recipeNamespace + "__" + stateID.
+// workflowRedisStateKey mirrors production: prefix + raw-URL-base64(recipe) + "__" + stateID.
 func workflowRedisStateKey(recipe, stateID string) string {
 	return workflowRedisKeyPrefix + workflowRedisRecipeNamespace(recipe) + "__" + stateID
 }
@@ -305,17 +306,5 @@ func workflowRedisRecipeNamespace(recipe string) string {
 	if name == "" {
 		name = "default"
 	}
-	var b strings.Builder
-	b.Grow(len(name))
-	for _, ch := range name {
-		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' {
-			b.WriteRune(ch)
-			continue
-		}
-		b.WriteByte('_')
-	}
-	if b.Len() == 0 {
-		return "default"
-	}
-	return b.String()
+	return base64.RawURLEncoding.EncodeToString([]byte(name))
 }

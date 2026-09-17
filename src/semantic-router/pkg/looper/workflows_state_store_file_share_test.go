@@ -59,7 +59,7 @@ func TestFileStateStore_SameDirectoryTTLChangeOnReload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("namespace: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(reloaded.dir, namespaced+".json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(reloaded.dir, workflowStateStoreFileName(namespaced))); !os.IsNotExist(err) {
 		t.Fatalf("sweeper used the previous generation TTL, leftover err=%v", err)
 	}
 }
@@ -107,5 +107,33 @@ func TestFileStateStore_CloseDoesNotDeleteReplacementRegistration(t *testing.T) 
 	got, ok, err := consumeWorkflowState(replacement, "still-alive")
 	if err != nil || !ok || got == nil {
 		t.Fatalf("replacement consume: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestFileStateStore_SymlinkDirectorySharesRegistry(t *testing.T) {
+	physicalRoot := t.TempDir()
+	aliasParent := t.TempDir()
+	aliasRoot := filepath.Join(aliasParent, "alias")
+	if err := os.Symlink(physicalRoot, aliasRoot); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	physical := filepath.Join(physicalRoot, "state")
+	alias := filepath.Join(aliasRoot, "state")
+	first := newWorkflowFileToolStateStore(physical, time.Hour)
+	defer first.Close()
+	second := newWorkflowFileToolStateStore(alias, time.Minute)
+	defer second.Close()
+	if first != second {
+		t.Fatalf("symlink alias constructed a second store: %q vs %q", first.dir, second.dir)
+	}
+
+	ctx := context.Background()
+	if _, err := first.Put(ctx, makeTestState("shared-symlink")); err != nil {
+		t.Fatalf("Put via physical path: %v", err)
+	}
+	got, ok, err := consumeWorkflowState(second, "shared-symlink")
+	if err != nil || !ok || got == nil {
+		t.Fatalf("consume via symlink alias: ok=%v err=%v", ok, err)
 	}
 }
