@@ -263,6 +263,7 @@ func TestShutdownRouterComponentsDoesNotCloseResourcesUnderTimedOutManagementReq
 	waitForTestSignal(t, requestAccepted, "management request was not accepted")
 
 	servingStopped := make(chan struct{})
+	retirementRequested := make(chan struct{})
 	resourcesClosed := make(chan struct{})
 	shutdownHookRan := make(chan struct{})
 	shutdownHooks := []func(context.Context) error{
@@ -278,9 +279,15 @@ func TestShutdownRouterComponentsDoesNotCloseResourcesUnderTimedOutManagementReq
 		shutdownDone <- shutdownRouterComponents(
 			ctx,
 			managementServer.Config.Shutdown,
-			func(context.Context) error {
-				close(resourcesClosed)
-				return nil
+			func(ctx context.Context) error {
+				close(retirementRequested)
+				select {
+				case <-releaseRequest:
+					close(resourcesClosed)
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			},
 			&shutdownHooks,
 			func(context.Context) error { return nil },
@@ -296,6 +303,7 @@ func TestShutdownRouterComponentsDoesNotCloseResourcesUnderTimedOutManagementReq
 	if !errors.Is(shutdownErr, context.DeadlineExceeded) {
 		t.Fatalf("shutdownRouterComponents() error = %v, want deadline exceeded", shutdownErr)
 	}
+	waitForTestSignal(t, retirementRequested, "management timeout skipped runtime retirement")
 	requireNoTestSignal(
 		t,
 		resourcesClosed,

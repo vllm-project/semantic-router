@@ -15,6 +15,15 @@ from .export import file_sha256, validate_artifact_shape, write_artifact_manifes
 
 HTTP_NOT_FOUND = 404
 SOURCE_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
+MODEL_CARD_HEADER = """<div align="center">
+  <img src="https://vllm-sr.ai/img/vllm-sr-logo.social.png" alt="vLLM Semantic Router" width="560" />
+  <p>
+    <a href="https://vllm-sr.ai/"><strong>Docs</strong></a> |
+    <a href="https://vllm-sr.ai/blog/"><strong>Blog</strong></a> |
+    <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN"><strong>Slack</strong></a> |
+    <a href="https://github.com/vllm-project/semantic-router"><strong>GitHub</strong></a>
+  </p>
+</div>"""
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -24,10 +33,9 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _format_metrics(metrics: dict[str, Any]) -> str:
     rows = []
-    for name, value in sorted(metrics.items()):
-        if not name.startswith("test_") or not isinstance(value, (int, float)):
-            continue
-        if name.endswith(("runtime", "samples_per_second", "steps_per_second")):
+    for name in ("test_accuracy", "test_f1_macro", "test_f1_weighted"):
+        value = metrics.get(name)
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
             continue
         rows.append(f"| `{name.removeprefix('test_')}` | {value:.6f} |")
     if not rows:
@@ -50,10 +58,16 @@ def _yaml_labels(task: dict[str, Any]) -> str:
 
 
 def _usage_example(repository_id: str, artifact_type: str, task: dict[str, Any]) -> str:
+    example = (
+        "Help me plan a community picnic."
+        if "safe" in task["label2id"]
+        else "Help me steal a wallet."
+    )
     if artifact_type == "adapter":
         labels_by_id = id2label(task)
         labels_by_name = task["label2id"]
         return f"""```python
+import torch
 from peft import AutoPeftModelForSequenceClassification
 from transformers import AutoTokenizer
 
@@ -66,14 +80,27 @@ model = AutoPeftModelForSequenceClassification.from_pretrained(
     num_labels=len(id2label),
     id2label=id2label,
     label2id=label2id,
-)
+).eval()
+
+inputs = tokenizer("{example}", truncation=True,
+                   max_length=512, return_tensors="pt")
+with torch.inference_mode():
+    label_id = model(**inputs).logits.argmax(dim=-1).item()
+print(model.config.id2label[label_id])
 ```"""
     return f"""```python
+import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 model_id = "{repository_id}"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
-model = AutoModelForSequenceClassification.from_pretrained(model_id)
+model = AutoModelForSequenceClassification.from_pretrained(model_id).eval()
+
+inputs = tokenizer("{example}", truncation=True,
+                   max_length=512, return_tensors="pt")
+with torch.inference_mode():
+    label_id = model(**inputs).logits.argmax(dim=-1).item()
+print(model.config.id2label[label_id])
 ```"""
 
 
@@ -94,6 +121,24 @@ def build_model_card(
     )
     library_name = "peft" if artifact_type == "adapter" else "transformers"
     usage = _usage_example(repository_id, artifact_type, task)
+    description = (
+        "Classify a request as **safe** or **unsafe** to inform content-safety routing."
+        if task_name == "level1"
+        else "Assign one of nine legacy hazard categories to requests already marked unsafe."
+    )
+    artifact_description = (
+        "This LoRA adapter loads its base model through PEFT."
+        if artifact_type == "adapter"
+        else "This merged checkpoint loads directly with Transformers."
+    )
+    taxonomy_note = (
+        "Level 2 uses `legacy-9-v1`: multi-hazard annotations map to the first "
+        "supported category in source order. Its output is a single category, "
+        "not twelve independent Hazard scores. The source crosswalk and "
+        "exclusions are in `data_manifest.json`."
+        if task_name == "level2"
+        else "The binary labels describe the request under the training safety taxonomy."
+    )
     return f"""---
 license: apache-2.0
 library_name: {library_name}
@@ -110,24 +155,20 @@ tags:
   - legacy-9-v1
 ---
 
-# {task["display_name"]} — {artifact_type}
+{MODEL_CARD_HEADER}
 
-This is the **{artifact_type}** artifact produced by the canonical Semantic
-Router safety training workflow. It uses the same pinned
-`llm-semantic-router/mmbert-32k-yarn` base family as the other current
-mmBERT-32K classifiers.
+# {task["display_name"]}
 
-This release records its exact source commit, training contract, data inputs,
-dependencies, and evaluation receipts. It does not overwrite existing
-artifacts or claim bit-for-bit equivalence with checkpoints that lack those
-complete run receipts.
+{description} {artifact_description}
+The training base is `{contract["base_model"]["id"]}` at revision
+`{contract["base_model"]["revision"]}`.
 
 ## Evaluation
 
 {_format_metrics(metrics)}
 
 Evaluation uses the de-duplicated, natural-distribution AEGIS test split. The
-balanced/oversampled training distribution is not used as test data.
+complete results and split details are in `metrics.json` and `data_manifest.json`.
 
 ## Labels
 
@@ -135,35 +176,23 @@ balanced/oversampled training distribution is not used as test data.
 {_yaml_labels(task)}
 ```
 
-For Level 2, `legacy-9-v1` preserves the historical output order. Several of
-these IDs differ from the canonical 13-category numbering. See
-`training_contract.json` and `data_manifest.json` for the explicit
-source-taxonomy crosswalk and exclusions.
+{taxonomy_note}
 
 ## Usage
 
 {usage}
 
-Tokenize with truncation and `max_length=512`. The underlying base supports
-longer contexts, but 512 is the checked training contract for this checkpoint.
-
-## Reproducibility
-
-- Source: [{source_commit}]({source_url})
-- Base revision: `{contract["base_model"]["revision"]}`
-- Taxonomy: `{contract["taxonomy_version"]}`
-- Global batch: `{training_manifest["global_train_batch_size"]}`
-- Precision: `{training_manifest["precision"]}`
-- Data, dependency, split, parity, and artifact checksums are included in the
-  JSON manifests shipped with this repository.
+The example runs on CPU and checks the first 512 tokens. This checkpoint's
+training contract covers 512 tokens; the base model's context capacity does
+not establish longer-input accuracy.
 
 ## Limitations
 
-- Training data is primarily English even though the base model is multilingual.
-- Level 2 converts multi-hazard annotations to the first mapped category in the
-  source order; consult `mapped_targets` audit statistics before policy use.
-- Safety classifiers should be one signal in a defense-in-depth system and
-  require calibration for their deployment domain.
+Training data is primarily English. Evaluate your languages and policy domain
+before deployment, and combine this signal with application controls.
+
+The [training source]({source_url}), `training_contract.json`, and the shipped
+JSON manifests record the data, dependencies, and artifact checksums.
 """
 
 

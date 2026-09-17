@@ -131,6 +131,13 @@ Feature controls:
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
+Deployment registries support Linux and macOS through descriptor-relative reads
+that reject symlinks in the registry path and its files. Use a canonical registry
+directory; macOS also requires read permission on its directory components.
+Other platforms reject a configured registry. Leaving `EVALUATION_DEPLOYMENTS_DIR`
+unset retains the single-runtime target. Evaluation workers require Linux for
+their sandbox.
+
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
 `DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
 Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as
@@ -169,6 +176,20 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
+
+To keep local Docker or Podman sessions valid when recreating the stack:
+
+1. Load the same `DASHBOARD_JWT_SECRET` into the host environment before every
+   `vllm-sr serve` invocation. Use your existing secret store; do not generate a
+   new value on each launch.
+2. Keep the Dashboard authentication database on its persistent volume.
+3. Start the stack normally. This variable configures Dashboard only; do not
+   pass it through `--recipe-env`.
+
+Without a stable key, each Dashboard restart requires users to log in again.
+Rotating the key also ends existing sessions, but does not change stored
+administrator accounts. If a temporary connection or server error interrupts
+session verification, choose **Retry** to reconnect without signing in again.
 
 Writes authenticated by the session cookie must carry an `X-CSRF-Token` header
 and a matching `Origin`. The frontend does this on its own. Set

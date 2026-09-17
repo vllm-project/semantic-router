@@ -6,14 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // ErrTokenSpansTruncated marks a token_spans.v1 response the provider declared
@@ -22,7 +24,7 @@ import (
 // would make a provider that saw half the text indistinguishable from one that
 // saw all of it and found nothing, which is the failure class behind #3333 and
 // #3364.
-var ErrTokenSpansTruncated = errors.New("token_spans.v1 response is partial: provider truncated its input")
+var ErrTokenSpansTruncated = tasks.ErrTokenSpansTruncated
 
 // HTTPTokenClassifierInference implements TokenClassifierBackend over the
 // token_spans.v1 contract: POST {"inputs": text} and receive spans with
@@ -47,15 +49,16 @@ type HTTPTokenClassifierInference struct {
 	model string
 }
 
-func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *PIIMapping, deadline time.Duration) (*HTTPTokenClassifierInference, error) {
+func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, labels tasks.TokenLabelSet, deadline time.Duration) (*HTTPTokenClassifierInference, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("token_spans external model config is required")
 	}
 	if cfg.ModelEndpoint.Address == "" {
 		return nil, fmt.Errorf("token_spans endpoint address is required")
 	}
-	if mapping == nil || len(mapping.LabelToIdx) == 0 {
-		return nil, fmt.Errorf("PII label mapping is required for token_spans")
+	known, outside, err := compileTokenLabels(labels)
+	if err != nil {
+		return nil, err
 	}
 
 	scheme := strings.ToLower(strings.TrimSpace(cfg.ModelEndpoint.Protocol))
@@ -81,7 +84,6 @@ func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *P
 	if err != nil {
 		return nil, fmt.Errorf("create token_spans connector: %w", err)
 	}
-	known, outside := knownPIILabels(mapping)
 	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: known, outside: outside, model: strings.TrimSpace(cfg.ModelName)}, nil
 }
 
@@ -120,30 +122,63 @@ var httpTokenClassifyOperation = connector.Operation{
 }
 
 // ClassifyTokens implements TokenClassifierBackend.
-func (h *HTTPTokenClassifierInference) ClassifyTokens(text string) ([]candle_binding.TokenEntity, error) {
-	return h.classifyTokens(context.Background(), text)
+func (h *HTTPTokenClassifierInference) ClassifyTokens(ctx context.Context, text string) (tasks.TokenClassificationResult, error) {
+	return h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: text})
 }
 
-func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text string) ([]candle_binding.TokenEntity, error) {
+// ClassifyGrounded runs grounded span detection over the token_spans.v1
+// contract: the answer is the classified text and travels as inputs, so every
+// returned offset indexes the answer; context and question travel as
+// parameters. The provider sees the same three fields the native detector
+// does, without the router assembling a prompt it would then have to parse.
+func (h *HTTPTokenClassifierInference) ClassifyGrounded(ctx context.Context, input tasks.GroundedTextRequest) (tasks.TokenClassificationResult, error) {
+	if input.Context == "" {
+		return tasks.TokenClassificationResult{}, fmt.Errorf("context is required for hallucination detection")
+	}
+	return h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: input.Answer, Parameters: map[string]string{"context": input.Context, "question": input.Question}})
+}
+
+func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text string) ([]tasks.TokenEntity, error) {
+	result, err := h.classifyTokenResult(ctx, httpClassifyRequest{Inputs: text})
+	return result.Entities, err
+}
+
+func (h *HTTPTokenClassifierInference) classifyTokenResult(ctx context.Context, request httpClassifyRequest) (tasks.TokenClassificationResult, error) {
+	text := request.Inputs
+	if !utf8.ValidString(text) {
+		return tasks.TokenClassificationResult{}, fmt.Errorf("token_spans input is not valid UTF-8")
+	}
+	for _, value := range request.Parameters {
+		if !utf8.ValidString(value) {
+			return tasks.TokenClassificationResult{}, fmt.Errorf("token_spans parameter is not valid UTF-8")
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
-	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
+	reqBody, err := json.Marshal(request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal token_spans request: %w", err)
+		return tasks.TokenClassificationResult{}, fmt.Errorf("failed to marshal token_spans request: %w", err)
 	}
 	responseBody, err := h.connector.Do(ctx, httpTokenClassifyOperation, reqBody)
 	if err != nil {
-		return nil, formatHTTPClassifyConnectorError(err)
+		return tasks.TokenClassificationResult{}, formatHTTPClassifyConnectorError(err)
 	}
 	spans, truncatedAt, model, err := decodeTokenSpansResponse(responseBody)
 	if err != nil {
-		return nil, err
+		return tasks.TokenClassificationResult{}, err
 	}
-	if err := h.checkModelIdentity(model); err != nil {
-		return nil, err
+	if identityErr := h.checkModelIdentity(model); identityErr != nil {
+		return tasks.TokenClassificationResult{}, identityErr
 	}
-	return alignTokenSpans(h.known, h.outside, text, spans, truncatedAt)
+	entities, err := alignTokenSpans(h.known, h.outside, text, spans, truncatedAt)
+	scoresAvailable := true
+	result := tasks.TokenClassificationResult{Entities: entities, ScoresAvailable: &scoresAvailable}
+	if truncatedAt != nil && (err == nil || errors.Is(err, ErrTokenSpansTruncated)) {
+		byteOffset := newSpanInput(text).byteAt[*truncatedAt]
+		result.TruncatedAt = &byteOffset
+	}
+	return result, err
 }
 
 // checkModelIdentity enforces the model-identity rule of token_spans.v1: the
@@ -216,16 +251,24 @@ func isPresentJSON(raw json.RawMessage) bool {
 // code-point offsets to the byte offsets TokenEntity carries internally. Any
 // violation rejects the whole response: a provider whose offsets are off by
 // one is redacting the wrong characters, and that must not be a warning.
-func alignTokenSpans(known, outside map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int) ([]candle_binding.TokenEntity, error) {
+func alignTokenSpans(known, outside map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int) ([]tasks.TokenEntity, error) {
+	return alignTokenSpansScored(known, outside, text, spans, truncatedAt, true)
+}
+
+// alignTokenSpansScored is alignTokenSpans with the score requirement as a
+// parameter. A provider bound through an adapter that yields no per-span score
+// (the chat adapter's quoted spans) shares every other rule of the contract:
+// label set, bounds, text match, byte conversion and duplicate rejection.
+func alignTokenSpansScored(known, outside map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int, requireScore bool) ([]tasks.TokenEntity, error) {
 	input := newSpanInput(text)
 	if err := input.checkTruncatedAt(truncatedAt); err != nil {
 		return nil, err
 	}
 
 	seen := make(map[spanKey]struct{}, len(spans))
-	entities := make([]candle_binding.TokenEntity, 0, len(spans))
+	entities := make([]tasks.TokenEntity, 0, len(spans))
 	for i, sp := range spans {
-		entity, err := alignTokenSpan(i, sp, input, known, outside, truncatedAt)
+		entity, err := alignTokenSpan(i, sp, input, known, outside, truncatedAt, requireScore)
 		if err != nil {
 			return nil, err
 		}
@@ -265,6 +308,13 @@ func newSpanInput(text string) spanInput {
 	return spanInput{runes: runes, byteAt: byteAt}
 }
 
+// codePointAt converts a byte offset on a code-point boundary to its code-point
+// index; a byte offset inside a multi-byte sequence maps to the code point that
+// contains it.
+func (in spanInput) codePointAt(byteOffset int) int {
+	return sort.SearchInts(in.byteAt, byteOffset)
+}
+
 func (in spanInput) checkTruncatedAt(truncatedAt *int) error {
 	if truncatedAt != nil && (*truncatedAt < 0 || *truncatedAt > len(in.runes)) {
 		return fmt.Errorf("token_spans truncated_at %d is outside a %d code-point input", *truncatedAt, len(in.runes))
@@ -273,28 +323,28 @@ func (in spanInput) checkTruncatedAt(truncatedAt *int) error {
 }
 
 // alignTokenSpan validates one span and converts it to a TokenEntity.
-func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map[string]struct{}, truncatedAt *int) (candle_binding.TokenEntity, error) {
+func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map[string]struct{}, truncatedAt *int, requireScore bool) (tasks.TokenEntity, error) {
 	label, err := spanLabel(i, sp, known, outside)
 	if err != nil {
-		return candle_binding.TokenEntity{}, err
+		return tasks.TokenEntity{}, err
 	}
 	start, end, err := spanBounds(i, label, sp, input, truncatedAt)
 	if err != nil {
-		return candle_binding.TokenEntity{}, err
+		return tasks.TokenEntity{}, err
 	}
 	text, err := spanText(i, label, sp, input, start, end)
 	if err != nil {
-		return candle_binding.TokenEntity{}, err
+		return tasks.TokenEntity{}, err
 	}
-	score, err := spanScore(i, label, sp)
+	score, err := spanScore(i, label, sp, requireScore)
 	if err != nil {
-		return candle_binding.TokenEntity{}, err
+		return tasks.TokenEntity{}, err
 	}
 	bStart, bEnd, err := spanBytes(i, label, sp, input, start, end)
 	if err != nil {
-		return candle_binding.TokenEntity{}, err
+		return tasks.TokenEntity{}, err
 	}
-	return candle_binding.TokenEntity{
+	return tasks.TokenEntity{
 		EntityType: label,
 		Start:      bStart,
 		End:        bEnd,
@@ -324,7 +374,7 @@ func spanLabel(i int, sp tokenSpanWire, known, outside map[string]struct{}) (str
 	}
 	if _, ok := known[label]; !ok {
 		// An unknown label is provider text; report its size, not its value.
-		return "", fmt.Errorf("token_spans span %d label (%d bytes) is not in the configured PII mapping", i, len(label))
+		return "", fmt.Errorf("token_spans span %d label (%d bytes) is not in the configured task label mapping", i, len(label))
 	}
 	return label, nil
 }
@@ -368,8 +418,11 @@ func spanText(i int, label string, sp tokenSpanWire, input spanInput, start, end
 	return text, nil
 }
 
-func spanScore(i int, label string, sp tokenSpanWire) (float32, error) {
-	if sp.Score == nil || *sp.Score < 0 || *sp.Score > 1 {
+func spanScore(i int, label string, sp tokenSpanWire, required bool) (float32, error) {
+	if sp.Score == nil && !required {
+		return 0, nil
+	}
+	if sp.Score == nil || math.IsNaN(float64(*sp.Score)) || math.IsInf(float64(*sp.Score), 0) || *sp.Score < 0 || *sp.Score > 1 {
 		return 0, fmt.Errorf("token_spans span %d (%s) score is missing or outside [0,1]", i, label)
 	}
 	return *sp.Score, nil
@@ -386,40 +439,6 @@ func spanBytes(i int, label string, sp tokenSpanWire, input spanInput, start, en
 		return 0, 0, fmt.Errorf("token_spans span %d (%s) byte_end %d disagrees with code-point end %d (byte %d)", i, label, *sp.ByteEnd, end, bEnd)
 	}
 	return bStart, bEnd, nil
-}
-
-// knownPIILabels collects the mapping's entity label names with any BIO prefix
-// removed, so a provider may say PERSON whether the mapping file was written
-// as PERSON or B-PERSON. The outside labels are returned separately and are
-// not part of the entity set: class zero of the mapping (the native
-// classifier's no-entity class) and the literal "O".
-func knownPIILabels(mapping *PIIMapping) (known, outside map[string]struct{}) {
-	known = make(map[string]struct{})
-	outside = map[string]struct{}{"O": {}}
-	if mapping == nil {
-		return known, outside
-	}
-	if zero, ok := mapping.IdxToLabel["0"]; ok && stripBIOPrefix(zero) != "" {
-		outside[stripBIOPrefix(zero)] = struct{}{}
-	}
-	for label, idx := range mapping.LabelToIdx {
-		if idx == 0 {
-			outside[stripBIOPrefix(label)] = struct{}{}
-		}
-	}
-	add := func(label string) {
-		label = stripBIOPrefix(label)
-		if _, isOutside := outside[label]; !isOutside && label != "" {
-			known[label] = struct{}{}
-		}
-	}
-	for label := range mapping.LabelToIdx {
-		add(label)
-	}
-	for _, label := range mapping.IdxToLabel {
-		add(label)
-	}
-	return known, outside
 }
 
 // Close releases idle connections owned by the remote connector.

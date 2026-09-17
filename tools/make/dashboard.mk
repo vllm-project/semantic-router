@@ -6,7 +6,7 @@ DASHBOARD_DIR := dashboard
 DASHBOARD_FRONTEND_DIR := $(DASHBOARD_DIR)/frontend
 DASHBOARD_BACKEND_DIR := $(DASHBOARD_DIR)/backend
 DASHBOARD_WIZMAP_DIR := $(DASHBOARD_DIR)/wizmap
-DASHBOARD_WASM_DIR := src/semantic-router/cmd/wasm
+DASHBOARD_WASM_DIR := $(DASHBOARD_DIR)/wasm
 
 ##@ Dashboard
 
@@ -27,6 +27,9 @@ dashboard-build-wasm: ## Build dashboard DSL compiler WASM assets
 	@echo "Building dashboard WASM assets..."
 	@$(MAKE) -C $(DASHBOARD_WASM_DIR) build
 	@echo "dashboard WASM assets completed"
+
+dashboard-test-wasm: ## Test the dashboard DSL compiler in the Go and Node WASM runtimes
+	@$(MAKE) -C $(DASHBOARD_WASM_DIR) test
 
 dashboard-dev-frontend: dashboard-install dashboard-build-wasm ## Start dashboard frontend in dev mode
 	@$(LOG_TARGET)
@@ -68,7 +71,7 @@ dashboard-build: dashboard-build-frontend dashboard-build-backend ## Build dashb
 dashboard-lint: ## Lint dashboard frontend and backend
 	@$(LOG_TARGET)
 	@echo "Running ESLint for dashboard frontend..."
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run lint
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run lint
 	@echo "dashboard/frontend lint passed"
 	@echo "Running golangci-lint for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
@@ -81,7 +84,7 @@ dashboard-lint: ## Lint dashboard frontend and backend
 dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 	@$(LOG_TARGET)
 	@echo "Running ESLint fix for dashboard frontend..."
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run lint -- --fix || true
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run lint -- --fix || true
 	@echo "dashboard/frontend lint fix applied"
 	@echo "Running golangci-lint fix for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
@@ -93,19 +96,19 @@ dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 
 dashboard-type-check: ## Run TypeScript type checking for dashboard frontend
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run type-check
-	cd $(DASHBOARD_WIZMAP_DIR) && npm install 2>/dev/null && npm run build >/dev/null
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run type-check
+	cd $(DASHBOARD_WIZMAP_DIR) && npm ci && npm run build >/dev/null
 	@echo "dashboard/frontend type-check passed"
 
 dashboard-test-frontend: ## Run dashboard frontend unit tests
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run test:unit
+	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run test:unit
 	@echo "dashboard/frontend unit tests passed"
 
 dashboard-test-e2e-evaluation: ## Run Evaluation browser acceptance in Chromium
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && \
-		npm install 2>/dev/null && \
+		npm ci && \
 		npx playwright install --with-deps chromium && \
 		npm run test:e2e:evaluation
 	@echo "dashboard/frontend Evaluation browser acceptance passed"
@@ -121,10 +124,10 @@ dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 		fi
 	@echo "dashboard/backend go mod tidy check passed"
 
-dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
+dashboard-test-backend: vllm-sr-install-cli ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_BACKEND_DIR) && \
-		VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-python3}" go test ./...
+		VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-$(AGENT_PYTHON)}" go test ./...
 
 dashboard-evaluation-catalog-check: ## Check generated Evaluation catalog mirrors
 	@python3 tools/ci/sync_evaluation_catalogs.py --check
@@ -147,7 +150,7 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 	@echo "dashboard cleaned"
 
 .PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
-	dashboard-build dashboard-build-wasm dashboard-build-frontend dashboard-build-backend \
+	dashboard-build dashboard-build-wasm dashboard-test-wasm dashboard-build-frontend dashboard-build-backend \
 	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
 	dashboard-evaluation-catalog-check \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \

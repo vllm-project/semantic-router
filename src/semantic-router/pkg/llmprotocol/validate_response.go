@@ -293,7 +293,7 @@ func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 	complete := true
 	for _, part := range parts {
 		if part.Value == nil {
-			complete = complete && part.Provenance == ""
+			complete = false
 			continue
 		}
 		found = true
@@ -305,6 +305,8 @@ func countEqualsSum(total TokenCount, parts ...TokenCount) (bool, bool) {
 	if total.Value == nil {
 		return true, false
 	}
+	// Optional usage buckets may be unknown. Known parts are a lower bound,
+	// while a complete breakdown must add up exactly to its declared total.
 	if !complete {
 		return sum <= *total.Value, false
 	}

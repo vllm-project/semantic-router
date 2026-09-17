@@ -22,14 +22,18 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	var diagnostics llmprotocol.Diagnostics
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
-		"kv_transfer": wire.hasLegacyKVTransferMetadata(),
-		"metadata":    len(wire.Metadata) > 0,
-		"moderation":  len(wire.Moderation) > 0,
+		"kv_transfer":     wire.hasLegacyKVTransferMetadata(),
+		"metadata":        len(wire.Metadata) > 0,
+		"moderation":      len(wire.Moderation) > 0,
+		"x_groq":          len(wire.XGroq) > 0,
+		"usage_breakdown": wire.hasUsageBreakdown(),
 	}, "response request metadata is not model output")
 	if err := decodeChatChoices(wire, &response, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
-	decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy)
+	if err := decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy); err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
+	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, body, response.Generation, response.SourceStopReason, policy)
 	return response, envelope, diagnostics, nil
 }
@@ -50,21 +54,45 @@ func decodeChatResponseUsage(
 	response *llmprotocol.Response,
 	diagnostics *llmprotocol.Diagnostics,
 	policy llmprotocol.Policy,
-) {
+) error {
 	if wire == nil {
-		return
+		return nil
 	}
-	response.Usage = decodeChatUsage(*wire)
-	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
-		"usage.compute_units":                                        len(wire.ComputeUnits) > 0,
-		"usage.prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
-		"usage.prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
-		"usage.prompt_tokens_details.text_tokens":                    wire.PromptTokensDetails != nil && wire.PromptTokensDetails.TextTokens != 0,
-		"usage.completion_tokens_details.accepted_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AcceptedPredictionTokens != 0,
-		"usage.completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
-		"usage.completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
-		"usage.completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
-	}, "provider accounting detail has no separate protocol-neutral bucket")
+	usage, err := decodeChatUsage(*wire)
+	if err != nil {
+		return err
+	}
+	response.Usage = usage
+	appendProviderFieldOmissions(
+		diagnostics, policy, llmprotocol.OpenAIChatV1,
+		chatUsageFieldOmissions(*wire, "usage."), chatUsageOmissionReason,
+	)
+	return nil
+}
+
+const chatUsageOmissionReason = "provider accounting detail has no separate protocol-neutral bucket"
+
+// chatUsageFieldOmissions lists usage detail with no neutral bucket. Buffered
+// responses and final stream chunks share one usage wire, so they share this
+// inventory and report the same omissions under their own field prefix.
+func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool {
+	return map[string]bool{
+		prefix + "compute_units":                                        len(wire.ComputeUnits) > 0,
+		prefix + "prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
+		prefix + "prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
+		prefix + "prompt_tokens_details.text_tokens":                    wire.PromptTokensDetails != nil && wire.PromptTokensDetails.TextTokens != 0,
+		prefix + "prompt_tokens_details.multimodal_tokens":              wire.PromptTokensDetails != nil && len(wire.PromptTokensDetails.MultimodalTokens) > 0,
+		prefix + "completion_tokens_details.accepted_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AcceptedPredictionTokens != 0,
+		prefix + "completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
+		prefix + "completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
+		prefix + "completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
+		prefix + "cost_in_usd_ticks":                                    wire.CostInUSDTicks != nil,
+		prefix + "num_sources_used":                                     wire.NumSourcesUsed != nil && *wire.NumSourcesUsed != 0,
+		prefix + "queue_time":                                           wire.QueueTime != nil,
+		prefix + "prompt_time":                                          wire.PromptTime != nil,
+		prefix + "completion_time":                                      wire.CompletionTime != nil,
+		prefix + "total_time":                                           wire.TotalTime != nil,
+	}
 }
 
 func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
@@ -141,7 +169,7 @@ func decodeChatTokenLogprobs(wire *chatLogprobsWire) []llmprotocol.TokenLogprob 
 	return tokens
 }
 
-func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
+func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 	usage := llmprotocol.Usage{
 		State:           llmprotocol.UsageAvailable,
 		InputUncached:   unknownCount(),
@@ -154,17 +182,9 @@ func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
 		Total:           authoritative(wire.TotalTokens),
 	}
 	if wire.PromptTokensDetails != nil {
-		usage.InputCacheRead = optionalAuthoritative(wire.PromptTokensDetails.CachedTokens)
-		usage.InputCacheWrite = optionalAuthoritative(wire.PromptTokensDetails.CacheWriteTokens)
-		if usage.InputCacheRead.Value != nil && usage.InputCacheWrite.Value != nil {
-			cached, cacheWrite := *usage.InputCacheRead.Value, *usage.InputCacheWrite.Value
-			uncached := int64(-1)
-			if cached >= 0 && cacheWrite >= 0 && wire.PromptTokens >= cached && cacheWrite <= wire.PromptTokens-cached {
-				uncached = wire.PromptTokens - cached - cacheWrite
-			}
-			usage.InputUncached = llmprotocol.TokenCount{
-				Value: llmprotocol.Int64(uncached), Provenance: llmprotocol.UsageDerived,
-			}
+		details := wire.PromptTokensDetails
+		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens); err != nil {
+			return llmprotocol.Usage{}, err
 		}
 	}
 	if wire.CompletionTokensDetails != nil {
@@ -178,7 +198,7 @@ func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
 			Value: llmprotocol.Int64(other), Provenance: llmprotocol.UsageDerived,
 		}
 	}
-	return usage
+	return usage, nil
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
@@ -205,7 +225,7 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 		return nil, diagnostics, err
 	}
 	wire.Choices = choices
-	wire.Usage = encodeChatUsage(response.Usage, envelope.Format)
+	wire.Usage = encodeChatUsage(response.Usage)
 	body, err := marshalWire(wire)
 	return body, diagnostics, err
 }
@@ -259,7 +279,7 @@ func encodeChatOutput(items []llmprotocol.OutputItem, index int, stop llmprotoco
 	return chatChoiceWire{Index: index, Message: message, FinishReason: &reason}, nil
 }
 
-func encodeChatUsage(usage llmprotocol.Usage, source llmprotocol.WireFormat) *chatUsageWire {
+func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
 	if usage.State == llmprotocol.UsageUnavailable || usage.InputTotal.Value == nil && usage.OutputTotal.Value == nil && usage.Total.Value == nil {
 		return nil
 	}
@@ -270,13 +290,9 @@ func encodeChatUsage(usage llmprotocol.Usage, source llmprotocol.WireFormat) *ch
 		total = prompt + completion
 	}
 	wire := &chatUsageWire{PromptTokens: prompt, CompletionTokens: completion, TotalTokens: total}
-	// Keep the established zero-filled Chat shape when translating from another
-	// protocol; neutral settlement has already retained the missing-field state.
-	if usage.InputCacheRead.Value != nil || usage.InputCacheWrite.Value != nil ||
-		source != "" && source != llmprotocol.OpenAIChatV1 {
+	if usage.InputCacheRead.Value != nil || usage.InputCacheWrite.Value != nil {
 		wire.PromptTokensDetails = &chatPromptTokensDetailsWire{
-			CachedTokens:     llmprotocol.Int64(tokenValue(usage.InputCacheRead)),
-			CacheWriteTokens: llmprotocol.Int64(tokenValue(usage.InputCacheWrite)),
+			CachedTokens: usage.InputCacheRead.Value, CacheWriteTokens: usage.InputCacheWrite.Value,
 		}
 	}
 	if usage.OutputReasoning.Value != nil {

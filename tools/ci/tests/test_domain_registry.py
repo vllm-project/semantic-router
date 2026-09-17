@@ -64,11 +64,96 @@ class DomainRegistryTests(unittest.TestCase):
             ),
         )
 
+    def test_modelcompat_tool_keeps_test_and_ci_coverage(self) -> None:
+        for path in (
+            "tools/modelcompat/main.go",
+            "tools/modelcompat/main_test.go",
+            "src/semantic-router/pkg/modelruntime/compatibility/receipt.go",
+            "tools/make/models.mk",
+        ):
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(
+                    "make check-modelcompat", commands_for_domains(domains, "checks")
+                )
+                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+
     def test_every_domain_job_is_declared_once(self) -> None:
         jobs = job_records()
         for name, domain in domain_records().items():
             with self.subTest(domain=name):
                 self.assertTrue(set(domain["ci_jobs"]).issubset(jobs))
+
+    def test_generated_contract_sources_and_outputs_select_the_drift_gate(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/apiserver/route_config.go",
+            "src/semantic-router/pkg/catalog/catalog.go",
+            "src/semantic-router/pkg/config/canonical.go",
+            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+            "dashboard/frontend/src/generated/routerConfigContract.ts",
+            "tools/codegen/configschema/main.go",
+            "tools/codegen/openapi/main.go",
+            "tools/codegen/embed_generated_index.py",
+            "tools/make/docs.mk",
+            "tools/make/golang.mk",
+            "website/static/openapi/apiserver/apiserver.openapi.json",
+            "website/docs/api/apiserver.md",
+        ):
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(
+                    "make generated-contract-check",
+                    commands_for_domains(domains, "checks"),
+                )
+                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+
+    def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
+        domains = matching_domains(
+            (
+                "tools/agent/skills/vllm-sr-agent-operations/references/configuration-loop.md",
+                "website/static/install/agent/vllm-sr/references/configuration-loop.md",
+            )
+        )
+        self.assertIn("make harness-check", commands_for_domains(domains, "checks"))
+        self.assertNotIn(
+            "make generated-contract-check", commands_for_domains(domains, "checks")
+        )
+
+    def test_relocated_tools_retain_unit_check_ownership(self) -> None:
+        cases = {
+            "tools/dev/dsl/main.go": "make go-tools-test",
+            "tools/models/classifier-operating-point/main.go": "make go-tools-test",
+            "tools/calibration/image-routing/main.go": "make go-tools-test",
+            "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
+            "tools/calibration/tuning/engine.py": "make test-calibration",
+            "tools/test/services/mock-vllm/app.py": "make test-provider-simulator",
+        }
+        for path, command in cases.items():
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(command, commands_for_domains(domains, "checks"))
+                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+
+    def test_reference_sources_select_checks_without_editing_outputs(self) -> None:
+        cases = {
+            "config/recipes/built-in/latest/mom-v1/recipe.dsl": "make model-catalog-generated-check",
+            "config/catalog/resources/models/virtual/vllm-sr.yaml": "make model-catalog-generated-check",
+            "website/static/model-catalog/catalog.json": "make model-catalog-generated-check",
+            "src/vllm-sr/cli/commands/request.py": "make docs-cli-check",
+            "website/docs/api/cli.md": "make docs-cli-check",
+            "config/fragments/signals/heuristic/keyword.yaml": "make docs-config-check",
+            "website/docs/tutorials/signal/heuristic/keyword.md": "make docs-config-check",
+            "deploy/operator/api/v1alpha1/semanticrouter_types.go": "make docs-crd-check",
+            "website/docs/api/crd-reference.md": "make docs-crd-check",
+            "website/scripts/generate-contributor-rank.mjs": "make docs-community-check",
+            "website/src/data/teamMembers.tsx": "make docs-community-check",
+            "website/src/data/committerActivity.generated.ts": "make docs-community-check",
+        }
+        for path, command in cases.items():
+            with self.subTest(path=path):
+                self.assertIn(
+                    command, commands_for_domains(matching_domains((path,)), "checks")
+                )
 
 
 if __name__ == "__main__":

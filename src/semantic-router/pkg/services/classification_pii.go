@@ -11,6 +11,7 @@ import (
 
 // PIIRequest represents a request for PII detection
 type PIIRequest struct {
+	Recipe  string      `json:"recipe,omitempty"`
 	Text    string      `json:"text"`
 	Options *PIIOptions `json:"options,omitempty"`
 }
@@ -26,6 +27,7 @@ type PIIOptions struct {
 
 // PIIResponse represents the response from PII detection
 type PIIResponse struct {
+	Recipe   string      `json:"recipe,omitempty"`
 	HasPII   bool        `json:"has_pii"`
 	Entities []PIIEntity `json:"entities"`
 	// ScanIncomplete reports that the classifier saw only part of the text,
@@ -53,16 +55,25 @@ type PIIEntity struct {
 
 // DetectPII performs PII detection
 func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (*PIIResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	if blankText(req.Text) {
 		return nil, ErrEmptyText
 	}
 
-	classifier := s.classifierSnapshot()
+	classifier, _, recipe, scopeErr := s.diagnosticClassifierSnapshot(req.Recipe)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	if req.Recipe != "" && (classifier == nil || !classifier.IsPIIEnabled()) {
+		return nil, ErrClassifierUnavailable
+	}
 	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &PIIResponse{
+			Recipe:                 recipe,
 			HasPII:                 false,
 			Entities:               []PIIEntity{},
 			SecurityRecommendation: "allow",
@@ -89,5 +100,6 @@ func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (
 	response := s.buildPIIResponse(req.Text, detections, req.Options)
 	response.ScanIncomplete = incomplete
 	response.ProcessingTimeMs = processingTime
+	response.Recipe = recipe
 	return response, nil
 }

@@ -36,18 +36,19 @@ void ModelManager::ensureCoreInitialized() {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!core_) {
-        core_ = std::make_unique<ov::Core>();
+        auto candidate = std::make_unique<ov::Core>();
         
         // Load OpenVINO tokenizers extension (required)
         std::string tokenizers_lib = getTokenizersExtension();
-        core_->add_extension(tokenizers_lib);
+        candidate->add_extension(tokenizers_lib);
         std::cout << "✓ Loaded OpenVINO tokenizers extension from: " << tokenizers_lib << std::endl;
 
         // Enable model compilation cache to avoid ~22s recompilation on restart.
         // Default: /tmp/ov_model_cache, overridable via OPENVINO_CACHE_DIR env var.
         const char* cache_dir = std::getenv("OPENVINO_CACHE_DIR");
         std::string cache_path = cache_dir ? cache_dir : "/tmp/ov_model_cache";
-        core_->set_property(ov::cache_dir(cache_path));
+        candidate->set_property(ov::cache_dir(cache_path));
+        core_ = std::move(candidate);
         std::cout << "✓ Model cache enabled: " << cache_path << std::endl;
 
     }

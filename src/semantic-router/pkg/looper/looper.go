@@ -31,12 +31,13 @@ import (
 
 // Request contains the input for looper execution
 type Request struct {
+	Grounding *GroundingBackends
 	// OriginalRequest is the OpenAI chat completion request from the client
 	OriginalRequest *openai.ChatCompletionNewParams
 
-	// BaseContextTokens is the Router's conservative estimate for the original
-	// request. Generated Looper stages add their own prompt growth before every
-	// backend dispatch and re-check the target model's context window.
+	// BaseContextTokens retains the legacy original-plus-growth estimate.
+	// Strict CandidateRequirements instead count each complete outbound stage
+	// and its effective output budget once, without adding this estimate.
 	BaseContextTokens int
 
 	// ModelRefs contains the list of models to potentially use, ordered by preference
@@ -45,6 +46,19 @@ type Request struct {
 	// ModelParams maps model names to their ModelParams configuration
 	// Used to lookup access_key and param_size for confidence routing
 	ModelParams map[string]config.ModelParams
+
+	// CandidateRequirements is the owning recipe's admission policy. Every
+	// generated stage rechecks this policy against its complete outbound request.
+	CandidateRequirements *config.CandidateRequirements
+
+	// PermittedModels contains the filtered assigned workers and explicitly
+	// configured helpers, including only their declared deployment aliases.
+	// A strict recipe never expands this boundary from the model catalog.
+	PermittedModels []string
+
+	// MaxTokensLimit retains the owning decision's cap after an algorithm
+	// overrides its stage output budget. It does not supply an omitted default.
+	MaxTokensLimit *int
 
 	// Algorithm defines the execution strategy
 	Algorithm *config.AlgorithmConfig
@@ -85,6 +99,11 @@ type Request struct {
 type Response struct {
 	// Body is the response body (JSON for non-streaming, SSE for streaming)
 	Body []byte
+
+	// BufferedBody is the completed Chat result behind a locally synthesized
+	// stream. It preserves alternative choices for semantic accounting without
+	// feeding a multi-choice aggregate through a single-choice stream decoder.
+	BufferedBody []byte `json:"-"`
 
 	// ContentType is "application/json" or "text/event-stream"
 	ContentType string

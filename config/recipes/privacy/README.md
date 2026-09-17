@@ -43,11 +43,18 @@ backend ownership, logging, retention, and access controls remain necessary.
 | Image content without an attack signal | `omni` | Use the local visual-language model with filtered tools. |
 | PII, private-context, or local-only signal | `local_privacy_policy` | Keep the request local with privacy-oriented reasoning. |
 | Clearly non-sensitive deep reasoning | `cloud_frontier_reasoning` | Use the configured frontier backend. |
-| Everything else | `local_standard` | Use the local model. |
+| Everything else | `local_standard` | Use the local model with local-only tool access. |
 
 Security and privacy decisions outrank the frontier route. The frontier route
 requires positive reasoning evidence and exclusion of privacy or attack
 signals.
+
+Recognized local-handling instructions take precedence over reasoning demand,
+including mixed requests that also quote other text. Local routes allow only
+`local_search` and `local_read`; security containment removes tools. If the
+security, privacy, or frontier decision cannot be resolved, the request returns
+an error. These English and Chinese patterns are not a DLP system or a guarantee
+that an operator-provided tool executes locally.
 
 ## Requirements
 
@@ -64,7 +71,7 @@ still pass through the Router and any enabled supporting stores or logs. Review
 those components before claiming end-to-end local processing. Treat classifier
 errors as possible: conservative fallbacks reduce risk but do not eliminate it.
 
-All four checked-in routes enable in-memory Router Replay. The effective replay
+All five checked-in routes enable in-memory Router Replay. The effective replay
 defaults capture up to 2 KiB each from the request and response body, including
 the local security-containment and privacy routes. Local model placement does
 not make that replay data harmless. Disable body capture or replay when prompts

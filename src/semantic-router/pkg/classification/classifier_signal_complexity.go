@@ -73,7 +73,7 @@ func (c *Classifier) classifyComplexity(
 	case c.complexityLabelBackend != nil:
 		return evaluateComplexityLabels(ctx, c.complexityLabelBackend, text, c.complexityRules())
 	default:
-		return c.complexityClassifier.classifyDetailedWithImageCached(text, imageURL, imgCache)
+		return c.complexityClassifier.classifyDetailedWithImageCached(ctx, text, imageURL, imgCache)
 	}
 }
 

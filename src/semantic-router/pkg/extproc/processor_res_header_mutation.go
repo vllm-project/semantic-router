@@ -340,7 +340,7 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName()))
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
-	if ctx.VSRSelectedDecisionName != "" {
+	if ctx.VSRSelectedDecisionName != "" && ctx.VSRSelectedDecisionConfidenceScored {
 		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
 	}
 	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
@@ -414,6 +414,7 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
 	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)
 	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
+	builder.addJoined(headers.VSRMatchedSafety, ctx.VSRMatchedSafety)
 	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
 	builder.addJoined(headers.VSRMatchedKB, ctx.VSRMatchedKB)
 	builder.addJoined(headers.VSRMatchedConversation, ctx.VSRMatchedConversation)

@@ -19,7 +19,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -36,17 +38,18 @@ var (
 	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
 	buildReloadRouter        = buildOpenAIRouterFromConfig
 	replaceReloadConfig      = config.Replace
-	prepareReloadRuntime     = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
-			Component:                  "extproc",
-			MaxParallelism:             modelruntime.DefaultParallelism(5),
-			OnEvent:                    logReloadRuntimeLifecycleEvent,
-			InitModalityClassifierFunc: InitModalityClassifier,
-		})
+	// Embeddings are prepared by buildRouterComponents with the service pool.
+	// The preparation seam stays injectable for lifecycle fault tests.
+	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		return modelruntime.EmbeddingRuntimeState{}, nil
 	}
+
 	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
 		if router == nil {
 			return nil
+		}
+		if router.Embeddings != nil {
+			state = router.embeddingRuntimeState()
 		}
 		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
 			{
@@ -72,6 +75,7 @@ var (
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
+	modelPool  *binding.Pool
 	configPath string
 	service    *RouterService
 	server     *grpc.Server
@@ -92,7 +96,11 @@ func NewServer(
 	certPath string,
 	runtimeRegistry *routerruntime.Registry,
 ) (*Server, error) {
-	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry)
+	modelPool := binding.NewPool()
+	if runtimeRegistry != nil {
+		modelPool = runtimeRegistry.ModelPool()
+	}
+	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry, modelPool)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +108,7 @@ func NewServer(
 	service := NewRouterService(router)
 	publishRouterState(router.Config, router, runtimeRegistry, service.current.Load().acquire)
 	return &Server{
+		modelPool:  modelPool,
 		configPath: configPath,
 		service:    service,
 		port:       port,
@@ -562,12 +571,21 @@ func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
 }
 
 func (s *Server) reloadRouterFromFile(configPath string) error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	before, _ := reloadDocumentHash(configPath)
 	candidateCfg, err := parseReloadConfig(configPath)
 	if err != nil {
+		// Do not attribute an older parse failure to a concurrent replacement.
+		if after, hashErr := reloadDocumentHash(configPath); hashErr == nil && after == before {
+			attempt := s.runtime.BeginConfigActivation(before, "file")
+			s.runtime.SetConfigActivationStage(attempt, "parse")
+			s.runtime.FinishConfigActivation(attempt, "failed", err)
+		}
 		return err
 	}
 
-	return s.reloadRouterFromConfig("file", configPath, candidateCfg)
+	return s.reloadRouterFromConfigLocked("file", configPath, candidateCfg)
 }
 
 func (s *Server) reloadRouterFromConfig(
@@ -577,28 +595,75 @@ func (s *Server) reloadRouterFromConfig(
 ) error {
 	s.reloadMu.Lock()
 	defer s.reloadMu.Unlock()
+	return s.reloadRouterFromConfigLocked(source, configPath, candidateCfg)
+}
+
+func (s *Server) reloadRouterFromConfigLocked(
+	source string,
+	configPath string,
+	candidateCfg *config.RouterConfig,
+) (reloadErr error) {
+	if candidateCfg == nil {
+		return errors.New("config reload candidate is nil")
+	}
+	attempt := s.runtime.BeginConfigActivation(candidateCfg.DocumentHash, source)
+	defer func() {
+		status := "active"
+		if errors.Is(reloadErr, errConfigReloadSuperseded) {
+			status = "superseded"
+		} else if reloadErr != nil {
+			status = "failed"
+		}
+		s.runtime.FinishConfigActivation(attempt, status, reloadErr)
+	}()
 	if s.lifecycle.isStopping() {
 		return errors.New("router server is shutting down")
 	}
+	if err := config.ValidateRoutingPreviewReload(resolveServerConfig(s), candidateCfg); err != nil {
+		return err
+	}
+	s.runtime.SetConfigActivationStage(attempt, "artifacts")
+	if err := modeldownload.ValidateReloadArtifacts(resolveServerConfig(s), candidateCfg); err != nil {
+		return fmt.Errorf("model artifact reload preflight failed: %w", err)
+	}
 	if source == "file" {
+		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
+			return err
+		}
+		s.runtime.SetConfigActivationStage(attempt, "model_download")
 		if err := ensureReloadConfigModels(candidateCfg); err != nil {
 			return fmt.Errorf("model download preflight failed: %w", err)
 		}
 	}
 
+	s.runtime.SetConfigActivationStage(attempt, "dependencies")
 	runtimeState, err := prepareReloadRuntime(candidateCfg)
 	if err != nil {
 		return fmt.Errorf("runtime dependency init failed: %w", err)
 	}
 
-	newRouter, err := buildReloadRouter(candidateCfg)
+	s.runtime.SetConfigActivationStage(attempt, "model_prepare")
+	newRouter, err := buildReloadRouter(candidateCfg, s.modelPool)
 	if err != nil {
 		return err
 	}
 	attachRuntimeRegistry(newRouter, s.runtime)
+	s.runtime.SetConfigActivationStage(attempt, "warmup")
 	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
 		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
+	}
+	s.runtime.SetConfigActivationStage(attempt, "publication")
+	if source == "file" {
+		release := s.runtime.LockConfigPublication()
+		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
+			release()
+			if closeErr := newRouter.Close(); closeErr != nil {
+				return fmt.Errorf("close discarded config generation: %w", closeErr)
+			}
+			return err
+		}
+		defer release()
 	}
 	inheritRouterLearningState(s.service.GetRouter(), newRouter)
 
@@ -616,6 +681,10 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	return nil
 }
+
+// CurrentConfig returns the published generation's configuration, including
+// while a Kubernetes candidate has been received but has not become ready.
+func (s *Server) CurrentConfig() *config.RouterConfig { return resolveServerConfig(s) }
 
 func (s *Server) configuredGRPCMaxMessageSize() int {
 	cfg := resolveServerConfig(s)
@@ -694,10 +763,26 @@ func publishRouterState(
 			ResponseCache:         router.responseCacheService(),
 			ContextCompression:    router.contextCompressionService(),
 			CompressionRecovery:   router.CompressionRecovery,
+			Plugins:               pluginruntime.Capabilities{Guards: router, Retrieval: router, Inspector: router},
 		})
 		return
 	}
 	services.SetGlobalClassificationService(router.ClassificationService)
 	memory.SetGlobalMemoryStore(router.MemoryStore)
 	selection.SetGlobalRegistry(router.ModelSelector)
+}
+
+func (s *Server) EmbeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
+	if s == nil || s.service == nil {
+		return modelruntime.EmbeddingRuntimeState{}
+	}
+	router := s.service.GetRouter()
+	if router == nil {
+		return modelruntime.EmbeddingRuntimeState{}
+	}
+	return router.embeddingRuntimeState()
+}
+
+func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
+	return modelruntime.EmbeddingState(r.Config, r.Embeddings)
 }

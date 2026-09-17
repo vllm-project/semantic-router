@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -29,6 +30,8 @@ type Server struct {
 	httpServer *http.Server
 	done       chan struct{}
 	serveErr   error
+	owned      *serverOwnedResources
+	ownedDone  chan struct{}
 }
 
 // Init starts the API server.
@@ -67,7 +70,10 @@ func InitWithOptions(opts InitOptions) error {
 		return err
 	}
 	<-server.done
-	return normalizeServerError(server.serveErr)
+	if server.ownedDone != nil {
+		<-server.ownedDone
+	}
+	return errors.Join(normalizeServerError(server.serveErr), server.owned.closeError())
 }
 
 func StartWithOptions(opts InitOptions) (*Server, error) {
@@ -89,8 +95,10 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 	}
 	cfg.ManagementAPI = managementCfg
 
-	classificationSvc := resolveClassificationService(cfg, opts.RuntimeRegistry)
-	classificationSvc = ensureClassificationService(cfg, opts.RuntimeRegistry, classificationSvc)
+	classificationSvc, classificationOwner, err := classificationServiceForStartup(cfg, opts.RuntimeRegistry)
+	if err != nil {
+		return nil, err
+	}
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -143,6 +151,7 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 	}
 
 	// Create HTTP server with routes
+	apiServer.initRoutingPreviewAdmission(cfg)
 	mux := apiServer.setupRoutes()
 	httpServer := &http.Server{
 		Addr:         managementCfg.ListenAddress(),
@@ -159,21 +168,32 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 		"remote_exposure": managementCfg.RemoteExposure,
 		"auth_mode":       managementCfg.Auth.Mode,
 	})
-	return startHTTPServer(httpServer)
+	return startHTTPServer(httpServer, classificationOwner)
 }
 
-func startHTTPServer(httpServer *http.Server) (*Server, error) {
+func startHTTPServer(httpServer *http.Server, owners ...io.Closer) (*Server, error) {
+	owned := newServerOwnedResources(owners)
 	listener, err := net.Listen("tcp", httpServer.Addr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, owned.drainAndClose())
 	}
+	httpServer.Addr = listener.Addr().String()
 	server := &Server{
 		httpServer: httpServer,
 		done:       make(chan struct{}),
+		owned:      owned,
+	}
+	if owned != nil {
+		server.ownedDone = make(chan struct{})
+		httpServer.Handler = owned.handler(httpServer.Handler)
 	}
 	go func() {
 		server.serveErr = httpServer.Serve(listener)
 		close(server.done)
+		if owned != nil {
+			_ = owned.drainAndClose()
+			close(server.ownedDone)
+		}
 	}()
 	return server, nil
 }
@@ -182,13 +202,21 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s == nil || s.httpServer == nil {
 		return nil
 	}
+	s.owned.beginDrain()
 	shutdownErr := s.httpServer.Shutdown(ctx)
 	if shutdownErr != nil {
 		_ = s.httpServer.Close()
 	}
 	select {
 	case <-s.done:
-		return errors.Join(shutdownErr, normalizeServerError(s.serveErr))
+		if s.ownedDone != nil {
+			select {
+			case <-s.ownedDone:
+			case <-ctx.Done():
+				return errors.Join(shutdownErr, ctx.Err())
+			}
+		}
+		return errors.Join(shutdownErr, normalizeServerError(s.serveErr), s.owned.closeError())
 	case <-ctx.Done():
 		_ = s.httpServer.Close()
 		return errors.Join(shutdownErr, ctx.Err())
@@ -223,31 +251,19 @@ func ensureClassificationService(
 	cfg *config.RouterConfig,
 	runtimeRegistry *routerruntime.Registry,
 	svc *services.ClassificationService,
-) *services.ClassificationService {
+) (*services.ClassificationService, error) {
 	if svc != nil {
-		return svc
+		return svc, nil
 	}
-
 	if runtimeRegistry != nil {
-		logging.ComponentEvent("apiserver", "classification_service_waiting_for_runtime", map[string]interface{}{
-			"using_placeholder": true,
-		})
-		return services.NewPlaceholderClassificationService()
+		logging.ComponentEvent("apiserver", "classification_service_waiting_for_runtime", map[string]interface{}{"using_placeholder": true})
+		return services.NewPlaceholderClassificationService(), nil
 	}
-
-	// If no global service exists, try auto-discovery unified classifier.
-	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
-	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+	service, err := services.NewClassificationServiceFromConfig(cfg)
 	if err != nil {
-		logging.ComponentWarnEvent("apiserver", "classification_service_autodiscovery_failed", map[string]interface{}{
-			"error":             err.Error(),
-			"using_placeholder": true,
-		})
-		return services.NewPlaceholderClassificationService()
+		return nil, fmt.Errorf("prepare canonical API classification runtime: %w", err)
 	}
-
-	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
-	return autoSvc
+	return service, nil
 }
 
 func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {
@@ -317,7 +333,23 @@ func buildConfigUpdater(
 			config.Replace(newCfg)
 		}
 	}
-	return runtimeRegistry.RefreshRuntimeConfig
+	// The persisted document is a candidate. The router watcher publishes the
+	// complete generation after preparation; mutating its borrowed service here
+	// would expose a new API classifier beside the old extproc/cache snapshot.
+	return func(*config.RouterConfig) {}
+}
+
+func classificationServiceForStartup(cfg *config.RouterConfig, registry *routerruntime.Registry) (*services.ClassificationService, io.Closer, error) {
+	service := resolveClassificationService(cfg, registry)
+	created := service == nil && registry == nil
+	service, err := ensureClassificationService(cfg, registry, service)
+	if err != nil {
+		return nil, nil, err
+	}
+	if created {
+		return service, service, nil
+	}
+	return service, nil, nil
 }
 
 // initClassify attempts to get the global classification service with retry logic
@@ -393,48 +425,26 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 // handleHealth handles health check requests
 func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status": "healthy", "service": "classification-api"}`))
+	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api"})
 }
 
 // handleReady reports whether router startup has completed enough for traffic.
 func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+	response := readinessResponse{Status: "starting", Service: "classification-api"}
 	state := s.loadStartupState()
-	if state == nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(`{"status":"starting","service":"classification-api","ready":false}`))
-		return
+	status := http.StatusServiceUnavailable
+	if state != nil {
+		response.Ready = state.Ready
+		response.readinessDetails = &readinessDetails{
+			Phase: state.Phase, Message: state.Message, DownloadingModel: state.DownloadingModel,
+			PendingModels: state.PendingModels, ReadyModels: state.ReadyModels, TotalModels: state.TotalModels,
+		}
+		if state.Ready {
+			response.Status = "ready"
+			status = http.StatusOK
+		}
 	}
-
-	if !state.Ready {
-		s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
-			"status":            "starting",
-			"service":           "classification-api",
-			"ready":             false,
-			"phase":             state.Phase,
-			"message":           state.Message,
-			"downloading_model": state.DownloadingModel,
-			"pending_models":    state.PendingModels,
-			"ready_models":      state.ReadyModels,
-			"total_models":      state.TotalModels,
-		})
-		return
-	}
-
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"status":            "ready",
-		"service":           "classification-api",
-		"ready":             true,
-		"phase":             state.Phase,
-		"message":           state.Message,
-		"downloading_model": state.DownloadingModel,
-		"pending_models":    state.PendingModels,
-		"ready_models":      state.ReadyModels,
-		"total_models":      state.TotalModels,
-	})
+	s.writeJSONResponse(w, status, response)
 }
 
 func (s *ClassificationAPIServer) writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
@@ -474,13 +484,10 @@ func (s *ClassificationAPIServer) writeJSONEncodingError(w http.ResponseWriter) 
 }
 
 func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, statusCode int, errorCode, message string) {
-	errorResponse := map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":      errorCode,
-			"message":   scrubSecretsInErrorMessage(message),
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
-		},
-	}
+	errorResponse := managementErrorResponse{Error: managementErrorDetail{
+		Code: errorCode, Message: scrubSecretsInErrorMessage(message),
+		Timestamp: time.Now().UTC().Format(time.RFC3339), RequestID: w.Header().Get(managementRequestIDHeader),
+	}}
 
 	s.writeJSONResponse(w, statusCode, errorResponse)
 }

@@ -117,7 +117,7 @@ func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
 
 func TestHandleCombinedClassificationReturnsAllSubResponses(t *testing.T) {
 	apiServer := &ClassificationAPIServer{
-		classificationSvc: services.NewPlaceholderClassificationService(),
+		classificationSvc: &combinedClassificationGeneration{},
 		config:            &config.RouterConfig{},
 	}
 

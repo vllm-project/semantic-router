@@ -60,7 +60,9 @@ authoring mechanics here and release operations in the maintainer guide.
    entrypoint. Default recipes use `global.router.auto_model_names`; named
    recipes set `model` and `expected_recipe`.
 5. Declare `expected_algorithm` for every decision and `expected_plugins` when
-   the decision configures plugins.
+   the decision configures plugins. A model-free `fast_response` decision has no
+   algorithm: omit `expected_algorithm`, assert the plugin, and set
+   `expected_selection_status: not_required` on its probe group.
 6. Use `expected_signals` or `forbidden_signals` for signal and projection
    evidence that the prompt is intended to exercise.
 7. Preserve or raise the checked-in `coverage` minima. New routing surfaces
@@ -68,6 +70,55 @@ authoring mechanics here and release operations in the maintainer guide.
 
 Each variant must contain exactly one of `query` or `messages`. Add `tools` when
 tool shape is part of the contract.
+
+### Raw signal values
+
+Use `expected_signal_values` when a projection consumes a raw score even below
+the signal's match threshold. Keys are exact runtime keys from the Preview
+response's top-level `signal_values`, rather than the plural families in
+`expected_signals`:
+
+```yaml
+expected_signal_values:
+  embedding:informational: {gte: -1, lte: 1}
+  structure:question_count: {gte: 2}
+```
+
+Each interval needs at least one inclusive `gte` or `lte` bound. Bounds must be
+finite numbers, not booleans, with `gte <= lte` when both are present. A group
+provides defaults; a variant replaces the whole mapping when specified, and
+`{}` clears it. Missing, nonnumeric or nonfinite values and corresponding
+`signal_errors` fail the assertion. An observed score below the match threshold
+can pass its interval without satisfying `expected_signals`; existing expected,
+forbidden, projection, decision and trace assertions remain independent.
+
+Scores use the evaluator's own units and are **not necessarily probabilities**.
+For example, cosine similarities may be negative, and structure values may be
+counts. A broad valid range proves observation, not semantic correctness; use
+decision and projection assertions to verify the intended policy. Static
+coverage resolves each value to a configured rule in that probe's recipe
+(`embedding:name` covers `embeddings:name`); unknown rules are rejected. Live
+reports retain observed values and interval errors in both evaluation scopes.
+
+## Expected model selection
+
+Selection checks use the expected algorithm's normal preview statuses by default.
+An optional `expected_selection_status` on a decision declares one exact expected
+status; a variant can override it for a specific boundary case. Supported values
+are `selected`, `planned_final`, `fallback`, `execution_required`, `unavailable`,
+and `failed`.
+
+Use an explicit `unavailable` expectation in a deployment-specific probe when
+its input exceeds every configured backend's context capacity. Such a negative
+probe must return no `selected_model` and a nonempty `selection_reason`. It still
+checks the requested model, recipe, decision, algorithm, signals, and trace.
+Missing selection methods are allowed for `unavailable` and `failed`, since
+eligibility checks can reject the request before a selector runs. Other probes
+retain their normal positive selection requirements.
+
+Record these deployment assumptions in the adapted probe's notes. Keep the
+maintained recipe's original probes and report their outcomes separately; do
+not silently turn an unexpected failure into an expected negative.
 
 ## Synthetic request fixtures
 
@@ -85,8 +136,9 @@ Keep large request boundaries declarative and reviewable:
   limit; animated containers are rejected.
 
 The evaluator materializes these fields only in memory. Reports retain the
-compact specification, materialized text/JSON byte counts, and a SHA-256
-receipt—not expanded filler or fixture binary. Do not check in repeated
+compact request specification, materialized text/JSON byte counts, and a SHA-256
+receipt. The raw Preview response is also preserved, including any text returned
+by the server; keep generated reports out of recipe packages. Do not check in repeated
 content objects, duplicate data URIs, YAML anchors, aliases, merge keys, or
 explicit tags; conformance and package admission reject YAML indirection.
 
@@ -134,11 +186,67 @@ make recipe-conformance-eval \
   RECIPE_CONFORMANCE_RECIPE=<name> \
   RECIPE_CONFORMANCE_ROUTER_URL=http://127.0.0.1:8080
 
-# Build the CPU router and run every maintained recipe.
+# Build the CPU router and run every CPU-compatible maintained recipe.
 make recipe-conformance-live-cpu-all
 ```
+
+### Policy and deployment scope
+
+Live evaluation uses routing Preview. It runs the configured router classifiers
+and embeddings, evaluates decisions and the model selector, and returns the
+trace without calling a backend LLM. The default `--scope deployment` checks
+both policy evidence and the expected selection result against the actual
+assigned models. It does not certify backend answer quality or multi-model
+execution.
+
+For reusable policy evaluation across different model capacities, explicitly use
+`--scope policy`:
+
+```bash
+python tools/calibration/recipe/recipe_conformance.py eval \
+  --recipe <name> --router-url http://127.0.0.1:8080 --scope policy
+
+python tools/calibration/recipe/router_calibration_loop.py eval \
+  --probes path/to/probes.yaml --router-url http://127.0.0.1:8080 --scope policy
+```
+
+Both scopes retain the same decision, recipe, algorithm, plugin, signal,
+projection, trace, and request-error checks. Policy scope can pass when no
+assigned model fits, but still requires a valid selection response. Reports
+show policy and deployment results separately, selection-status counts, and
+each returned reason. A policy pass is not a deployment pass. Keep
+`expected_algorithm`; omitting it is not a policy-only mode.
+
+Explicit group-level `expected_selection_status: unavailable` and
+`not_required` remain strict in both scopes: the status must match, no final
+model may be fabricated, and a reason is required. `not_required` also requires
+the `fast_response` selection method. Use `unavailable` only when the test binds
+real assignment limits; a long request alone does not imply that every possible
+model pool must reject it.
+
+For deployment qualification, bind the intended recipe entrypoints and real
+model metadata, then run deployment scope and backend execution checks. Input
+capacity includes retained messages and media plus the effective output limit.
+The router's neutral token estimate is not an exact tokenizer or media bound.
+Router-classifier input limits are separate: an inference or HTTP failure fails
+both scopes and cannot be reclassified as a successful capacity rejection.
 
 CI publishes coverage in the job summary and uploads the consolidated
 `recipe-conformance-report` artifact for 30 days. `inventory.json` contains the
 configured, asserted, and uncovered surfaces; per-recipe `eval-report.json`
 contains exact live results and T3 receipts.
+
+### Explicit hardware requirements
+
+Static checks always include every maintained recipe. Live CPU planning derives
+hardware requirements from explicit `global.model_catalog.deployments.*.device`
+values. Recipes with non-CPU devices stay in the inventory and are listed with
+their required devices in `cpu-eligibility.json` and the consolidated report;
+they do not count as CPU runtime passes. The CPU runner rejects an incompatible
+explicit selection before stopping or starting any containers. It never rewrites
+GPU bindings to CPU.
+
+Use `list --platform cpu` to list compatible CPU recipes. For an AMD recipe,
+start its unchanged configuration with the matching image and run
+`make recipe-conformance-eval` against that active Router. Hardware-specific
+execution remains an explicit runtime qualification.

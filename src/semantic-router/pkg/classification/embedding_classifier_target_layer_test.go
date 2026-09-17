@@ -1,18 +1,19 @@
 package classification
 
 import (
+	"context"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestEmbeddingClassifierPassesTargetLayerToBackend(t *testing.T) {
 	capturedLayer := 0
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		capturedLayer = targetLayer
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
 		getEmbedding2DMatryoshka = originalFunc
@@ -27,7 +28,7 @@ func TestEmbeddingClassifierPassesTargetLayerToBackend(t *testing.T) {
 		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
 	}
 
-	if _, err := classifier.computeEmbedding("query", "mmbert"); err != nil {
+	if _, err := classifier.computeEmbedding(context.Background(), "query", "mmbert"); err != nil {
 		t.Fatalf("computeEmbedding failed: %v", err)
 	}
 	if capturedLayer != 6 {

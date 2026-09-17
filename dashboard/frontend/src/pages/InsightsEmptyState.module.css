@@ -1,0 +1,132 @@
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 1rem 1.5rem;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 1.1rem;
+  border: 1px solid var(--color-border-hover);
+  border-radius: var(--radius-2xl);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.description {
+  max-width: 440px;
+  margin: 0.6rem 0 1.15rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.guideLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 36px;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--color-border-hover);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.guideLink:hover {
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
+}
+
+.guideLink:focus-visible,
+.privacySummary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+
+.privacy {
+  width: min(100%, 480px);
+  margin-top: 1.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.privacySummary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: fit-content;
+  min-height: 32px;
+  margin: 0 auto;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  list-style: none;
+}
+
+.privacySummary::-webkit-details-marker {
+  display: none;
+}
+
+.privacySummary:hover {
+  color: var(--color-text);
+}
+
+.privacySummary svg,
+.guideLink svg {
+  flex-shrink: 0;
+}
+
+.privacy[open] .chevron {
+  transform: rotate(90deg);
+}
+
+.privacyBody {
+  margin-top: 0.65rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  line-height: 1.65;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.privacyBody p {
+  margin: 0;
+}
+
+.privacyBody p + p {
+  margin-top: 0.65rem;
+}
+
+.privacyBody code {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 520px) {
+  .emptyState {
+    padding: 2rem 0 1rem;
+  }
+}
