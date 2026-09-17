@@ -506,6 +506,7 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_config_generator_timeouts.py \
 		src/vllm-sr/tests/test_container_log_spool.py \
 		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
 		src/vllm-sr/tests/test_evaluation_live.py \

@@ -37,6 +37,53 @@ PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
 
+_DURATION_PATTERN = re.compile(r"^([0-9]+(?:\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$")
+
+
+def _parse_duration_seconds(duration_str: str) -> float:
+    if not isinstance(duration_str, str) or not duration_str.strip():
+        raise ValueError("duration string cannot be empty")
+    s = duration_str.strip()
+    if s in ("0", "0s", "0m", "0h", "0ms", "0us", "0ns"):
+        return 0.0
+    if not _DURATION_PATTERN.match(s):
+        raise ValueError(f"invalid duration format: {duration_str!r}")
+    total_seconds = 0.0
+    for match in re.finditer(r"([0-9]+(?:\.[0-9]+)?)(ns|us|µs|ms|s|m|h)", s):
+        val, unit = float(match.group(1)), match.group(2)
+        if unit == "ns":
+            total_seconds += val * 1e-9
+        elif unit in ("us", "µs"):
+            total_seconds += val * 1e-6
+        elif unit == "ms":
+            total_seconds += val * 1e-3
+        elif unit == "s":
+            total_seconds += val
+        elif unit == "m":
+            total_seconds += val * 60
+        elif unit == "h":
+            total_seconds += val * 3600
+    return total_seconds
+
+
+def format_protobuf_duration(duration: str | float | int) -> str:
+    """Format duration into an Envoy protobuf Duration string ending with 's'.
+
+    Envoy strictly requires protobuf Duration values to end with a single 's'
+    (e.g., '10s', '0.3s', '0s'). Duration strings using other units (e.g. '300ms',
+    '2m') must be normalized to seconds before rendering Envoy configuration.
+    """
+    if isinstance(duration, (int, float)):
+        sec = float(duration)
+    else:
+        sec = _parse_duration_seconds(duration)
+    if sec == int(sec):
+        return f"{int(sec)}s"
+    formatted = f"{sec:.9f}".rstrip("0").rstrip(".")
+    if not formatted or formatted == "-0":
+        return "0s"
+    return f"{formatted}s"
+
 
 class Listener(BaseModel):
     """Network listener configuration."""
@@ -51,6 +98,16 @@ class Listener(BaseModel):
         "If set, requests without 'Authorization: Bearer <key>' matching one of these "
         "values are rejected with HTTP 401.",
     )
+
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return "300s"
+        dur = _parse_duration_seconds(v)
+        if dur < 0:
+            raise ValueError("listener timeout cannot be negative")
+        return format_protobuf_duration(dur)
 
 
 class KeywordSignal(BaseModel):
@@ -1753,35 +1810,6 @@ class ModelPricing(BaseModel):
     completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
-_DURATION_PATTERN = re.compile(r"^([0-9]+(?:\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$")
-
-
-def _parse_duration_seconds(duration_str: str) -> float:
-    if not isinstance(duration_str, str) or not duration_str.strip():
-        raise ValueError("duration string cannot be empty")
-    s = duration_str.strip()
-    if s in ("0", "0s", "0m", "0h", "0ms", "0us", "0ns"):
-        return 0.0
-    if not _DURATION_PATTERN.match(s):
-        raise ValueError(f"invalid duration format: {duration_str!r}")
-    total_seconds = 0.0
-    for match in re.finditer(r"([0-9]+(?:\.[0-9]+)?)(ns|us|µs|ms|s|m|h)", s):
-        val, unit = float(match.group(1)), match.group(2)
-        if unit == "ns":
-            total_seconds += val * 1e-9
-        elif unit in ("us", "µs"):
-            total_seconds += val * 1e-6
-        elif unit == "ms":
-            total_seconds += val * 1e-3
-        elif unit == "s":
-            total_seconds += val
-        elif unit == "m":
-            total_seconds += val * 60
-        elif unit == "h":
-            total_seconds += val * 3600
-    return total_seconds
-
-
 class ProviderReliability(BaseModel):
     """Generated Envoy reliability policy for one provider model."""
 
@@ -1807,6 +1835,7 @@ class ProviderReliability(BaseModel):
             stream_idle_dur = _parse_duration_seconds(self.stream_idle_timeout)
             if stream_idle_dur < 0:
                 raise ValueError("stream_idle_timeout cannot be negative")
+            self.stream_idle_timeout = format_protobuf_duration(stream_idle_dur)
 
         if self.request_timeout is not None:
             req_dur = _parse_duration_seconds(self.request_timeout)
@@ -1816,11 +1845,31 @@ class ProviderReliability(BaseModel):
                 raise ValueError(
                     "request_timeout cannot be 0 without a positive stream_idle_timeout"
                 )
+            self.request_timeout = format_protobuf_duration(req_dur)
 
         if self.connect_timeout is not None:
             conn_dur = _parse_duration_seconds(self.connect_timeout)
             if conn_dur <= 0:
                 raise ValueError("connect_timeout must be greater than 0")
+            self.connect_timeout = format_protobuf_duration(conn_dur)
+
+        if self.health_check_timeout:
+            hc_dur = _parse_duration_seconds(self.health_check_timeout)
+            if hc_dur <= 0:
+                raise ValueError("health_check_timeout must be greater than 0")
+            self.health_check_timeout = format_protobuf_duration(hc_dur)
+
+        if self.health_check_interval:
+            hci_dur = _parse_duration_seconds(self.health_check_interval)
+            if hci_dur <= 0:
+                raise ValueError("health_check_interval must be greater than 0")
+            self.health_check_interval = format_protobuf_duration(hci_dur)
+
+        if self.base_ejection_time:
+            bet_dur = _parse_duration_seconds(self.base_ejection_time)
+            if bet_dur <= 0:
+                raise ValueError("base_ejection_time must be greater than 0")
+            self.base_ejection_time = format_protobuf_duration(bet_dur)
 
         return self
 

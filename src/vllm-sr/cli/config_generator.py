@@ -8,7 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 from cli.catalog_provider_projection import project_provider_models_for_envoy
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
-from cli.models import UserConfig
+from cli.models import UserConfig, format_protobuf_duration
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -75,6 +75,14 @@ def generate_envoy_config_from_user_config(
     listeners = []
     if user_config.listeners:
         for listener in user_config.listeners:
+            listener_timeout = (
+                listener.timeout if hasattr(listener, "timeout") else "300s"
+            )
+            if listener_timeout:
+                try:
+                    listener_timeout = format_protobuf_duration(listener_timeout)
+                except Exception:
+                    pass
             listeners.append(
                 {
                     "name": listener.name,
@@ -82,9 +90,7 @@ def generate_envoy_config_from_user_config(
                         ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, listener.address
                     ),
                     "port": listener.port,
-                    "timeout": (
-                        listener.timeout if hasattr(listener, "timeout") else "300s"
-                    ),
+                    "timeout": listener_timeout or "300s",
                     "api_keys": (
                         list(listener.api_keys)
                         if getattr(listener, "api_keys", None)
@@ -139,6 +145,28 @@ def generate_envoy_config_from_user_config(
             len({endpoint["host_authority"] for endpoint in endpoints}) > 1
         )
 
+        reliability_data = (
+            model.reliability.model_dump() if model.reliability is not None else {}
+        )
+        for timeout_key in (
+            "request_timeout",
+            "stream_idle_timeout",
+            "connect_timeout",
+            "health_check_timeout",
+            "health_check_interval",
+            "base_ejection_time",
+        ):
+            if (
+                timeout_key in reliability_data
+                and reliability_data[timeout_key] is not None
+            ):
+                try:
+                    reliability_data[timeout_key] = format_protobuf_duration(
+                        reliability_data[timeout_key]
+                    )
+                except Exception:
+                    pass
+
         models.append(
             {
                 "name": model.name,
@@ -149,11 +177,7 @@ def generate_envoy_config_from_user_config(
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
                 "auto_host_rewrite": auto_host_rewrite,
-                "reliability": (
-                    model.reliability.model_dump()
-                    if model.reliability is not None
-                    else {}
-                ),
+                "reliability": reliability_data,
             }
         )
 
