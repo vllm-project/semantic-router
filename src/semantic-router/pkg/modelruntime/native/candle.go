@@ -112,6 +112,9 @@ func (r *Runtime) Sequence(ctx context.Context, spec config.ResolvedModelBinding
 	if spec.Deployment.Provider == "ort" {
 		return r.ortSequence(ctx, spec)
 	}
+	if spec.Deployment.Provider == "openvino" {
+		return r.openvinoSequence(ctx, spec)
+	}
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: sequence provider %q is unavailable", binding.ErrCapability, spec.Deployment.Provider)
 	}
