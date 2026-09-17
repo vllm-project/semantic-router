@@ -242,10 +242,11 @@ func TestMilvusCacheCreateCollectionConsistencyOptions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fake := &recordingMilvusClient{}
 			cache := &MilvusCache{
-				enabled:        true,
-				client:         fake,
-				config:         milvusCacheTestConfig(tc.config),
-				collectionName: "test_cache",
+				enabled:           true,
+				client:            fake,
+				config:            milvusCacheTestConfig(tc.config),
+				collectionName:    "test_cache",
+				embeddingProvider: cacheTestEmbeddingProvider(),
 			}
 
 			require.NoError(t, cache.createCollection(context.Background()))

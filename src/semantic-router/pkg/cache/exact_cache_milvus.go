@@ -118,8 +118,11 @@ func (c *MilvusCache) AddExact(
 	if effectiveTTL > 0 {
 		expiresAt = now.Add(time.Duration(effectiveTTL) * time.Second).Unix()
 	}
-	dimension := c.embeddingDimension()
-	_, err := c.client.Upsert(
+	dimension, err := c.embeddingDimension()
+	if err != nil {
+		return fmt.Errorf("milvus exact embedding dimension: %w", err)
+	}
+	_, err = c.client.Upsert(
 		ctx,
 		c.collectionName,
 		"",

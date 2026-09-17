@@ -39,7 +39,12 @@ func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, b
 			return embedding.ConsumerSettings{}, false, fmt.Errorf("resolve valkey cache embedding dimension: %w", err)
 		}
 	case *MilvusCache:
-		model, dimension = value.embeddingModel, value.embeddingDimension()
+		model = value.embeddingModel
+		var err error
+		dimension, err = value.embeddingDimension()
+		if err != nil {
+			return embedding.ConsumerSettings{}, false, fmt.Errorf("resolve milvus cache embedding dimension: %w", err)
+		}
 	case *QdrantCache:
 		model = value.embeddingModel
 		var err error
@@ -86,7 +91,11 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 		view = &ValkeyCache{embeddingModel: "mmbert", config: cfg.Valkey, embeddingProvider: cfg.EmbeddingProvider}
 		logical = []string{cfg.Valkey.Index.Name, cfg.Valkey.Index.Prefix}
 	case MilvusCacheType, HybridCacheType:
-		view = &MilvusCache{embeddingModel: "mmbert", config: cfg.Milvus}
+		view = &MilvusCache{
+			embeddingModel:    "mmbert",
+			config:            cfg.Milvus,
+			embeddingProvider: cfg.EmbeddingProvider,
+		}
 		logical = []string{cfg.Milvus.Collection.Name}
 	case QdrantCacheType:
 		view = &QdrantCache{embeddingModel: "mmbert", embeddingProvider: cfg.EmbeddingProvider}

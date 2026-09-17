@@ -25,7 +25,12 @@ func physicalNamespace(cfg CacheConfig) []string {
 }
 
 func namespaceFixture(backend CacheBackendType, dimension int) CacheConfig {
-	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingModel: "mmbert"}
+	cfg := CacheConfig{
+		Enabled:           true,
+		BackendType:       backend,
+		EmbeddingModel:    "mmbert",
+		EmbeddingProvider: &cacheIdentityContractProvider{},
+	}
 	switch backend {
 	case RedisCacheType:
 		cfg.Redis = &config.RedisConfig{}

@@ -113,7 +113,10 @@ func TestCacheEmbeddingSettingsReflectActualBackend(t *testing.T) {
 	if err != nil || !ok || settings.Layer != 6 || settings.Dimension != 256 {
 		t.Fatalf("inmemory actual settings: %#v %v %v", settings, ok, err)
 	}
-	persistent := &QdrantCache{embeddingModel: "mmbert"}
+	persistent := &QdrantCache{
+		embeddingModel:    "mmbert",
+		embeddingProvider: &cacheIdentityContractProvider{},
+	}
 	settings, ok, err = LocalEmbeddingSettings(persistent)
 	if err != nil || !ok || settings.Layer != 0 || settings.Dimension != 768 {
 		t.Fatalf("persistent actual settings: %#v %v %v", settings, ok, err)
@@ -156,13 +159,25 @@ func TestCacheIdentityAndNamespacePropagateDimensionErrors(t *testing.T) {
 	if _, supported, err := LocalEmbeddingSettings(backend); err == nil || supported {
 		t.Fatalf("dimension error was not returned: supported=%v err=%v", supported, err)
 	}
+	milvusBackend := &MilvusCache{
+		embeddingModel:    "mmbert",
+		embeddingProvider: provider,
+		config:            &config.MilvusConfig{},
+	}
+	if _, supported, err := LocalEmbeddingSettings(milvusBackend); err == nil || supported {
+		t.Fatalf("Milvus dimension error was not returned: supported=%v err=%v", supported, err)
+	}
 
-	cfg := namespaceFixture(RedisCacheType, 0)
-	cfg.EmbeddingProvider = provider
-	if _, _, err := PrepareEmbeddingNamespace(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-		t.Fatal("identity resolver called after dimension failure")
-		return embedding.ContentIdentity{}, nil
-	}); err == nil {
-		t.Fatal("namespace preparation swallowed dimension error")
+	for _, backendType := range []CacheBackendType{RedisCacheType, MilvusCacheType, HybridCacheType, QdrantCacheType} {
+		t.Run(string(backendType), func(t *testing.T) {
+			cfg := namespaceFixture(backendType, 0)
+			cfg.EmbeddingProvider = provider
+			if _, _, err := PrepareEmbeddingNamespace(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+				t.Fatal("identity resolver called after dimension failure")
+				return embedding.ContentIdentity{}, nil
+			}); err == nil {
+				t.Fatal("namespace preparation swallowed dimension error")
+			}
+		})
 	}
 }

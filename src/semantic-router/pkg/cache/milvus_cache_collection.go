@@ -33,7 +33,10 @@ func (c *MilvusCache) initializeCollection() error {
 		})
 	}
 
-	expectedDimension := c.embeddingDimension()
+	expectedDimension, err := c.embeddingDimension()
+	if err != nil {
+		return fmt.Errorf("failed to resolve semantic cache embedding dimension: %w", err)
+	}
 	if expectedDimension <= 0 {
 		return fmt.Errorf("invalid semantic cache embedding dimension: %d", expectedDimension)
 	}
@@ -82,30 +85,29 @@ func (c *MilvusCache) initializeCollection() error {
 	return nil
 }
 
-func (c *MilvusCache) embeddingDimension() int {
+func (c *MilvusCache) embeddingDimension() (int, error) {
 	if c == nil {
-		return 0
+		return 0, fmt.Errorf("milvus cache is nil")
 	}
 	if c.effectiveDimension > 0 {
-		return c.effectiveDimension
+		return c.effectiveDimension, nil
 	}
 	if c.config == nil {
-		return 0
+		return 0, fmt.Errorf("milvus cache config is not initialized")
 	}
-	dimension, err := resolveMilvusCacheEmbeddingDimension(
+	return resolveMilvusCacheEmbeddingDimension(
 		c.embeddingProvider,
 		c.embeddingModel,
 		c.config.Collection.VectorField.Dimension,
 	)
-	if err != nil {
-		return 0
-	}
-	return dimension
 }
 
 // createCollection builds the Milvus collection with the appropriate schema
 func (c *MilvusCache) createCollection(ctx context.Context) error {
-	actualDimension := c.embeddingDimension()
+	actualDimension, err := c.embeddingDimension()
+	if err != nil {
+		return fmt.Errorf("failed to resolve semantic cache embedding dimension: %w", err)
+	}
 	if actualDimension <= 0 {
 		return fmt.Errorf("invalid semantic cache embedding dimension: %d", actualDimension)
 	}
