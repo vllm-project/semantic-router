@@ -24,7 +24,7 @@ func (r *OpenAIRouter) applyStickyToolSelection(
 	strategyID string,
 	ctx *RequestContext,
 ) []llmprotocol.Tool {
-	selected, _ := r.applyStickyToolSelectionWithStatus(
+	selected, _ := r.applyStickyToolSelectionWithStatusAndRetrieval(
 		request,
 		authorizedTools,
 		selectedTools,
@@ -32,6 +32,7 @@ func (r *OpenAIRouter) applyStickyToolSelection(
 		toolsConfig,
 		strategyID,
 		ctx,
+		"",
 	)
 	return selected
 }
@@ -49,6 +50,28 @@ func (r *OpenAIRouter) applyStickyToolSelectionWithStatus(
 	toolsConfig *config.ToolsPluginConfig,
 	strategyID string,
 	ctx *RequestContext,
+) ([]llmprotocol.Tool, bool) {
+	return r.applyStickyToolSelectionWithStatusAndRetrieval(
+		request,
+		authorizedTools,
+		selectedTools,
+		selectionConfig,
+		toolsConfig,
+		strategyID,
+		ctx,
+		"",
+	)
+}
+
+func (r *OpenAIRouter) applyStickyToolSelectionWithStatusAndRetrieval(
+	request *llmprotocol.Request,
+	authorizedTools []llmprotocol.Tool,
+	selectedTools []llmprotocol.Tool,
+	selectionConfig *config.ToolSelectionPluginConfig,
+	toolsConfig *config.ToolsPluginConfig,
+	strategyID string,
+	ctx *RequestContext,
+	retrievalFingerprint string,
 ) ([]llmprotocol.Tool, bool) {
 	if !r.shouldApplyStickyToolSelection(request, selectionConfig, ctx) {
 		return selectedTools, false
@@ -83,7 +106,7 @@ func (r *OpenAIRouter) applyStickyToolSelectionWithStatus(
 		Key:                   identity.StorageKey,
 		Quota:                 identity.QuotaKey,
 		PolicyFingerprint:     policyFingerprint,
-		CatalogFingerprint:    tools.ToolCatalogFingerprint(authorizedTools),
+		CatalogFingerprint:    tools.EffectiveToolCatalogFingerprint(authorizedTools, retrievalFingerprint),
 		CapabilityFingerprint: tools.ToolCapabilityFingerprint(capabilities, string(ctx.TargetFormat)),
 		Authorized:            authorized,
 		Selected:              selected,

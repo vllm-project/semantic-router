@@ -2,6 +2,9 @@ package extproc
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -133,9 +136,11 @@ func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) 
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsThreshold,
 		Enabled:             cfg.Tools.Enabled,
+		Backend:             embeddingModels.EmbeddingBackend(),
 		ModelType:           embeddingModels.EmbeddingConfig.ModelType,
 		TargetDimension:     embeddingModels.EmbeddingConfig.TargetDimension,
 		Provider:            provider,
+		ProviderIdentity:    toolsEmbeddingProviderIdentity(cfg),
 	})
 
 	if toolsDatabase.IsEnabled() {
@@ -148,6 +153,109 @@ func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) 
 	}
 
 	return toolsDatabase, nil
+}
+
+func toolsEmbeddingProviderIdentity(cfg *config.RouterConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	models := cfg.EmbeddingModels
+	modelType := strings.ToLower(strings.TrimSpace(models.EmbeddingConfig.ModelType))
+	backend := strings.ToLower(strings.TrimSpace(models.EmbeddingBackend()))
+	parts := []string{
+		backend,
+		modelType,
+		strconv.Itoa(models.EmbeddingConfig.TargetDimension),
+		strconv.FormatBool(models.UseCPU),
+	}
+	if models.UsesRemoteEmbeddingBackend() {
+		parts = append(parts,
+			normalizeEmbeddingProviderURL(models.Endpoint.BaseURL),
+			strings.TrimSpace(models.Endpoint.Model),
+			strconv.Itoa(models.Endpoint.Dimensions),
+		)
+		return strings.Join(parts, "\x00")
+	}
+
+	modelPath := ""
+	switch modelType {
+	case config.EmbeddingModelTypeQwen3:
+		modelPath = models.Qwen3ModelPath
+	case "gemma":
+		modelPath = models.GemmaModelPath
+	case "mmbert":
+		modelPath = models.MmBertModelPath
+	case "multimodal":
+		modelPath = models.MultiModalModelPath
+	case "bert":
+		modelPath = models.BertModelPath
+	default:
+		modelPath = strings.Join([]string{
+			models.Qwen3ModelPath,
+			models.GemmaModelPath,
+			models.MmBertModelPath,
+			models.MultiModalModelPath,
+			models.BertModelPath,
+		}, "\x00")
+	}
+	parts = append(parts, config.ResolveModelPath(strings.TrimSpace(modelPath)))
+	return strings.Join(parts, "\x00")
+}
+
+func normalizeEmbeddingProviderURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		return canonicalEmbeddingProviderURL(parsed)
+	}
+
+	// A malformed endpoint should not make credentials part of the provider
+	// identity. Keep a useful, deterministic fallback while removing the
+	// portions that commonly carry secrets (userinfo, query, and fragment).
+	return sanitizeMalformedEmbeddingProviderURL(trimmed)
+}
+
+func canonicalEmbeddingProviderURL(parsed *url.URL) string {
+	if parsed == nil {
+		return ""
+	}
+
+	canonical := *parsed
+	canonical.Scheme = strings.ToLower(canonical.Scheme)
+	canonical.Host = strings.ToLower(canonical.Host)
+	canonical.User = nil
+	canonical.RawQuery = ""
+	canonical.ForceQuery = false
+	canonical.Fragment = ""
+	canonical.RawFragment = ""
+	canonical.Path = strings.TrimRight(canonical.Path, "/")
+	if canonical.RawPath != "" {
+		canonical.RawPath = strings.TrimRight(canonical.RawPath, "/")
+		if canonical.RawPath == "" || canonical.RawPath == canonical.Path {
+			canonical.RawPath = ""
+		}
+	}
+	return strings.TrimRight(canonical.String(), "/")
+}
+
+func sanitizeMalformedEmbeddingProviderURL(raw string) string {
+	safe := raw
+	if queryStart := strings.IndexAny(safe, "?#"); queryStart >= 0 {
+		safe = safe[:queryStart]
+	}
+
+	// url.Parse can reject an invalid escape or host while the raw value still
+	// contains userinfo. Remove the segment before the last at-sign even when a
+	// malformed or schemeless endpoint has no recognizable authority boundary.
+	if userInfoEnd := strings.LastIndexByte(safe, '@'); userInfoEnd >= 0 {
+		userInfoStart := strings.LastIndexAny(safe[:userInfoEnd], "/\\") + 1
+		safe = safe[:userInfoStart] + safe[userInfoEnd+1:]
+	}
+	return strings.TrimSpace(safe)
 }
 
 func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {

@@ -161,6 +161,24 @@ func ToolCatalogFingerprint(catalog []llmprotocol.Tool) string {
 	return marshalFingerprint(entries)
 }
 
+// EffectiveToolCatalogFingerprint combines the provider-visible catalog with
+// an optional retrieval fingerprint. The provider catalog remains the stable
+// public definition fingerprint; retrieval-defining metadata is folded in only
+// when a selection path supplies it. An empty retrieval fingerprint preserves
+// the historical catalog-only result for compatibility.
+func EffectiveToolCatalogFingerprint(catalog []llmprotocol.Tool, retrievalFingerprint string) string {
+	if strings.TrimSpace(retrievalFingerprint) == "" {
+		return ToolCatalogFingerprint(catalog)
+	}
+	return marshalFingerprint(struct {
+		ProviderCatalog string `json:"provider_catalog"`
+		Retrieval       string `json:"retrieval"`
+	}{
+		ProviderCatalog: ToolCatalogFingerprint(catalog),
+		Retrieval:       retrievalFingerprint,
+	})
+}
+
 type toolPolicyFingerprintInput struct {
 	Enabled              bool                                  `json:"enabled"`
 	Mode                 string                                `json:"mode"`

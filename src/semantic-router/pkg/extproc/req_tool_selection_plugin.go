@@ -123,7 +123,8 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 		return r.handleToolSelectionError(request, response, ctx, toolErr, r.effectiveToolSelectionFallback(ts))
 	}
 	if ts.Sticky != nil && ts.Sticky.Enabled {
-		authorizedTools, catalogErr := tools.SemanticTools(db.GetAllTools())
+		toolSnapshot, retrievalFingerprint := db.Snapshot()
+		authorizedTools, catalogErr := tools.SemanticTools(toolSnapshot)
 		if catalogErr == nil {
 			if toolsCfg != nil && toolsCfg.Enabled && toolsCfg.EffectiveMode() == config.ToolsPluginModeFiltered {
 				authorizedTools = filterToolsByDecisionPolicy(
@@ -142,7 +143,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 			)
 			if emptyQuery {
 				var committed bool
-				selectedTools, committed = r.applyStickyToolSelectionWithStatus(
+				selectedTools, committed = r.applyStickyToolSelectionWithStatusAndRetrieval(
 					request,
 					authorizedTools,
 					selectedTools,
@@ -150,12 +151,13 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 					toolsCfg,
 					strategyOut,
 					ctx,
+					retrievalFingerprint,
 				)
 				if !committed {
 					return nil
 				}
 			} else {
-				selectedTools = r.applyStickyToolSelection(
+				selectedTools, _ = r.applyStickyToolSelectionWithStatusAndRetrieval(
 					request,
 					authorizedTools,
 					selectedTools,
@@ -163,6 +165,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 					toolsCfg,
 					strategyOut,
 					ctx,
+					retrievalFingerprint,
 				)
 			}
 		} else {
@@ -226,9 +229,10 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	}
 	if ts.Sticky != nil && ts.Sticky.Enabled {
 		policy := effectiveStickyFilterPolicy(ts, r.effectiveToolSelectionFallback(ts))
+		retrievalFingerprint := toolsEmbeddingProviderIdentity(r.Config)
 		if emptyQuery {
 			var committed bool
-			filtered, committed = r.applyStickyToolSelectionWithStatus(
+			filtered, committed = r.applyStickyToolSelectionWithStatusAndRetrieval(
 				request,
 				authorizedTools,
 				filtered,
@@ -236,12 +240,13 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 				resolveDecisionToolsConfig(ctx),
 				strategyLabel,
 				ctx,
+				retrievalFingerprint,
 			)
 			if !committed {
 				return nil
 			}
 		} else {
-			filtered = r.applyStickyToolSelection(
+			filtered, _ = r.applyStickyToolSelectionWithStatusAndRetrieval(
 				request,
 				authorizedTools,
 				filtered,
@@ -249,6 +254,7 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 				resolveDecisionToolsConfig(ctx),
 				strategyLabel,
 				ctx,
+				retrievalFingerprint,
 			)
 		}
 	}

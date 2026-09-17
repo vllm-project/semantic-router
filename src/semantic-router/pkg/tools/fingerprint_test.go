@@ -170,6 +170,22 @@ func TestToolCatalogFingerprint_EmptyCatalog(t *testing.T) {
 	}
 }
 
+func TestEffectiveToolCatalogFingerprintEmptyRetrievalPreservesCatalog(t *testing.T) {
+	catalog := []llmprotocol.Tool{sampleTool("search")}
+	if got, want := EffectiveToolCatalogFingerprint(catalog, ""), ToolCatalogFingerprint(catalog); got != want {
+		t.Fatalf("empty retrieval fingerprint changed legacy catalog fingerprint: got %q want %q", got, want)
+	}
+}
+
+func TestEffectiveToolCatalogFingerprintTracksRetrievalInputs(t *testing.T) {
+	catalog := []llmprotocol.Tool{sampleTool("search")}
+	first := EffectiveToolCatalogFingerprint(catalog, "retrieval-v1")
+	second := EffectiveToolCatalogFingerprint(catalog, "retrieval-v2")
+	if first == second {
+		t.Fatal("retrieval fingerprint change must invalidate effective catalog fingerprint")
+	}
+}
+
 func TestToolPolicyFingerprint_Deterministic(t *testing.T) {
 	cfg := &config.ToolSelectionPluginConfig{Enabled: true, Mode: "add", TopK: 5}
 	first := ToolPolicyFingerprint(cfg)

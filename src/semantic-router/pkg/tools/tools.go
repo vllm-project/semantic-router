@@ -35,34 +35,49 @@ type ToolSimilarity struct {
 
 // ToolsDatabase manages a collection of tools with semantic search capabilities
 type ToolsDatabase struct {
-	entries             []ToolEntry
-	mu                  sync.RWMutex
-	similarityThreshold float32
-	enabled             bool
-	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
-	targetDim           int    // Target dimension for embeddings
-	provider            embedding.Provider
+	entries              []ToolEntry
+	mu                   sync.RWMutex
+	similarityThreshold  float32
+	enabled              bool
+	backend              string
+	modelType            string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
+	targetDim            int    // Target dimension for embeddings
+	provider             embedding.Provider
+	providerIdentity     string
+	retrievalFingerprint string
 }
 
 // ToolsDatabaseOptions holds options for creating a new tools database
 type ToolsDatabaseOptions struct {
 	SimilarityThreshold float32
 	Enabled             bool
+	Backend             string
 	ModelType           string // Model type to use for embeddings
 	TargetDimension     int    // Target dimension for embeddings
 	Provider            embedding.Provider
+	ProviderIdentity    string
 }
 
 // NewToolsDatabase creates a new tools database with the given options
 func NewToolsDatabase(options ToolsDatabaseOptions) *ToolsDatabase {
-	return &ToolsDatabase{
+	database := &ToolsDatabase{
 		entries:             []ToolEntry{},
 		similarityThreshold: options.SimilarityThreshold,
 		enabled:             options.Enabled,
+		backend:             strings.ToLower(strings.TrimSpace(options.Backend)),
 		modelType:           options.ModelType,
 		targetDim:           options.TargetDimension,
 		provider:            options.Provider,
+		providerIdentity:    strings.TrimSpace(options.ProviderIdentity),
 	}
+	if database.backend == "" && options.Provider != nil {
+		database.backend = strings.ToLower(strings.TrimSpace(options.Provider.Backend()))
+	}
+	if database.backend == "" {
+		database.backend = "candle"
+	}
+	database.retrievalFingerprint = database.computeRetrievalFingerprint(nil)
+	return database
 }
 
 // IsEnabled returns whether the tools database is enabled
@@ -126,7 +141,7 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 				if err != nil {
 					resultChan <- result{entry: entry, err: err}
 				} else {
-					entry.Embedding = embedding
+					entry.Embedding = append([]float32(nil), embedding...)
 					resultChan <- result{entry: entry, err: nil}
 				}
 			}
@@ -165,6 +180,7 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 			successCount++
 		}
 	}
+	db.retrievalFingerprint = db.computeRetrievalFingerprint(db.entries)
 
 	logging.ComponentEvent("tools", "tool_database_loaded", map[string]interface{}{
 		"file_path":        filePath,
@@ -189,12 +205,19 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 		return fmt.Errorf("failed to generate embedding for tool %s: %w", tool.Function.Name, err)
 	}
 
-	entry := ToolEntry{Tool: tool, Description: description, Embedding: embedding, Category: category, Tags: tags}
+	entry := ToolEntry{
+		Tool:        tool,
+		Description: description,
+		Embedding:   append([]float32(nil), embedding...),
+		Category:    category,
+		Tags:        append([]string(nil), tags...),
+	}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	db.entries = append(db.entries, entry)
+	db.retrievalFingerprint = db.computeRetrievalFingerprint(db.entries)
 	logging.ComponentEvent("tools", "tool_added", map[string]interface{}{
 		"tool_name":       tool.Function.Name,
 		"category":        category,
