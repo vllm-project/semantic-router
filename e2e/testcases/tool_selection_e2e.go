@@ -136,7 +136,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                    "stacked_system_prompt_and_tool_selection",
-			Prompt:                  "__TOOL_SELECTION_WITH_SYSTEM_PROMPT__ Plan a short hiking trip; check weather for Mount Rainier.",
+			Prompt:                  "__TOOL_SELECTION_WITH_SYSTEM_PROMPT__ Search web resources for recent Mount Rainier trail information and get current weather for that location.",
 			Tools:                   contractToolsExcept(contractTools, "get_weather"),
 			ExpectDecision:          "tool_selection_with_system_prompt_decision",
 			ExpectToolsStrategy:     "default",
