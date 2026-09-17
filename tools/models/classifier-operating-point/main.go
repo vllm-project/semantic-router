@@ -13,8 +13,8 @@ import (
 
 func main() {
 	model := flag.String("model", "", "Directory containing final config, tokenizer and model.safetensors")
-	source := flag.String("policy", "", "Runtime-only v1/v2 score policy; thresholds are never selected here")
-	output := flag.String("output", "", "New version-2 sidecar path (must not already exist)")
+	source := flag.String("policy", "", "Runtime-only v1/v2/v3 score policy; thresholds are never selected here")
+	output := flag.String("output", "", "New sidecar path: v1 becomes v2, v2/v3 retain their version (must not exist)")
 	flag.Parse()
 	if err := run(*model, *source, *output); err != nil {
 		fmt.Fprintln(os.Stderr, err)

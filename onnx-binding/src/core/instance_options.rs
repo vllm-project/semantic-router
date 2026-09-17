@@ -6,7 +6,9 @@
 use crate::core::{
     artifact_identity::{ArtifactDigest, ArtifactSnapshot},
     compilation_cache::{CompilationCacheLease, CompilationIdentity, SharedCacheEvidence},
-    execution_contract::{validate_contract, validate_session, ExecutionInput},
+    execution_contract::{
+        session_input_schema, validate_contract, validate_session, ExecutionInput,
+    },
     onnx_artifacts::capture_onnx,
     unified_error::{errors, UnifiedResult},
 };
@@ -104,6 +106,8 @@ pub struct SessionEvidence {
     pub artifacts: Vec<ArtifactDigest>,
     pub execution_max_input_tokens: Option<usize>,
     pub execution_inputs: Vec<ExecutionInput>,
+    /// Actual loaded session declarations; -1 denotes a dynamic dimension.
+    pub input_schema: Vec<ExecutionInput>,
     pub compilation_cache: Option<SharedCacheEvidence>,
     /// Effective provider compiler controls captured once before preparation.
     pub compiler_flags: BTreeMap<String, String>,
@@ -614,6 +618,7 @@ impl InstanceOptions {
             } else {
                 Vec::new()
             },
+            input_schema: session_input_schema(&session.inputs),
             compilation_cache: cache_lease.as_ref().map(|lease| lease.evidence.clone()),
             compiler_flags,
         });

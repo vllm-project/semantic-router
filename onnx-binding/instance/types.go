@@ -72,12 +72,15 @@ type EmbeddingResult struct {
 
 // SessionEvidence describes loaded execution policy. Successful registration is
 // not an inference claim; CompletedInferences and the ORT profile prove execution.
+// InputSchema records actual loaded session declarations for every provider;
+// dynamic dimensions are -1 and fixed dimensions remain explicit.
 type SessionEvidence struct {
 	RuntimeBuild            string                    `json:"runtime_build"`
 	CompilerFlags           map[string]string         `json:"compiler_flags"`
 	Artifacts               []ArtifactDigest          `json:"artifacts"`
 	ExecutionMaxInputTokens int                       `json:"execution_max_input_tokens,omitempty"`
 	ExecutionInputs         []ExecutionInput          `json:"execution_inputs"`
+	InputSchema             []ExecutionInput          `json:"input_schema"`
 	CompilationCache        *CompilationCacheEvidence `json:"compilation_cache,omitempty"`
 	Graph                   string                    `json:"graph"`
 	Provider                string                    `json:"provider"`
@@ -96,8 +99,10 @@ type ArtifactDigest struct {
 	SHA256 string `json:"sha256"`
 }
 
-// ExecutionInput records fixed shapes only when the provider requires them.
-// CPU dynamic sessions report their capacity separately and leave this empty.
+// ExecutionInput describes one named tensor input. In SessionEvidence.InputSchema,
+// its shape preserves the loaded graph's declared dimensions, including -1 for
+// dynamic axes. ExecutionInputs separately records MIGraphX's fixed contract;
+// an empty ExecutionInputs slice does not imply a dynamic graph.
 type ExecutionInput struct {
 	Name  string  `json:"name"`
 	Dtype string  `json:"dtype"`

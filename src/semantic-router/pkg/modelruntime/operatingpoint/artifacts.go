@@ -16,6 +16,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// CKFlashAttentionLibrary is an installed trusted implementation. A policy may
+// bind its content identity but cannot select an executable library path.
+const CKFlashAttentionLibrary = "/usr/local/lib/libort_ck_flash_attn.so.1"
+
 // Load verifies only explicitly selected files. The native provider remains the
 // model loader and owns its actual input budget, task head and resource identity.
 func Load(ctx context.Context, spec config.ResolvedModelBinding, labels []string) (*Policy, error) {
@@ -71,7 +75,11 @@ func Load(ctx context.Context, spec config.ResolvedModelBinding, labels []string
 	if execution.ONNX != nil && spec.Binding.Head != "" && spec.Binding.Head != execution.ONNX.File {
 		return nil, fmt.Errorf("selected ONNX head differs from operating point")
 	}
-	if deployment.CustomOpsProfile != "" {
+	profile := ""
+	if execution.ONNX != nil {
+		profile = execution.ONNX.CustomOpsProfile
+	}
+	if deployment.CustomOpsProfile != profile {
 		return nil, fmt.Errorf("operating point graph does not declare a custom-ops execution")
 	}
 	if err := p.VerifyArtifacts(ctx, deployment.Artifact); err != nil {
@@ -86,9 +94,18 @@ func Load(ctx context.Context, spec config.ResolvedModelBinding, labels []string
 // VerifyArtifacts is also called after native preparation. Startup replacement
 // cannot bind a policy to different files; a published generation is immutable.
 func (p *Policy) VerifyArtifacts(ctx context.Context, root string) error {
+	return p.verifyArtifacts(ctx, root, CKFlashAttentionLibrary)
+}
+
+func (p *Policy) verifyArtifacts(ctx context.Context, root, trustedLibrary string) error {
+	customOpsSHA256 := ""
 	files := map[string]string{"model.safetensors": p.definition.ModelWeightsSHA256, "config.json": p.definition.ModelConfigSHA256, "tokenizer.json": p.definition.TokenizerSHA256}
 	if graph := p.ONNX(); graph != nil {
 		for _, artifact := range graph.Artifacts {
+			if artifact.Role == "custom-ops" {
+				customOpsSHA256 = artifact.SHA256
+				continue
+			}
 			path := graph.File
 			if artifact.Role != "graph" {
 				path = filepath.Join(filepath.Dir(graph.File), strings.TrimPrefix(artifact.Role, "external:"))
@@ -104,22 +121,37 @@ func (p *Policy) VerifyArtifacts(ctx context.Context, root string) error {
 		if err != nil {
 			return err
 		}
-		file, err := os.Open(path)
-		if err != nil {
+		if err := verifyFileDigest(ctx, path, want); err != nil {
 			return err
 		}
-		hash := sha256.New()
-		_, copyErr := io.Copy(hash, &contextReader{ctx: ctx, reader: file})
-		closeErr := file.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		if hex.EncodeToString(hash.Sum(nil)) != want {
-			return fmt.Errorf("operating point %s SHA256 differs from selected artifact", name)
-		}
+	}
+	if customOpsSHA256 != "" {
+		return verifyFileDigest(ctx, trustedLibrary, customOpsSHA256)
+	}
+	return nil
+}
+
+func verifyFileDigest(ctx context.Context, path, want string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		_ = file.Close()
+		return fmt.Errorf("operating point artifact must be a regular file: %s", path)
+	}
+	hash := sha256.New()
+	_, copyErr := io.Copy(hash, &contextReader{ctx: ctx, reader: file})
+	closeErr := file.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if hex.EncodeToString(hash.Sum(nil)) != want {
+		return fmt.Errorf("operating point %s SHA256 differs from selected artifact", path)
 	}
 	return nil
 }
