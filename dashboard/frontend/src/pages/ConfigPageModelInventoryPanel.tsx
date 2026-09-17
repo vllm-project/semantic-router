@@ -17,9 +17,7 @@ import { findModelProviderPreset } from './modelProviderCatalog'
 function ModelProviderMark({ model }: { model: NormalizedModel }) {
   const backend = model.backend_refs?.[0]
   const preset = findModelProviderPreset({
-    backendName: backend?.name,
-    baseUrl: backend?.base_url,
-    apiFormat: model.api_format ?? backend?.provider,
+    providerID: backend?.provider,
   })
   return (
     <span className={styles.modelProviderMark} aria-hidden="true">
@@ -328,8 +326,8 @@ export default function ConfigPageModelInventoryPanel({
         className={configStyles.managerTable}
         readonly={isReadonly}
         pagination={{
-          pageSize: 25,
-          pageSizeOptions: [25, 50, 100],
+          pageSize: 5,
+          pageSizeOptions: [5, 10, 25, 50],
           itemLabel: 'models',
           resetKey: `${modelsSearch}|${reasoningFamilyFilter}|${endpointFilter}|${roleFilter}`,
         }}

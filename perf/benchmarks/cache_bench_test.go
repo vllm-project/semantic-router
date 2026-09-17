@@ -4,253 +4,101 @@ package benchmarks
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 )
 
-const embeddingModelPathEnv = "QWEN3_MODEL_PATH"
+const (
+	cacheEmbeddingModelType  = "mmbert"
+	cacheEmbeddingDeployment = "perf-cache-embedding"
+)
 
-var embeddingModelPathOnce sync.Once
+var (
+	cacheEmbeddingOnce     sync.Once
+	cacheEmbeddingErr      error
+	cacheEmbeddingOwner    *embedding.Set
+	cacheEmbeddingProvider embedding.Provider
+)
 
-// initCacheEmbeddingModels initializes the cache embedding models for benchmarks.
-// The fallback paths inside cache.InitEmbeddingModels are relative to the process
-// working directory, which for `go test` is this package directory
-// (perf/benchmarks), so none of them reach the repo-root models/ directory.
-// Point QWEN3_MODEL_PATH at the repo root explicitly (same repo-root resolution
-// as initIntentClassifier in classification_accuracy_bench_test.go) unless the
-// caller already set it.
-func initCacheEmbeddingModels(b *testing.B) {
+func cacheEmbeddingDevice() string {
+	if useGPU := os.Getenv("USE_GPU"); useGPU == "true" || useGPU == "1" {
+		return "cuda:0"
+	}
+	return "cpu"
+}
+
+func cacheEmbeddingConfig(spec config.ResolvedModelBinding) *config.RouterConfig {
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = cacheEmbeddingModelType
+	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.EmbeddingModel = cacheEmbeddingModelType
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: cacheEmbeddingDeployment, Contract: "embedding.v1", Adapter: cacheEmbeddingModelType}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{cacheEmbeddingDeployment: spec.Deployment}
+	return cfg
+}
+
+// Prepare the shared response-cache owner used by the router and retain it
+// until TestMain cleanup, including failures after preparation.
+func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 	b.Helper()
-	embeddingModelPathOnce.Do(func() {
-		if os.Getenv(embeddingModelPathEnv) != "" {
-			return
-		}
-		wd, err := os.Getwd()
+	cacheEmbeddingOnce.Do(func() {
+		spec := benchmarkModel(b, "embedding", "embedding.v1")
+		cfg := cacheEmbeddingConfig(spec)
+		set, err := modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, benchmarkRuntime)
 		if err != nil {
+			cacheEmbeddingErr = fmt.Errorf("prepare Vela embedding: %w", err)
 			return
 		}
-		modelDir := filepath.Join(wd, "..", "..", "models", "mom-embedding-pro")
-		if _, err := os.Stat(modelDir); err == nil {
-			os.Setenv(embeddingModelPathEnv, modelDir)
+		provider, err := set.Default()
+		if err != nil {
+			cacheEmbeddingErr = errors.Join(err, set.Close())
+			return
 		}
+		cacheEmbeddingOwner = set
+		cacheEmbeddingProvider = provider
 	})
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
+	if cacheEmbeddingErr != nil {
+		b.Fatal(cacheEmbeddingErr)
 	}
+	recordModelIdentity(b, "embedding")
+	return cacheEmbeddingProvider
 }
 
-// BenchmarkCacheSearch_1000Entries benchmarks cache search with 1000 entries
 func BenchmarkCacheSearch_1000Entries(b *testing.B) {
-	// Initialize embedding models once
-	initCacheEmbeddingModels(b)
-
-	config := cache.BenchmarkConfig{
-		CacheSize:         1000,
-		ConcurrencyLevels: []int{1},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.7,
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.OverallP95, "p95_ms")
-		b.ReportMetric(result.OverallP99, "p99_ms")
-		b.ReportMetric(result.Throughput, "qps")
-		b.ReportMetric(result.CacheHitRate*100, "hit_rate_%")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 1000, workers: 1, hnsw: true, repeatPercent: 70})
 }
 
-// BenchmarkCacheSearch_10000Entries benchmarks cache search with 10,000 entries
 func BenchmarkCacheSearch_10000Entries(b *testing.B) {
-	initCacheEmbeddingModels(b)
-
-	config := cache.BenchmarkConfig{
-		CacheSize:         10000,
-		ConcurrencyLevels: []int{1},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.7,
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.OverallP95, "p95_ms")
-		b.ReportMetric(result.OverallP99, "p99_ms")
-		b.ReportMetric(result.Throughput, "qps")
-		b.ReportMetric(result.CacheHitRate*100, "hit_rate_%")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 10000, workers: 1, hnsw: true, repeatPercent: 70})
 }
 
-// BenchmarkCacheSearch_HNSW benchmarks HNSW index search
 func BenchmarkCacheSearch_HNSW(b *testing.B) {
-	initCacheEmbeddingModels(b)
-
-	config := cache.BenchmarkConfig{
-		CacheSize:         5000,
-		ConcurrencyLevels: []int{1},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.7,
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.SearchP95, "search_p95_ms")
-		b.ReportMetric(result.EmbeddingP95, "embedding_p95_ms")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 5000, workers: 1, hnsw: true, repeatPercent: 70})
 }
 
-// BenchmarkCacheSearch_Linear benchmarks linear search (no HNSW)
 func BenchmarkCacheSearch_Linear(b *testing.B) {
-	initCacheEmbeddingModels(b)
-
-	config := cache.BenchmarkConfig{
-		CacheSize:         1000, // Smaller for linear search
-		ConcurrencyLevels: []int{1},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           false,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.7,
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.SearchP95, "search_p95_ms")
-		b.ReportMetric(result.EmbeddingP95, "embedding_p95_ms")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 1000, workers: 1, hnsw: false, repeatPercent: 70})
 }
 
-// BenchmarkCacheConcurrency_1 benchmarks cache with concurrency level 1
 func BenchmarkCacheConcurrency_1(b *testing.B) {
-	initCacheEmbeddingModels(b)
-
-	config := cache.BenchmarkConfig{
-		CacheSize:         5000,
-		ConcurrencyLevels: []int{1},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.7,
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.Throughput, "qps")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 5000, workers: 1, hnsw: true, repeatPercent: 70})
 }
 
-// BenchmarkCacheConcurrency_10 benchmarks cache with concurrency level 10
 func BenchmarkCacheConcurrency_10(b *testing.B) {
-	initCacheEmbeddingModels(b)
-
-	config := cache.BenchmarkConfig{
-		CacheSize:         5000,
-		ConcurrencyLevels: []int{10},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.7,
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.Throughput, "qps")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 5000, workers: 10, hnsw: true, repeatPercent: 70})
 }
 
-// BenchmarkCacheConcurrency_50 benchmarks cache with concurrency level 50
 func BenchmarkCacheConcurrency_50(b *testing.B) {
-	initCacheEmbeddingModels(b)
-
-	config := cache.BenchmarkConfig{
-		CacheSize:         5000,
-		ConcurrencyLevels: []int{50},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.7,
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.Throughput, "qps")
-		b.ReportMetric(result.CacheHitRate*100, "hit_rate_%")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 5000, workers: 50, hnsw: true, repeatPercent: 70})
 }
 
-// BenchmarkCacheHitRate benchmarks cache hit rate effectiveness
 func BenchmarkCacheHitRate(b *testing.B) {
-	initCacheEmbeddingModels(b)
-
-	// High hit ratio scenario
-	config := cache.BenchmarkConfig{
-		CacheSize:         5000,
-		ConcurrencyLevels: []int{10},
-		RequestsPerLevel:  b.N,
-		SimilarityThresh:  0.85,
-		UseHNSW:           true,
-		EmbeddingModel:    "qwen3",
-		HitRatio:          0.9, // 90% expected hit rate
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	results := cache.RunStandaloneBenchmark(context.Background(), config)
-
-	if len(results) > 0 {
-		result := results[0]
-		b.ReportMetric(result.CacheHitRate*100, "hit_rate_%")
-		b.ReportMetric(result.OverallP95, "p95_ms")
-	}
+	runCacheLookupBenchmark(b, cacheScenario{entries: 5000, workers: 10, hnsw: true, repeatPercent: 90})
 }

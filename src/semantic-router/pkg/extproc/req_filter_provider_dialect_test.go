@@ -5,109 +5,88 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestResolveOpenAIBackendDialect(t *testing.T) {
+func TestResolveProviderReasoningTransport(t *testing.T) {
 	tests := []struct {
-		name                      string
-		profile                   *config.ProviderProfile
-		wantKind                  openAIBackendDialectKind
-		wantTopLevelEffort        bool
-		wantTopLevelDeepSeekThink bool
+		name               string
+		profile            *config.ProviderProfile
+		want               modelcatalog.ReasoningTransport
+		wantTop            bool
+		wantThink          bool
+		wantDeep           bool
+		wantObject         bool
+		wantOutput         bool
+		wantThinkingEffort bool
 	}{
 		{
-			name:               "legacy endpoint without profile is vllm",
-			wantKind:           openAIBackendDialectVLLM,
-			wantTopLevelEffort: false,
+			name: "endpoint without profile uses template kwargs",
+			want: modelcatalog.ReasoningTransportChatTemplate,
 		},
 		{
-			name:               "local openai-compatible provider is generic",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "http://localhost:8000/v1"},
-			wantKind:           openAIBackendDialectGenericOpenAICompat,
-			wantTopLevelEffort: false,
+			name:    "vllm uses template kwargs",
+			profile: &config.ProviderProfile{Type: "vllm", BaseURL: "http://localhost:8000/v1"},
+			want:    modelcatalog.ReasoningTransportChatTemplate,
 		},
 		{
-			name:               "official openai uses top-level reasoning effort",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"},
-			wantKind:           openAIBackendDialectOfficialOpenAI,
-			wantTopLevelEffort: true,
+			name:    "openai uses top-level reasoning effort",
+			profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://proxy.example/v1"},
+			want:    modelcatalog.ReasoningTransportTopLevelEffort,
+			wantTop: true,
 		},
 		{
-			name:                      "official deepseek uses top-level 'thinking' and effort",
-			profile:                   &config.ProviderProfile{Type: "openai", BaseURL: "https://api.deepseek.com"},
-			wantKind:                  openAIBackendDialectOfficialDeepSeek,
-			wantTopLevelEffort:        true,
-			wantTopLevelDeepSeekThink: true,
+			name:      "deepseek uses thinking object and effort",
+			profile:   &config.ProviderProfile{Type: "deepseek", BaseURL: "https://private.example/v1"},
+			want:      modelcatalog.ReasoningTransportDeepSeekThinking,
+			wantTop:   true,
+			wantThink: true,
+			wantDeep:  true,
 		},
 		{
-			name:               "openrouter uses top-level reasoning effort",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"},
-			wantKind:           openAIBackendDialectOpenRouter,
-			wantTopLevelEffort: true,
+			name:      "zai uses thinking object without effort",
+			profile:   &config.ProviderProfile{Type: "zai", BaseURL: "https://private.example/v1"},
+			want:      modelcatalog.ReasoningTransportThinkingObject,
+			wantThink: true,
 		},
 		{
-			name:               "unknown openai-compatible provider is generic",
-			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://proxy.example.com/v1"},
-			wantKind:           openAIBackendDialectGenericOpenAICompat,
-			wantTopLevelEffort: false,
+			name:               "model binding can combine thinking object and top-level effort",
+			profile:            &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportThinkingEffort},
+			want:               modelcatalog.ReasoningTransportThinkingEffort,
+			wantTop:            true,
+			wantThink:          true,
+			wantThinkingEffort: true,
+		},
+		{
+			name:       "openrouter uses normalized reasoning object",
+			profile:    &config.ProviderProfile{Type: "openrouter"},
+			want:       modelcatalog.ReasoningTransportReasoningObject,
+			wantObject: true,
+		},
+		{
+			name:       "explicit anthropic transport uses output config effort",
+			profile:    &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportOutputConfig},
+			want:       modelcatalog.ReasoningTransportOutputConfig,
+			wantOutput: true,
+		},
+		{
+			name:    "generic compatible provider uses template kwargs regardless of hostname",
+			profile: &config.ProviderProfile{Type: "openai-compatible", BaseURL: "https://api.openai.com/v1"},
+			want:    modelcatalog.ReasoningTransportChatTemplate,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dialect := resolveOpenAIBackendDialect(tt.profile)
-			assert.Equal(t, tt.wantKind, dialect.kind)
-			assert.Equal(t, tt.wantTopLevelEffort, dialect.usesTopLevelReasoningEffort())
-			assert.Equal(t, tt.wantTopLevelDeepSeekThink, dialect.usesDeepSeekOfficialReasoning())
-		})
-	}
-}
-
-func TestResolveOpenAIBackendDialectAzureHosts(t *testing.T) {
-	tests := []struct {
-		name         string
-		providerType string
-		baseURL      string
-	}{
-		{name: "canonical azure profile", providerType: "azure-openai"},
-		{name: "azure openai host", providerType: "openai", baseURL: "https://my-resource.openai.azure.com/openai/v1"},
-		{name: "azure ai foundry host", providerType: "openai", baseURL: "https://my-resource.services.ai.azure.com/openai/v1"},
-		{name: "cognitive services host", providerType: "openai", baseURL: "https://my-resource.cognitiveservices.azure.com/openai/v1"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dialect := resolveOpenAIBackendDialect(&config.ProviderProfile{Type: tt.providerType, BaseURL: tt.baseURL})
-
-			assert.Equal(t, openAIBackendDialectAzureOpenAI, dialect.kind)
-			assert.Equal(t, llmprotocol.ResponseVendorAzure, dialect.vendorExtensionProvider())
-			// Azure request shaping is unchanged from the generic dialect.
-			assert.False(t, dialect.usesTopLevelReasoningEffort())
-			assert.False(t, dialect.usesDeepSeekOfficialReasoning())
-		})
-	}
-}
-
-// Every other backend keeps the strict contract: no vendor allowance at all.
-func TestResolveOpenAIBackendDialectGrantsNoVendorAllowanceByDefault(t *testing.T) {
-	tests := []struct {
-		name    string
-		profile *config.ProviderProfile
-	}{
-		{name: "legacy endpoint without profile", profile: nil},
-		{name: "official openai", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}},
-		{name: "official deepseek", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://api.deepseek.com/v1"}},
-		{name: "openrouter", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://openrouter.ai/api/v1"}},
-		{name: "generic openai compatible", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://llm.example.com/v1"}},
-		// A host that merely mentions azure is not an Azure endpoint.
-		{name: "azure lookalike host", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://azure.example.com/v1"}},
-		// Suffix matching must not fire on a bare label match either.
-		{name: "azure lookalike suffix", profile: &config.ProviderProfile{Type: "openai", BaseURL: "https://notopenai.azure.com.evil.test/v1"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Empty(t, resolveOpenAIBackendDialect(tt.profile).vendorExtensionProvider())
+			transport := resolveProviderReasoningTransport(tt.profile)
+			assert.Equal(t, tt.want, transport)
+			assert.Equal(t, tt.wantTop, usesTopLevelReasoningEffort(transport))
+			assert.Equal(t, tt.wantThink, usesThinkingObjectTransport(transport))
+			assert.Equal(t, tt.wantDeep, isDeepSeekThinkingTransport(transport))
+			assert.Equal(t, tt.wantObject, usesReasoningObjectTransport(transport))
+			assert.Equal(t, tt.wantOutput, usesOutputConfigEffortTransport(transport))
+			assert.Equal(t, tt.wantThinkingEffort, usesThinkingObjectEffortTransport(transport))
 		})
 	}
 }

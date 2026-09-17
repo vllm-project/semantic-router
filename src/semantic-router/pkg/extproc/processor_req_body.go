@@ -71,6 +71,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	if err != nil {
 		return nil, err
 	}
+	captureRequestDemand(ctx, requestDemandStagePostContext, request, decisionState.selectedModel)
 	return r.handleModelRoutingWithPersonalizedCache(
 		request,
 		originalModel,
@@ -111,6 +112,7 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 			"decision":   decisionName,
 		})
 	}
+	captureRequestDemand(ctx, requestDemandStagePostToolPolicy, request, selectedModel)
 	isEntrypoint := ctx.Routing.SelectedRecipe() != nil
 	executesLooper := r.routeExecutesLooper(ctx)
 	if !isEntrypoint && !executesLooper && !r.usesExternalGatewayDispatch(originalModel) {
@@ -201,7 +203,12 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.handleToolSelectionForRequest(request, response, ctx)
-		return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		if err != nil {
+			return nil, err
+		}
+		r.dispatchShadowIfConfigured(ctx, dispatch)
+		return finalized, nil
 	}
 
 	// Record routing decision with tracing
@@ -226,16 +233,10 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// Log routing decision
 	r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
-	// Save the actual model for token tracking
-	ctx.RequestModel = matchedModel
-
-	// Capture router replay information if enabled
-	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+	// Persist the final dispatch demand, including automatic output resolved
+	// below. Defer also preserves a record when finalization fails or panics;
+	// Process owns its terminal lifecycle and response headers run afterwards.
+	defer r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
@@ -243,6 +244,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
+	r.dispatchShadowIfConfigured(ctx, dispatch)
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
@@ -279,19 +281,12 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
 
-	// Save the actual model for token tracking
-	ctx.RequestModel = originalModel
-
-	// Capture router replay information if enabled even when the client pins a model.
-	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
+	// Capture the final dispatch demand for pinned Models too, retaining a
+	// record on finalization failure before Process handles the terminal state.
+	defer r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)

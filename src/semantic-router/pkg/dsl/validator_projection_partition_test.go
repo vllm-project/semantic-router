@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -85,5 +86,42 @@ ROUTE impossible_route {
 	}
 	if !found {
 		t.Error("expected constraint about impossible AND between partition members")
+	}
+}
+
+func TestProjectionPartitionChecksWholeBooleanCondition(t *testing.T) {
+	for _, test := range []struct {
+		name, condition string
+		impossible      bool
+	}{
+		{"repeated alternatives", `(domain("math") OR domain("science")) AND (domain("math") OR domain("science"))`, false},
+		{"viable fallback", `(domain("math") AND domain("science")) OR domain("history")`, false},
+		{"all alternatives conflict", `(domain("math") OR domain("science")) AND domain("history")`, true},
+		{"nested conditional alternatives", `(domain("math") OR domain("science")) AND (keyword("explain") OR (keyword("details") AND (domain("math") OR domain("science"))))`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			input := fmt.Sprintf(`
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL domain science { mmlu_categories: ["physics"] }
+SIGNAL domain history { mmlu_categories: ["history"] }
+SIGNAL keyword explain { operator: "any" patterns: ["explain"] }
+SIGNAL keyword details { operator: "any" patterns: ["details"] }
+PROJECTION partition topics { semantics: "exclusive" members: ["math", "science", "history"] default: "history" }
+ROUTE condition { PRIORITY 100 WHEN %s MODEL "m1" }
+`, test.condition)
+			diagnostics, errs := Validate(input)
+			if len(errs) > 0 {
+				t.Fatal(errs)
+			}
+			conflict := false
+			for _, diag := range diagnostics {
+				if strings.Contains(diag.Message, "mutually exclusive") {
+					conflict = true
+				}
+			}
+			if conflict != test.impossible {
+				t.Fatalf("constraint=%v want=%v: %+v", conflict, test.impossible, diagnostics)
+			}
+		})
 	}
 }

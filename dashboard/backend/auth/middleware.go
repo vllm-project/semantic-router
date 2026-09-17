@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
 type contextKey string
@@ -76,6 +78,11 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
+			if !routerGatewayRequestAllowed(r.Method, r.URL.Path) {
+				http.Error(w, "Router management route is not exposed by the Dashboard", http.StatusForbidden)
+				return
+			}
+
 			for _, required := range RequiredPermissions(r.Method, r.URL.Path) {
 				if !perms[required] {
 					http.Error(w, "Forbidden", http.StatusForbidden)
@@ -117,7 +124,9 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 }
 
 func requiredPermission(method, path string) string {
-	path = strings.TrimSpace(strings.ToLower(path))
+	if !strings.HasPrefix(path, "/api/router/") {
+		path = strings.TrimSpace(strings.ToLower(path))
+	}
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
 		settingsPermission,
@@ -144,7 +153,12 @@ func requiredPermission(method, path string) string {
 // routes require one permission; controlled-pair creation is both an evidence
 // write and an immediate two-worker launch, so it deliberately requires both.
 func RequiredPermissions(method, path string) []string {
-	path = strings.TrimSpace(strings.ToLower(path))
+	if policy, ok := routercontract.LookupManagement(method, path); ok {
+		return policy.Permissions
+	}
+	if !strings.HasPrefix(path, "/api/router/") {
+		path = strings.TrimSpace(strings.ToLower(path))
+	}
 	if method == http.MethodPost && path == "/api/evaluation/v1/controlled-pairs" {
 		return []string{PermEvalWrite, PermEvalRun}
 	}
@@ -223,6 +237,9 @@ func settingsPermission(method, path string) (string, bool) {
 }
 
 func routerPermission(method, path string) (string, bool) {
+	if policy, ok := routercontract.LookupManagement(method, path); ok {
+		return policy.Permissions[0], true
+	}
 	switch {
 	case path == "/api/models/catalog":
 		return PermConfigRead, true
@@ -230,30 +247,33 @@ func routerPermission(method, path string) (string, bool) {
 		return PermConfigWrite, true
 	case path == "/api/models/verify":
 		return PermEvalRun, true
-	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
-		return PermFeedbackSubmit, true
-	case strings.HasPrefix(path, "/api/router/v1/router_replay"):
-		return PermReplayRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/response-cache/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/api/v1/context-compression/preview":
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/context-compression/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/config/deploy",
-		path == "/api/router/config/deploy/preview",
-		path == "/api/router/config/rollback":
+	case path == "/api/router/config/deploy", path == "/api/router/config/deploy/preview", path == "/api/router/config/rollback":
 		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/router/config/"):
 		if method == http.MethodGet {
 			return PermConfigRead, true
 		}
 		return PermConfigWrite, true
-	case strings.HasPrefix(path, "/api/router/"):
+	case path == "/api/router/v1/chat/completions" && method == http.MethodPost:
 		return PermConfigRead, true
+	case strings.HasPrefix(path, "/api/router/"):
+		return "", true
 	default:
 		return "", false
 	}
+}
+
+// Dashboard-owned config handlers and inference dispatch have their own policy.
+// Every management gateway request must exist in the shared exact allowlist.
+func routerGatewayRequestAllowed(method, path string) bool {
+	if !strings.HasPrefix(path, "/api/router/") || strings.HasPrefix(path, "/api/router/config/") {
+		return true
+	}
+	if path == "/api/router/v1/chat/completions" && (method == http.MethodPost || method == http.MethodOptions) {
+		return true
+	}
+	_, ok := routercontract.LookupManagement(method, path)
+	return ok
 }
 
 func knowledgePermission(_ string, path string) (string, bool) {

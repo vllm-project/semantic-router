@@ -222,7 +222,7 @@ func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 			changed = true
 		}
 	}
-	for _, field := range []string{"annotations", "signal_errors"} {
+	for _, field := range []string{"annotations", "signal_errors", "looper"} {
 		if clearObjectField(diagnostics, field) {
 			changed = true
 		}

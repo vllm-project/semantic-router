@@ -21,11 +21,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: known-model
+    model: known-model
   models:
     - name: known-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
           api_key: test-secret
 routing:
   modelCards:

@@ -2,13 +2,19 @@
 
 The `perf/` module measures component-level Router hot paths with Go
 benchmarks. Use it to compare allocations, bytes, and execution time for
-classification, decision evaluation, cache operations, and ExtProc data
-handling. Looper microbenchmarks live beside the Looper implementation and are
-included by the repository Make targets.
+classification, decision evaluation, cache operations, and Looper execution.
+Looper microbenchmarks live beside the implementation and are included by the
+repository Make targets.
 
 These are not end-to-end quality or load benchmarks. For reasoning quality,
 session routing, hallucination detection, and fusion evaluations, see
 [`bench/`](../bench/README.md).
+
+`make perf-test-unit` runs the parser, artifact identity, and regression contract
+tests without downloading models or running benchmarks. `make check` selects
+this target for performance changes. The dedicated performance CI job runs the
+model measurements; `make verify DOMAIN=performance` runs them locally through
+`perf-check`.
 
 ## Run the benchmarks
 
@@ -62,6 +68,66 @@ make perf-compare
 The parser writes `reports/current.json`; the comparison writes
 `reports/comparison.json`.
 
+Classification and cache benchmarks use canonical, revision-pinned Vela artifacts
+through owned native runtime handles. Missing weights or failed inference fail the
+run. `VLLM_SR_DOMAIN_MODEL`, `VLLM_SR_PII_MODEL`, `VLLM_SR_JAILBREAK_MODEL`, and
+`VLLM_SR_EMBEDDING_MODEL` can point to downloaded snapshots. The asset downloader's
+`VLLM_SR_MODEL_MANIFEST` freezes the current catalog for both sides of a comparison.
+No model IDs or revisions are maintained separately in this module.
+
+The previous classification and cache baseline files contain no measurements.
+CI therefore measures those families against the PR base revision (or the prior
+main revision for scheduled runs), using the current benchmark program and the
+same downloaded Vela checkpoints on both revisions:
+
+```bash
+export VLLM_SR_MODEL_MANIFEST=/absolute/path/to/perf-models.json
+bash perf/scripts/compare-model-baseline.sh "$BASE_REF" reports
+cd perf
+go run ./cmd/perftest --compare-baseline=testdata/baselines \
+  --current=../reports/current.json --model-baseline=../reports/model-baseline.json \
+  --threshold-file=config/thresholds.yaml --output=../reports/comparison.json \
+  --inventory=config/benchmark-inventory.json --fail-on-regression
+```
+
+The helper reuses native libraries only when their sources and build inputs are
+unchanged. Otherwise it builds the base revision's libraries. An incompatible
+base fails with its compile/runtime output. Reports record the measured source
+commit, registry revisions, actual artifact content hashes, device, precision,
+and benchmark protocol. Missing measurements or identity differences fail the
+comparison; Qwen3 and legacy classifier numbers cannot become Vela baselines.
+Model correctness belongs to the real-model regression suite; these benchmarks
+do not publish accuracy from a missing optional dataset.
+
+## Cache measurement protocol
+
+Each HNSW operation measures 100 public `LookupSimilarWithThreshold` requests
+on each of five independently constructed graphs (500 requests/op). Linear
+search uses one cache and 100 requests/op. Every graph contributes equally;
+no graph or sample is retried or selected by its result. The eight scenarios retain their cache
+sizes, HNSW/linear modes, 1/10/50 workers, similarity threshold, and Vela model.
+A fixed corpus retains the original ten query topics and composed-query shape;
+70% or 90% of lookup inputs reuse a base query. This is an input repetition
+ratio, not an asserted model hit rate. The report records the observed hit rate.
+
+Population uses unique request IDs and validates the actual stored entry count.
+Population, embedding-memo warmup, worker startup, aggregation, and cleanup are
+outside Go's timed/allocation interval. Each worker handles requests even in a
+`-benchtime=1x` smoke run. Reports use batch `ns/op`, `B/op`, and `allocs/op`,
+with explicit `requests/op` and `graphs/op`, pooled observed hit rate, and
+request throughput. They do not
+claim separate embedding/search phase timings. HNSW retains its production
+randomized graph construction; the corpus and insertion order are fixed. The
+five-graph ensemble reduces graph-dependent variation. Go `B.Loop` reuses the
+prepared graphs throughout calibration so setup runs once per scenario.
+
+The `cache=public-lookup-v3` protocol records these units and the warmed memo.
+Both revisions run this exact harness and checkpoint; old standalone-harness
+measurements, which included random setup amortized over Go's variable iteration
+count, are not comparable to this protocol. Model inference is real during
+preparation; these cases measure repeated cached lookups, while classification
+benchmarks separately measure inference calls.
+
 ## What is gated
 
 Thresholds in [`config/thresholds.yaml`](config/thresholds.yaml) are matched to
@@ -72,10 +138,14 @@ the `default` thresholds.
   stable for the same code and Go version.
 - `ns/op` is advisory because host speed and contention affect wall-clock
   measurements.
-- A benchmark missing from the baseline is reported but cannot be compared
-  until a reviewed baseline is added.
+- Model benchmarks require measurements with the same artifact content and
+  execution settings. Both measurements must cover the versioned inventory in
+  `config/benchmark-inventory.json`; missing, extra, or duplicate workloads fail.
 
-Treat an allocation pass as one signal, not a general performance guarantee.
+Go allocation metrics do not include Rust/C++ allocations, process RSS, or GPU
+memory. Benchmark commands exclude ordinary unit tests, which run in their own
+checks. The former JSON/map microbenchmarks did not call production ExtProc and
+are excluded from the product performance gate.
 Record the source revision, Go version, model artifacts, CPU, and benchmark
 command whenever wall-clock results are shared.
 
@@ -95,16 +165,15 @@ different address, run `go tool pprof` directly against the profile file.
 
 | Family | Location | Measures |
 | --- | --- | --- |
-| Classification | `benchmarks/classification*_bench_test.go` | batch inference, parallel calls, CGO overhead, and intent accuracy setup |
+| Classification | `benchmarks/classification*_bench_test.go` | owned Vela Domain/PII/Guard batch inference, parallel calls, and Domain inference |
 | Decision | `benchmarks/decision_bench_test.go` | rule evaluation, priority selection, and parallel evaluation |
-| Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths |
-| ExtProc data handling | `benchmarks/extproc_bench_test.go` | JSON encoding, request-body parsing, and header manipulation |
+| Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths through the owned Vela Embedding provider |
 | Looper | `../src/semantic-router/pkg/looper/*_bench_test.go` | Base, Fusion, ReMoM, and Flow helpers and execution |
 
 The repository's reusable performance workflow runs these numeric regression
 checks when the performance CI domain is selected. The workflow and
-`make perf-check` use the same parser, thresholds, and committed baseline
-directory.
+`make perf-check` use the same parser and thresholds. Model measurements also
+require a same-checkpoint baseline passed to the comparator as shown above.
 
 ## Directory layout
 

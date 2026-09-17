@@ -132,7 +132,7 @@ func TestDecodeProviderWireAcceptsUnanticipatedAzureFields(t *testing.T) {
 		`"a_field_azure_ships_next_year":{"nested":true},` +
 		`"choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"hi"}}]}`
 
-	dropped, err := decodeProviderWireVendorAware([]byte(body), &target, policy)
+	_, dropped, err := decodeProviderWireVendorAware([]byte(body), &target, policy)
 	if err != nil {
 		t.Fatalf("decodeProviderWireVendorAware() error = %v, want nil", err)
 	}
@@ -321,5 +321,60 @@ func TestChatStreamErrorReportsVendorExtensions(t *testing.T) {
 	if len(diagnostics) != 1 || diagnostics[0].Field != "azure_trace" ||
 		diagnostics[0].Action != llmprotocol.DiagnosticDropped {
 		t.Errorf("diagnostics = %+v, want one dropped azure_trace field", diagnostics)
+	}
+}
+
+// A caller that persists a response needs to know the bytes it holds are not
+// canonical. This predicate is that signal.
+func TestDiagnosticsDroppedVendorExtensions(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.ResponseVendorAzure
+
+	_, _, decorated, err := OpenAIChatCodec{}.DecodeResponse([]byte(azureChatCompletion), policy)
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v, want nil", err)
+	}
+	if !DiagnosticsDroppedVendorExtensions(decorated) {
+		t.Errorf("DiagnosticsDroppedVendorExtensions() = false for %+v, want true", decorated)
+	}
+
+	if DiagnosticsDroppedVendorExtensions(nil) {
+		t.Error("DiagnosticsDroppedVendorExtensions(nil) = true, want false")
+	}
+	unrelated := llmprotocol.Diagnostics{{
+		Action: llmprotocol.DiagnosticDropped,
+		Field:  "metadata",
+		Reason: "response request metadata is not model output",
+	}}
+	if DiagnosticsDroppedVendorExtensions(unrelated) {
+		t.Error("DiagnosticsDroppedVendorExtensions() = true for an unrelated drop, want false")
+	}
+}
+
+// The cache write/read contract, at the codec level: re-encoding a decorated
+// response yields bytes a strict decoder accepts, while the original upstream
+// bytes are rejected. This is what makes the miss-to-hit path survivable.
+func TestReencodedAzureResponseSatisfiesTheStrictContract(t *testing.T) {
+	vendorPolicy := llmprotocol.DefaultPolicy()
+	vendorPolicy.ResponseVendor = llmprotocol.ResponseVendorAzure
+
+	response, envelope, _, err := OpenAIChatCodec{}.DecodeResponse([]byte(azureChatCompletion), vendorPolicy)
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v, want nil", err)
+	}
+
+	canonical, _, err := OpenAIChatCodec{}.EncodeResponse(response, envelope, vendorPolicy)
+	if err != nil {
+		t.Fatalf("EncodeResponse() error = %v, want nil", err)
+	}
+
+	// Strict: no vendor allowance, the way a cache read decodes.
+	_, _, _, canonicalErr := OpenAIChatCodec{}.DecodeResponse(canonical, llmprotocol.DefaultPolicy())
+	if canonicalErr != nil {
+		t.Errorf("strict DecodeResponse(re-encoded) error = %v, want nil", canonicalErr)
+	}
+	_, _, _, originalErr := OpenAIChatCodec{}.DecodeResponse([]byte(azureChatCompletion), llmprotocol.DefaultPolicy())
+	if originalErr == nil {
+		t.Error("strict DecodeResponse(original) error = nil, want rejection")
 	}
 }

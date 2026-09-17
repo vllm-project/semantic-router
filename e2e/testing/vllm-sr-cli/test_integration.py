@@ -7,13 +7,13 @@ They are slower than unit tests and should be run with --integration flag.
 
 """
 
+import json
 import os
-import subprocess
+import shutil
 import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
-from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -24,6 +24,7 @@ DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
 MOCK_OPENAI_SERVER_PORT = 18080
 MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
+PULL_POLICY_PROBE_IMAGE = "example.invalid/vllm-sr-cli/pull-policy-probe:always"
 
 
 class TestServeIntegration(ServeSessionMixin, CLITestBase):
@@ -35,41 +36,38 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
     def _create_minimal_config(self, port: int = 8888) -> str:
         return self.write_minimal_canonical_config(port=port)
 
-    def test_wait_for_serve_success_does_not_terminate_a_successful_process(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.return_value = ("ready", "")
-        process.returncode = 0
+    def _pull_interceptor_env(self) -> tuple[dict[str, str], Path]:
+        """Intercept runtime pulls without replacing the rest of the CLI stack."""
+        real_runtime = shutil.which(self.container_runtime)
+        self.assertIsNotNone(real_runtime, f"{self.container_runtime} is not on PATH")
 
-        self._wait_for_serve_success(process)
+        wrapper_dir = Path(self.test_dir) / "pull-interceptor"
+        wrapper_dir.mkdir()
+        wrapper_path = wrapper_dir / self.container_runtime
+        pull_log = wrapper_dir / "pulls.log"
+        wrapper_path.write_text(
+            """#!/bin/sh
+set -eu
+if [ "$1" = "pull" ]; then
+  printf '%s\\n' "$2" >> "$VLLM_SR_TEST_PULL_LOG"
+  printf 'Intercepted test pull: %s\\n' "$2" >&2
+  exit 1
+fi
+exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
+""",
+            encoding="utf-8",
+        )
+        wrapper_path.chmod(0o755)
 
-        process.communicate.assert_called_once_with(timeout=self.HEALTH_CHECK_TIMEOUT)
-        process.terminate.assert_not_called()
-        process.kill.assert_not_called()
-
-    def test_wait_for_serve_success_rejects_a_failed_process(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.return_value = ("", "startup failed")
-        process.returncode = 1
-
-        with self.assertRaisesRegex(AssertionError, "startup failed"):
-            self._wait_for_serve_success(process)
-
-        process.terminate.assert_not_called()
-        process.kill.assert_not_called()
-
-    def test_wait_for_serve_success_terminates_and_drains_a_timeout(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.side_effect = [
-            subprocess.TimeoutExpired("vllm-sr serve", self.HEALTH_CHECK_TIMEOUT),
-            ("", "stopped after timeout"),
-        ]
-
-        with self.assertRaisesRegex(AssertionError, "before the timeout"):
-            self._wait_for_serve_success(process)
-
-        process.terminate.assert_called_once_with()
-        process.kill.assert_not_called()
-        self.assertEqual(process.communicate.call_count, 2)
+        return (
+            {
+                "CONTAINER_RUNTIME": self.container_runtime,
+                "PATH": f"{wrapper_dir}{os.pathsep}{os.environ['PATH']}",
+                "VLLM_SR_TEST_PULL_LOG": str(pull_log),
+                "VLLM_SR_TEST_REAL_RUNTIME": real_runtime or "",
+            },
+            pull_log,
+        )
 
     @contextmanager
     def _running_mock_upstream(
@@ -142,16 +140,25 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         return "\n".join(diagnostics)
 
     def _send_mock_chat_completion(
-        self, mock_container: str, *, redact_values: tuple[str, ...] = ()
+        self,
+        mock_container: str,
+        *,
+        request_path: str = "/v1/chat/completions",
+        redact_values: tuple[str, ...] = (),
+        request_headers: dict[str, str] | None = None,
+        model: str = "test-model",
     ):
         """Send a chat request, retrying until the local stack is ready."""
         listener_port = 8888 + self.runtime_stack.port_offset
         request = urllib_request.Request(
-            f"http://localhost:{listener_port}/v1/chat/completions",
-            data=(
-                b'{"model":"test-model","messages":[{"role":"user","content":"ping"}]}'
-            ),
-            headers={"Content-Type": "application/json"},
+            f"http://localhost:{listener_port}{request_path}",
+            data=json.dumps(
+                {
+                    "model": model,
+                    "messages": [{"role": "user", "content": "ping"}],
+                }
+            ).encode(),
+            headers={"Content-Type": "application/json", **(request_headers or {})},
             method="POST",
         )
         deadline = time.time() + 60
@@ -201,15 +208,27 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         *,
         container_suffix: str,
         base_path: str,
+        request_path: str = "/v1/chat/completions",
+        direct_endpoint: bool = False,
+        skip_processing: bool = False,
+        selected_model_header: bool = False,
+        model: str = "test-model",
+        looper: bool = False,
     ) -> set[str]:
         """Route one chat request to a path-recording OpenAI mock upstream."""
         mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
-        base_url = f"http://{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
+        upstream = f"{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
+        serve_kwargs = (
+            {"endpoint": upstream}
+            if direct_endpoint
+            else {"base_url": f"http://{upstream}", "provider": "openai"}
+        )
 
         with self._running_serve(
-            base_url=base_url,
-            provider="openai",
             api_only=True,
+            skip_processing=skip_processing,
+            looper=looper,
+            **serve_kwargs,
         ):
             self.assertTrue(
                 self.wait_for_health(
@@ -219,7 +238,17 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
                 "router API did not become healthy",
             )
             with self._running_mock_upstream(mock_container):
-                self._send_mock_chat_completion(mock_container)
+                request_headers = {}
+                if skip_processing:
+                    request_headers["x-vsr-skip-processing"] = "true"
+                if selected_model_header:
+                    request_headers["x-selected-model"] = model
+                self._send_mock_chat_completion(
+                    mock_container,
+                    request_path=request_path,
+                    request_headers=request_headers or None,
+                    model=model,
+                )
                 return self._mock_upstream_paths(mock_container)
 
     @unittest.skipUnless(
@@ -246,7 +275,7 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
     def test_base_url_path_rewrite_is_idempotent(self):
-        """Verify route cache recomputation does not apply a base path twice."""
+        """Do not rewrite the complete provider path after model selection."""
         self.print_test_header(
             "Idempotent Base URL Rewrite Integration Test",
             "Routes /v1/chat/completions once to a /v1beta/openai mock upstream",
@@ -267,18 +296,14 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
 
         self.print_test_result(True, "Base URL path was applied exactly once")
 
-    @unittest.skip(
-        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
-        "paths that still begin with the /v1 segment after rewriting."
-    )
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(self):
-        """Document the known gap for /v1/chat -> /v1/provider/chat rewrites."""
+    def test_base_url_path_rewrite_idempotency_for_v1_segment_prefix(self):
+        """Send a v1-prefixed provider path upstream exactly once."""
         self.print_test_header(
-            "Future Base URL Rewrite Integration Test",
+            "V1-Prefixed Base URL Rewrite Integration Test",
             "Routes /v1/chat/completions once to a /v1/provider mock upstream",
         )
 
@@ -291,7 +316,104 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
             upstream_paths,
         )
 
-        self.print_test_result(True, "Future /v1 segment base URL was applied once")
+        self.print_test_result(True, "/v1 segment base URL was applied once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_base_url_path_rewrite_with_overlapping_prefix(self):
+        """Keep ingress and provider paths distinct when their prefixes overlap."""
+        self.print_test_header(
+            "Overlapping Base URL Rewrite Integration Test",
+            "Routes /v1/chat/completions once to a /v1/chat mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="overlapping-rewrite-upstream",
+            base_path="/v1/chat",
+        )
+        self.assertEqual(
+            {"/v1/chat/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Overlapping base URL was applied once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_direct_endpoint_path_is_resolved_by_ext_proc(self):
+        """Use the materialized endpoint path without a selected-route rewrite."""
+        self.print_test_header(
+            "Direct Endpoint Path Integration Test",
+            "Routes the resolved provider path through a direct endpoint",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="direct-endpoint-path-upstream",
+            base_path="/compatible-mode/v1",
+            direct_endpoint=True,
+        )
+        self.assertEqual(
+            {"/compatible-mode/v1/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Direct endpoint path was resolved once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_looper_custom_prefix_uses_selected_route_without_rewrite(self):
+        """Keep Looper provider paths off the default rewriting route."""
+        self.print_test_header(
+            "Looper Provider Path Integration Test",
+            "Routes every Looper hop once to a /v1/provider mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="looper-provider-path-upstream",
+            base_path="/v1/provider",
+            model="vllm-sr/auto",
+            looper=True,
+        )
+        self.assertEqual(
+            {"/v1/provider/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Looper provider paths were resolved once")
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_skip_processing_keeps_direct_endpoint_prefix_rewrite(self):
+        """Keep the default-route prefix when semantic processing is skipped."""
+        self.print_test_header(
+            "Skip-Processing Direct Endpoint Integration Test",
+            "Preserves the default route prefix without semantic routing",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="skip-direct-endpoint-path-upstream",
+            base_path="/compatible-mode/v1",
+            request_path="/v1/chat/completions?api-version=test",
+            direct_endpoint=True,
+            skip_processing=True,
+            selected_model_header=True,
+        )
+        self.assertEqual(
+            {"/compatible-mode/v1/chat/completions?api-version=test"},
+            upstream_paths,
+        )
+
+        self.print_test_result(
+            True, "Skip processing preserved the default route prefix"
+        )
 
     def _check_health_endpoint(self):
         """Check health endpoint (informational, doesn't fail test)."""
@@ -536,39 +658,43 @@ class TestServeIntegration(ServeSessionMixin, CLITestBase):
             "Verifies 'always' policy attempts to pull from registry",
         )
 
-        try:
-            # Step 1: Create a lean active config
-            self.write_minimal_canonical_config()
+        self.write_minimal_canonical_config()
+        interceptor_env, pull_log = self._pull_interceptor_env()
+        cmd = [
+            "serve",
+            "--router-image",
+            PULL_POLICY_PROBE_IMAGE,
+            "--envoy-image",
+            PULL_POLICY_PROBE_IMAGE,
+            "--dashboard-image",
+            PULL_POLICY_PROBE_IMAGE,
+            "--image-pull-policy",
+            "always",
+        ]
+        return_code, stdout, stderr = self.run_cli(
+            cmd,
+            timeout=20,
+            env=interceptor_env,
+        )
 
-            # Step 2: Run serve briefly with always policy
-            # We use run_cli with a short timeout - if it accepts the flag, test passes
-            cmd = ["serve", "--image-pull-policy", "always"]
-            print(f"\nRunning: vllm-sr {' '.join(cmd)}")
-
-            # Use run_cli which handles timeouts gracefully
-            _return_code, stdout, stderr = self.run_cli(cmd, timeout=20)
-            output = (stdout + stderr).lower()
-
-            # Check for pull-related messages in output
-            pull_indicators = ["pull", "pulling", "downloading", "download"]
-            pull_detected = any(ind in output for ind in pull_indicators)
-
-            if pull_detected:
-                print("  ✓ Pull attempt detected in output")
-                self.print_test_result(True, "always policy attempts pull")
-            elif self.container_status() == "running":
-                # Container running means policy worked (image was up-to-date)
-                print("  ✓ Container running (image was up-to-date)")
-                self.print_test_result(True, "always policy works")
-            else:
-                # Policy was accepted by CLI (didn't error on the flag)
-                # Even timeout means it started processing
-                print("  ✓ always policy was accepted by CLI")
-                self.print_test_result(True, "always policy accepted")
-
-        finally:
-            # Clean up any running container
-            self.run_cli(["stop"], timeout=10)
+        self.assertNotEqual(
+            return_code,
+            0,
+            "the pull interceptor must stop serve immediately after the probe",
+        )
+        self.assertTrue(pull_log.exists(), "always policy did not invoke image pull")
+        pulled_images = pull_log.read_text(encoding="utf-8").splitlines()
+        self.assertGreaterEqual(len(pulled_images), 1)
+        self.assertEqual(
+            set(pulled_images),
+            {PULL_POLICY_PROBE_IMAGE},
+            "the pull probe must not touch suite runtime image tags",
+        )
+        self.assertIn(
+            f"pulling container image: {PULL_POLICY_PROBE_IMAGE}",
+            (stdout + stderr).lower(),
+        )
+        self.print_test_result(True, "always policy attempts an isolated pull")
 
     def tearDown(self):
         """Clean up after integration tests."""

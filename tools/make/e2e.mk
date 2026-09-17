@@ -16,6 +16,12 @@ E2E_TESTS ?=
 E2E_SETUP_ONLY ?= false
 E2E_SKIP_SETUP ?= false
 E2E_USE_WORKSPACE_MODELS ?= false
+E2E_UNIT_REPORT_DIR ?= $(CURDIR)/.agent-harness/e2e-unit
+
+.PHONY: test-e2e-unit
+test-e2e-unit: $(HARNESS_VENV_DEPS) ## Test E2E framework helpers and profiles without starting a cluster
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/ci/run_e2e_unit.py --output "$(E2E_UNIT_REPORT_DIR)"
 
 # Build the E2E test binary
 build-e2e: ## Build the E2E test binary
@@ -24,6 +30,10 @@ build-e2e: ## Build the E2E test binary
 	@cd e2e && go build -o ../bin/e2e ./cmd/e2e
 
 # Run E2E tests
+test-e2e-profile-multimodal: ## Unit-test the multimodal-routing E2E profile package (CRD mirrors the pack, chart defaults kept)
+	@$(LOG_TARGET)
+	@cd e2e && go test ./profiles/multimodal-routing/ -count=1
+
 e2e-test: ## Run E2E tests (PROFILE=envoy-ai-gateway by default)
 e2e-test: build-e2e
 	@$(LOG_TARGET)

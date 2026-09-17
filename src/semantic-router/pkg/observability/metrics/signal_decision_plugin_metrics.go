@@ -62,6 +62,15 @@ var (
 		[]string{"decision_name"},
 	)
 
+	// DecisionUnknownTotal tracks decisions resolved by an on_unknown policy
+	DecisionUnknownTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_decision_unknown_total",
+			Help: "Total number of decisions resolved by an on_unknown policy, by decision name and policy",
+		},
+		[]string{"decision", "policy"},
+	)
+
 	// DecisionConfidence tracks the distribution of decision confidence scores
 	DecisionConfidence = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -137,6 +146,17 @@ func RecordDecisionMatch(decisionName string, confidence float64) {
 	}
 	DecisionMatchTotal.WithLabelValues(decisionName).Inc()
 	DecisionConfidence.WithLabelValues(decisionName).Observe(confidence)
+}
+
+// RecordDecisionUnknown records a decision resolved by its on_unknown policy
+func RecordDecisionUnknown(decisionName, policy string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	if policy == "" {
+		policy = consts.UnknownLabel
+	}
+	DecisionUnknownTotal.WithLabelValues(decisionName, policy).Inc()
 }
 
 // RecordPluginExecution records a plugin execution event

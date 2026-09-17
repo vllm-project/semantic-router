@@ -1,23 +1,32 @@
-name: Test And Build
+name: Core Tests
 
 on:
   workflow_call:
+    inputs:
+      native-artifact:
+        type: string
+        default: ""
+      verification:
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 env:
   HELM_VERSION: v3.14.0
+  CI: "true"
 
 jobs:
   test-and-build:
-    name: Core test and build
-    runs-on: ubuntu-latest
+    name: Core Tests
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
 
       - name: Set up Rust
+        if: inputs.native-artifact == ''
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.90
@@ -43,14 +52,8 @@ jobs:
       - name: Validate Helm chart
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 
-      - name: Set up golangci-lint
-        uses: golangci/golangci-lint-action@v7
-        with:
-          version: v2.5.0
-          install-mode: binary
-          args: --help
-
       - name: Cache Rust dependencies
+        if: inputs.native-artifact == ''
         uses: actions/cache@v4
         with:
           path: |
@@ -72,64 +75,90 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Setup model storage on /mnt
-        run: |
-          # Use /mnt for model storage (has ~75GB vs ~14GB on root)
-          # This helps prevent "no space left on device" errors
-          echo "Disk space before setup:"
-          df -h / && df -h /mnt
-
-          # Create /mnt/models directory if it doesn't exist
-          sudo mkdir -p /mnt/models
-          sudo chown -R $USER:$USER /mnt/models
-
-          # If models directory already exists in workspace, move it to /mnt
-          if [ -d "models" ] && [ ! -L "models" ]; then
-            echo "Moving existing models directory to /mnt/models..."
-            # Move contents if /mnt/models is not empty, otherwise just move the directory
-            if [ "$(ls -A /mnt/models 2>/dev/null)" ]; then
-              echo "Warning: /mnt/models already has content, merging..."
-              sudo cp -r models/* /mnt/models/ || true
-              rm -rf models
-            else
-              sudo mv models /mnt/models
-            fi
-          fi
-
-          # Create symlink from models/ to /mnt/models/ so existing code continues to work
-          if [ ! -e "models" ]; then
-            ln -s /mnt/models models
-            echo "Created symlink: models -> /mnt/models"
-          elif [ -L "models" ]; then
-            echo "Symlink already exists: models -> $(readlink models)"
-          else
-            echo "Warning: models exists but is not a symlink"
-          fi
-
-          echo "Disk space after setup:"
-          df -h / && df -h /mnt
-          echo "Models directory setup complete. Models will be stored in /mnt/models"
-
-      - name: Cache Models
-        uses: actions/cache@v4
+      - name: Load shared native libraries
+        if: inputs.native-artifact != ''
+        uses: ./.github/actions/load-native-artifact
         with:
-          path: |
-            models/
-          key: ${{ runner.os }}-models-v2-${{ hashFiles('tools/make/models.mk') }}
-          restore-keys: |
-            ${{ runner.os }}-models-v2-
-        continue-on-error: true # Don't fail the job if caching fails
+          artifact: ${{ inputs.native-artifact }}
 
-      - name: Check go mod tidy
-        run: make check-go-mod-tidy
+      - name: Build and test native libraries without a shared producer
+        if: inputs.native-artifact == ''
+        run: make rust-ci test-rust-ci
 
-      - name: Build Rust library (CPU-only, no CUDA)
-        run: make rust-ci
+      - name: Check Go modules and vet source
+        run: make check-go-mod-tidy vet
 
-      # Reuse the CPU bindings above and gate protection before external services
-      # or model downloads. The report includes per-turn failures on regression.
-      - name: Gate agent routing protection benchmark
-        run: make bench-agent-routing-protection
+      - name: Set up Python for selector parity
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the CPU ORT runtime for tiny-tensor contracts
+        run: |
+          python3 -m pip install onnxruntime==1.22.0 PyYAML==6.0.3
+          python3 - <<'PYCODE'
+          import importlib.util
+          import os
+          from pathlib import Path
+          root = Path(importlib.util.find_spec("onnxruntime").origin).parent / "capi"
+          paths = list(root.glob("libonnxruntime.so.*"))
+          assert len(paths) == 1, paths
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write(f"ORT_DYLIB_PATH={paths[0]}\n")
+          PYCODE
+
+      - name: Run owned binding and alternate provider-default contracts
+        run: make test-core-owned
+
+      - name: Verify trained selector parity with the native runtime
+        run: |
+          python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt
+          mkdir -p .agent-harness/core
+          PYTEST_ADDOPTS="--junitxml=$GITHUB_WORKSPACE/.agent-harness/core/parity.xml" make test-model-selection-parity
+
+      - name: Run discovered core contracts once
+        run: make test-core-unit
+        env:
+          CORE_NATIVE_FIXTURES: "1"
+          SR_TEST_MODE: "true"
+          ROUTER_PROTECTION_REPORT: ${{ github.workspace }}/.agent-harness/agent-routing-protection/report.json
+
+      - name: Local dev smoke test (no Authorino)
+        run: |
+          python3 -m pip install -U "huggingface_hub[cli]" hf_transfer
+          tools/test/smoke/test-local-up-router.sh
+        timeout-minutes: 20
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
+
+      - name: Record actual core and parity evidence
+        if: inputs.verification != ''
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+        run: |
+          python3 tools/ci/workflow_evidence.py --verification "$VERIFICATION" \
+            --evidence .agent-harness/core/unit/evidence.json \
+            --evidence .agent-harness/core/owned/evidence.json \
+            --junit .agent-harness/core/parity.xml \
+            --case tools/test/smoke/test-local-up-router.sh \
+            --output .agent-harness/core/result.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.verification != ''
+        with:
+          name: ci-result-core
+          path: .agent-harness/core/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-framework-evidence
+          path: .agent-harness/core/
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Upload agent routing protection report
         if: always()
@@ -139,136 +168,6 @@ jobs:
           path: .agent-harness/agent-routing-protection/report.json
           include-hidden-files: true
           if-no-files-found: warn
-
-      # Regenerates the apiserver OpenAPI JSON and reference Markdown from the
-      # route catalog and fails if either committed artifact differs, so API
-      # docs cannot be hand-edited or left stale when a route changes.
-      # Runs before the model/service setup so drift fails fast.
-      - name: Check generated API docs are up to date
-        run: make api-docs-check
-        env:
-          CI: true
-          CGO_ENABLED: 1
-          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
-
-      - name: Install HuggingFace CLI
-        run: |
-          pip install -U "huggingface_hub[cli]" hf_transfer
-
-
-      - name: Start Milvus service
-        run: |
-          echo "Starting Milvus vector database..."
-
-          # Pre-pull with retries to handle Docker Hub rate limits
-          MILVUS_IMAGE="milvusdb/milvus:v2.3.3"
-          for attempt in 1 2 3 4 5; do
-            if docker pull "${MILVUS_IMAGE}"; then
-              echo "Successfully pulled ${MILVUS_IMAGE}"
-              break
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              echo "ERROR: Failed to pull ${MILVUS_IMAGE} after 5 attempts"
-              exit 1
-            fi
-            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
-            sleep $((attempt * 15))
-          done
-
-          docker run -d \
-            --name milvus-semantic-cache \
-            --security-opt seccomp:unconfined \
-            -e ETCD_USE_EMBED=true \
-            -e ETCD_DATA_DIR=/var/lib/milvus/etcd \
-            -e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
-            -e COMMON_STORAGETYPE=local \
-            -e CLUSTER_ENABLED=false \
-            -p 19530:19530 \
-            -p 9091:9091 \
-            "${MILVUS_IMAGE}" \
-            milvus run standalone
-
-          echo "Waiting for Milvus to be ready..."
-          sleep 20
-
-          # Verify Milvus is responsive
-          timeout 30 bash -c 'until docker logs milvus-semantic-cache 2>&1 | grep -q "Proxy successfully started"; do sleep 2; done' || true
-
-          echo "Milvus is ready at localhost:19530"
-          docker ps --filter "name=milvus-semantic-cache"
-
-      - name: Start Qdrant service
-        run: |
-          echo "Starting Qdrant..."
-          make start-qdrant
-
-      - name: Start Redis service
-        run: |
-          echo "Starting Redis Stack..."
-          make start-redis
-
-      - name: Start Valkey service
-        run: |
-          echo "Starting Valkey bundle..."
-          make start-valkey
-
-      - name: Run semantic router tests
-        run: make test
-        env:
-          CI: true
-          CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
-          CGO_ENABLED: 1
-          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
-          # make test runs download-models first, which fetches the multimodal
-          # embedding model (config.yaml model_catalog references
-          # models/mom-embedding-multimodal -> llm-semantic-router/multi-modal-embed-small).
-          # Exporting the path here un-gates the model-gated multimodal tests in
-          # test-semantic-router and test-binding-minimal (issue #2319).
-          MULTIMODAL_MODEL_PATH: ${{ github.workspace }}/models/mom-embedding-multimodal
-          MILVUS_URI: localhost:19530
-          SKIP_MILVUS_TESTS: false
-          SKIP_QDRANT_TESTS: false
-          SKIP_REDIS_TESTS: false
-          SKIP_VALKEY_TESTS: false
-          VALKEY_HOST: localhost
-          VALKEY_PORT: 6380
-          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
-          # For PRs from forks, this will be empty and gated models will gracefully skip
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
-
-      - name: Local dev smoke test (no Authorino)
-        run: tools/smoke/test-local-up-router.sh
-        timeout-minutes: 20
-        env:
-          CI: true
-          CGO_ENABLED: 1
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
-
-      - name: Clean Redis service
-        if: always()
-        run: |
-          echo "Stopping Redis container and cleaning data..."
-          make clean-redis
-
-      - name: Clean Valkey service
-        if: always()
-        run: |
-          echo "Stopping Valkey container and cleaning data..."
-          make clean-valkey
-
-      - name: Stop Qdrant service
-        if: always()
-        run: make stop-qdrant
-
-      - name: Stop Milvus service
-        if: always()
-        run: |
-          echo "Stopping Milvus container..."
-          docker stop milvus-semantic-cache || true
-          docker rm milvus-semantic-cache || true
-          echo "Milvus container cleaned up"
 
       - name: Upload test artifacts on failure
         if: failure()
@@ -286,4 +185,4 @@ jobs:
         run: |
           echo "::error::Test and build failed. Check the workflow run for details."
           echo "To reproduce this job locally: make test-and-build-local"
-          echo "To run the baseline PR parity gate locally: make agent-pr-gate"
+          echo "To run the baseline PR checks locally: make ci-full"

@@ -15,7 +15,7 @@ fixtures:
       media_type: image/png
       sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
       data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
-router_eval_endpoint: /api/v1/eval
+router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 4
@@ -77,6 +77,29 @@ decisions:
       - id: factual_sources_followup
         query: "Your previous answer was wrong. Verify this with sources: who wrote The Iliad and roughly when was it composed?"
         tags: [feedback, verified, fact_check]
+      - id: repeated_moon_landing_sources
+        messages:
+          - role: user
+            content: 'Verify this with sources: when did Apollo 11 land on the Moon?'
+          - role: assistant
+            content: It happened in the late 1960s.
+          - role: user
+            content: 'Verify this with sources: when did Apollo 11 land on the Moon?'
+          - role: assistant
+            content: The mission landed during the summer.
+          - role: user
+            content: 'Verify this with sources: when did Apollo 11 land on the Moon?'
+        expected_signals:
+          reask:
+            - persistently_dissatisfied
+          keywords:
+            - verification_markers
+        tags:
+          - language:en
+          - persistent
+          - verified
+          - messages
+          - positive:verification
 
   - id: feedback_code_recovery
     expected_decision: feedback_code_recovery
@@ -154,6 +177,30 @@ decisions:
         expected_signals:
           reask: [persistently_dissatisfied]
         tags: [feedback, code, persistent, messages, javascript]
+      - id: repeated_code_with_sources
+        messages:
+          - role: user
+            content: Fix this Python function. It raises ValueError when parsing a date. Verify this with sources.
+          - role: assistant
+            content: Try converting the input to a string.
+          - role: user
+            content: Fix this Python function. It raises ValueError when parsing a date. Verify this with sources.
+          - role: assistant
+            content: Try using a different date format.
+          - role: user
+            content: Fix this Python function. It raises ValueError when parsing a date. Verify this with sources.
+        expected_signals:
+          reask:
+            - persistently_dissatisfied
+          keywords:
+            - code_error_markers
+            - verification_markers
+        tags:
+          - language:en
+          - persistent
+          - code
+          - messages
+          - collision
 
   - id: feedback_general_recovery
     expected_decision: feedback_general_recovery
@@ -216,6 +263,48 @@ decisions:
         expected_signals:
           reask: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages, zh, math]
+      - id: repeated_integer_sum_proof
+        messages:
+          - role: user
+            content: Prove that the sum of the first n positive integers is n(n+1)/2.
+          - role: assistant
+            content: The total is half of n squared plus n.
+          - role: user
+            content: Prove that the sum of the first n positive integers is n(n+1)/2.
+          - role: assistant
+            content: You can pair terms from opposite ends.
+          - role: user
+            content: Prove that the sum of the first n positive integers is n(n+1)/2.
+        expected_signals:
+          reask:
+            - persistently_dissatisfied
+        tags:
+          - language:en
+          - persistent
+          - proof
+          - messages
+          - negative:verification
+      - id: repeated_graduation_wishes
+        messages:
+          - role: user
+            content: 为朋友写四句毕业祝福。
+          - role: assistant
+            content: 祝你毕业快乐，前程似锦。
+          - role: user
+            content: 为朋友写四句毕业祝福。
+          - role: assistant
+            content: 愿你未来顺利，实现梦想。
+          - role: user
+            content: 为朋友写四句毕业祝福。
+        expected_signals:
+          reask:
+            - persistently_dissatisfied
+        tags:
+          - language:zh
+          - persistent
+          - creative
+          - messages
+          - negative:verification
 
   - id: feedback_need_clarification
     expected_decision: feedback_need_clarification
@@ -238,6 +327,12 @@ decisions:
       - id: walkthrough_example
         query: "Walk me through it more clearly with one simple example."
         tags: [feedback, clarification]
+      - id: rainbow_clarification
+        query: Explain your previous description of rainbows more clearly, with one example.
+        tags:
+          - language:en
+          - clarification
+          - negative:verification
 
   - id: feedback_default
     expected_decision: feedback_default
@@ -248,3 +343,10 @@ decisions:
       - id: ordinary_first_turn
         query: "Summarize the purpose of a project README in one paragraph."
         tags: [fallback, negative]
+      - id: ordinary_rainbow_question
+        query: What causes rainbows?
+        tags:
+          - language:en
+          - fallback
+          - negative
+          - factual

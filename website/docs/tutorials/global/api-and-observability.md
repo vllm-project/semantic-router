@@ -36,15 +36,15 @@ The management API validates and normalizes a candidate config without writing
 it:
 
 ```http
-POST /config/router/validate
+POST /api/v1/config/validate
 Content-Type: application/json
 
 {"yaml":"version: v0.3\n..."}
 ```
 
 Successful responses include `valid: true` and the normalized canonical YAML.
-Validation uses the same parser and semantic checks as `PATCH /config/router`
-and `PUT /config/router`, but preserves `${ENV_VAR}` references verbatim rather
+Validation uses the same parser and semantic checks as `PATCH /api/v1/config`
+and `PUT /api/v1/config`, but preserves `${ENV_VAR}` references verbatim rather
 than reading process secrets. The endpoint requires `config.read`; plaintext
 secret viewing is not implied.
 
@@ -54,11 +54,36 @@ secret viewing is not implied.
 global:
   services:
     api:
+      routing_preview:
+        request_timeout_seconds: 120
+        max_concurrency: 16
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
 ```
+
+`max_batch_size` bounds `texts` per `/api/v1/diagnostics/classify/batch` request. Larger
+batches return `400 INVALID_INPUT`.
+
+`routing_preview` applies to `POST /api/v1/routing/preview`. Its inference
+deadline starts after the request body is decoded and defaults to 120 seconds.
+Set `request_timeout_seconds` between 1 and 3600 using measured inference times
+for the intended input lengths and deployment hardware. This setting can be
+updated through config hot reload;
+other HTTP routes keep their existing timeouts.
+
+A deadline returns `504 REQUEST_TIMEOUT` and cancels queued or cancellable
+inference. Native inference already running may finish later. Its model resources
+and admission slot remain held until it finishes, including during shutdown.
+`max_concurrency` is a positive worker limit, defaults to 16, and has no wait
+queue: when all slots are occupied, new previews return `429 OVERLOADED`.
+Changing this limit requires a deployment restart; hot reload rejects the change.
+
+The response writer has five additional seconds to send the result or timeout
+response. Dashboard Topology uses the configured Preview budget plus this
+allowance and propagates client cancellation. Recipe probes retain their own
+`evaluation.request_timeout_seconds` caller budget in `probes.yaml`; configure
+it for the intended run, and allow at least five extra seconds in external HTTP
+clients or proxies when they need to receive the Router's timeout response.
 
 ### Response API
 
@@ -113,10 +138,20 @@ Common Prometheus metric families:
 | Tokens and cost | `llm_model_tokens_total`, `llm_model_prompt_tokens_total`, `llm_model_completion_tokens_total`, `llm_model_cost_total` |
 | Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
+| Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
+| Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
+| Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
+| Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
+
+Looper metric labels are restricted to bounded algorithm, stage, status,
+reason, token-type, and currency values. Request IDs, trace IDs, ordinals,
+decision names, model names, scores, and thresholds are available through
+traces or detailed Router Replay rather than Prometheus labels. Detailed
+attempt metrics currently cover the Confidence algorithm.
 
 ### Profiling
 

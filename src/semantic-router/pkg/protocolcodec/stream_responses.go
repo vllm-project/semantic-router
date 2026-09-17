@@ -273,7 +273,7 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire responsesEventWire
-	vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
+	_, vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}

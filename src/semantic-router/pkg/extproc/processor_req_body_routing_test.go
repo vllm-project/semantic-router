@@ -9,12 +9,95 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
+
+func TestProviderCredentialIsInjectedOnceWithOverwriteSemantics(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: private
+      provider_model_id: private
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          endpoint: https://private.example/v1
+          auth_header: x-api-key
+          auth_prefix: ""
+          api_key: static-secret
+routing: {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{
+		Config: cfg,
+		CredentialResolver: authz.NewCredentialResolver(
+			authz.NewStaticConfigProvider(cfg),
+		),
+	}
+	profile, err := cfg.GetProviderProfileForEndpoint("private_primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := &routeHeaderState{profile: profile}
+
+	if response := router.appendProviderCredential(
+		state, "private", "private_primary", &RequestContext{Headers: map[string]string{}},
+	); response != nil {
+		t.Fatalf("appendProviderCredential() returned error response: %#v", response)
+	}
+	if len(state.setHeaders) != 1 {
+		t.Fatalf("credential header count = %d, want 1", len(state.setHeaders))
+	}
+	header := state.setHeaders[0]
+	if header.GetHeader().GetKey() != "x-api-key" || string(header.GetHeader().GetRawValue()) != "static-secret" {
+		t.Fatalf("credential header = %#v, want raw x-api-key", header)
+	}
+	if header.GetAppendAction() != core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD {
+		t.Fatalf("credential append action = %v, want overwrite", header.GetAppendAction())
+	}
+}
+
+func TestProviderWithNoAuthDoesNotRequireCredentialInFailClosedMode(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: local
+      provider_model_id: llama3.2
+      api_format: openai
+      backend_refs:
+        - provider: ollama
+          endpoint: http://127.0.0.1:11434/v1
+routing: {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.GetProviderProfileForEndpoint("local_primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := authz.NewCredentialResolver(authz.NewStaticConfigProvider(cfg))
+	router := &OpenAIRouter{Config: cfg, CredentialResolver: resolver}
+	state := &routeHeaderState{profile: profile}
+
+	if response := router.appendProviderCredential(
+		state, "local", "local_primary", &RequestContext{Headers: map[string]string{}},
+	); response != nil {
+		t.Fatalf("auth.strategy=none returned error response: %#v", response)
+	}
+	if len(state.setHeaders) != 0 {
+		t.Fatalf("auth.strategy=none injected headers: %#v", state.setHeaders)
+	}
+}
 
 func TestProviderDispatchEncodesEveryClientBackendProtocolPair(t *testing.T) {
 	formats := []llmprotocol.WireFormat{
@@ -322,27 +405,6 @@ func protocolRequestFixture(format llmprotocol.WireFormat) []byte {
 	}
 }
 
-func TestProviderProtocolPath(t *testing.T) {
-	tests := []struct {
-		name         string
-		baseURL      string
-		protocolPath string
-		want         string
-	}{
-		{name: "root", baseURL: "https://api.example.com", protocolPath: "/v1/messages", want: "/v1/messages"},
-		{name: "version root", baseURL: "https://api.example.com/v1", protocolPath: "/v1/responses", want: "/v1/responses"},
-		{name: "nested version root", baseURL: "https://api.example.com/openai/v1", protocolPath: "/v1/responses", want: "/openai/v1/responses"},
-		{name: "custom base", baseURL: "https://api.example.com/proxy", protocolPath: "/v1/messages", want: "/proxy/v1/messages"},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := providerProtocolPath(test.baseURL, test.protocolPath); got != test.want {
-				t.Fatalf("providerProtocolPath(%q, %q) = %q, want %q", test.baseURL, test.protocolPath, got, test.want)
-			}
-		})
-	}
-}
-
 func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -361,6 +423,12 @@ func TestSetProviderRequestPathCoversProtocolAndBaseURLMatrix(t *testing.T) {
 			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/compatible/v1"},
 			format:  llmprotocol.OpenAIChatV1,
 			want:    "/compatible/v1/chat/completions",
+		},
+		{
+			name:    "Chat OpenAI custom API root",
+			profile: config.ProviderProfile{Type: "openai", BaseURL: "https://api.example.com/v1beta/openai"},
+			format:  llmprotocol.OpenAIChatV1,
+			want:    "/v1beta/openai/chat/completions",
 		},
 		{
 			name:    "Chat explicit override",
@@ -500,6 +568,23 @@ func TestHandleAutoModelRoutingSameModelEncodesCurrentSemanticRequest(t *testing
 	}
 }
 
+func TestHandleAutoModelRoutingSameModelReevaluatesOntoSelectedRoute(t *testing.T) {
+	router := routingTestRouter("auto")
+	router.Config.ClearRouteCache = true
+	request := testNeutralRequest("auto", "route this request")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+
+	response, err := router.handleEntrypointModelRouting(
+		request, "auto", "", entropy.ReasoningDecision{}, "auto", ctx,
+	)
+	if err != nil {
+		t.Fatalf("handleEntrypointModelRouting returned error: %v", err)
+	}
+	if !response.GetRequestBody().GetResponse().GetClearRouteCache() {
+		t.Fatal("same-name entrypoint dispatch did not clear the fallback route cache")
+	}
+}
+
 func TestSpecifiedModelPreservesAnthropicWireAtExtProcBoundary(t *testing.T) {
 	router := routingTestRouter("test-model")
 	request := testNeutralRequest("test-model", "Explain the incident.")
@@ -565,5 +650,42 @@ func routingTestContext(format llmprotocol.WireFormat, request *llmprotocol.Requ
 		SemanticRequest: request,
 		RequestID:       "routing-test-request",
 		TraceContext:    context.Background(),
+	}
+}
+
+func TestProviderDispatchHonorsRouteCachePolicyAcrossRequestPaths(t *testing.T) {
+	for _, flow := range []string{"looper", "same_model", "specified_model"} {
+		for _, clear := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/clear=%t", flow, clear), func(t *testing.T) {
+				router := routingTestRouter("worker")
+				router.Config.ClearRouteCache = clear
+				request := testNeutralRequest("worker", "Summarize this note.")
+				ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+				var response *ext_proc.ProcessingResponse
+				var err error
+				switch flow {
+				case "looper":
+					response, err = router.handleLooperInternalRequest("worker", ctx)
+				case "same_model":
+					response, err = router.handleEntrypointModelRouting(request, "worker", "", entropy.ReasoningDecision{}, "worker", ctx)
+				default:
+					response, err = router.handleSpecifiedModelRouting(request, "worker", "", ctx)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				common := response.GetRequestBody().GetResponse()
+				if common == nil {
+					t.Fatalf("expected provider dispatch, got %v", response)
+				}
+				values := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+				if values[headers.SelectedModel] != "worker" || values[":path"] != "/v1/chat/completions" {
+					t.Fatalf("provider routing headers = %v", values)
+				}
+				if common.GetClearRouteCache() != clear {
+					t.Fatalf("provider headers changed but clear_route_cache = %t, want %t", common.GetClearRouteCache(), clear)
+				}
+			})
+		}
 	}
 }

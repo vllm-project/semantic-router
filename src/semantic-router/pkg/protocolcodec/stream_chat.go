@@ -62,6 +62,7 @@ type chatChunkWire struct {
 	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
+	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -143,7 +144,7 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{event}, nil, err
 	}
 	var chunk chatChunkWire
-	vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
+	_, vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -182,10 +183,22 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"stream.kv_transfer", "provider KV-transfer metadata is not model output",
 		)
 	}
+	if len(chunk.XGroq) > 0 {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.x_groq", "provider request metadata is not model output",
+		)
+	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
 			"stream.moderation", "moderation metadata has no protocol-neutral representation",
+		)
+	}
+	if chunk.Usage != nil {
+		appendProviderFieldOmissions(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			chatUsageFieldOmissions(*chunk.Usage, "stream.usage."), chatUsageOmissionReason,
 		)
 	}
 	return diagnostics
@@ -263,7 +276,10 @@ func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmp
 		events = append(events, choiceEvents...)
 	}
 	if chunk.Usage != nil {
-		usage := decodeChatUsage(*chunk.Usage)
+		usage, usageErr := decodeChatUsage(*chunk.Usage)
+		if usageErr != nil {
+			return nil, nil, usageErr
+		}
 		event, nextErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventUsageUpdated, Usage: &usage})
 		if nextErr != nil {
 			return nil, nil, nextErr

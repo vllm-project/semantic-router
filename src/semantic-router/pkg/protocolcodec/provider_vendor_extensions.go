@@ -147,3 +147,16 @@ func appendVendorExtensionDiagnostics(
 		appendProviderFieldOmission(diagnostics, policy, source, field, vendorExtensionReason)
 	}
 }
+
+// DiagnosticsDroppedVendorExtensions reports whether a decode dropped vendor
+// response decorations. A body that produced these diagnostics is not canonical
+// on the wire, so callers that persist a response must not persist those bytes:
+// a strict reader would reject them later.
+func DiagnosticsDroppedVendorExtensions(diagnostics llmprotocol.Diagnostics) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Action == llmprotocol.DiagnosticDropped && diagnostic.Reason == vendorExtensionReason {
+			return true
+		}
+	}
+	return false
+}

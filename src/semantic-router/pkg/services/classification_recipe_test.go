@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,18 +37,27 @@ func TestEvalDecisionCandidatesSelectsEntrypointRecipe(t *testing.T) {
 	_, _, _, err = service.evalRoutingScope("router/missing")
 	require.ErrorIs(t, err, ErrUnknownRoutingModel)
 
-	response, err := service.ClassifyIntentForEval(IntentRequest{
+	response, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Text:  "hello",
 		Model: "router/speed-flash",
 	})
-	require.NoError(t, err)
-	assert.Equal(t, speedRecipe, response.Recipe)
+	require.ErrorIs(t, err, ErrClassifierUnavailable)
+	require.Nil(t, response)
 
-	_, err = service.ClassifyIntentForEval(IntentRequest{
+	_, err = service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Text:  "hello",
 		Model: "router/missing",
 	})
 	require.ErrorIs(t, err, ErrUnknownRoutingModel)
+}
+
+func TestEvalRejectsCanceledContextBeforeResolvingInput(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	service := NewPlaceholderClassificationService()
+	response, err := service.ClassifyIntentForEval(ctx, IntentRequest{Text: "hello"})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, response)
 }
 
 func TestRecipeClassificationServiceRejectsConcreteBackendModel(t *testing.T) {
@@ -63,7 +73,7 @@ func TestRecipeClassificationServiceRejectsConcreteBackendModel(t *testing.T) {
 	require.NoError(t, err)
 	service := NewRecipeClassificationService(classifiers, routerConfig)
 
-	_, err = service.ClassifyIntent(IntentRequest{Text: "hello", Model: "backend-model"})
+	_, err = service.ClassifyIntent(context.Background(), IntentRequest{Text: "hello", Model: "backend-model"})
 	require.ErrorIs(t, err, ErrUnknownRoutingModel)
 
 	classifier, err := service.classifierForRequestModel("")
@@ -116,7 +126,7 @@ func TestRecipeClassificationServiceRefreshesNamedRecipePolicy(t *testing.T) {
 	service := NewRecipeClassificationService(classifiers, initial)
 
 	require.NoError(t, service.TryRefreshRuntimeConfig(recipeConfig("beta")))
-	response, err := service.ClassifyIntentForEval(IntentRequest{
+	response, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Text:     "hello",
 		Model:    "router/private",
 		Metadata: map[string]string{"tenant": "beta"},

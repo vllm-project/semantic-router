@@ -1,3 +1,5 @@
+PREBUILT_RUNTIME_IMAGES ?= 0
+
 # ======== docker.mk ============
 # = Docker build and management =
 # ======== docker.mk ============
@@ -53,7 +55,11 @@ docker-build-llm-katan: ## Build llm-katan Docker image
 docker-build-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Building llm-katan Docker image..."
+ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
+	@$(CONTAINER_RUNTIME) image inspect $(LLM_KATAN_IMAGE) >/dev/null
+else
 	@$(CONTAINER_RUNTIME) build -f e2e/testing/llm-katan/Dockerfile -t $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) e2e/testing/llm-katan/
+endif
 
 # Build dashboard Docker image
 docker-build-dashboard: ## Build dashboard Docker image
@@ -337,7 +343,8 @@ ifneq ($(shell git status --porcelain -- dashboard/backend dashboard/frontend sr
 VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
-VLLM_SR_DASHBOARD_BUILD_ARGS := $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
+# Hash the source only when a build consumes these arguments.
+VLLM_SR_DASHBOARD_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:
@@ -365,7 +372,7 @@ vllm-sr-dev:
 	@echo "1. Cleaning up old containers..."
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
 	@echo ""
-	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+	@set -e; if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
 		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
 		echo "   Only use this when the local router image already includes your latest code changes."; \
 		echo ""; \
@@ -383,7 +390,7 @@ vllm-sr-dev:
 		echo "Router image built: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
 	fi
-	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+	@set -e; if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
 		echo "3. Ensuring official Envoy image is available..."; \
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
@@ -430,7 +437,11 @@ vllm-sr-build:
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_IMAGE) >/dev/null
+else
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+endif
 	@echo "Image built: $(VLLM_SR_IMAGE)"
 
 vllm-sr-router-build: ## Build vLLM Semantic Router router Docker image
@@ -440,7 +451,11 @@ vllm-sr-router-build:
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ROUTER_IMAGE) >/dev/null
+else
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_ROUTER_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+endif
 	@echo "Image built: $(VLLM_SR_ROUTER_IMAGE)"
 
 vllm-sr-envoy-build: ## Build vLLM Semantic Router Envoy Docker image
@@ -457,7 +472,11 @@ vllm-sr-dashboard-build:
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DASHBOARD_DOCKERFILE)"
+ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_DASHBOARD_IMAGE) >/dev/null
+else
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_DASHBOARD_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .
+endif
 	@echo "Image built: $(VLLM_SR_DASHBOARD_IMAGE)"
 
 vllm-sr-start: ## Start vLLM Semantic Router service
@@ -476,11 +495,11 @@ vllm-sr-start: vllm-sr-dev
 # Tests are located in e2e/testing/vllm-sr-cli/
 
 vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
-vllm-sr-install-cli: agent-venv-install
+vllm-sr-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e src/vllm-sr
 
 vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
-vllm-sr-sim-install-cli: agent-venv-install
+vllm-sr-sim-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
 
 vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
@@ -504,11 +523,32 @@ vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_container_images.py \
+		src/vllm-sr/tests/test_container_log_spool.py \
+		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
+		src/vllm-sr/tests/test_embedding_api_config.py \
+		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
+		src/vllm-sr/tests/test_evaluation_live.py \
+		src/vllm-sr/tests/test_evaluation_worker_task_limit.py \
+		src/vllm-sr/tests/test_evaluation_worker_sandbox.py \
+		src/vllm-sr/tests/test_install_package_resolution.py \
+		src/vllm-sr/tests/test_install_runtime_behavior.py \
+		src/vllm-sr/tests/test_install_script_surface.py \
+		src/vllm-sr/tests/test_model_binding_contract.py \
+		src/vllm-sr/tests/test_recipe_builtin.py \
+		src/vllm-sr/tests/test_reasoning_controls.py \
+		src/vllm-sr/tests/test_route_command.py \
+		src/vllm-sr/tests/test_runtime_lifecycle.py \
+		src/vllm-sr/tests/test_runtime_observability.py \
+		src/vllm-sr/tests/test_setup_bootstrap.py \
+		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
+		src/vllm-sr/tests/test_split_runtime_stack.py
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local runtime images)
+vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_TEST_UPSTREAM_IMAGE=$(VLLM_SR_TEST_UPSTREAM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration
+	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_TEST_UPSTREAM_IMAGE=$(VLLM_SR_TEST_UPSTREAM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration-only
 
 memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
 memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-llm-katan

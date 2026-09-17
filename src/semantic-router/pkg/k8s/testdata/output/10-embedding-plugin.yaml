@@ -1,26 +1,18 @@
 version: v0.3
 providers:
   defaults:
-    default_model: deepseek-v3
-    reasoning_families:
-      deepseek:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: high
+    model: deepseek-v3
+    reasoning_effort: high
   models:
     - name: deepseek-v3
-      reasoning_family: deepseek
+      reasoning:
+        family: deepseek
       pricing:
         prompt_per_1m: 0.27
         completion_per_1m: 1.1
     - name: deepseek-r1
-      reasoning_family: deepseek
+      reasoning:
+        family: deepseek
       pricing:
         prompt_per_1m: 0.55
         completion_per_1m: 2.2
@@ -128,11 +120,13 @@ global:
     management_api: {}
     router_replay:
       enabled: false
+      ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       enabled: false
+      ttl_seconds: 0
     memory: {}
   integrations:
     tools:
@@ -164,6 +158,11 @@ global:
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
     modules:
+      safety:
+        safety:
+          use_cpu: false
+        hazard:
+          use_cpu: false
       prompt_compression:
         enabled: false
         max_tokens: 0
@@ -206,6 +205,7 @@ global:
           model_id: ""
           threshold: 0
           use_cpu: false
+          enable_nli_filtering: false
         explainer:
           model_id: ""
           threshold: 0

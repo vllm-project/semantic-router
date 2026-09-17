@@ -1,4 +1,4 @@
-//go:build !windows && cgo && (amd64 || arm64)
+//go:build !windows && cgo && (amd64 || arm64 || riscv64)
 
 // This suite exercises the native Candle backend's behavioral contract and only
 // runs under the CGO build. The non-CGO stub's fail-closed contract is verified
@@ -392,8 +392,6 @@ func TestFindMostSimilar(t *testing.T) {
 
 }
 
-// TestClassifiers tests classification functions - removed basic BERT tests, keeping only working ModernBERT tests
-
 // TestBERTClassifiers tests BERT-based classification functions (not ModernBERT)
 // These models use BERT/LoRA architecture, not ModernBERT, so we use the appropriate Candle BERT classifier functions
 func TestBERTClassifiers(t *testing.T) {
@@ -422,11 +420,6 @@ func TestBERTClassifiers(t *testing.T) {
 		}
 
 		t.Logf("BERT LoRA category classification: Class=%d, Confidence=%.4f", result.Class, result.Confidence)
-	})
-
-	t.Run("BERTPIIClassifier", func(t *testing.T) {
-		// Skip if PII model doesn't exist
-		t.Skip("Skipping PII classifier test - model path may not exist")
 	})
 
 	t.Run("BERTJailbreakClassifier", func(t *testing.T) {
@@ -602,337 +595,6 @@ func TestBertClassifier_ConcurrentClassificationSafety(t *testing.T) {
 	}
 
 	t.Logf("concurrent test OK: goroutines=%d iterations=%d", numGoroutines, iterationsPerGoroutine)
-}
-
-// TestModernBERTPIITokenClassification tests the PII token classification functionality
-// Note: This test is skipped because the ModernBERT PII token classifier model is not available
-func TestModernBERTPIITokenClassification(t *testing.T) {
-	t.Skip("Skipping ModernBERT PII token classifier tests - model not available in current setup")
-
-	// Test data with various PII entities
-	testCases := []struct {
-		name            string
-		text            string
-		expectedTypes   []string // Expected entity types (may be empty if model not available)
-		minEntities     int      // Minimum expected entities
-		maxEntities     int      // Maximum expected entities
-		shouldHaveSpans bool     // Whether entities should have valid spans
-	}{
-		{
-			name:            "EmailAndPhone",
-			text:            "My email is john.doe@example.com and my phone is 555-123-4567",
-			expectedTypes:   []string{"EMAIL", "PHONE"},
-			minEntities:     0, // Allow 0 if model not available
-			maxEntities:     3,
-			shouldHaveSpans: true,
-		},
-		{
-			name:            "PersonAndAddress",
-			text:            "My name is John Smith and I live at 123 Main Street, New York, NY 10001",
-			expectedTypes:   []string{"PERSON", "ADDRESS"},
-			minEntities:     0,
-			maxEntities:     4,
-			shouldHaveSpans: true,
-		},
-		{
-			name:            "SSNAndCreditCard",
-			text:            "My SSN is 123-45-6789 and credit card number is 4532-1234-5678-9012",
-			expectedTypes:   []string{"SSN", "CREDIT_CARD"},
-			minEntities:     0,
-			maxEntities:     3,
-			shouldHaveSpans: true,
-		},
-		{
-			name:            "NoPII",
-			text:            "This is a normal sentence without any personal information",
-			expectedTypes:   []string{},
-			minEntities:     0,
-			maxEntities:     0,
-			shouldHaveSpans: false,
-		},
-		{
-			name:            "EmptyText",
-			text:            "",
-			expectedTypes:   []string{},
-			minEntities:     0,
-			maxEntities:     0,
-			shouldHaveSpans: false,
-		},
-		{
-			name:            "ComplexDocument",
-			text:            "Dear Mr. Anderson, your account john.anderson@email.com has been updated. Contact us at +1-555-123-4567 or visit 123 Main St, New York, NY 10001. DOB: 12/31/1985, SSN: 987-65-4321.",
-			expectedTypes:   []string{"PERSON", "EMAIL", "PHONE", "ADDRESS", "DATE", "SSN"},
-			minEntities:     0,
-			maxEntities:     8,
-			shouldHaveSpans: true,
-		},
-	}
-
-	t.Run("InitTokenClassifier", func(t *testing.T) {
-		err := InitModernBertPIITokenClassifier(PIITokenClassifierModelPath, true)
-		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping ModernBERT PII token classifier tests due to model initialization error: %v", err)
-			}
-			t.Skipf("ModernBERT PII token classifier not available: %v", err)
-		}
-		t.Log("PII token classifier initialized successfully")
-	})
-
-	// Test each case
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Get config path
-			configPath := PIITokenClassifierModelPath + "/config.json"
-
-			// Perform token classification
-			result, err := ClassifyModernBertPIITokens(tc.text, configPath)
-
-			if tc.text == "" {
-				// Empty text should return error
-				if err == nil {
-					t.Error("Expected error for empty text")
-				}
-				return
-			}
-
-			if err != nil {
-				if isModelInitializationError(err) {
-					t.Skipf("Skipping token classification tests due to model initialization error: %v", err)
-				}
-				t.Skipf("Token classification failed (model may not be available): %v", err)
-			}
-
-			// Validate number of entities
-			numEntities := len(result.Entities)
-			if numEntities < tc.minEntities || numEntities > tc.maxEntities {
-				t.Logf("Warning: Expected %d-%d entities, got %d for text: %s",
-					tc.minEntities, tc.maxEntities, numEntities, tc.text)
-			}
-
-			t.Logf("Found %d entities in: %s", numEntities, tc.text)
-
-			// Validate each entity
-			entityTypes := make(map[string]int)
-			for i, entity := range result.Entities {
-				t.Logf("  Entity %d: %s='%s' at %d-%d (confidence: %.3f)",
-					i+1, entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
-
-				// Validate entity structure
-				if entity.EntityType == "" {
-					t.Errorf("Entity %d has empty entity type", i)
-				}
-
-				if entity.Text == "" {
-					t.Errorf("Entity %d has empty text", i)
-				}
-
-				if entity.Confidence < 0.0 || entity.Confidence > 1.0 {
-					t.Errorf("Entity %d has invalid confidence: %f", i, entity.Confidence)
-				}
-
-				// Validate spans if required
-				if tc.shouldHaveSpans && tc.text != "" {
-					if entity.Start < 0 || entity.End <= entity.Start || entity.End > len(tc.text) {
-						t.Errorf("Entity %d has invalid span: %d-%d for text length %d",
-							i, entity.Start, entity.End, len(tc.text))
-					} else {
-						// Verify span extraction
-						extractedText := tc.text[entity.Start:entity.End]
-						if extractedText != entity.Text {
-							t.Errorf("Entity %d span mismatch: expected '%s', extracted '%s'",
-								i, entity.Text, extractedText)
-						}
-					}
-				}
-
-				// Count entity types
-				entityTypes[entity.EntityType]++
-			}
-
-			// Log entity type summary
-			if len(entityTypes) > 0 {
-				t.Log("Entity type summary:")
-				for entityType, count := range entityTypes {
-					t.Logf("  - %s: %d", entityType, count)
-				}
-			}
-		})
-	}
-
-	// Test error conditions
-	t.Run("ErrorHandling", func(t *testing.T) {
-		configPath := PIITokenClassifierModelPath + "/config.json"
-
-		// Test with empty text
-		_, err := ClassifyModernBertPIITokens("", configPath)
-		if err == nil {
-			t.Error("Expected error for empty text")
-		} else {
-			t.Logf("Empty text error handled: %v", err)
-		}
-
-		// Test with empty config path
-		_, err = ClassifyModernBertPIITokens("Test text", "")
-		if err == nil {
-			t.Error("Expected error for empty config path")
-		} else {
-			t.Logf("Empty config path error handled: %v", err)
-		}
-
-		// Test with invalid config path
-		_, err = ClassifyModernBertPIITokens("Test text", "/invalid/path/config.json")
-		if err == nil {
-			t.Error("Expected error for invalid config path")
-		} else {
-			t.Logf("Invalid config path error handled: %v", err)
-		}
-	})
-
-	// Test performance with longer text
-	t.Run("PerformanceTest", func(t *testing.T) {
-		longText := `
-		Dear Mr. John Anderson,
-
-		Thank you for your inquiry. Your account number is ACC-123456789.
-		We have updated your contact information:
-		- Email: john.anderson@email.com
-		- Phone: +1-555-123-4567
-		- Address: 456 Oak Street, Los Angeles, CA 90210
-
-		For security purposes, please verify your Social Security Number: 987-65-4321
-		and date of birth: March 15, 1985.
-
-		If you have any questions, please contact our support team at support@company.com
-		or call our toll-free number: 1-800-555-0123.
-
-		Best regards,
-		Customer Service Team
-		`
-
-		configPath := PIITokenClassifierModelPath + "/config.json"
-
-		start := time.Now()
-		result, err := ClassifyModernBertPIITokens(longText, configPath)
-		duration := time.Since(start)
-
-		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping performance test due to model initialization error: %v", err)
-			}
-			t.Skipf("Performance test skipped (model not available): %v", err)
-		}
-
-		t.Logf("Processed %d characters in %v", len(longText), duration)
-		t.Logf("Found %d entities in longer text", len(result.Entities))
-
-		// Group entities by type
-		entityTypes := make(map[string]int)
-		for _, entity := range result.Entities {
-			entityTypes[entity.EntityType]++
-		}
-
-		if len(entityTypes) > 0 {
-			t.Log("Entity type distribution:")
-			for entityType, count := range entityTypes {
-				t.Logf("  - %s: %d entities", entityType, count)
-			}
-		}
-
-		// Performance threshold (should process reasonably quickly)
-		if duration > 10*time.Second {
-			t.Logf("Warning: Processing took longer than expected: %v", duration)
-		}
-	})
-
-	// Test concurrent access
-	t.Run("ConcurrentAccess", func(t *testing.T) {
-		const numGoroutines = 5
-		const numIterations = 3
-
-		configPath := PIITokenClassifierModelPath + "/config.json"
-		testText := "Contact John Doe at john.doe@example.com or call 555-123-4567"
-
-		var wg sync.WaitGroup
-		errors := make(chan error, numGoroutines*numIterations)
-		results := make(chan int, numGoroutines*numIterations) // Store number of entities found
-
-		for i := 0; i < numGoroutines; i++ {
-			wg.Add(1)
-			go func(id int) {
-				defer wg.Done()
-				for j := 0; j < numIterations; j++ {
-					result, err := ClassifyModernBertPIITokens(testText, configPath)
-					if err != nil {
-						errors <- err
-					} else {
-						results <- len(result.Entities)
-					}
-				}
-			}(i)
-		}
-
-		wg.Wait()
-		close(errors)
-		close(results)
-
-		// Check for errors
-		errorCount := 0
-		for err := range errors {
-			t.Errorf("Concurrent classification error: %v", err)
-			errorCount++
-		}
-
-		// Check results consistency
-		var entityCounts []int
-		for count := range results {
-			entityCounts = append(entityCounts, count)
-		}
-
-		if len(entityCounts) > 0 && errorCount == 0 {
-			t.Logf("Concurrent access successful: processed %d requests", len(entityCounts))
-
-			// Check if results are consistent (they should be for same input)
-			firstCount := entityCounts[0]
-			for i, count := range entityCounts {
-				if count != firstCount {
-					t.Logf("Warning: Inconsistent results - request %d found %d entities vs %d",
-						i, count, firstCount)
-				}
-			}
-		} else if errorCount > 0 {
-			t.Skipf("Concurrent test skipped due to %d errors (model may not be available)", errorCount)
-		}
-	})
-
-	// Comparison with sequence classification
-	t.Run("CompareWithSequenceClassification", func(t *testing.T) {
-		testText := "My email is john.doe@example.com and my phone is 555-123-4567"
-		configPath := PIITokenClassifierModelPath + "/config.json"
-
-		// Try sequence classification (may not be initialized)
-		seqResult, seqErr := ClassifyModernBertPIIText(testText)
-
-		// Token classification
-		tokenResult, tokenErr := ClassifyModernBertPIITokens(testText, configPath)
-
-		if seqErr == nil && tokenErr == nil {
-			t.Logf("Sequence classification: Class %d (confidence: %.3f)",
-				seqResult.Class, seqResult.Confidence)
-			t.Logf("Token classification: %d entities detected", len(tokenResult.Entities))
-
-			for _, entity := range tokenResult.Entities {
-				t.Logf("  - %s: '%s' (%.3f)", entity.EntityType, entity.Text, entity.Confidence)
-			}
-		} else if tokenErr == nil {
-			t.Logf("Token classification successful: %d entities", len(tokenResult.Entities))
-			if seqErr != nil {
-				t.Logf("Sequence classification not available: %v", seqErr)
-			}
-		} else {
-			t.Skipf("Both classification methods failed - models not available")
-		}
-	})
 }
 
 // TestUtilityFunctions tests utility functions
@@ -1909,6 +1571,10 @@ func TestEmbeddingConsistency(t *testing.T) {
 		// Check that embeddings are identical (or very close)
 		maxDiff := 0.0
 		for i := range embedding1 {
+			if math.IsNaN(float64(embedding1[i])) || math.IsInf(float64(embedding1[i]), 0) ||
+				math.IsNaN(float64(embedding2[i])) || math.IsInf(float64(embedding2[i]), 0) {
+				t.Fatalf("Invalid embedding value at index %d: %f, %f", i, embedding1[i], embedding2[i])
+			}
 			diff := math.Abs(float64(embedding1[i] - embedding2[i]))
 			if diff > maxDiff {
 				maxDiff = diff
@@ -1922,8 +1588,8 @@ func TestEmbeddingConsistency(t *testing.T) {
 		}
 	})
 
-	t.Run("DifferentDimensionsSharePrefix", func(t *testing.T) {
-		// Test that Matryoshka embeddings are prefixes of full embeddings
+	t.Run("DifferentDimensionsShareNormalizedPrefix", func(t *testing.T) {
+		// Matryoshka truncation preserves the prefix direction and restores unit norm.
 		full768, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
 		if err != nil {
 			t.Fatalf("Failed to get 768-dim embedding: %v", err)
@@ -1934,19 +1600,49 @@ func TestEmbeddingConsistency(t *testing.T) {
 			t.Fatalf("Failed to get 256-dim embedding: %v", err)
 		}
 
-		// Check that first 256 values match
+		for _, embedding := range []struct {
+			values    []float32
+			dimension int
+		}{
+			{full768, 768},
+			{mat256, 256},
+		} {
+			if len(embedding.values) != embedding.dimension {
+				t.Fatalf("Expected %d-dim embedding, got %d", embedding.dimension, len(embedding.values))
+			}
+			normSquared := 0.0
+			for i, value := range embedding.values {
+				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+					t.Fatalf("Invalid %d-dim embedding value at index %d: %f", embedding.dimension, i, value)
+				}
+				normSquared += float64(value) * float64(value)
+			}
+			if norm := math.Sqrt(normSquared); math.Abs(norm-1) > TestEpsilon {
+				t.Fatalf("Expected unit-norm %d-dim embedding, got norm %e", embedding.dimension, norm)
+			}
+		}
+
+		prefixNormSquared := 0.0
+		for _, value := range full768[:len(mat256)] {
+			prefixNormSquared += float64(value) * float64(value)
+		}
+		prefixNorm := math.Sqrt(prefixNormSquared)
+		if prefixNorm <= 0 || math.IsNaN(prefixNorm) || math.IsInf(prefixNorm, 0) {
+			t.Fatalf("Cannot normalize embedding prefix with norm %e", prefixNorm)
+		}
+
 		maxDiff := 0.0
-		for i := 0; i < 256; i++ {
-			diff := math.Abs(float64(full768[i] - mat256[i]))
+		for i, value := range mat256 {
+			diff := math.Abs(float64(full768[i])/prefixNorm - float64(value))
 			if diff > maxDiff {
 				maxDiff = diff
 			}
 		}
 
 		if maxDiff > TestEpsilon {
-			t.Errorf("Matryoshka prefix differs from full embedding: max diff = %e", maxDiff)
+			t.Errorf("Matryoshka embedding differs from normalized prefix: max diff = %e", maxDiff)
 		} else {
-			t.Logf("Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
+			t.Logf("Matryoshka 256 matches normalized prefix of 768 (max diff: %e)", maxDiff)
 		}
 	})
 }

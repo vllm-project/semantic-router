@@ -26,11 +26,11 @@ func TestParseVectorStoreListParamsValidation(t *testing.T) {
 		url  string
 		code string
 	}{
-		{name: "invalid limit", url: "/v1/vector_stores?limit=abc", code: "INVALID_LIMIT"},
-		{name: "zero limit", url: "/v1/vector_stores?limit=0", code: "INVALID_LIMIT"},
-		{name: "negative limit", url: "/v1/vector_stores?limit=-1", code: "INVALID_LIMIT"},
-		{name: "invalid order", url: "/v1/vector_stores?order=sideways", code: "INVALID_ORDER"},
-		{name: "ambiguous cursors", url: "/v1/vector_stores?after=vs_a&before=vs_b", code: "INVALID_CURSOR"},
+		{name: "invalid limit", url: "/api/v1/storage/vector-stores?limit=abc", code: "INVALID_LIMIT"},
+		{name: "zero limit", url: "/api/v1/storage/vector-stores?limit=0", code: "INVALID_LIMIT"},
+		{name: "negative limit", url: "/api/v1/storage/vector-stores?limit=-1", code: "INVALID_LIMIT"},
+		{name: "invalid order", url: "/api/v1/storage/vector-stores?order=sideways", code: "INVALID_ORDER"},
+		{name: "ambiguous cursors", url: "/api/v1/storage/vector-stores?after=vs_a&before=vs_b", code: "INVALID_CURSOR"},
 	}
 
 	for _, tc := range cases {
@@ -52,7 +52,7 @@ func TestParseVectorStoreListParamsValidation(t *testing.T) {
 
 func TestParseVectorStoreListParamsCapsLimit(t *testing.T) {
 	server := &ClassificationAPIServer{}
-	req := httptest.NewRequest(http.MethodGet, "/v1/vector_stores?limit=1000&order=asc&after=vs_a", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/vector-stores?limit=1000&order=asc&after=vs_a", nil)
 	rr := httptest.NewRecorder()
 
 	params, ok := server.parseVectorStoreListParams(rr, req)

@@ -2,31 +2,21 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Model-A
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: medium
+    model: Model-A
+    reasoning_effort: medium
   models:
     - name: Model-A
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: qwen-endpoint
+          provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
     - name: Model-B
       backend_refs:
         - name: tinyllama-endpoint
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:

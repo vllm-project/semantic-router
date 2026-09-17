@@ -24,6 +24,7 @@ from cli.evaluation.reporting import (
 )
 from cli.evaluation.worker_report import (
     WorkerReportDraft,
+    WorkerReportPrimaryMetric,
     WorkerReportSummary,
     WorkerRunState,
     WorkerTrackReport,
@@ -33,6 +34,21 @@ from cli.evaluation.worker_report import (
 def _value(metrics: list[EvaluationMetric], metric_id: str) -> float | None:
     metric = next((row for row in metrics if row.id == metric_id), None)
     return metric.value if metric else None
+
+
+def _primary_metric(metrics: list[EvaluationMetric]) -> EvaluationMetric | None:
+    for metric_id in (
+        "joint.realized_quality",
+        "routing.accuracy",
+        "model_pool.oracle_quality",
+    ):
+        metric = next(
+            (row for row in metrics if row.id == metric_id and row.value is not None),
+            None,
+        )
+        if metric is not None:
+            return metric
+    return None
 
 
 def _sum_optional(values: list[float | None]) -> float | None:
@@ -155,11 +171,7 @@ def build_worker_report_draft(
     costs = build_costs(records)
     totals = _track_plan_totals(manifest, planned_case_ids)
     overall_coverage = aggregate_track_coverage(records, totals)
-    quality = _value(metrics, "joint.realized_quality")
-    if quality is None:
-        quality = _value(metrics, "routing.accuracy")
-    if quality is None:
-        quality = _value(metrics, "model_pool.oracle_quality")
+    primary = _primary_metric(metrics)
     latency = _value(metrics, "joint.latency_p95_ms")
     if latency is None:
         latency = _value(metrics, "capacity.latency_p95_ms")
@@ -182,7 +194,16 @@ def build_worker_report_draft(
         run=run,
         summary=WorkerReportSummary(
             verdict=verdict,
-            quality_score=quality if promotion_summary_available else None,
+            primary_metric=(
+                WorkerReportPrimaryMetric(
+                    id=primary.id,
+                    value=primary.value,
+                    unit=primary.unit,
+                    confidence_interval=primary.confidence_interval,
+                )
+                if promotion_summary_available and primary is not None
+                else None
+            ),
             latency_p95_ms=latency if promotion_summary_available else None,
             runtime_cost=(
                 costs.runtime.amount if promotion_summary_available else None

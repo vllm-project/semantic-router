@@ -177,9 +177,9 @@ type inputModalitySignalDoc struct {
 }
 
 // runInputModalityClassifyEvalCases asserts the input_modality signal at the
-// classify/eval API boundary: /api/v1/eval evaluates every configured rule
+// classify/eval API boundary: /api/v1/routing/preview evaluates every configured rule
 // (including video, which no wire protocol can carry yet) and
-// /api/v1/classify/intent reports the matched rules and selected decision.
+// /api/v1/diagnostics/classify/intent reports the matched rules and selected decision.
 func runInputModalityClassifyEvalCases(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -229,7 +229,7 @@ func runInputModalityClassifyEvalCases(
 		},
 	}
 	for _, tc := range evalCases {
-		document, err := postInputModalityAPI(ctx, session, "/api/v1/eval", tc.content)
+		document, err := postInputModalityAPI(ctx, session, "/api/v1/routing/preview", tc.content)
 		if err != nil {
 			return 0, fmt.Errorf("%s: %w", tc.name, err)
 		}
@@ -261,7 +261,7 @@ func runInputModalityIntentCase(ctx context.Context, session *fixtures.ServiceSe
 		{"type": "text", "text": "what is shown in this image?"},
 		{"type": "image_url", "image_url": map[string]string{"url": inputModalityProbeImage}},
 	}
-	document, err := postInputModalityAPI(ctx, session, "/api/v1/classify/intent", intentContent)
+	document, err := postInputModalityAPI(ctx, session, "/api/v1/diagnostics/classify/intent", intentContent)
 	if err != nil {
 		return fmt.Errorf("classify intent image request: %w", err)
 	}

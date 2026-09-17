@@ -35,6 +35,7 @@ type executionAttestationEntry struct {
 	InputTokens           *int64                         `json:"input_tokens,omitempty"`
 	OutputTokens          *int64                         `json:"output_tokens,omitempty"`
 	ResponseContentDigest *string                        `json:"response_content_digest,omitempty"`
+	FinalAnswerComplete   *bool                          `json:"final_answer_complete,omitempty"`
 	Quality               *float64                       `json:"quality,omitempty"`
 	ControlledPair        *controlledPairObservation     `json:"controlled_pair,omitempty"`
 	RoutingRecipeDecision *RoutingRecipeDecisionSnapshot `json:"routing_recipe_decision,omitempty"`
@@ -91,6 +92,11 @@ func brokerEntryReceipt(entry executionAttestationEntry) (string, error) {
 		"response_content_digest": entry.ResponseContentDigest,
 		"controlled_pair":         entry.ControlledPair,
 		"routing_recipe_decision": entry.RoutingRecipeDecision,
+	}
+	// Omit the additive observation for legacy transcripts so their existing
+	// receipts remain verifiable. Newly brokered chat responses always bind it.
+	if entry.FinalAnswerComplete != nil {
+		subject["final_answer_complete"] = *entry.FinalAnswerComplete
 	}
 	digest, err := canonicalValueDigest(subject)
 	if err != nil {

@@ -1,26 +1,18 @@
 version: v0.3
 providers:
   defaults:
-    default_model: qwen-2.5-7b
-    reasoning_families:
-      deepseek:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: high
+    model: qwen-2.5-7b
+    reasoning_effort: high
   models:
     - name: qwen-2.5-7b
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       pricing:
         prompt_per_1m: 0.5
         completion_per_1m: 1
     - name: qwen-2.5-72b
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       pricing:
         prompt_per_1m: 3
         completion_per_1m: 6
@@ -163,11 +155,13 @@ global:
     management_api: {}
     router_replay:
       enabled: false
+      ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       enabled: false
+      ttl_seconds: 0
     memory: {}
   integrations:
     tools:
@@ -199,6 +193,11 @@ global:
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
     modules:
+      safety:
+        safety:
+          use_cpu: false
+        hazard:
+          use_cpu: false
       prompt_compression:
         enabled: false
         max_tokens: 0
@@ -241,6 +240,7 @@ global:
           model_id: ""
           threshold: 0
           use_cpu: false
+          enable_nli_filtering: false
         explainer:
           model_id: ""
           threshold: 0

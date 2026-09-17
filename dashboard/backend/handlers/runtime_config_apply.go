@@ -66,15 +66,38 @@ func formatRuntimeApplyError(prefix string, err error) string {
 	return fmt.Sprintf("%s: %v", prefix, err)
 }
 
+// atomicRename is os.Rename by default; tests override it to simulate a rename failure.
+var atomicRename = os.Rename
+
+// writeConfigAtomically writes via a temp file and rename, and fails on a rename error instead of falling back to a non-atomic direct write.
 func writeConfigAtomically(configPath string, yamlData []byte) error {
 	tmpConfigFile := configPath + ".tmp"
-	if err := os.WriteFile(tmpConfigFile, yamlData, 0o644); err != nil {
+	tmpFile, err := os.OpenFile(tmpConfigFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmpConfigFile, configPath); err != nil {
-		if writeErr := os.WriteFile(configPath, yamlData, 0o644); writeErr != nil {
-			return writeErr
-		}
+	if _, err := tmpFile.Write(yamlData); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	if err := atomicRename(tmpConfigFile, configPath); err != nil {
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	// Best-effort: fsync the directory too so the rename is durable, not just the bytes.
+	if dir, derr := os.Open(filepath.Dir(configPath)); derr == nil {
+		_ = dir.Sync()
+		_ = dir.Close()
 	}
 	return nil
 }

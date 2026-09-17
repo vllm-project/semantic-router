@@ -18,8 +18,12 @@ type WorkflowsLooper struct {
 }
 
 func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
+	return newWorkflowsLooper(cfg, ownClient(NewClient(cfg)))
+}
+
+func newWorkflowsLooper(cfg *config.LooperConfig, binding clientBinding) *WorkflowsLooper {
 	return &WorkflowsLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, binding),
 		toolStates: newWorkflowToolStateStoreFromConfig(
 			workflowFlowRuntimeConfig(cfg),
 		),
@@ -128,8 +132,6 @@ type workflowExecutionSummary struct {
 }
 
 func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
-
 	cfg := resolveWorkflowsExecutionConfig(req)
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("workflows requires decision modelRefs")
@@ -142,6 +144,11 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 	original := extractOriginalContent(req.OriginalRequest)
 	if stateID, ok := findWorkflowToolStateID(req.OriginalRequest); ok {
 		return l.resumeWorkflowToolCall(ctx, req, cfg, workerModels, stateID)
+	}
+	var err error
+	cfg, err = l.resolveDynamicWorkflowPlanner(req, cfg, original, workerModels)
+	if err != nil {
+		return nil, err
 	}
 	logging.ComponentEvent("looper", "workflows_execution_started", map[string]interface{}{
 		"decision":     req.DecisionName,
@@ -694,22 +701,27 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	iteration int,
 	baseReq *Request,
 ) (*ModelResponse, error) {
+	callReq := workflowModelRequest(req, cfg, allowTools)
+	return l.dispatchModel(
+		ctx,
+		baseReq,
+		callReq,
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(baseReq, modelName)},
+		CallOptions{DecisionName: baseReq.DecisionName, Iteration: iteration},
+	)
+}
+
+func workflowModelRequest(req *openai.ChatCompletionNewParams, cfg workflowsExecutionConfig, allowTools bool) *openai.ChatCompletionNewParams {
 	callReq := cloneRequest(req)
 	if !allowTools {
 		callReq = stripFusionToolUse(callReq)
 	}
-	if modelName == cfg.PlannerModel {
-		applyWorkflowChatTemplateKwargs(callReq, workflowPlannerChatTemplateKwargs(modelName))
-	}
-	applyWorkflowModelReasoningControl(callReq, modelName, baseReq)
 	if cfg.Temperature != nil {
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
 	if cfg.MaxCompletionTokens > 0 {
+		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 	}
-	if modelName == cfg.PlannerModel && cfg.PlannerMaxCompletionTokens > 0 {
-		callReq.MaxCompletionTokens = openai.Int(int64(cfg.PlannerMaxCompletionTokens))
-	}
-	return l.callModelWithContextGate(ctx, baseReq, callReq, modelName, false, iteration, nil, accessKeyForModel(baseReq, modelName))
+	return callReq
 }

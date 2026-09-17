@@ -92,9 +92,32 @@ normalization, or reference dereferencing. Extraction defaults to exact
 `content` matching; use `extract.sources` or `extract.mode: json_object` only
 when the decision explicitly permits a wider parser.
 
-The planner model is a control-plane model. It does not need to appear in
-`modelRefs`. Worker calls are constrained to `modelRefs`; if the planner names a
-model outside that list, the executor rejects the plan.
+The planner model generates the control plan. Omit `planner.model` to use the
+first assigned worker, in declared order, that is eligible for the complete
+planner request, including JSON output and its output/context budget. This scan
+makes no model calls. An explicit planner override keeps that target and must
+pass the same stage checks; it is not replaced by another model on failure.
+If no eligible planner exists, the request fails closed. An explicit planner
+may be a separately configured helper outside the worker `modelRefs`, but must
+still have an operator-assigned backend. Worker calls remain constrained to
+`modelRefs`; the executor rejects a plan that names a worker outside that list.
+Planner selection does not reduce a configured minimum of distinct successful
+workers.
+
+Set `final.model` to choose a worker from `modelRefs` for the final answer,
+independently of the planner.
+This works in both modes; configured `final.model` and `final.prompt` override
+the corresponding fields in a generated plan. A fast planner can organize work
+while a stronger model synthesizes the answer. Verify that the planner reliably
+returns valid JSON before relying on this split.
+
+Reasoning controls come from each model's
+[reasoning configuration](../../../installation/model-reasoning.md) and decision
+reference. For a custom model, declare the appropriate reasoning family before
+using `use_reasoning: false`; without a family, backend reasoning behavior passes
+through. Budget for planning, sequential worker steps, and final synthesis within
+the client and gateway timeouts. A per-round timeout does not extend the gateway
+deadline. Check complete output and `finish_reason`, not only HTTP success.
 
 Static mode uses an explicit role plan. Each role model must be in the
 decision's `modelRefs`.
@@ -137,9 +160,9 @@ routing:
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |
 | `template` | string | `micro_agent` | Static workflow template name |
 | `roles` | list[object] | required for static | Ordered static roles, each with `name`, `models`, optional `prompt`, and optional `access_list` of earlier role ids or agent ids |
-| `final.model` | string | first worker response | Optional static final synthesis model from `modelRefs` |
-| `final.prompt` | string | built-in synthesis prompt | Optional static final synthesis instruction |
-| `planner.model` | string | required for dynamic | Control-plane model used to generate the workflow plan |
+| `final.model` | string | plan's final model, then planner, then first worker response | Override the final synthesis model in either mode; must belong to `modelRefs` |
+| `final.prompt` | string | plan's final prompt or built-in synthesis prompt | Override the final synthesis instruction in either mode |
+| `planner.model` | string | first eligible assigned worker | Optional explicit model used to generate the workflow plan |
 | `planner.max_completion_tokens` | int | `2048` | Max completion tokens for the planner JSON plan only |
 | `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
 | `max_steps` | int | `3` | Maximum workflow steps accepted from the planner |
@@ -182,6 +205,21 @@ setting it to `[]` isolates the step from prior outputs. Use a role id such as
 `solver:1:deepseek-worker` to expose only one worker from a parallel role. The
 same agent id is emitted as `flow.steps[].responses[].agent_id` when
 `include_intermediate_responses` is enabled.
+
+Step IDs must be unique and must not collide with generated agent IDs. The
+router trims step IDs before validation; generated default IDs and normalized
+static role IDs follow the same uniqueness rule. Ambiguous plans are rejected
+before worker execution. In dynamic mode, `on_error: skip` uses the existing
+fallback plan instead of executing the invalid plan.
+
+This validation also applies when resuming a persisted workflow. A paused plan
+with conflicting IDs that an older version accepted is now rejected on resume,
+without dispatching further model calls. Resume validation failures do not start
+a fallback workflow, even with `on_error: skip`. Restart with an unambiguous
+plan rather than relying on the old continuation. Step IDs with surrounding
+whitespace are now trimmed consistently with access-list entries and agent IDs;
+older continuations whose stored step identity no longer matches may also be
+rejected.
 
 For local single-process development, `memory` is enough. For local restarts use
 `file`. For multi-replica deployments, use `redis` so a tool-result turn can be
