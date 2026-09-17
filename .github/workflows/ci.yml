@@ -89,8 +89,9 @@ jobs:
       verifications: ${{ needs.plan.outputs.generated }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
 
+  # Static caller names also label skipped jobs, before matrix expansion.
   security:
-    name: Quality / ${{ matrix.verification.display_name }}
+    name: Quality / Security
     needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -98,18 +99,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.security) }}
+        label: ${{ fromJSON(needs.plan.outputs.security).*.display_name }}
     uses: ./.github/workflows/security-scan.yml
     permissions:
       contents: read
       actions: read
       security-events: write
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).security[matrix.label]) }}
     secrets: inherit
 
   core:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Core
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -118,15 +119,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.core) }}
+        label: ${{ fromJSON(needs.plan.outputs.core).*.display_name }}
     uses: ./.github/workflows/test-and-build.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).core[matrix.label]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   storage:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Storage
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -135,15 +136,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.storage) }}
+        label: ${{ fromJSON(needs.plan.outputs.storage).*.display_name }}
     uses: ./.github/workflows/test-storage.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).storage[matrix.label]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   dashboard:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Dashboard
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -152,15 +153,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.dashboard) }}
+        label: ${{ fromJSON(needs.plan.outputs.dashboard).*.display_name }}
     uses: ./.github/workflows/dashboard-test.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).dashboard[matrix.label]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   operator:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Operator
     needs: [plan, images]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -169,17 +170,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.operator) }}
+        label: ${{ fromJSON(needs.plan.outputs.operator).*.display_name }}
     uses: ./.github/workflows/operator-ci.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).operator[matrix.label]) }}
       prebuilt-images: true
       run_integration: true
-      integration_matrix: ${{ toJSON(matrix.verification.integration_matrix) }}
+      integration_matrix: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).operator[matrix.label].integration_matrix) }}
     secrets: inherit
 
   local:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Local Stack
     needs: [plan, images]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -188,15 +189,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.local) }}
+        label: ${{ fromJSON(needs.plan.outputs.local).*.display_name }}
     uses: ./.github/workflows/test-local.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).local[matrix.label]) }}
       prebuilt-images: true
     secrets: inherit
 
   recipes:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Recipes
     needs: [plan, images]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -205,15 +206,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.recipes) }}
+        label: ${{ fromJSON(needs.plan.outputs.recipes).*.display_name }}
     uses: ./.github/workflows/recipe-conformance.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).recipes[matrix.label]) }}
       prebuilt-images: true
     secrets: inherit
 
   native:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Native Inference
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -223,15 +224,15 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.native) }}
+        label: ${{ fromJSON(needs.plan.outputs.native).*.display_name }}
     uses: ./.github/workflows/test-native.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
-      native-artifact: ${{ matrix.verification.native && needs.native-build.outputs.artifact-name || '' }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).native[matrix.label]) }}
+      native-artifact: ${{ fromJSON(needs.plan.outputs.dispatch).native[matrix.label].native && needs.native-build.outputs.artifact-name || '' }}
     secrets: inherit
 
   performance:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Performance
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -240,16 +241,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.performance) }}
+        label: ${{ fromJSON(needs.plan.outputs.performance).*.display_name }}
     uses: ./.github/workflows/performance-test.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).performance[matrix.label]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
       base-ref: ${{ inputs.performance-base-ref || github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
     secrets: inherit
 
   package:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Packages
     needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -257,16 +258,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.package) }}
+        label: ${{ fromJSON(needs.plan.outputs.package).*.display_name }}
     uses: ./.github/workflows/package-check.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).package[matrix.label]) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
     secrets: inherit
 
   tools:
-    name: Tests / ${{ matrix.batch.display_name }}
+    name: Tests / Components
     needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -275,14 +276,14 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        batch: ${{ fromJSON(needs.plan.outputs.component_batches) }}
+        label: ${{ fromJSON(needs.plan.outputs.component_batches).*.display_name }}
     uses: ./.github/workflows/test-tools.yml
     with:
-      batch: ${{ toJSON(matrix.batch) }}
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).tools[matrix.label]) }}
     secrets: inherit
 
   e2e:
-    name: Tests / ${{ matrix.verification.display_name }}
+    name: Tests / Kubernetes
     needs: [plan, images]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -292,13 +293,13 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        verification: ${{ fromJSON(needs.plan.outputs.e2e) }}
+        label: ${{ fromJSON(needs.plan.outputs.e2e).*.display_name }}
     uses: ./.github/workflows/integration-test-k8s.yml
     with:
-      verification: ${{ toJSON(matrix.verification) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).e2e[matrix.label]) }}
       prebuilt-images: true
-      profiles: ${{ format('["{0}"]', matrix.verification.profile) }}
-      baseline-suite: ${{ matrix.verification.baseline_suite }}
+      profiles: ${{ format('["{0}"]', fromJSON(needs.plan.outputs.dispatch).e2e[matrix.label].profile) }}
+      baseline-suite: ${{ fromJSON(needs.plan.outputs.dispatch).e2e[matrix.label].baseline_suite }}
     secrets: inherit
 
   gate:
