@@ -187,6 +187,15 @@ domains:
     checks: [make test-semantic-router, make config-schema-check]
     ci_jobs: [core-tests]
 
+  model-compatibility:
+    owner: router-core
+    paths:
+      - tools/modelcompat/**
+      - src/semantic-router/pkg/modelruntime/compatibility/**
+      - tools/make/models.mk
+    checks: [make check-modelcompat]
+    ci_jobs: [core-tests]
+
   image-calibration:
     owner: router-core
     documentation_check: true
