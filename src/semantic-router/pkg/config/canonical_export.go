@@ -354,6 +354,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 
 	return CanonicalModelCatalog{
 		Deployments: cloneModelMap(cfg.ModelDeployments),
+		Bindings:    cloneModelMap(cfg.GlobalModelBindings),
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},

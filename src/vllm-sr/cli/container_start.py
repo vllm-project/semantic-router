@@ -184,6 +184,8 @@ def _build_common_runtime_env(
     recipe_store_dir: str | None = None,
 ):
     common_env = dict(env_vars or {})
+    # Signing authority belongs to Dashboard, never to recipe/data-plane env.
+    common_env.pop("DASHBOARD_JWT_SECRET", None)
     # Evaluation configuration is a Dashboard-only control-plane input. Rebuild
     # it from the trusted host environment after the service environments split;
     # the deployment path is then replaced with a read-only container mount.
@@ -565,7 +567,7 @@ def _build_dashboard_runtime_command(
         port_mappings=[(stack_layout.dashboard_port, 8700)],
         entrypoint=service_entrypoint,
         command_args=service_args,
-        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"}
+        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_JWT_SECRET"}
         | inherited_sensitive_env
         | evaluation_dashboard_secret_env_names(dashboard_env),
     )
@@ -600,6 +602,11 @@ def _build_dashboard_runtime_env(
     management_port: int = 8080,
 ):
     dashboard_env = dict(common_env)
+    dashboard_env.pop("DASHBOARD_JWT_SECRET", None)
+    if os.getenv("DASHBOARD_JWT_SECRET", "").strip():
+        # The container runtime inherits the host value by name. Do not copy
+        # signing material into command arguments or printable runtime state.
+        dashboard_env["DASHBOARD_JWT_SECRET"] = ""
     for name in (
         "DASHBOARD_ADMIN_EMAIL",
         "DASHBOARD_ADMIN_PASSWORD",

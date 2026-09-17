@@ -204,6 +204,24 @@ type SystemPromptPluginConfig struct {
 	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"`
 }
 
+// IsEnabled preserves the implicit activation of a nonempty system prompt.
+func (c *SystemPromptPluginConfig) IsEnabled() bool {
+	if c == nil {
+		return false
+	}
+	if c.Enabled != nil {
+		return *c.Enabled
+	}
+	return c.SystemPrompt != ""
+}
+
+func (c *SystemPromptPluginConfig) EffectiveMode() string {
+	if c == nil || c.Mode == "" {
+		return "insert"
+	}
+	return c.Mode
+}
+
 // HeaderMutationPluginConfig represents configuration for header_mutation plugin.
 type HeaderMutationPluginConfig struct {
 	Add    []HeaderPair `json:"add,omitempty" yaml:"add,omitempty"`

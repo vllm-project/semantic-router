@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 import time
 from collections.abc import Iterator
@@ -39,11 +40,18 @@ from responses_wire import (
     response_requests_image_generation,
     response_texts,
 )
+from shadow_control import ShadowControl
+from shadow_control import router as shadow_router
 
 app = FastAPI()
 app.state.request_store = RequestStore()
 app.include_router(router)
 app.include_router(classify_router)
+app.state.shadow_control = (
+    ShadowControl() if os.getenv("MOCK_VLLM_SHADOW_CONTROL") == "true" else None
+)
+if app.state.shadow_control is not None:
+    app.include_router(shadow_router)
 
 
 def is_hallucination_detection_request(req: ChatRequest) -> bool:
@@ -237,7 +245,7 @@ async def chat_completions(request: Request):
         return error_response
     assert body is not None
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    app.state.request_store.record(session_id, body, request.headers)
+    request.app.state.request_store.record(session_id, body, request.headers)
     try:
         req = ChatRequest.model_validate(body)
     except ValidationError as error:
@@ -253,7 +261,15 @@ async def chat_completions(request: Request):
     if control_response is not None:
         return control_response
 
-    if is_hallucination_detection_request(req):
+    shadow_control: ShadowControl | None = request.app.state.shadow_control
+    if shadow_control is not None:
+        shadow_response = await shadow_control.respond(
+            model=req.model, request_id=request.headers.get("x-request-id", "")
+        )
+        if shadow_response is not None:
+            return shadow_response
+        content = f"Hello from {req.model}."
+    elif is_hallucination_detection_request(req):
         content = build_hallucination_detection_content(req)
     else:
         content = build_chat_content(req)

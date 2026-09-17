@@ -6,6 +6,7 @@ import ProductLoadingState from '../components/ProductLoadingState'
 import ProductIcon from '../components/ProductIcon'
 import {
   getLoadedModelCount,
+  getRouterModelConsumers,
   getModelStatusSummary,
   getTotalKnownModelCount,
   type RouterModelInfo,
@@ -468,7 +469,12 @@ const DashboardPage: React.FC = () => {
                   value: (
                     <RouterModelInventory
                       mode="detail"
-                      modelsInfo={{ models: [selectedRuntimeModel] }}
+                      modelsInfo={{
+                        models: getRouterModelConsumers(
+                          status?.models?.models ?? [],
+                          selectedRuntimeModel,
+                        ),
+                      }}
                     />
                   ),
                 },

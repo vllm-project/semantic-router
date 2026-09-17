@@ -299,6 +299,10 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 	}
 	logging.ComponentDebugEvent("extproc", "decision_evaluated", payload)
 
+	if err := r.prepareDecisionContextOverflow(ctx, originalModel); err != nil {
+		return decisionName, evaluationConfidence, reasoningDecision, "", err
+	}
+
 	destination, terminal, actionErr := r.decisionRouteActionDestination(result.Decision, ctx)
 	if actionErr != nil {
 		return decisionName, evaluationConfidence, reasoningDecision, "", actionErr

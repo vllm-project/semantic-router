@@ -147,7 +147,7 @@ religion and political affiliation require an explicit personal attribute or pro
 in the current request; quoted personal records also qualify.
 
 Every Vault path disables client tools, strips tool history, and disables Router
-memory, response caching, replay capture, and learning adaptation. It also
+memory, response caching, and learning adaptation. It also
 suppresses new Responses object writes. These restrictions apply regardless of
 the Guard, Safety, Hazard, and PII verdicts; unavailable triage fails closed.
 
@@ -155,6 +155,29 @@ Assign every Vault backend to infrastructure that meets your privacy
 requirements. The recipe does not establish physical placement, change provider
 retention, delete earlier stored conversations, or disable operational usage
 metadata.
+
+## Replay and Insights
+
+All five recipes, including Vault, enable PostgreSQL Replay by default so
+Dashboard Insights can show their requests and routing decisions. The defaults
+keep records for seven days, limit raw request and response excerpts to 4,096
+bytes each, and limit structured tool traces to 100 steps. Expired PostgreSQL
+records are removed during subsequent writes.
+
+`vllm-sr recipe builtin init` preserves explicit operator settings, including
+`enabled: false`. Local `vllm-sr serve` manages PostgreSQL and its persistent
+volume. Other deployment methods need a PostgreSQL connection and credentials
+in `global.services.router_replay.postgres`.
+
+- To disable default capture, set `global.services.router_replay.enabled: false`.
+  Individual decisions can still opt in.
+- To forbid capture for a recipe, set its `routing.data_policy.replay: false`.
+  This also blocks decision-level opt-ins.
+
+Vault's other data-handling restrictions still apply. Replay settings do not
+change provider retention or delete previously captured conversations. See the
+[Replay guide](../../../../../website/docs/tutorials/plugin/router-replay.md)
+for capture limits and access controls.
 
 ## Quick start
 

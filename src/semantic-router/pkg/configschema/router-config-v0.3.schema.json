@@ -762,6 +762,12 @@
     },
     "CanonicalModelCatalog": {
       "properties": {
+        "bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
         "deployments": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelDeployment"
@@ -1668,6 +1674,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ContextCompressionCurrentUserConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ContextCompressionPluginConfig": {
       "properties": {
         "enabled": {
@@ -1772,6 +1787,9 @@
     },
     "ContextCompressionTargetsConfig": {
       "properties": {
+        "current_user": {
+          "$ref": "#/$defs/ContextCompressionCurrentUserConfig"
+        },
         "tool_outputs": {
           "$ref": "#/$defs/ContextCompressionTargetConfig"
         },
@@ -7579,6 +7597,15 @@
         "path": [
           "integrations",
           "looper"
+        ]
+      },
+      {
+        "key": "bindings",
+        "layer": "model_catalog",
+        "display_name": "Bindings",
+        "path": [
+          "model_catalog",
+          "bindings"
         ]
       },
       {
