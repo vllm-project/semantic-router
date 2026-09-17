@@ -54,7 +54,16 @@ func candleSharesBackbone(adapter string) bool {
 }
 
 func (r *Runtime) candleResource(ctx context.Context, spec config.ResolvedModelBinding, tokenTask bool) (*binding.Resource, error) {
+	return r.candleResourceWithWindow(ctx, spec, tokenTask, 0)
+}
+
+func (r *Runtime) candleResourceWithWindow(ctx context.Context, spec config.ResolvedModelBinding, tokenTask bool, windowSize int) (*binding.Resource, error) {
 	options := candleOptions(spec)
+	if windowSize > 0 {
+		options.MaxInputTokens = windowSize
+		options.DocumentMaxInputTokens = spec.Deployment.Input.MaxTokens
+		options.Overflow = "reject"
+	}
 	revision, err := r.artifactRevision(ctx, options.ModelPath)
 	if err != nil {
 		return nil, err
@@ -118,7 +127,7 @@ func (r *Runtime) Sequence(ctx context.Context, spec config.ResolvedModelBinding
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: sequence provider %q is unavailable", binding.ErrCapability, spec.Deployment.Provider)
 	}
-	resource, model, err := r.prepareCandleSequence(ctx, spec)
+	resource, model, err := r.prepareCandleSequence(ctx, spec, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +163,7 @@ func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) 
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: token provider %q is unavailable", binding.ErrCapability, spec.Deployment.Provider)
 	}
-	resource, model, info, err := r.prepareCandleTokens(ctx, spec)
+	resource, model, info, err := r.prepareCandleTokens(ctx, spec, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -182,8 +191,8 @@ func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) 
 }
 
 // prepareCandleTokens binds one token head while preserving pooled ownership.
-func (r *Runtime) prepareCandleTokens(ctx context.Context, spec config.ResolvedModelBinding) (*binding.Resource, *candle.TokenClassifier, candle.InstanceInfo, error) {
-	resource, err := r.candleResource(ctx, spec, true)
+func (r *Runtime) prepareCandleTokens(ctx context.Context, spec config.ResolvedModelBinding, windowSize int) (*binding.Resource, *candle.TokenClassifier, candle.InstanceInfo, error) {
+	resource, err := r.candleResourceWithWindow(ctx, spec, true, windowSize)
 	if err != nil {
 		return nil, nil, candle.InstanceInfo{}, err
 	}
@@ -258,8 +267,8 @@ func candleInputUsage(input candle.InputMetadata) *tasks.InputUsage {
 	return &tasks.InputUsage{OriginalTokens: input.InputTokens, ProcessedTokens: input.ProcessedTokens, Truncated: input.Truncated}
 }
 
-func (r *Runtime) prepareCandleSequence(ctx context.Context, spec config.ResolvedModelBinding) (*binding.Resource, *candle.SequenceClassifier, error) {
-	resource, err := r.candleResource(ctx, spec, false)
+func (r *Runtime) prepareCandleSequence(ctx context.Context, spec config.ResolvedModelBinding, windowSize int) (*binding.Resource, *candle.SequenceClassifier, error) {
+	resource, err := r.candleResourceWithWindow(ctx, spec, false, windowSize)
 	if err != nil {
 		return nil, nil, err
 	}

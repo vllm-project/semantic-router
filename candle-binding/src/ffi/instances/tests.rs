@@ -92,6 +92,7 @@ fn options(dir: &TempDir) -> Options {
         device: "cpu".into(),
         precision: "float32".into(),
         max_input_tokens: 0,
+        document_max_input_tokens: 0,
         overflow: "truncate".into(),
         adapters: Vec::new(),
         generation_max_tokens: 0,
@@ -257,6 +258,7 @@ fn maintained_checkpoint_instance_regression() {
         device: "cpu".into(),
         precision: "float32".into(),
         max_input_tokens: 0,
+        document_max_input_tokens: 0,
         overflow: "truncate".into(),
         adapters: Vec::new(),
         generation_max_tokens: 0,
@@ -971,3 +973,6 @@ fn token_windows_decode_boundary_entity_once_with_original_offsets() {
         .to_string()
         .contains("capability"));
 }
+
+#[path = "tests/document_windows.rs"]
+mod document_windows;

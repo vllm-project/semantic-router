@@ -155,18 +155,11 @@ fn windows<T>(
     categorical: bool,
     wrap: impl Fn(usize, usize, Vec<f32>) -> T,
 ) -> UnifiedResult<WindowOutput<T>> {
-    let input = instance.input(text)?;
-    if input.truncated {
-        return Err(errors::validation(
-            "input_tokens",
-            &format!("at most {}", instance.effective_limit),
-            &input.original_tokens.to_string(),
-        ));
-    }
+    let input = instance.window_input(text, size)?;
     let plan = crate::core::sequence_windows::encode_windows(
         &instance.tokenizer,
         text,
-        instance.effective_limit,
+        instance.document_max_input_tokens,
         size,
         overlap,
     )
