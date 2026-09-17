@@ -81,6 +81,7 @@ permission.
 | `GET` | `/health` | Process liveness |
 | `GET` | `/ready` | Whether startup has completed |
 | `GET` | `/startup-status` | Startup and model-download progress |
+| `GET` | `/api/v1/status` | Versioned replica-local startup and configuration observations |
 | `GET` | `/api/v1` | Registered endpoint discovery |
 | `GET` | `/openapi.json` | Generated OpenAPI schema, optionally narrowed by exact `path` and `method` |
 | `GET` | `/docs` | Swagger UI |
@@ -88,6 +89,46 @@ permission.
 Use `/health` for liveness and `/ready` for readiness. During model download or
 runtime preparation, a process can be healthy while `/ready` still returns
 `503`.
+
+### Replica-local status
+
+`GET /api/v1/status` requires `ready.read`. It returns `schema_version: "v1"`,
+an opaque `instance_id`, an observation timestamp, and conditions with `True`,
+`False`, or `Unknown` status. The instance identity changes when the Router
+registry is recreated.
+
+The response reads in-process startup observations and the active configuration
+registry. It does not treat a shared Redis value as this replica's state.
+Configuration hashes identify the active snapshot and the most recent candidate
+observed by the activation coordinator. They do not claim to describe an
+unobserved external desired configuration.
+
+| Condition | Meaning |
+| --- | --- |
+| `Live` | The process answered the request |
+| `StartupComplete` | The local startup writer reported completion or failure |
+| `ActiveConfigAvailable` | The registry has a classification runtime that can still be acquired |
+| `ConfigConverged` | The active and latest observed configuration hashes match |
+| `Ready` | Known startup/runtime failures are false; required dependency and quorum readiness is otherwise unknown |
+
+The stable reason codes are `ProcessRunning`, `StartupUnobserved`,
+`StartupIncomplete`, `StartupFailed`, `StartupComplete`, `NoActiveConfig`,
+`ActiveConfigAvailable`, `ConfigIdentityUnobserved`, `ConfigHashesMatch`,
+`ConfigActivationPending`, `ConfigActivationFailed`,
+`ConfigActivationSuperseded`, and `RequiredDependenciesUnobserved`.
+Activation stages are diagnostic metadata, not additional readiness conditions.
+
+A failed reload reports `ConfigActivationFailed` without discarding the
+last-known-good active hash. Successful publication changes the active hash and
+reports `ConfigHashesMatch`. Raw startup messages, credentials, and activation
+failure details are excluded.
+
+This first contract does not evaluate every required dependency, recipe
+capability, or quorum. `RequiredDependenciesUnobserved` must not be treated as
+ready. HTTP `200` means the status document was retrieved, not that traffic can
+be served. The existing `/health`, `/ready`, and `/startup-status` contracts are
+unchanged; this endpoint does not replace their deployment probes. Fleet
+aggregation, per-replica persistence/TTL, and probe wiring remain separate work.
 
 ## Inspect signals without an inference call
 
@@ -437,6 +478,7 @@ Health, readiness, and API contract discovery.
 | `GET` | `/health` | Health check endpoint |
 | `GET` | `/ready` | Readiness endpoint that turns green only after startup completes |
 | `GET` | `/startup-status` | Detailed router startup and model-download status |
+| `GET` | `/api/v1/status` | Versioned replica-local startup and configuration status; not a deployment probe |
 | `GET` | `/api/v1` | Progressive API capability discovery |
 | `GET` | `/openapi.json` | OpenAPI 3.0 specification; optionally narrowed to one path or operation |
 | `GET` | `/docs` | Interactive Swagger UI documentation |
