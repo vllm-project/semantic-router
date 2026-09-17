@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -35,6 +36,8 @@ type classifierMappings struct {
 
 type routerComponents struct {
 	embeddings            *embedding.Set
+	serviceEmbeddings     *embedding.Set
+	cacheEmbeddings       *embedding.Set
 	modelRuntime          *native.Runtime
 	rerankers             map[config.RecipeName]modelruntime.PairScorer
 	cfg                   *config.RouterConfig
@@ -209,6 +212,22 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	}
 	components.embeddings = embeddings
 	components.resources.add(embeddings.Close)
+	servicesConfig := *cfg
+	// Ingestion owns an independent handle for its longer worker lifetime.
+	servicesConfig.VectorStore = nil
+	components.serviceEmbeddings, err = modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), &servicesConfig, components.modelRuntime)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
+	components.resources.add(components.serviceEmbeddings.Close)
+	components.cacheEmbeddings = embeddings
+	if cfg.NeedsSemanticResponseCache() {
+		components.cacheEmbeddings, err = modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, components.modelRuntime)
+		if err != nil {
+			return nil, rollbackResources(components.resources, err)
+		}
+		components.resources.add(components.cacheEmbeddings.Close)
+	}
 	components.rerankers, err = modelruntime.PrepareRerankers(context.Background(), cfg, components.modelRuntime)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
@@ -257,7 +276,7 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	}
 
 	if err := components.buildMemoryRuntime(func(memoryCfg *config.RouterConfig) (memory.Store, error) {
-		return createMemoryStore(memoryCfg, components.embeddings)
+		return createMemoryStore(memoryCfg, components.serviceEmbeddings)
 	}); err != nil {
 		return nil, err
 	}
@@ -295,7 +314,7 @@ func (components *routerComponents) buildEarlyResources() error {
 			})
 		},
 		func(cfg *config.RouterConfig) (cache.CacheBackend, error) {
-			semanticCache, identity, err := createSemanticCache(cfg, components.embeddings)
+			semanticCache, identity, err := createSemanticCache(cfg, components.cacheEmbeddings)
 			components.semanticCacheIdentity = identity
 			return semanticCache, err
 		},
@@ -310,8 +329,16 @@ func (components *routerComponents) buildEarlyResourcesWith(
 	) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error),
 	buildCache func(*config.RouterConfig) (cache.CacheBackend, error),
 ) error {
-	var err error
-	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.embeddings)
+	verifier, err := modelruntime.PrepareOwnedResponseCacheNLI(context.Background(), components.cfg, components.modelRuntime)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+	if verifier != nil {
+		// The cache drains and closes before its borrowed verifier is released.
+		components.resources.add(verifier.Close)
+	}
+
+	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.serviceEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
@@ -320,6 +347,7 @@ func (components *routerComponents) buildEarlyResourcesWith(
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
+	components.classificationSvc.SetGlobalEmbeddings(components.serviceEmbeddings)
 	components.resources.add(components.recipeClassifiers.Close)
 	components.resources.add(components.classificationSvc.Close)
 
@@ -333,9 +361,17 @@ func (components *routerComponents) buildEarlyResourcesWith(
 	if target, ok := components.semanticCache.(interface {
 		SetPolarityVerifier(cache.PolarityVerifyFunc)
 	}); ok {
-		target.SetPolarityVerifier(components.classifier.PolarityVerifier())
+		if verifier != nil {
+			target.SetPolarityVerifier(func(ctx context.Context, cached, incoming string) (float32, error) {
+				result, callErr := verifier.Call(ctx, string(config.GlobalModelScope), tasks.TextPairRequest{Premise: cached, Hypothesis: incoming})
+				if callErr != nil {
+					return 0, callErr
+				}
+				return result.Probabilities[2], nil
+			})
+		}
 	}
-	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.embeddings)
+	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.cacheEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}

@@ -4,7 +4,7 @@
 
 MODEL_CATALOG_PYTHON ?= $(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3)
 
-.PHONY: model-catalog-generate model-catalog-check model-catalog-test \
+.PHONY: model-catalog-generate model-catalog-check model-catalog-generated-check model-catalog-test \
 	model-catalog-audit model-catalog-boundary-check \
 	model-catalog-package-stage model-catalog-package-check
 
@@ -32,8 +32,10 @@ model-catalog-boundary-check: ## Reject checked-in consumer mirrors
 model-catalog-test: ## Run catalog compiler contract tests
 	@$(MODEL_CATALOG_PYTHON) -m unittest discover -s tools/catalog/tests -p "test_*.py"
 
-model-catalog-check: model-catalog-test model-catalog-boundary-check ## Reject invalid/incomplete sources, mirrors, or stale projections
+model-catalog-generated-check: model-catalog-boundary-check ## Reject stale catalog projections without running the compiler test suite
 	@$(MODEL_CATALOG_PYTHON) tools/catalog/generate_model_catalog.py --check
+
+model-catalog-check: model-catalog-test model-catalog-generated-check ## Reject invalid/incomplete sources, mirrors, or stale projections
 	@$(MODEL_CATALOG_PYTHON) tools/catalog/audit_model_catalog.py --require-min-evaluations-per-model 5 >/dev/null
 
 model-catalog-audit: ## Report authored catalog evaluation completeness (non-blocking by default)

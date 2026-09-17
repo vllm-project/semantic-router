@@ -177,6 +177,20 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
 
+To keep local Docker or Podman sessions valid when recreating the stack:
+
+1. Load the same `DASHBOARD_JWT_SECRET` into the host environment before every
+   `vllm-sr serve` invocation. Use your existing secret store; do not generate a
+   new value on each launch.
+2. Keep the Dashboard authentication database on its persistent volume.
+3. Start the stack normally. This variable configures Dashboard only; do not
+   pass it through `--recipe-env`.
+
+Without a stable key, each Dashboard restart requires users to log in again.
+Rotating the key also ends existing sessions, but does not change stored
+administrator accounts. If a temporary connection or server error interrupts
+session verification, choose **Retry** to reconnect without signing in again.
+
 Writes authenticated by the session cookie must carry an `X-CSRF-Token` header
 and a matching `Origin`. The frontend does this on its own. Set
 `DASHBOARD_ALLOWED_ORIGINS` to a comma-separated list when the browser's origin

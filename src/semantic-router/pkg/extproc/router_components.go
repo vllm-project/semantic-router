@@ -52,9 +52,10 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 
 func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, string, error) {
 	semanticCacheCfg := cfg.SemanticCache
+	storeNeeded, semanticNeeded := cfg.ResponseCacheDemand()
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.CacheBackendType(semanticCacheCfg.BackendType),
-		Enabled:             semanticCacheCfg.Enabled,
+		Enabled:             storeNeeded,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          semanticCacheCfg.MaxEntries,
 		TTLSeconds:          semanticCacheCfg.TTLSeconds,
@@ -74,26 +75,32 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 		cacheConfig.BackendType = cache.InMemoryCacheType
 	}
 
-	if cacheConfig.Enabled && len(sets) > 0 && sets[0] != nil {
+	if semanticNeeded && len(sets) > 0 && sets[0] != nil {
 		provider, err := sets[0].Get(cacheConfig.EmbeddingModel, 0, 0)
 		if err != nil {
 			return nil, "", fmt.Errorf("semantic cache embedding: %w", err)
 		}
 		cacheConfig.EmbeddingProvider = provider
 	}
-	cacheConfig, identity, err := cache.PrepareEmbeddingNamespace(cacheConfig, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-		return embedding.ResolveProviderIdentity(cacheConfig.EmbeddingProvider, settings)
-	})
-	if err != nil {
-		return nil, "", fmt.Errorf("bind semantic cache embedding: %w", err)
+	identity := ""
+	if semanticNeeded {
+		var err error
+		cacheConfig, identity, err = cache.PrepareEmbeddingNamespace(cacheConfig, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+			return embedding.ResolveProviderIdentity(cacheConfig.EmbeddingProvider, settings)
+		})
+		if err != nil {
+			return nil, "", fmt.Errorf("bind semantic cache embedding: %w", err)
+		}
 	}
 	semanticCache, err := cache.NewCacheBackend(cacheConfig)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create semantic cache: %w", err)
 	}
-	if err := cache.ValidateBackendEmbedding(context.Background(), semanticCache); err != nil {
-		_ = semanticCache.Close()
-		return nil, "", fmt.Errorf("failed to prepare semantic cache embedding: %w", err)
+	if semanticNeeded {
+		if err := cache.ValidateBackendEmbedding(context.Background(), semanticCache); err != nil {
+			_ = semanticCache.Close()
+			return nil, "", fmt.Errorf("failed to prepare semantic cache embedding: %w", err)
+		}
 	}
 
 	if semanticCache.IsEnabled() {
@@ -114,28 +121,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 }
 
 func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	semanticCacheCfg := cfg.SemanticCache
-	embeddingModels := cfg.EmbeddingModels
-	embeddingModel := semanticCacheCfg.EmbeddingModel
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case embeddingModels.MmBertModelPath != "":
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		return "gemma"
-	default:
-		logging.ComponentWarnEvent("extproc", "semantic_cache_embedding_fallback", map[string]interface{}{
-			"fallback_model": "bert",
-		})
-		return "bert"
-	}
+	return config.SemanticCacheEmbeddingModel(cfg)
 }
 
 func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {

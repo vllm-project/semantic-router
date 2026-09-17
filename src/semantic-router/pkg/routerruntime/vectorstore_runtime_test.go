@@ -33,11 +33,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 	}))
 	defer server.Close()
 
-	for _, explicit := range []bool{false, true} {
-		name := "implicit embedding"
-		if explicit {
-			name = "explicit embedding"
-		}
+	for _, name := range []string{"implicit embedding", "explicit embedding", "global embedding"} {
 		t.Run(name, func(t *testing.T) {
 			cfg := &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
 				Enabled: true, BackendType: "memory", EmbeddingModel: "bert", EmbeddingDimension: 2,
@@ -56,8 +52,13 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 				"classifier.risk": {Deployment: "classifier", Contract: "label_distribution.v1", Adapter: "modernbert"},
 				"safety.unsafe":   {Deployment: "classifier", Contract: "label_distribution.v1", Adapter: "modernbert"},
 			}
-			if explicit {
+			if name != "implicit embedding" {
 				cfg.ModelBindings["embedding"] = config.ModelBinding{Deployment: "embedder", Contract: "embedding.v1", Adapter: "openai_compatible"}
+			}
+			if name == "global embedding" {
+				cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": cfg.ModelBindings["embedding"]}
+				cfg.ModelDeployments["local-override"] = config.ModelDeployment{Provider: "ort", Artifact: "/not-installed/recipe-only"}
+				cfg.ModelBindings["embedding"] = config.ModelBinding{Deployment: "local-override", Contract: "embedding.v1", Adapter: "bert"}
 			}
 			if _, err := config.CompileModelBindings(cfg); err != nil {
 				t.Fatalf("complete source configuration is invalid: %v", err)
@@ -77,7 +78,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 			})
 			vector, err := runtime.Embedder.Embed(context.Background(), "ingestion query")
 			want := []float32{1, 0}
-			if explicit {
+			if name == "global embedding" {
 				want = []float32{0, 1}
 			}
 			if err != nil || !reflect.DeepEqual(vector, want) {

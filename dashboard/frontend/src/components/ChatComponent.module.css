@@ -971,6 +971,23 @@ body.playground-fullscreen .container {
   max-width: 100%;
 }
 
+.userMessageToggle {
+  display: block;
+  margin-top: 0.5rem;
+  padding: 0.2rem 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary-light);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: normal;
+}
+
+.userMessageToggle:hover {
+  text-decoration: underline;
+}
+
 /* For user messages, preserve whitespace */
 .message.user .messageText {
   white-space: pre-wrap;

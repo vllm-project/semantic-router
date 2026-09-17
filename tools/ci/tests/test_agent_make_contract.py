@@ -70,6 +70,8 @@ class HarnessMakeContractTests(unittest.TestCase):
             "config-schema-check",
             "api-docs-check",
             "agent-skill-check",
+            "docs-generated-check",
+            "docs-crd-check",
         ):
             self.assertIn(dependency, check)
         generate = target_block("generated-contract-generate", docs_make)
@@ -82,8 +84,32 @@ class HarnessMakeContractTests(unittest.TestCase):
         )
         steps = workflow["jobs"]["test-and-build"]["steps"]
         self.assertTrue(
-            any(step.get("run") == "make generated-contract-check" for step in steps)
+            any(
+                "make generated-contract-check" in step.get("run", "") for step in steps
+            )
         )
+
+    def test_reference_drift_is_checked_even_for_docs_only_changes(self) -> None:
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/pre-commit.yml").read_text()
+        )
+        job = workflow["jobs"]["generated-docs"]
+        self.assertNotIn("if", job)
+        commands = [step.get("run", "") for step in job["steps"]]
+        self.assertIn(
+            "make docs-generated-check docs-cli-test docs-community-test", commands
+        )
+        self.assertFalse(any("pip install -e" in command for command in commands))
+
+    def test_website_builds_reject_drift_before_generating_runtime_assets(self) -> None:
+        scripts = json.loads((REPO_ROOT / "website/package.json").read_text())[
+            "scripts"
+        ]
+        for target in ("build", "build:en", "build:zh", "deploy", "test"):
+            with self.subTest(target=target):
+                self.assertTrue(
+                    scripts[target].startswith("npm run generated:check &&")
+                )
 
     def test_verify_requires_explicit_domain_or_profile(self) -> None:
         verify = target_block("verify")

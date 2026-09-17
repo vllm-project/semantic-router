@@ -76,6 +76,8 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 		model, err = r.candleEmbedding(ctx, spec, view)
 	case "ort":
 		model, err = r.ortEmbedding(ctx, spec, view)
+	case "openvino":
+		model, err = r.openvinoEmbedding(ctx, spec, view)
 	default:
 		err = fmt.Errorf("%w: native embedding provider %q", binding.ErrCapability, spec.Deployment.Provider)
 	}
