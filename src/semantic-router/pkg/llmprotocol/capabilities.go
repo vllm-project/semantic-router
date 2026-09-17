@@ -51,6 +51,9 @@ const (
 	// including its request options, output item, and progress events. It is not
 	// interchangeable with generic image input or output support.
 	CapabilityImageGeneration
+	CapabilitySamplingMinP
+	CapabilityRepetitionPenalty
+	CapabilityCacheIsolation
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -121,6 +124,9 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningEffort, "reasoning_effort"},
 		{CapabilityReasoningBudget, "reasoning_budget"},
 		{CapabilitySamplingTopK, "sampling_top_k"},
+		{CapabilitySamplingMinP, "sampling_min_p"},
+		{CapabilityRepetitionPenalty, "repetition_penalty"},
+		{CapabilityCacheIsolation, "cache_isolation"},
 		{CapabilitySamplingSeed, "sampling_seed"},
 		{CapabilitySamplingPenalties, "sampling_penalties"},
 		{CapabilityStopSequences, "stop_sequences"},
@@ -184,6 +190,12 @@ func requestTransportCapabilities(request Request) Capability {
 
 func requestSamplingCapabilities(request Request) Capability {
 	var required Capability
+	if request.Sampling.MinP != nil {
+		required |= CapabilitySamplingMinP
+	}
+	if request.Sampling.RepetitionPenalty != nil {
+		required |= CapabilityRepetitionPenalty
+	}
 	if request.Sampling.TopK != nil {
 		required |= CapabilitySamplingTopK
 	}
@@ -201,6 +213,9 @@ func requestSamplingCapabilities(request Request) Capability {
 
 func requestStateCapabilities(request Request) Capability {
 	var required Capability
+	if request.CacheSalt != nil {
+		required |= CapabilityCacheIsolation
+	}
 	if len(request.Metadata) > 0 {
 		required |= CapabilityRequestMetadata
 	}
@@ -415,6 +430,9 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_effort":      CapabilityReasoningEffort,
 		"reasoning_budget":      CapabilityReasoningBudget,
 		"sampling_top_k":        CapabilitySamplingTopK,
+		"sampling_min_p":        CapabilitySamplingMinP,
+		"repetition_penalty":    CapabilityRepetitionPenalty,
+		"cache_isolation":       CapabilityCacheIsolation,
 		"sampling_seed":         CapabilitySamplingSeed,
 		"sampling_penalties":    CapabilitySamplingPenalties,
 		"stop_sequences":        CapabilityStopSequences,
