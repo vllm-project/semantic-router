@@ -198,10 +198,10 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/config/deploy", expected: PermConfigDeploy},
 		{method: http.MethodPost, path: "/api/router/config/deploy/preview", expected: PermConfigDeploy},
 		{method: http.MethodGet, path: "/api/router/config/deployments", expected: PermConfigRead},
-		{method: http.MethodGet, path: "/api/router/api/v1/response-cache/stats", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/router/api/v1/response-cache/invalidate", expected: PermConfigWrite},
-		{method: http.MethodPost, path: "/api/router/api/v1/context-compression/preview", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/router/api/v1/context-compression/recovery/invalidate", expected: PermConfigWrite},
+		{method: http.MethodGet, path: "/api/router/api/v1/storage/response-cache/stats", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", expected: PermConfigWrite},
+		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", expected: PermEvalRun},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/context-recovery/invalidate", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/evaluation/v1/catalog", expected: PermEvalRead},
 		{method: http.MethodPost, path: "/api/evaluation/v1/runs", expected: PermEvalWrite},
 		{method: http.MethodDelete, path: "/api/evaluation/v1/runs/task-1", expected: PermEvalWrite},
@@ -381,5 +381,87 @@ func TestAuthenticateRequestRequiresEvaluationRunForLiveModelVerification(t *tes
 	)
 	if writerResponse.Code != http.StatusNoContent || calls != 1 {
 		t.Fatalf("writer status = %d, calls = %d", writerResponse.Code, calls)
+	}
+}
+
+func TestRouterGatewayRejectsUndeclaredMethodAndPathBeforePermissionFallback(t *testing.T) {
+	for _, tc := range []struct {
+		method, path string
+		allowed      bool
+		permission   string
+	}{
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/rerank", true, PermEvalRun},
+		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings", true, PermConfigRead},
+		{http.MethodPost, "/api/router/api/v1/plugins/rag/preview", true, PermEvalRun},
+		{http.MethodGet, "/api/router/api/v1/observability/audit", true, PermReplayRead},
+		{http.MethodPost, "/api/router/api/v1/storage/response-cache/flush", true, PermConfigWrite},
+		{http.MethodPatch, "/api/router/api/v1/config", false, ""},
+		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", false, ""},
+		{http.MethodPost, "/api/router/api/v1/plugins/rag/bindings", false, ""},
+		{http.MethodGet, "/api/router/api/v1/response-cache/stats", false, ""},
+		{http.MethodPost, "/api/router/v1/chat/completions/suffix", false, ""},
+	} {
+		if routerGatewayRequestAllowed(tc.method, tc.path) != tc.allowed {
+			t.Fatalf("gateway decision wrong: %+v", tc)
+		}
+		if got := requiredPermission(tc.method, tc.path); got != tc.permission {
+			t.Fatalf("permission = %q for %+v", got, tc)
+		}
+	}
+}
+
+func TestAuthenticateRouterGatewayEnforcesProbePermissionAndDefaultDeny(t *testing.T) {
+	t.Parallel()
+	svc := newTestAuthService(t)
+	reader := newTestUser(t, svc, "gateway-reader@example.com", RoleRead, "active")
+	writer := newTestUser(t, svc, "gateway-writer@example.com", RoleWrite, "active")
+	calls := 0
+	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(http.StatusNoContent) }))
+	for _, tc := range []struct {
+		method, path               string
+		readerStatus, writerStatus int
+	}{
+		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings", http.StatusNoContent, http.StatusNoContent},
+		{http.MethodGet, "/api/router/api/v1/observability/audit", http.StatusNoContent, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/rerank", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/plugins/rag/preview", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/storage/response-cache/flush", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPatch, "/api/router/api/v1/config", http.StatusForbidden, http.StatusForbidden},
+		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", http.StatusForbidden, http.StatusForbidden},
+	} {
+		before := calls
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, reader, tc.method, tc.path, `{}`))
+		if response.Code != tc.readerStatus || (calls != before) != (tc.readerStatus == http.StatusNoContent) {
+			t.Fatalf("reader %s %s: %d", tc.method, tc.path, response.Code)
+		}
+		before = calls
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, writer, tc.method, tc.path, `{}`))
+		if response.Code != tc.writerStatus || (calls != before) != (tc.writerStatus == http.StatusNoContent) {
+			t.Fatalf("writer %s %s: %d", tc.method, tc.path, response.Code)
+		}
+	}
+}
+
+func TestAuthenticateRouterRetrievalRequiresResourceReadInAdditionToEvaluation(t *testing.T) {
+	t.Parallel()
+	svc := newTestAuthService(t)
+	writer := newTestUser(t, svc, "retrieval-eval-only@example.com", RoleWrite, "active")
+	if _, err := svc.store.db.Exec(`DELETE FROM role_permissions WHERE role = ? AND permission_key = ?`, RoleWrite, PermConfigRead); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) }))
+	for _, plugin := range []string{"rag", "tools", "tool_selection"} {
+		path := "/api/router/api/v1/plugins/" + plugin + "/preview"
+		if got := RequiredPermissions(http.MethodPost, path); !reflect.DeepEqual(got, []string{PermEvalRun, PermConfigRead}) {
+			t.Fatalf("incomplete retrieval permissions: %v", got)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, writer, http.MethodPost, path, `{"mode":"probe"}`))
+		if response.Code != http.StatusForbidden || called {
+			t.Fatalf("evaluation-only principal read plugin resources: %s status=%d", plugin, response.Code)
+		}
 	}
 }

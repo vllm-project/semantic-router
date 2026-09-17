@@ -27,6 +27,7 @@ def render_markdown_summary(
     after_results = after_eval.get("results", [])
     acceptance = after_eval.get("acceptance", {})
     lines.extend(_render_performance_section(after_eval.get("performance", {})))
+    lines.extend(_render_selection_section(after_eval))
     lines.extend(_render_decision_section(decision_summaries, acceptance))
     lines.extend(_render_tag_section(tag_summaries))
     lines.extend(_render_variant_section(after_results))
@@ -72,9 +73,43 @@ def _render_performance_section(performance: dict[str, Any]) -> list[str]:
 
 def _render_eval_summary(label: str, evaluation: dict[str, Any]) -> list[str]:
     return [
+        f"- {label} scope: `{evaluation.get('evaluation_scope', 'deployment')}`",
         f"- {label} success: `{evaluation['matched']}/{evaluation['total']}` ({evaluation['success_rate']}%)",
         f"- {label} decision coverage: `{evaluation['matched_decisions']}/{evaluation['total_decisions']}` ({evaluation['decision_success_rate']}%)",
     ]
+
+
+def _render_selection_section(evaluation: dict[str, Any]) -> list[str]:
+    scopes = evaluation.get("scopes") or {}
+    if not scopes:
+        return []
+    lines = ["## Policy and Deployment", ""]
+    if evaluation.get("evaluation_scope") == "policy":
+        lines.extend(
+            [
+                "Policy success verifies router inference and decision evidence. It does not certify that the assigned models can execute the request.",
+                "",
+            ]
+        )
+    for name in ("policy", "deployment"):
+        summary = scopes.get(name) or {}
+        lines.append(
+            f"- {name.capitalize()}: `{summary.get('matched', 0)}/{summary.get('total', 0)}`; passed: `{summary.get('passed', False)}`"
+        )
+    for status, count in (evaluation.get("selection_status_counts") or {}).items():
+        lines.append(f"- Selection `{status}`: `{count}`")
+    reasons = evaluation.get("selection_reasons") or []
+    if reasons:
+        lines.extend(["", "| Variant | Selection | Reason |", "|---|---|---|"])
+        for item in reasons:
+            reason = (
+                str(item.get("reason") or item.get("error") or "")
+                .replace("|", "\\|")
+                .replace("\n", " ")
+            )
+            lines.append(f"| `{item['id']}` | `{item['status']}` | {reason} |")
+    lines.append("")
+    return lines
 
 
 def _render_review_axes() -> list[str]:
@@ -135,9 +170,13 @@ def _render_variant_section(after_results: list[dict[str, Any]]) -> list[str]:
     for result in after_results:
         status = "pass" if result["matched"] else "review"
         actual = result["actual_decision"] or "(none)"
+        expected = result["expected_decision"]
+        if result.get("expected_selection_status"):
+            expected += f" / {result['expected_selection_status']}"
+            actual += f" / {result.get('selection_status') or '(none)'}"
         tags = ",".join(result.get("tags") or []) or "-"
         lines.append(
-            f"| `{result['id']}` | `{result['expected_decision']}` | `{actual}` | `{tags}` | `{status}` |"
+            f"| `{result['id']}` | `{expected}` | `{actual}` | `{tags}` | `{status}` |"
         )
     lines.append("")
     return lines
@@ -205,6 +244,7 @@ def _render_decision_failures(
                 ("candidate alias", result.get("alias_matched", True)),
                 ("plugins", result.get("plugins_matched", True)),
                 ("signals", result.get("signals_matched", True)),
+                ("signal values", result.get("signal_values_matched", True)),
                 ("trace", result.get("trace_matched", True)),
             )
             if not passed
@@ -216,6 +256,9 @@ def _render_decision_failures(
                 "Candidate pool: "
                 f"`{', '.join(str(model) for model in result['recommended_models'])}`"
             )
+        if result.get("signal_value_errors"):
+            value_errors = "; ".join(result["signal_value_errors"])
+            lines.append(f"Signal value errors: `{value_errors}`")
         if result.get("trace_errors"):
             lines.append(f"Trace errors: `{'; '.join(result['trace_errors'])}`")
         if result.get("error"):

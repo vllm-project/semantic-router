@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type discoveredModels struct {
@@ -177,6 +179,23 @@ type loraModelMatch struct {
 }
 
 func classifyLoRAModel(path string, dirName string, modelRegistry map[string]string) loraModelMatch {
+	// Versioned family names do not encode architecture. The registry declares
+	// the task and the artifact config declares how its weights are executed.
+	spec := config.GetModelByPath(path)
+	if spec == nil {
+		spec = config.GetModelByPath("models/" + filepath.Base(path))
+	}
+	if spec != nil && isModernBertModel(path) {
+		switch spec.Purpose {
+		case config.PurposeDomainClassification:
+			return loraModelMatch{kind: loraIntentModel, architecture: "modernbert"}
+		case config.PurposePIIDetection:
+			return loraModelMatch{kind: loraPIIModel, architecture: "modernbert"}
+		case config.PurposeJailbreakDetection:
+			return loraModelMatch{kind: loraSecurityModel, architecture: "modernbert"}
+		}
+	}
+
 	intent, pii, security := loraRegistryMatch(path, modelRegistry)
 	switch {
 	case intent || strings.HasPrefix(dirName, "lora_intent_classifier") || strings.Contains(dirName, "intent-classifier-merged"):

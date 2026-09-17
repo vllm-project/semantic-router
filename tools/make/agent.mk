@@ -26,6 +26,7 @@ AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_PYTHON ?= $(AGENT_VENV)/bin/python
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 AGENT_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.agent-requirements.txt
+AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
 AGENT_NODEENV ?= $(AGENT_VENV)/nodeenv
 AGENT_NODE_TOOLS ?= $(AGENT_VENV)/node-tools
 AGENT_MARKDOWNLINT ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/markdownlint
@@ -58,6 +59,7 @@ ci-full: ## Reproduce the complete baseline PR checks locally
 harness-check: $(HARNESS_BOOTSTRAP_DEPS) ## Validate the domain registry, workflows, and harness tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py validate
+	@"$(AGENT_PYTHON)" tools/agent/scripts/sync_public_skill.py --check
 	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
 	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
 	@"$(AGENT_PYTHON)" -m unittest discover -s tools/agent/scripts/tests -p "test_*.py"
@@ -76,9 +78,11 @@ harness-venv-install: ## Install the repository check dependencies
 		python3 -m venv "$(AGENT_VENV)"; \
 	fi
 	@if [ ! -f "$(AGENT_REQUIREMENTS_STAMP)" ] || \
-		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; then \
+		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" || \
+		! cmp -s tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; then \
 		"$(AGENT_PYTHON)" -m pip install -r tools/agent/requirements.txt && \
-		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; \
+		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" && \
+		cp tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; \
 	fi
 	@if [ "$(abspath $(AGENT_WORKTREE_VENV))" != "$(abspath $(AGENT_VENV))" ]; then \
 		if [ -e "$(AGENT_WORKTREE_VENV)" ] && [ ! -L "$(AGENT_WORKTREE_VENV)" ]; then \
@@ -141,3 +145,11 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 .PHONY: impact check verify ci-full harness-check harness-venv-install harness-bootstrap \
 	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap harness-rust-bootstrap \
 	test-and-build-local
+
+agent-skill-sync: ## Regenerate the public install skill from its repository source
+	@python3 tools/agent/scripts/sync_public_skill.py
+
+agent-skill-check: ## Check the generated public skill without writing
+	@python3 tools/agent/scripts/sync_public_skill.py --check
+
+.PHONY: agent-skill-sync agent-skill-check

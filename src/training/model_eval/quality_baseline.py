@@ -14,7 +14,7 @@ What this adds over ``mom_collection_eval.py``:
 Example:
 
     python src/training/model_eval/quality_baseline.py \
-        --task jailbreak --device cuda --output-dir baseline/jailbreak
+        --task fact-check --device cuda --output-dir baseline/fact-check
 """
 
 from __future__ import annotations
@@ -169,8 +169,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     spec = TASK_SPECS[args.task]
-    dataset_revision = resolve_hf_revision(spec.dataset_repo, repo_type="dataset")
     measured = resolve_measured_artifact(args, served)
+    spec.validate_artifact(measured.repo)
+    dataset_revision = resolve_hf_revision(spec.dataset_repo, repo_type="dataset")
 
     mapping = (
         dict(measured.referenced["label_mapping"])

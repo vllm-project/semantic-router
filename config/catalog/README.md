@@ -184,7 +184,19 @@ This is catalog or custom-model schema, never a new decision field.
 
 Virtual-model `recommended_pool` entries are suggestions, not foreign keys.
 They may name catalog-backed models or operator-defined models that only exist
-in a deployment configuration.
+in a deployment configuration. The list may be omitted or empty. Its length does
+not change a role's required assignment or `minimum_candidates`: operators must
+still provide enough eligible backends. For private routing, the operator owns
+the deployment boundary; a recommendation does not establish where a model runs
+or how that deployment handles data. Declared capabilities, context and output
+limits, and quality evidence must match the assigned deployment and policy.
+
+The MoM 2.0 policy's reference pools use DeepSeek V4 Flash and Pro at `max`
+reasoning effort and GLM-5.1 with reasoning enabled. Configure the assigned
+backend's reasoning mode to match the catalog evidence; other effort levels may
+not have the required index. These examples do not establish image capability or
+measured deployment latency and pricing. Vault leaves recommendations empty so
+operators explicitly assign deployments that meet their privacy requirements.
 
 Model Hub is a catalog, not an overall model ranking. The generated product
 views may compare only one selected benchmark version, profile, and metric.

@@ -121,12 +121,16 @@ func TestOwnedOpenVINOCompatibilityKeepsIndependentBERTServices(t *testing.T) {
 				cfg.VectorStore = &config.VectorStoreConfig{Enabled: true, EmbeddingModel: "bert", EmbeddingDimension: 4}
 			}
 			runtime := native.New(binding.NewPool())
-			first, err := PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
+			prepare := PrepareOwnedGlobalServiceEmbeddings
+			if consumer == "cache" {
+				prepare = PrepareOwnedResponseCacheEmbeddings
+			}
+			first, err := prepare(context.Background(), cfg, runtime)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer first.Close()
-			peer, err := PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
+			peer, err := prepare(context.Background(), cfg, runtime)
 			if err != nil {
 				t.Fatal(err)
 			}

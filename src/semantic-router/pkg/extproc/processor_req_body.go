@@ -233,11 +233,6 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// Log routing decision
 	r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
 	// Capture router replay information if enabled
 	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
 
@@ -283,11 +278,6 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 		return r.imageFileDispatchFailure(err, ctx)
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
-
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
 
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)

@@ -58,6 +58,16 @@ def test_install_script_persists_selected_runtime() -> None:
     assert "CONTAINER_RUNTIME=" in content
 
 
+def test_install_script_launcher_preserves_install_root() -> None:
+    content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    # A custom --install-root writes runtime.env under that root. The
+    # generated launcher must export VLLM_SR_INSTALL_ROOT so later CLI
+    # sessions resolve the persisted runtime.env next to this installation
+    # instead of the default location (#3370).
+    assert 'export VLLM_SR_INSTALL_ROOT="$INSTALL_ROOT"' in content
+
+
 def test_installation_doc_documents_runtime_options() -> None:
     content = INSTALL_DOC_PATH.read_text(encoding="utf-8")
 
@@ -116,6 +126,10 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     assert "vllm-sr route preview" in skill
     assert "vllm-sr route probe" in skill
     assert "Dashboard is optional" in skill
+    assert "--channel dev --mode cli --runtime skip --no-launch" in skill
+    assert "--channel stable --mode cli" not in skill
+    assert 'export PATH="$HOME/.local/bin:$PATH"' in skill
+    assert "vllm-sr recipe builtin list" in skill
 
 
 def test_pypi_publish_workflow_does_not_push_back_to_main() -> None:

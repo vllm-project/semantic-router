@@ -142,6 +142,11 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 	spec := server.generateOpenAPISpec()
 
 	eval := spec.Paths["/api/v1/routing/preview"].Post
+	for _, status := range []string{"429", "503", "504"} {
+		if _, ok := eval.Responses[status]; !ok {
+			t.Fatalf("Preview response %s is undocumented", status)
+		}
+	}
 	requireOpenAPIParameter(t, eval.Parameters, "trace", "query", false, "boolean")
 	if eval.RequestBody == nil || eval.RequestBody.Content["application/json"].Schema == nil {
 		t.Fatal("routing preview request schema is missing")
