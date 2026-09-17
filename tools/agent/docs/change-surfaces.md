@@ -166,11 +166,15 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Contributor prose lives in `AGENTS.md`, `CONTRIBUTING.md`, this directory,
   and the nearest local `AGENTS.md`. It does not duplicate executable routing.
 - `make generated-contract-check` recomputes config JSON/TypeScript, OpenAPI
-  JSON and its endpoint index, and the public operations skill with all Markdown
-  references. It fails on drift without rewriting authored or published files.
+  JSON and its endpoint index, model catalogs, CLI/CRD references, the configuration
+  catalog, and the public operations skill with all Markdown references.
+  It fails on drift without rewriting authored or published files.
   `make generated-contract-generate` refreshes those artifacts in dependency
   order. Commit the generated changes with their sources. The core CI gate runs
   the same check; `make check` selects it for API/config source or output changes.
+  Every PR and main quality gate also runs `make docs-generated-check` for
+  references that need no native build. Website builds reject stale catalog,
+  CLI, configuration, and skill artifacts before generating build-only assets.
   Skill-only changes use the lightweight `make agent-skill-check` through the
   pre-commit and harness gates, without building native libraries.
 

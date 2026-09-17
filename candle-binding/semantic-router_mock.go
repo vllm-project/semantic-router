@@ -594,6 +594,11 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
 }
 
+// InitMmBert32KModalityClassifier is unavailable without the native backend.
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
+	return ErrBackendUnavailable
+}
+
 // ClassifyMmBert32KPII classifies text with mmBERT-32K PII classifier
 func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	return nil, ErrBackendUnavailable

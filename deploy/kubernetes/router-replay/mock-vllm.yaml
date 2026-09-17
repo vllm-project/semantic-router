@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-vllm
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-vllm
+  template:
+    metadata:
+      labels:
+        app: mock-vllm
+    spec:
+      containers:
+        - name: mock-vllm
+          image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+          imagePullPolicy: Never
+          env:
+            - name: MOCK_VLLM_SHADOW_CONTROL
+              value: "true"
+          ports:
+            - containerPort: 8000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-vllm
+  namespace: default
+spec:
+  selector:
+    app: mock-vllm
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

@@ -296,7 +296,9 @@ func (r *OpenAIRouter) performCacheLookup(
 		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "response_cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
-		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
+		// The cache partition includes the selected backend, independently of
+		// the public entrypoint and any provider alias in the cached body.
+		r.startRouterReplay(ctx, ctx.CacheRequestModel, ctx.CacheSelectedModel, categoryName)
 		r.reportCacheHitTelemetry(ctx, cachedResponse, lookupDuration)
 		logging.LogEvent("cache_hit", map[string]interface{}{
 			"request_id": ctx.RequestID,

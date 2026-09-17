@@ -11,11 +11,13 @@ import (
 )
 
 type canonicalRoutingOverrideFields struct {
-	modelBindings bool
-	modelCards    bool
-	signals       bool
-	projections   bool
-	decisions     bool
+	candidateRequirements bool
+	dataPolicy            bool
+	modelBindings         bool
+	modelCards            bool
+	signals               bool
+	projections           bool
+	decisions             bool
 }
 
 func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig.CanonicalRouting, canonicalRoutingOverrideFields, error) {
@@ -36,6 +38,10 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 
 	for key := range object {
 		switch key {
+		case "candidate_requirements":
+			fields.candidateRequirements = true
+		case "data_policy":
+			fields.dataPolicy = true
 		case "model_bindings":
 			fields.modelBindings = true
 		case "modelCards":
@@ -55,6 +61,31 @@ func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig
 	}
 	if err := yaml.Unmarshal(data, &routing); err != nil {
 		return routing, fields, err
+	}
+	if fields.candidateRequirements {
+		payload, err := json.Marshal(object["candidate_requirements"])
+		if err != nil {
+			return routing, fields, err
+		}
+		policy, err := decodeCanonicalModelObject[routerconfig.CandidateRequirements](&apiextensionsv1.JSON{Raw: payload})
+		if err != nil {
+			return routing, fields, fmt.Errorf("candidate_requirements: %w", err)
+		}
+		if err := policy.Validate(); err != nil {
+			return routing, fields, err
+		}
+		routing.CandidateRequirements = &policy
+	}
+	if fields.dataPolicy {
+		payload, err := json.Marshal(object["data_policy"])
+		if err != nil {
+			return routing, fields, err
+		}
+		policy, err := decodeCanonicalModelObject[routerconfig.RoutingDataPolicy](&apiextensionsv1.JSON{Raw: payload})
+		if err != nil {
+			return routing, fields, fmt.Errorf("data_policy: %w", err)
+		}
+		routing.DataPolicy = &policy
 	}
 	if fields.modelBindings {
 		bindingsJSON, err := json.Marshal(object["model_bindings"])
@@ -76,6 +107,12 @@ func applyCanonicalRoutingOverrides(
 	routing routerconfig.CanonicalRouting,
 	fields canonicalRoutingOverrideFields,
 ) {
+	if fields.candidateRequirements {
+		canonical.Routing.CandidateRequirements = routing.CandidateRequirements.Clone()
+	}
+	if fields.dataPolicy {
+		canonical.Routing.DataPolicy = routing.DataPolicy.Clone()
+	}
 	if fields.modelBindings {
 		canonical.Routing.ModelBindings = routing.ModelBindings
 	}

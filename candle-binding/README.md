@@ -143,6 +143,43 @@ Direct C callers must use `candle_free_embedding_capabilities_v1` before reusing
 or discarding a result. V1 identifies the ABI descriptor, not a task-contract
 identity or version.
 
+## ModernBERT rotary configuration
+
+Both ModernBERT encoder implementations use the same rotary resolver and cache.
+They read the official `norm_eps` normalization parameter. The older
+`layer_norm_eps` spelling remains a compatible alias; conflicting values fail
+validation instead of silently selecting one.
+`config.json` selects default RoPE or standard YaRN; model names and
+`training_config.json` do not select the mathematics. Raising theta alone is
+still default RoPE. `max_position_embeddings` is the cache capacity; `factor`
+does not multiply this limit or change a task's configured input budget.
+
+The supported Transformers 4 form is `rope_scaling` with `rope_type: "yarn"`
+(`type` is also accepted), `factor`, `original_max_position_embeddings`,
+`beta_fast`, `beta_slow`, `attention_factor`, and optional `truncate: true`.
+Defaults are original length equal to the configured capacity, beta values 32/1,
+and attention factor `1 + 0.1 * ln(factor)`. Global and local theta remain
+separate. Transformers 5 `rope_parameters` must explicitly describe both
+`full_attention` and `sliding_attention`, each with its own `rope_theta` and
+scaling. The two attention types may use different supported recipes. If both
+old and new forms are present, their resolved parameters must agree.
+
+Explicit `layer_types` must match the periodic
+`global_attn_every_n_layers` architecture. Dynamic scaling, partial rotary
+heads, `truncate: false`, additional scaling options, and contradictory
+parameters fail during configuration validation. Positions, angles and scaled
+sine/cosine values are computed in float32 before casting the cache to the
+model dtype. Default float32 caches and encoder outputs retain the previous
+arithmetic bit for bit.
+
+The [synthetic numerical fixtures](test_data/modernbert_rope/README.md) test
+frequency, long-position cache and rotated Q/K values, plus both complete tiny
+encoder paths against official Transformers 4.57.6. Transformers 5.3.0 provides
+an additional mathematical reference, but its standard nested YaRN config
+validator currently raises `KeyError`; these tests do **not** claim standard
+Transformers 5 checkpoint loading works. They also do not qualify trained model
+quality or CUDA execution.
+
 ## Troubleshooting
 
 - `library 'candle_semantic_router' not found`: build the release library and

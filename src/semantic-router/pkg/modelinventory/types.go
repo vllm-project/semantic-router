@@ -24,6 +24,7 @@ type ModelsInfoSummary struct {
 // ModelInfo represents information about a loaded model.
 type ModelInfo struct {
 	Name              string                          `json:"name"`
+	Recipe            string                          `json:"recipe,omitempty"`
 	Type              string                          `json:"type"`
 	Loaded            bool                            `json:"loaded"`
 	State             string                          `json:"state,omitempty"`
@@ -42,5 +43,7 @@ type SystemInfo struct {
 	Architecture string `json:"architecture"`
 	OS           string `json:"os"`
 	MemoryUsage  string `json:"memory_usage"`
-	GPUAvailable bool   `json:"gpu_available"`
+	// GPUAvailable reports GPU execution in the active prepared bindings,
+	// rather than probing the host for unused hardware.
+	GPUAvailable bool `json:"gpu_available"`
 }

@@ -1,0 +1,73 @@
+{
+  "pad_token_id": 0,
+  "bos_token_id": 50281,
+  "eos_token_id": 50282,
+  "cls_token_id": 50281,
+  "sep_token_id": 50282,
+  "tie_word_embeddings": true,
+  "vocab_size": 64,
+  "max_position_embeddings": 32768,
+  "hidden_size": 32,
+  "intermediate_size": 48,
+  "num_hidden_layers": 2,
+  "num_attention_heads": 2,
+  "initializer_range": 0.02,
+  "initializer_cutoff_factor": 2.0,
+  "norm_eps": 1e-05,
+  "norm_bias": false,
+  "attention_bias": false,
+  "attention_dropout": 0.0,
+  "hidden_activation": "gelu",
+  "local_attention": 8,
+  "embedding_dropout": 0.0,
+  "mlp_bias": false,
+  "mlp_dropout": 0.0,
+  "decoder_bias": true,
+  "classifier_pooling": "cls",
+  "classifier_dropout": 0.0,
+  "classifier_bias": false,
+  "classifier_activation": "gelu",
+  "deterministic_flash_attn": false,
+  "sparse_prediction": false,
+  "sparse_pred_ignore_index": -100,
+  "layer_types": [
+    "full_attention",
+    "sliding_attention"
+  ],
+  "global_attn_every_n_layers": 2,
+  "rope_parameters": {
+    "full_attention": {
+      "rope_theta": 10000.0,
+      "rope_type": "yarn",
+      "factor": 4.0,
+      "original_max_position_embeddings": 8192,
+      "truncate": true
+    },
+    "sliding_attention": {
+      "rope_theta": 20000.0,
+      "rope_type": "yarn",
+      "factor": 4.0,
+      "original_max_position_embeddings": 8192,
+      "truncate": true
+    }
+  },
+  "return_dict": true,
+  "output_hidden_states": false,
+  "dtype": null,
+  "chunk_size_feed_forward": 0,
+  "is_encoder_decoder": false,
+  "architectures": null,
+  "id2label": {
+    "0": "LABEL_0",
+    "1": "LABEL_1"
+  },
+  "label2id": {
+    "LABEL_0": 0,
+    "LABEL_1": 1
+  },
+  "problem_type": null,
+  "_name_or_path": "",
+  "transformers_version": "5.3.0",
+  "model_type": "modernbert",
+  "output_attentions": false
+}

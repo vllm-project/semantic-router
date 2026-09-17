@@ -65,7 +65,6 @@ const (
 )
 
 var (
-	ErrBackendUnavailable    = errors.New("onnx: native backend unavailable for this build")
 	ErrUnsupportedModelType  = errors.New("unsupported embedding model type")
 	ErrMalformedCapabilities = errors.New("malformed embedding capabilities")
 )

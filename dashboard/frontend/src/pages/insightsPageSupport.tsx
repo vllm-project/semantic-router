@@ -3,10 +3,18 @@ import CollapsibleSection from '../components/CollapsibleSection'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDateTime } from '../utils/dateTime'
+import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
+import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 
-import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
+import type {
+  InsightsCostSummary,
+  InsightsCurrencyCostSummary,
+  InsightsRecord,
+  Signal,
+} from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
+import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
@@ -29,6 +37,21 @@ export function getInsightsLifecyclePresentation(record: InsightsRecord) {
     : state.replace('_', ' ')
 
   return { state, successful, errored, pending, label }
+}
+
+export function getInsightsLifecycleStatusClass(
+  lifecycle: ReturnType<typeof getInsightsLifecyclePresentation>,
+) {
+  if (lifecycle.successful) {
+    return styles.statusSuccess
+  }
+  if (lifecycle.errored) {
+    return styles.statusError
+  }
+  if (lifecycle.pending) {
+    return styles.statusPending
+  }
+  return styles.statusUnknown
 }
 
 export function getUniqueDecisions(records: InsightsRecord[]) {
@@ -55,31 +78,35 @@ export function getUniqueModels(records: InsightsRecord[]) {
 }
 
 export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSummary {
-  let totalSaved = 0
-  let baselineSpend = 0
-  let actualSpend = 0
-  let currency: string | undefined
+  const groups = new Map<string, InsightsCurrencyCostSummary>()
   let costRecordCount = 0
-
   records.forEach((record) => {
-    if (!hasCompleteCostData(record)) {
-      return
+    if (!hasCompleteCostData(record)) return
+    const currency = record.currency!.trim().toUpperCase()
+    const group = groups.get(currency) ?? {
+      totalSaved: 0,
+      baselineSpend: 0,
+      actualSpend: 0,
+      currency,
+      costRecordCount: 0,
     }
-
-    totalSaved += record.cost_savings ?? 0
-    baselineSpend += record.baseline_cost ?? 0
-    actualSpend += record.actual_cost ?? 0
-    currency = currency || record.currency
+    group.totalSaved += record.cost_savings!
+    group.baselineSpend += record.baseline_cost!
+    group.actualSpend += record.actual_cost!
+    group.costRecordCount += 1
+    groups.set(currency, group)
     costRecordCount += 1
   })
-
+  const byCurrency = [...groups.values()].sort((a, b) => a.currency.localeCompare(b.currency))
+  const single = byCurrency.length === 1 ? byCurrency[0] : undefined
   return {
-    totalSaved,
-    baselineSpend,
-    actualSpend,
-    currency,
+    totalSaved: single?.totalSaved ?? 0,
+    baselineSpend: single?.baselineSpend ?? 0,
+    actualSpend: single?.actualSpend ?? 0,
+    currency: single?.currency,
     costRecordCount,
     excludedRecordCount: records.length - costRecordCount,
+    byCurrency,
   }
 }
 
@@ -214,19 +241,22 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     },
     {
       key: 'actual_cost',
-      header: 'Actual Cost',
+      header: 'Estimated Cost',
       width: '160px',
       sortable: true,
-      render: (row) => renderCostValue(row.actual_cost, row.currency),
+      render: (row) =>
+        hasCompleteCostData(row)
+          ? renderCostValue(row.actual_cost, row.currency)
+          : renderUnavailableCost(row),
     },
     {
       key: 'cost_savings',
-      header: 'Saved vs Baseline',
+      header: 'Estimated Savings',
       width: '180px',
       sortable: true,
       render: (row) => {
         if (!hasCompleteCostData(row)) {
-          return <span className={styles.costValueMuted}>N/A</span>
+          return renderUnavailableCost(row)
         }
 
         return (
@@ -247,17 +277,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       render: (row) => {
         const lifecycle = getInsightsLifecyclePresentation(row)
         return (
-          <span
-            className={`${styles.statusBadge} ${
-              lifecycle.successful
-                ? styles.statusSuccess
-                : lifecycle.errored
-                  ? styles.statusError
-                  : lifecycle.pending
-                    ? styles.statusPending
-                    : styles.statusUnknown
-            }`}
-          >
+          <span className={`${styles.statusBadge} ${getInsightsLifecycleStatusClass(lifecycle)}`}>
             {lifecycle.label}
           </span>
         )
@@ -269,12 +289,13 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '160px',
       render: (row) => (
         <div className={styles.indicators}>
-          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>
-            Cache
-          </span>
-          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>
-            Stream
-          </span>
+          {row.from_cache && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Cache hit</span>
+          )}
+          {row.streaming && (
+            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Streaming</span>
+          )}
+          {!row.from_cache && !row.streaming && <span>No recorded flags</span>}
         </div>
       ),
     },
@@ -328,8 +349,14 @@ export function buildInsightsRecordSections(
       { label: 'Original model', value: record.original_model || '-' },
       { label: 'Selected model', value: record.selected_model || '-' },
       { label: 'Selection method', value: record.selection_method || '-' },
+      {
+        label: 'Selection rationale',
+        value: record.route_diagnostics?.selection_reasoning || 'Not recorded',
+      },
     ],
   })
+
+  sections.push(...buildRoutingExplanationSections(record))
 
   sections.push({
     title: 'Usage & Cost',
@@ -338,12 +365,29 @@ export function buildInsightsRecordSections(
       { label: 'Prompt tokens', value: formatTokenValue(record.prompt_tokens) },
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
-      { label: 'Baseline model', value: record.baseline_model || '-' },
-      { label: 'Actual cost', value: formatCurrencyOrNA(record.actual_cost, record.currency) },
-      { label: 'Baseline cost', value: formatCurrencyOrNA(record.baseline_cost, record.currency) },
+      { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
       {
-        label: 'Saved vs baseline',
-        value: formatCurrencyOrNA(record.cost_savings, record.currency),
+        label: 'Cost basis',
+        value:
+          getInsightsCostUnavailableReason(record) ||
+          'Recorded tokens × configured model rates; excludes infrastructure charges and invoice adjustments.',
+      },
+      {
+        label: 'Baseline basis',
+        value:
+          'New records compare the recipe’s complete model pool across all decisions in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+      },
+      {
+        label: 'Estimated model cost',
+        value: formatRecordedCost(record, record.actual_cost),
+      },
+      {
+        label: 'Estimated baseline cost',
+        value: formatRecordedCost(record, record.baseline_cost),
+      },
+      {
+        label: 'Estimated savings',
+        value: formatRecordedCost(record, record.cost_savings),
       },
     ],
   })
@@ -396,74 +440,65 @@ export function buildInsightsRecordSections(
 }
 
 export function collectSignals(signals: Signal): string[] {
-  const allSignals: string[] = []
-  const append = (key: keyof Signal) => {
-    allSignals.push(
-      ...(signals[key] ?? []).map((value) =>
-        formatRoutingMetadataValue(`x-vsr-matched-${key.replace(/_/g, '-')}`, value),
-      ),
-    )
-  }
-  const signalKeys: Array<keyof Signal> = [
-    'keyword',
-    'embedding',
-    'domain',
-    'fact_check',
-    'user_feedback',
-    'reask',
-    'preference',
-    'language',
-    'context',
-    'structure',
-    'complexity',
-    'modality',
-    'authz',
-    'jailbreak',
-    'pii',
-    'kb',
-  ]
-  signalKeys.forEach(append)
-  return allSignals
-}
-
-export function hasCompleteCostData(record: InsightsRecord) {
-  return (
-    (record.lifecycle_state === undefined || record.lifecycle_state === 'completed') &&
-    typeof record.actual_cost === 'number' &&
-    typeof record.baseline_cost === 'number' &&
-    typeof record.cost_savings === 'number' &&
-    typeof record.total_tokens === 'number' &&
-    Boolean(record.currency) &&
-    Boolean(record.baseline_model)
+  return ROUTER_CONFIG_EXTENSION.signals.flatMap(({ type }) =>
+    (signals[type] ?? []).map((value) =>
+      formatRoutingMetadataValue(`x-vsr-matched-${type.replace(/_/g, '-')}`, value),
+    ),
   )
 }
 
-function buildSignalFields(signals: Signal): ViewField[] {
-  const signalEntries: Array<[keyof Signal, string]> = [
-    ['keyword', 'Keyword matches'],
-    ['embedding', 'Embedding matches'],
-    ['domain', 'Domain matches'],
-    ['fact_check', 'Fact check results'],
-    ['user_feedback', 'User feedback'],
-    ['reask', 'Reask'],
-    ['preference', 'Preference signals'],
-    ['language', 'Language signals'],
-    ['context', 'Context signals'],
-    ['structure', 'Structure signals'],
-    ['complexity', 'Complexity signals'],
-    ['modality', 'Modality signals'],
-    ['authz', 'Authz signals'],
-    ['jailbreak', 'Jailbreak signals'],
-    ['pii', 'PII signals'],
-    ['kb', 'Knowledge base signals'],
-  ]
+export function getInsightsCostUnavailableReason(record: InsightsRecord): string | undefined {
+  return getUnavailableCost(record)?.reason
+}
 
-  return signalEntries.flatMap(([key, label]) => {
+function getUnavailableCost(record: InsightsRecord) {
+  if (record.lifecycle_state !== 'completed') {
+    return { label: 'Not completed', reason: 'Request not completed' }
+  }
+  if (!Number.isFinite(record.total_tokens)) {
+    return { label: 'Usage not recorded', reason: 'Token usage was not recorded for this request' }
+  }
+  if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
+    return {
+      label: 'Price not recorded',
+      reason:
+        'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
+    }
+  }
+  if (
+    !Number.isFinite(record.baseline_cost) ||
+    !Number.isFinite(record.cost_savings) ||
+    !record.baseline_model
+  ) {
+    return {
+      label: 'Baseline not recorded',
+      reason: 'Baseline estimate was not recorded for this request',
+    }
+  }
+  return undefined
+}
+
+function renderUnavailableCost(record: InsightsRecord) {
+  const unavailable = getUnavailableCost(record)
+  return (
+    <span className={styles.costValueMuted} title={unavailable?.reason}>
+      {unavailable?.label || 'N/A'}
+    </span>
+  )
+}
+
+export function hasCompleteCostData(record: InsightsRecord) {
+  return getInsightsCostUnavailableReason(record) === undefined
+}
+
+function buildSignalFields(signals: Signal): ViewField[] {
+  return ROUTER_CONFIG_EXTENSION.signals.flatMap(({ type: key, display_name }) => {
     const values = signals[key]
     if (!values?.length) {
       return []
     }
 
+    const label = `${display_name} signals`
     return [
       {
         label,
@@ -505,9 +540,11 @@ function buildGuardrailsValue(record: InsightsRecord) {
         {record.jailbreak_detected ? (
           <span className={styles.alertDanger}>
             Jailbreak: {record.jailbreak_type || 'detected'} (
-            {record.jailbreak_score_available === true && typeof record.jailbreak_confidence === 'number'
+            {record.jailbreak_score_available === true &&
+            typeof record.jailbreak_confidence === 'number'
               ? `${(record.jailbreak_confidence * 100).toFixed(1)}%`
-              : 'Score unavailable'})
+              : 'Score unavailable'}
+            )
           </span>
         ) : null}
         {record.pii_detected ? (
@@ -693,8 +730,8 @@ function formatNumericMetric(value: number) {
 }
 
 function renderCostValue(value?: number, currency?: string) {
-  if (typeof value !== 'number' || !currency) {
-    return <span className={styles.costValueMuted}>N/A</span>
+  if (!Number.isFinite(value) || !currency?.trim()) {
+    return <span className={styles.costValueMuted}>Price not recorded</span>
   }
 
   return (
@@ -716,30 +753,17 @@ function formatJson(jsonStr: string | undefined) {
   }
 }
 
-function formatCurrency(value: number, currency?: string) {
-  if (!currency) {
-    return 'N/A'
+function formatRecordedCost(record: InsightsRecord, value?: number) {
+  if (!Number.isFinite(value) || !record.currency?.trim()) {
+    return getUnavailableCost(record)?.label || 'Price not recorded'
   }
-
-  try {
-    const minimumFractionDigits = Math.abs(value) >= 0.01 ? 2 : 4
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits,
-      maximumFractionDigits: 4,
-    }).format(value)
-  } catch {
-    return `${value.toFixed(4)} ${currency}`
-  }
-}
-
-function formatCurrencyOrNA(value?: number, currency?: string) {
-  return typeof value === 'number' && currency ? formatCurrency(value, currency) : 'N/A'
+  return formatCurrency(value, record.currency)
 }
 
 function formatTokenValue(value?: number) {
-  return typeof value === 'number' ? value.toLocaleString('en-US') : '-'
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('en-US')
+    : 'Not recorded'
 }
 
 function formatSimilarityValue(value?: number) {

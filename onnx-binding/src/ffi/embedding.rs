@@ -14,7 +14,7 @@ use std::ffi::{c_char, CStr, CString};
 use std::sync::OnceLock;
 
 /// Global singleton for MmBertEmbeddingModel (wrapped in Mutex for mutable access)
-pub(super) static GLOBAL_MMBERT_MODEL: OnceLock<Mutex<MmBertEmbeddingModel>> = OnceLock::new();
+pub(crate) static GLOBAL_MMBERT_MODEL: OnceLock<Mutex<MmBertEmbeddingModel>> = OnceLock::new();
 
 // ============================================================================
 // Initialization Functions

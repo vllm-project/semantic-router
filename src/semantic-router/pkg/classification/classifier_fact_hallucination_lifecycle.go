@@ -28,7 +28,7 @@ func (c *Classifier) IsHallucinationDetectionEnabled() bool {
 	if !c.needsHallucinationDetectorForRuntime() {
 		return false
 	}
-	if c.Config.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendEndpoint {
+	if c.usesRemoteHallucinationDetector() {
 		return true
 	}
 	if c.models != nil {
@@ -36,6 +36,21 @@ func (c *Classifier) IsHallucinationDetectionEnabled() bool {
 		return c.models.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU).Deployment.Provider == "candle"
 	}
 	return CurrentNativeBackendCapabilities().LocalHallucinationDetection
+}
+
+// usesRemoteHallucinationDetector reports whether the hallucination detector
+// is remote. The compiled plan decides when there is one; without a plan the
+// legacy scalar's own token decides, so a configuration that asks for an
+// endpoint is never downgraded to the local model because it is incomplete.
+// Its problems surface when the detector is built, with the validator's
+// message, not as a silent switch of backend.
+func (c *Classifier) usesRemoteHallucinationDetector() bool {
+	if c.models != nil {
+		if spec, ok := c.models.plan.Lookup(c.models.recipe, "hallucination_detector"); ok {
+			return spec.Deployment.Provider == "http"
+		}
+	}
+	return c.Config.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendEndpoint
 }
 
 func (c *Classifier) needsHallucinationDetectorForRuntime() bool {
@@ -78,7 +93,7 @@ func (c *Classifier) initializeHallucinationDetector() error {
 		return nil
 	}
 
-	if c.Config.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendEndpoint {
+	if c.usesRemoteHallucinationDetector() {
 		detector, err := NewEndpointHallucinationDetector(&c.Config.HallucinationMitigation.HallucinationModel, c.models)
 		if err != nil {
 			return fmt.Errorf("failed to create endpoint hallucination detector: %w", err)

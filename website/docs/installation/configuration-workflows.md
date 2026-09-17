@@ -23,9 +23,12 @@ vllm-sr serve --config config.yaml
 `config init` writes the packaged minimal canonical template and refuses to
 replace an existing file unless `--force` is explicit. When a Router is already
 running, start from `vllm-sr config get` instead so unrelated active settings
-are preserved. A model becomes a routing candidate only after the same model
-name appears in `providers.models`, `routing.modelCards`, and the applicable
-decision's `modelRefs`.
+are preserved. Declare physical models in `providers.models` and reference their
+names in the applicable decision's `modelRefs`. For named recipes, decisions
+live under `recipes[].routing.decisions`; reusable built-in recipes receive
+model assignments when an Entrypoint is published. Optional model metadata
+stays in the shared top-level `routing.modelCards`. Add the metadata required by
+the selected algorithm or capability, such as context limits or LoRA adapters.
 
 The local runtime derives stack-specific service addresses in runtime-owned
 state without rewriting the source file. Concurrent `serve` and `stop`

@@ -7,13 +7,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestCommandProcessFixtureEndToEnd(t *testing.T) {
+func realEvaluationWorkerPython(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("real evaluation workers require the Linux seccomp and Landlock sandbox")
+	}
 	python := os.Getenv("VLLM_SR_EVALUATION_TEST_PYTHON")
 	if python == "" {
 		t.Skip("set VLLM_SR_EVALUATION_TEST_PYTHON to run the real Python worker")
@@ -23,6 +28,12 @@ func TestCommandProcessFixtureEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PYTHONPATH", pythonRoot)
+	t.Setenv("TMPDIR", "/tmp")
+	return python
+}
+
+func TestCommandProcessFixtureEndToEnd(t *testing.T) {
+	python := realEvaluationWorkerPython(t)
 	root := filepath.Join(t.TempDir(), "evaluation")
 	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create evaluation store: %v", err)

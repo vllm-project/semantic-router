@@ -161,7 +161,9 @@ func RecordSessionDecision(p SessionDecisionParams) {
 }
 
 // RecordSessionUsage attaches response usage and cost to router-owned session
-// memory. It does not create a model checkout when no prior decision exists.
+// memory. Flows without a dispatch decision (such as Looper) retain their last
+// observed response model. Once RecordSessionDecision establishes ownership,
+// responses must not change it: they can complete out of order.
 func RecordSessionUsage(p SessionUsageParams) {
 	if p.SessionID == "" || p.Model == "" {
 		return
@@ -177,7 +179,9 @@ func RecordSessionUsage(p SessionUsageParams) {
 	}
 	s.evictExpiredLocked(now)
 	st := s.sessionLocked(p.SessionID)
-	st.currentModel = p.Model
+	if st.turnCount == 0 {
+		st.currentModel = p.Model
+	}
 	st.lastSeen = now
 	usage := modelpricing.Normalize(modelpricing.Usage{
 		PromptTokens:      p.PromptTokens,
