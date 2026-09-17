@@ -538,6 +538,23 @@ func TestHandleAutoModelRoutingSameModelEncodesCurrentSemanticRequest(t *testing
 	}
 }
 
+func TestHandleAutoModelRoutingSameModelReevaluatesOntoSelectedRoute(t *testing.T) {
+	router := routingTestRouter("auto")
+	router.Config.ClearRouteCache = true
+	request := testNeutralRequest("auto", "route this request")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+
+	response, err := router.handleEntrypointModelRouting(
+		request, "auto", "", entropy.ReasoningDecision{}, "auto", ctx,
+	)
+	if err != nil {
+		t.Fatalf("handleEntrypointModelRouting returned error: %v", err)
+	}
+	if !response.GetRequestBody().GetResponse().GetClearRouteCache() {
+		t.Fatal("same-name entrypoint dispatch did not clear the fallback route cache")
+	}
+}
+
 func TestSpecifiedModelPreservesAnthropicWireAtExtProcBoundary(t *testing.T) {
 	router := routingTestRouter("test-model")
 	request := testNeutralRequest("test-model", "Explain the incident.")
