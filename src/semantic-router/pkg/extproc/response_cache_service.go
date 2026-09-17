@@ -62,7 +62,10 @@ func responseCacheEmbeddingIdentity(cfg *config.RouterConfig, backend cache.Cach
 	if cfg == nil || backend == nil || !backend.IsEnabled() {
 		return "", nil
 	}
-	settings, supported := cache.LocalEmbeddingSettings(backend)
+	settings, supported, err := cache.LocalEmbeddingSettings(backend)
+	if err != nil {
+		return "", fmt.Errorf("resolve semantic cache embedding settings: %w", err)
+	}
 	if !supported {
 		return "", nil
 	}
