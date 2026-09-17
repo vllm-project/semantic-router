@@ -1097,6 +1097,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 

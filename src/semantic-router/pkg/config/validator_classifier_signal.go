@@ -119,9 +119,9 @@ func validateLocalClassifierSignal(rule ClassifierSignalRule) error {
 	if strings.TrimSpace(rule.ModelPath) == "" {
 		return fmt.Errorf("routing.signals.classifiers[%q]: local classifiers require model_path", rule.Name)
 	}
-	if rule.Model != "" || rule.Instructions != "" {
+	if rule.Model != "" || rule.Instructions != "" || rule.DisableRationale {
 		return fmt.Errorf(
-			"routing.signals.classifiers[%q]: local classifiers do not accept model or instructions",
+			"routing.signals.classifiers[%q]: local classifiers do not accept model, instructions or disable_rationale",
 			rule.Name,
 		)
 	}
@@ -208,9 +208,9 @@ func validateSequenceClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRu
 			rule.Name,
 		)
 	}
-	if rule.ModelPath != "" || rule.UseCPU || rule.Instructions != "" {
+	if rule.ModelPath != "" || rule.UseCPU || rule.Instructions != "" || rule.DisableRationale {
 		return fmt.Errorf(
-			"routing.signals.classifiers[%q]: sequence_classifier classifiers do not accept model_path, use_cpu or instructions",
+			"routing.signals.classifiers[%q]: sequence_classifier classifiers do not accept model_path, use_cpu, instructions or disable_rationale",
 			rule.Name,
 		)
 	}

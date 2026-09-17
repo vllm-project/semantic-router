@@ -39,6 +39,14 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 HF_ORG := llm-semantic-router
 MODELS_DIR := models
 
+# The checked-in reference suite targets
+# peft-internal-testing/tiny-random-BertForSequenceClassification at
+# 325bf1727142e5f4216ca8e3eef68752321979ac. The model remains external and
+# must be downloaded at that exact revision before running qualification.
+CANDLE_COMPAT_LABELS ?= LABEL_0,LABEL_1
+CANDLE_COMPAT_SUITE ?= pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json
+CANDLE_COMPAT_OUTPUT ?= $(CURDIR)/.agent-harness/compatibility/candle-cpu-receipt.json
+
 # mmBERT merged models (for Rust inference)
 MMBERT_MODELS := \
 	mmbert-intent-classifier-merged \
@@ -116,6 +124,40 @@ download-models-lora: ## Download models for LoRA and advanced embedding tests
 .PHONY: download-eval-models
 download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
+
+.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat check-modelcompat
+
+# Like the schema tools, modelcompat reuses the Router's Go module.
+test-modelcompat: rust-ci ## Test the offline compatibility tool (set CANDLE_MODEL_PATH for native qualification)
+	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 go test -race -count=1 -v ../../tools/modelcompat/*.go
+
+check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
+	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
+
+test: test-modelcompat
+
+# Do not attribute a working-tree build to HEAD. Local planning artifacts outside
+# the compiled source trees do not affect this source check.
+check-candle-qualification-source:
+	@git diff --quiet HEAD -- || { echo "Candle qualification requires committed sources (tracked changes found)"; exit 1; }
+	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding tools/modelcompat)" && \
+		test -z "$$untracked" || { echo "Candle qualification requires committed sources (untracked source files found)"; exit 1; }
+
+qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
+	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
+	@test -n "$(CANDLE_ARTIFACT_REVISION)" || (echo "CANDLE_ARTIFACT_REVISION is required" && exit 1)
+	@$(MAKE) rust-ci
+	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
+	@cd src/semantic-router && \
+		$(NATIVE_ENV) \
+		go run ../../tools/modelcompat/main.go qualify-candle-cpu \
+			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
+			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
+			--router-revision "$(shell git rev-parse HEAD)" \
+			--labels "$(CANDLE_COMPAT_LABELS)" \
+			--suite "$(CANDLE_COMPAT_SUITE)" \
+			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
+	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
 
 # Minimal model set for perf/benchmarks (CI performance tests).
 # The component benchmarks initialize classifiers/embeddings directly instead

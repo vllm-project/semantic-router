@@ -1502,6 +1502,9 @@
         "instructions": {
           "type": "string"
         },
+        "disable_rationale": {
+          "type": "boolean"
+        },
         "use_cpu": {
           "type": "boolean"
         }

@@ -49,6 +49,7 @@ type protectionMessage struct {
 }
 
 type protectionExpectation struct {
+	Rejected        bool   `json:"rejected" yaml:"rejected"`
 	HardLocked      *bool  `json:"hard_locked" yaml:"hard_locked"`
 	PreflightReason string `json:"preflight_reason" yaml:"preflight_reason"`
 	Model           string `json:"model" yaml:"model"`
@@ -147,7 +148,9 @@ func validateProtectionCandidates(step protectionStep) error {
 }
 
 func validateProtectionExpectation(step protectionStep) error {
-	if !slices.Contains(step.Candidates, step.Proposal) || !slices.Contains(step.Candidates, step.Expected.Model) {
+	if !slices.Contains(step.Candidates, step.Proposal) ||
+		(!step.Expected.Rejected && !slices.Contains(step.Candidates, step.Expected.Model)) ||
+		(step.Expected.Rejected && step.Expected.Model != "") {
 		return fmt.Errorf("%s: proposal and expectation must be eligible", step.ID)
 	}
 	if step.Expected.Action == "" || step.Expected.Reason == "" || step.Expected.PreflightReason == "" || step.Expected.HardLocked == nil {
