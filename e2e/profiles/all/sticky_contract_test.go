@@ -25,6 +25,9 @@ func TestStickyToolSelectionContractIsRegistered(t *testing.T) {
 			t.Fatalf("envoy-ai-gateway profile is missing sticky testcase %q: %v", required, profile.GetTestCases())
 		}
 	}
+	if profileHasTestCase(profile.GetTestCases(), "sticky-tool-selection-expiry") {
+		t.Fatalf("envoy-ai-gateway profile must not own the short-TTL expiry testcase: %v", profile.GetTestCases())
+	}
 
 	recovery, ok := pkgtestcases.Get("sticky-tool-selection-recovery")
 	if !ok {
@@ -33,6 +36,50 @@ func TestStickyToolSelectionContractIsRegistered(t *testing.T) {
 	for _, requiredTag := range []string{"sticky", "restart", "recovery"} {
 		if !containsString(recovery.Tags, requiredTag) {
 			t.Fatalf("sticky recovery testcase tags = %v, want %q", recovery.Tags, requiredTag)
+		}
+	}
+}
+
+func TestStickyToolSelectionExpiryContractIsRegistered(t *testing.T) {
+	profile, err := framework.NewProfileByName("sticky-tool-selection-expiry")
+	if err != nil {
+		t.Fatalf("sticky-tool-selection-expiry profile failed: %v", err)
+	}
+
+	const required = "sticky-tool-selection-expiry"
+	if !profileHasTestCase(profile.GetTestCases(), required) {
+		t.Fatalf("sticky-tool-selection-expiry profile is missing testcase %q: %v", required, profile.GetTestCases())
+	}
+
+	expiry, ok := pkgtestcases.Get(required)
+	if !ok {
+		t.Fatalf("%s is not registered", required)
+	}
+	for _, requiredTag := range []string{"sticky", "ttl", "expiry"} {
+		if !containsString(expiry.Tags, requiredTag) {
+			t.Fatalf("sticky expiry testcase tags = %v, want %q", expiry.Tags, requiredTag)
+		}
+	}
+}
+
+func TestStickyToolSelectionRedisContractIsRegistered(t *testing.T) {
+	profile, err := framework.NewProfileByName("sticky-tool-selection-redis")
+	if err != nil {
+		t.Fatalf("sticky-tool-selection-redis profile failed: %v", err)
+	}
+
+	const required = "sticky-tool-selection-redis-recovery"
+	if !profileHasTestCase(profile.GetTestCases(), required) {
+		t.Fatalf("sticky-tool-selection-redis profile is missing testcase %q: %v", required, profile.GetTestCases())
+	}
+
+	testCase, ok := pkgtestcases.Get(required)
+	if !ok {
+		t.Fatalf("%s is not registered", required)
+	}
+	for _, requiredTag := range []string{"sticky", "redis", "restart", "fallback"} {
+		if !containsString(testCase.Tags, requiredTag) {
+			t.Fatalf("sticky Redis testcase tags = %v, want %q", testCase.Tags, requiredTag)
 		}
 	}
 }

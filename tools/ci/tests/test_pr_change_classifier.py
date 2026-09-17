@@ -338,13 +338,98 @@ class PRChangeClassifierTests(unittest.TestCase):
         )
 
     def test_sticky_provider_prefix_selects_anthropic_profile(self) -> None:
-        result = classify(
-            ["e2e/testcases/sticky_tool_selection_provider_prefix.go"]
-        )
+        result = classify(["e2e/testcases/sticky_tool_selection_provider_prefix.go"])
 
         self.assertEqual(
             result.profiles,
             ("envoy-ai-gateway", "anthropic-shim"),
+        )
+
+    def test_sticky_merge_selects_prefix_and_redis_profiles(self) -> None:
+        result = classify(["src/semantic-router/pkg/sessiontools/merge.go"])
+
+        self.assertEqual(
+            result.profiles,
+            (
+                "envoy-ai-gateway",
+                "sticky-tool-selection-expiry",
+                "sticky-tool-selection-redis",
+                "anthropic-shim",
+            ),
+        )
+
+    def test_sticky_redis_store_skips_anthropic_profile(self) -> None:
+        result = classify(["src/semantic-router/pkg/sessiontools/store_redis.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-redis"),
+        )
+
+    def test_sticky_runtime_seams_select_all_sticky_profiles(self) -> None:
+        paths = (
+            "src/semantic-router/pkg/extproc/req_tool_selection_plugin.go",
+            "src/semantic-router/pkg/tools/fingerprint.go",
+            "src/semantic-router/pkg/tools/retrieval_fingerprint.go",
+        )
+
+        for path in paths:
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertEqual(
+                    result.profiles,
+                    (
+                        "envoy-ai-gateway",
+                        "sticky-tool-selection-expiry",
+                        "sticky-tool-selection-redis",
+                        "anthropic-shim",
+                    ),
+                )
+
+    def test_sticky_provider_generation_seams_select_anthropic_profile(self) -> None:
+        paths = (
+            "src/semantic-router/pkg/extproc/req_filter_tools.go",
+            "src/semantic-router/pkg/extproc/req_filter_tools_generation.go",
+        )
+
+        for path in paths:
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertEqual(
+                    result.profiles,
+                    ("envoy-ai-gateway", "anthropic-shim"),
+                )
+
+    def test_sticky_redis_profile_selects_itself(self) -> None:
+        result = classify(["e2e/profiles/sticky-tool-selection-redis/profile.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-redis"),
+        )
+
+    def test_sticky_expiry_profile_selects_itself(self) -> None:
+        result = classify(["e2e/profiles/sticky-tool-selection-expiry/profile.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-expiry"),
+        )
+
+    def test_sticky_expiry_case_selects_expiry_profile(self) -> None:
+        result = classify(["e2e/testcases/sticky_tool_selection_expiry.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-expiry"),
+        )
+
+    def test_sticky_restart_helper_selects_restart_profiles(self) -> None:
+        result = classify(["e2e/testcases/response_api_restart_recovery.go"])
+
+        self.assertEqual(
+            result.profiles,
+            ("envoy-ai-gateway", "sticky-tool-selection-redis"),
         )
 
     def test_release_and_nightly_image_lifecycles_are_distinct(self) -> None:

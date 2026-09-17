@@ -934,7 +934,8 @@ config:
             contradiction_threshold: 0.5
       tool_sessions:
         backend: local
-        ttl_seconds: 300
+        # Keep state alive across the multi-minute restart recovery contract.
+        ttl_seconds: 900
         max_sessions: 100
         max_sessions_per_identity: 10
         max_state_bytes: 4096

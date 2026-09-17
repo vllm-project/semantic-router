@@ -59,6 +59,18 @@ var StickyToolSelectionContract = []string{
 	"sticky-tool-selection-recovery",
 }
 
+// StickyToolSelectionExpiryContract isolates the short local-store TTL from
+// restart coverage that needs retained state to survive for several minutes.
+var StickyToolSelectionExpiryContract = []string{
+	"sticky-tool-selection-expiry",
+}
+
+// StickyToolSelectionRedisContract is isolated because its unavailable-store
+// case intentionally restarts Redis and must not run beside unrelated cases.
+var StickyToolSelectionRedisContract = []string{
+	"sticky-tool-selection-redis-recovery",
+}
+
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
 var DashboardContract = []string{
 	// Core API

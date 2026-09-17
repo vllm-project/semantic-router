@@ -30,6 +30,8 @@ import (
 	routeaction "github.com/vllm-project/semantic-router/e2e/profiles/route-action"
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	stickytoolselectionexpiry "github.com/vllm-project/semantic-router/e2e/profiles/sticky-tool-selection-expiry"
+	stickytoolselectionredis "github.com/vllm-project/semantic-router/e2e/profiles/sticky-tool-selection-redis"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
 )
@@ -131,6 +133,16 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"sticky-tool-selection-expiry",
+		func() framework.Profile { return stickytoolselectionexpiry.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register(
+		"sticky-tool-selection-redis",
+		func() framework.Profile { return stickytoolselectionredis.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"vectorstore-registry",

@@ -81,7 +81,7 @@ func testStickyToolSelection(
 	if err := assertStickyReplacement(secondTools, calledTools); err != nil {
 		return err
 	}
-	invalidationSnapshot, err := runStickyInvalidation(ctx, sessions, sessionID, trustedHeaders, firstTools)
+	invalidationSnapshot, err := runStickyInvalidation(ctx, sessions, sessionID, trustedHeaders, calledTools)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func runStickyCalledToolPin(
 			},
 			map[string]any{
 				"role":    "user",
-				"content": "__STICKY_TOOL_SELECTION__ Search recent weather reports.",
+				"content": "__STICKY_TOOL_SELECTION__ Calculate 29 times 31.",
 			},
 		},
 		"tools":       tools,
@@ -195,7 +195,18 @@ func runStickyCalledToolPin(
 	if !containsStickyTool(called, "search_web") {
 		return stickyToolSnapshot{}, fmt.Errorf("called-tool pin turn omitted previously called tool %q", "search_web")
 	}
-	return called, nil
+
+	retained, err := runStickyTurn(ctx, sessions, sessionID, stickyNormalRequest(
+		"__STICKY_TOOL_SELECTION__ Calculate 29 times 31.", tools), headers, "called-tool retention turn")
+	if err != nil {
+		return stickyToolSnapshot{}, err
+	}
+	calledDefinition := toolDefinitionByName(called, "search_web")
+	retainedDefinition := toolDefinitionByName(retained, "search_web")
+	if calledDefinition == nil || retainedDefinition == nil || !bytes.Equal(calledDefinition, retainedDefinition) {
+		return stickyToolSnapshot{}, fmt.Errorf("called tool %q was not retained with stable provider bytes", "search_web")
+	}
+	return retained, nil
 }
 
 func assertStickyReplacement(previous, replacement stickyToolSnapshot) error {
@@ -287,15 +298,18 @@ func runStickyInvalidation(
 	sessions *stickySessionPair,
 	sessionID string,
 	headers map[string]string,
-	first stickyToolSnapshot,
+	previous stickyToolSnapshot,
 ) (stickyToolSnapshot, error) {
-	changedName := first.Names[0]
-	tools := stickyOnlyTool(2, changedName)
-	if len(tools) != 1 {
-		return stickyToolSnapshot{}, fmt.Errorf("cannot build schema revision for retained tool %q", changedName)
+	if len(previous.Names) == 0 {
+		return stickyToolSnapshot{}, fmt.Errorf("schema invalidation requires retained tools")
 	}
-	updated, err := runStickyTurn(ctx, sessions, sessionID, stickyNormalRequest(
-		stickyInvalidationPrompt(changedName), tools), headers, "schema invalidation turn")
+	changedName := previous.Names[0]
+	if containsStickyTool(previous, "search_web") {
+		changedName = "search_web"
+	}
+	tools := stickyContractTools(2, changedName)
+	request := stickyNormalRequest(stickyInvalidationPrompt(changedName), tools)
+	updated, err := runStickyTurn(ctx, sessions, sessionID, request, headers, "schema invalidation turn")
 	if err != nil {
 		return stickyToolSnapshot{}, err
 	}
@@ -306,7 +320,25 @@ func runStickyInvalidation(
 			changedName,
 		)
 	}
-	oldDefinition := toolDefinitionByName(first, changedName)
+	baselineID := sessionID + "-invalidation-baseline"
+	baseline, err := runStickyTurn(
+		ctx,
+		sessions,
+		baselineID,
+		request,
+		stickyRequestHeaders(baselineID, false),
+		"schema invalidation stateless baseline",
+	)
+	if err != nil {
+		return stickyToolSnapshot{}, err
+	}
+	if err := assertStickySnapshotsEqual(updated, baseline); err != nil {
+		return stickyToolSnapshot{}, fmt.Errorf("schema invalidation did not fall back to stateless selection: %w", err)
+	}
+	if err := assertStickySnapshotsDifferent(previous, updated); err != nil {
+		return stickyToolSnapshot{}, fmt.Errorf("schema invalidation reused the retained tool set: %w", err)
+	}
+	oldDefinition := toolDefinitionByName(previous, changedName)
 	newDefinition := toolDefinitionByName(updated, changedName)
 	if oldDefinition == nil || newDefinition == nil || bytes.Equal(oldDefinition, newDefinition) {
 		return stickyToolSnapshot{}, fmt.Errorf("schema invalidation did not replace provider definition for %q", changedName)
@@ -451,15 +483,6 @@ func stickyContractTools(revision int, changedName string) []fixtures.ChatTool {
 		{Type: "function", Function: fixtures.ChatToolFunc{Name: "calculate", Description: calculateDescription, Parameters: calculateParameters}},
 		{Type: "function", Function: fixtures.ChatToolFunc{Name: "search_web", Description: searchDescription, Parameters: searchParameters}},
 	}
-}
-
-func stickyOnlyTool(revision int, name string) []fixtures.ChatTool {
-	for _, tool := range stickyContractTools(revision, name) {
-		if tool.Function.Name == name {
-			return []fixtures.ChatTool{tool}
-		}
-	}
-	return nil
 }
 
 func stickyInvalidationPrompt(toolName string) string {
