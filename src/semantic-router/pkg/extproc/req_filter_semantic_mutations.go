@@ -195,7 +195,3 @@ func (r *OpenAIRouter) applySemanticRequestParams(
 	}
 	return result.Changed, err
 }
-
-func blockSemanticRequestField(request *llmprotocol.Request, field string) (bool, error) {
-	return llmprotocol.BlockRequestField(request, field)
-}

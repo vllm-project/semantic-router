@@ -30,13 +30,19 @@ func TestPrepareProviderDispatchChecksPrimaryModelTaskCapabilities(t *testing.T)
 			request.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
 			ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
 			ctx.VSRSelectedDecision = decision
-			dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+			var dispatch *providerDispatch
+			var err error
+			if fallback {
+				dispatch, err = selectCapabilityTestDispatch(router, request, decision, ctx)
+			} else {
+				dispatch, err = router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+			}
 			if fallback {
 				if err != nil || dispatch.logicalModel != "generator" || ctx.RequestModel != "generator" {
 					t.Fatalf("capabilities=%v: dispatch=%+v error=%v", capabilities, dispatch, err)
 				}
 				if ctx.ImmediateProtocolError != nil {
-					t.Fatal("successful same-wire reroute retained the primary rejection")
+					t.Fatal("successful capability selection left a dispatch error")
 				}
 			} else {
 				var protocolError *llmprotocol.ProtocolError
@@ -48,7 +54,7 @@ func TestPrepareProviderDispatchChecksPrimaryModelTaskCapabilities(t *testing.T)
 	}
 }
 
-func TestPrepareProviderDispatchPreservesContextEligibilityOnReroute(t *testing.T) {
+func TestCapabilitySelectionPreservesContextEligibility(t *testing.T) {
 	for _, largeFallback := range []bool{false, true} {
 		router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 		params := router.Config.ModelConfig[primary]
@@ -72,7 +78,7 @@ func TestPrepareProviderDispatchPreservesContextEligibilityOnReroute(t *testing.
 		if _, err := router.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, ctx); err != nil {
 			t.Fatal(err)
 		}
-		dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+		dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 		if largeFallback {
 			if err != nil || dispatch.logicalModel != "large-generator" {
 				t.Fatalf("dispatch=%+v error=%v, want eligible large generator", dispatch, err)
