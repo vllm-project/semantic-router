@@ -27,8 +27,10 @@ from recipe_metadata_schema import (
     load_recipe_metadata_document,
     validate_recipe_metadata_schema,
 )
+from router_calibration_evaluation import EVALUATION_SCOPES
 from router_calibration_manifest import Probe, load_probe_manifest
 from router_calibration_report import render_markdown_summary
+from router_calibration_signal_values import signal_value_reference
 from router_calibration_support import evaluate_probes, write_json
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -88,6 +90,7 @@ class RecipeInventory:
     plugins: tuple[str, ...]
     fallback_decisions: tuple[str, ...]
     coverage: dict[str, Any]
+    required_devices: tuple[str, ...] = ()
 
 
 @dataclass
@@ -197,6 +200,12 @@ def recipe_profiles(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def config_auto_entrypoints(config: dict[str, Any]) -> tuple[str, ...]:
     global_config = _mapping(config.get("global"))
     if not global_config:
+        return ()
+    if config.get("recipes") and not any(
+        key in config for key in ("providers", "routing", "entrypoints")
+    ):
+        # Portable bundles may carry global defaults without declaring a
+        # runtime. Their entrypoints are supplied when recipes are composed.
         return ()
     router = _mapping(global_config.get("router"))
     if "auto_model_names" in router:
@@ -401,6 +410,11 @@ def _validate_probe_signals(
     probe: Probe,
     configured_signals: dict[str, set[str]],
 ) -> None:
+    for key in probe.expected_signal_values:
+        try:
+            signal_value_reference(key, configured_signals)
+        except ValueError as exc:
+            raise ValueError(f"{path}: probe {probe.probe_id}: {exc}") from exc
     for signal_type, name in probe.expected_signals:
         configured_names = configured_signals.get(signal_type, set())
         base_name = name.split(":", 1)[0]
@@ -424,6 +438,33 @@ def _assert_probe_coverage(context: ProbeReferenceContext) -> None:
             f"{context.path}: entrypoints without probes: "
             f"{', '.join(missing_entrypoints)}"
         )
+
+
+def configured_accelerators(config: dict[str, Any]) -> tuple[str, ...]:
+    """Keep explicit hardware requirements; never project a GPU recipe onto CPU."""
+    catalog = _mapping(_mapping(config.get("global")).get("model_catalog"))
+    deployments = _mapping(catalog.get("deployments"))
+    devices = {
+        str(_mapping(deployment).get("device") or "cpu").strip().lower()
+        for deployment in deployments.values()
+    }
+    return tuple(sorted(devices - {"cpu"}))
+
+
+def cpu_inventory(inventory: list[RecipeInventory]) -> list[RecipeInventory]:
+    return [recipe for recipe in inventory if not recipe.required_devices]
+
+
+def cpu_eligibility(inventory: list[RecipeInventory]) -> dict[str, Any]:
+    return {
+        "platform": "cpu",
+        "eligible": [recipe.name for recipe in cpu_inventory(inventory)],
+        "excluded": [
+            {"recipe": recipe.name, "required_devices": recipe.required_devices}
+            for recipe in inventory
+            if recipe.required_devices
+        ],
+    }
 
 
 def build_recipe_inventory(path: Path) -> RecipeInventory:
@@ -460,15 +501,15 @@ def build_recipe_inventory(path: Path) -> RecipeInventory:
     plugins: set[str] = set()
     fallback_decisions: set[str] = set()
     for (recipe, name), decision in decisions.items():
-        algorithm = str(
-            _mapping(decision.get("algorithm")).get("type") or "static"
-        ).strip()
-        algorithms.add(algorithm)
-        plugins.update(
+        decision_plugins = {
             str(_mapping(plugin).get("type") or "").strip()
             for plugin in _sequence(decision.get("plugins"))
             if str(_mapping(plugin).get("type") or "").strip()
-        )
+        }
+        algorithm = str(_mapping(decision.get("algorithm")).get("type") or "").strip()
+        if algorithm or "fast_response" not in decision_plugins:
+            algorithms.add(algorithm or "static")
+        plugins.update(decision_plugins)
         rules = _mapping(decision.get("rules"))
         if not _sequence(rules.get("conditions")):
             fallback_decisions.add(f"{recipe}:{name}")
@@ -517,6 +558,7 @@ def build_recipe_inventory(path: Path) -> RecipeInventory:
         plugins=tuple(sorted(plugins)),
         fallback_decisions=tuple(sorted(fallback_decisions)),
         coverage=coverage,
+        required_devices=configured_accelerators(config),
     )
 
 
@@ -621,6 +663,8 @@ def command_static(args: argparse.Namespace) -> int:
 
 def command_list(args: argparse.Namespace) -> int:
     inventory = discover_inventory(args.recipes_root)
+    if args.platform == "cpu":
+        inventory = cpu_inventory(inventory)
     names = [recipe.name for recipe in inventory]
     print(",".join(names) if args.format == "csv" else json.dumps(names))
     return 0
@@ -628,12 +672,33 @@ def command_list(args: argparse.Namespace) -> int:
 
 def command_plan(args: argparse.Namespace) -> int:
     inventory = discover_inventory(args.recipes_root)
-    matrix = matrix_payload(inventory, args.shards)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    write_json(args.output_dir / "cpu-eligibility.json", cpu_eligibility(inventory))
+    matrix = matrix_payload(cpu_inventory(inventory), args.shards)
     encoded = json.dumps(matrix, separators=(",", ":"))
     if args.github_output:
         write_github_output(args.github_output, "matrix", encoded)
     else:
         print(json.dumps(matrix, indent=2))
+    return 0
+
+
+def command_check_cpu(args: argparse.Namespace) -> int:
+    names = [name.strip() for name in args.recipes.split(",") if name.strip()]
+    inventory = {
+        recipe.name: recipe for recipe in discover_inventory(args.recipes_root)
+    }
+    if not names:
+        raise ValueError("at least one recipe is required")
+    for name in names:
+        if name not in inventory:
+            raise ValueError(f"unknown recipe: {name}")
+        devices = inventory[name].required_devices
+        if devices:
+            raise ValueError(
+                f"{name} requires explicit devices {', '.join(devices)}; "
+                "the CPU runner does not override deployment hardware"
+            )
     return 0
 
 
@@ -643,12 +708,24 @@ def command_eval(args: argparse.Namespace) -> int:
     config = load_yaml_mapping(recipe_path / "config.yaml")
     manifest, probes = load_probe_manifest(recipe_path / "probes.yaml")
     probes = bind_default_entrypoints(config, probes)
-    evaluation = evaluate_probes(args.router_url, probes, manifest)
+    evaluation = evaluate_probes(
+        args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
+    )
     tag_acceptance = evaluate_live_tag_policy(
         evaluation, _mapping(manifest.get("coverage"))
     )
     evaluation["coverage_acceptance"] = tag_acceptance
     evaluation["passed"] = bool(evaluation["passed"]) and tag_acceptance["passed"]
+    for scope, summary in evaluation.get("scopes", {}).items():
+        scoped_results = [
+            {**result, "matched": bool(result.get(f"{scope}_matched"))}
+            for result in evaluation["results"]
+        ]
+        scoped_tags = evaluate_live_tag_policy(
+            {"results": scoped_results}, _mapping(manifest.get("coverage"))
+        )
+        summary["coverage_acceptance"] = scoped_tags
+        summary["passed"] = bool(summary["passed"]) and scoped_tags["passed"]
     report = {"inventory": asdict(inventory), "evaluation": evaluation}
     output_dir = args.output_dir / args.recipe
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -666,6 +743,8 @@ def command_eval(args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "recipe": args.recipe,
+                "evaluation_scope": evaluation.get("evaluation_scope", "deployment"),
+                "scopes": evaluation.get("scopes", {}),
                 "matched": evaluation["matched"],
                 "total": evaluation["total"],
                 "passed": evaluation["passed"],
@@ -708,19 +787,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     list_parser = subparsers.add_parser("list")
     list_parser.add_argument("--format", choices=("csv", "json"), default="json")
+    list_parser.add_argument("--platform", choices=("all", "cpu"), default="all")
     list_parser.set_defaults(func=command_list)
 
     static = subparsers.add_parser("static")
     static.set_defaults(func=command_static)
 
-    plan = subparsers.add_parser("plan")
+    plan = subparsers.add_parser("plan", help="plan compatible live CPU shards")
     plan.add_argument("--shards", type=int, default=3)
     plan.add_argument("--github-output", type=Path)
     plan.set_defaults(func=command_plan)
 
+    check_cpu = subparsers.add_parser("check-cpu")
+    check_cpu.add_argument("--recipes", required=True)
+    check_cpu.set_defaults(func=command_check_cpu)
+
     evaluate = subparsers.add_parser("eval")
     evaluate.add_argument("--recipe", required=True)
     evaluate.add_argument("--router-url", required=True)
+    evaluate.add_argument(
+        "--scope",
+        choices=EVALUATION_SCOPES,
+        default="deployment",
+        help="Policy checks real routing evidence; deployment also requires the expected live model selection.",
+    )
     evaluate.set_defaults(func=command_eval)
 
     report = subparsers.add_parser("report")

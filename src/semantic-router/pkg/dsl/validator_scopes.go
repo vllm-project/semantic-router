@@ -13,6 +13,7 @@ func (v *Validator) checkRoutingScopes() {
 		return
 	}
 	v.checkStrategy(v.prog.Strategy, Position{})
+	v.checkCandidateRequirements(v.prog.CandidateRequirements, Position{})
 
 	recipeNames := map[string]Position{"default": {}}
 	for _, recipe := range v.prog.Recipes {
@@ -39,6 +40,7 @@ func (v *Validator) checkRecipeScope(recipe *RecipeDecl) {
 	child.checkConstraints()
 	child.checkConflicts()
 	child.checkStrategy(scoped.Strategy, recipe.Pos)
+	child.checkCandidateRequirements(scoped.CandidateRequirements, recipe.Pos)
 	for _, diag := range child.diagnostics {
 		diag.Message = fmt.Sprintf("RECIPE %q: %s", recipe.Name, diag.Message)
 		v.diagnostics = append(v.diagnostics, diag)
@@ -68,20 +70,29 @@ func recipeProgramWithSharedModels(parent, recipe *Program) *Program {
 		return &Program{Models: parent.Models}
 	}
 	return &Program{
-		Strategy:             recipe.Strategy,
-		Signals:              recipe.Signals,
-		ProjectionPartitions: recipe.ProjectionPartitions,
-		ProjectionScores:     recipe.ProjectionScores,
-		ProjectionMappings:   recipe.ProjectionMappings,
-		Routes:               recipe.Routes,
-		Models:               parent.Models,
-		Plugins:              recipe.Plugins,
-		TestBlocks:           recipe.TestBlocks,
+		Strategy:              recipe.Strategy,
+		CandidateRequirements: recipe.CandidateRequirements.Clone(),
+		DataPolicy:            recipe.DataPolicy.Clone(),
+		ModelBindings:         cloneModelBindings(recipe.ModelBindings),
+		Signals:               recipe.Signals,
+		ProjectionPartitions:  recipe.ProjectionPartitions,
+		ProjectionScores:      recipe.ProjectionScores,
+		ProjectionMappings:    recipe.ProjectionMappings,
+		Routes:                recipe.Routes,
+		Models:                parent.Models,
+		Plugins:               recipe.Plugins,
+		TestBlocks:            recipe.TestBlocks,
 	}
 }
 
 func (v *Validator) checkStrategy(strategy string, pos Position) {
 	if err := config.RoutingStrategy(strategy).Validate(); err != nil {
+		v.addDiag(DiagConstraint, pos, err.Error(), nil)
+	}
+}
+
+func (v *Validator) checkCandidateRequirements(requirements *config.CandidateRequirements, pos Position) {
+	if err := requirements.Validate(); err != nil {
 		v.addDiag(DiagConstraint, pos, err.Error(), nil)
 	}
 }

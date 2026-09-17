@@ -1080,8 +1080,8 @@ type HNSWEmbeddingConfig struct {
 	// +optional
 	TargetLayer int `json:"target_layer,omitempty"`
 
-	// EnableSoftMatching enables soft matching mode
-	// +kubebuilder:default=true
+	// EnableSoftMatching allows below-threshold matches when no rule meets its threshold.
+	// +kubebuilder:default=false
 	// +optional
 	EnableSoftMatching bool `json:"enable_soft_matching,omitempty"`
 
@@ -1127,6 +1127,39 @@ type EmbeddingEndpointConfig struct {
 	Dimensions int `json:"dimensions,omitempty"`
 }
 
+// PrototypeScoringConfig overrides prototype-bank construction and scoring for
+// one embedding-backed signal rule. Router-owned defaults apply only after
+// translation; the operator preserves an absent override and an empty object.
+type PrototypeScoringConfig struct {
+	// Enabled controls prototype clustering. False retains every candidate.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// ClusterSimilarityThreshold is the clustering similarity threshold.
+	// Stored as a numeric string, like other fractional operator config fields.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	ClusterSimilarityThreshold string `json:"cluster_similarity_threshold,omitempty"`
+
+	// MaxPrototypes caps the number of cluster representatives.
+	// +optional
+	MaxPrototypes int `json:"max_prototypes,omitempty"`
+
+	// BestWeight weights the best prototype against the top-M mean.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	BestWeight string `json:"best_weight,omitempty"`
+
+	// TopM is the number of highest-scoring prototypes included in the mean.
+	// +optional
+	TopM int `json:"top_m,omitempty"`
+
+	// MarginThreshold is the minimum winner-versus-runner-up score margin.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	MarginThreshold string `json:"margin_threshold,omitempty"`
+}
+
 // ComplexityRulesConfig defines complexity-based signal classification.
 //
 // The CEL rules below reject at admission the boundary combinations the Router
@@ -1143,6 +1176,12 @@ type EmbeddingEndpointConfig struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.hard_above) && has(self.easy_below)) || double(self.easy_below) < double(self.hard_above)",message="easy_below must be below hard_above; the band between them is medium"
 // +kubebuilder:validation:XValidation:rule="!(has(self.hard_below) && has(self.easy_above)) || double(self.hard_below) < double(self.easy_above)",message="hard_below must be below easy_above; the band between them is medium"
 type ComplexityRulesConfig struct {
+	// PrototypeScoring replaces the family prototype-scoring configuration for
+	// this rule. Absence inherits the family; a present object is a complete
+	// override, including an empty object. Defaults remain Router-owned.
+	// +optional
+	PrototypeScoring *PrototypeScoringConfig `json:"prototype_scoring,omitempty"`
+
 	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
 	Name string `json:"name"`
 
@@ -1432,11 +1471,26 @@ type ToolsConfig struct {
 	FallbackToEmpty bool `json:"fallback_to_empty,omitempty"`
 }
 
-// PromptGuardConfig defines prompt guard configuration
+// PromptGuardConfig defines prompt guard configuration.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
 	// Backend selects a named external classifier and its typed result contract.
 	// +optional
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+	// MaxSequenceLength limits the total tokenized input, including special
+	// tokens. Omission or zero retains the 512-token budget. The model loader
+	// validates the requested budget against the loaded model's capacity.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
+	// Window enables explicit scanning of all input tokens. Omission or null
+	// keeps whole-input inference. Only the local mmbert32k variant supports it.
+	// +nullable
+	// +optional
+	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
@@ -1450,11 +1504,11 @@ type PromptGuardConfig struct {
 	// +kubebuilder:validation:Enum=http_chat;http_classify
 	// +optional
 	Protocol string `json:"protocol,omitempty"`
-	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
+	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.7"
+	// +kubebuilder:default="0.5"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`
@@ -1477,6 +1531,20 @@ type PromptGuardConfig struct {
 	// +kubebuilder:validation:Enum=allow;block
 	// +optional
 	OnError string `json:"on_error,omitempty"`
+}
+
+// PromptGuardWindowConfig scans original content tokens with overlap. The
+// native tokenizer also checks that special tokens leave enough content room.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.overlap) || self.overlap < self.size",message="window.overlap must be smaller than window.size"
+type PromptGuardWindowConfig struct {
+	// Size is the inference window budget, including special tokens.
+	// +kubebuilder:validation:Minimum=1
+	Size int `json:"size"`
+	// Overlap counts content tokens shared by consecutive windows.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Overlap int `json:"overlap,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration
@@ -1511,7 +1579,24 @@ type CategoryModelConfig struct {
 // admission instead of by the router at load.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.use_mmbert_32k) || !self.use_mmbert_32k",message="backend cannot be combined with local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="max_sequence_length requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="window requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PIIModelConfig struct {
+	// MaxSequenceLength is the total tokenized input budget, including special
+	// tokens. Omission or zero preserves the 512-token legacy limit.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
+	// UseMmBERT32K selects the local model that supports token windows.
+	// +optional
+	UseMmBERT32K bool `json:"use_mmbert_32k,omitempty"`
+	// Window scans original content tokens with explicit overlap. Omission or
+	// null leaves window selection unchanged; no CRD defaults are injected.
+	// +nullable
+	// +optional
+	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// +optional
@@ -1526,9 +1611,8 @@ type PIIModelConfig struct {
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
 	// Backend names a remote token classifier speaking token_spans.v1. Its
 	// absence keeps local PII inference. The local selectors this replaces are
-	// model_id, use_modernbert and use_cpu above; the router also refuses a
-	// backend combined with the use_mmbert_32k selector that this CRD does not
-	// expose, so that combination cannot be written here.
+	// model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit
+	// token windows are only supported by the local mmbert32k model.
 	// +optional
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 	// OnError selects what a PII backend failure, or a provider-declared

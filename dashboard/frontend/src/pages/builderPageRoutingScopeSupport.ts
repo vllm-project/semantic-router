@@ -63,6 +63,8 @@ export function chooseDefaultBuilderRoutingScope(ast: ASTProgram | null): string
   if (!ast?.recipes?.length) return 'global'
 
   const hasGlobalRouting =
+    ast.candidateRequirements != null ||
+    ast.dataPolicy != null ||
     Object.keys(ast.modelBindings ?? {}).length > 0 ||
     (ast.signals?.length ?? 0) > 0 ||
     (ast.routes?.length ?? 0) > 0 ||

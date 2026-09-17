@@ -272,6 +272,14 @@ func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) conf
 
 func (c *Compiler) compileRequestParamsPluginConfig(fields map[string]Value) config.RequestParamsPluginConfig {
 	cfg := config.RequestParamsPluginConfig{}
+	if value, exists := fields["default_max_tokens"]; exists {
+		if integer, ok := value.(IntValue); ok && integer.V > 0 {
+			v := integer.V
+			cfg.DefaultMaxTokens = &v
+		} else {
+			c.addError(Position{}, "request_params.default_max_tokens must be a positive integer")
+		}
+	}
 	if v, ok := getStringArrayField(fields, "blocked_params"); ok {
 		cfg.BlockedParams = v
 	}

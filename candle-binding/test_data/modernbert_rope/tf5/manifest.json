@@ -1,0 +1,21 @@
+{
+  "transformers": "5.3.0",
+  "torch": "2.10.0+rocm7.0",
+  "dtype": "float32",
+  "attention": "sdpa",
+  "seed": 20260913,
+  "script_sha256": "cbec6368799c0a01513526d33e72f1bca1d03e92c3db65a2ef80f34955efa0b3",
+  "implementation_sha256": {
+    "modeling_modernbert.py": "d657e768ab419cb4101d3564d346cfe95b69149dd45e1d2f3e0b2fb138c6700b",
+    "modeling_rope_utils.py": "14407d3a5fb26c2e14a75a6195887e163f31fbf307d870dbb03031bc9f012ecd"
+  },
+  "weights_sha256": "8f28e25dbadf411e45829bf223f4b719f77cec36af56d6c241127cfcffc0961f",
+  "files": {
+    "config.json": "b27391de4f38a3ba2c0f8fb14f9bef37281cebe2e9aa30e274cec0c1605a2de2",
+    "../rope.json": "514b2f01682a927824bb9bea16352f4cb3e65b3a2cbede27dc88d7c28c2b5bc0",
+    "../tiny-output.json": "6fc862ec1b4deedc48b80839ec9d54275e161bca66c1d4c2578ea3af579ca09a",
+    "../reference.safetensors.fixture": "d6e81d60bffde6ae60fda7281a3990411f9a344136f8c662e05dbbdcaf77e190"
+  },
+  "configuration_path": "official TF5 config then explicit nested parameters; upstream nested YaRN validator KeyError preserved separately",
+  "scope": "Generated random tiny backbone and numerical arrays; no trained checkpoint, data, or task-quality claim"
+}

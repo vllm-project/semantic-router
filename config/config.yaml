@@ -152,7 +152,21 @@ evaluation:
 routing:
   strategy: priority
   # Optional recipe-local consumer bindings to named model deployments.
-  model_bindings: {}
+  model_bindings:
+    classifier.content-risk:
+      deployment: content-risk
+      contract: label_scores.v1
+      adapter: modernbert
+      operating_point:
+        path: operating_point.json
+        sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
+    rag.reranker:
+      deployment: document-ranker
+      contract: relevance_scores.v1
+      adapter: vela_reranker
+      pair_scorer:
+        layer: 22
+        dimension: 768
   modelCards:
     - name: qwen3-8b
       display_name: Qwen3 8B reference model
@@ -238,6 +252,14 @@ routing:
       - name: technical_support
         threshold: 0.75
         aggregation_method: max
+        # A complete rule override; omission inherits the family configuration.
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 8
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
         candidates:
           - how to configure the system
           - installation guide
@@ -290,6 +312,13 @@ routing:
       - name: other
         description: General fallback traffic.
         mmlu_categories: [other]
+
+    safety:
+      - name: unsafe-content
+        description: Content risk, independent of prompt attacks.
+        labels: [safe, unsafe]
+        unsafe_labels: [unsafe]
+        threshold: 0.5
 
     fact_check:
       - name: needs_fact_check
@@ -423,6 +452,13 @@ routing:
       - name: needs_reasoning
         threshold: 0.10
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 6
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
         hard:
           candidates:
             - solve this step by step
@@ -643,11 +679,17 @@ routing:
         modality: audio
 
     classifiers:
+      - name: content-risk
+        description: Independent content hazards with model-specific operating points.
+        type: local
+        labels: [violence, criminal_activity, sexual_content, child_exploitation,
+                 hate, harassment_abuse, regulated_substances, weapons,
+                 self_harm, privacy, specialized_advice, misinformation]
       - name: generic-safety-score
         description: Generic binary safety classification head.
         type: local
-        model_path: models/mmbert32k-jailbreak-detector-merged
-        labels: [SAFE, JAILBREAK]
+        model_path: models/Vela-1.0-Encoder-307M-Safety
+        labels: [safe, unsafe]
         use_cpu: true
       - name: tool-risk
         description: Prompted tool execution risk labeler.
@@ -813,6 +855,8 @@ routing:
               target_tokens: auto
               reserve_output_tokens: auto
             targets:
+              current_user:
+                mode: preserve
               tool_outputs:
                 mode: extractive
                 min_tokens: 2000
@@ -1164,6 +1208,7 @@ routing:
             blocked_params:
               - logprobs
               - top_logprobs
+            default_max_tokens: 4096
             max_tokens_limit: 8192
             max_n: 4
             strip_unknown: false
@@ -1409,6 +1454,20 @@ routing:
             reasoning, coding, or multi-step analysis.
           timeout_seconds: 5
 
+    - name: content_privacy_route
+      description: Route requests that cross the Hazard privacy operating point.
+      priority: 126
+      rules:
+        operator: AND
+        on_unknown: fail_request
+        conditions:
+          - type: classifier
+            name: content-risk
+            label: privacy
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+
     - name: classifier_band_route
       description: Route a bounded generic classifier score to a local model.
       priority: 125
@@ -1418,7 +1477,7 @@ routing:
         conditions:
           - type: classifier
             name: generic-safety-score
-            label: JAILBREAK
+            label: unsafe
             predicate:
               gte: 0.5
       modelRefs:
@@ -1457,6 +1516,7 @@ routing:
             max_cost_per_1m: 5.0
             max_inflight: 50
           latency_percentile: 95
+          latency_metric: ttft
           on_no_candidates: cheapest
 
     - name: fallback_knn_route
@@ -1519,6 +1579,8 @@ routing:
             backend: vectorstore
             similarity_threshold: 0.69
             top_k: 5
+            rerank:
+              top_k: 3
             max_context_length: 7000
             injection_mode: tool_role
             on_failure: skip
@@ -1655,6 +1717,13 @@ recipes:
     description: Keeps privacy-sensitive traffic on the local default-tier model.
     routing:
       strategy: confidence
+      # Strict model facts; input accounting still uses an estimate.
+      candidate_requirements:
+        capabilities: declared
+        context: known_limits
+      # This deny also applies before a decision is available.
+      data_policy:
+        replay: false
       signals:
         keywords:
           - name: privacy_recipe_keywords
@@ -1768,6 +1837,11 @@ global:
 
   services:
     api:
+      routing_preview:
+        request_timeout_seconds: 120
+        max_concurrency: 16
+      embeddings:
+        enabled: false
       batch_classification:
         max_batch_size: 100
         max_concurrency: 8
@@ -1881,6 +1955,7 @@ global:
             - ready.read
             - docs.read
             - metrics.read
+            - audit.read
             - classify.invoke
             - config.read
             - replay.read
@@ -1892,6 +1967,7 @@ global:
             - ready.read
             - docs.read
             - metrics.read
+            - audit.read
             - classify.invoke
             - config.read
             - config.write
@@ -2205,24 +2281,43 @@ global:
             key_prefix: "vllm-sr:flow:state:"
 
   model_catalog:
+    # Shared task defaults. Recipe model_bindings may override their own consumers.
+    bindings: {}
     # Named physical deployments and their shared admission budgets.
-    deployments: {}
+    deployments:
+      content-risk:
+        artifact: models/Vela-1.0-Encoder-307M-Hazard
+        provider: candle
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+      document-ranker:
+        artifact: models/Vela-1.0-Encoder-307M-Reranker
+        provider: candle
+        device: cpu
+        precision: native
+        input:
+          max_tokens: 4096
+          overflow: reject
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: models/mom-embedding-multimodal
         bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
+          full_context: false
           backend: candle
           model_type: mmbert
           preload_embeddings: true
           target_dimension: 768
           target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
+          enable_soft_matching: false
+          top_k: 0
           min_score_threshold: 0.45
           prototype_scoring:
             enabled: true
@@ -2240,13 +2335,15 @@ global:
           max_response_bytes: 16777216
           dimensions: 1024
     system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
+      safety: models/Vela-1.0-Encoder-307M-Safety
+      hazard: models/Vela-1.0-Encoder-307M-Hazard
+      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
+      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
-      feedback_detector: models/mmbert32k-feedback-detector-merged
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
     # Keys must match global.model_catalog.system entries (prompt_guard,
     # domain_classifier, pii_classifier, fact_check_classifier,
@@ -2268,6 +2365,18 @@ global:
         queue_timeout_ms: 250
         on_overflow: shed
     external:
+      - name: external-safety
+        model_role: classification
+        llm_endpoint:
+          address: safety-service
+          port: 8080
+          protocol: http
+      - name: external-hazard
+        model_role: classification
+        llm_endpoint:
+          address: hazard-service
+          port: 8080
+          protocol: http
       - name: external-guardrail
         llm_provider: openai
         model_role: guardrail
@@ -2404,6 +2513,12 @@ global:
             positive_group: escalate
             negative_group: keep
     modules:
+      safety:
+        safety:
+          model_ref: safety
+          model_id: models/Vela-1.0-Encoder-307M-Safety
+          use_cpu: true
+          max_sequence_length: 0
       prompt_compression:
         enabled: true
         # Built-in profile for scoring/preserve defaults: default, coding, medical,
@@ -2423,11 +2538,17 @@ global:
       prompt_guard:
         enabled: true
         model_ref: prompt_guard
-        model_id: models/mmbert32k-jailbreak-detector-merged
-        threshold: 0.7
+        model_id: models/Vela-1.0-Encoder-307M-Guard
+        threshold: 0.5
         use_cpu: true
         variant: mmbert32k
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        max_sequence_length: 0
+        # Optional token windows. The total input budget above remains 512
+        # when zero; larger budgets require a qualified checkpoint and policy.
+        window:
+          size: 512
+          overlap: 255
+        jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
         positive_labels: [jailbreak]
         # allow (default) tolerates a classifier-backend failure and treats the
         # affected content as not matching; block treats it as a match instead,
@@ -2439,10 +2560,11 @@ global:
           # configured; false disables the classifier outright.
           enabled: true
           model_ref: domain_classifier
-          model_id: models/mmbert32k-intent-classifier-merged
+          max_sequence_length: 0
+          model_id: models/Vela-1.0-Encoder-307M-Domain
           threshold: 0.5
           use_cpu: true
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
           fallback_category: other
         mcp:
           enabled: true
@@ -2461,11 +2583,16 @@ global:
           # configured; false disables the classifier outright.
           enabled: true
           model_ref: pii_classifier
-          model_id: models/mmbert32k-pii-detector-merged
+          # Document budget; each exact token window executes at most 512 tokens.
+          max_sequence_length: 32768
+          window:
+            size: 512
+            overlap: 255
+          model_id: models/Vela-1.0-Encoder-307M-PII
           threshold: 0.9
           use_cpu: true
           use_mmbert_32k: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           # allow (default) keeps a classify error or a provider-declared
           # truncation as a non-match for that content; block treats it as a
           # match on classification_error, so unverified text cannot pass as clean.
@@ -2492,8 +2619,9 @@ global:
         enabled: true
         fact_check:
           model_ref: fact_check_classifier
-          model_id: models/mmbert32k-factcheck-classifier-merged
-          threshold: 0.65
+          max_sequence_length: 0
+          model_id: models/Vela-1.0-Encoder-307M-FactCheck
+          threshold: 0.95
           use_cpu: true
           use_mmbert_32k: true
         detector:
@@ -2517,7 +2645,8 @@ global:
       feedback_detector:
         enabled: true
         model_ref: feedback_detector
-        model_id: models/mmbert32k-feedback-detector-merged
+        max_sequence_length: 0
+        model_id: models/Vela-1.0-Encoder-307M-Feedback
         threshold: 0.7
         use_cpu: true
         use_modernbert: false
@@ -2527,7 +2656,8 @@ global:
         enabled: true
         method: hybrid
         classifier:
-          model_path: models/mmbert32k-modality-router-merged
+          model_path: models/Vela-1.0-Encoder-307M-Modality
+          max_sequence_length: 0
           use_cpu: true
         keywords:
           - image

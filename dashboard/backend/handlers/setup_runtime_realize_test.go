@@ -30,25 +30,11 @@ func configureSetupRuntimeCLI(t *testing.T) {
 
 func managedSetupRuntime(t *testing.T) (string, *setupmode.Resolver) {
 	t.Helper()
-	root := t.TempDir()
-	state := filepath.Join(root, ".vllm-sr")
-	if err := os.MkdirAll(state, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	configPath := createBootstrapSetupConfig(t, state)
-	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
+	// A runtime-owned config requires managed service startup inside Docker.
+	// Reuse the created-container fixture so the real CLI materializer and
+	// activation execute together without depending on the host's services.
+	configPath, root, _ := setupActivationRegressionRuntime(t)
 	t.Setenv("VLLM_SR_STATE_ROOT_DIR", root)
-	t.Setenv(routerContainerNameEnv, "setup-test-router")
-	t.Setenv(dashboardContainerNameEnv, "setup-test-dashboard")
-	t.Setenv(envoyContainerNameEnv, "setup-test-envoy")
-	configureSetupRuntimeCLI(t)
-	// Service orchestration is independently tested with lifecycle fixtures.
-	// This test executes the real CLI materializer without contacting Docker.
-	docker := filepath.Join(root, "docker")
-	if err := os.WriteFile(docker, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return configPath, setupmode.New(configPath, false)
 }
 
@@ -332,11 +318,18 @@ func TestManagedSetupRejectsUnreachableExplicitListenerWithoutPublishing(t *test
 func TestStandaloneSetupKeepsRouterListenerDefaultsWithoutRealizer(t *testing.T) {
 	root := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, root)
+	isolateConfigMutationRuntime(t)
 	t.Setenv(routerContainerNameEnv, "")
+	t.Setenv(envoyContainerNameEnv, "")
 	t.Setenv(dashboardContainerNameEnv, "")
 	t.Setenv("TARGET_ROUTER_API_URL", "")
-	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
+	// A runtime-owned path opts a containerized Dashboard into managed startup.
+	// This fixture owns only a standalone config, even when tests run in Docker.
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "")
 	t.Setenv("VLLM_SR_PYTHON_BIN", filepath.Join(root, "python-missing"))
+	if isManagedContainerConfigPath(configPath) || managedSplitManagementReachabilityRequired() {
+		t.Fatal("standalone fixture unexpectedly requires a managed runtime")
+	}
 	resolver := setupmode.New(configPath, false)
 	body := mustJSONRaw(t, SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
 	response := httptest.NewRecorder()

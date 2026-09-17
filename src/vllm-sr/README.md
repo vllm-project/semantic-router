@@ -66,6 +66,15 @@ vllm-sr stop
 Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
 `--readonly` to keep Dashboard available without config editing.
 
+Local startup waits up to 1800 seconds for readiness after containers start.
+Use `--startup-timeout SECONDS` with a positive integer when model loading or
+GPU compilation needs a different budget, for example
+`vllm-sr serve --startup-timeout 7200`. This Docker-only option also covers
+Dashboard readiness during first-run setup. If the wait expires, the CLI exits
+with an error and leaves containers running for `vllm-sr status` and
+`vllm-sr logs router`; use `vllm-sr stop` to stop them. Request inference
+deadlines are configured separately.
+
 ## Test routing
 
 `route preview` reports which signals, decision, algorithm, and plugins matched without

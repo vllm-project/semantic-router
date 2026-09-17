@@ -1,27 +1,35 @@
 # Session identification
 
-Session-aware routing, memory, replay, and telemetry need a stable identity for
-related turns. The router uses an explicit client identity when one is
-available and derives a fallback otherwise.
+Router Learning protection requires stable, explicit client identities for
+related turns. Replay and telemetry can use derived fallback identities, but
+those fallbacks do not enable protection.
 
 ## Choose the identity you need
 
-For Chat Completions and Messages API clients, send `x-session-id` when your
-application already has a stable session key:
+For the default `scope: conversation` protection, send both headers:
 
 ```http
-x-session-id: tenant-42:conversation-7
+x-session-id: tenant-42:session-7
+x-conversation-id: conversation-3
 ```
 
-For Router Learning protection, `x-conversation-id` can identify a narrower
-conversation inside that session. A protection policy with
-`scope: conversation` uses the conversation identity; `scope: session` uses
-the broader session identity.
+Keep `x-session-id` stable for the session and `x-conversation-id` stable for
+each conversation inside it. Conversation protection requires both; a policy
+with `scope: session` requires only the session header. Use your configured
+header names if customized. If a required identity is missing, the request
+still routes, but protection does not retain a model.
 
-The Responses API manages its own conversation chain. Its request
-`conversation` value wins, otherwise a `previous_response_id` chain inherits
-the original conversation, and a new conversation id is generated when neither
-is present.
+Replay uses the same configured session and conversation header names when that
+explicit identity is available. Recording a conversation ID does not change the
+protection scope or reset model ownership under session scope.
+
+The Responses API keeps explicit conversation membership separate from response
+lineage. A request's `conversation` value identifies that membership;
+`previous_response_id` retrieves retained history and provides an internal
+lineage tracking key, without joining or creating a conversation. With neither,
+the router generates an internal tracking identity. These telemetry identities
+do not replace the configured identity headers required by Router Learning
+protection.
 
 ## Chat and Messages API priority
 

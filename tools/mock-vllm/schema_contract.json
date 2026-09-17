@@ -41,7 +41,7 @@
         "verbosity",
         "web_search_options"
       ],
-      "extension_request_fields": ["chat_template_kwargs", "reasoning_budget_tokens"],
+      "extension_request_fields": ["cache_salt", "chat_template_kwargs", "min_p", "reasoning_budget_tokens", "repetition_penalty", "top_k"],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {
         "add_generation_prompt": ["boolean"],
@@ -116,7 +116,9 @@
         "remote_block_ids",
         "remote_engine_id",
         "remote_host",
-        "remote_port"
+        "remote_port",
+        "usage_breakdown",
+        "x_groq"
       ],
       "official_usage_fields": [
         "completion_tokens",
@@ -125,6 +127,14 @@
         "prompt_tokens",
         "prompt_tokens_details",
         "total_tokens"
+      ],
+      "extension_usage_fields": [
+        "completion_time",
+        "cost_in_usd_ticks",
+        "num_sources_used",
+        "prompt_time",
+        "queue_time",
+        "total_time"
       ]
     },
     "openai_responses": {

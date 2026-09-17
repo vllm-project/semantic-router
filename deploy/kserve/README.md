@@ -8,6 +8,18 @@ OpenShift Routes for inference and the Router API.
 Use the simulator mode for a CPU-only integration check. Use a real
 `LLMInferenceService` only after its model-serving requirements are satisfied.
 
+The default internal models are Vela Domain, PII and Embedding, with immutable
+download revisions. Existing explicit `--embedding-model mom-embedding-ultra`
+and `mmbert` options still select the older mmBERT embedding repository.
+Model upgrades preserve the bounded input policies; see the
+[Vela model guide](../../website/docs/tutorials/global/vela-models.md) before
+opting into whole-document inference.
+
+New deployments request a 20 GiB model volume for the native and ONNX runtime
+artifacts. Training intermediates are excluded from preloading. Existing PVCs
+retain their data and size; provision sufficient capacity before changing their
+model selection.
+
 ## Requirements
 
 - an OpenShift project and authenticated `oc` CLI;

@@ -206,6 +206,15 @@ def _error_message(payload: Any) -> str:
         code = str(error.get("code") or "").strip()
         message = str(error.get("message") or "").strip()
         return f"{code}: {message}" if code and message else message or code
+    decision_error = str(payload.get("decision_error") or "").strip()
+    if decision_error:
+        policies = payload.get("applied_unknown_policies")
+        if isinstance(policies, dict) and policies:
+            applied = ", ".join(
+                f"{key}={value}" for key, value in sorted(policies.items())
+            )
+            return f"{decision_error} (applied unknown policies: {applied})"
+        return decision_error
     return str(payload.get("message") or "")
 
 

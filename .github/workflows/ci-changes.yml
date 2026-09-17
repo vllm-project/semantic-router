@@ -5,6 +5,8 @@ on:
     outputs:
       core_test:
         value: ${{ jobs.classify.outputs.core_test }}
+      image_calibration:
+        value: ${{ jobs.classify.outputs.image_calibration }}
       dashboard:
         value: ${{ jobs.classify.outputs.dashboard }}
       website:
@@ -39,6 +41,8 @@ on:
         value: ${{ jobs.classify.outputs.router_learning }}
       recipe_conformance:
         value: ${{ jobs.classify.outputs.recipe_conformance }}
+      riscv_qemu:
+        value: ${{ jobs.classify.outputs.riscv_qemu }}
       docs_only:
         value: ${{ jobs.classify.outputs.docs_only }}
       security:
@@ -55,6 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       core_test: ${{ steps.classify.outputs.core_test }}
+      image_calibration: ${{ steps.classify.outputs.image_calibration }}
       dashboard: ${{ steps.classify.outputs.dashboard }}
       website: ${{ steps.classify.outputs.website }}
       paper: ${{ steps.classify.outputs.paper }}
@@ -72,6 +77,7 @@ jobs:
       performance: ${{ steps.classify.outputs.performance }}
       router_learning: ${{ steps.classify.outputs.router_learning }}
       recipe_conformance: ${{ steps.classify.outputs.recipe_conformance }}
+      riscv_qemu: ${{ steps.classify.outputs.riscv_qemu }}
       docs_only: ${{ steps.classify.outputs.docs_only }}
       security: ${{ steps.classify.outputs.security }}
       full: ${{ steps.classify.outputs.full }}

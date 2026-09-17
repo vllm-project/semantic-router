@@ -12,10 +12,10 @@ import (
 )
 
 var expectedAMDModelSpecs = []string{
-	"models/mmbert-embed-32k-2d-matryoshka",
-	"models/mmbert32k-intent-classifier-merged",
-	"models/mmbert32k-factcheck-classifier-merged",
-	"models/mmbert32k-feedback-detector-merged",
+	"models/Vela-1.0-Encoder-307M-Embedding",
+	"models/Vela-1.0-Encoder-307M-Domain",
+	"models/Vela-1.0-Encoder-307M-FactCheck",
+	"models/Vela-1.0-Encoder-307M-Feedback",
 }
 
 func TestExtractModelPaths(t *testing.T) {
@@ -119,6 +119,8 @@ func TestIsModelDirectory(t *testing.T) {
 		expected bool
 	}{
 		{"models/bert-base-uncased", true},
+		{"models/Vela-1.0-Encoder-307M-Safety", true},
+		{"models/Vela-1.0-Encoder-307M-Safety/model.safetensors", false},
 		{"models/gmtrouter.pt", false},
 		{"models/lora_model/adapter_config.json", false},
 		{"models/mapping.json", false},
@@ -449,7 +451,7 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -491,12 +493,12 @@ routing:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/mmbert-embed-32k-2d-matryoshka",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -560,9 +562,9 @@ global:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/mmbert-embed-32k-2d-matryoshka",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
 func TestBuildModelSpecsSkipsUnusedFeedbackDetectorDefaults(t *testing.T) {
@@ -610,9 +612,9 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 	}
 
 	assertContainsAllModelSpecs(t, specs,
-		"models/mmbert-embed-32k-2d-matryoshka",
+		"models/Vela-1.0-Encoder-307M-Embedding",
 		"models/mom-embedding-light",
-		"models/mmbert32k-modality-router-merged",
+		"models/Vela-1.0-Encoder-307M-Modality",
 	)
 }
 
@@ -680,7 +682,38 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 	}
 }
 
-func TestBuildModelSpecsSkipsRouterOwnedDefaultsForMemoryE2EConfigs(t *testing.T) {
+func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve RISC-V QEMU config path")
+	}
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "e2e", "config", "config.riscv-qemu.yaml"))
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	if !cfg.IsCategoryClassifierEnabled() {
+		t.Fatal("RISC-V QEMU config must enable the Vela Domain classifier")
+	}
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want only Vela Domain: %#v", len(specs), specs)
+	}
+	if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].Revision == "" {
+		t.Fatalf("RISC-V QEMU must download the pinned Vela Domain classifier: %#v", specs[0])
+	}
+}
+
+func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing.T) {
 	for _, relParts := range [][]string{
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user.yaml"},
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user-valkey.yaml"},
@@ -707,8 +740,13 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForMemoryE2EConfigs(t *testing.T
 			if err != nil {
 				t.Fatalf("BuildModelSpecs() error = %v", err)
 			}
-			if len(specs) != 0 {
-				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
+			if len(specs) != 1 {
+				t.Fatalf("BuildModelSpecs() returned %d specs, want only the memory embedding: %#v", len(specs), specs)
+			}
+			if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Embedding" ||
+				specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Embedding" ||
+				specs[0].Revision == "" || specs[0].CheckONNX {
+				t.Fatalf("memory E2E must download the pinned native Vela embedding: %#v", specs[0])
 			}
 		})
 	}

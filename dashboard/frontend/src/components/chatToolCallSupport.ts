@@ -31,6 +31,7 @@ const parseJsonToolCall = (body: string, index: number): ParsedToolCallChunk | n
     return {
       id: typeof parsed.id === 'string' ? parsed.id : undefined,
       index,
+      argumentMode: 'snapshot',
       functionName: name.trim(),
       functionArguments: typeof args === 'string' ? args : JSON.stringify(args),
     }
@@ -54,6 +55,7 @@ const parseTaggedToolCall = (body: string, index: number): ParsedToolCallChunk |
 
   return {
     index,
+    argumentMode: 'snapshot',
     functionName: functionMatch[1],
     functionArguments: JSON.stringify(args),
   }
@@ -76,12 +78,14 @@ export const extractTextToolCalls = (content: string): TextToolCallExtraction =>
   }
 }
 
-export const mergeToolCallArgumentChunk = (current: string, incoming: string): string => {
-  if (!incoming) return current
-  if (!current) return incoming
-  if (incoming === current || current.endsWith(incoming)) return current
-  if (incoming.startsWith(current)) return incoming
-  return current + incoming
+export const mergeToolCallArgumentChunk = (
+  current: string,
+  incoming: string,
+  mode: 'delta' | 'snapshot' = 'delta',
+): string => {
+  // Repeated deltas are data: dropping a repeated "9" changes a tool's input.
+  // Only complete message/tool envelopes may replace accumulated arguments.
+  return mode === 'snapshot' ? incoming : current + incoming
 }
 
 export const normalizeToolCallArguments = (value: string): string => {

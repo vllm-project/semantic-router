@@ -1,4 +1,5 @@
 import os
+import shlex
 import socket
 import stat
 import subprocess
@@ -603,6 +604,17 @@ def test_rocm_runtime_images_pin_only_the_attention_compiler_exclusion() -> None
         ), dockerfile
 
 
+def test_rocm_runtime_images_ship_miopen_jit_headers() -> None:
+    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
+        runtime_stage = dockerfile.read_text(encoding="utf-8").rsplit(
+            "\nFROM ", maxsplit=1
+        )[-1]
+        assert "rocrand-dev" in runtime_stage, dockerfile
+        assert (
+            "test -r /opt/rocm/include/rocrand/rocrand_xorwow.h" in runtime_stage
+        ), dockerfile
+
+
 def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_CUDA_DOCKERFILE.read_text(encoding="utf-8")
 
@@ -715,6 +727,30 @@ def test_extproc_dockerfile_copies_built_in_knowledge_bases() -> None:
 
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
     assert "COPY config/kb/ /app/config/kb/" not in content
+
+
+def test_extproc_dockerfile_stages_complete_openvino_go_package() -> None:
+    staged_sources: set[str] = set()
+    for line in EXTPROC_DOCKERFILE.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("COPY "):
+            continue
+        _, *sources, destination = shlex.split(line)
+        if destination.rstrip("/") != "openvino-binding":
+            continue
+        for source in sources:
+            for matched in REPO_ROOT.glob(source):
+                files = matched.glob("*.go") if matched.is_dir() else (matched,)
+                staged_sources.update(path.name for path in files)
+
+    runtime_sources = {
+        path.name
+        for path in (REPO_ROOT / "openvino-binding").glob("*.go")
+        if not path.name.endswith("_test.go")
+    }
+    assert runtime_sources <= staged_sources, (
+        "OpenVINO-tagged router image omits Go sources: "
+        f"{sorted(runtime_sources - staged_sources)}"
+    )
 
 
 def test_extproc_rocm_dockerfile_copies_built_in_knowledge_bases() -> None:

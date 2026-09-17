@@ -12,6 +12,7 @@ import (
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
 	return map[string]bool{
+		config.SignalTypeSafety:        len(c.safetyClassifiers) > 0,
 		config.SignalTypeKeyword:       c.keywordClassifier != nil,
 		config.SignalTypeEmbedding:     c.keywordEmbeddingClassifier != nil,
 		config.SignalTypeDomain:        c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
@@ -204,7 +205,16 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		usedSignals = c.getUsedSignals()
 	}
 
-	textForSignal := textForSignalFunc(text, uncompressedText, skipCompressionSignals)
+	boundedText := textForSignalFunc(text, uncompressedText, skipCompressionSignals)
+	textForSignal := func(signalType string) string {
+		if c.hasLongContextClassifier(signalType) {
+			if uncompressedText != "" && skipCompressionSignals[signalType] {
+				return uncompressedText
+			}
+			return text
+		}
+		return boundedText(signalType)
+	}
 	ready := c.signalReadiness()
 
 	results := &SignalResults{
