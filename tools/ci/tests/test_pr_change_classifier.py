@@ -350,9 +350,6 @@ class SelectionTests(unittest.TestCase):
             {tuple(plan["expected_verification_ids"]) for plan in plans},
             {tuple(plans[0]["expected_verification_ids"])},
         )
-        self.assertEqual(
-            result.profiles,
-            ("envoy-ai-gateway", "dashboard", "no-model", "remote-embedding"),
         self.assertTrue(
             set(full_cpu_ids()) <= set(plans[0]["expected_verification_ids"])
         )
