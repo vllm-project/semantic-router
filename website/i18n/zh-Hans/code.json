@@ -2965,5 +2965,41 @@
   },
   "homepage.useCases.title": {
     "message": "一个路由器，三种用法"
+  },
+  "team.members.guan404ming.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.guan404ming.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.abhinav-m22.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.abhinav-m22.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.subin9.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.subin9.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.TwilightTechie.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.TwilightTechie.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.yaojiejia.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.yaojiejia.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.adaamko.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.adaamko.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
   }
 }
