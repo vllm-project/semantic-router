@@ -618,6 +618,7 @@ class ClassifierSignal(BaseModel):
     model_path: Optional[str] = None
     labels: List[str]
     instructions: Optional[str] = None
+    disable_rationale: StrictBool = False
     use_cpu: bool = False
 
     @model_validator(mode="after")
@@ -641,11 +642,13 @@ class ClassifierSignal(BaseModel):
             self._validate_sequence()
         return self
 
-    def _validate_local(self):
+    def _validate_local(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError("local classifiers require at least two labels")
-        if self.model or self.instructions:
-            raise ValueError("local classifiers do not accept model or instructions")
+        if self.model or self.instructions or self.disable_rationale:
+            raise ValueError(
+                "local classifiers do not accept model, instructions or disable_rationale"
+            )
 
     def _validate_llm(self):
         if not self.instructions:
@@ -653,14 +656,19 @@ class ClassifierSignal(BaseModel):
         if self.model_path or self.use_cpu:
             raise ValueError("llm classifiers do not accept model_path or use_cpu")
 
-    def _validate_sequence(self):
+    def _validate_sequence(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError(
                 "sequence_classifier classifiers require at least two labels"
             )
-        if self.model_path or self.use_cpu or self.instructions:
+        if (
+            self.model_path
+            or self.use_cpu
+            or self.instructions
+            or self.disable_rationale
+        ):
             raise ValueError(
-                "sequence_classifier classifiers do not accept model_path, use_cpu or instructions"
+                "sequence_classifier classifiers do not accept model_path, use_cpu, instructions or disable_rationale"
             )
 
 

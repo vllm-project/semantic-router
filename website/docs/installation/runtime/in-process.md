@@ -17,6 +17,7 @@ Install the CLI and a matching Router image using the
 | --- | --- | --- | --- |
 | CPU | Candle | Native weights | The example below |
 | CPU | ONNX Runtime | ONNX | Use `provider: ort`, `device: cpu` |
+| OpenVINO device | OpenVINO-enabled build | Exported IR | [OpenVINO models](openvino.md) |
 | AMD GPU | ONNX Runtime with ROCm or MIGraphX | ONNX | [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md) |
 | NVIDIA GPU | Candle CUDA build | Native weights | Use `provider: candle`, `device: cuda:0`; validate on your GPU |
 | Apple GPU | Candle Metal build | Compatible native weights | Use `provider: candle`, `device: metal:0`; check model compatibility |

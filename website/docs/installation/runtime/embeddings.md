@@ -97,7 +97,24 @@ layer-6 vector. Exact-match caching does not need an embedding.
 
 ## Test an embedding
 
-After starting the Router, check readiness and generate two vectors:
+To use embedding and similarity diagnostics without a routing consumer, opt in
+to the global embedding service:
+
+```yaml
+global:
+  services:
+    api:
+      embeddings:
+        enabled: true
+```
+
+Requests without an explicit recipe use the global embedding binding. Requests
+that select a recipe keep that recipe's binding. The setting defaults to `false`,
+which preserves diagnostics backed by an already prepared default recipe;
+`preload_embeddings` alone does not enable this standalone service.
+
+Restart or reload the Router after merging the fragment, then check readiness
+and generate two vectors:
 
 ```bash
 curl -fsS http://localhost:8080/ready

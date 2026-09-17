@@ -355,7 +355,7 @@ COPY onnx-binding/go.mod onnx-binding/
 COPY onnx-binding/instance/ onnx-binding/instance/
 COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
-COPY openvino-binding/go.mod openvino-binding/semantic-router.go openvino-binding/
+COPY openvino-binding/go.mod openvino-binding/*.go openvino-binding/
 COPY openvino-binding/cpp/include/ openvino-binding/cpp/include/
 
 # Download Go dependencies (cached layer)

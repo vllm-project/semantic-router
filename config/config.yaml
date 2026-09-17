@@ -1843,6 +1843,8 @@ global:
       routing_preview:
         request_timeout_seconds: 120
         max_concurrency: 16
+      embeddings:
+        enabled: false
       batch_classification:
         max_batch_size: 100
         max_concurrency: 8
