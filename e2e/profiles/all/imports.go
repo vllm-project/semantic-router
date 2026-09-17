@@ -39,9 +39,9 @@ import (
 
 var mockVLLMLocalImages = []framework.LocalImageBuild{
 	{
-		Dockerfile:   "tools/mock-vllm/Dockerfile",
+		Dockerfile:   "tools/test/services/mock-vllm/Dockerfile",
 		Tag:          "ghcr.io/vllm-project/semantic-router/mock-vllm:latest",
-		BuildContext: "tools/mock-vllm",
+		BuildContext: "tools/test/services/mock-vllm",
 	},
 }
 

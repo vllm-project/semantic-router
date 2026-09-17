@@ -30,7 +30,7 @@ func TestProviderSimulatorContractsTrackCodecInventories(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..")
 	openAI := readProviderSimulatorContracts(
 		t,
-		filepath.Join(root, "tools", "mock-vllm", "schema_contract.json"),
+		filepath.Join(root, "tools", "test", "services", "mock-vllm", "schema_contract.json"),
 	)
 	anthropic := readProviderSimulatorContracts(
 		t,

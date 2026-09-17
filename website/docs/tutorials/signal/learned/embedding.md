@@ -226,7 +226,7 @@ its candidates with examples from your deployment and recalibrate the
 threshold. The example values are not portable defaults.
 
 The shipped thresholds were obtained with
-[`cmd/image-routing-calibration`](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/cmd/image-routing-calibration)
+[`tools/calibration/image-routing`](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/image-routing)
 against `llm-semantic-router/multi-modal-embed-small` (snapshot
 `fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4`, 384 dimensions, default
 `prototype_scoring`) and a hand-reviewed manifest of repository images in which

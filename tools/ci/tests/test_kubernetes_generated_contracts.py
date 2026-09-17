@@ -152,7 +152,7 @@ class KubernetesGeneratedContractsTests(unittest.TestCase):
 
     def test_crd_reference_gate_propagates_failure_after_identical_output(self) -> None:
         self.write(Path("website/docs/api/crd-reference.md"), "current reference\n")
-        generator = Path("tools/crd/generate-reference.sh")
+        generator = Path("tools/codegen/crd/generate-reference.sh")
         self.write(
             generator,
             f"#!{sys.executable}\n"

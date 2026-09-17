@@ -55,6 +55,33 @@ ROUTE "policy-route" (on_unknown = "fail_request") {
 	)
 }
 
+func TestClassifierRationaleRoundTrip(t *testing.T) {
+	for _, disabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("disabled_%t", disabled), func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.ClassifierRules = []config.ClassifierSignalRule{{
+				Name:             "risk",
+				Type:             config.ClassifierSignalTypeLLM,
+				Model:            "judge",
+				Labels:           []string{"SAFE", "RISKY"},
+				Instructions:     "Classify the input.",
+				DisableRationale: disabled,
+			}}
+			source, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(source, "disable_rationale: true") != disabled {
+				t.Fatalf("rationale setting changed in DSL:\n%s", source)
+			}
+			roundTrip := mustCompilePolicyDSL(t, source)
+			if !reflect.DeepEqual(cfg.ClassifierRules, roundTrip.ClassifierRules) {
+				t.Fatalf("classifier changed after round trip: %#v", roundTrip.ClassifierRules)
+			}
+		})
+	}
+}
+
 func TestPolicySignalsRoundTripInsideIsolatedRecipes(t *testing.T) {
 	input := `
 MODEL "model-a" {}
