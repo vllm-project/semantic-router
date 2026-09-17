@@ -106,7 +106,7 @@ func TestRunQualifyCandleCPUWritesEvidenceBeforeReturningFailure(t *testing.T) {
 }
 
 func TestRunValidateAcceptsFailedEvidence(t *testing.T) {
-	data, err := os.ReadFile("../../pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json")
+	data, err := os.ReadFile("../../src/semantic-router/pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json")
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestRunValidateAcceptsFailedEvidence(t *testing.T) {
 }
 
 func TestRunValidateExpectedDigest(t *testing.T) {
-	path := "../../pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json"
+	path := "../../src/semantic-router/pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json"
 	const digest = "sha256:d02895afb86cb4ffeb146f0902f14048410cf70909612ab0da5bc097e1870c31"
 	var stdout bytes.Buffer
 	if err := run([]string{"validate", "--expected-digest", digest, path}, nil, &stdout); err != nil {
@@ -165,7 +165,7 @@ func TestRunQualifyRequiresOutputFile(t *testing.T) {
 }
 
 func TestWriteReceiptDoesNotOverwriteEvidence(t *testing.T) {
-	data, err := os.ReadFile("../../pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json")
+	data, err := os.ReadFile("../../src/semantic-router/pkg/modelruntime/compatibility/testdata/local-candle-cpu-v1.json")
 	if err != nil {
 		t.Fatal(err)
 	}

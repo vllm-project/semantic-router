@@ -64,6 +64,20 @@ class DomainRegistryTests(unittest.TestCase):
             ),
         )
 
+    def test_modelcompat_tool_keeps_test_and_ci_coverage(self) -> None:
+        for path in (
+            "tools/modelcompat/main.go",
+            "tools/modelcompat/main_test.go",
+            "src/semantic-router/pkg/modelruntime/compatibility/receipt.go",
+            "tools/make/models.mk",
+        ):
+            with self.subTest(path=path):
+                domains = matching_domains((path,))
+                self.assertIn(
+                    "make check-modelcompat", commands_for_domains(domains, "checks")
+                )
+                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+
     def test_every_domain_job_is_declared_once(self) -> None:
         jobs = job_records()
         for name, domain in domain_records().items():

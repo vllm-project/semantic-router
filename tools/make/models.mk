@@ -125,13 +125,22 @@ download-models-lora: ## Download models for LoRA and advanced embedding tests
 download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
 
-.PHONY: qualify-candle-cpu check-candle-qualification-source
+.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat check-modelcompat
+
+# Like the schema tools, modelcompat reuses the Router's Go module.
+test-modelcompat: rust-ci ## Test the offline compatibility tool (set CANDLE_MODEL_PATH for native qualification)
+	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 go test -race -count=1 -v ../../tools/modelcompat/*.go
+
+check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
+	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
+
+test: test-modelcompat
 
 # Do not attribute a working-tree build to HEAD. Local planning artifacts outside
 # the compiled source trees do not affect this source check.
 check-candle-qualification-source:
 	@git diff --quiet HEAD -- || { echo "Candle qualification requires committed sources (tracked changes found)"; exit 1; }
-	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding)" && \
+	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding tools/modelcompat)" && \
 		test -z "$$untracked" || { echo "Candle qualification requires committed sources (untracked source files found)"; exit 1; }
 
 qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
@@ -141,7 +150,7 @@ qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Ca
 	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
 	@cd src/semantic-router && \
 		$(NATIVE_ENV) \
-		go run ./cmd/modelcompat qualify-candle-cpu \
+		go run ../../tools/modelcompat/main.go qualify-candle-cpu \
 			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
 			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
 			--router-revision "$(shell git rev-parse HEAD)" \

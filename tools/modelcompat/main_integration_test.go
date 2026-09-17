@@ -48,7 +48,7 @@ func TestNativeCandleCPUCommandRoundTrip(t *testing.T) {
 		// This is a command integration fixture, not published release evidence.
 		"--router-revision", "synthetic-integration-test-working-tree",
 		"--labels", "LABEL_0,LABEL_1",
-		"--suite", "../../pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json",
+		"--suite", "../../src/semantic-router/pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json",
 		"--output", path)
 	if err != nil {
 		t.Fatalf("native qualification failed: %v\n%s", err, output)
