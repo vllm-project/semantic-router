@@ -42,6 +42,16 @@ func TestInventoryTracksReadyHandlesAcrossSharedResourcesAndGenerations(t *testi
 	if got := current.Snapshot(); len(got) != 3 || got[0].Artifact != "artifact" || got[2].Identity.Recipe != "named" {
 		t.Fatalf("lost separate handle/recipe inventory: %+v", got)
 	}
+	shared := current.Snapshot()
+	if len(shared[0].ResourceID) != 64 || shared[0].ResourceID != shared[1].ResourceID || shared[1].ResourceID != shared[2].ResourceID {
+		t.Fatalf("shared resource identity differs between consumer handles: %+v", shared)
+	}
+	other := inventoryHandle(t, pool, candidate, "other-device", "cuda:0")
+	other.Ready()
+	if candidate.Snapshot()[0].ResourceID == shared[0].ResourceID {
+		t.Fatal("incompatible execution devices were merged")
+	}
+	_ = other.Close()
 	_ = failed.Close() // A candidate that fails before warmup is never ready.
 	if len(candidate.Snapshot()) != 0 || len(current.Snapshot()) != 3 {
 		t.Fatal("candidate failure changed the active generation")

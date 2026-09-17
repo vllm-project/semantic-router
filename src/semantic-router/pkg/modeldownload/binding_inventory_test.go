@@ -568,3 +568,59 @@ func TestORTOperatingPointRequiresNativeSourceInCachedSnapshot(t *testing.T) {
 		t.Fatalf("source checkpoint omitted: complete=%v err=%v", complete, err)
 	}
 }
+
+func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		t.Run(map[bool]string{false: "module_defaults", true: "global_bindings"}[explicit], func(t *testing.T) {
+			cfg := &config.RouterConfig{MoMRegistry: map[string]string{
+				"models/global-embedding": "test/global-embedding", "models/global-nli": "test/global-nli",
+				"models/recipe-embedding": "test/recipe-embedding", "models/recipe-nli": "test/recipe-nli",
+			}}
+			cfg.BertModelPath = "models/global-embedding"
+			cfg.EmbeddingConfig.ModelType = "bert"
+			cfg.EmbeddingModels.UseCPU = true
+			cfg.Tools.Enabled = true
+			cfg.SemanticCache.Enabled = true
+			cfg.SemanticCache.EmbeddingModel = "bert"
+			cfg.SemanticCache.PolarityGuard = &config.PolarityGuardConfig{Mode: "nli"}
+			cfg.HallucinationMitigation.NLIModel.ModelID = "models/global-nli"
+			cfg.HallucinationMitigation.NLIModel.UseCPU = true
+			cfg.ModelDeployments = map[string]config.ModelDeployment{
+				"global-embedding": {Provider: "candle", Device: "cpu", Artifact: "models/global-embedding"},
+				"global-nli":       {Provider: "candle", Device: "cpu", Artifact: "models/global-nli"},
+				"recipe-embedding": {Provider: "ort", Device: "rocm:7", Artifact: "models/recipe-embedding"},
+				"recipe-nli":       {Provider: "candle", Device: "cuda:7", Artifact: "models/recipe-nli"},
+			}
+			cfg.ModelBindings = map[string]config.ModelBinding{
+				"embedding":               {Deployment: "recipe-embedding", Adapter: "mmbert", Contract: "embedding.v1"},
+				"hallucination_explainer": {Deployment: "recipe-nli", Adapter: "modernbert", Contract: "text_pair_distribution.v1"},
+			}
+			if explicit {
+				cfg.GlobalModelBindings = map[string]config.ModelBinding{
+					"embedding":               {Deployment: "global-embedding", Adapter: "bert", Contract: "embedding.v1"},
+					"hallucination_explainer": {Deployment: "global-nli", Adapter: "modernbert", Contract: "text_pair_distribution.v1"},
+				}
+			}
+			specs, err := BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := map[string]bool{}
+			for _, spec := range specs {
+				got[spec.LocalPath] = true
+			}
+			if len(got) != 2 || !got["models/global-embedding"] || !got["models/global-nli"] {
+				t.Fatalf("service download used recipe source: %+v", specs)
+			}
+			cfg.Tools.Enabled = false
+			cfg.Decisions = []config.Decision{{Name: "no-cache-consumer"}}
+			specs, err = BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(specs) != 0 {
+				t.Fatalf("idle global models provisioned: %+v", specs)
+			}
+		})
+	}
+}

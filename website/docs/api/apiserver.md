@@ -1,7 +1,7 @@
 # Router management API
 
-The router management API provides health, classification, configuration,
-storage, cache, compression, and replay operations. It listens on port `8080`
+The router management API provides configuration, routing previews, plugin
+inspection, model diagnostics, storage, and observability. It listens on port `8080`
 by default and the local stack binds it to `127.0.0.1`.
 
 For model traffic, use the configured Envoy listener described in
@@ -32,6 +32,25 @@ curl -sS 'http://localhost:8080/openapi.json?path=/api/v1/config&method=PATCH'
 Agents should call these Router endpoints directly; the Dashboard is not part
 of the discovery path. The Website also renders the generated contract in the
 [searchable OpenAPI reference](./openapi).
+
+## Resource boundaries
+
+| Capability | Responsibility |
+| --- | --- |
+| `config` | Canonical configuration, recipes, validation, planning, and activation |
+| `routing` | Evaluate a request through the configured routing pipeline |
+| `plugins` | Discover plugin types, inspect recipe/decision bindings, and preview or probe behavior |
+| `inventory` | Inspect configured and prepared runtime resources |
+| `diagnostics` | Invoke a specific prepared model or a routing classifier |
+| `storage` | Manage stored data, response-cache partitions, and context-recovery scopes |
+| `observability` | Read metrics, replays, and management audit; submit outcome evidence |
+| `system` | Health, startup, readiness, and API discovery |
+
+Plugin configuration belongs to its recipe decision in the canonical document.
+Use `/api/v1/config/recipes/{name}` with `If-Match` to change it. There is no second
+plugin configuration database or independent plugin enable/disable state.
+`/config/router` is not registered; the canonical configuration API is
+`/api/v1/config`.
 
 ## Access and authentication
 
@@ -115,6 +134,47 @@ Standalone classification, embedding, and similarity diagnostics return
 exceeded. The error retains the model's limit details; other inference failures
 remain server errors.
 
+## Diagnose a prepared model binding
+
+`GET /api/v1/diagnostics/models?recipe=<name>` lists the bindings actually
+prepared for that recipe. Select a returned `name` and its `contract`; the
+Router does not infer a model from a family name or silently load a fallback.
+Both `recipe` and `binding` are required for the typed invocation endpoints.
+
+| Operation under `/api/v1/diagnostics/models` | Prepared task | Vela use |
+| --- | --- | --- |
+| `POST /labels` | Label distribution, including configured window scanning | Domain, Guard, FactCheck, Feedback, Modality |
+| `POST /label-scores` | Independent label scores and configured operating point | Safety, Hazard |
+| `POST /tokens` | Token spans with original UTF-8 byte offsets | PII |
+| `POST /embeddings` | The binding's configured embedding representation | Embedding |
+| `POST /rerank` | Query/document relevance scores in input order | Reranker |
+
+For example, take a label-distribution binding name from discovery:
+
+```bash
+curl -sS 'http://localhost:8080/api/v1/diagnostics/models?recipe=default'
+curl -sS http://localhost:8080/api/v1/diagnostics/models/labels \
+  -H 'Content-Type: application/json' \
+  -d '{"recipe":"default","binding":"<prepared-binding-name>","text":"Explain this Python error."}'
+```
+
+Every invocation returns the actual binding identity, artifact revision,
+provider, device, precision, and task limits alongside the result. Calls retain
+the owning runtime generation until inference finishes, including during reload.
+An unprepared or foreign-recipe binding fails explicitly. Windowed Guard and
+PII keep their prepared scan geometry; Hazard keeps its operating-point
+thresholds and policy digest. The shared Vela Encoder is an artifact used by
+task bindings, so it does not need a separate inference endpoint.
+
+The convenience classification, embedding, NLI, and similarity endpoints also
+accept an optional `recipe`. Omitting it retains their default-recipe behavior;
+a supplied recipe is resolved explicitly. The typed model endpoints are the
+preferred way to verify exactly which loaded model produced a result. Rerank
+batches obey `global.services.api.batch_classification.max_batch_size` (100 pairs when
+unset). Typed calls share their prepared resource's admission gate and have a
+two-minute request deadline; native inference retains its lease until it
+actually returns, even after cancellation. Actual coverage follows active configuration: discovering a task does not load it.
+
 ## Inspect models and metrics
 
 | Method | Path | Use |
@@ -175,6 +235,16 @@ create a backup, and trigger reload; an active config still does not prove that
 upstream model backends are healthy. Check `/ready` and send a representative
 request after a change.
 
+`activation_status` is `active`, `pending`, `failed`, or `unknown`. When a
+candidate has been attempted, `activation` includes its document hash, attempt,
+stage, timestamps, and a redacted failure detail. A failed candidate leaves the
+previous generation active. Config mutation responses return `503` with
+`status: activation_failed` when that failure is observed during the activation
+wait: the document was persisted, so read its current `ETag` and inspect or
+roll back that candidate instead of blindly retrying the write. The status is
+process-local and describes the latest attempted candidate. A newer file
+supersedes an older attempt.
+
 Tracing settings are initialized at process startup. Config plans, updates,
 and rollbacks that change `global.services.observability.tracing` return
 `409 RESTART_REQUIRED` without persisting the candidate. Apply those changes
@@ -194,7 +264,8 @@ Knowledge-base configuration:
 In a router process, create, update, and delete persist a candidate and return
 `202` with `activation_status: pending` and `generated_runtime_hash` while the
 replacement generation prepares. Poll `/api/v1/config/hash` until
-`active_runtime_hash` matches that candidate. A second KB mutation while pending
+`active_runtime_hash` matches that candidate, or stop on `activation_status: failed` and inspect `activation`. A failure already observed at mutation time
+returns `503` with the persisted candidate's activation detail. A second KB mutation while pending
 returns `409` with `CONFIG_ACTIVATION_PENDING` and does not overwrite it.
 Updates use independent asset revision paths; deletion removes the candidate
 config entry while retaining files needed by old and rollback generations.
@@ -220,6 +291,45 @@ fields. They exist only on the management listener. `/v1/files` and
 `/v1/vector_stores` are not inference-listener aliases and are not registered
 by the Router API.
 
+## Discover and inspect plugins
+
+`GET /api/v1/plugins` projects the canonical plugin registry, including each
+plugin's schema URL, bindings URL, and supported operations. It includes all
+registered types, including plugins without a separate runtime operation.
+`GET /api/v1/plugins/{type}` selects one descriptor;
+`GET /api/v1/plugins/{type}/bindings?recipe=<name>&decision=<name>` inspects active
+bindings, declared enablement, reachability, and dependency availability.
+Availability is not a network health probe; `runtime_inspected: false` means
+that only configuration was available for inspection. Configuration links point back to
+the owning recipe. An empty binding list means the plugin is not configured in
+the selected scope.
+
+Operation metadata distinguishes `read`, `preview`, `probe`, and `mutation`.
+A descriptor links to shared storage or observability resources where applicable;
+it does not duplicate their state under a plugin-specific resource tree.
+
+| Plugin behavior | Operation |
+| --- | --- |
+| `system_prompt`, `request_params`, `header_mutation`, `fast_response` | `POST /api/v1/plugins/{type}/preview` using a typed candidate `configuration` or an active `binding` |
+| `hallucination`, `response_jailbreak` | Preview an active policy and its supplied conditions; `mode: probe` invokes its configured detectors |
+| `rag` | Preview context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache |
+| `tools`, `tool_selection` | Preview static tool policy; semantic selection requires explicit `mode: probe` |
+| `context_compression` | Preview retained targets and budgets using the existing compression contract |
+| `response_cache`, `memory` | Operate their resources under `/api/v1/storage` |
+| `router_replay`, `shadow_dispatch` | Inspect recorded outcomes under `/api/v1/observability/replays` |
+
+The guard, RAG, and tool previews require an explicit
+`binding: {"recipe":"<name>","decision":"<name>"}`. Their default `mode` is
+`preview`; they do not automatically escalate to a probe. A probe may invoke a
+configured local or remote classifier, embedding service, or retrieval backend.
+RAG previews require `data.read`, tool-policy previews require `config.read`,
+and guard probes require `classify.invoke`. These operations never execute a
+selected tool or generate a provider response. Returned
+`mode`, `persisted`, and `backend_calls` describe the operation: `persisted: false` means it does not write plugin data or conversation state; a probe may
+update runtime metrics or embedding memoization, and a configured external
+retrieval service may have its own effects. Header values in previews require
+`secret_view`.
+
 ## Operate the response cache
 
 Response-cache endpoints are separate from inference-time cache lookup. They
@@ -228,27 +338,41 @@ audited invalidation.
 
 | Method | Path | Use |
 | --- | --- | --- |
-| `GET` | `/api/v1/response-cache/capabilities` | Backend capabilities |
-| `GET` | `/api/v1/response-cache/health` | Backend health |
-| `GET` | `/api/v1/response-cache/stats` | Redacted statistics |
-| `GET` | `/api/v1/response-cache/audit` | Redacted mutation audit entries |
-| `POST` | `/api/v1/response-cache/test` | Validate and probe a candidate configuration |
-| `POST` | `/api/v1/response-cache/invalidate` | Dry-run or invalidate a scoped partition |
-| `POST` | `/api/v1/response-cache/flush` | Advance a scoped or global cache epoch |
+| `GET` | `/api/v1/storage/response-cache/capabilities` | Backend capabilities |
+| `GET` | `/api/v1/storage/response-cache/health` | Backend health |
+| `GET` | `/api/v1/storage/response-cache/stats` | Redacted statistics |
+| `POST` | `/api/v1/storage/response-cache/test` | Validate and probe a candidate configuration |
+| `POST` | `/api/v1/storage/response-cache/invalidate` | Dry-run or invalidate a scoped partition |
+| `POST` | `/api/v1/storage/response-cache/flush` | Advance a scoped or global cache epoch |
 
 Prefer scoped invalidation and a dry run before a destructive cache mutation.
 Bearer roles distinguish read, invalidate, and broader cache-management
 permissions.
 
+## Inspect management audit
+
+`GET /api/v1/observability/audit` requires `audit.read` and covers audited
+management operations across config, recipes, data, cache, and compression.
+Use an exact `action` filter, `limit` (1–1000, default 100), and `after_sequence`
+for pagination. Continue with the returned `next_sequence` and keep the same
+filter. `has_more` indicates more matching entries; `truncated` means the
+requested cursor predates retained data.
+
+The hash-chained ring retains the latest 10,000 entries in this process.
+`oldest_sequence` identifies its retention boundary; the oldest entry can refer
+to a predecessor outside the ring. Restart resets the log and its sequence, so
+this endpoint is not a durable compliance archive. Audit records contain route
+and authorization metadata, not request bodies or plugin payloads.
+
 ## Inspect context compression
 
 | Method | Path | Use |
 | --- | --- | --- |
-| `GET` | `/api/v1/context-compression/capabilities` | Runtime capabilities |
-| `GET` | `/api/v1/context-compression/health` | Runtime health |
-| `GET` | `/api/v1/context-compression/stats` | Redacted statistics |
-| `POST` | `/api/v1/context-compression/preview` | Preview compression without persistence |
-| `POST` | `/api/v1/context-compression/recovery/invalidate` | Invalidate a trusted recovery scope |
+| `GET` | `/api/v1/plugins/context_compression/capabilities` | Runtime capabilities |
+| `GET` | `/api/v1/plugins/context_compression/health` | Runtime health |
+| `GET` | `/api/v1/observability/plugins/context_compression/stats` | Redacted statistics |
+| `POST` | `/api/v1/plugins/context_compression/preview` | Preview compression without persistence |
+| `POST` | `/api/v1/storage/context-recovery/invalidate` | Invalidate a trusted recovery scope |
 
 Use `preview` to evaluate what would be retained before enabling compression on
 important traffic.
@@ -294,6 +418,14 @@ is enabled.
 The following reference is generated from the Router's registered route
 catalog. Use it to scan every endpoint; use the task-oriented sections above
 for guidance and the running `/openapi.json` for exact schemas.
+
+The former `/api/v1/response-cache/*` and
+`/api/v1/context-compression/*` routes are retired. Clients should rediscover
+operations from `/api/v1` or `/api/v1/plugins`: cache operations now use
+`/api/v1/storage/response-cache/*`; compression capabilities, health, and preview
+use `/api/v1/plugins/context_compression/*`; statistics, recovery invalidation,
+and audit use the observability/storage paths above. No redirect or legacy
+handler changes a mutation's meaning.
 
 <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 ### system
@@ -351,7 +483,7 @@ Inspect configured and loaded model and classifier resources.
 
 ### observability
 
-Inspect routing replays and metrics, and submit outcome evidence.
+Inspect routing replays, metrics, and management audit; submit outcome evidence.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -361,13 +493,22 @@ Inspect routing replays and metrics, and submit outcome evidence.
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
+| `GET` | `/api/v1/observability/audit` | Page through this Router process's bounded management mutation audit; filter by action and resume after a sequence |
+| `GET` | `/api/v1/observability/plugins/context_compression/stats` | Get redacted context-compression statistics |
 
 ### storage
 
-Manage Router-owned knowledge bases, memories, files, and vector stores.
+Manage Router-owned knowledge bases, memories, files, vector stores, cache partitions, and context recovery.
 
 | Method | Path | Description |
 | --- | --- | --- |
+| `GET` | `/api/v1/storage/response-cache/capabilities` | Get response-cache backend capabilities |
+| `GET` | `/api/v1/storage/response-cache/health` | Check response-cache backend health |
+| `GET` | `/api/v1/storage/response-cache/stats` | Get redacted response-cache statistics |
+| `POST` | `/api/v1/storage/response-cache/test` | Validate and probe a response-cache candidate configuration |
+| `POST` | `/api/v1/storage/response-cache/invalidate` | Dry-run or invalidate a scoped response-cache partition |
+| `POST` | `/api/v1/storage/response-cache/flush` | Advance a scoped or global response-cache epoch |
+| `POST` | `/api/v1/storage/context-recovery/invalidate` | Invalidate a trusted context-recovery request scope |
 | `GET` | `/api/v1/storage/knowledge-bases` | List configured knowledge bases |
 | `POST` | `/api/v1/storage/knowledge-bases` | Create a managed knowledge base |
 | `GET` | `/api/v1/storage/knowledge-bases/{name}` | Read a knowledge base |
@@ -394,35 +535,31 @@ Manage Router-owned knowledge bases, memories, files, and vector stores.
 | `DELETE` | `/api/v1/storage/files/{id}` | Delete an uploaded file |
 | `GET` | `/api/v1/storage/files/{id}/content` | Download uploaded-file content |
 
-### response-cache
+### plugins
 
-Inspect and manage the response-cache service.
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/v1/response-cache/capabilities` | Get response-cache backend capabilities |
-| `GET` | `/api/v1/response-cache/health` | Check response-cache backend health |
-| `GET` | `/api/v1/response-cache/stats` | Get redacted response-cache statistics |
-| `GET` | `/api/v1/response-cache/audit` | Get redacted response-cache mutation audit entries |
-| `POST` | `/api/v1/response-cache/test` | Validate and probe a response-cache candidate configuration |
-| `POST` | `/api/v1/response-cache/invalidate` | Dry-run or invalidate a scoped response-cache partition |
-| `POST` | `/api/v1/response-cache/flush` | Advance a scoped or global response-cache epoch |
-
-### context-compression
-
-Inspect, preview, and manage context compression.
+Discover recipe-scoped plugin bindings, dependencies, and typed behavior previews.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/context-compression/capabilities` | Get context-compression capabilities |
-| `GET` | `/api/v1/context-compression/health` | Check context-compression runtime health |
-| `GET` | `/api/v1/context-compression/stats` | Get redacted context-compression statistics |
-| `POST` | `/api/v1/context-compression/preview` | Preview context compression without persistence |
-| `POST` | `/api/v1/context-compression/recovery/invalidate` | Invalidate a trusted context-recovery request scope |
+| `GET` | `/api/v1/plugins/context_compression/capabilities` | Get context-compression capabilities |
+| `GET` | `/api/v1/plugins/context_compression/health` | Check context-compression runtime health |
+| `POST` | `/api/v1/plugins/context_compression/preview` | Preview context compression without persistence |
+| `GET` | `/api/v1/plugins` | Discover every registered recipe-scoped plugin, its schema, bindings, and supported operations |
+| `GET` | `/api/v1/plugins/{type}` | Describe one canonical plugin type and its supported management operations |
+| `GET` | `/api/v1/plugins/{type}/bindings` | Inspect active recipe and decision plugin bindings and published dependency availability; does not probe network health |
+| `POST` | `/api/v1/plugins/system_prompt/preview` | Preview system instruction changes using the dispatch protocol codec; no persistence or backend calls |
+| `POST` | `/api/v1/plugins/request_params/preview` | Preview the dispatch parameter policy, including blocked fields, defaults, and caps; no persistence or backend calls |
+| `POST` | `/api/v1/plugins/header_mutation/preview` | Preview ordered Envoy header operations; values require secret_view; no persistence or backend calls |
+| `POST` | `/api/v1/plugins/fast_response/preview` | Preview fixed assistant text before transport encoding; no persistence or backend calls |
+| `POST` | `/api/v1/plugins/response_jailbreak/preview` | Preview an active binding's response-jailbreak policy; mode=probe explicitly invokes its configured classifier without generation or persistence |
+| `POST` | `/api/v1/plugins/hallucination/preview` | Preview an active binding's hallucination policy and supplied fact-check/context conditions; mode=probe explicitly invokes configured detectors without generation or persistence |
+| `POST` | `/api/v1/plugins/rag/preview` | Preview configured RAG context injection using supplied_context; mode=probe retrieves from the configured backend without the RAG result cache or generation |
+| `POST` | `/api/v1/plugins/tools/preview` | Preview the configured tools policy; mode=probe permits semantic tool retrieval but never executes tools |
+| `POST` | `/api/v1/plugins/tool_selection/preview` | Preview the configured tool_selection policy; mode=probe permits configured retrieval and embedding calls but never executes tools |
 
 ### diagnostics
 
-Invoke low-level classifiers, embeddings, NLI, and similarity diagnostics.
+Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, and rerankers.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -437,4 +574,10 @@ Invoke low-level classifiers, embeddings, NLI, and similarity diagnostics.
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate text and image embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
+| `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |
+| `POST` | `/api/v1/diagnostics/models/labels` | Inspect a prepared label distribution; windowed bindings preserve their configured scan |
+| `POST` | `/api/v1/diagnostics/models/label-scores` | Inspect independent label scores using the prepared operating point when configured |
+| `POST` | `/api/v1/diagnostics/models/tokens` | Inspect prepared token spans with original UTF-8 byte offsets and complete configured window scanning |
+| `POST` | `/api/v1/diagnostics/models/embeddings` | Run the explicitly selected prepared embedding binding at its published representation |
+| `POST` | `/api/v1/diagnostics/models/rerank` | Score query-document pairs using the selected prepared relevance binding without running a RAG request; max_batch_size applies (default 100 pairs) |
 <!-- END-GENERATED-ENDPOINT-INDEX -->

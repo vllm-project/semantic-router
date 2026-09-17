@@ -4,6 +4,9 @@
   "$defs": {
     "APIConfig": {
       "properties": {
+        "embeddings": {
+          "$ref": "#/$defs/EmbeddingAPIConfig"
+        },
         "batch_classification": {
           "$ref": "#/$defs/BatchClassificationConfig"
         },
@@ -762,6 +765,12 @@
     },
     "CanonicalModelCatalog": {
       "properties": {
+        "bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
         "deployments": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelDeployment"
@@ -1490,6 +1499,9 @@
         "instructions": {
           "type": "string"
         },
+        "disable_rationale": {
+          "type": "boolean"
+        },
         "use_cpu": {
           "type": "boolean"
         }
@@ -1668,6 +1680,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ContextCompressionCurrentUserConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ContextCompressionPluginConfig": {
       "properties": {
         "enabled": {
@@ -1772,6 +1793,9 @@
     },
     "ContextCompressionTargetsConfig": {
       "properties": {
+        "current_user": {
+          "$ref": "#/$defs/ContextCompressionCurrentUserConfig"
+        },
         "tool_outputs": {
           "$ref": "#/$defs/ContextCompressionTargetConfig"
         },
@@ -2336,6 +2360,15 @@
         },
         "repetition_penalty": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EmbeddingAPIConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -7570,6 +7603,15 @@
         "path": [
           "integrations",
           "looper"
+        ]
+      },
+      {
+        "key": "bindings",
+        "layer": "model_catalog",
+        "display_name": "Bindings",
+        "path": [
+          "model_catalog",
+          "bindings"
         ]
       },
       {

@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -11,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 )
 
 func (r *OpenAIRouter) applySemanticReasoningMode(
@@ -174,7 +174,6 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 	return true, nil
 }
 
-//nolint:cyclop // Each supported request parameter is applied through the closed neutral contract.
 func (r *OpenAIRouter) applySemanticRequestParams(
 	decision *config.Decision,
 	request *llmprotocol.Request,
@@ -183,29 +182,18 @@ func (r *OpenAIRouter) applySemanticRequestParams(
 	if decision == nil || request == nil || decision.GetRequestParamsConfig() == nil {
 		return false, nil
 	}
-	params := decision.GetRequestParamsConfig()
+	result, err := pluginruntime.ApplyRequestParams(request, decision.GetRequestParamsConfig())
 	decisionKey := config.RoutingDecisionKey(routingScope, decision.Name)
-	changed := false
-	for _, field := range params.BlockedParams {
-		blocked, err := blockSemanticRequestField(request, strings.TrimSpace(field))
-		if err != nil {
-			return false, err
-		}
-		if blocked {
-			changed = true
-			metrics.RecordBlockedParam(decisionKey, field)
-		}
+	for _, field := range result.Blocked {
+		metrics.RecordBlockedParam(decisionKey, field)
 	}
-	changed = llmprotocol.DefaultOutputTokens(request, params.DefaultMaxTokens) || changed
-	if llmprotocol.CapOutputTokens(request, params.MaxTokensLimit) {
+	if result.CappedOutputTokens {
 		metrics.RecordMaxTokensCapped(decisionKey)
-		changed = true
 	}
-	if llmprotocol.CapCandidateCount(request, params.MaxN) {
+	if result.CappedCandidateCount {
 		metrics.RecordMaxNCapped(decisionKey)
-		changed = true
 	}
-	return changed, nil
+	return result.Changed, err
 }
 
 func blockSemanticRequestField(request *llmprotocol.Request, field string) (bool, error) {

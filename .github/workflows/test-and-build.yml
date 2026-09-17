@@ -135,6 +135,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Test repository calibration tools
+        run: make test-calibration
+
+      - name: Test the provider simulator
+        run: make test-provider-simulator
+
       - name: Verify trained selector parity with the native runtime
         run: |
           python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt
@@ -155,10 +161,16 @@ jobs:
           if-no-files-found: warn
 
       # Recompute all public contracts from their authored sources and reject
-      # drift in config JSON/TypeScript, OpenAPI/index, and skill/references.
+      # drift in schemas, OpenAPI, catalogs, CLI/CRD docs, and skill/references.
       # Runs before the model/service setup so drift fails fast.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
       - name: Check generated public contracts are up to date
-        run: make generated-contract-check
+        run: |
+          python3 -m pip install -r tools/docs/requirements.txt
+          make generated-contract-check
         env:
           CI: true
           CGO_ENABLED: 1
@@ -251,7 +263,7 @@ jobs:
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Local dev smoke test (no Authorino)
-        run: tools/smoke/test-local-up-router.sh
+        run: tools/test/smoke/test-local-up-router.sh
         timeout-minutes: 20
         env:
           CI: true

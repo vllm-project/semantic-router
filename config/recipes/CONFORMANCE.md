@@ -203,10 +203,10 @@ For reusable policy evaluation across different model capacities, explicitly use
 `--scope policy`:
 
 ```bash
-python tools/dev/router-calibration/recipe_conformance.py eval \
+python tools/calibration/recipe/recipe_conformance.py eval \
   --recipe <name> --router-url http://127.0.0.1:8080 --scope policy
 
-python tools/dev/router-calibration/router_calibration_loop.py eval \
+python tools/calibration/recipe/router_calibration_loop.py eval \
   --probes path/to/probes.yaml --router-url http://127.0.0.1:8080 --scope policy
 ```
 

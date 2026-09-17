@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -195,20 +196,20 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 }
 
 // applyMaxToolTraceBytes truncates structured tool-trace text fields to max
-// bytes. A non-positive max disables truncation.
+// bytes. A non-positive max disables truncation, but malformed UTF-8 is still
+// normalized before text reaches a database.
 func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
-	if max <= 0 {
-		return
-	}
-	rec.Prompt, rec.PromptTruncated = truncateString(rec.Prompt, max)
-	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = truncateString(rec.ToolDefinitions, max)
+	prompt, promptCut := truncateString(rec.Prompt, max)
+	rec.Prompt, rec.PromptTruncated = prompt, rec.PromptTruncated || promptCut
+	definitions, definitionsCut := truncateString(rec.ToolDefinitions, max)
+	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = definitions, rec.ToolDefinitionsTruncated || definitionsCut
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
 
 // truncateToolTraceSteps applies the byte limit to each step's Arguments and
 // Output fields.
 func truncateToolTraceSteps(trace *ToolTrace, max int) {
-	if trace == nil || max <= 0 {
+	if trace == nil {
 		return
 	}
 	for i := range trace.Steps {
@@ -402,10 +403,14 @@ func (r *Recorder) getRecord(id string) (RoutingRecord, bool, error) {
 	return rec, found, err
 }
 
-func (r *Recorder) ListAllRecords() []RoutingRecord {
+func (r *Recorder) ListRecords() ([]RoutingRecord, error) {
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
-	records, err := r.storage.List(ctx)
+	return r.storage.List(ctx)
+}
+
+func (r *Recorder) ListAllRecords() []RoutingRecord {
+	records, err := r.ListRecords()
 	if err != nil {
 		return []RoutingRecord{}
 	}
@@ -439,24 +444,26 @@ func applyBodyCapturePolicy(body string, truncated, capture bool, maxBytes int) 
 	if !capture {
 		return "", false
 	}
-	if len(body) > maxBytes {
-		return strings.Clone(body[:maxBytes]), true
-	}
-	return body, truncated
+	body, cut := truncateString(body, maxBytes)
+	return body, truncated || cut
 }
 
 func truncateBody(body []byte, maxBytes int) (string, bool) {
-	if maxBytes <= 0 || len(body) <= maxBytes {
-		return string(body), false
-	}
-	return string(body[:maxBytes]), true
+	return truncateString(string(body), maxBytes)
 }
 
+// Captured text uses U+FFFD for malformed UTF-8 runs. Apply the byte budget after
+// normalization, and keep only complete runes so PostgreSQL TEXT remains valid.
 func truncateString(s string, maxBytes int) (string, bool) {
+	s = strings.ToValidUTF8(s, "\uFFFD")
 	if maxBytes <= 0 || len(s) <= maxBytes {
 		return s, false
 	}
-	return strings.Clone(s[:maxBytes]), true
+	end := maxBytes
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	return strings.Clone(s[:end]), true
 }
 
 func logSignalFields(signals Signal) map[string]interface{} {

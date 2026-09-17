@@ -91,6 +91,7 @@ type (
 
 // BatchClassificationRequest represents a batch classification request
 type BatchClassificationRequest struct {
+	Recipe   string                 `json:"recipe,omitempty"`
 	Texts    []string               `json:"texts"`
 	TaskType string                 `json:"task_type,omitempty"` // "intent", "pii", "security", or "all"
 	Options  *ClassificationOptions `json:"options,omitempty"`
@@ -106,6 +107,7 @@ type BatchClassificationResult struct {
 
 // BatchClassificationResponse represents the response from batch classification
 type BatchClassificationResponse struct {
+	Recipe           string                           `json:"recipe,omitempty"`
 	Results          []BatchClassificationResult      `json:"results"`
 	TotalCount       int                              `json:"total_count"`
 	ProcessingTimeMs int64                            `json:"processing_time_ms"`
@@ -128,6 +130,7 @@ type ClassificationOptions struct {
 
 // EmbeddingRequest represents a request for embedding generation
 type EmbeddingRequest struct {
+	Recipe          string   `json:"recipe,omitempty"`
 	Texts           []string `json:"texts,omitempty"`
 	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
 	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
@@ -150,6 +153,7 @@ type EmbeddingResult struct {
 
 // EmbeddingResponse represents the response from embedding generation
 type EmbeddingResponse struct {
+	Recipe                string            `json:"recipe,omitempty"`
 	Embeddings            []EmbeddingResult `json:"embeddings"`
 	TotalCount            int               `json:"total_count"`
 	TotalProcessingTimeMs int64             `json:"total_processing_time_ms"`
@@ -158,6 +162,7 @@ type EmbeddingResponse struct {
 
 // SimilarityRequest represents a request to calculate similarity between two texts
 type SimilarityRequest struct {
+	Recipe          string  `json:"recipe,omitempty"`
 	Text1           string  `json:"text1"`
 	Text2           string  `json:"text2"`
 	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
@@ -169,6 +174,7 @@ type SimilarityRequest struct {
 
 // SimilarityResponse represents the response of a similarity calculation
 type SimilarityResponse struct {
+	Recipe           string  `json:"recipe,omitempty"`
 	ModelUsed        string  `json:"model_used"`         // "qwen3", "gemma", or "unknown"
 	Similarity       float32 `json:"similarity"`         // Cosine similarity score (-1.0 to 1.0)
 	ProcessingTimeMs float32 `json:"processing_time_ms"` // Processing time in milliseconds
@@ -176,6 +182,7 @@ type SimilarityResponse struct {
 
 // BatchSimilarityRequest represents a request to find top-k similar candidates for a query
 type BatchSimilarityRequest struct {
+	Recipe          string   `json:"recipe,omitempty"`
 	Query           string   `json:"query"`                      // Query text
 	Candidates      []string `json:"candidates"`                 // Array of candidate texts
 	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
@@ -195,6 +202,7 @@ type BatchSimilarityMatch struct {
 
 // BatchSimilarityResponse represents the response of batch similarity matching
 type BatchSimilarityResponse struct {
+	Recipe           string                 `json:"recipe,omitempty"`
 	Matches          []BatchSimilarityMatch `json:"matches"`            // Top-k matches, sorted by similarity (descending)
 	TotalCandidates  int                    `json:"total_candidates"`   // Total number of candidates processed
 	ModelUsed        string                 `json:"model_used"`         // "qwen3", "gemma", or "unknown"

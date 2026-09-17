@@ -347,6 +347,7 @@ export interface NormalizedModel {
   reasoning_efforts?: string[]
   provider_model_id?: string
   api_format?: string
+  api_format_override?: string
   external_model_ids?: Record<string, string>
   backend_refs?: BackendRefEntry[]
   endpoints: Endpoint[]
@@ -1096,6 +1097,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 

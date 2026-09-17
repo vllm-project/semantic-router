@@ -33,14 +33,15 @@ type labelClassifier interface {
 }
 
 type llmLabelClassifier struct {
-	client       *VLLMClient
-	model        string
-	labels       []string
-	instructions string
-	timeout      time.Duration
-	maxTokens    int
-	handle       *binding.Resolved[string, labelClassification]
-	recipe       string
+	client           *VLLMClient
+	model            string
+	labels           []string
+	instructions     string
+	disableRationale bool
+	timeout          time.Duration
+	maxTokens        int
+	handle           *binding.Resolved[string, labelClassification]
+	recipe           string
 }
 
 func newLLMLabelClassifier(
@@ -64,12 +65,13 @@ func newLLMLabelClassifier(
 		maxTokens = defaultLLMLabelClassifierMaxTokens
 	}
 	classifier := &llmLabelClassifier{
-		client:       client,
-		model:        external.ModelName,
-		labels:       append([]string(nil), rule.Labels...),
-		instructions: rule.Instructions,
-		timeout:      timeout,
-		maxTokens:    maxTokens,
+		client:           client,
+		model:            external.ModelName,
+		labels:           append([]string(nil), rule.Labels...),
+		instructions:     rule.Instructions,
+		disableRationale: rule.DisableRationale,
+		timeout:          timeout,
+		maxTokens:        maxTokens,
 	}
 	runtime := consumerModelRuntime(models)
 	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Protocol: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractLabelDistribution}
@@ -96,13 +98,21 @@ func (c *llmLabelClassifier) classify(
 ) (labelClassification, error) {
 	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
+	responseFields := `"scores" and "rationale"`
+	rationaleInstruction := ` "rationale" must be a short reason.`
+	if c.disableRationale {
+		responseFields = `"scores"`
+		rationaleInstruction = ""
+	}
 	systemPrompt := fmt.Sprintf(
 		"%s\n\nScore every label from: %s.\n"+
-			`Return only JSON with exactly "scores" and "rationale". `+
+			`Return only JSON with exactly %s. `+
 			`"scores" must map every exact label to a number between 0 and 1, `+
-			`and all scores must sum to 1. "rationale" must be a short reason.`,
+			`and all scores must sum to 1.%s`,
 		strings.TrimSpace(c.instructions),
 		strings.Join(c.labels, ", "),
+		responseFields,
+		rationaleInstruction,
 	)
 	response, err := c.client.GenerateWithSystemPrompt(
 		callCtx,
@@ -122,12 +132,13 @@ func (c *llmLabelClassifier) classify(
 		return labelClassification{}, fmt.Errorf("classifier returned no choices")
 	}
 	content := strings.TrimSpace(response.Choices[0].Message.Content)
-	return parseLLMLabelClassification(content, c.labels)
+	return parseLLMLabelClassification(content, c.labels, c.disableRationale)
 }
 
 func parseLLMLabelClassification(
 	content string,
 	labels []string,
+	disableRationale bool,
 ) (labelClassification, error) {
 	// Some reasoning models return their trace in content rather than a
 	// separate reasoning field. Strip only complete leading blocks, leaving
@@ -144,14 +155,20 @@ func parseLLMLabelClassification(
 	if err := json.Unmarshal([]byte(content), &raw); err != nil {
 		return labelClassification{}, fmt.Errorf("classifier returned invalid JSON: %w", err)
 	}
-	if len(raw) != 2 || raw["scores"] == nil || raw["rationale"] == nil {
+	if disableRationale {
+		if raw["scores"] == nil || len(raw) > 2 || (len(raw) == 2 && raw["rationale"] == nil) {
+			return labelClassification{}, fmt.Errorf(
+				"classifier response must contain exactly scores and optional rationale",
+			)
+		}
+	} else if len(raw) != 2 || raw["scores"] == nil || raw["rationale"] == nil {
 		return labelClassification{}, fmt.Errorf(
 			"classifier response must contain exactly scores and rationale",
 		)
 	}
 	var result struct {
-		Scores    map[string]float64 `json:"scores"`
-		Rationale string             `json:"rationale"`
+		Scores    map[string]*float64 `json:"scores"`
+		Rationale *string             `json:"rationale"`
 	}
 	if err := json.Unmarshal(
 		[]byte(content),
@@ -159,15 +176,27 @@ func parseLLMLabelClassification(
 	); err != nil {
 		return labelClassification{}, fmt.Errorf("classifier returned invalid JSON: %w", err)
 	}
-	result.Rationale = strings.TrimSpace(result.Rationale)
-	if result.Rationale == "" {
+	rationale := ""
+	if result.Rationale != nil {
+		rationale = strings.TrimSpace(*result.Rationale)
+	} else if disableRationale && raw["rationale"] != nil {
+		return labelClassification{}, fmt.Errorf("classifier rationale must be a string")
+	}
+	if !disableRationale && rationale == "" {
 		return labelClassification{}, fmt.Errorf("classifier returned an empty rationale")
 	}
-	scores, err := validateLLMLabelScores(labels, result.Scores)
+	reported := make(map[string]float64, len(result.Scores))
+	for label, score := range result.Scores {
+		if score == nil {
+			return labelClassification{}, fmt.Errorf("classifier score for label %q must be a number", label)
+		}
+		reported[label] = *score
+	}
+	scores, err := validateLLMLabelScores(labels, reported)
 	if err != nil {
 		return labelClassification{}, err
 	}
-	return labelClassification{Scores: scores, Rationale: result.Rationale}, nil
+	return labelClassification{Scores: scores, Rationale: rationale}, nil
 }
 
 func validateLLMLabelScores(

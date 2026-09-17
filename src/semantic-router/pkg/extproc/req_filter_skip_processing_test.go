@@ -117,6 +117,37 @@ func TestHandleRequestHeadersSkipProcessingHeaderIsCaseInsensitive(t *testing.T)
 	}
 }
 
+func TestHandleRequestHeadersSkipProcessingReturnsToDefaultRoute(t *testing.T) {
+	router := newRouterWithSkipProcessingGate(true)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newSkipProcessingRequestHeaders("POST", "/v1/chat/completions", "true")
+	request.RequestHeaders.Headers.Headers = append(
+		request.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: "X-Selected-Model", Value: "test-model"},
+	)
+
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+	common := response.GetRequestHeaders().GetResponse()
+	if !common.GetClearRouteCache() {
+		t.Fatal("expected selected-route cache to be cleared for skip processing")
+	}
+	if !containsHeaderName(common.GetHeaderMutation().GetRemoveHeaders(), headers.SelectedModel) {
+		t.Fatalf("selected-model header was not removed: %v", common.GetHeaderMutation().GetRemoveHeaders())
+	}
+}
+
+func containsHeaderName(names []string, want string) bool {
+	for _, name := range names {
+		if name == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestHandleRequestHeadersSkipProcessingBypassesValidation(t *testing.T) {
 	router := newRouterWithSkipProcessingGate(true)
 	ctx := &RequestContext{Headers: make(map[string]string)}

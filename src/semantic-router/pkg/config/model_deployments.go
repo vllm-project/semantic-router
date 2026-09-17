@@ -31,7 +31,8 @@ type ModelInputBudget struct {
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
 }
 
-// ModelBinding is a recipe-local use of a deployment. Head and MappingPath
+// ModelBinding declares a shared task default or a recipe-local deployment use.
+// Head and MappingPath
 // describe task interpretation and never imply physical resource compatibility.
 type ModelBinding struct {
 	Deployment     string                   `yaml:"deployment" json:"deployment"`
@@ -58,6 +59,7 @@ type ResolvedModelBinding struct {
 // exact: absence never falls back to a binding from a different recipe.
 type ModelBindingPlan struct {
 	recipes map[RecipeName]map[string]ResolvedModelBinding
+	global  map[string]ResolvedModelBinding
 }
 
 func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModelBinding, bool) {
@@ -75,6 +77,9 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 	if d.Provider != "http" {
 		if d.Device == "" {
 			d.Device = "cpu"
+			if d.Provider == "openvino" {
+				d.Device = "CPU"
+			}
 		}
 		if d.Precision == "" {
 			d.Precision = "native"
@@ -107,6 +112,19 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 		}
 		if d.Precision != "native" && d.Precision != "fp32" && d.Precision != "fp16" {
 			return fmt.Errorf("precision must be native, fp32 or fp16")
+		}
+	case "openvino":
+		if strings.TrimSpace(d.Artifact) == "" || d.ExternalModel != "" {
+			return fmt.Errorf("local deployment requires artifact and cannot set external_model")
+		}
+		if strings.TrimSpace(d.Device) != d.Device || d.Device == "" || strings.ContainsRune(d.Device, 0) {
+			return fmt.Errorf("OpenVINO device must be non-empty and trimmed")
+		}
+		if d.Precision != "native" {
+			return fmt.Errorf("OpenVINO executes the exported IR with native precision")
+		}
+		if d.Input.Overflow == "window" {
+			return fmt.Errorf("OpenVINO supports reject or truncate input policy")
 		}
 	case "http":
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
@@ -160,15 +178,20 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("model bindings require router configuration")
 	}
-	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
-			return nil, fmt.Errorf("model deployment name must be non-empty and trimmed")
-		}
-		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
-			return nil, fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
-		}
+	if err := validateModelDeploymentContracts(cfg); err != nil {
+		return nil, err
 	}
-	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding)}
+	return compileModelBindings(cfg)
+}
+
+// compileModelBindings assumes global deployment contracts were already
+// validated by the caller, then resolves global defaults and recipe overrides.
+func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
+	global, err := resolveGlobalModelBindings(cfg)
+	if err != nil {
+		return nil, err
+	}
+	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding), global: global}
 	profiles := cfg.Recipes
 	if len(profiles) == 0 {
 		recipe := cfg.RoutingScope
@@ -178,9 +201,10 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 		profiles = []RoutingRecipe{{Name: recipe, Profile: RoutingProfile{ModelBindings: cfg.ModelBindings, Signals: cfg.Signals}}}
 	}
 	for _, recipe := range profiles {
-		bindings := make(map[string]ResolvedModelBinding, len(recipe.Profile.ModelBindings))
-		for _, name := range sortedModelKeys(recipe.Profile.ModelBindings) {
-			decl := recipe.Profile.ModelBindings[name]
+		declarations := cfg.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings)
+		bindings := make(map[string]ResolvedModelBinding, len(declarations))
+		for _, name := range sortedModelKeys(declarations) {
+			decl := declarations[name]
 			deployment, exists := cfg.ModelDeployments[decl.Deployment]
 			if !exists {
 				return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown deployment %q", recipe.Name, name, decl.Deployment)
@@ -201,6 +225,18 @@ func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 				}
 			}
 			bindings[name] = ResolvedModelBinding{Recipe: recipe.Name, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
+		}
+		// The legacy `backend: endpoint` scalar is shorthand for a binding the
+		// recipe did not write out. Desugar it here so the runtime has one
+		// selection mechanism; an explicit binding for the consumer wins.
+		if _, declared := bindings["hallucination_detector"]; !declared {
+			decl, deployment, legacy, err := LegacyHallucinationBinding(&cfg.HallucinationMitigation.HallucinationModel)
+			if err != nil {
+				return nil, fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
+			}
+			if legacy {
+				bindings["hallucination_detector"] = ResolvedModelBinding{Recipe: recipe.Name, Name: "hallucination_detector", Binding: decl, Deployment: deployment.WithDefaults(), Admission: cfg.ModelAdmission[decl.Deployment]}
+			}
 		}
 		plan.recipes[recipe.Name] = bindings
 	}
@@ -283,12 +319,25 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
 			return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
 		}
-		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat {
-			return fmt.Errorf("hallucination detector requires http_chat adapter")
+		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
+			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
 		}
 	}
 	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {
 		return fmt.Errorf("%s has no ORT task adapter", name)
+	}
+	if deployment.Provider == "openvino" {
+		if want != "embedding.v1" && want != RemoteClassifierContractLabelDistribution {
+			return fmt.Errorf("OpenVINO supports text embedding and sequence label distributions only")
+		}
+		switch decl.Adapter {
+		case "auto", "bert", "modernbert", "mmbert", "mmbert32k", "mmbert-32k":
+		default:
+			return fmt.Errorf("unsupported OpenVINO adapter %q", decl.Adapter)
+		}
+		if decl.Head != "" && filepath.Ext(decl.Head) != ".xml" {
+			return fmt.Errorf("OpenVINO head must identify a complete IR XML graph")
+		}
 	}
 	// Artifact-specific capacity is checked by the loaded provider. Config
 	// cannot infer a checkpoint limit from its adapter name or a fixed 512 cap.
@@ -316,6 +365,21 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 }
 
 func validateModelDeploymentContracts(cfg *RouterConfig) error {
-	_, err := CompileModelBindings(cfg)
+	if cfg == nil {
+		return fmt.Errorf("model bindings require router configuration")
+	}
+	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
+			return fmt.Errorf("model deployment name must be non-empty and trimmed")
+		}
+		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
+			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateModelBindingContracts(cfg *RouterConfig) error {
+	_, err := compileModelBindings(cfg)
 	return err
 }
