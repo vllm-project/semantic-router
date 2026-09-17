@@ -50,6 +50,16 @@ the response, measured latency, and its available quality score. Check the
 scoring method in `benchmark.py` against your task before treating
 `performance` as a training label.
 
+If the input has no domain categories, enrich the benchmark records with a
+running router before training:
+
+```bash
+python add_category_to_training_data.py \
+  --vsr-url http://localhost:8080 \
+  --input benchmark_output.jsonl \
+  --output benchmark_with_category.jsonl
+```
+
 ## Train Selectors
 
 ```bash
