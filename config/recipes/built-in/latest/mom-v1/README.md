@@ -151,30 +151,33 @@ memory, response caching, and learning adaptation. It also
 suppresses new Responses object writes. These restrictions apply regardless of
 the Guard, Safety, Hazard, and PII verdicts; unavailable triage fails closed.
 
-All five recipes, including Vault, enable Router Replay with PostgreSQL by
-default. Insights can show their routing decisions and bounded request and
-response excerpts. Raw bodies are limited to 4,096 bytes each; structured tool
-traces have a separate limit of 100 steps. The bundle sets a seven-day retention
-period. PostgreSQL removes expired records during subsequent writes.
-
-`vllm-sr recipe builtin init` fills omitted Replay settings from the bundle and
-preserves operator-authored settings, including `enabled: false`. Local
-`vllm-sr serve` provisions its managed PostgreSQL service and persistent volume,
-then supplies a stack-specific credential reference. Other deployment methods
-must configure `global.services.router_replay.postgres` with their PostgreSQL
-connection and credentials before starting Router.
-
-To disable the deployment's default capture, set
-`global.services.router_replay.enabled: false`. An explicit route-local Replay
-opt-in can override that default. To forbid capture for one recipe, set that
-recipe's `routing.data_policy.replay: false`; this also blocks route-local
-Replay opt-ins. Vault's other data-handling controls remain active
-when Replay is enabled. Neither setting changes provider-side retention.
-
 Assign every Vault backend to infrastructure that meets your privacy
 requirements. The recipe does not establish physical placement, change provider
 retention, delete earlier stored conversations, or disable operational usage
 metadata.
+
+## Replay and Insights
+
+All five recipes, including Vault, enable PostgreSQL Replay by default so
+Dashboard Insights can show their requests and routing decisions. The defaults
+keep records for seven days, limit raw request and response excerpts to 4,096
+bytes each, and limit structured tool traces to 100 steps. Expired PostgreSQL
+records are removed during subsequent writes.
+
+`vllm-sr recipe builtin init` preserves explicit operator settings, including
+`enabled: false`. Local `vllm-sr serve` manages PostgreSQL and its persistent
+volume. Other deployment methods need a PostgreSQL connection and credentials
+in `global.services.router_replay.postgres`.
+
+- To disable default capture, set `global.services.router_replay.enabled: false`.
+  Individual decisions can still opt in.
+- To forbid capture for a recipe, set its `routing.data_policy.replay: false`.
+  This also blocks decision-level opt-ins.
+
+Vault's other data-handling restrictions still apply. Replay settings do not
+change provider retention or delete previously captured conversations. See the
+[Replay guide](../../../../../website/docs/tutorials/plugin/router-replay.md)
+for capture limits and access controls.
 
 ## Quick start
 

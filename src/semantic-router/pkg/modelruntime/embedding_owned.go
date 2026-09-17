@@ -16,10 +16,7 @@ import (
 // PrepareOwnedEmbeddings prepares the catalog for a candidate generation.
 // Failure releases only the candidate's independent resource references.
 func PrepareOwnedEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
-	if cfg != nil && cfg.GlobalModelBindings["embedding"].Deployment != "" {
-		return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
-	}
-	return prepareEmbeddings(ctx, cfg, runtime, true, embedding.Options{})
+	return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
 }
 
 // PrepareOwnedRecipeEmbeddings excludes service-owned cache, tools, memory and
@@ -130,7 +127,11 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 		if recipe == config.GlobalModelScope {
 			spec.Name = globalEmbeddingConsumerName(cfg, model, primary)
 		}
-		provider, err := runtime.Embedding(ctx, spec, 0, 0)
+		var options embedding.Options
+		if recipe == config.GlobalModelScope && cfg.SemanticCache.Enabled && model == config.SemanticCacheEmbeddingModel(cfg) {
+			options = view
+		}
+		provider, err := runtime.Embedding(ctx, spec, options.Dimension, options.Layer)
 		if err != nil {
 			return fail(fmt.Errorf("prepare %s embedding: %w", model, err))
 		}

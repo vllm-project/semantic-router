@@ -51,3 +51,16 @@ func TestGlobalModelServicesUseOnlyReachableEnabledPlugins(t *testing.T) {
 		t.Fatal("preparation demand changed global authoring")
 	}
 }
+
+func TestRecipeToolConsumerUsesGlobalModuleWithoutGlobalBinding(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = "bert"
+	cfg.Decisions = []Decision{{Plugins: []DecisionPlugin{{Type: "tool_selection", Configuration: MustStructuredPayload(ToolSelectionPluginConfig{Enabled: true})}}}}
+	if EmbeddingModelsNeeded(cfg, "bert", false)["bert"] {
+		t.Fatal("recipe prepared a second service-owned tools model")
+	}
+	service := cfg.ConfigForGlobalModelServices()
+	if !EmbeddingModelsNeeded(service, "bert", true)["bert"] {
+		t.Fatal("global scope lost tool consumer")
+	}
+}

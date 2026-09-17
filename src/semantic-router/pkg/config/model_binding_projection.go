@@ -17,6 +17,9 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 	scoped.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
 	for name := range scoped.ModelBindings {
 		spec, ok := plan.Lookup(recipe, name)
+		if recipe == GlobalModelScope {
+			spec, ok = plan.LookupGlobal(name)
+		}
 		if !ok {
 			return nil, fmt.Errorf("model binding %q is absent from recipe %q", name, recipe)
 		}
