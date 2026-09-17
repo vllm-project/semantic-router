@@ -78,8 +78,9 @@ type knowledgeBaseDeleteResponse struct {
 }
 
 type knowledgeBaseActivation struct {
-	ActivationStatus     string `json:"activation_status,omitempty" yaml:"activation_status,omitempty"`
-	GeneratedRuntimeHash string `json:"generated_runtime_hash,omitempty" yaml:"generated_runtime_hash,omitempty"`
+	Activation           *configActivationResponse `json:"activation,omitempty" yaml:"activation,omitempty"`
+	ActivationStatus     string                    `json:"activation_status,omitempty" yaml:"activation_status,omitempty"`
+	GeneratedRuntimeHash string                    `json:"generated_runtime_hash,omitempty" yaml:"generated_runtime_hash,omitempty"`
 }
 
 func normalizeKnowledgeBaseRequest(payload knowledgeBaseUpsertRequest) (knowledgeBaseUpsertRequest, error) {

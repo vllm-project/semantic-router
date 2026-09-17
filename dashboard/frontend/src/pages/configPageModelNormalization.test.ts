@@ -115,3 +115,29 @@ describe('config page model normalization', () => {
     expect(responses.reasoning_efforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
   })
 })
+
+it('preserves legacy wire format, reasoning and model identity in the edit projection', () => {
+  const [model] = getNormalizedModels(
+    {
+      model_config: {
+        legacy: {
+          api_format: 'anthropic',
+          reasoning_family: 'claude',
+          model_id: 'remote-id',
+          external_model_ids: { anthropic: 'remote-id' },
+          preferred_endpoints: ['legacy-endpoint'],
+        },
+      },
+    },
+    false,
+    catalog,
+  )
+  expect(model).toMatchObject({
+    api_format: 'anthropic',
+    api_format_override: 'anthropic',
+    reasoning: { family: 'claude' },
+    provider_model_id: 'remote-id',
+    external_model_ids: { anthropic: 'remote-id' },
+    backend_refs: [{ name: 'legacy-endpoint' }],
+  })
+})

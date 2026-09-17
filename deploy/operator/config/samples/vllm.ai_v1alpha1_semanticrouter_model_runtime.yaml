@@ -8,7 +8,7 @@ spec:
   config:
     model_deployments:
       local-pii:
-        artifact: models/mmbert32k-pii-detector-merged
+        artifact: models/Vela-1.0-Encoder-307M-PII
         provider: candle
         device: cpu
         precision: native
@@ -27,4 +27,4 @@ spec:
           deployment: local-pii
           contract: token_spans.v1
           adapter: mmbert32k
-          mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json

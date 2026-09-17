@@ -42,12 +42,9 @@ func (c *KnowledgeBaseClassifier) embedOneExemplar(backend, modelType string, ta
 		return embeddingResult{ref: ref, embedding: embedding}
 	}
 	if backend == "openvino" {
-		embedding, err := getOpenVINOEmbedding(modelType, ref.text, targetDim)
-		if err != nil {
-			return embeddingResult{ref: ref, err: err}
-		}
-		return embeddingResult{ref: ref, embedding: embedding}
+		return embeddingResult{ref: ref, err: fmt.Errorf("OpenVINO requires an owned model binding")}
 	}
+
 	output, err := getEmbeddingWithModelType(ref.text, modelType, targetDim)
 	if err != nil {
 		return embeddingResult{ref: ref, err: err}

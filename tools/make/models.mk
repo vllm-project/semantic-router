@@ -10,14 +10,22 @@ test-model-selection-parity: ## Compare Python-trained selectors with the curren
 
 .PHONY: test-model-selection-parity
 
-test-training-contracts: ## Run dependency-light model training contract tests
-	@python3 -m unittest discover -s src/training/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
+.PHONY: onnx-artifact-test
+onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with real CPU inference
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_pack_shared_weights.py'
+
+test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/user_feedback_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/pii_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/sequence_repair/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m pytest -q \
 		src/training/model_eval/test_provenance.py \
 		src/training/model_eval/test_artifact_inventory.py \
@@ -30,6 +38,14 @@ test-training-contracts: ## Run dependency-light model training contract tests
 # Hugging Face org for mmBERT models
 HF_ORG := llm-semantic-router
 MODELS_DIR := models
+
+# The checked-in reference suite targets
+# peft-internal-testing/tiny-random-BertForSequenceClassification at
+# 325bf1727142e5f4216ca8e3eef68752321979ac. The model remains external and
+# must be downloaded at that exact revision before running qualification.
+CANDLE_COMPAT_LABELS ?= LABEL_0,LABEL_1
+CANDLE_COMPAT_SUITE ?= pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json
+CANDLE_COMPAT_OUTPUT ?= $(CURDIR)/.agent-harness/compatibility/candle-cpu-receipt.json
 
 # mmBERT merged models (for Rust inference)
 MMBERT_MODELS := \
@@ -102,6 +118,46 @@ download-qwen3-embedding: ## Download the Qwen3 embedding model for binding test
 download-models-lora: ## Download models for LoRA and advanced embedding tests
 	@$(MAKE) download-models
 	@$(MAKE) download-qwen3-embedding
+
+# The evaluation registry pins current Vela native snapshots. The MMBERT lists
+# below and their download targets intentionally remain explicit legacy tools.
+.PHONY: download-eval-models
+download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
+	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
+
+.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat check-modelcompat
+
+# Like the schema tools, modelcompat reuses the Router's Go module.
+test-modelcompat: rust-ci ## Test the offline compatibility tool (set CANDLE_MODEL_PATH for native qualification)
+	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 go test -race -count=1 -v ../../tools/modelcompat/*.go
+
+check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
+	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
+
+test: test-modelcompat
+
+# Do not attribute a working-tree build to HEAD. Local planning artifacts outside
+# the compiled source trees do not affect this source check.
+check-candle-qualification-source:
+	@git diff --quiet HEAD -- || { echo "Candle qualification requires committed sources (tracked changes found)"; exit 1; }
+	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding tools/modelcompat)" && \
+		test -z "$$untracked" || { echo "Candle qualification requires committed sources (untracked source files found)"; exit 1; }
+
+qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
+	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
+	@test -n "$(CANDLE_ARTIFACT_REVISION)" || (echo "CANDLE_ARTIFACT_REVISION is required" && exit 1)
+	@$(MAKE) rust-ci
+	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
+	@cd src/semantic-router && \
+		$(NATIVE_ENV) \
+		go run ../../tools/modelcompat/main.go qualify-candle-cpu \
+			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
+			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
+			--router-revision "$(shell git rev-parse HEAD)" \
+			--labels "$(CANDLE_COMPAT_LABELS)" \
+			--suite "$(CANDLE_COMPAT_SUITE)" \
+			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
+	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
 
 # Minimal model set for perf/benchmarks (CI performance tests).
 # The component benchmarks initialize classifiers/embeddings directly instead
@@ -334,7 +390,6 @@ clean-mmbert: ## Remove downloaded mmBERT models
 # Training configuration (optimized for mmBERT-32K LoRA fine-tuning)
 # Hyperparameters validated on 2026-02-02:
 #   - Intent Classifier: 92% accuracy (MMLU-Pro + supplement data)
-#   - Jailbreak Detector: 97.7% training accuracy (toxic-chat + salad-data)
 #   - PII Detector: 97.2% training accuracy (AI4Privacy + Presidio combined dataset)
 #   - Feedback Detector: 98.8% accuracy (4-class, requires higher rank)
 TRAIN_EPOCHS ?= 5
@@ -374,7 +429,7 @@ LORA_DIR := $(TRAINING_DIR)/model_classifier
 # Output directories for 32K models
 MMBERT32K_MODELS_DIR := models/mmbert32k
 
-train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
+train-mmbert32k-all: ## Train remaining legacy mmBERT-32K tasks (Guard retired)
 	@echo "🚀 Training all mmBERT-32K models..."
 	@echo "   Base model: llm-semantic-router/mmbert-32k-yarn"
 	@echo "   Epochs: $(TRAIN_EPOCHS), Batch size: $(TRAIN_BATCH_SIZE)"
@@ -382,7 +437,6 @@ train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
 	@$(MAKE) train-mmbert32k-feedback
 	@$(MAKE) train-mmbert32k-intent
 	@$(MAKE) train-mmbert32k-pii
-	@$(MAKE) train-mmbert32k-jailbreak
 	@$(MAKE) train-mmbert32k-factcheck
 	@echo ""
 	@echo "All mmBERT-32K models trained successfully!"
@@ -482,23 +536,12 @@ train-mmbert32k-pii-presidio-only: ## Train PII Detector with Presidio only (leg
 		--no-ai4privacy
 	@echo "Presidio-only PII training complete"
 
-train-mmbert32k-jailbreak: ## Train Jailbreak Detector (toxic-chat + salad-data)
-	@echo "Training Jailbreak Detector with mmBERT-32K..."
-	@mkdir -p $(MMBERT32K_MODELS_DIR)
-	python $(LORA_DIR)/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py \
-		--mode train \
-		--model mmbert-32k \
-		--lora-rank $(LORA_RANK) \
-		--lora-alpha $(LORA_ALPHA) \
-		--epochs $(TRAIN_EPOCHS) \
-		--batch-size $(TRAIN_BATCH_SIZE) \
-		--learning-rate $(TRAIN_LR) \
-		--max-samples $(MAX_SAMPLES)
-	@echo "Jailbreak Detector training complete (97.7% accuracy expected)"
-	@# Move to organized directory
-	@if [ -d "lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
-		mv lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora; \
-	fi
+train-mmbert32k-jailbreak: ## Retired: use the explicit Vela Guard sequence trainer
+	@echo "Legacy Guard training is retired. Use the Vela Base with:"
+	@echo "  python -m src.training.model_classifier.sequence_repair.train --method full --fresh-head"
+	@echo "Supply --base, --base-id, --base-revision, --contract, --train, --dev, and --output explicitly."
+	@echo "See src/training/model_classifier/prompt_guard_fine_tuning_lora/README.md."
+	@exit 2
 
 train-mmbert32k-factcheck: ## Train Fact Check Classifier
 	@echo "Training Fact Check Classifier with mmBERT-32K..."
@@ -597,15 +640,15 @@ ROCM_IMAGE ?= rocm/vllm:v0.14.0_amd_dev
 
 train-mmbert32k-gpu: ## Train all mmBERT-32K models on GPU (ROCm Docker)
 	@echo "🚀 Training mmBERT-32K models on GPU..."
-	@./tools/models/train-mmbert32k-gpu.sh
+	@./src/training/model_classifier/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-quick: ## Quick GPU training (fewer samples, 3 epochs)
 	@echo "🚀 Quick GPU training (3 epochs, 2000 samples)..."
-	TRAIN_EPOCHS=3 MAX_SAMPLES=2000 ./tools/models/train-mmbert32k-gpu.sh
+	TRAIN_EPOCHS=3 MAX_SAMPLES=2000 ./src/training/model_classifier/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-full: ## Full GPU training (more samples, 10 epochs)
 	@echo "🚀 Full GPU training (10 epochs, 20000 samples)..."
-	TRAIN_EPOCHS=10 MAX_SAMPLES=20000 TRAIN_BATCH_SIZE=32 ./tools/models/train-mmbert32k-gpu.sh
+	TRAIN_EPOCHS=10 MAX_SAMPLES=20000 TRAIN_BATCH_SIZE=32 ./src/training/model_classifier/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-shell: ## Open interactive shell in GPU training container
 	@echo "🐚 Opening interactive shell in ROCm container..."

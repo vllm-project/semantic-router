@@ -1,0 +1,107 @@
+{
+  "schema_version": "looper-tts.v1",
+  "id": "synthetic-contract",
+  "dataset": {
+    "id": "synthetic",
+    "revision": "fixture-v1",
+    "evidence_kind": "synthetic",
+    "items": [
+      {
+        "id": "q1",
+        "prompt": "Synthetic fixture: return the letter A.",
+        "prompt_sha256": "6b675da9d16d18c3d695b75ecee740022674f716bf964f10fe3ab488ee077ff8"
+      }
+    ],
+    "calibration_ids": [
+      "calibration-q1"
+    ]
+  },
+  "models": [
+    {
+      "id": "model-a",
+      "provider": "fixture",
+      "model": "synthetic-model",
+      "revision": "fixture-v1",
+      "sampling": {
+        "temperature": 0,
+        "top_p": 1
+      },
+      "pricing": {
+        "as_of": "2026-09-05",
+        "currency": "USD",
+        "input_per_million": null,
+        "output_per_million": null
+      }
+    }
+  ],
+  "arms": [
+    {
+      "id": "direct",
+      "algorithm": "direct",
+      "model_ids": [
+        "model-a"
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "confidence",
+      "algorithm": "confidence",
+      "model_ids": [
+        "model-a"
+      ],
+      "parameters": {
+        "threshold": 0.8,
+        "calibration_revision": "fixture-v1"
+      }
+    },
+    {
+      "id": "remom",
+      "algorithm": "remom",
+      "model_ids": [
+        "model-a"
+      ],
+      "parameters": {
+        "breadth": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "fusion",
+      "algorithm": "fusion",
+      "model_ids": [
+        "model-a"
+      ],
+      "parameters": {
+        "panel_model_ids": [
+          "model-a"
+        ],
+        "judge_model_id": "model-a",
+        "synthesis_model_id": "model-a"
+      }
+    }
+  ],
+  "budgets": [
+    {
+      "id": "small",
+      "max_calls": 8,
+      "max_total_tokens": 4096,
+      "exhaustion_policy": "stop_and_record"
+    },
+    {
+      "id": "large",
+      "max_calls": 16,
+      "max_total_tokens": 8192,
+      "exhaustion_policy": "stop_and_record"
+    }
+  ],
+  "scorer": {
+    "id": "synthetic-exact",
+    "revision": "fixture-v1",
+    "protocol_sha256": "e94a477184436fdf9da99b3d482880b02ebd998ac193125ad1adb53b2958d69d"
+  },
+  "seeds": [
+    7
+  ]
+}

@@ -21,25 +21,13 @@ export function useTestQuery(
   const [testResult, setTestResult] = useState<TestQueryResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Keep backend diagnostics and accuracy; never simulate a failed live preview.
+  // A failed Preview must not be presented as a simulated runtime result.
   const runTest = useCallback(async () => {
     if (!testQuery.trim()) return
 
     setIsLoading(true)
     try {
-      const result = await testQueryDryRun(testQuery, routingModel)
-      setTestResult(result)
-    } catch (error) {
-      setTestResult({
-        query: testQuery,
-        mode: 'dry-run',
-        matchedSignals: [],
-        matchedDecision: null,
-        matchedModels: [],
-        highlightedPath: [],
-        isAccurate: false,
-        warning: error instanceof Error ? error.message : 'Live router preview failed',
-      })
+      setTestResult(await runTestQueryPreview(testQuery, routingModel))
     } finally {
       setIsLoading(false)
     }
@@ -56,5 +44,23 @@ export function useTestQuery(
     isLoading,
     runTest,
     clearResult,
+  }
+}
+
+export async function runTestQueryPreview(query: string, model?: string): Promise<TestQueryResult> {
+  try {
+    const result = await testQueryDryRun(query, model)
+    return { ...result, mode: 'dry-run' }
+  } catch (error) {
+    return {
+      query,
+      mode: 'dry-run',
+      matchedSignals: [],
+      matchedDecision: null,
+      matchedModels: [],
+      highlightedPath: ['client'],
+      isAccurate: false,
+      warning: error instanceof Error ? `Preview unavailable: ${error.message}` : 'Preview unavailable',
+    }
   }
 }

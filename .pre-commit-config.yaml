@@ -23,6 +23,13 @@ repos:
         language: system
         files: \.go$
 
+      - id: go-tools-lint
+        name: repository Go tools lint
+        entry: make go-tools-lint
+        language: system
+        pass_filenames: false
+        files: ^(tools/(dev/dsl|models/classifier-operating-point|calibration/image-routing)/.*\.go$|bench/grounded_fusion/fusioneval/.*\.go$|tools/make/go-tools\.mk$)
+
   - repo: local
     hooks:
       - id: model-catalog-generated
@@ -30,7 +37,21 @@ repos:
         entry: make model-catalog-check
         language: system
         pass_filenames: false
-        files: ^(config/catalog/|config/recipes/built-in/latest/catalog\.yaml$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+        files: ^(config/catalog/|config/recipes/built-in/|src/vllm-sr/cli/model_bundle\.py$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+
+      - id: cli-reference-generated
+        name: CLI command reference
+        entry: make docs-cli-check
+        language: system
+        pass_filenames: false
+        files: ^(src/vllm-sr/cli/.*\.py$|tools/docs/|website/docs/api/cli\.md$)
+
+      - id: configuration-reference-generated
+        name: configuration reference catalog
+        entry: make docs-config-check
+        language: system
+        pass_filenames: false
+        files: ^(config/fragments/|website/docs/tutorials/|website/docs/installation/configuration\.md$|website/scripts/(generate-configuration-catalog\.mjs|lib/configuration-catalog\.mjs)$)
 
   - repo: local
     hooks:
@@ -94,6 +115,16 @@ repos:
         files: \.(cjs|mjs|js|jsx|ts|tsx)$
         exclude: (^|/)node_modules/
         require_serial: true
+
+      # A pre-commit hook so the always-on quality gate runs this suite at the
+      # exact PR head.
+      - id: github-scripts-tests
+        name: github actions helper script tests
+        entry: bash -c 'cd .github/scripts && npm ci --no-audit --no-fund && npm test'
+        language: system
+        files: ^\.github/scripts/
+        exclude: ^\.github/scripts/node_modules/
+        pass_filenames: false
 
   # Rust specific hooks
   - repo: local
