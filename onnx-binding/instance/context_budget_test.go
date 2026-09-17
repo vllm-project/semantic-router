@@ -65,10 +65,10 @@ func TestOwnedClassifierRetainsUpstreamSpecialTokenAndPaddingSafeguards(t *testi
 	} else if !strings.Contains(loadErr.Error(), "requires 2 special tokens") {
 		t.Fatalf("wrong preparation error: %v", loadErr)
 	}
-	options.MaxInputTokens = 513
+	options.MaxInputTokens = 4097
 	if invalid, loadErr := LoadSequenceClassifier(options); loadErr == nil {
 		_ = invalid.Close()
-		t.Fatal("owned Core classification cap exceeded 512")
+		t.Fatal("classification exceeded the fixture checkpoint capacity of 4096")
 	}
 	options.MaxInputTokens, options.Overflow = 2, "truncate_right"
 	truncated, err := LoadSequenceClassifier(options)

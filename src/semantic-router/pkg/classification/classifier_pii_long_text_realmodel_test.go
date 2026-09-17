@@ -46,8 +46,8 @@ func setupRealPIIClassifier(t *testing.T) *Classifier {
 		t.Fatalf("load PII mapping %q: %v", mappingPath, err)
 	}
 
-	if err := candle_binding.InitMmBert32KPIIClassifier(modelPath, true); err != nil {
-		t.Fatalf("init mmBERT-32K PII classifier: %v", err)
+	if initErr := candle_binding.InitMmBert32KPIIClassifier(modelPath, true); initErr != nil {
+		t.Fatalf("init mmBERT-32K PII classifier: %v", initErr)
 	}
 
 	cfg := &config.RouterConfig{}

@@ -160,6 +160,9 @@ def summarize_decision_results(
                 "model": variants[0].get("model"),
                 "expected_recipe": variants[0].get("expected_recipe"),
                 "expected_algorithm": variants[0].get("expected_algorithm"),
+                "expected_selection_status": variants[0].get(
+                    "expected_selection_status"
+                ),
                 "expected_alias": variants[0].get("expected_alias"),
                 "matched": matched,
                 "total": total,

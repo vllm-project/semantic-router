@@ -374,6 +374,36 @@ spec:
                           maxLength: 100
                           minLength: 1
                           type: string
+                        prototypeScoring:
+                          description: |-
+                            PrototypeScoring overrides the family's prototype construction and scoring.
+                            An omitted object inherits the family; an empty object uses core defaults.
+                          properties:
+                            bestWeight:
+                              description: BestWeight weights the best similarity
+                                against top-M support.
+                              type: number
+                            clusterSimilarityThreshold:
+                              description: ClusterSimilarityThreshold controls membership
+                                in prototype clusters.
+                              type: number
+                            enabled:
+                              description: Enabled controls clustering and the representative
+                                cap, not aggregation.
+                              type: boolean
+                            marginThreshold:
+                              description: MarginThreshold controls the winner-versus-runner-up
+                                score margin.
+                              type: number
+                            maxPrototypes:
+                              description: MaxPrototypes caps representatives when
+                                clustering is enabled.
+                              type: integer
+                            topM:
+                              description: TopM is the number of top similarities
+                                used for support.
+                              type: integer
+                          type: object
                         queryModality:
                           description: |-
                             QueryModality declares which modality of the incoming request payload

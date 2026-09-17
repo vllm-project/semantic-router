@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -73,6 +74,21 @@ func TestKnowledgeBaseCandidatePreservesRetiredAssetsAndRejectsPendingWrites(t *
 	}
 	if _, statErr := os.Stat(managedKnowledgeBaseDirForSource(baseDir, managedKnowledgeBaseSourcePath(payload.Name), payload.Name)); !os.IsNotExist(statErr) {
 		t.Fatalf("rejected mutation staged assets: %v", statErr)
+	}
+	candidateHash, err := configFileHash(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt := server.runtimeRegistry.BeginConfigActivation(candidateHash, "file")
+	server.runtimeRegistry.FinishConfigActivation(attempt, "failed", errors.New("model preparation failed"))
+	failedWrite := httptest.NewRecorder()
+	server.handleCreateKnowledgeBase(failedWrite, httptest.NewRequest(http.MethodPost, apiStorageKnowledgeBasesPath, bytes.NewReader(mustMarshalKnowledgeBasePayload(t, payload))))
+	if failedWrite.Code != http.StatusConflict || !strings.Contains(failedWrite.Body.String(), "CONFIG_ACTIVATION_FAILED") || !strings.Contains(failedWrite.Body.String(), "roll back the full configuration") {
+		t.Fatalf("failed candidate misreported: %d %s", failedWrite.Code, failedWrite.Body.String())
+	}
+	after, err = os.ReadFile(configPath)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("failed-candidate mutation replaced the saved candidate: %v", err)
 	}
 	candidate, err := config.Parse(configPath)
 	if err != nil {

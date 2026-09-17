@@ -127,6 +127,12 @@ func TestControlledProcessReportBundlePassesServerValidation(t *testing.T) {
 	if sealed.Run.Name != run.Name || sealed.Run.Description != run.Description || sealed.Run.StartedAt == nil || sealed.Run.CompletedAt == nil {
 		t.Fatalf("sealed report run identity is not server-owned: %+v", sealed.Run)
 	}
+	if !sealed.Provenance.GeneratedAt.Equal(run.CreatedAt) {
+		t.Fatalf("replay provenance timestamp=%s, want immutable manifest time %s", sealed.Provenance.GeneratedAt, run.CreatedAt)
+	}
+	if sealed.Run.CompletedAt.Before(*sealed.Run.StartedAt) {
+		t.Fatalf("server completion predates start: %+v", sealed.Run)
+	}
 	if sealed.AttestationRevision != ServerAttestationRevision {
 		t.Fatalf("sealed report attestation_revision=%q, want %q", sealed.AttestationRevision, ServerAttestationRevision)
 	}

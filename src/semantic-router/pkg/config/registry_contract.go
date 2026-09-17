@@ -6,6 +6,7 @@ package config
 type ModelRegistryInfo struct {
 	LocalPath           string   `json:"local_path,omitempty"`
 	RepoID              string   `json:"repo_id,omitempty"`
+	Revision            string   `json:"revision,omitempty"`
 	Purpose             string   `json:"purpose,omitempty"`
 	Description         string   `json:"description,omitempty"`
 	ParameterSize       string   `json:"parameter_size,omitempty"`
@@ -27,6 +28,7 @@ func (m ModelSpec) RegistryInfo() ModelRegistryInfo {
 	return ModelRegistryInfo{
 		LocalPath:           m.LocalPath,
 		RepoID:              m.RepoID,
+		Revision:            m.Revision,
 		Purpose:             string(m.Purpose),
 		Description:         m.Description,
 		ParameterSize:       m.ParameterSize,

@@ -451,7 +451,7 @@ func newControlledPairExecutionTestService(
 	maxConcurrent int,
 ) (*Service, string, string) {
 	t.Helper()
-	root := t.TempDir()
+	root := deploymentRegistryTestRoot(t)
 	storeRoot := filepath.Join(root, "evaluation")
 	if err := os.Mkdir(storeRoot, 0o700); err != nil {
 		t.Fatalf("create controlled pair store: %v", err)

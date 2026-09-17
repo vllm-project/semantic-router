@@ -118,12 +118,20 @@ jobs:
         run: |
           GOBIN=$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.19.0
 
-      - name: Generate manifests
-        run: make manifests
+      - name: Generate manifests and API code
+        run: make manifests generate
 
       - name: Verify no changes
         run: |
-          git diff --exit-code || (echo "Generated manifests are out of date. Run 'make manifests' and commit the changes." && exit 1)
+          git add -A -- .
+          if ! git diff --cached --quiet -- .; then
+            echo "Generated operator artifacts are out of date. Run 'make manifests generate' in deploy/operator and commit the changes."
+            git diff --cached -- .
+            exit 1
+          fi
+
+      - name: Verify generated CRD reference
+        run: make -C ../.. docs-crd-check
 
   docker-build:
     name: Operator smoke images
