@@ -8,11 +8,11 @@ CONTROLLER_GEN_VERSION ?= v0.20.0
 
 config-schema-generate: ## Generate canonical Router config contracts for all consumers
 	@$(LOG_TARGET)
-	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../..
+	@cd src/semantic-router && go run ../../tools/codegen/configschema/main.go --repository-root ../..
 
 config-schema-check: ## Check that generated Router config contracts match Go source
 	@$(LOG_TARGET)
-	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../.. --check
+	@cd src/semantic-router && go run ../../tools/codegen/configschema/main.go --repository-root ../.. --check
 
 go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)
@@ -90,7 +90,7 @@ generate-crd: install-controller-gen ## Generate CRD manifests using controller-
 
 generate-deepcopy: install-controller-gen ## Generate deepcopy methods using controller-gen
 	@echo "Generating deepcopy methods..."
-	@cd src/semantic-router && PATH="$$(go env GOPATH)/bin:$$PATH" controller-gen object:headerFile=./hack/boilerplate.go.txt paths=./pkg/apis/vllm.ai/v1alpha1
+	@cd src/semantic-router && PATH="$$(go env GOPATH)/bin:$$PATH" controller-gen object:headerFile=../../tools/codegen/boilerplate.go.txt paths=./pkg/apis/vllm.ai/v1alpha1
 
 generate-api: generate-deepcopy generate-crd ## Generate all API artifacts (deepcopy, CRDs)
 	@echo "Generated all API artifacts"
@@ -103,7 +103,7 @@ generate-api-check: install-controller-gen ## Check generated Kubernetes API cod
 	cd src/semantic-router; \
 	PATH="$$(go env GOPATH)/bin:$$PATH" controller-gen \
 		crd:crdVersions=v1,allowDangerousTypes=true \
-		object:headerFile=./hack/boilerplate.go.txt \
+		object:headerFile=../../tools/codegen/boilerplate.go.txt \
 		paths=./pkg/apis/vllm.ai/v1alpha1 \
 		output:crd:dir="$$tmp_dir/crds" \
 		output:object:dir="$$tmp_dir/code"; \

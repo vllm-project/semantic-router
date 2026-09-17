@@ -189,7 +189,7 @@ To bind an already selected runtime-only score policy to final native files,
 run the packaging tool from `src/semantic-router`:
 
 ```bash
-go run ./cmd/classifier-operating-point \
+go run ../../tools/models/classifier-operating-point/main.go \
   --model /path/to/native-model \
   --policy /path/to/selected-score-policy.json \
   --output /path/to/new-operating-point.json

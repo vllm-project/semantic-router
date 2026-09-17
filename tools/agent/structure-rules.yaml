@@ -35,8 +35,11 @@ languages:
     globs:
       - src/**/*.go
       - dashboard/backend/**/*.go
+      - dashboard/wasm/**/*.go
       - e2e/**/*.go
       - deploy/**/*.go
+      - tools/**/*.go
+      - bench/grounded_fusion/fusioneval/**/*.go
   python:
     globs:
       - src/**/*.py

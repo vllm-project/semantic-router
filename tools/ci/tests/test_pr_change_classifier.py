@@ -58,8 +58,8 @@ class PRChangeClassifierTests(unittest.TestCase):
         must run the calibration job, which feeds the required PR Gate."""
         for path in (
             "config/fragments/signal/embedding/image-routing.yaml",
-            "src/semantic-router/cmd/image-routing-calibration/main.go",
-            "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json",
+            "tools/calibration/image-routing/main.go",
+            "tools/calibration/image-routing/testdata/calibration-set.json",
             "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
             "e2e/profiles/multimodal-routing/crds/intelligentroute.yaml",
             # The CRD-mirror test runs only inside the gate, and e2e.mk defines
@@ -111,7 +111,7 @@ class PRChangeClassifierTests(unittest.TestCase):
         manifest = json.loads(
             (
                 REPO_ROOT
-                / "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json"
+                / "tools/calibration/image-routing/testdata/calibration-set.json"
             ).read_text()
         )
         paths = [entry["image_file"] for entry in manifest["positives"]]
@@ -316,7 +316,7 @@ class PRChangeClassifierTests(unittest.TestCase):
         for path in (
             "website/docs/api/apiserver.md",
             "website/static/openapi/apiserver/apiserver.openapi.json",
-            "tools/openapi-gen/main.go",
+            "tools/codegen/openapi/main.go",
         ):
             with self.subTest(path=path):
                 self.assertIn("core-tests", classify([path]).selected_jobs)

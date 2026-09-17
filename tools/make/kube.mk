@@ -3,7 +3,7 @@
 
 # Configuration
 KIND_CLUSTER_NAME ?= semantic-router-cluster
-KIND_CONFIG_FILE ?= tools/kind/kind-config.yaml
+KIND_CONFIG_FILE ?= tools/dev/kind/kind-config.yaml
 KUBE_NAMESPACE ?= vllm-semantic-router-system
 DOCKER_IMAGE ?= ghcr.io/vllm-project/semantic-router/extproc:latest
 
@@ -33,7 +33,7 @@ create-cluster: ## Create a kind cluster with optimized configuration
 	fi
 	@if [ ! -f "$(KIND_CONFIG_FILE)" ]; then \
 		echo "$(YELLOW)[INFO]$(NC) Kind config not found: $(KIND_CONFIG_FILE). Generating..."; \
-		bash tools/kind/generate-kind-config.sh; \
+		bash tools/dev/kind/generate-kind-config.sh; \
 	fi
 	@echo "$(BLUE)[INFO]$(NC) Creating cluster with config: $(KIND_CONFIG_FILE)"
 	@mkdir -p /tmp/kind-semantic-router

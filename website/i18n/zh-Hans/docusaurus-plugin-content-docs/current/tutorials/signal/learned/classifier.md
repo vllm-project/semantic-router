@@ -124,7 +124,7 @@ Eval 的 `metrics.classifier.rules` 包含工作点 SHA256、实际提供方、�
 如需将已经选定的评分策略绑定到最终原生文件，在 `src/semantic-router` 下运行打包工具：
 
 ```bash
-go run ./cmd/classifier-operating-point \
+go run ../../tools/models/classifier-operating-point/main.go \
   --model /path/to/native-model \
   --policy /path/to/selected-score-policy.json \
   --output /path/to/new-operating-point.json
