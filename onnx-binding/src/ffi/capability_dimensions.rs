@@ -14,7 +14,8 @@ impl EmbeddingDimensions {
         let mut supported = vec![native];
         for &dimension in declared {
             let dimension = positive_dimension(dimension)?;
-            if !supported.contains(&dimension) {
+            // Truncation cannot produce a width above the loaded model's output.
+            if dimension <= native && !supported.contains(&dimension) {
                 supported.push(dimension);
             }
         }
@@ -75,11 +76,24 @@ mod tests {
     }
 
     #[test]
+    fn filters_declared_dimensions_above_native_width() {
+        let defaults = [768, 512, 256, 128, 64];
+        let tiny = EmbeddingDimensions::from_model(3, &defaults).unwrap();
+        assert_eq!(&*tiny.supported, &[3]);
+
+        let reduced = EmbeddingDimensions::from_model(512, &defaults).unwrap();
+        assert_eq!(&*reduced.supported, &[512, 256, 128, 64]);
+
+        let mixed = EmbeddingDimensions::from_model(3, &[4, 2, 3, 1, 2, 768]).unwrap();
+        assert_eq!(&*mixed.supported, &[3, 2, 1]);
+    }
+
+    #[test]
     fn rejects_invalid_model_metadata() {
         assert!(EmbeddingDimensions::from_model(0, &[320]).is_err());
         assert!(EmbeddingDimensions::from_model(960, &[0]).is_err());
         let oversized: Vec<usize> = (1..=1025).collect();
-        assert!(EmbeddingDimensions::from_model(1, &oversized).is_err());
+        assert!(EmbeddingDimensions::from_model(1025, &oversized).is_err());
         if usize::BITS > 32 {
             assert!(EmbeddingDimensions::from_model(usize::MAX, &[]).is_err());
             assert!(EmbeddingDimensions::from_model(960, &[usize::MAX]).is_err());

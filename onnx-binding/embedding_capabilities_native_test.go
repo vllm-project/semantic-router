@@ -3,8 +3,15 @@
 package onnx_binding
 
 import (
+	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestNativeEmbeddingCapabilitiesCanonicalizeMmBert(t *testing.T) {
@@ -28,6 +35,46 @@ func TestGetEmbeddingWithModelTypeRejectsUnsupportedTypes(t *testing.T) {
 				t.Fatalf("GetEmbeddingWithModelType(%q) error = %v, want ErrUnsupportedModelType", modelType, err)
 			}
 		})
+	}
+}
+
+func TestNativeEmbeddingCapabilitiesLoadedDimensions(t *testing.T) {
+	// The legacy native model is process-global. Keep the fixture isolated
+	// from tests that initialize a caller-supplied checkpoint.
+	const childEnv = "ONNX_CAPABILITIES_LOADED_CHILD"
+	if os.Getenv(childEnv) != "1" {
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^TestNativeEmbeddingCapabilitiesLoadedDimensions$", "-test.v")
+		cmd.Env = append(os.Environ(), childEnv+"=1")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("loaded capabilities subprocess: %v\n%s", err, output)
+		}
+		return
+	}
+
+	before, err := EmbeddingCapabilitiesFor("mmbert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCapabilityDimensions(t, before)
+	if before.DimensionState != DimensionStateNotLoaded {
+		t.Fatalf("fresh process reports a loaded mmBERT model: %#v", before)
+	}
+	if err = InitMmBertEmbeddingModel(filepath.Join("instance", "testdata", "embedding"), true); err != nil {
+		t.Fatal(err)
+	}
+	assertLoadedMmBertCapabilities(t)
+	got, err := EmbeddingCapabilitiesFor("mmbert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.NativeDimension != 3 || !slices.Equal(got.SupportedDimensions, []int{3}) {
+		t.Fatalf("3-wide fixture dimensions = %#v, want native 3 and supported [3]", got)
 	}
 }
 
@@ -63,5 +110,16 @@ func assertLoadedMmBertCapabilities(t *testing.T) {
 	}
 	if got.NativeDimension != len(output.Embedding) {
 		t.Fatalf("native width %d does not match produced width %d", got.NativeDimension, len(output.Embedding))
+	}
+	for _, dimension := range got.SupportedDimensions {
+		t.Run(strconv.Itoa(dimension), func(t *testing.T) {
+			output, err := GetEmbeddingWithModelType("model dimension contract", "mmbert", dimension)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(output.Embedding) != dimension {
+				t.Fatalf("advertised width %d produced %d values", dimension, len(output.Embedding))
+			}
+		})
 	}
 }
