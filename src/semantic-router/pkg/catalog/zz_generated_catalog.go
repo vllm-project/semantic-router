@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:7be69bef3d6206c6a97c6c0531ef8f2f3170215f551c319f9ad054d90bbd47c9"
+const builtInCatalogDigest = "sha256:e640fd3baa413c1b0e8499a0a528c49c6e1f81227c246a8830fdb656e17c6c59"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -91281,7 +91281,7 @@ const builtInCatalogJSON = `{
         "tools",
         "multimodal"
       ],
-      "description": "Multi-objective routing across intelligence, latency, cost, and answer recovery.",
+      "description": "Balances measured quality, latency, and cost across reasoning, simple, and general requests.",
       "display_name": "MoM V1 Blend",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -91302,7 +91302,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "1.3.0",
+      "policy_version": "3.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -91313,60 +91313,42 @@ const builtInCatalogJSON = `{
       "roles": [
         {
           "minimum_candidates": 1,
-          "name": "economy",
+          "name": "reasoning",
           "recommended_pool": [
-            "local/qwen3.5-9b"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
             "chat",
-            "tools",
-            "long_context"
-          ]
-        },
-        {
-          "minimum_candidates": 2,
-          "name": "balanced",
-          "recommended_pool": [
-            "local/qwen3.6-35b",
-            "local/step-3.7-flash",
-            "local/qwen3.5-122b",
-            "local/mistral-small-4"
-          ],
-          "required": true,
-          "traits": [
-            "chat",
-            "reasoning",
-            "tools"
+            "reasoning"
           ]
         },
         {
           "minimum_candidates": 1,
-          "name": "vision",
+          "name": "simple",
           "recommended_pool": [
-            "local/qwen3.6-35b",
-            "local/step-3.7-flash"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
-            "chat",
-            "vision",
-            "multimodal",
-            "tools"
+            "chat"
           ]
         },
         {
           "minimum_candidates": 1,
-          "name": "terminal_context",
+          "name": "medium",
           "recommended_pool": [
-            "local/glm-5.2"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
-            "chat",
-            "reasoning",
-            "text",
-            "long_context"
+            "chat"
           ]
         }
       ],
@@ -91378,10 +91360,9 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
+        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
         "authority": "vllm-sr-maintainers",
-        "status": "reproduced",
-        "verified_at": "2026-09-04"
+        "status": "claimed"
       }
     },
     {
@@ -91391,7 +91372,7 @@ const builtInCatalogJSON = `{
         "reasoning",
         "tools"
       ],
-      "description": "Economy-first direct answers with bounded opt-in reasoning.",
+      "description": "Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.",
       "display_name": "MoM V1 Lite",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -91411,7 +91392,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "1.2.0",
+      "policy_version": "3.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -91422,44 +91403,43 @@ const builtInCatalogJSON = `{
       "roles": [
         {
           "minimum_candidates": 1,
+          "name": "tools",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "tools"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "reasoning",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
           "name": "economy",
           "recommended_pool": [
-            "local/qwen3.5-9b"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
-            "chat",
-            "reasoning",
-            "tools",
-            "long_context"
-          ]
-        },
-        {
-          "minimum_candidates": 1,
-          "name": "multimodal_guard",
-          "recommended_pool": [
-            "local/qwen3.6-35b"
-          ],
-          "required": true,
-          "traits": [
-            "chat",
-            "vision",
-            "multimodal",
-            "long_context"
-          ]
-        },
-        {
-          "minimum_candidates": 1,
-          "name": "terminal_context",
-          "recommended_pool": [
-            "local/glm-5.2"
-          ],
-          "required": true,
-          "traits": [
-            "chat",
-            "reasoning",
-            "text",
-            "long_context"
+            "chat"
           ]
         }
       ],
@@ -91470,20 +91450,20 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
+        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
         "authority": "vllm-sr-maintainers",
-        "status": "reproduced",
-        "verified_at": "2026-09-04"
+        "status": "claimed"
       }
     },
     {
       "asset": "mom-v1",
       "capabilities": [
         "chat",
+        "reasoning",
         "tools",
         "multimodal"
       ],
-      "description": "Latency-first interactive, tool, vision, and heavy-workload routing.",
+      "description": "Prioritizes measured first-token or output-token latency within task-specific quality bands.",
       "display_name": "MoM V1 Flash",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -91504,7 +91484,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "1.3.0",
+      "policy_version": "3.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -91515,58 +91495,57 @@ const builtInCatalogJSON = `{
       "roles": [
         {
           "minimum_candidates": 1,
-          "name": "interactive",
+          "name": "tools",
           "recommended_pool": [
-            "local/qwen3.5-9b",
-            "local/qwen3.6-35b"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
             "chat",
-            "tools",
-            "low_latency"
-          ]
-        },
-        {
-          "minimum_candidates": 1,
-          "name": "vision",
-          "recommended_pool": [
-            "local/qwen3.6-35b",
-            "local/step-3.7-flash"
-          ],
-          "required": true,
-          "traits": [
-            "vision",
-            "multimodal",
             "tools"
           ]
         },
         {
           "minimum_candidates": 1,
-          "name": "terminal_context",
+          "name": "reasoning",
           "recommended_pool": [
-            "local/glm-5.2"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
             "chat",
-            "reasoning",
-            "text",
-            "long_context"
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "fast",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat"
           ]
         }
       ],
       "traits": [
         "latency_optimized",
         "chat",
+        "reasoning",
         "tools",
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
+        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
         "authority": "vllm-sr-maintainers",
-        "status": "reproduced",
-        "verified_at": "2026-09-04"
+        "status": "claimed"
       }
     },
     {
@@ -91578,7 +91557,7 @@ const builtInCatalogJSON = `{
         "multimodal",
         "orchestration"
       ],
-      "description": "Accuracy-first direct and bounded multi-model orchestration.",
+      "description": "Combines strict quality selection with bounded review and agent workflows.",
       "display_name": "MoM V1 Ultra",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -91599,7 +91578,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "1.2.0",
+      "policy_version": "3.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -91609,78 +91588,61 @@ const builtInCatalogJSON = `{
       "recipe": "accuracy",
       "roles": [
         {
-          "minimum_candidates": 1,
-          "name": "frontier",
+          "minimum_candidates": 2,
+          "name": "agent",
           "recommended_pool": [
-            "local/glm-5.2",
-            "local/qwen3.5-122b"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
             "chat",
             "reasoning",
-            "structured_output",
-            "long_context",
-            "tools"
-          ]
-        },
-        {
-          "minimum_candidates": 3,
-          "name": "panel",
-          "recommended_pool": [
-            "local/step-3.7-flash",
-            "local/mistral-small-4",
-            "local/gpt-oss-120b"
-          ],
-          "required": true,
-          "traits": [
-            "reasoning",
-            "provider_diversity",
-            "tools"
+            "tools",
+            "structured_output"
           ]
         },
         {
           "minimum_candidates": 2,
-          "name": "confidence",
+          "name": "review",
           "recommended_pool": [
-            "local/qwen3.6-35b",
-            "local/step-3.7-flash",
-            "local/glm-5.2"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
-            "token_logprobs",
+            "chat",
+            "reasoning",
+            "structured_output"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "reasoning",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
             "reasoning"
           ]
         },
         {
           "minimum_candidates": 1,
-          "name": "vision",
+          "name": "simple",
           "recommended_pool": [
-            "local/qwen3.6-35b",
-            "local/step-3.7-flash"
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
           ],
           "required": true,
           "traits": [
-            "chat",
-            "vision",
-            "multimodal",
-            "tools"
-          ]
-        },
-        {
-          "minimum_candidates": 1,
-          "name": "terminal_context",
-          "recommended_pool": [
-            "local/glm-5.2"
-          ],
-          "required": true,
-          "traits": [
-            "chat",
-            "reasoning",
-            "text",
-            "long_context",
-            "tools"
+            "chat"
           ]
         }
       ],
@@ -91693,10 +91655,9 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
+        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
         "authority": "vllm-sr-maintainers",
-        "status": "reproduced",
-        "verified_at": "2026-09-04"
+        "status": "claimed"
       }
     },
     {
@@ -91706,7 +91667,7 @@ const builtInCatalogJSON = `{
         "reasoning",
         "tool_isolation"
       ],
-      "description": "Local-only privacy, containment, and tool-history minimization.",
+      "description": "Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.",
       "display_name": "MoM V1 Vault",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -91726,7 +91687,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "1.2.0",
+      "policy_version": "3.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -91736,62 +91697,37 @@ const builtInCatalogJSON = `{
       "recipe": "vault",
       "roles": [
         {
-          "minimum_candidates": 2,
+          "minimum_candidates": 1,
+          "name": "sensitive",
+          "recommended_pool": [],
+          "required": true,
+          "traits": [
+            "chat",
+            "private_deployment"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
           "name": "private",
-          "recommended_pool": [
-            "local/qwen3.5-9b",
-            "local/qwen3.6-35b",
-            "local/gpt-oss-120b"
-          ],
+          "recommended_pool": [],
           "required": true,
           "traits": [
-            "local_only",
             "chat",
-            "reasoning"
-          ]
-        },
-        {
-          "minimum_candidates": 1,
-          "name": "private_vision",
-          "recommended_pool": [
-            "local/qwen3.5-122b",
-            "local/qwen3.6-35b"
-          ],
-          "required": true,
-          "traits": [
-            "local_only",
-            "vision",
-            "multimodal"
-          ]
-        },
-        {
-          "minimum_candidates": 1,
-          "name": "terminal_context",
-          "recommended_pool": [
-            "local/glm-5.2"
-          ],
-          "required": true,
-          "traits": [
-            "local_only",
-            "chat",
-            "reasoning",
-            "text",
-            "long_context"
+            "private_deployment"
           ]
         }
       ],
       "traits": [
         "privacy",
-        "local_only",
         "chat",
         "reasoning",
-        "tool_isolation"
+        "tool_isolation",
+        "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8",
+        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
         "authority": "vllm-sr-maintainers",
-        "status": "reproduced",
-        "verified_at": "2026-09-04"
+        "status": "claimed"
       }
     }
   ],
@@ -93014,6 +92950,68 @@ const builtInCatalogJSON = `{
       "description": "Fast serverless model inference.",
       "display_name": "Fireworks AI",
       "id": "fireworks",
+      "models": [
+        {
+          "catalog": "meta/muse-glimmer-30b",
+          "id": "accounts/fireworks/models/muse-glimmer-30b",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.04,
+            "completion_per_1m": 1.5,
+            "currency": "USD",
+            "prompt_per_1m": 0.35
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://app.fireworks.ai/models/fireworks/muse-glimmer-30b",
+            "status": "claimed",
+            "verified_at": "2026-09-10"
+          }
+        },
+        {
+          "catalog": "moonshot/kimi-k3",
+          "id": "accounts/fireworks/models/kimi-k3",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.3,
+            "completion_per_1m": 15.0,
+            "currency": "USD",
+            "prompt_per_1m": 3.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://app.fireworks.ai/models/fireworks/kimi-k3",
+            "status": "claimed",
+            "verified_at": "2026-09-10"
+          }
+        },
+        {
+          "catalog": "thinking-machines/inkling",
+          "id": "accounts/fireworks/models/inkling",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.17,
+            "completion_per_1m": 4.05,
+            "currency": "USD",
+            "prompt_per_1m": 1.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://app.fireworks.ai/models/fireworks/inkling",
+            "status": "claimed",
+            "verified_at": "2026-09-10"
+          }
+        }
+      ],
       "presentation": {
         "logo": "package:fireworks",
         "monochrome": false,

@@ -96,6 +96,7 @@ func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interfac
 	metrics := mustMapAt(t, api, "batch_classification", "metrics")
 
 	assertMapCoversStructFields(t, api, reflect.TypeOf(APIConfig{}), "global.services.api")
+	assertMapCoversStructFields(t, mustMapAt(t, api, "routing_preview"), reflect.TypeOf(RoutingPreviewConfig{}), "global.services.api.routing_preview")
 	assertMapCoversStructFields(t, mustMapAt(t, api, "batch_classification"), reflect.TypeOf(BatchClassificationConfig{}), "global.services.api.batch_classification", "concurrency_threshold", "max_concurrency")
 	assertMapCoversStructFields(t, metrics, reflect.TypeOf(BatchClassificationMetricsConfig{}), "global.services.api.batch_classification.metrics")
 	assertSliceUnionCoversStructFields(
@@ -302,10 +303,9 @@ func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
 func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
 	assertMapCoversStructFields(t, modules, reflect.TypeOf(CanonicalModelModules{}), "global.model_catalog.modules")
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
-	// protocol is mutually exclusive with variant (PromptGuardConfig); the
-	// reference config demonstrates the local variant path, so protocol has
-	// no reference-config key to cover here.
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "protocol")
+	// Remote backend and local variant are mutually exclusive. The reference
+	// demonstrates the local path; legacy protocol is migration-only.
+	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "protocol", "backend")
 	assertReferenceConfigClassifierModuleCoverage(t, mustMapAt(t, modules, "classifier"))
 	assertReferenceConfigComplexityModuleCoverage(t, mustMapAt(t, modules, "complexity"))
 	assertReferenceConfigHallucinationModuleCoverage(t, mustMapAt(t, modules, "hallucination_mitigation"))

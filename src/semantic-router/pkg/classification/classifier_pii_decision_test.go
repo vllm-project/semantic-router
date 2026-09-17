@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // A valid denied entity makes a rule true even when another part of its scan
@@ -23,9 +23,9 @@ func TestPIIDetectionSurvivesIncompleteScanWithOnUnknownNoMatch(t *testing.T) {
 
 	for _, tc := range []struct {
 		name          string
-		entities      []candle_binding.TokenEntity
+		entities      []tasks.TokenEntity
 		err           error
-		historySpans  []candle_binding.TokenEntity
+		historySpans  []tasks.TokenEntity
 		historyErr    error
 		allowed       []string
 		threshold     float32
@@ -33,7 +33,7 @@ func TestPIIDetectionSurvivesIncompleteScanWithOnUnknownNoMatch(t *testing.T) {
 		wantDeniedPII bool
 	}{
 		{
-			name: "denied span before truncation", entities: []candle_binding.TokenEntity{email},
+			name: "denied span before truncation", entities: []tasks.TokenEntity{email},
 			err: ErrTokenSpansTruncated, wantDecision: "block_pii", wantDeniedPII: true,
 		},
 		{
@@ -41,20 +41,20 @@ func TestPIIDetectionSurvivesIncompleteScanWithOnUnknownNoMatch(t *testing.T) {
 			wantDecision: "fallback",
 		},
 		{
-			name: "allowed span before truncation", entities: []candle_binding.TokenEntity{email},
+			name: "allowed span before truncation", entities: []tasks.TokenEntity{email},
 			err: ErrTokenSpansTruncated, allowed: []string{"EMAIL"}, wantDecision: "fallback",
 		},
 		{
-			name: "below threshold span before truncation", entities: []candle_binding.TokenEntity{email},
+			name: "below threshold span before truncation", entities: []tasks.TokenEntity{email},
 			err: ErrTokenSpansTruncated, threshold: 1, wantDecision: "fallback",
 		},
 		{
-			name: "denied span with failed history", entities: []candle_binding.TokenEntity{email},
+			name: "denied span with failed history", entities: []tasks.TokenEntity{email},
 			historyErr: backendError, wantDecision: "block_pii", wantDeniedPII: true,
 		},
 		{
 			name: "denied history with failed current message", err: backendError,
-			historySpans: []candle_binding.TokenEntity{historyEmail}, wantDecision: "block_pii", wantDeniedPII: true,
+			historySpans: []tasks.TokenEntity{historyEmail}, wantDecision: "block_pii", wantDeniedPII: true,
 		},
 		{
 			name: "backend error without valid evidence", err: backendError,

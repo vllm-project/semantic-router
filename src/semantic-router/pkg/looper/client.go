@@ -28,6 +28,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -173,35 +174,11 @@ func (c *Client) callModel(
 	target ModelTarget,
 	options CallOptions,
 ) (*ModelResponse, error) {
-	// Clone and modify the request with the target model
-	modifiedReq := cloneRequest(req)
-	modifiedReq.Model = target.Name
-
-	// Configure logprobs based on config
-	if options.Logprobs != nil && options.Logprobs.Enabled {
-		modifiedReq.Logprobs = openai.Bool(true)
-		topLogprobs := options.Logprobs.TopLogprobs
-		if topLogprobs < 1 {
-			topLogprobs = 1 // Need at least 1 for margin calculation
-		}
-		if topLogprobs > 5 {
-			topLogprobs = 5 // API limit
-		}
-		modifiedReq.TopLogprobs = openai.Int(int64(topLogprobs))
-	}
-
-	// Marshal request to JSON first
-	body, err := json.Marshal(modifiedReq)
+	body, err := prepareModelCallBody(req, target, options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, err
 	}
-
-	// Add stream parameter via JSON manipulation (SDK doesn't expose Stream field)
 	streaming := options.Mode == ResponseSSE
-	body, err = setStreamParam(body, streaming)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set stream param: %w", err)
-	}
 
 	logprobsEnabled := options.Logprobs != nil && options.Logprobs.Enabled
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
@@ -264,6 +241,14 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	// Distinguish the Chat wire shape from a native provider response without
+	// discarding accounting for an empty Chat completion. Algorithms such as
+	// Fusion classify that completion as unusable after retaining its usage.
+	if !completion.JSON.Choices.Valid() ||
+		(completion.JSON.Object.Valid() && completion.Object != "chat.completion") {
+		return nil, fmt.Errorf("model %s did not return a chat completion response", modelName)
+	}
+
 	result := &ModelResponse{
 		Raw:         body,
 		Parsed:      &completion,
@@ -306,11 +291,23 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		IsStreaming: true,
 	}
 
-	// Parse SSE chunks to extract content, reasoning, and usage.
-	content, reasoning, chunks := parseSSEContent(body)
-	result.ReasoningContent = reasoning
-	result.Content = content
-	result.StreamingChunks = chunks
+	// Validate the same stream lifecycle used by the provider boundary before
+	// any algorithm can treat a partial or failed stream as a successful answer.
+	events, err := decodeModelStream(body, modelName)
+	if err != nil {
+		return nil, err
+	}
+	for _, event := range events {
+		switch event.Type {
+		case llmprotocol.EventOutputTextDelta:
+			result.Content += event.Delta
+		case llmprotocol.EventReasoningDelta:
+			result.ReasoningContent += event.Delta
+		case llmprotocol.EventToolCallDelta:
+			result.HasToolCalls = true
+		}
+	}
+	_, _, result.StreamingChunks = parseSSEContent(body)
 	result.Usage = parseStreamingUsage(body)
 
 	return result, nil

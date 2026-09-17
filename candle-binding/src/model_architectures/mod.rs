@@ -6,6 +6,8 @@ pub mod attention; // NEW: Shared attention kernels (chunked SDPA)
 pub mod embedding;
 pub mod generative; // NEW: Generative/causal language models (Qwen3ForCausalLM)
 pub mod lora;
+pub(crate) mod modernbert_config;
+pub mod modernbert_rope;
 pub mod prefix_cache; // NEW: Prefix caching for fixed prompts
 pub mod traditional; // NEW: Embedding models (Qwen3, Gemma)
 

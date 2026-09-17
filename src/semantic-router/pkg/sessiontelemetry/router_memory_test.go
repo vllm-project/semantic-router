@@ -6,6 +6,45 @@ import (
 	"time"
 )
 
+func TestSessionUsageObservationYieldsToDispatchOwnership(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	t.Cleanup(ResetRouterSessionMemoryForTesting)
+	RecordSessionUsage(SessionUsageParams{SessionID: "usage-only", Model: "small", PromptTokens: 10})
+	snapshot, ok := GetRouterSessionSnapshot("usage-only", time.Now())
+	if !ok || snapshot.CurrentModel != "small" || snapshot.TurnCount != 0 || snapshot.CumulativePromptTokens != 10 {
+		t.Fatalf("usage-only flow must retain its observed model: %+v, found=%t", snapshot, ok)
+	}
+	RecordSessionDecision(SessionDecisionParams{SessionID: "usage-only", SelectedModel: "frontier", DecisionName: "reasoning"})
+	RecordSessionUsage(SessionUsageParams{SessionID: "usage-only", Model: "small", PromptTokens: 15})
+	snapshot, ok = GetRouterSessionSnapshot("usage-only", time.Now())
+	if !ok || snapshot.CurrentModel != "frontier" || snapshot.TurnCount != 1 || snapshot.CumulativePromptTokens != 25 {
+		t.Fatalf("usage must defer to the dispatch owner without losing tokens: %+v, found=%t", snapshot, ok)
+	}
+}
+
+func TestLateSessionUsagePreservesLatestDecision(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	t.Cleanup(ResetRouterSessionMemoryForTesting)
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID: "overlap", SelectedModel: "small", DecisionName: "simple",
+	})
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID: "overlap", SelectedModel: "frontier", DecisionName: "reasoning", TurnIndex: 1,
+		ActiveToolLoop: true, Policy: map[string]interface{}{"decision_reason": "switch_allowed"},
+	})
+	RecordSessionUsage(SessionUsageParams{SessionID: "overlap", Model: "frontier", PromptTokens: 20, Cost: .02})
+	RecordSessionUsage(SessionUsageParams{SessionID: "overlap", Model: "small", PromptTokens: 10, Cost: .01})
+	snapshot, ok := GetRouterSessionSnapshot("overlap", time.Now())
+	if !ok || snapshot.CurrentModel != "frontier" || snapshot.LastDecisionName != "reasoning" ||
+		!snapshot.ActiveToolLoop || snapshot.LastDecisionReason != "switch_allowed" ||
+		snapshot.TurnCount != 2 || snapshot.SwitchCount != 1 {
+		t.Fatalf("late usage changed the latest decision: %+v, found=%t", snapshot, ok)
+	}
+	if snapshot.CumulativePromptTokens != 30 || math.Abs(snapshot.CumulativeCost-.03) > 1e-9 {
+		t.Fatalf("late usage must still be billed: %+v", snapshot)
+	}
+}
+
 func TestRouterSessionMemoryRecordsDecisionAndUsage(t *testing.T) {
 	ResetRouterSessionMemoryForTesting()
 	base := time.Date(2026, time.May, 30, 10, 0, 0, 0, time.UTC)

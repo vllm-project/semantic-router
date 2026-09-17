@@ -39,10 +39,16 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 		return fmt.Errorf("category backend protocol %q is not supported", backendCfg.Protocol)
 	}
 	timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
-	backend, err := newCategoryHTTPBackend(external, categoryMapping, timeout)
+	transport, err := newHTTPClassifierInference(external, categoryMapping, timeout)
 	if err != nil {
 		return err
 	}
+	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
+	owned, err := prepareRemoteSequence(models, models.remoteSpec("domain_classifier", backendCfg), external, transport)
+	if err != nil {
+		return err
+	}
+	backend := &categoryHTTPBackend{backend: owned}
 	b.options = append(b.options, withCategory(categoryMapping, nil, backend))
 	return nil
 }
@@ -52,7 +58,23 @@ func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *Ca
 	if err != nil {
 		return err
 	}
+	if b.models != nil {
+		if variant == "" || variant == config.CategoryVariantCandle {
+			variant = "auto"
+		}
+		spec := b.models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, variant, config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU, b.cfg.CategoryModel.MaxSequenceLength)
+		var labels []string
+		if categoryMapping != nil {
+			labels = indexedNativeLabels(categoryMapping.IdxToCategory)
+		}
+		backend := ownedCategoryBackend{&ownedSequenceBackend{runtime: b.models.runtime, spec: spec, labels: labels}}
+		b.options = append(b.options, withCategory(categoryMapping, backend, backend))
+		return nil
+	}
 	categoryInitializer, categoryInference := categoryDependenciesForVariant(variant)
+	if native, ok := categoryInitializer.(*MmBERT32KCategoryInitializerImpl); ok {
+		native.maxSequenceLength = b.cfg.CategoryModel.MaxSequenceLength
+	}
 	b.options = append(b.options, withCategory(categoryMapping, categoryInitializer, categoryInference))
 	return nil
 }
@@ -88,24 +110,52 @@ func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 	b.options = append(b.options, withMCPCategory(mcpInit, mcpInf))
 }
 
-func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *JailbreakMapping) (JailbreakInitializer, SequenceClassifierBackend, error) {
-	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg, jailbreakMapping)
+func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *JailbreakMapping, models ...*classifierModelRuntime) (JailbreakInitializer, SequenceClassifierBackend, error) {
+	if cfg.PromptGuard.Window != nil {
+		if jailbreakMapping == nil {
+			// No reachable model consumer loaded a mapping for this recipe.
+			return nil, nil, nil
+		}
+		backend, err := newWindowedJailbreakBackend(cfg.PromptGuard, jailbreakMapping, models...)
+		return backend, backend, err
+	}
+	if len(models) > 0 && cfg.PromptGuard.Protocol == "" && cfg.PromptGuard.Backend == nil {
+		adapter := cfg.PromptGuard.Variant
+		if adapter == "" || adapter == config.PromptGuardVariantCandle {
+			adapter = "auto"
+		}
+		spec := models[0].localSpec("prompt_guard", cfg.PromptGuard.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU, cfg.PromptGuard.MaxSequenceLength)
+		var labels []string
+		if jailbreakMapping != nil {
+			labels = indexedNativeLabels(jailbreakMapping.IdxToLabel)
+		}
+		backend := &ownedSequenceBackend{runtime: models[0].runtime, spec: spec, labels: labels}
+		return backend, backend, nil
+	}
+	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg, jailbreakMapping, models...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
 	}
-	if cfg.PromptGuard.Protocol != "" {
+	if cfg.PromptGuard.Protocol != "" || cfg.PromptGuard.Backend != nil {
 		// Remote backends have no local model to initialize.
 		return nil, jailbreakInference, nil
 	}
 	switch cfg.PromptGuard.Variant {
 	case config.PromptGuardVariantMmBERT32K:
-		return createMmBERT32KJailbreakInitializer(), jailbreakInference, nil
+		return &MmBERT32KJailbreakInitializerImpl{maxSequenceLength: cfg.PromptGuard.MaxSequenceLength}, jailbreakInference, nil
 	default:
 		return createJailbreakInitializer(), jailbreakInference, nil
 	}
 }
 
-func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping) (PIIInitializer, PIIInference, error) {
+func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, models ...*classifierModelRuntime) (PIIInitializer, PIIInference, error) {
+	if cfg.PIIModel.Window != nil {
+		backend, err := newWindowedPIIBackend(cfg.PIIModel, piiMapping, models...)
+		if err != nil {
+			return nil, nil, err
+		}
+		return backend, backend, nil
+	}
 	if cfg.PIIModel.Backend != nil {
 		if piiMapping == nil {
 			// The mapping loader is skipped on purpose when no reachable routing
@@ -135,7 +185,12 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping) (PII
 			return nil, nil, fmt.Errorf("PII backend protocol %q is not supported", backendCfg.Protocol)
 		}
 		timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
-		inference, err := newPIIHTTPBackend(external, piiMapping, timeout)
+		transport, err := newPIIHTTPTokenClassifierInference(external, piiMapping, timeout)
+		if err != nil {
+			return nil, nil, err
+		}
+		modelRuntime := consumerModelRuntime(models)
+		inference, err := prepareRemoteTokens(modelRuntime, modelRuntime.remoteSpec("pii_classifier", backendCfg), external, transport)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -144,11 +199,24 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping) (PII
 		})
 		return nil, inference, nil
 	}
+	if len(models) > 0 {
+		adapter := "auto"
+		if cfg.PIIModel.UseMmBERT32K {
+			adapter = "mmbert32k"
+		}
+		spec := models[0].localSpec("pii_classifier", cfg.PIIModel.ModelID, adapter, config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU, cfg.PIIModel.MaxSequenceLength)
+		var labels []string
+		if piiMapping != nil {
+			labels = indexedNativeLabels(piiMapping.IdxToLabel)
+		}
+		backend := &ownedTokenBackend{runtime: models[0].runtime, spec: spec, labels: labels}
+		return backend, backend, nil
+	}
 	if cfg.PIIModel.UseMmBERT32K {
 		logging.ComponentEvent("classifier", "pii_detector_backend_selected", map[string]interface{}{
 			"backend": "mmbert_32k",
 		})
-		return createMmBERT32KPIIInitializer(), createMmBERT32KPIIInference(), nil
+		return &MmBERT32KPIIInitializerImpl{maxSequenceLength: cfg.PIIModel.MaxSequenceLength}, createMmBERT32KPIIInference(), nil
 	}
 	return createPIIInitializer(), createPIIInference(), nil
 }
@@ -183,6 +251,8 @@ func (b *classifierOptionBuilder) addComplexityBackend() error {
 		return fmt.Errorf("failed to resolve complexity backend: %w", err)
 	}
 	deadline := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
+	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
+	spec := models.remoteSpec("complexity", backendCfg)
 
 	switch backendCfg.Contract {
 	case config.RemoteClassifierContractScore:
@@ -193,7 +263,11 @@ func (b *classifierOptionBuilder) addComplexityBackend() error {
 		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
 			"contract": config.RemoteClassifierContractScore,
 		})
-		b.options = append(b.options, withComplexityScoreBackend(scorer))
+		owned, err := prepareRemoteScore(models, spec, external, scorer)
+		if err != nil {
+			return err
+		}
+		b.options = append(b.options, withComplexityScoreBackend(owned))
 	case config.RemoteClassifierContractLabelDistribution:
 		labels, err := newHTTPClassifierInference(
 			external,
@@ -206,7 +280,11 @@ func (b *classifierOptionBuilder) addComplexityBackend() error {
 		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
 			"contract": config.RemoteClassifierContractLabelDistribution,
 		})
-		b.options = append(b.options, withComplexityLabelBackend(labels))
+		owned, err := prepareRemoteSequence(models, spec, external, labels)
+		if err != nil {
+			return err
+		}
+		b.options = append(b.options, withComplexityLabelBackend(owned))
 	default:
 		// Unreachable: the validator above rejects anything else. Kept so a
 		// future contract cannot be silently ignored here.

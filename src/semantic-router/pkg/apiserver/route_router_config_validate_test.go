@@ -152,12 +152,16 @@ routing:
 	}
 }
 
-func TestValidateHotReloadCompatibilityRejectsLocalClassifierChange(t *testing.T) {
+func TestValidateHotReloadCompatibilityAllowsOwnedLocalClassifierChange(t *testing.T) {
 	current := []byte(localClassifierReloadConfig("models/risk-v1"))
 	next := []byte(localClassifierReloadConfig("models/risk-v2"))
 
-	if err := validateHotReloadCompatibility(current, next); err == nil {
-		t.Fatal("expected restart-required local classifier reload error")
+	if err := validateHotReloadCompatibility(current, next); err != nil {
+		t.Fatalf("owned local classifier changes should prepare a candidate: %v", err)
+	}
+	invalid := []byte(strings.ReplaceAll(string(next), "labels: [SAFE, RISKY]", "labels: [SAFE, SAFE]"))
+	if err := validateHotReloadCompatibility(current, invalid); err == nil {
+		t.Fatal("invalid candidate labels should still fail validation")
 	}
 }
 
@@ -186,6 +190,21 @@ func TestValidateHotReloadCompatibilityAllowsRouterPolicyChange(t *testing.T) {
 		mustMarshalCanonicalConfigYAML(t, next),
 	); err != nil {
 		t.Fatalf("routing-only change should be hot-reloadable: %v", err)
+	}
+}
+
+func TestPreviewTimeoutReloadKeepsListenerAdmissionBound(t *testing.T) {
+	current := minimalDeployTestConfig("route")
+	next := minimalDeployTestConfig("route")
+	timeout, limit := 600, 8
+	next.API.RoutingPreview.RequestTimeoutSeconds = &timeout
+	if err := validateParsedHotReloadCompatibility(current, next); err != nil {
+		t.Fatalf("timeout-only reload rejected: %v", err)
+	}
+	next.API.RoutingPreview.MaxConcurrency = &limit
+	err := validateParsedHotReloadCompatibility(current, next)
+	if err == nil || !strings.Contains(err.Error(), "deployment workflow") {
+		t.Fatalf("listener admission change was not rejected: %v", err)
 	}
 }
 

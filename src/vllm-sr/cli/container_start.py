@@ -6,7 +6,10 @@ from cli.commands.runtime_support import (
     RECIPE_ENV_ALLOWLIST_ENV,
     sensitive_env_names,
 )
-from cli.config_generator import generate_envoy_config_from_user_config
+from cli.config_generator import (
+    ENVOY_CONTAINER_LISTENER_ADDRESS_ENV,
+    generate_envoy_config_from_user_config,
+)
 from cli.consts import (
     DEFAULT_NOFILE_LIMIT,
     MIN_NOFILE_LIMIT,
@@ -91,10 +94,15 @@ def container_start_vllm_sr(
     runtime_config_file: str | None = None,
 ):
     """Start the runtime containers and return code, stdout, and stderr."""
-    runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
     envoy_log_level = _resolve_envoy_log_level(env_vars)
     stack_layout = stack_layout or resolve_runtime_stack()
+    for listener in listeners:
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
+    runtime = get_container_runtime()
     resolve_runtime_topology(topology)
 
     normalized_platform = _resolve_platform(env_vars)
@@ -176,6 +184,8 @@ def _build_common_runtime_env(
     recipe_store_dir: str | None = None,
 ):
     common_env = dict(env_vars or {})
+    # Signing authority belongs to Dashboard, never to recipe/data-plane env.
+    common_env.pop("DASHBOARD_JWT_SECRET", None)
     # Evaluation configuration is a Dashboard-only control-plane input. Rebuild
     # it from the trusted host environment after the service environments split;
     # the deployment path is then replaced with a read-only container mount.
@@ -276,7 +286,10 @@ def _runtime_container_specs(
         runtime_paths["effective_config_path"], stack_layout
     )
     listener_host_ports = {
-        listener["port"] + stack_layout.port_offset
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
         for listener in listeners
         if listener.get("port")
     }
@@ -449,7 +462,10 @@ def _build_envoy_runtime_command(
         port_mappings=[
             (
                 _listener_host_address(listener),
-                listener["port"] + stack_layout.port_offset,
+                stack_layout.host_port(
+                    listener["port"],
+                    name=f"listener {listener.get('name', 'unknown')} host port",
+                ),
                 listener["port"],
             )
             for listener in listeners
@@ -551,7 +567,7 @@ def _build_dashboard_runtime_command(
         port_mappings=[(stack_layout.dashboard_port, 8700)],
         entrypoint=service_entrypoint,
         command_args=service_args,
-        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"}
+        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_JWT_SECRET"}
         | inherited_sensitive_env
         | evaluation_dashboard_secret_env_names(dashboard_env),
     )
@@ -586,6 +602,11 @@ def _build_dashboard_runtime_env(
     management_port: int = 8080,
 ):
     dashboard_env = dict(common_env)
+    dashboard_env.pop("DASHBOARD_JWT_SECRET", None)
+    if os.getenv("DASHBOARD_JWT_SECRET", "").strip():
+        # The container runtime inherits the host value by name. Do not copy
+        # signing material into command arguments or printable runtime state.
+        dashboard_env["DASHBOARD_JWT_SECRET"] = ""
     for name in (
         "DASHBOARD_ADMIN_EMAIL",
         "DASHBOARD_ADMIN_PASSWORD",
@@ -622,6 +643,9 @@ def _build_dashboard_runtime_env(
     dashboard_env.setdefault(
         "ENVOY_ROUTER_API_ADDRESS", stack_layout.router_container_name
     )
+    # Dashboard regeneration must preserve the same bridge realization as serve.
+    # listeners.address still controls the host publication in the Docker argv.
+    dashboard_env[ENVOY_CONTAINER_LISTENER_ADDRESS_ENV] = "0.0.0.0"
     dashboard_env.setdefault("VLLM_SR_ENVOY_CONFIG_PATH", "/app/.vllm-sr/envoy.yaml")
     dashboard_env.setdefault(
         "OPENCLAW_DASHBOARD_CONTAINER_NAME", stack_layout.dashboard_container_name
@@ -685,8 +709,12 @@ def _render_split_envoy_config(
 ) -> None:
     original_extproc = os.environ.get("ENVOY_EXTPROC_ADDRESS")
     original_router_api = os.environ.get("ENVOY_ROUTER_API_ADDRESS")
+    original_listener = os.environ.get(ENVOY_CONTAINER_LISTENER_ADDRESS_ENV)
     os.environ["ENVOY_EXTPROC_ADDRESS"] = stack_layout.router_container_name
     os.environ["ENVOY_ROUTER_API_ADDRESS"] = stack_layout.router_container_name
+    # The managed bridge uses IPv4, even for an IPv6 host port publication.
+    # Container loopback cannot receive NAT or Dashboard service-name traffic.
+    os.environ[ENVOY_CONTAINER_LISTENER_ADDRESS_ENV] = "0.0.0.0"
     try:
         generate_envoy_config_from_user_config(
             parse_user_config(config_path),
@@ -696,6 +724,7 @@ def _render_split_envoy_config(
     finally:
         _restore_env_var("ENVOY_EXTPROC_ADDRESS", original_extproc)
         _restore_env_var("ENVOY_ROUTER_API_ADDRESS", original_router_api)
+        _restore_env_var(ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, original_listener)
 
 
 def _restore_env_var(name: str, original_value: str | None) -> None:

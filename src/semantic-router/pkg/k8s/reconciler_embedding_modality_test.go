@@ -3,6 +3,9 @@ package k8s
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -102,12 +105,16 @@ func TestReconcileKubernetesConfigValidationDispatch(t *testing.T) {
 	}
 
 	reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
+	reconciler.onConfigUpdate = func(*config.RouterConfig) error {
+		t.Fatal("invalid global config must not be published")
+		return nil
+	}
 	gotErr := reconciler.validateAndUpdate(context.Background(), pool, route)
 	if gotErr == nil {
 		t.Fatal("validateAndUpdate: expected shared K8s config validation error, got nil")
 	}
 	for _, want := range []string{
-		"kubernetes config validation failed:",
+		"failed to normalize canonical config:",
 		"tools.advanced_filtering.candidate_pool_size must be >= 0",
 	} {
 		if !strings.Contains(gotErr.Error(), want) {
@@ -235,8 +242,8 @@ func buildEmbeddingModalityRoute(namespace, ruleName, queryModality string) *v1a
 
 // buildEmbeddingModalityStaticConfig returns the static base RouterConfig
 // the operator would supply to the reconciler. ConfigSource is set to
-// Kubernetes to mirror operator-mode bootstrap, which is the path where
-// validateConfigStructure early-returns and PR-C closes the resulting gap.
+// Kubernetes to mirror operator-mode bootstrap, where routing contracts are
+// deferred until CRDs have been merged.
 func buildEmbeddingModalityStaticConfig(modelType string) *config.RouterConfig {
 	return &config.RouterConfig{
 		ConfigSource: config.ConfigSourceKubernetes,
@@ -407,4 +414,87 @@ func assertKubernetesValidationFailureStatus(t *testing.T, reconciler *Reconcile
 		t.Fatalf("Get route after reconcile: %v", err)
 	}
 	assertReadyCondition(t, "route", refetchedRoute.Status.Conditions, metav1.ConditionFalse, "ValidationFailed")
+}
+
+func TestReconcileDiscardsStaticModelBindings(t *testing.T) {
+	type bindingCase struct {
+		name, global, routing string
+	}
+	var cases []bindingCase
+	for _, module := range []struct {
+		consumer, contract, adapter, global string
+	}{
+		{"domain_classifier", "label_distribution.v1", "modernbert", ""},
+		{"pii_classifier", "token_spans.v1", "mmbert32k", ""},
+		{
+			"prompt_guard", "label_distribution.v1", "modernbert",
+			"  model_catalog: {modules: {prompt_guard: {variant: mmbert32k, max_sequence_length: 32768, window: {size: 128, overlap: 63}}}}\n",
+		},
+	} {
+		binding := fmt.Sprintf("%s: {deployment: removed-deployment, contract: %s, adapter: %s}\n",
+			module.consumer, module.contract, module.adapter)
+		cases = append(cases,
+			bindingCase{module.consumer + "/top_level", module.global, "routing:\n  model_bindings:\n    " + binding},
+			bindingCase{module.consumer + "/default_recipe", module.global, "recipes:\n  - name: default\n    routing:\n      model_bindings:\n        " + binding},
+			bindingCase{module.consumer + "/named_recipe", module.global, "recipes:\n  - name: stale\n    routing:\n      model_bindings:\n        " + binding},
+		)
+	}
+	loaders := []struct {
+		name  string
+		parse func(*testing.T, []byte) (*config.RouterConfig, error)
+	}{
+		{"bytes", func(_ *testing.T, raw []byte) (*config.RouterConfig, error) {
+			return config.ParseYAMLBytes(raw)
+		}},
+		{"file", func(t *testing.T, raw []byte) (*config.RouterConfig, error) {
+			t.Helper()
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, raw, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return config.Parse(path)
+		}},
+	}
+	for _, tc := range cases {
+		for _, loader := range loaders {
+			t.Run(tc.name+"/"+loader.name, func(t *testing.T) {
+				raw := "version: v0.3\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + tc.routing
+				staticConfig, err := loader.parse(t, []byte(raw))
+				if err != nil {
+					t.Fatalf("Kubernetes startup must defer ignored routing bindings: %v", err)
+				}
+				if err := config.ValidateKubernetesConfigContracts(staticConfig); err == nil || !strings.Contains(err.Error(), "unknown deployment") {
+					t.Fatalf("complete validation must reject invalid bindings, got %v", err)
+				}
+				fileRaw := strings.Replace(raw, "config_source: kubernetes", "config_source: file", 1)
+				if _, err := loader.parse(t, []byte(fileRaw)); err == nil || !strings.Contains(err.Error(), "unknown deployment") {
+					t.Fatalf("file source must reject invalid bindings, got %v", err)
+				}
+
+				const namespace = "default"
+				pool := buildEmbeddingModalityPool(namespace)
+				route := buildEmbeddingModalityRoute(namespace, "crd_rule", "text")
+				reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
+				var published *config.RouterConfig
+				reconciler.onConfigUpdate = func(candidate *config.RouterConfig) error {
+					published = candidate
+					return nil
+				}
+				if err := reconciler.validateAndUpdate(context.Background(), pool, route); err != nil {
+					t.Fatalf("CRDs must replace ignored static bindings: %v", err)
+				}
+				if published == nil || len(published.Decisions) != 1 || published.Decisions[0].Name != "decision_under_test" {
+					t.Fatal("reconciliation did not publish the CRD routing decision")
+				}
+				if len(published.ModelBindings) != 0 {
+					t.Fatal("reconciliation retained static routing bindings")
+				}
+				for _, recipe := range published.Recipes {
+					if recipe.Name == "stale" || len(recipe.Profile.ModelBindings) != 0 {
+						t.Fatal("reconciliation retained static recipe state")
+					}
+				}
+			})
+		}
+	}
 }

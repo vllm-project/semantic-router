@@ -44,6 +44,12 @@ The Dashboard is available at <http://localhost:8700>. The routed
 OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
 reference config).
 
+For local `serve`, `listeners[].address` controls the host port publication.
+Use `127.0.0.1` or `::1` for host-only access. Envoy listens on the container
+bridge interface so both the published port and Dashboard can reach it; this
+keeps the host loopback restriction, including after Dashboard config saves.
+Standalone `config envoy` generation retains the configured listener address.
+
 `vllm-sr serve` starts the routing stack. It does not start the physical LLM
 backends referenced by `providers.models`; those endpoints must already be
 running and reachable.
@@ -59,6 +65,15 @@ vllm-sr stop
 
 Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
 `--readonly` to keep Dashboard available without config editing.
+
+Local startup waits up to 1800 seconds for readiness after containers start.
+Use `--startup-timeout SECONDS` with a positive integer when model loading or
+GPU compilation needs a different budget, for example
+`vllm-sr serve --startup-timeout 7200`. This Docker-only option also covers
+Dashboard readiness during first-run setup. If the wait expires, the CLI exits
+with an error and leaves containers running for `vllm-sr status` and
+`vllm-sr logs router`; use `vllm-sr stop` to stop them. Request inference
+deadlines are configured separately.
 
 ## Test routing
 

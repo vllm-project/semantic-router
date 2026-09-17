@@ -16,6 +16,7 @@ import (
 // FusionLooper implements Fusion-style multi-model deliberation:
 // parallel panel responses, judge analysis, then a final synthesized answer.
 type FusionLooper struct {
+	grounding *GroundingBackends
 	*BaseLooper
 }
 
@@ -202,8 +203,10 @@ func (l *FusionLooper) callFusionModel(
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
 	if override.MaxCompletionTokens > 0 {
+		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		callReq.MaxCompletionTokens = openai.Int(int64(override.MaxCompletionTokens))
 	} else if cfg.MaxCompletionTokens > 0 {
+		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 	}
 	return l.dispatchModel(
