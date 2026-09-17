@@ -272,7 +272,10 @@ func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmp
 		events = append(events, choiceEvents...)
 	}
 	if chunk.Usage != nil {
-		usage := decodeChatUsage(*chunk.Usage)
+		usage, usageErr := decodeChatUsage(*chunk.Usage)
+		if usageErr != nil {
+			return nil, nil, usageErr
+		}
 		event, nextErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventUsageUpdated, Usage: &usage})
 		if nextErr != nil {
 			return nil, nil, nextErr
