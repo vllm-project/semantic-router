@@ -104,7 +104,7 @@ func TestParseLLMLabelClassificationRejectsInvalidDistribution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseLLMLabelClassification(tt.content, []string{"SAFE", "RISKY"})
+			_, err := parseLLMLabelClassification(tt.content, []string{"SAFE", "RISKY"}, false)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("parseLLMLabelClassification() error = %v, want %q", err, tt.wantErr)
 			}
