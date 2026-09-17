@@ -31,9 +31,11 @@ func TestPreparedInventoryPublishesSourceNamesAndActualInputLimits(t *testing.T)
 		entries = append(entries, binding.PreparedBinding{
 			Identity: binding.Identity{Recipe: "example", Name: name, Deployment: name, Contract: "label_distribution.v1", Adapter: "mmbert"},
 			Artifact: "models/derived/opaque-" + name, Revision: spec.Revision + ":" + strings.Repeat("a", 64),
-			Capability: binding.Capability{Provider: "ort", Device: "rocm:0", Precision: "native",
+			Capability: binding.Capability{
+				Provider: "ort", Device: "rocm:0", Precision: "native",
 				Limits: binding.Limits{ModelTokens: 32768, TaskTokens: 32768, DocumentTokens: 262144, DeploymentTokens: 262144, Overflow: "window"},
-				Window: &binding.WindowCapability{Size: 32768, Overlap: 256}},
+				Window: &binding.WindowCapability{Size: 32768, Overlap: 256},
+			},
 		})
 	}
 	api := &ClassificationAPIServer{classificationSvc: metadataInventoryService{entries: entries}}
@@ -65,7 +67,9 @@ func TestPreparedInventoryPublishesSourceNamesAndActualInputLimits(t *testing.T)
 func TestPreparedInventoryDoesNotGuessUnknownOrExternalSource(t *testing.T) {
 	spec := config.GetModelByPath("models/Vela-1.0-Encoder-307M-Domain")
 	for _, test := range []struct{ revision, device string }{
-		{"", "rocm:0"}, {"main:digest", "rocm:0"}, {strings.Repeat("a", 40) + ":digest", "rocm:0"},
+		{"", "rocm:0"},
+		{"main:digest", "rocm:0"},
+		{strings.Repeat("a", 40) + ":digest", "rocm:0"},
 		{spec.Revision + ":digest", "external"},
 	} {
 		models, ok := preparedModelsInfo(metadataInventoryService{entries: []binding.PreparedBinding{{
