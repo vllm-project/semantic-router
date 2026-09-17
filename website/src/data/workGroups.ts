@@ -34,7 +34,7 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/Xunzhuo',
       },
       {
-        name: 'yaojiejia',
+        name: 'Alex Jia',
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
@@ -120,7 +120,7 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/subin9',
       },
       {
-        name: 'yaojiejia',
+        name: 'Alex Jia',
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
@@ -319,7 +319,7 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/abhinav-m22',
       },
       {
-        name: 'yaojiejia',
+        name: 'Alex Jia',
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
