@@ -20028,8 +20028,17 @@
                                       ]
                                     }
                                   },
+                                  "disposition": {
+                                    "type": "string"
+                                  },
+                                  "fallback_target": {
+                                    "type": "string"
+                                  },
                                   "required_count": {
                                     "type": "integer"
+                                  },
+                                  "selected_policy": {
+                                    "type": "string"
                                   },
                                   "usable_count": {
                                     "type": "integer"
@@ -23409,8 +23418,17 @@
                                 ]
                               }
                             },
+                            "disposition": {
+                              "type": "string"
+                            },
+                            "fallback_target": {
+                              "type": "string"
+                            },
                             "required_count": {
                               "type": "integer"
+                            },
+                            "selected_policy": {
+                              "type": "string"
                             },
                             "usable_count": {
                               "type": "integer"

@@ -72,7 +72,7 @@ func buildFusionStreamingToolCallSSE(
 		"finish_reason": nil,
 	}
 	var extra map[string]interface{}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
+	if shouldIncludeFusionTrace(cfg, trace) {
 		extra = map[string]interface{}{"fusion": projectFusionPublicTrace(trace)}
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))

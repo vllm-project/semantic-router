@@ -109,18 +109,26 @@ func responsesErrorCode(protocolError *llmprotocol.ProtocolError) string {
 
 func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire responsesResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateResponsesResponseResource(wire, false); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics := responsesResponseMetadataDiagnostics(wire, policy)
+	nestedVendorExtensions, err := responsesOutputVendorExtensions(wire.Output, policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	vendorExtensions = append(vendorExtensions, nestedVendorExtensions...)
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
+	diagnostics = appendDiagnostics(diagnostics, responsesResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeResponsesResponseResource(wire, policy, &diagnostics)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, body, response.Generation, wire.Status, policy), diagnostics, nil
+	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, canonicalBody, response.Generation, wire.Status, policy), diagnostics, nil
 }
 
 func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -515,7 +523,7 @@ func (OpenAIResponsesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
-	return decodeOpenAITransportError(body, policy)
+	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIResponsesV1)
 }
 
 func (OpenAIResponsesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

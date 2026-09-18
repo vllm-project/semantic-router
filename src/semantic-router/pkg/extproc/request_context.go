@@ -330,6 +330,8 @@ type RequestContext struct {
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ResponseVendor           llmprotocol.ResponseVendor
+	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 
