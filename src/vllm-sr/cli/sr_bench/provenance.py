@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .contracts import digest
 from .setup import PACKAGES, harness_paths
+from .snapshots import capture_recipes
 
 ENVIRONMENT_PROBE = """
 import importlib.metadata,json,platform
@@ -24,7 +25,11 @@ print(encoded)
 
 
 def capture_runner(manifest):
-    """Snapshot local files and actual installed versions before any dispatch."""
+    """Capture runner identity and optional observed recipes before dispatch.
+
+    Recipe receipts have their own content hash; their observation timestamps
+    are intentionally excluded from the code/environment identity fingerprint.
+    """
     package = Path(__file__).parent
     sources = {
         str(path.relative_to(package)): hashlib.sha256(path.read_bytes()).hexdigest()
@@ -83,4 +88,5 @@ def capture_runner(manifest):
         **observed,
         "fingerprint_sha256": digest(observed),
         "captured_at": datetime.now(timezone.utc).isoformat(),
+        "recipe_snapshots": capture_recipes(manifest),
     }
