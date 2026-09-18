@@ -74,7 +74,7 @@ def read_records(path):
         return pq.read_table(path).to_pylist()
     if path.suffix == ".jsonl":
         return [
-            json.loads(line) for line in path.read_text().splitlines() if line.strip()
+            json.loads(line) for line in path.read_text().split("\n") if line.strip()
         ]
     data = json.loads(path.read_text())
     if isinstance(data, list):

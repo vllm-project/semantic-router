@@ -8,6 +8,7 @@ import pytest
 
 from cli.sr_bench.sources import _stratified_order, combine_datasets, prepare_dataset
 from cli.sr_bench.setup import PACKAGES, TASK_SOURCES
+from cli.sr_bench.contracts import load_document
 
 
 def _source(tmp_path, count=198):
@@ -73,6 +74,35 @@ def test_prepared_dataset_never_overwrites_corrupted_evidence(tmp_path):
     with pytest.raises(ValueError, match="immutable dataset content changed"):
         prepare_dataset(**kwargs)
     assert path.read_text() == "corrupted"
+
+
+def test_jsonl_preserves_unicode_separators_inside_task_strings(tmp_path):
+    source = tmp_path / "source.jsonl"
+    content = "Question with embedded separators:\u2028paragraph\u2029next\u0085line"
+    cases = [
+        {
+            "benchmark": "gpqa-diamond",
+            "id": f"gpqa-diamond/{i}",
+            "messages": [{"role": "user", "content": content}],
+            "answer": "A",
+        }
+        for i in range(198)
+    ]
+    source.write_text(
+        "\n".join(json.dumps(case, ensure_ascii=False) for case in cases) + "\n"
+    )
+    assert load_document(source) == cases
+    prepared = prepare_dataset(
+        benchmark="gpqa-diamond",
+        profile="standard",
+        store=tmp_path / "store",
+        source_path=source,
+        revision="fixture-v1",
+    )
+    combined = combine_datasets([prepared], tmp_path / "store")
+    assert combined == prepared
+    assert len(load_document(combined["path"])) == 158
+    assert load_document(combined["path"])[0]["messages"][0]["content"] == content
 
 
 def test_strata_coverage_and_balanced_agent_domains():

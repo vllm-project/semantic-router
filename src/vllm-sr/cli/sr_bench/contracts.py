@@ -108,7 +108,7 @@ def load_document(path):
     path = Path(path).expanduser().resolve()
     if path.suffix == ".jsonl":
         return [
-            json.loads(line) for line in path.read_text().splitlines() if line.strip()
+            json.loads(line) for line in path.read_text().split("\n") if line.strip()
         ]
     if path.suffix in {".yaml", ".yml"}:
         import yaml
