@@ -5,6 +5,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -43,8 +44,7 @@ func newPolarityTestCache(t *testing.T, useNLI bool) (*InMemoryCache, CacheEntry
 	return c, entry
 }
 
-// installVerifier swaps in a fake verifier for the test and restores the
-// package state afterwards.
+// installVerifier installs a fake verifier on this test's cache instance.
 func installVerifier(t *testing.T, c *InMemoryCache, fn PolarityVerifyFunc) {
 	t.Helper()
 	c.SetPolarityVerifier(fn)
@@ -137,8 +137,24 @@ func TestPolarityNLIGuardDisabledNeverCallsVerifier(t *testing.T) {
 	}
 }
 
-func TestPolarityNLIGuardFailsOpen(t *testing.T) {
-	t.Run("verifier error serves the hit", func(t *testing.T) {
+func TestPolarityNLIGuardFailsClosedForCache(t *testing.T) {
+	assertUnverifiedMiss := func(t *testing.T, c *InMemoryCache, result LookupResult) {
+		t.Helper()
+		if result.Found || result.ResponseBody != nil {
+			t.Fatalf("unverified candidate must be a cache miss, got %+v", result)
+		}
+		if result.Similarity != 1.0 {
+			t.Fatalf("unverified candidate score must still be reported, got %.4f", result.Similarity)
+		}
+		if atomic.LoadInt64(&c.missCount) != 1 || atomic.LoadInt64(&c.hitCount) != 0 {
+			t.Fatalf("unverified candidate must count as a miss: miss=%d hit=%d", c.missCount, c.hitCount)
+		}
+		if !c.entries[0].LastAccessAt.IsZero() || c.entries[0].HitCount != 0 {
+			t.Fatalf("unverified candidate must not update access info: %+v", c.entries[0])
+		}
+	}
+
+	t.Run("verifier error becomes a miss", func(t *testing.T) {
 		c, entry := newPolarityTestCache(t, true)
 		installVerifier(t, c, func(context.Context, string, string) (float32, error) {
 			return 0, errors.New("nli backend unavailable")
@@ -147,39 +163,57 @@ func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 		if err != nil {
 			t.Fatalf("verifier errors must not surface to the caller: %v", err)
 		}
-		if !result.Found {
-			t.Fatal("verifier error must fail open and serve the threshold-verified hit")
-		}
+		assertUnverifiedMiss(t, c, result)
 	})
 
-	t.Run("nil verifier serves the hit", func(t *testing.T) {
+	t.Run("nil verifier becomes a miss", func(t *testing.T) {
 		c, entry := newPolarityTestCache(t, true)
 		installVerifier(t, c, nil)
 		result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !result.Found {
-			t.Fatal("unconfigured verifier must fail open")
-		}
+		assertUnverifiedMiss(t, c, result)
 	})
 }
 
 func TestPolarityNLIGuardHonorsCancellation(t *testing.T) {
-	c, entry := newPolarityTestCache(t, true)
-	installVerifier(t, c, func(context.Context, string, string) (float32, error) {
-		t.Fatal("verifier must not run for a cancelled request")
-		return 0, nil
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	t.Run("before verification", func(t *testing.T) {
+		c, entry := newPolarityTestCache(t, true)
+		installVerifier(t, c, func(context.Context, string, string) (float32, error) {
+			t.Fatal("verifier must not run for a cancelled request")
+			return 0, nil
+		})
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
 
-	result, err := finishWithCandidate(c, ctx, "How do I disable two-factor authentication?", entry)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got result=%+v err=%v", result, err)
-	}
-	if result.Found {
-		t.Fatal("cancelled lookup must not serve a result")
+		result, err := finishWithCandidate(c, ctx, "How do I disable two-factor authentication?", entry)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got result=%+v err=%v", result, err)
+		}
+		if result.Found {
+			t.Fatal("cancelled lookup must not serve a result")
+		}
+	})
+
+	for _, verifierErr := range []error{context.Canceled, nil} {
+		t.Run(fmt.Sprintf("during verification/error=%v", verifierErr), func(t *testing.T) {
+			c, entry := newPolarityTestCache(t, true)
+			ctx, cancel := context.WithCancel(context.Background())
+			installVerifier(t, c, func(context.Context, string, string) (float32, error) {
+				cancel()
+				return 0, verifierErr
+			})
+
+			result, err := finishWithCandidate(c, ctx, "How do I disable two-factor authentication?", entry)
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("expected context.Canceled, got result=%+v err=%v", result, err)
+			}
+			if result.Found || atomic.LoadInt64(&c.missCount) != 0 || atomic.LoadInt64(&c.hitCount) != 0 {
+				t.Fatalf("cancelled verification must not become a cache outcome: result=%+v miss=%d hit=%d",
+					result, c.missCount, c.hitCount)
+			}
+		})
 	}
 }
 
@@ -232,5 +266,24 @@ func TestValidateCacheConfigPolarityThreshold(t *testing.T) {
 	base.PolarityGuard.UseNLI = false
 	if err := ValidateCacheConfig(base); err != nil {
 		t.Fatalf("threshold is irrelevant with the NLI tier off: %v", err)
+	}
+}
+
+// A verifier outage in a replacement cache must not change the live cache's
+// behavior while both generations are still serving requests.
+func TestPolarityNLIGuardFailureIsIsolatedToCache(t *testing.T) {
+	live, liveEntry := newPolarityTestCache(t, true)
+	replacement, replacementEntry := newPolarityTestCache(t, true)
+	live.SetPolarityVerifier(func(context.Context, string, string) (float32, error) { return 0, nil })
+	replacement.SetPolarityVerifier(func(context.Context, string, string) (float32, error) {
+		return 0, errors.New("replacement verifier unavailable")
+	})
+	result, err := finishWithCandidate(replacement, context.Background(), "How can I enable 2FA?", replacementEntry)
+	if err != nil || result.Found || result.ResponseBody != nil {
+		t.Fatalf("unverified replacement candidate must miss: result=%+v err=%v", result, err)
+	}
+	result, err = finishWithCandidate(live, context.Background(), "How can I enable 2FA?", liveEntry)
+	if err != nil || !result.Found || string(result.ResponseBody) != "ENABLE-ANSWER" {
+		t.Fatalf("live cache's verifier must remain independent: result=%+v err=%v", result, err)
 	}
 }
