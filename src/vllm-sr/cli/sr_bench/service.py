@@ -235,7 +235,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
             if route == ["runs"]:
                 if method == "GET":
-                    return self._send(200, {"runs": self.server.store.list(owner)})
+                    return self._send(
+                        200, {"runs": self.server.store.list(owner, summary=True)}
+                    )
                 body = self._body()
                 manifest = body.get("manifest")
                 if not manifest:

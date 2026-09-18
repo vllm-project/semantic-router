@@ -25,6 +25,64 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def run_summary(run):
+    """Project collection metadata without copying frozen question/source payloads."""
+    source = run["manifest"]
+    manifest = {
+        key: source[key]
+        for key in (
+            "version",
+            "name",
+            "mode",
+            "profile",
+            "seed",
+            "cost_policy",
+            "targets",
+            "limits",
+            "sampling",
+            "benchmark_weights",
+            "adapter_versions",
+            "plan_sha256",
+            "case_sha256",
+        )
+        if key in source
+    }
+    if dataset := source.get("dataset"):
+        manifest["dataset"] = {
+            key: dataset[key]
+            for key in (
+                "id",
+                "name",
+                "path",
+                "sha256",
+                "case_count",
+                "profile",
+                "split",
+                "seed",
+                "custom_subset",
+                "benchmarks",
+            )
+            if key in dataset
+        }
+    if recovery := source.get("recovery"):
+        manifest["recovery"] = {
+            key: recovery[key]
+            for key in (
+                "parent_run_id",
+                "mode",
+                "selected_cells_sha256",
+                "parent_snapshot",
+                "recovery_subset",
+                "new_attempt_acknowledged",
+            )
+            if key in recovery
+        }
+        manifest["recovery"]["selected_cell_count"] = len(
+            recovery.get("selected_cells", [])
+        )
+    return {**run, "manifest": manifest, "manifest_summary": True}
+
+
 class Store:
     def __init__(self, root):
         self.root = Path(root).expanduser().resolve()
@@ -189,7 +247,7 @@ class Store:
                 },
             }
 
-    def list(self, owner=None):
+    def list(self, owner=None, summary=False):
         with self.lock:
             rows = self.db.execute(
                 "SELECT id FROM runs"
@@ -197,7 +255,10 @@ class Store:
                 + " ORDER BY created_at DESC",
                 (() if owner is None else (owner,)),
             ).fetchall()
-            return [self.get(row[0]) for row in rows]
+            return [
+                run_summary(self.get(row[0])) if summary else self.get(row[0])
+                for row in rows
+            ]
 
     def request(self, owner, request_key):
         with self.lock:

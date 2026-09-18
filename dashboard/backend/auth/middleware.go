@@ -150,8 +150,8 @@ func requiredPermission(method, path string) string {
 }
 
 // RequiredPermissions returns every permission needed by a request. Most
-// routes require one permission; sr-bench run creation persists a manifest and
-// immediately launches work, so it requires both write and run permissions.
+// routes require one permission; sr-bench run creation and recovery persist a
+// manifest and immediately launch work, so both need write and run permissions.
 func RequiredPermissions(method, path string) []string {
 	if policy, ok := routercontract.LookupManagement(method, path); ok {
 		return policy.Permissions
@@ -159,7 +159,7 @@ func RequiredPermissions(method, path string) []string {
 	if !strings.HasPrefix(path, "/api/router/") {
 		path = strings.TrimSpace(strings.ToLower(path))
 	}
-	if method == http.MethodPost && path == "/api/sr-bench/v1/runs" {
+	if method == http.MethodPost && (path == "/api/sr-bench/v1/runs" || isSRBenchRunAction(path, "recover")) {
 		return []string{PermEvalWrite, PermEvalRun}
 	}
 	primary := requiredPermission(method, path)
@@ -329,7 +329,7 @@ func observabilityPermission(_ string, path string) (string, bool) {
 func featurePermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
-		if isSRBenchCancelAction(path) {
+		if isSRBenchRunAction(path, "cancel") {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -345,10 +345,14 @@ func featurePermission(method, path string) (string, bool) {
 	}
 }
 
-func isSRBenchCancelAction(path string) bool {
-	rest := strings.TrimPrefix(strings.TrimRight(path, "/"), "/api/sr-bench/v1/runs/")
+func isSRBenchRunAction(path, action string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/sr-bench/v1/runs/")
+	if rest == path {
+		return false
+	}
 	parts := strings.Split(rest, "/")
-	return len(parts) == 2 && parts[0] != "" && parts[1] == "cancel"
+	return len(parts) == 2 && parts[0] != "" && parts[1] == action
 }
 
 func openclawPermission(method, path string) (string, bool) {

@@ -273,6 +273,31 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 			wantRequired: []string{PermEvalWrite, PermEvalRun},
 		},
 		{
+			name: "recovery requires write", path: "/api/sr-bench/v1/runs/run-1/recover",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "recovery requires run", path: "/api/sr-bench/v1/runs/run-1/recover",
+			removePermission: PermEvalRun, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "recovery permits write and run", path: "/api/sr-bench/v1/runs/run-1/recover",
+			wantStatus:   http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite, PermEvalRun},
+		},
+		{
+			name: "recovery planning requires write", path: "/api/sr-bench/v1/runs/run-1/recover-plan",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "recovery planning needs no generation permission", path: "/api/sr-bench/v1/runs/run-1/recover-plan",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
 			name: "cancel requires run not write", path: "/api/sr-bench/v1/runs/run-1/cancel",
 			removePermission: PermEvalWrite, wantStatus: http.StatusNoContent,
 			wantRequired: []string{PermEvalRun},
