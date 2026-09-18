@@ -98,9 +98,9 @@ func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef, ctx *Re
 	for _, ref := range refs {
 		if strings.TrimSpace(ref.Model) == "" ||
 			!r.configuredBackendModel(ref.Model) ||
-			(ctx != nil && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
+			(ctx != nil && !decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
 			(ctx != nil && ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) ||
-			(ctx != nil && r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, r.candidateRequirements(ctx)) != nil) {
+			(ctx != nil && r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, r.candidateRequirements(ctx), ctx.AutomaticCandidateDemands) != nil) {
 			continue
 		}
 		eligible = append(eligible, ref)

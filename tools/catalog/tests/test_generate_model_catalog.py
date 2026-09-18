@@ -1111,6 +1111,91 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         for binding in fireworks["models"]:
             self.assertEqual(set(binding["protocols"]), expected_protocols)
 
+    def test_together_serverless_mappings_match_the_dated_catalog(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        together = next(
+            provider
+            for provider in resources["providers"]
+            if provider["id"] == "together"
+        )
+        models = {model["id"]: model for model in resources["models"]}
+        expected: dict[str, tuple[str, float, float, float, int, str | None]] = {
+            "minimax/minimax-m3": (
+                "MiniMaxAI/MiniMax-M3",
+                0.30,
+                0.06,
+                1.20,
+                524288,
+                "FP4",
+            ),
+            "moonshot/kimi-k3": (
+                "moonshotai/Kimi-K3",
+                3.00,
+                0.30,
+                15.00,
+                1048576,
+                None,
+            ),
+            "zai/glm-5.2": ("zai-org/GLM-5.2", 1.40, 0.26, 4.40, 1048575, "FP4"),
+        }
+        bindings = together["models"]
+        self.assertEqual(len(bindings), 3)
+        self.assertEqual(
+            {binding["catalog"]: binding["id"] for binding in bindings},
+            {model_id: facts[0] for model_id, facts in expected.items()},
+        )
+        self.assertEqual(len({binding["id"] for binding in bindings}), 3)
+        self.assertEqual(
+            len({models[binding["catalog"]]["publisher"] for binding in bindings}), 3
+        )
+        for binding in bindings:
+            with self.subTest(model=binding["catalog"]):
+                _, prompt, cached, completion, context, quantization = expected[
+                    binding["catalog"]
+                ]
+                self.assertEqual(binding["relationship"], "managed_cloud")
+                self.assertEqual(binding["lifecycle"], "active")
+                self.assertIn("chat", models[binding["catalog"]]["capabilities"])
+                self.assertEqual(
+                    binding["pricing"],
+                    {
+                        "currency": "USD",
+                        "prompt_per_1m": prompt,
+                        "cached_input_per_1m": cached,
+                        "completion_per_1m": completion,
+                    },
+                )
+                restrictions: dict[str, int | str] = {"context_window_size": context}
+                if quantization is not None:
+                    restrictions["quantization"] = quantization
+                self.assertEqual(binding["restrictions"], restrictions)
+                self.assertEqual(
+                    binding["verification"],
+                    {
+                        "status": "claimed",
+                        "verified_at": "2026-09-16",
+                        "source": "https://docs.together.ai/docs/serverless/models",
+                    },
+                )
+
+    def test_together_mappings_claim_only_supported_chat_operations(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        together = next(
+            provider
+            for provider in resources["providers"]
+            if provider["id"] == "together"
+        )
+        protocol = "openai/chat-completions@1"
+        self.assertEqual(together["default_base_url"], "https://api.together.ai/v1")
+        self.assertEqual(together["protocols"], [protocol])
+        self.assertEqual(together["default_protocol"], protocol)
+        self.assertEqual(
+            together["supported_operations"],
+            [f"{protocol}#create", f"{protocol}#list_models"],
+        )
+        for binding in together["models"]:
+            self.assertEqual(binding["protocols"], [protocol])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -83,6 +83,14 @@ func (r *OpenAIRouter) decisionRouteActionDestination(
 	if destination == "" {
 		return "", false, nil
 	}
+	if decisionUsesAutomaticOutput(ctx.SemanticRequest, decision) {
+		refs := append([]config.ModelRef{{Model: destination}}, decision.ModelRefs...)
+		eligible, err := r.automaticEligibleRefs(refs, ctx)
+		if err != nil {
+			return "", false, err
+		}
+		return eligible[0].Model, true, nil
+	}
 	if requirements := r.candidateRequirements(ctx); selection.CandidateRequirementsEnabled(requirements) {
 		demand, err := selection.EffectiveCandidateDemand(ctx.SemanticRequest, decision)
 		if err != nil {

@@ -371,7 +371,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		ctx.VSRSelectionMethod = "fast_response"
 		return "", entropy.ReasoningDecision{}, nil
 	}
-	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && ineligible > 0 {
+	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); !decisionUsesAutomaticOutput(ctx.SemanticRequest, result.Decision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && ineligible > 0 {
 		return "", entropy.ReasoningDecision{}, fmt.Errorf(
 			"%w: decision %q requires %d request tokens but %d explicitly configured algorithm model(s) have smaller context windows",
 			errNoContextEligibleDecisionModel,
@@ -412,6 +412,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 			selCtx.ExpectedOutputTokens = int(*demand.MaxOutputTokens)
 		}
 	}
+	selCtx.CandidateDemands = ctx.AutomaticCandidateDemands
 	selectedModelRef, usedMethod, err := r.selectModelFromCandidates(
 		selCtx,
 		result.Decision.Algorithm,

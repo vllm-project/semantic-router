@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -13,7 +14,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 import verification_catalog as catalog  # noqa: E402
-from ci_plan import make_plan  # noqa: E402
+from ci_plan import EXECUTORS, github_outputs, make_plan  # noqa: E402
 from domain_registry import load_domain_registry  # noqa: E402
 
 
@@ -77,17 +78,123 @@ class DisplayNameTests(unittest.TestCase):
                 )
             )
 
-    def test_reusable_matrix_callers_name_their_human_dimension(self):
-        # GitHub appends every object field to a static matrix caller name.
-        # Referencing the display dimension keeps check names readable.
+    def test_reusable_callers_keep_skipped_names_static_and_matrix_values_scalar(self):
+        # Job-level if runs before matrix expansion. Static caller names also
+        # need scalar axes so active jobs do not append entire contract objects.
         jobs = workflow("ci.yml")["jobs"]
+        callers = set()
         for identity, job in jobs.items():
             matrix = job.get("strategy", {}).get("matrix", {})
             if "uses" not in job or not matrix:
                 continue
-            field = "batch" if "batch" in matrix else "verification"
+            callers.add(identity)
+            source = "component_batches" if identity == "tools" else identity
+            argument = "batch" if identity == "tools" else "verification"
             with self.subTest(job=identity):
-                self.assertIn("matrix." + field + ".display_name", job["name"])
+                self.assertTrue(job["name"].strip())
+                self.assertNotIn("${{", job["name"])
+                self.assertEqual(
+                    matrix,
+                    {
+                        "label": "${{ fromJSON(needs.plan.outputs."
+                        + source
+                        + ").*.display_name }}"
+                    },
+                )
+                self.assertEqual(
+                    job["with"][argument],
+                    "${{ toJSON(fromJSON(needs.plan.outputs.dispatch)."
+                    + identity
+                    + "[matrix.label]) }}",
+                )
+        self.assertEqual(callers, set(EXECUTORS) - {"quality", "generated"})
+
+    def test_dispatch_round_trip_preserves_full_empty_and_subset_plans(self):
+        plans = {
+            "full": make_plan([], source_sha="a" * 40, full=True),
+            "empty": make_plan([], source_sha="a" * 40, draft=True),
+            "subset": make_plan(
+                [],
+                source_sha="a" * 40,
+                requested=(
+                    "native.candle-cpu",
+                    "e2e.envoy-ai-gateway",
+                    "ck-rewrite",
+                    "cli-unit",
+                ),
+            ),
+        }
+        for scenario, plan in plans.items():
+            before = copy.deepcopy(plan)
+            outputs = github_outputs(plan)
+            dispatch = json.loads(outputs["dispatch"])
+            with self.subTest(plan=scenario):
+                self.assertEqual(plan, before)
+                self.assertEqual(json.loads(outputs["plan"]), before)
+                self.assertEqual(
+                    set(dispatch), set(EXECUTORS) - {"quality", "generated"}
+                )
+                unchanged = {
+                    key: before[key]
+                    for key in (
+                        "images",
+                        "publish_images",
+                        "multiarch",
+                        "publish_helm",
+                        "publish_python",
+                    )
+                }
+                unchanged.update(plan=before, build_native=before["native"])
+                for executor in EXECUTORS:
+                    rows = (
+                        plan["component_batches"]
+                        if executor == "tools"
+                        else [
+                            row
+                            for row in plan["verifications"]
+                            if row["executor"] == executor
+                        ]
+                    )
+                    output = "component_batches" if executor == "tools" else executor
+                    unchanged[output] = rows
+                    if executor not in dispatch:
+                        continue
+                    labels = [row["display_name"] for row in rows]
+                    self.assertEqual(set(dispatch[executor]), set(labels))
+                    self.assertEqual(len(labels), len(set(labels)))
+                    self.assertEqual(
+                        [dispatch[executor][label] for label in labels], rows
+                    )
+                self.assertEqual(
+                    {
+                        key: json.loads(value)
+                        for key, value in outputs.items()
+                        if key != "dispatch"
+                    },
+                    unchanged,
+                )
+
+    def test_dispatch_rejects_missing_or_ambiguous_labels(self):
+        full = make_plan([], source_sha="a" * 40, full=True)
+        for family in ("native", "tools"):
+            for invalid in (None, "", " ", "duplicate"):
+                plan = copy.deepcopy(full)
+                rows = (
+                    plan["component_batches"]
+                    if family == "tools"
+                    else [
+                        row
+                        for row in plan["verifications"]
+                        if row["executor"] == family
+                    ]
+                )
+                rows[0]["display_name"] = (
+                    rows[1]["display_name"] if invalid == "duplicate" else invalid
+                )
+                with self.subTest(family=family, invalid=invalid), self.assertRaises(
+                    ValueError
+                ):
+                    github_outputs(plan)
 
     def test_dynamic_leaf_jobs_use_display_labels(self):
         for filename, key in (
