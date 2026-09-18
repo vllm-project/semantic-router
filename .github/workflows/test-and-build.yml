@@ -75,8 +75,8 @@ jobs:
         if: inputs.native-artifact == ''
         run: make rust-ci test-rust-ci
 
-      - name: Vet Go source
-        run: make vet
+      - name: Check Go modules and vet source
+        run: make check-go-mod-tidy vet
 
       - name: Set up Python for selector parity
         uses: actions/setup-python@v5
@@ -94,8 +94,7 @@ jobs:
           paths = list(root.glob("libonnxruntime.so.*"))
           assert len(paths) == 1, paths
           with open(os.environ["GITHUB_ENV"], "a") as output:
-              output.write(f"ORT_DYLIB_PATH={paths[0]}
-")
+              output.write(f"ORT_DYLIB_PATH={paths[0]}\n")
           PYCODE
 
       - name: Run owned binding and alternate provider-default contracts
