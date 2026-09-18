@@ -485,14 +485,11 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		},
 		"usage": usage.Map(),
 	}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = projectFusionPublicTrace(trace)
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal fusion response: %w", err)
 	}
-	return &Response{
+	resp := &Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -501,7 +498,13 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		AlgorithmType:         "fusion",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}
+	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
+		resp.RouterExtensions = &RouterExtensions{
+			Fusion: trace,
+		}
+	}
+	return resp, nil
 }
 
 func (l *FusionLooper) formatFusionToolCallJSONResponse(
@@ -520,14 +523,11 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	completion["model"] = finalResp.Model
 	completion["usage"] = usage.Map()
 	normalizeCompletionToolFinishReason(completion)
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = projectFusionPublicTrace(trace)
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal fusion tool-call response: %w", err)
 	}
-	return &Response{
+	resp := &Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -536,7 +536,13 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 		AlgorithmType:         "fusion",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}
+	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
+		resp.RouterExtensions = &RouterExtensions{
+			Fusion: trace,
+		}
+	}
+	return resp, nil
 }
 
 func (l *FusionLooper) formatFusionStreamingResponse(

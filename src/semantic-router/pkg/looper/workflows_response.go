@@ -78,14 +78,11 @@ func formatWorkflowJSONResponse(
 		},
 		"usage": usage.Map(),
 	}
-	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
-		completion["flow"] = trace
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal workflow response: %w", err)
 	}
-	return &Response{
+	resp := &Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -94,7 +91,13 @@ func formatWorkflowJSONResponse(
 		AlgorithmType:         "workflows",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}
+	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
+		resp.RouterExtensions = &RouterExtensions{
+			Flow: trace,
+		}
+	}
+	return resp, nil
 }
 
 func workflowFinalFinishReason(resp *ModelResponse) string {
@@ -120,14 +123,11 @@ func formatWorkflowToolCallJSONResponse(
 	completion["id"] = fmt.Sprintf("chatcmpl-flow-%d", time.Now().UnixNano())
 	completion["model"] = finalResp.Model
 	completion["usage"] = usage.Map()
-	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
-		completion["flow"] = trace
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal workflow tool-call response: %w", err)
 	}
-	return &Response{
+	resp := &Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -136,7 +136,13 @@ func formatWorkflowToolCallJSONResponse(
 		AlgorithmType:         "workflows",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}
+	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
+		resp.RouterExtensions = &RouterExtensions{
+			Flow: trace,
+		}
+	}
+	return resp, nil
 }
 
 func formatWorkflowStreamingResponse(

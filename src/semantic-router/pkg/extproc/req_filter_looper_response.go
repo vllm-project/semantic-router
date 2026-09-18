@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -111,6 +112,16 @@ func (r *OpenAIRouter) prepareLooperResponse(
 		}
 		semantic = &translated.Response
 		body = translated.Body
+
+		// Merge router-owned extensions after strict protocol translation
+		if resp.RouterExtensions != nil {
+			merged, mergeErr := mergeRouterExtensions(body, resp.RouterExtensions)
+			if mergeErr != nil {
+				return nil, nil, nil, fmt.Errorf("failed to merge router extensions: %w", mergeErr)
+			}
+			body = merged
+		}
+
 		reqCtx.ResponseEnvelope = translated.Envelope
 		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, translated.Diagnostics...)
 	}
@@ -304,3 +315,32 @@ func newHeaderValueOption(key string, value string) *core.HeaderValueOption {
 		},
 	}
 }
+
+// mergeRouterExtensions merges router-owned response extensions into the
+// translated body after strict protocol translation. This maintains the
+// provenance boundary: Body is strictly provider-shaped and passes through
+// engine.TranslateResponse; extensions are router-generated and merged after.
+func mergeRouterExtensions(body []byte, ext *looper.RouterExtensions) ([]byte, error) {
+	if ext == nil {
+		return body, nil
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal translated body: %w", err)
+	}
+	if ext.Fusion != nil {
+		parsed["fusion"] = ext.Fusion
+	}
+	if ext.Flow != nil {
+		parsed["flow"] = ext.Flow
+	}
+	if ext.ReMoM != nil {
+		parsed["reasoning_mom_responses"] = ext.ReMoM
+	}
+	merged, err := json.Marshal(parsed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged body: %w", err)
+	}
+	return merged, nil
+}
+

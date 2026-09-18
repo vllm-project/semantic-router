@@ -142,6 +142,35 @@ type Response struct {
 	// ExecutionTrace is bounded, content-free diagnostic evidence for tracing
 	// and Router Replay. It is not included in the client response body.
 	ExecutionTrace ExecutionTrace `json:"-"`
+
+	// RouterExtensions holds router-owned response extensions (fusion, flow,
+	// reasoning_mom_responses) that are managed separately from the provider-
+	// shaped Body. This field is populated by Looper formatters and merged
+	// into the final wire response by prepareLooperResponse after strict
+	// protocol translation. nil when no extensions are present.
+	RouterExtensions *RouterExtensions `json:"-"`
+}
+
+// RouterExtensions holds router-owned response extensions that are managed
+// separately from the provider-shaped Body to maintain strict protocol
+// translation boundaries. These extensions are merged into the final wire
+// response after Body has passed through engine.TranslateResponse.
+type RouterExtensions struct {
+	Fusion interface{} `json:"fusion,omitempty"`
+	Flow   interface{} `json:"flow,omitempty"`
+	ReMoM  interface{} `json:"reasoning_mom_responses,omitempty"`
+}
+
+// WorkflowsTrace contains execution evidence from Workflows algorithm runs.
+type WorkflowsTrace struct {
+	Steps                 []interface{} `json:"steps,omitempty"`
+	FailedModels          []interface{} `json:"failed_models,omitempty"`
+	IntermediateResponses []interface{} `json:"intermediate_responses,omitempty"`
+}
+
+// ReMoMTrace contains execution evidence from ReMoM algorithm runs.
+type ReMoMTrace struct {
+	Rounds []interface{} `json:"rounds,omitempty"`
 }
 
 // Looper defines the interface for multi-model execution strategies
