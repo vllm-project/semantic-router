@@ -44,10 +44,10 @@ func TestProvisionRejectsInvalidSkillSelections(t *testing.T) {
 				if recorder.Code != http.StatusBadRequest {
 					t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
 				}
-			var response map[string]string
-			if unmarshalErr := json.Unmarshal(recorder.Body.Bytes(), &response); unmarshalErr != nil || response["error"] == "" {
-				t.Fatalf("expected JSON error, got %s (%v)", recorder.Body.String(), unmarshalErr)
-			}
+				var response map[string]string
+				if unmarshalErr := json.Unmarshal(recorder.Body.Bytes(), &response); unmarshalErr != nil || response["error"] == "" {
+					t.Fatalf("expected JSON error, got %s (%v)", recorder.Body.String(), unmarshalErr)
+				}
 				after, err := os.ReadDir(dataDir)
 				if err != nil {
 					t.Fatal(err)
