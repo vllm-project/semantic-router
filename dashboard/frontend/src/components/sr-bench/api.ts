@@ -30,31 +30,63 @@ export class SrBenchRequestError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${SR_BENCH_API}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...init.headers },
-  })
-  const value: unknown = await response.json().catch(() => null)
-  if (!response.ok) {
-    const payload = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
-    const detail =
-      typeof payload.error === 'object' && payload.error
-        ? (payload.error as Record<string, unknown>).message
-        : payload.error
-    throw new SrBenchRequestError(
-      typeof detail === 'string'
-        ? detail
-        : typeof payload.message === 'string'
-          ? payload.message
-          : `sr-bench request failed (HTTP ${response.status}).`,
-      response.status,
-      typeof payload.code === 'string' ? payload.code : undefined,
-      typeof payload.dispatch_started === 'boolean' ? payload.dispatch_started : undefined,
-    )
+  // Bound reads and initial run submission responses, including stalled bodies.
+  // A submission timeout is ambiguous; its durable identity must be reconciled.
+  // No request is automatically retried by this layer.
+  const reading = !init.method || ['GET', 'HEAD'].includes(init.method)
+  const submitting = path === '/runs' && init.method === 'POST'
+  const controller = reading || submitting ? new AbortController() : null
+  let timedOut = false
+  const abort = () => controller?.abort()
+  init.signal?.addEventListener('abort', abort, { once: true })
+  if (init.signal?.aborted) abort()
+  const deadline = controller
+    ? setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, 30000)
+    : undefined
+  try {
+    const response = await fetch(`${SR_BENCH_API}${path}`, {
+      ...init,
+      signal: controller?.signal ?? init.signal,
+      headers: { 'Content-Type': 'application/json', ...init.headers },
+    })
+    const value: unknown = await response.json().catch(() => null)
+    if (timedOut) throw new Error('Read deadline exceeded')
+    if (!response.ok) {
+      const payload = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+      const detail =
+        typeof payload.error === 'object' && payload.error
+          ? (payload.error as Record<string, unknown>).message
+          : payload.error
+      throw new SrBenchRequestError(
+        typeof detail === 'string'
+          ? detail
+          : typeof payload.message === 'string'
+            ? payload.message
+            : `sr-bench request failed (HTTP ${response.status}).`,
+        response.status,
+        typeof payload.code === 'string' ? payload.code : undefined,
+        typeof payload.dispatch_started === 'boolean' ? payload.dispatch_started : undefined,
+      )
+    }
+    if (value === null)
+      throw new SrBenchRequestError('sr-bench returned an empty response.', response.status)
+    return value as T
+  } catch (error) {
+    if (timedOut)
+      throw new SrBenchRequestError(
+        submitting
+          ? 'The evaluation submission response timed out. Reconcile the saved submission before starting another attempt.'
+          : 'Reading saved sr-bench evidence timed out after 30 seconds. Existing runs continue independently.',
+        408,
+      )
+    throw error
+  } finally {
+    if (deadline) clearTimeout(deadline)
+    init.signal?.removeEventListener('abort', abort)
   }
-  if (value === null)
-    throw new SrBenchRequestError('sr-bench returned an empty response.', response.status)
-  return value as T
 }
 
 const post = <T>(path: string, body: unknown) =>

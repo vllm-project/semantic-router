@@ -1,29 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { benchApi, SrBenchRequestError } from './api'
 import { money, number } from './model'
 import type { RecoveryCell, RecoveryPlan, RecoveryRequest, Run } from './types'
 import styles from './SrBench.module.css'
+import {
+  clearRecovery,
+  readRecovery,
+  saveRecovery,
+  type PendingRecovery,
+} from './recoverySubmission'
 
 const cellKey = (cell: RecoveryCell) => `${cell.target_id}\0${cell.case_id}`
-function savedRequest(key: string): RecoveryRequest | null {
-  try {
-    return JSON.parse(sessionStorage.getItem(key) ?? 'null') as RecoveryRequest | null
-  } catch {
-    return null
-  }
-}
 
 export default function RunRecovery({
   run,
+  actorID,
   canRun,
   onRecovered,
 }: {
   run: Run
+  actorID: string
   canRun: boolean
   onRecovered: (run: Run) => void
 }) {
-  const storageKey = `sr-bench-recovery:${run.id}`
-  const [request, setRequest] = useState<RecoveryRequest | null>(() => savedRequest(storageKey))
+  const [saved] = useState(() => readRecovery(actorID, run.id))
+  const [request, setRequest] = useState<RecoveryRequest | null>(saved.saved?.request ?? null)
   const [mode, setMode] = useState<RecoveryPlan['mode']>('undispatched')
   const [plan, setPlan] = useState<RecoveryPlan | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -31,7 +32,19 @@ export default function RunRecovery({
   const [page, setPage] = useState(0)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const mounted = useRef(false)
+  const requestSequence = useRef(0)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      requestSequence.current += 1
+    }
+  }, [])
   async function review() {
+    if (!canRun || pending || request || saved.error) return
+    const sequence = ++requestSequence.current
+    const current = () => mounted.current && requestSequence.current === sequence
     setPending(true)
     setError('')
     setPlan(null)
@@ -39,15 +52,19 @@ export default function RunRecovery({
     setAcknowledged(false)
     setPage(0)
     try {
-      setPlan(await benchApi.recoveryPlan(run.id, mode))
+      const reviewed = await benchApi.recoveryPlan(run.id, mode)
+      if (current()) setPlan(reviewed)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not inspect recovery eligibility.')
+      if (current())
+        setError(cause instanceof Error ? cause.message : 'Could not inspect recovery eligibility.')
     } finally {
-      setPending(false)
+      if (current()) setPending(false)
     }
   }
   async function recover() {
-    if (!request && !plan) return
+    if (!canRun || pending || saved.error || (!request && !plan)) return
+    const sequence = ++requestSequence.current
+    const current = () => mounted.current && requestSequence.current === sequence
     const body = request ?? {
       mode,
       plan_sha256: plan!.plan_sha256,
@@ -55,24 +72,37 @@ export default function RunRecovery({
       idempotency_key: crypto.randomUUID(),
       ...(mode === 'failed' ? { acknowledge_new_attempt: acknowledged } : {}),
     }
+    const submission: PendingRecovery = { version: 1, actorID, parentID: run.id, request: body }
     setPending(true)
     setError('')
     try {
       // Persist the exact attempt before posting. Reloading or a lost response must
       // reuse its idempotency key, never create a second recovery implicitly.
-      sessionStorage.setItem(storageKey, JSON.stringify(body))
+      saveRecovery(submission)
       setRequest(body)
       const child = await benchApi.recover(run.id, body)
-      sessionStorage.removeItem(storageKey)
+      if (!current()) return
+      if (!clearRecovery(submission))
+        throw new Error(
+          'The saved recovery changed while this response was pending. Reload to reconcile the current request.',
+        )
       setRequest(null)
       onRecovered(child)
     } catch (cause) {
+      if (!current()) return
       if (
         cause instanceof SrBenchRequestError &&
         cause.code === 'recovery_plan_required' &&
         cause.dispatchStarted === false
       ) {
-        sessionStorage.removeItem(storageKey)
+        try {
+          if (!clearRecovery(submission)) throw new Error('Saved recovery identity changed')
+        } catch {
+          setError(
+            'The service confirmed no dispatch, but the saved recovery could not be cleared safely. Reload and reconcile its identity before creating another plan.',
+          )
+          return
+        }
         setRequest(null)
         setPlan(null)
         setSelected(new Set())
@@ -83,7 +113,7 @@ export default function RunRecovery({
           : 'Recovery response unavailable. Reconcile this same request before creating another attempt.',
       )
     } finally {
-      setPending(false)
+      if (current()) setPending(false)
     }
   }
   return (
@@ -93,12 +123,16 @@ export default function RunRecovery({
         Inspect eligibility, select cases and create a separate child run. The original run and its
         costs remain unchanged; the child reports only its own scope.
       </p>
-      {request ? (
+      {saved.error ? (
+        <p className={styles.error} role="alert">
+          {saved.error}
+        </p>
+      ) : request ? (
         <div className={styles.notice}>
           <strong>Recovery submission needs reconciliation</strong>
           <p>
-            The exact request is saved in this tab. Checking it again uses the same submission ID
-            and selected cases.
+            The exact request is saved for this account and parent in this tab. Checking it again
+            uses the same submission ID and selected cases.
           </p>
           <p>
             {number(request.cells.length)} cases · {request.mode}

@@ -1,0 +1,998 @@
+# Balance R2 development-study fragment, 2026-09-18.
+# Merge evaluation entries by ID, records by benchmark/profile/model, and the
+# recipe by name into your canonical configuration. Deep-merge global.router.
+# This is not a standalone deployment or a recommended production default.
+# The operator must supply providers, model cards, native request profiles,
+# simulated or real price declarations, listeners, and entrypoint wiring.
+# Exact model names below must match those operator-owned definitions.
+# The quality index uses 25 reused development cases; it is not holdout evidence.
+# Imported quality records were intentionally excluded from this fragment.
+# Full captured active-runtime SHA256 (NOT this fragment's SHA256):
+# 4f1d0400dd7803c798f84806048afd1316ae3e8adcebcbff661b7005efa82a90
+# Validate and plan the merged config, record its new active hash, then preview
+# and evaluate before use. Do not claim the old runtime hash for a new deployment.
+
+evaluation:
+  benchmarks:
+  - default_profile: acceptance-20260918
+    display_name: Local static development evaluation, 4K
+    domain: general
+    id: sr-bench/dev-static-4k@1.0.0
+    metrics:
+    - direction: higher_is_better
+      id: macro_accuracy
+      range:
+      - 0
+      - 1
+      unit: proportion
+    profiles:
+    - description: 25 fixed development cases across four benchmarks; native sampling with
+        shared 4K output ceiling; final-channel scoring. Not full sr-bench or unseen evidence.
+      display_name: Frozen development subset
+      id: acceptance-20260918
+  indices:
+  - aggregation: weighted_mean
+    components:
+    - benchmark: sr-bench/dev-static-4k@1.0.0
+      benchmark_profile: acceptance-20260918
+      metric: macro_accuracy
+      normalization:
+        type: identity
+      weight: 1
+    display_name: Local development quality, 4K
+    id: sr-bench/local-quality-4k@1.0.0
+    missing:
+      policy: require_all
+    scale:
+    - 0
+    - 100
+  records:
+  - benchmark: sr-bench/dev-static-4k@1.0.0
+    benchmark_profile: acceptance-20260918
+    measured_at: '2026-09-18'
+    metrics:
+      macro_accuracy: 0.4444444444444445
+    model: zai/glm-5.3-flash
+    reasoning_effort: max
+  - benchmark: sr-bench/dev-static-4k@1.0.0
+    benchmark_profile: acceptance-20260918
+    measured_at: '2026-09-18'
+    metrics:
+      macro_accuracy: 0.5365079365079365
+    model: qwen/qwen3.8-flash-next
+    reasoning_effort: xhigh
+  - benchmark: sr-bench/dev-static-4k@1.0.0
+    benchmark_profile: acceptance-20260918
+    measured_at: '2026-09-18'
+    metrics:
+      macro_accuracy: 0.49206349206349204
+    model: qwen/qwen3.8-27b
+    reasoning_effort: xhigh
+recipes:
+- description: Everyday routing with measured tradeoffs between quality, responsiveness, and
+    cost.
+  name: balance
+  routing:
+    candidate_requirements:
+      capabilities: declared
+      context: known_limits
+    decisions:
+    - adaptations:
+        adaptation:
+          candidate_set: decision
+      algorithm:
+        minimum_candidates: 1
+        multi_factor:
+          expected_output_tokens: 8192
+          latency_metric: tpot
+          latency_percentile: 95
+          objective:
+            priorities:
+            - factor: quality
+              tolerance: 0.03
+            - factor: latency
+              tolerance: 0.1
+            - factor: cost
+            - factor: load
+            strategy: lexicographic
+          on_no_candidates: fail
+          quality:
+            index: sr-bench/local-quality-4k@1.0.0
+            on_missing: exclude
+        type: multi_factor
+      description: Preserve the quality-oriented pool for requests combining care intent with
+        factual checking or high-stakes domains.
+      modelRefs:
+      - model: zai/glm-5.3-flash
+        reasoning_effort: max
+        reasoning_mode: enabled
+        use_reasoning: true
+      - model: qwen/qwen3.8-flash-next
+        reasoning_effort: xhigh
+        reasoning_mode: enabled
+        use_reasoning: true
+      name: factual_guard
+      plugins:
+      - configuration:
+          default_max_tokens: auto
+        type: request_params
+      - configuration:
+          budget:
+            reserve_output_tokens: auto
+            target_tokens: auto
+            trigger_tokens: auto
+          enabled: true
+          failure_mode: fail_open
+          mode: auto
+          scoring:
+            method: bm25
+          targets:
+            current_user:
+              mode: truncate
+            history:
+              min_tokens: 2000
+              mode: extractive
+              target_tokens: 1000
+            memory:
+              mode: preserve
+            rag:
+              mode: preserve
+            tool_outputs:
+              mode: preserve
+        type: context_compression
+      priority: 400
+      rules:
+        conditions:
+        - name: actionable_care
+          type: projection
+        - conditions:
+          - name: needs_fact_check
+            type: fact_check
+          - name: health
+            type: domain
+          - name: law
+            type: domain
+          - name: business
+            type: domain
+          - name: economics
+            type: domain
+          operator: OR
+        on_unknown: no_match
+        operator: AND
+    - adaptations:
+        adaptation:
+          candidate_set: decision
+      algorithm:
+        minimum_candidates: 1
+        multi_factor:
+          expected_output_tokens: 8192
+          latency_metric: tpot
+          latency_percentile: 95
+          objective:
+            priorities:
+            - factor: quality
+              tolerance: 0.1
+            - factor: cost
+            - factor: latency
+              tolerance: 0.1
+            - factor: load
+            strategy: lexicographic
+          on_no_candidates: fail
+          quality:
+            index: sr-bench/local-quality-4k@1.0.0
+            on_missing: exclude
+        type: multi_factor
+      description: Prefer lower inference cost among models within the locally calibrated
+        quality tolerance; factual guard is evaluated first.
+      modelRefs:
+      - model: zai/glm-5.3-flash
+        reasoning_effort: max
+        reasoning_mode: enabled
+        use_reasoning: true
+      - model: qwen/qwen3.8-flash-next
+        reasoning_effort: xhigh
+        reasoning_mode: enabled
+        use_reasoning: true
+      - model: qwen/qwen3.8-27b
+        reasoning_effort: xhigh
+        reasoning_mode: enabled
+        use_reasoning: true
+      name: reasoning
+      plugins:
+      - configuration:
+          default_max_tokens: auto
+        type: request_params
+      - configuration:
+          budget:
+            reserve_output_tokens: auto
+            target_tokens: auto
+            trigger_tokens: auto
+          enabled: true
+          failure_mode: fail_open
+          mode: auto
+          scoring:
+            method: bm25
+          targets:
+            current_user:
+              mode: truncate
+            history:
+              min_tokens: 2000
+              mode: extractive
+              target_tokens: 1000
+            memory:
+              mode: preserve
+            rag:
+              mode: preserve
+            tool_outputs:
+              mode: preserve
+        type: context_compression
+      priority: 300
+      rules:
+        conditions:
+        - name: difficulty:hard
+          type: complexity
+        - conditions:
+          - conditions:
+            - name: deliberate
+              type: keyword
+            - name: verify
+              type: keyword
+            operator: OR
+          - conditions:
+            - name: no_analysis
+              type: keyword
+            operator: NOT
+          - conditions:
+            - name: quoted_request
+              type: structure
+            operator: NOT
+          operator: AND
+        - conditions:
+          - name: has_answer
+            type: conversation
+          - name: retry
+            type: projection
+          - conditions:
+            - name: quoted_request
+              type: structure
+            operator: NOT
+          operator: AND
+        - conditions:
+          - name: actionable_care
+            type: projection
+          - conditions:
+            - name: needs_fact_check
+              type: fact_check
+            - name: health
+              type: domain
+            - name: law
+              type: domain
+            - name: business
+              type: domain
+            - name: economics
+              type: domain
+            operator: OR
+          operator: AND
+        - conditions:
+          - conditions:
+            - name: answer_error
+              type: keyword
+            - name: answer_revision
+              type: keyword
+            - conditions:
+              - name: no_revision
+                type: keyword
+              operator: NOT
+            operator: AND
+          - conditions:
+            - name: quoted_request
+              type: structure
+            operator: NOT
+          operator: AND
+        - conditions:
+          - name: has_answer
+            type: conversation
+          - name: answer_repair
+            type: keyword
+          - conditions:
+            - name: no_revision
+              type: keyword
+            operator: NOT
+          - conditions:
+            - name: quoted_request
+              type: structure
+            operator: NOT
+          operator: AND
+        - conditions:
+          - name: care_request
+            type: keyword
+          - conditions:
+            - name: health
+              type: domain
+            - name: law
+              type: domain
+            - name: business
+              type: domain
+            - name: economics
+              type: domain
+            operator: OR
+          - conditions:
+            - name: quoted_request
+              type: structure
+            operator: NOT
+          operator: AND
+        on_unknown: no_match
+        operator: OR
+    - adaptations:
+        adaptation:
+          candidate_set: decision
+      algorithm:
+        minimum_candidates: 1
+        multi_factor:
+          expected_output_tokens: 4096
+          latency_metric: ttft
+          latency_percentile: 95
+          objective:
+            priorities:
+            - factor: quality
+              tolerance: 0.12
+            - factor: cost
+              tolerance: 0.05
+            - factor: latency
+              tolerance: 0.1
+            - factor: load
+            strategy: lexicographic
+          on_no_candidates: fail
+          quality:
+            index: sr-bench/local-quality-4k@1.0.0
+            on_missing: exclude
+        type: multi_factor
+      description: Use an efficient model when the task is positively identified as simple.
+      modelRefs:
+      - model: qwen/qwen3.8-flash-next
+        reasoning_effort: xhigh
+        reasoning_mode: enabled
+        use_reasoning: true
+      - model: qwen/qwen3.8-27b
+        reasoning_effort: xhigh
+        reasoning_mode: enabled
+        use_reasoning: true
+      name: simple
+      plugins:
+      - configuration:
+          default_max_tokens: auto
+        type: request_params
+      - configuration:
+          budget:
+            reserve_output_tokens: auto
+            target_tokens: auto
+            trigger_tokens: auto
+          enabled: true
+          failure_mode: fail_open
+          mode: auto
+          scoring:
+            method: bm25
+          targets:
+            current_user:
+              mode: truncate
+            history:
+              min_tokens: 2000
+              mode: extractive
+              target_tokens: 1000
+            memory:
+              mode: preserve
+            rag:
+              mode: preserve
+            tool_outputs:
+              mode: preserve
+        type: context_compression
+      priority: 100
+      rules:
+        conditions:
+        - name: difficulty:easy
+          type: complexity
+        - conditions:
+          - name: has_answer
+            type: conversation
+          operator: NOT
+        - conditions:
+          - name: tool_loop
+            type: conversation
+          operator: NOT
+        - conditions:
+          - name: tool_required
+            type: conversation
+          operator: NOT
+        - conditions:
+          - conditions:
+            - name: actionable_care
+              type: projection
+            - conditions:
+              - name: needs_fact_check
+                type: fact_check
+              - name: health
+                type: domain
+              - name: law
+                type: domain
+              - name: business
+                type: domain
+              - name: economics
+                type: domain
+              operator: OR
+            operator: AND
+          operator: NOT
+        - conditions:
+          - conditions:
+            - name: care_request
+              type: keyword
+            - conditions:
+              - name: health
+                type: domain
+              - name: law
+                type: domain
+              - name: business
+                type: domain
+              - name: economics
+                type: domain
+              operator: OR
+            - conditions:
+              - name: quoted_request
+                type: structure
+              operator: NOT
+            operator: AND
+          operator: NOT
+        on_unknown: no_match
+        operator: AND
+    - adaptations:
+        adaptation:
+          candidate_set: decision
+      algorithm:
+        minimum_candidates: 1
+        multi_factor:
+          expected_output_tokens: 4096
+          latency_metric: ttft
+          latency_percentile: 95
+          objective:
+            priorities:
+            - factor: quality
+              tolerance: 0.1
+            - factor: cost
+            - factor: latency
+              tolerance: 0.1
+            - factor: load
+            strategy: lexicographic
+          on_no_candidates: fail
+          quality:
+            index: sr-bench/local-quality-4k@1.0.0
+            on_missing: exclude
+        type: multi_factor
+      description: Prefer lower inference cost among models within the locally calibrated
+        quality tolerance; factual guard is evaluated first.
+      modelRefs:
+      - model: zai/glm-5.3-flash
+        reasoning_effort: max
+        reasoning_mode: enabled
+        use_reasoning: true
+      - model: qwen/qwen3.8-flash-next
+        reasoning_effort: xhigh
+        reasoning_mode: enabled
+        use_reasoning: true
+      - model: qwen/qwen3.8-27b
+        reasoning_effort: xhigh
+        reasoning_mode: enabled
+        use_reasoning: true
+      name: medium
+      plugins:
+      - configuration:
+          default_max_tokens: auto
+        type: request_params
+      - configuration:
+          budget:
+            reserve_output_tokens: auto
+            target_tokens: auto
+            trigger_tokens: auto
+          enabled: true
+          failure_mode: fail_open
+          mode: auto
+          scoring:
+            method: bm25
+          targets:
+            current_user:
+              mode: truncate
+            history:
+              min_tokens: 2000
+              mode: extractive
+              target_tokens: 1000
+            memory:
+              mode: preserve
+            rag:
+              mode: preserve
+            tool_outputs:
+              mode: preserve
+        type: context_compression
+      priority: 10
+    projections:
+      mappings:
+      - method: threshold_bands
+        name: recovery_band
+        outputs:
+        - gte: 1
+          name: retry
+        source: recovery
+      - method: threshold_bands
+        name: care_margin_direction
+        outputs:
+        - gt: 0
+          name: actionable_care
+        source: care_margin
+      scores:
+      - inputs:
+        - name: wrong_answer
+          type: user_feedback
+          weight: 1
+        - name: repeat
+          type: reask
+          weight: 0.5
+        - name: correction
+          type: keyword
+          weight: 0.5
+        method: weighted_sum
+        name: recovery
+      - inputs:
+        - name: consequential
+          type: embedding
+          value_source: raw
+          weight: 1
+        - name: informational
+          type: embedding
+          value_source: raw
+          weight: -1
+        method: weighted_sum
+        name: care_margin
+    signals:
+      complexity:
+      - description: Separate direct tasks from analysis and synthesis. Length and language
+          do not determine difficulty.
+        easy:
+          candidates:
+          - Copy explicitly supplied information into the requested structure without adding
+            an inference.
+          - Apply one local edit while preserving the meaning and all other stated details.
+          - Retrieve a directly stated fact and give a concise answer without combining separate
+            arguments.
+          - 把明确提供的信息复制到指定结构中，不添加推断。
+          - 只做一处局部修改，保留原意以及所有其他已述细节。
+          - 提取直接陈述的事实，简洁作答，不合并不同论证。
+          - انسخ المعلومات المقدمة صراحةً إلى البنية المطلوبة من دون إضافة استنتاج.
+          - أجر تعديلاً موضعياً واحداً مع الحفاظ على المعنى وجميع التفاصيل الأخرى المذكورة.
+          - استخرج حقيقة مذكورة مباشرةً وقدّم إجابة موجزة من دون دمج حجج منفصلة.
+          - Übertrage ausdrücklich bereitgestellte Informationen in die verlangte Struktur,
+            ohne eine Schlussfolgerung hinzuzufügen.
+          - Nimm eine einzige lokale Änderung vor und erhalte dabei die Bedeutung und alle
+            anderen genannten Einzelheiten.
+          - Entnimm eine direkt genannte Tatsache und antworte knapp, ohne getrennte Argumente
+            zu verbinden.
+          - Copia la información proporcionada explícitamente en la estructura solicitada
+            sin añadir inferencias.
+          - Aplica una sola modificación local conservando el significado y todos los demás
+            detalles indicados.
+          - Extrae un hecho expresado directamente y responde de forma concisa sin combinar
+            argumentos separados.
+          - 明示された情報を指定の構造にそのまま移し、推論を加えないでください。
+          - 意味と他のすべての記載事項を保ちながら、一か所だけ修正してください。
+          - 直接述べられた事実を取り出し、別々の論点を組み合わせずに簡潔に答えてください。
+          - Return the order number explicitly shown on this receipt.
+          - Look up the requested service status using the provided function.
+          - Translate this short message while preserving its meaning.
+          - Summarize the facts stated in this paragraph in one sentence.
+          - 返回这张收据上明确写出的订单编号。
+          - 使用提供的函数查询指定服务的当前状态。
+          - 翻译这条简短消息并保留原意。
+          - 用一句话概括这段文字中陈述的事实。
+          - Devuelve el número de pedido que aparece explícitamente en este recibo.
+          - Consulta el estado del servicio solicitado mediante la función proporcionada.
+          - Traduce este mensaje breve conservando su significado.
+          - Resume en una frase los hechos expuestos en este párrafo.
+          - Gib die auf diesem Beleg ausdrücklich angegebene Bestellnummer zurück.
+          - Frage den Zustand des gewünschten Dienstes mit der bereitgestellten Funktion ab.
+          - Übersetze diese kurze Nachricht und erhalte ihre Bedeutung.
+          - Fasse die in diesem Absatz genannten Fakten in einem Satz zusammen.
+          - أعِد رقم الطلب المذكور صراحةً في هذا الإيصال.
+          - استعلم عن حالة الخدمة المطلوبة باستخدام الدالة المتاحة.
+          - ترجم هذه الرسالة القصيرة مع الحفاظ على معناها.
+          - لخّص الحقائق الواردة في هذه الفقرة في جملة واحدة.
+          - この領収書に明記された注文番号を返してください。
+          - 提供された関数で指定サービスの現在の状態を調べてください。
+          - この短いメッセージを意味を保って翻訳してください。
+          - この段落に書かれた事実を一文に要約してください。
+        easy_below: -0.08
+        hard:
+          candidates:
+          - Find an outcome satisfying interacting constraints and justify why the nearest
+            alternatives fail.
+          - Reconcile conflicting evidence, identify unsupported assumptions, and defend a
+            conclusion under uncertainty.
+          - Design a multi-stage solution whose intermediate choices remain consistent with
+            the final objective.
+          - 找出满足相互影响的约束的结果，并说明最接近的其他方案为何不成立。
+          - 协调冲突的证据，识别没有依据的假设，并在不确定性下论证结论。
+          - 设计一个多阶段方案，使中间选择始终与最终目标一致。
+          - أوجد نتيجة تحقق قيوداً متفاعلة، وبيّن لماذا لا تصلح البدائل الأقرب.
+          - وفّق بين الأدلة المتعارضة، وحدد الافتراضات غير المدعومة، ودافع عن استنتاج في ظل
+            عدم اليقين.
+          - صمّم حلاً متعدد المراحل تبقى خياراته الوسيطة متسقة مع الهدف النهائي.
+          - Finde ein Ergebnis, das zusammenwirkende Bedingungen erfüllt, und begründe, warum
+            die nächstliegenden Alternativen scheitern.
+          - Gleiche widersprüchliche Belege ab, erkenne unbelegte Annahmen und verteidige
+            eine Schlussfolgerung unter Unsicherheit.
+          - Entwirf eine mehrstufige Lösung, deren Zwischenentscheidungen mit dem Endziel
+            vereinbar bleiben.
+          - Encuentra un resultado que satisfaga restricciones interdependientes y justifica
+            por qué fallan las alternativas más cercanas.
+          - Concilia pruebas contradictorias, identifica supuestos sin fundamento y defiende
+            una conclusión ante la incertidumbre.
+          - Diseña una solución de varias etapas cuyas decisiones intermedias sigan siendo
+            coherentes con el objetivo final.
+          - 相互に影響する制約を満たす結果を見つけ、近い代替案が成立しない理由を示してください。
+          - 矛盾する証拠を整理し、裏付けのない仮定を特定して、不確実な状況でも結論を論証してください。
+          - 中間の選択が最終目標と一貫する、多段階の解決策を設計してください。
+          - Design a reliable service architecture, compare alternatives and explain the latency,
+            cost and failure-recovery tradeoffs.
+          - Diagnose the underlying cause of a failure using incomplete logs and conflicting
+            observations, and justify the proposed fix.
+          - Derive an algorithm, prove its correctness and analyze its time and space complexity.
+          - Combine conflicting research findings into a supported conclusion and identify
+            which additional evidence would change it.
+          - 设计可靠的服务架构，比较备选方案，并解释延迟、成本和故障恢复之间的取舍。
+          - 结合不完整日志和相互矛盾的观察诊断故障根因，并论证修复方案。
+          - 推导一个算法，证明其正确性并分析时间和空间复杂度。
+          - 综合相互冲突的研究结果，得出有依据的结论，并指出哪些额外证据会改变该结论。
+          - Diseña una arquitectura de servicio fiable, compara alternativas y explica los
+            compromisos entre latencia, coste y recuperación ante fallos.
+          - Diagnostica la causa de un fallo con registros incompletos y observaciones contradictorias,
+            y justifica la solución propuesta.
+          - Deduce un algoritmo, demuestra su corrección y analiza su complejidad temporal
+            y espacial.
+          - Integra resultados de investigación contradictorios en una conclusión fundamentada
+            e identifica qué pruebas adicionales la cambiarían.
+          - Entwirf eine zuverlässige Dienstarchitektur, vergleiche Alternativen und erläutere
+            die Zielkonflikte zwischen Latenz, Kosten und Wiederherstellung nach Ausfällen.
+          - Diagnostiziere die Ursache eines Fehlers anhand unvollständiger Protokolle und
+            widersprüchlicher Beobachtungen und begründe die vorgeschlagene Lösung.
+          - Leite einen Algorithmus her, beweise seine Korrektheit und analysiere seine Zeit-
+            und Speicherkomplexität.
+          - Führe widersprüchliche Forschungsergebnisse zu einer belegten Schlussfolgerung
+            zusammen und benenne zusätzliche Belege, die sie ändern würden.
+          - صمّم بنية خدمة موثوقة، وقارن البدائل، واشرح المفاضلات بين زمن الاستجابة والتكلفة
+            والتعافي من الأعطال.
+          - شخّص السبب الجذري لعطل باستخدام سجلات غير مكتملة وملاحظات متعارضة، وبرّر الإصلاح
+            المقترح.
+          - اشتق خوارزمية، وأثبت صحتها، وحلّل تعقيدها الزمني والمكاني.
+          - ادمج نتائج أبحاث متعارضة للوصول إلى استنتاج مدعوم، وحدد الأدلة الإضافية التي قد
+            تغيّره.
+          - 信頼性の高いサービス構成を設計し、代替案を比較して、遅延、費用、障害復旧のトレードオフを説明してください。
+          - 不完全なログと矛盾する観測から障害の根本原因を診断し、修正案の根拠を説明してください。
+          - アルゴリズムを導出し、正しさを証明して、時間と空間の計算量を分析してください。
+          - 相反する研究結果を統合して根拠のある結論を示し、どの追加証拠が結論を変えるかを特定してください。
+        hard_above: 0.025
+        name: difficulty
+        prototype_scoring:
+          best_weight: 0.75
+          enabled: false
+          top_m: 2
+      conversation:
+      - feature:
+          source:
+            role: assistant
+            type: message
+          type: exists
+        name: has_answer
+      - feature:
+          source:
+            type: active_tool_loop
+          type: exists
+        name: tool_loop
+      - feature:
+          source:
+            type: tool_choice_required
+          type: exists
+        name: tool_required
+      domains:
+      - description: Medical and health information.
+        mmlu_categories:
+        - health
+        name: health
+      - description: Legal information and interpretation.
+        mmlu_categories:
+        - law
+        name: law
+      - description: Business information and commercial decisions.
+        mmlu_categories:
+        - business
+        name: business
+      - description: Economic information and financial decisions.
+        mmlu_categories:
+        - economics
+        name: economics
+      embeddings:
+      - aggregation_method: max
+        candidates:
+        - Help choose an action when a mistaken choice could cause material harm or an irreversible
+          loss.
+        - Evaluate practical alternatives and recommend a course of action while accounting
+          for consequential uncertainty.
+        - 当错误选择可能造成实质伤害或不可逆损失时，帮助选择行动。
+        - 评估现实可行的方案，并在考虑重大不确定性的基础上建议行动路线。
+        - ساعد في اختيار تصرف عندما قد يؤدي القرار الخاطئ إلى ضرر ملموس أو خسارة لا يمكن تداركها.
+        - قيّم البدائل العملية واقترح مساراً للعمل مع مراعاة عدم اليقين ذي العواقب المهمة.
+        - Hilf bei der Wahl einer Handlung, wenn eine falsche Entscheidung erheblichen Schaden
+          oder einen unumkehrbaren Verlust verursachen könnte.
+        - Bewerte praktische Alternativen und empfehle ein Vorgehen unter Berücksichtigung
+          folgenreicher Unsicherheit.
+        - Ayuda a elegir una acción cuando una decisión equivocada podría causar un daño importante
+          o una pérdida irreversible.
+        - Evalúa alternativas prácticas y recomienda una línea de acción teniendo en cuenta
+          la incertidumbre y sus consecuencias.
+        - 誤った選択が重大な被害や取り返しのつかない損失を招く可能性があるとき、行動の選択を支援してください。
+        - 現実的な選択肢を評価し、重大な結果につながる不確実性を考慮して行動方針を勧めてください。
+        name: consequential
+        prototype_scoring:
+          best_weight: 0.75
+          enabled: false
+          top_m: 2
+        threshold: 0.7
+      - aggregation_method: max
+        candidates:
+        - Explain the meaning of a concept neutrally without advising anyone to act.
+        - Describe background information for learning or quotation, without making a practical
+          recommendation.
+        - 客观解释一个概念的含义，不建议任何人采取行动。
+        - 介绍用于学习或引用的背景信息，不提供现实行动建议。
+        - اشرح معنى مفهوم بشكل محايد من دون أن تنصح أحداً باتخاذ إجراء.
+        - قدّم معلومات خلفية للتعلم أو الاقتباس من دون تقديم توصية عملية.
+        - Erkläre die Bedeutung eines Begriffs neutral, ohne jemandem zu einer Handlung zu
+          raten.
+        - Beschreibe Hintergrundinformationen zum Lernen oder Zitieren, ohne eine praktische
+          Empfehlung zu geben.
+        - Explica el significado de un concepto de forma neutral sin aconsejar a nadie que
+          actúe.
+        - Describe información de contexto para aprender o citar, sin hacer una recomendación
+          práctica.
+        - 誰かに行動を勧めることなく、概念の意味を中立的に説明してください。
+        - 学習や引用のための背景情報を説明し、実際の行動については助言しないでください。
+        name: informational
+        prototype_scoring:
+          best_weight: 0.75
+          enabled: false
+          top_m: 2
+        threshold: 0.7
+      fact_check:
+      - description: The task calls for checking factual claims; this signal does not verify
+          an answer.
+        name: needs_fact_check
+      keywords:
+      - case_sensitive: false
+        keywords:
+        - analyze the tradeoffs
+        - from first principles
+        - root cause
+        - reason step by step
+        - compare the alternatives carefully
+        - 分析取舍
+        - 第一性原理
+        - 根因分析
+        - 逐步推理
+        - analizar las ventajas y desventajas
+        - causa raíz
+        - analyser les compromis
+        - cause racine
+        - トレードオフを分析
+        - 根本原因
+        - kompromisse analysieren
+        - ursache analysieren
+        - analisar as compensações
+        - causa raiz
+        - 트레이드오프를 분석
+        - 근본 원인
+        - حلل المفاضلات
+        - السبب الجذري
+        - समझौतों का विश्लेषण
+        - मूल कारण
+        - проанализируй компромиссы
+        - первопричина
+        method: regex
+        name: deliberate
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - verify the answer
+        - cite sources
+        - fact-check
+        - check the evidence
+        - 核实答案
+        - 引用来源
+        - verificar la respuesta
+        - citer les sources
+        - 答えを検証
+        - quellen zitieren
+        - verificar a resposta
+        - 답변을 검증
+        - تحقق من الإجابة
+        - उत्तर सत्यापित करें
+        - проверь ответ
+        method: regex
+        name: verify
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - do not analyze
+        - don't analyze
+        - without analysis
+        - 不要分析
+        - 无需分析
+        - no analices
+        - sans analyse
+        - 分析しない
+        - nicht analysieren
+        - sem análise
+        - 분석하지 마
+        - دون تحليل
+        - विश्लेषण मत करो
+        - без анализа
+        method: regex
+        name: no_analysis
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - that's wrong
+        - wrong answer
+        - \b(is|was|were) wrong\b
+        - \banswer was incorrect\b
+        - \bcorrect (it|this|the answer)\b
+        - please correct the answer
+        - try again
+        - 回答错了
+        - 请纠正答案
+        - la respuesta es incorrecta
+        - corrige la respuesta
+        - la réponse est incorrecte
+        - corrige la réponse
+        - 回答が間違っています
+        - bitte korrigiere die antwort
+        - a resposta está errada
+        - 답변이 틀렸습니다
+        - الإجابة خاطئة
+        - उत्तर गलत है
+        - ответ неверный
+        method: regex
+        name: correction
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - (answer|response|result|solution|output|calculation|value|recommendation|explanation|assessment).{0,64}(wrong|incorrect|erroneous|error|inconsistent|mistake)
+        - (wrong|incorrect|erroneous|inconsistent).{0,32}(answer|response|result|solution|output|calculation|value|recommendation|explanation|assessment)
+        - (回答|答案|结果|解答|输出|计算|数值).{0,32}(错|不正确|不一致|有误)
+        - (الإجابة|الجواب|النتيجة|الناتج|الحساب|القيمة).{0,40}(خاط|خطأ|غير صحيح|غير متسق)
+        - (antwort|ergebnis|lösung|ausgabe|berechnung|wert).{0,48}(falsch|fehler|nicht korrekt|widersprüch)
+        - (respuesta|resultado|solución|salida|cálculo|valor).{0,48}(incorrect|erróne|error|equivoc|incoherent)
+        - (回答|答え|結果|解答|出力|計算|値).{0,32}(間違|誤り|誤って|不正確|矛盾)
+        - (réponse|résultat|solution|calcul).{0,48}(faux|fausse|incorrect|erron|erreur)
+        - (resposta|resultado|solução|cálculo).{0,48}(errad|incorret|erro|equivoc)
+        - (답변|답|계산|결과).{0,24}(틀|잘못|오류|맞지)
+        - (उत्तर|जवाब|गणना|परिणाम).{0,32}(गलत|त्रुटि|अशुद्ध)
+        - (ответ|решени|расчёт|результат).{0,48}(невер|неправиль|ошиб)
+        - (?:错误|不正确|有误|不一致)的?(?:回答|答案|结果|解答|计算|数值)
+        - (?:إجابتك|اجابتك|جوابك).{0,32}(?:خاط|خطأ|غير صحيح)
+        - (?:falsche|fehlerhafte|inkorrekte)[nrs]?\s+(?:antwort|ergebnis|lösung|berechnung)
+        - (?:誤った|間違った|不正確な)(?:回答|答え|結果|解答|計算)
+        - (?:respuesta|resultado|solución|cálculo).{0,48}defectuos
+        method: regex
+        name: answer_error
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:(?:please|then|and|now)\s+)*(?:(?:I want you to|I would
+          like you to|could you|can you)\s+)?(?:\b(correct|fix|revise|replace|recheck|recalculate|recompute|redo|try
+          again|check again)\b)
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:请|然后|再|并|接着)*(?:(?:把|将).{0,24})?(?:(请|重新|再).{0,16}(检查|核对|计算|推导|修改|纠正|更正|修正)|纠正|更正|修正|重算|重做)
+        - (?:^|[.!?;,:。！？；，、؛؟،\n])\s*(?:(?:من فضلك|ثم|رجاء)\s+)*(?:(صحح|صحّح|صوّب|عدّل|راجع|أعد|اعد).{0,40}(الإجابة|الجواب|النتيجة|الناتج|الحساب|القيمة|حساب|فحص|النظر)|أعد
+          الحساب)
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:(?:bitte|dann|und|jetzt)\s+)*(?:(korrigiere|berichtige|überprüfe|prüfe|berechne|überarbeite|wiederhole))
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:(?:por favor|después|luego|ahora|y)\s+)*(?:(corrige|corrija|rectifica|revisa|recalcula|vuelve
+          a calcular|comprueba de nuevo))
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:まず|次に|そして)?(?:(訂正|修正|直して|やり直|再計算|確認して|見直して|検算))
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:s\x27il vous plaît[, ]*|s\x27il te plaît[, ]*|puis\s+)?(corrigez|corrige|rectifiez|rectifie|recalculez|recalcule)\b
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:por favor[, ]*)?(corrija|corrige|corrigir|retifique|recalcule)\b
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:제발\s*|다시\s*)?(?:(?:답변|답|결과|설명|풀이|내용)(?:을|를)\s*)?(수정|정정|고쳐|바로잡)
+        - (?:^|[.!?;,:।\n])\s*(?:कृपया\s*)?(?:इसे\s*|उत्तर\s*|जवाब\s*)?(सुधारें|सुधारो|सही
+          करें|ठीक करें)
+        - (?:^|[.!?;,:。！？；，、\n])\s*(?:пожалуйста[, ]*)?(исправь|исправьте|скорректируй|скорректируйте|пересчитай|пересчитайте)
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:请|然后|再|并)*(?:替换|更换|换掉|修改)[^。！？\n]{0,32}(?:回答|答案|结果|解答|计算)
+        - (?:^|[.!?;,:。！？；：，、؛؟،\n])\s*(?:(?:من فضلك|ثم|رجاء)\s+)*(?:استبدل|بدّل|بدل|صحح|صحّح|عدّل|عدل)[^.!?؛\n]{0,48}(?:إجابت|اجابت|جواب|النتيجة|الإجابة|الجواب)
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:(?:bitte|dann|und|jetzt)\s+)*(?:ersetze|tausche|ändern|ändere)\b
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:(?:por favor|después|luego|ahora|y)\s+)*(?:sustituye|reemplaza|sustituya|reempláce)\b
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:まず|次に|そして)?(?:その|この|前の|先ほどの)?[^。！？\n]{0,24}(?:回答|答え|結果|解答|計算)(?:を|は)[^。！？\n]{0,24}(?:訂正|修正|置き換え|直して|再計算|やり直)
+        method: regex
+        name: answer_revision
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - (do not|don't|never).{0,24}(correct|fix|revise|replace|recheck|recalculate|redo)
+        - (不要|无需|不必).{0,12}(纠正|更正|修正|修改|重算|重做|核对)
+        - لا.{0,12}(تصحح|تعدّل|تعدل|تراجع|تعد الحساب)
+        - (nicht|keinesfalls).{0,24}(korrigieren|berichtigen|überarbeiten|ändern)|korrigiere.{0,24}nicht
+        - no.{0,12}(corrijas|corrija|rectifiques|revises|recalcules)
+        - (訂正|修正|変更|再計算).{0,8}(しないで|不要)|直さないで
+        - 不要.{0,12}(重新检查|重新计算|检查|计算)|别.{0,12}(纠正|修正|重算)
+        - لا.{0,12}(تصحّح|تراجع|تعد حساب|تعد فحص)
+        - (prüfe|überprüfe|berechne|überarbeite|berichtige).{0,24}nicht
+        - no.{0,12}(corrijas|rectifiques|revises|recalcules|vuelvas a calcular)
+        - (やり直さない|見直さない|確認しない|再計算しない)
+        - ne.{0,24}(corrige|rectifie|recalcule).{0,16}pas
+        - não.{0,16}(corrija|corrige|corrigir|retifique|recalcule)
+        - (수정|정정|고치|고쳐|바로잡).{0,12}(하지 마|지 마|말아|필요 없)
+        - (सुधार|सही|ठीक).{0,12}(न करें|मत करो|मत करें)|मत.{0,12}(सुधार|करो)
+        - (?:^|[\s.!?;,:])не\s+(исправ|корректир|пересчит)
+        - (?:不要|无需|不必|别).{0,12}(?:替换|更换|换掉|修改|纠正|重算|重新计算)
+        - لا.{0,12}(?:تستبدل|تبدّل|تبدل)
+        - (?:ersetze|tausche|ändere).{0,32}nicht
+        - \bno\s+(?:sustituyas|reemplaces|sustituya|reemplaza)\b
+        - (?:置き換え|やり直|再計算|訂正|修正).{0,8}(?:ないで|しない|不要)|直さないで
+        method: regex
+        name: no_revision
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:(?:please|then|now|and)\s+)*(?:(?:can|could) you\s+)?(?:(?:correct|fix)\s+(?:(?:the|your|previous|last)\s+){0,3}(?:answer|response|result|solution|calculation|recommendation|explanation|assessment|it|this)\b|(?:recalculate|recompute)\b)
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:请|然后|再|并)*(?:(?:把|将).{0,24})?(?:(?:纠正|更正|修正)[^。！？\n]{0,16}(?:回答|答案|结果|解答|计算)|重算|重新计算|重新核算)
+        - (?:^|[.!?;,:。！？；：，、؛؟،\n])\s*(?:(?:من فضلك|ثم|رجاء)\s+)*(?:(?:صحح|صحّح|صوّب)[^.!?؛\n]{0,24}(?:الإجابة|الجواب|النتيجة|الحساب|إجابتك)|أعد
+          الحساب|اعد الحساب)
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:(?:bitte|dann|und|jetzt)\s+)*(?:(?:korrigiere|berichtige)\s+(?:(?:die|das|deine|dein|vorherige|vorheriges)\s+)*(?:antwort|ergebnis|lösung|berechnung)\b|berechne
+          neu\b)
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:(?:por favor|después|luego|ahora|y)\s+)*(?:(?:corrige|corrija|rectifica)\s+(?:(?:la|el|tu|su)\s+)?(?:respuesta|resultado|solución|cálculo)\b|recalcula\b)
+        - (?:^|[.!?;,:。！？；：，、\n])\s*(?:まず|次に|そして)?(?:その|この|前の|先ほどの)?(?:回答|答え|結果|解答|計算)(?:を|は)?[^。！？\n]{0,24}(?:訂正して|修正して|直して|再計算して|やり直して)(?:ください)?
+        method: regex
+        name: answer_repair
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - \b(?:what should I (?:do|take)|should I (?:take|stop|change|sign|pay|invest)|is
+          it safe for me to|can I safely)\b
+        - (?:我(?:该|应该|应当|能否|可不可以|能不能).{0,16}(?:做|服用|停药|继续|签署|支付|投资)|我该怎么办)
+        - (?:ماذا (?:يجب|ينبغي) أن أفعل|هل (?:يجب|ينبغي|يمكنني).{0,32}(?:أتناول|أوقف|أستمر|أوقع|أدفع|أستثمر))
+        - \b(?:was soll ich (?:tun|nehmen)|soll(?:te)? ich [^.!?;:\n]{0,48}(?:einnehmen|absetzen|nehmen|unterschreiben|zahlen|investieren)|ist
+          es für mich sicher)\b
+        - \b(?:qué (?:debo|debería) hacer|debo (?:tomar|dejar|continuar|firmar|pagar|invertir)|es
+          seguro para mí)\b
+        - (?:私は.{0,24}(?:飲む|服用|やめる|続ける|署名|支払|投資).{0,8}(?:べき|よい|良い)|どうすれば(?:よい|いい|良い)|どうするべき)
+        method: regex
+        name: care_request
+        operator: OR
+      reasks:
+      - lookback_turns: 1
+        name: repeat
+        threshold: 0.8
+      structure:
+      - description: Vocabulary mentioned for explanation or translation is not an execution
+          request.
+        feature:
+          source:
+            pattern: (?i)(?:(\b(define|translate|explain)\b.{0,48}\b(phrase|term|expression)\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(defina|traduza|explique).{0,48}(frase|expressão|ter(?:mo))|(정의|번역|설명).{0,16}(문구|표현|용어|“|「)|(عرّف|ترجم|اشرح).{0,32}(العبارة|التعبير|المصطلح)|(परिभाषित|अनुवाद|समझाइए).{0,32}(वाक्यांश|अभिव्यक्ति|शब्द)|(определи|переведи|объясни).{0,48}(фразу|выражение|термин)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「)|(["“「][^"”」]{1,120}["”」]).{0,80}(define|translate|explain|설명|정의|번역|اشرح|عرّف|ترجم|समझाइए|परिभाषित|अनुवाद|объясни|определи|переведи|解释|定义|翻译|説明|翻訳))|(?:^|[.!?;。！？；\n])\s*(?:please\s+)?(?:translate|quote)\b[^.!?;:\n]{0,64}[:：]|(?:^|[.!?;。！？；\n])\s*(?:请)?(?:翻译|引用)[^。！？；：\n]{0,32}[:：]|(?:^|[.!?;。！？；\n])\s*(?:(?:من
+              فضلك|رجاء)\s+)?(?:ترجم|اقتبس)[^.!?؛:\n]{0,48}[:：]|(?:^|[.!?;。！？；\n])\s*(?:bitte\s+)?(?:übersetze|zitiere)\b[^.!?;:\n]{0,64}[:：]|(?:^|[.!?;。！？；\n])\s*(?:por
+              favor\s+)?(?:traduce|cita)\b[^.!?;:\n]{0,64}[:：]|(?:^|[.!?;。！？；\n])\s*(?:以下を|次を)?(?:翻訳|引用)(?:して(?:ください)?)?[:：])
+            type: regex
+          type: exists
+        name: quoted_request
+      user_feedbacks:
+      - description: The user rejects the correctness of an earlier answer.
+        name: wrong_answer
+    strategy: priority
+global:
+  router:
+    learning:
+      adaptation:
+        enabled: false
+      enabled: true
+      protection:
+        enabled: true
+        scope: conversation

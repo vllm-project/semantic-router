@@ -80,6 +80,24 @@ test('live inventory, frozen dataset and persisted CLI run are visible', async (
   page,
 }, testInfo) => {
   const blocked = await openAcceptance(page)
+  const progressBars = page
+    .getByRole('region', { name: 'Evaluation runs', exact: true })
+    .getByRole('progressbar')
+  expect(await progressBars.count()).toBeGreaterThan(0)
+  expect(
+    await progressBars.evaluateAll((elements) =>
+      elements.every((element) => {
+        const bar = element.getBoundingClientRect()
+        const cell = element.closest('td')!.getBoundingClientRect()
+        return (
+          bar.left >= cell.left &&
+          bar.right <= cell.right + 0.5 &&
+          bar.top >= cell.top &&
+          bar.bottom <= cell.bottom + 0.5
+        )
+      }),
+    ),
+  ).toBe(true)
   await screenshot(page, testInfo, 'live-run-management.png')
   await page.getByRole('button', { name: 'Datasets', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Prepared datasets', exact: true })).toBeVisible()

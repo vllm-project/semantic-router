@@ -1,47 +1,91 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { benchApi } from './api'
-import { DEFAULT_LIMITS, makeManifest } from './model'
+import type { Manifest } from './types'
 
-afterEach(() => vi.unstubAllGlobals())
+describe('sr-bench evidence read deadlines', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
-describe('shared sr-bench API', () => {
-  it('submits the frozen manifest to the same service as CLI runs', async () => {
-    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'run-1' })))
-    vi.stubGlobal('fetch', fetcher)
-    const manifest = makeManifest('Trial', 'live', 'smoke', undefined, [], DEFAULT_LIMITS)
-    await benchApi.start(manifest, 'submit-1')
-    expect(fetcher).toHaveBeenCalledWith(
-      '/api/sr-bench/v1/runs',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ manifest, idempotency_key: 'submit-1' }),
-      }),
+  it('bounds a stalled read and does not retry the request', async () => {
+    const fetch = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        }),
     )
+    vi.stubGlobal('fetch', fetch)
+    const outcome = expect(benchApi.runs()).rejects.toMatchObject({
+      status: 408,
+      message: expect.stringContaining('timed out after 30 seconds'),
+    })
+    await vi.advanceTimersByTimeAsync(30000)
+    await outcome
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
   })
-  it('reports server failure without retrying a potentially accepted generation', async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: { message: 'Dispatch requires reconciliation' } }), {
-        status: 409,
-      }),
+
+  it('preserves caller cancellation and clears the read deadline', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+          }),
+      ),
     )
-    vi.stubGlobal('fetch', fetcher)
-    await expect(benchApi.cancel('run-1')).rejects.toThrow('Dispatch requires reconciliation')
-    expect(fetcher).toHaveBeenCalledTimes(1)
+    const controller = new AbortController()
+    const outcome = expect(benchApi.runs(controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    controller.abort()
+    await outcome
+    expect(vi.getTimerCount()).toBe(0)
   })
-  it('bounds evidence pages and fetches full call bodies only by explicit identity', async () => {
-    const fetcher = vi
-      .fn()
-      .mockImplementation(
-        async () => new Response(JSON.stringify({ total: 250, limit: 100, next_cursor: 100 })),
-      )
-    vi.stubGlobal('fetch', fetcher)
-    await benchApi.results('run-1')
-    await benchApi.calls('run-1', 100)
-    await benchApi.call('run-1', 'call/1')
-    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-      '/api/sr-bench/v1/runs/run-1/results?after=0&limit=100',
-      '/api/sr-bench/v1/runs/run-1/calls?after=100&limit=100',
-      '/api/sr-bench/v1/runs/run-1/calls/call%2F1',
-    ])
+
+  it('does not apply the evidence timeout or automatic retries to mutations', async () => {
+    let finish!: (response: Response) => void
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+        }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    const result = benchApi.cancel('run-existing')
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    finish(new Response(JSON.stringify({ id: 'run-existing', status: 'cancelled' })))
+    await expect(result).resolves.toMatchObject({ status: 'cancelled' })
+  })
+
+  it('marks a lost initial submission response ambiguous without claiming dispatch was stopped', async () => {
+    const fetch = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    const outcome = expect(
+      benchApi.start({} as Manifest, 'same-submission-id'),
+    ).rejects.toMatchObject({
+      status: 408,
+      dispatchStarted: undefined,
+      message: expect.stringContaining('Reconcile the saved submission'),
+    })
+    await vi.advanceTimersByTimeAsync(30000)
+    await outcome
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

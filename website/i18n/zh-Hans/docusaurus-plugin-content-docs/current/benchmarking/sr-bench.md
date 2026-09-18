@@ -68,7 +68,7 @@ vllm-sr benchmark --store ./data/sr-bench target register --file targets.json
 
 目标字段包括 `id`、`kind: single|mom`、`base_url`、`model` 和可选的 `api_key_env`。计价运行需按实际模型身份提供四类 USD/百万 token 价格：`input`、`cached_input`、`cache_write`、`output`。MoM 还需固定实际配置 `config_hash`，预览使用 `preview_url`，计价时声明 `max_inference_calls`。当前直接 MoM 适配器要求完整的一次推理计量；不能用最终模型的价格代替未计量的组合调用。
 
-HLE/SimpleQA 需固定裁判和 `grader_version: sr-bench-reference-judge-v1`；τ³ 需固定模拟器和 `release: 1.0.1`。运维在 store 的 `benchmark-options.json` 配置这些依赖。外部运行环境使用 `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON` 和对应 `_ROOT`；源码和沙箱镜像必须固定版本。预检会在付费派发前报告缺失依赖。
+HLE/SimpleQA 需固定裁判和 `grader_version: sr-bench-reference-judge-v1`；τ³ 需固定模拟器和 `release: 1.0.1`。运维在 store 的 `benchmark-options.json` 配置这些依赖。外部适配器默认发现 `benchmark setup` 安装的固定环境；可用 `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON` 和对应 `_ROOT` 覆盖其位置。源码和沙箱镜像仍须固定版本。预检会在付费派发前报告缺失依赖。
 
 ## 冻结并运行
 

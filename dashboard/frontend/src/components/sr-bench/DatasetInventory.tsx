@@ -6,11 +6,13 @@ import styles from './SrBench.module.css'
 export default function DatasetInventory({
   datasets,
   runs,
+  runsLoaded = true,
   canRun,
   onUse,
 }: {
   datasets: Dataset[]
   runs: Run[]
+  runsLoaded?: boolean
   canRun: boolean
   onUse: (dataset: Dataset) => void
 }) {
@@ -80,7 +82,9 @@ export default function DatasetInventory({
                   'Benchmark scope is recorded in the dataset manifest.'}
               </p>
               <p className={styles.muted}>
-                {number(usedBy.length)} evaluation runs use this case hash
+                {runsLoaded
+                  ? `${number(usedBy.length)} evaluation runs use this case hash`
+                  : 'Associated runs are not yet available.'}
               </p>
               <details>
                 <summary>Dataset identity and provenance</summary>

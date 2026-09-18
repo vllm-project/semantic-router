@@ -113,6 +113,7 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
             CLITestBase.ROUTER_CONTAINER_NAME,
             CLITestBase.ENVOY_CONTAINER_NAME,
             CLITestBase.DASHBOARD_CONTAINER_NAME,
+            CLITestBase.SR_BENCH_CONTAINER_NAME,
             CLITestBase.PROBE_CONTAINER_NAME,
             *CLITestBase.AUXILIARY_CONTAINER_NAMES,
         ):
@@ -146,7 +147,47 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
             IsolatedCLITestBase.PROBE_CONTAINER_NAME,
             "isolated-test-vllm-sr-cli-test-probe",
         )
+        self.assertEqual(
+            IsolatedCLITestBase.SR_BENCH_CONTAINER_NAME,
+            "isolated-test-vllm-sr-sr-bench-container",
+        )
         self.assertEqual(IsolatedCLITestBase.runtime_stack.port_offset, 4200)
+
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "true"})
+    def test_teardown_stops_managed_worker_before_removing_its_store(self):
+        self.base.original_dir = os.getcwd()
+        events = []
+        with (
+            mock.patch.object(
+                self.base,
+                "_cleanup_container",
+                side_effect=lambda: events.append("stop"),
+            ),
+            mock.patch.object(
+                self.base, "_explicit_container_status", return_value="not found"
+            ),
+            mock.patch.object(
+                cli_test_base.shutil,
+                "rmtree",
+                side_effect=lambda _path: events.append("remove-store"),
+            ),
+        ):
+            self.base.tearDown()
+        self.assertEqual(events, ["stop", "remove-store"])
+
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "true"})
+    def test_teardown_preserves_evidence_when_worker_cleanup_fails(self):
+        self.base.original_dir = os.getcwd()
+        with (
+            mock.patch.object(self.base, "_cleanup_container"),
+            mock.patch.object(
+                self.base, "_explicit_container_status", return_value="running"
+            ),
+            mock.patch.object(cli_test_base.shutil, "rmtree") as remove,
+            self.assertRaisesRegex(AssertionError, "preserving its evidence"),
+        ):
+            self.base.tearDown()
+        remove.assert_not_called()
 
     def test_test_only_container_names_follow_the_runtime_stack(self):
         base_name = "vllm-sr-cli-test-control-redis"

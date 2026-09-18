@@ -1,14 +1,21 @@
-import { useMemo, useState } from 'react'
-import { benchApi } from './api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { benchApi, SrBenchRequestError } from './api'
 import { DEFAULT_LIMITS, makeManifest, number, validateManifest } from './model'
 import type { Catalog, Dataset, Manifest, Plan, Run, Target } from './types'
 import styles from './SrBench.module.css'
+import {
+  clearSubmission,
+  readSubmission,
+  saveSubmission,
+  type PendingSubmission,
+} from './submission'
 
 interface Props {
   catalog: Catalog
   datasets: Dataset[]
   targets: Target[]
   canRun: boolean
+  actorID: string
   initialModel?: string
   initialDataset?: string
   onStarted: (run: Run) => void
@@ -19,10 +26,13 @@ export default function RunComposer({
   datasets,
   targets: registeredTargets,
   canRun,
+  actorID,
   initialModel,
   initialDataset,
   onStarted,
 }: Props) {
+  const [saved] = useState(() => readSubmission(actorID))
+  const [submission, setSubmission] = useState<PendingSubmission | null>(saved.request)
   const [name, setName] = useState('Balance comparison')
   const [mode, setMode] = useState<Manifest['mode']>('live')
   const [costPolicy, setCostPolicy] = useState<'require_priced' | 'capability_only'>(
@@ -46,6 +56,15 @@ export default function RunComposer({
   } | null>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const mounted = useRef(false)
+  const requestSequence = useRef(0)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      requestSequence.current += 1
+    }
+  }, [])
   const profiles = catalog.profiles.map((item) => item.id)
   const dataset = datasets.find((item) => item.id === datasetID)
   const formManifest = useMemo(
@@ -59,6 +78,9 @@ export default function RunComposer({
   const planCurrent = plan?.fingerprint === fingerprint
 
   async function reviewPlan() {
+    if (pending || submission || saved.error) return
+    const sequence = ++requestSequence.current
+    const current = () => mounted.current && requestSequence.current === sequence
     setError('')
     setPending(true)
     setPlan(null)
@@ -67,6 +89,7 @@ export default function RunComposer({
       const issue = validateManifest(manifest)
       if (issue) throw new Error(issue)
       const evidence = await benchApi.plan(manifest)
+      if (!current()) return
       setPlan({
         manifest: evidence.manifest,
         evidence,
@@ -74,28 +97,98 @@ export default function RunComposer({
         idempotencyKey: crypto.randomUUID(),
       })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not prepare this run.')
+      if (current())
+        setError(cause instanceof Error ? cause.message : 'Could not prepare this run.')
     } finally {
-      setPending(false)
+      if (current()) setPending(false)
     }
   }
 
   async function startRun() {
-    if (!plan || !planCurrent || !canRun) return
+    if (pending || !canRun || saved.error || (!submission && (!plan || !planCurrent))) return
+    const sequence = ++requestSequence.current
+    const current = () => mounted.current && requestSequence.current === sequence
+    const body = submission ?? {
+      version: 1 as const,
+      actorID,
+      manifest: plan!.manifest,
+      idempotencyKey: plan!.idempotencyKey,
+    }
     setError('')
     setPending(true)
     try {
-      onStarted(await benchApi.start(plan.manifest, plan.idempotencyKey))
+      saveSubmission(body)
+      setSubmission(body)
+      const run = await benchApi.start(body.manifest, body.idempotencyKey)
+      if (!current()) return
+      if (!clearSubmission(body))
+        throw new Error(
+          'The saved submission changed while this response was pending. Reload to reconcile the current request.',
+        )
+      setSubmission(null)
+      onStarted(run)
     } catch (cause) {
+      if (!current()) return
+      if (cause instanceof SrBenchRequestError && cause.dispatchStarted === false) {
+        try {
+          if (!clearSubmission(body)) throw new Error('The saved submission identity changed')
+          setSubmission(null)
+          setPlan(null)
+        } catch {
+          setError(
+            'The service confirmed no dispatch, but this tab could not clear the saved submission. Reconcile browser storage before creating another plan.',
+          )
+          return
+        }
+      }
       setError(
         cause instanceof Error
           ? cause.message
           : 'Could not start this run. Check the run list before submitting again.',
       )
     } finally {
-      setPending(false)
+      if (current()) setPending(false)
     }
   }
+
+  if (submission || saved.error)
+    return (
+      <section className={styles.panel} aria-labelledby="new-run-title">
+        <h2 id="new-run-title">Create evaluation</h2>
+        {saved.error ? (
+          <p className={styles.error} role="alert">
+            {saved.error}
+          </p>
+        ) : (
+          submission && (
+            <div className={styles.notice}>
+              <h3>Evaluation submission needs reconciliation</h3>
+              <p>
+                The frozen request is saved for this account in this tab. No new plan can replace it
+                until its outcome is known. Checking again uses the same submission ID and manifest;
+                it may finish the original submission if the service never received it.
+              </p>
+              <p>
+                {submission.manifest.name} ·{' '}
+                {submission.manifest.targets.map((target) => target.id).join(', ')}
+              </p>
+              <button disabled={!canRun || pending} onClick={() => void startRun()}>
+                {pending ? 'Reconciling…' : 'Check or submit same evaluation'}
+              </button>
+              <details className={styles.details}>
+                <summary>Frozen submission</summary>
+                <pre>{JSON.stringify(submission.manifest, null, 2)}</pre>
+              </details>
+            </div>
+          )
+        )}
+        {error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
+      </section>
+    )
 
   return (
     <section className={styles.panel} aria-labelledby="new-run-title">

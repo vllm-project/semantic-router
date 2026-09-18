@@ -270,19 +270,25 @@ The PR includes implementation, this proposal, user documentation, updated skill
 and sanitized acceptance evidence. Private infrastructure identifiers and raw
 gated benchmark answers do not belong in the PR.
 
+The [September 18 development study](../../../../website/docs/benchmarking/sr-bench-development-study-20260918.md)
+records the completed three-single-model baseline and three Balance revisions
+on 25 reused development cases, with 170 retained calls and qualified offline
+accounting corrections. Its simulated-price savings and small-sample scores do
+not establish holdout quality, all-adapter acceptance, or production savings.
+
 - [ ] Replace old CLI/API/UI evaluation surfaces and stale active documentation.
 - [ ] Install from a built wheel and discover the same catalog from CLI and UI.
 - [ ] Prepare reproducible datasets; verify disjoint splits and source digests.
 - [ ] Verify deadline, continuous-stream repetition, cancellation, crash/unknown
   dispatch, budget stop and incomplete accounting with deterministic fault tests.
-- [ ] Run actual single models and MoM through the CLI using fixed task IDs;
+- [x] Run actual single models and MoM through the CLI using fixed task IDs;
   verify saved responses, final-channel scoring, identities and metric arithmetic.
-- [ ] Measure the current Balance recipe and every constituent single model on
+- [x] Measure the current Balance recipe and every constituent single model on
   the same frozen development cases before tuning.
-- [ ] Complete optimization loop 1: inspect baseline errors and cost, formulate
+- [x] Complete optimization loop 1: inspect baseline errors and cost, formulate
   a routing change, validate/plan/apply, confirm the active revision, then preview
   and measure the first optimized Balance recipe.
-- [ ] Complete optimization loop 2: inspect the first iteration, apply and
+- [x] Complete optimization loop 2: inspect the first iteration, apply and
   preview a second revision, then measure it on the same development cases.
   Compare all three Balance revisions with the complete single-model baseline.
 - [ ] Evaluate the frozen final recipe and the chosen baseline on a disjoint

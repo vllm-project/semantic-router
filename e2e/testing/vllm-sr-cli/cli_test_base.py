@@ -73,6 +73,7 @@ class CLITestBase(unittest.TestCase):
     ROUTER_CONTAINER_NAME = "vllm-sr-router-container"
     ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
     DASHBOARD_CONTAINER_NAME = "vllm-sr-dashboard-container"
+    SR_BENCH_CONTAINER_NAME = "vllm-sr-sr-bench-container"
     REDIS_CONTAINER_NAME = "vllm-sr-redis"
     POSTGRES_CONTAINER_NAME = "vllm-sr-postgres"
     MILVUS_CONTAINER_NAME = "vllm-sr-milvus"
@@ -108,6 +109,7 @@ class CLITestBase(unittest.TestCase):
         cls.ROUTER_CONTAINER_NAME = cls.runtime_stack.router_container_name
         cls.ENVOY_CONTAINER_NAME = cls.runtime_stack.envoy_container_name
         cls.DASHBOARD_CONTAINER_NAME = cls.runtime_stack.dashboard_container_name
+        cls.SR_BENCH_CONTAINER_NAME = cls.runtime_stack.sr_bench_container_name
         cls.REDIS_CONTAINER_NAME = cls.runtime_stack.redis_container_name
         cls.POSTGRES_CONTAINER_NAME = cls.runtime_stack.postgres_container_name
         cls.MILVUS_CONTAINER_NAME = cls.runtime_stack.milvus_container_name
@@ -149,6 +151,15 @@ class CLITestBase(unittest.TestCase):
     def tearDown(self):
         """Clean up after each test."""
         os.chdir(self.original_dir)
+        if os.getenv("RUN_INTEGRATION_TESTS", "").lower() == "true":
+            # The worker owns an open journal in this test's temporary store.
+            # Stop it before deleting the store or starting another workspace.
+            self._cleanup_container()
+            self.assertEqual(
+                self._explicit_container_status(self.SR_BENCH_CONTAINER_NAME),
+                "not found",
+                "Managed worker cleanup failed; preserving its evidence directory",
+            )
         # Clean up temp directory
         try:
             shutil.rmtree(self.test_dir)
@@ -219,6 +230,7 @@ class CLITestBase(unittest.TestCase):
             cls.ROUTER_CONTAINER_NAME,
             cls.ENVOY_CONTAINER_NAME,
             cls.DASHBOARD_CONTAINER_NAME,
+            cls.SR_BENCH_CONTAINER_NAME,
             cls.PROBE_CONTAINER_NAME,
             *cls.AUXILIARY_CONTAINER_NAMES,
         )

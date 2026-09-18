@@ -99,11 +99,13 @@ function Distribution({ title, entries }: { title: string; entries: Array<[strin
 
 export default function RunDetails({
   id,
+  actorID,
   canRun,
   onChanged,
   onRecovered,
 }: {
   id: string
+  actorID: string
   canRun: boolean
   onChanged: () => void
   onRecovered: (run: Run) => void
@@ -554,7 +556,13 @@ export default function RunDetails({
             <pre>{JSON.stringify(report?.provenance ?? {}, null, 2)}</pre>
           </details>
           {run.manifest.mode === 'live' && !active(run.status) && run.status !== 'completed' && (
-            <RunRecovery run={run} canRun={canRun} onRecovered={onRecovered} />
+            <RunRecovery
+              key={`${actorID}:${run.id}`}
+              run={run}
+              actorID={actorID}
+              canRun={canRun}
+              onRecovered={onRecovered}
+            />
           )}
           {run.status === 'completed' && run.manifest.mode === 'live' && (
             <RunArtifacts id={id} canRun={canRun} />

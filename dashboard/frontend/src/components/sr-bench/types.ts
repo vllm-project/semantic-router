@@ -151,7 +151,11 @@ export interface Report {
   version: string
   run_id: string
   status: string
-  summary: { targets: TargetMetrics[]; wall_time_s?: number | null }
+  summary: {
+    targets: TargetMetrics[]
+    wall_time_s?: number | null
+    total_spend_usd?: number | null
+  }
   benchmarks: Array<Record<string, unknown>>
   limitations: string[]
   provenance: Record<string, unknown> & {

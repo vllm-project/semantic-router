@@ -128,10 +128,11 @@ select registered targets but cannot edit their destinations or credentials.
 Judged benchmarks require a fixed single-model judge and
 `grader_version: sr-bench-reference-judge-v1`. τ³ also needs a fixed simulator
 and release `1.0.1`. Operators supply these in `benchmark-options.json` in the
-store. External adapters require `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON`
-and corresponding `_ROOT` variables, exact source revisions and, for code or
-terminal tasks, digest-pinned sandbox images. Preflight reports missing
-prerequisites before dispatch.
+store. External adapters discover the pinned environments installed by
+`benchmark setup`. Set `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON` and the
+corresponding `_ROOT` variables to override those locations. Exact source
+revisions and, for code or terminal tasks, digest-pinned sandbox images remain
+required. Preflight reports missing prerequisites before dispatch.
 
 ## Plan and run
 

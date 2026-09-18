@@ -199,6 +199,232 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
   )
 })
 
+test('reconciles a lost initial submission after reload with the same identity and account', async ({
+  page,
+}) => {
+  await mockBench(page)
+  let actorID = 'user-admin-1'
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({
+      json: {
+        user: {
+          id: actorID,
+          email: 'test@example.com',
+          name: 'Test operator',
+          role: 'admin',
+          permissions: ['evaluation.read', 'evaluation.write', 'evaluation.run'],
+        },
+      },
+    }),
+  )
+  const submissions: Record<string, unknown>[] = []
+  await page.route('**/api/sr-bench/v1/runs', async (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill({ json: { runs: [run] } })
+    submissions.push(route.request().postDataJSON())
+    if (submissions.length === 1) return route.abort('failed')
+    await route.fulfill({ json: run })
+  })
+  await page.goto('/evaluation?view=new')
+  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await page.getByLabel('Add configured target').selectOption('single')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Evaluation submission needs reconciliation' }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toHaveCount(0)
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }),
+  ).toBeVisible()
+  expect(submissions).toHaveLength(1)
+  actorID = 'another-user'
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }),
+  ).toHaveCount(0)
+  actorID = 'user-admin-1'
+  await page.reload()
+  await page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }).click()
+  await expect(page).toHaveURL(/run=run-1/)
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toEqual(submissions[0])
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-submission:user-admin-1')),
+  ).toBeNull()
+})
+
+test('ignores an old response after remount without clearing a newer submission', async ({
+  page,
+}) => {
+  await mockBench(page)
+  const submissions: Array<{ idempotency_key: string; manifest: typeof manifest }> = []
+  let finishOld!: () => void
+  const oldPending = new Promise<void>((resolve) => {
+    finishOld = resolve
+  })
+  let finishNew!: () => void
+  const newPending = new Promise<void>((resolve) => {
+    finishNew = resolve
+  })
+  await page.route('**/api/sr-bench/v1/runs', async (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill({ json: { runs: [] } })
+    submissions.push(route.request().postDataJSON())
+    const index = submissions.length
+    if (index === 1) await oldPending
+    if (index === 3) await newPending
+    await route.fulfill({ json: { ...run, id: index === 3 ? 'run-2' : 'run-1' } })
+  })
+  await page.goto('/evaluation?view=new')
+  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await page.getByLabel('Add configured target').selectOption('single')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  await expect.poll(() => submissions.length).toBe(1)
+  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
+  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
+  await page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }).click()
+  await expect(page).toHaveURL(/run=run-1/)
+  expect(submissions[1]).toEqual(submissions[0])
+  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
+  await page.getByLabel('Run name', { exact: true }).fill('Newer submission')
+  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await page.getByLabel('Add configured target').selectOption('single')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  await expect.poll(() => submissions.length).toBe(3)
+  const oldResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON().idempotency_key === submissions[0].idempotency_key,
+  )
+  finishOld()
+  await (await oldResponse).finished()
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+  await expect(page).toHaveURL(/view=new$/)
+  const saved = await page.evaluate(() =>
+    JSON.parse(sessionStorage.getItem('sr-bench-submission:user-admin-1')!),
+  )
+  expect(saved.idempotencyKey).toBe(submissions[2].idempotency_key)
+  finishNew()
+  await expect(page).toHaveURL(/run=run-2/)
+})
+
+test('does not navigate a new account from a prior account delayed submission', async ({
+  page,
+}) => {
+  await mockBench(page)
+  let finishOld!: () => void
+  const oldPending = new Promise<void>((resolve) => {
+    finishOld = resolve
+  })
+  let submitted = false
+  await page.route('**/api/sr-bench/v1/runs', async (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill({ json: { runs: [] } })
+    submitted = true
+    await oldPending
+    await route.fulfill({ json: run })
+  })
+  await page.route('**/api/auth/logout', (route) => route.fulfill({ json: {} }))
+  await page.route('**/api/auth/login', (route) =>
+    route.fulfill({
+      json: {
+        token: 'second-test-session',
+        user: {
+          id: 'second-account',
+          name: 'Second account',
+          email: 'second@example.com',
+          role: 'admin',
+        },
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=new')
+  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await page.getByLabel('Add configured target').selectOption('single')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  await expect.poll(() => submitted).toBe(true)
+  await page.getByRole('button', { name: 'Open account menu for Admin User', exact: true }).click()
+  await page.getByRole('button', { name: 'Logout', exact: true }).click()
+  await expect(page).toHaveURL(/\/login/)
+  await page.getByLabel('Email', { exact: true }).fill('second@example.com')
+  await page.getByLabel('Password', { exact: true }).fill('fixture-password')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open account menu for Second account', exact: true }),
+  ).toBeVisible()
+  await page.evaluate(() => {
+    history.pushState({}, '', '/evaluation?view=new')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeVisible()
+  const oldResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/runs'),
+  )
+  finishOld()
+  await (await oldResponse).finished()
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+  await expect(page).toHaveURL(/view=new$/)
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-submission:user-admin-1')),
+  ).not.toBeNull()
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-submission:second-account')),
+  ).toBeNull()
+})
+
+test('fails closed when an initial submission cannot be preserved in session storage', async ({
+  page,
+}) => {
+  const requests = await mockBench(page)
+  await page.addInitScript(() => {
+    const original = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('sr-bench-submission:'))
+        throw new DOMException('Storage full', 'QuotaExceededError')
+      original.call(this, key, value)
+    }
+  })
+  await page.goto('/evaluation?view=new')
+  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await page.getByLabel('Add configured target').selectOption('single')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('No request was sent')
+  expect(requests).toHaveLength(1)
+})
+
+test('clears an initial submission only after the service proves no dispatch occurred', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs', async (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill({ json: { runs: [] } })
+    await route.fulfill({
+      status: 400,
+      json: { error: 'Frozen plan rejected before dispatch', dispatch_started: false },
+    })
+  })
+  await page.goto('/evaluation?view=new')
+  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await page.getByLabel('Add configured target').selectOption('single')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Frozen plan rejected before dispatch')
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-submission:user-admin-1')),
+  ).toBeNull()
+})
+
 test('shows learning preview selection and snapshot evidence without a capability score', async ({
   page,
 }) => {
@@ -631,6 +857,28 @@ test('manages long-lived runs and uses a dataset from its frozen inventory', asy
   await mockBench(page)
   await page.goto('/evaluation')
   await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
+  const bars = page
+    .getByRole('region', { name: 'Evaluation runs', exact: true })
+    .getByRole('progressbar')
+  await expect(bars).toHaveCount(2)
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    expect(
+      await bars.evaluateAll((elements) =>
+        elements.every((element) => {
+          const bar = element.getBoundingClientRect()
+          const cell = element.closest('td')!.getBoundingClientRect()
+          return (
+            bar.left >= cell.left &&
+            bar.right <= cell.right + 0.5 &&
+            bar.top >= cell.top &&
+            bar.bottom <= cell.bottom + 0.5
+          )
+        }),
+      ),
+    ).toBe(true)
+  }
+  await page.setViewportSize({ width: 1280, height: 844 })
   await page.getByLabel('Search runs').fill('Candidate')
   await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Candidate test', exact: true })).toBeVisible()
@@ -719,6 +967,41 @@ test('reopens all three optimization comparisons from the saved URL', async ({
   })
 })
 
+test('shows available datasets while a run read stalls and recovers without false empty states', async ({
+  page,
+}) => {
+  const submissions = await mockBench(page)
+  await page.clock.install()
+  let stalled = true
+  await page.route('**/api/sr-bench/v1/runs', async (route) => {
+    if (!stalled) await route.fulfill({ json: { runs: [run] } })
+  })
+  await page.goto('/evaluation?view=datasets')
+  await expect(page.getByRole('heading', { name: 'Prepared datasets', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Evaluate this dataset', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Associated runs are not yet available.', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Runs (0)', exact: true })).toHaveCount(0)
+  await page.clock.fastForward(30001)
+  await expect(page.getByRole('alert')).toContainText(
+    'runs: Reading saved sr-bench evidence timed out',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Evaluate this dataset', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Runs', exact: true }).click()
+  await expect(page.getByText('Run inventory is unavailable.', { exact: true })).toBeVisible()
+  await expect(page.getByText('No evaluation runs yet.', { exact: true })).toHaveCount(0)
+  stalled = false
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  expect(submissions).toHaveLength(0)
+})
+
 test('requires explicit recovery scope and reuses a lost-response submission after reload', async ({
   page,
 }) => {
@@ -771,6 +1054,181 @@ test('requires explicit recovery scope and reuses a lost-response submission aft
     acknowledge_new_attempt: true,
     cells: [{ case_id: 'failed-case', target_id: 'single' }],
   })
+})
+
+async function mockUndispatchedRecovery(page: Page) {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({ json: { ...run, status: 'cancelled' } }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/recover-plan', (route) =>
+    route.fulfill({
+      json: {
+        parent_run_id: 'run-1',
+        mode: 'undispatched',
+        eligible_cells: [{ case_id: 'unstarted', target_id: 'single' }],
+        excluded: [],
+        counts: { eligible: 1, excluded: 0 },
+        parent: {
+          status: 'cancelled',
+          progress: run.progress,
+          known_spend_usd: 0,
+          spend_complete: true,
+        },
+        plan_sha256: 'f'.repeat(64),
+      },
+    }),
+  )
+}
+
+async function openParentInSameDocument(page: Page) {
+  await page.evaluate(() => {
+    history.pushState({}, '', '/evaluation?view=runs&run=run-1')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+}
+
+test('keeps a newer recovery intent when an unmounted recovery responds late', async ({ page }) => {
+  await mockUndispatchedRecovery(page)
+  const submissions: Array<{ idempotency_key: string }> = []
+  let finishOld!: () => void
+  const oldPending = new Promise<void>((resolve) => {
+    finishOld = resolve
+  })
+  let finishNew!: () => void
+  const newPending = new Promise<void>((resolve) => {
+    finishNew = resolve
+  })
+  await page.route('**/api/sr-bench/v1/runs/run-1/recover', async (route) => {
+    submissions.push(route.request().postDataJSON())
+    const index = submissions.length
+    if (index === 1) await oldPending
+    if (index === 3) await newPending
+    await route.fulfill({ json: { ...run, id: index === 3 ? 'child-2' : 'child-1' } })
+  })
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.getByRole('button', { name: 'Review recovery plan', exact: true }).click()
+  await page.getByLabel('Recover single unstarted', { exact: true }).check()
+  await page.getByRole('button', { name: 'Create recovery run (1 cases)', exact: true }).click()
+  await expect.poll(() => submissions.length).toBe(1)
+  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Recover unfinished work', exact: true }),
+  ).toHaveCount(0)
+  await openParentInSameDocument(page)
+  await page.getByRole('button', { name: 'Check or submit same recovery', exact: true }).click()
+  await expect(page).toHaveURL(/run=child-1/)
+  expect(submissions[1]).toEqual(submissions[0])
+  await openParentInSameDocument(page)
+  await page.getByRole('button', { name: 'Review recovery plan', exact: true }).click()
+  await page.getByLabel('Recover single unstarted', { exact: true }).check()
+  await page.getByRole('button', { name: 'Create recovery run (1 cases)', exact: true }).click()
+  await expect.poll(() => submissions.length).toBe(3)
+  const oldResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON().idempotency_key === submissions[0].idempotency_key,
+  )
+  finishOld()
+  await (await oldResponse).finished()
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+  await expect(page).toHaveURL(/run=run-1$/)
+  const saved = await page.evaluate(() =>
+    JSON.parse(sessionStorage.getItem('sr-bench-recovery:user-admin-1:run-1')!),
+  )
+  expect(saved.request.idempotency_key).toBe(submissions[2].idempotency_key)
+  finishNew()
+  await expect(page).toHaveURL(/run=child-2/)
+})
+
+test('isolates recovery intent across logout and ignores the old account response', async ({
+  page,
+}) => {
+  await mockUndispatchedRecovery(page)
+  let finishOld!: () => void
+  const oldPending = new Promise<void>((resolve) => {
+    finishOld = resolve
+  })
+  let submitted = false
+  await page.route('**/api/sr-bench/v1/runs/run-1/recover', async (route) => {
+    submitted = true
+    await oldPending
+    await route.fulfill({ json: { ...run, id: 'old-child' } })
+  })
+  await page.route('**/api/auth/logout', (route) => route.fulfill({ json: {} }))
+  await page.route('**/api/auth/login', (route) =>
+    route.fulfill({
+      json: {
+        token: 'second-test-session',
+        user: {
+          id: 'second-account',
+          name: 'Second account',
+          email: 'second@example.com',
+          role: 'admin',
+        },
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.getByRole('button', { name: 'Review recovery plan', exact: true }).click()
+  await page.getByLabel('Recover single unstarted', { exact: true }).check()
+  await page.getByRole('button', { name: 'Create recovery run (1 cases)', exact: true }).click()
+  await expect.poll(() => submitted).toBe(true)
+  await page.getByRole('button', { name: 'Open account menu for Admin User', exact: true }).click()
+  await page.getByRole('button', { name: 'Logout', exact: true }).click()
+  await expect(page).toHaveURL(/\/login/)
+  await page.getByLabel('Email', { exact: true }).fill('second@example.com')
+  await page.getByLabel('Password', { exact: true }).fill('fixture-password')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open account menu for Second account', exact: true }),
+  ).toBeVisible()
+  await openParentInSameDocument(page)
+  await expect(
+    page.getByRole('button', { name: 'Review recovery plan', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Check or submit same recovery', exact: true }),
+  ).toHaveCount(0)
+  const oldResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname.endsWith('/recover'),
+  )
+  finishOld()
+  await (await oldResponse).finished()
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+  await expect(page).toHaveURL(/run=run-1$/)
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-recovery:user-admin-1:run-1')),
+  ).not.toBeNull()
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-recovery:second-account:run-1')),
+  ).toBeNull()
+})
+
+test('blocks recovery when its saved scope is corrupted', async ({ page }) => {
+  await mockUndispatchedRecovery(page)
+  await page.addInitScript(() =>
+    sessionStorage.setItem('sr-bench-recovery:user-admin-1:run-1', '{broken'),
+  )
+  const submissions: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST') submissions.push(request.url())
+  })
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByRole('alert')).toContainText('saved recovery cannot be read safely')
+  await expect(page.getByRole('button', { name: 'Review recovery plan', exact: true })).toHaveCount(
+    0,
+  )
+  await expect(
+    page.getByRole('button', { name: 'Check or submit same recovery', exact: true }),
+  ).toHaveCount(0)
+  expect(submissions).toEqual([])
 })
 
 test('displays and downloads a matching server-captured recipe', async ({ page }) => {

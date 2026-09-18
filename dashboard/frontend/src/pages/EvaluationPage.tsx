@@ -14,6 +14,8 @@ import DatasetInventory from '../components/sr-bench/DatasetInventory'
 import type { Catalog, Dataset, Run, Target } from '../components/sr-bench/types'
 import styles from '../components/sr-bench/SrBench.module.css'
 
+type Inventory = 'catalog' | 'datasets' | 'targets' | 'runs'
+
 export default function EvaluationPage() {
   const { user } = useAuth()
   const { serverReadonly, isLoading: settingsLoading } = useReadonly()
@@ -26,40 +28,57 @@ export default function EvaluationPage() {
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [targets, setTargets] = useState<Target[]>([])
   const [runs, setRuns] = useState<Run[]>([])
-  const [error, setError] = useState('')
+  const [readErrors, setReadErrors] = useState<Partial<Record<Inventory, string>>>({})
+  const [loaded, setLoaded] = useState<Partial<Record<Inventory, boolean>>>({})
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
   const [lastRead, setLastRead] = useState<string | null>(null)
   const refresh = useCallback(() => setRevision((value) => value + 1), [])
+  const error = Object.entries(readErrors)
+    .filter(([, message]) => message)
+    .map(([name, message]) => `${name}: ${message}`)
+    .join(' ')
 
   useEffect(() => {
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     setLoading(true)
+    async function read<T>(name: Inventory, response: Promise<T>, accept: (value: T) => void) {
+      try {
+        const value = await response
+        if (!controller.signal.aborted) {
+          accept(value)
+          setLoaded((previous) => ({ ...previous, [name]: true }))
+          setReadErrors((previous) => ({ ...previous, [name]: '' }))
+        }
+        return value
+      } catch (cause) {
+        if (!controller.signal.aborted)
+          setReadErrors((previous) => ({
+            ...previous,
+            [name]:
+              cause instanceof Error ? cause.message : 'sr-bench service could not be reached.',
+          }))
+        throw cause
+      }
+    }
     async function load() {
       try {
         const responses = await Promise.allSettled([
-          benchApi.catalog(controller.signal),
-          benchApi.datasets(controller.signal),
-          benchApi.targets(controller.signal),
-          benchApi.runs(controller.signal),
+          read('catalog', benchApi.catalog(controller.signal), setCatalog),
+          read('datasets', benchApi.datasets(controller.signal), (value) =>
+            setDatasets(value.datasets),
+          ),
+          read('targets', benchApi.targets(controller.signal), (value) =>
+            setTargets(value.targets),
+          ),
+          read('runs', benchApi.runs(controller.signal), (value) => {
+            setRuns(value.runs)
+            setLastRead(new Date().toLocaleTimeString())
+          }),
         ])
         if (controller.signal.aborted) return
-        if (responses[0].status === 'fulfilled') setCatalog(responses[0].value)
-        if (responses[1].status === 'fulfilled') setDatasets(responses[1].value.datasets)
-        if (responses[2].status === 'fulfilled') setTargets(responses[2].value.targets)
-        if (responses[3].status === 'fulfilled') {
-          setRuns(responses[3].value.runs)
-          setLastRead(new Date().toLocaleTimeString())
-        }
         const failure = responses.find((response) => response.status === 'rejected')
-        setError(
-          failure?.status === 'rejected'
-            ? failure.reason instanceof Error
-              ? failure.reason.message
-              : 'sr-bench service could not be reached.'
-            : '',
-        )
         // Retry reads after a disconnect and discover runs started from the CLI.
         // This timer never submits, resumes or retries an evaluation.
         const running =
@@ -107,7 +126,7 @@ export default function EvaluationPage() {
             onClick={() => setSearch({ view: key })}
           >
             {label}
-            {key === 'runs' ? ` (${runs.length})` : ''}
+            {key === 'runs' && loaded.runs ? ` (${runs.length})` : ''}
           </button>
         ))}
       </nav>
@@ -126,13 +145,14 @@ export default function EvaluationPage() {
         </div>
       )}
       {!catalog && loading && <p role="status">Loading sr-bench…</p>}
-      {view === 'new' && catalog && (
+      {view === 'new' && catalog && loaded.datasets && loaded.targets && (
         <RunComposer
           catalog={catalog}
           datasets={datasets}
           targets={targets}
           canRun={canRun}
-          key={search.get('dataset') ?? 'new'}
+          actorID={user?.id ?? ''}
+          key={`${user?.id ?? ''}:${search.get('dataset') ?? 'new'}`}
           initialModel={search.get('model') ?? undefined}
           initialDataset={search.get('dataset') ?? undefined}
           onStarted={(run) => {
@@ -144,15 +164,22 @@ export default function EvaluationPage() {
       )}
       {view === 'runs' && (
         <>
-          <RunList
-            runs={runs}
-            selectedID={selectedID}
-            onSelect={(id) => setSearch({ view: 'runs', run: id })}
-          />
+          {loaded.runs ? (
+            <RunList
+              runs={runs}
+              selectedID={selectedID}
+              onSelect={(id) => setSearch({ view: 'runs', run: id })}
+            />
+          ) : (
+            <p role="status">
+              {readErrors.runs ? 'Run inventory is unavailable.' : 'Loading evaluation runs…'}
+            </p>
+          )}
           {selectedID && (
             <RunDetails
-              key={selectedID}
+              key={`${user?.id ?? ''}:${selectedID}`}
               id={selectedID}
+              actorID={user?.id ?? ''}
               canRun={canRun}
               onChanged={refresh}
               onRecovered={(run) => {
@@ -163,15 +190,31 @@ export default function EvaluationPage() {
           )}
         </>
       )}
-      {view === 'datasets' && (
+      {view === 'datasets' && loaded.datasets && (
         <DatasetInventory
           datasets={datasets}
           runs={runs}
+          runsLoaded={!!loaded.runs}
           canRun={canRun}
           onUse={(dataset) => setSearch({ view: 'new', dataset: dataset.id })}
         />
       )}
-      {view === 'compare' && (
+      {view === 'datasets' && !loaded.datasets && (
+        <p role="status">
+          {readErrors.datasets ? 'Dataset inventory is unavailable.' : 'Loading prepared datasets…'}
+        </p>
+      )}
+      {view === 'new' && (!catalog || !loaded.datasets || !loaded.targets) && (
+        <p role="status">
+          Waiting for the benchmark catalog, prepared datasets and configured targets.
+        </p>
+      )}
+      {view === 'compare' && !loaded.runs && (
+        <p role="status">
+          {readErrors.runs ? 'Run inventory is unavailable.' : 'Loading evaluation runs…'}
+        </p>
+      )}
+      {view === 'compare' && loaded.runs && (
         <>
           <RunComparison runs={runs} />
           <ReplayComposer
