@@ -105,8 +105,7 @@ jobs:
       - name: Configure isolated PostgreSQL registry tests
         run: |
           mkdir -p .agent-harness/core/storage
-          printf '%s
-' "$ROUTER_REPLAY_TEST_POSTGRES_CONFIG" > .agent-harness/core/storage/postgres.json
+          printf '%s\n' "$ROUTER_REPLAY_TEST_POSTGRES_CONFIG" > .agent-harness/core/storage/postgres.json
           echo "VSR_TEST_POSTGRES_CONFIG=$GITHUB_WORKSPACE/.agent-harness/core/storage/postgres.json" >> "$GITHUB_ENV"
       - name: Run selected storage inventory and reject skips
         run: |
