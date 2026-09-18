@@ -358,11 +358,7 @@ func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
 // AppendOutcomeContext lets background dispatchers cancel outstanding receipt
 // I/O at shutdown. The recorder's operation timeout still bounds each write.
 func (r *Recorder) AppendOutcomeContext(parent context.Context, id string, outcome Outcome) error {
-	timeout := r.operationTimeout
-	if timeout <= 0 {
-		timeout = DefaultOperationTimeout
-	}
-	ctx, cancel := context.WithTimeout(parent, timeout)
+	ctx, cancel := r.replayOperationContextFrom(parent)
 	defer cancel()
 	return r.storage.AppendOutcome(ctx, id, outcome)
 }
@@ -437,11 +433,17 @@ func (r *Recorder) ListAllRecords() []RoutingRecord {
 // config reload, or shutdown indefinitely. Store mutations acknowledge queued
 // persistence before returning, so callers can release the timer immediately.
 func (r *Recorder) replayOperationContext() (context.Context, context.CancelFunc) {
+	return r.replayOperationContextFrom(context.Background())
+}
+
+// replayOperationContextFrom bounds an operation whose caller owns cancellation,
+// such as the background outcome writer at shutdown.
+func (r *Recorder) replayOperationContextFrom(parent context.Context) (context.Context, context.CancelFunc) {
 	timeout := r.operationTimeout
 	if timeout <= 0 {
 		timeout = DefaultOperationTimeout
 	}
-	return context.WithTimeout(context.Background(), timeout)
+	return context.WithTimeout(parent, timeout)
 }
 
 // applyBodyCapturePolicy enforces one capture switch on one body field. The

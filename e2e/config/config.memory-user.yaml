@@ -32,9 +32,10 @@ routing:
         operator: OR
         keywords: [THRESHOLD_MARKER]
   decisions:
-    # Isolate response persistence from request-side retrieval during a backend outage.
+    # Dedicated route so receipt assertions are not disturbed by other traffic.
+    # Retrieval stays fail-open during the backend outage the receipt tests cause.
     - name: persistence_receipt_route
-      description: Write-only route for request-correlated persistence receipts
+      description: Route for request-correlated persistence receipts
       priority: 250
       rules:
         operator: OR
@@ -53,7 +54,7 @@ routing:
             capture_response_body: false
         - type: memory
           configuration:
-            enabled: false
+            enabled: true
             auto_store: true
     # Triggered by NOMEM_MARKER keyword. Memory explicitly disabled so retrieval
     # is skipped even though global memory.enabled=true.

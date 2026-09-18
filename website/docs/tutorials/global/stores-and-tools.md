@@ -145,21 +145,22 @@ precedence over the decision's value, followed by `global.stores.memory`.
 Only an omitted value falls back to the next level.
 
 Response handling does not wait for Memory persistence to complete. Identity
-checks and capacity reservation precede bounded history snapshots; encoding and
-writes run in the background. Other response-path Replay operations remain
-synchronous.
+checks and capacity reservation precede the bounded history snapshot, which is
+taken while the response path still owns the conversation state; protocol
+encoding and writes run in the background. Other response-path Replay
+operations remain synchronous.
 
 Configure `global.stores.memory.persistence`:
 
 | Field | Meaning | Default |
 | --- | --- | --- |
-| `timeout_seconds` | Seconds from reservation to timeout, including preparation, queue wait, and writing | 30 |
-| `concurrency` | Worker slots, including preparation and writes; 1–64 | 8 |
-| `queue` | Reserved attempts waiting for a worker; 1–1024 | 64 |
-| `shutdown_grace_seconds` | Seconds to drain writes on reload or shutdown before cancellation | 5 |
+| `timeout_seconds` | Seconds from reservation to timeout, including preparation, queue wait, and writing; 0–9,223,372,036 | 30 |
+| `concurrency` | Worker slots, including preparation and writes; 0–64 | 8 |
+| `queue` | Reserved attempts waiting for a worker; 0–1024 | 64 |
+| `shutdown_grace_seconds` | Seconds to drain writes on reload or shutdown before cancellation; 0–9,223,372,036 | 5 |
 
 Omit a field or set it to `0` to take the default. Negative values and values
-above these concurrency or queue limits are rejected during configuration
+above the listed limits are rejected during configuration
 validation, before workers or queue storage are allocated at startup or reload.
 This also applies to the initial `config_source: kubernetes` document, before
 the controller loads routing CRDs; global resource bounds are not deferred.
@@ -172,8 +173,10 @@ share a 4096-node structural limit. Bounded length checks run before reserving
 persistence capacity; text assembly and history copying run only after admission.
 Exceeding a limit skips persistence with `skipped` / `history_too_large` and
 `fail_open=true`, without occupying persistence capacity or truncating the model
-response or history. Missing user identity skips preparation. Background contexts
-retain only span context and tracestate.
+response or history. Missing user identity skips preparation with `skipped` /
+`memory_info_unavailable` and `fail_open=true`. A response the jailbreak or
+hallucination policy blocks reports `policy_blocked` instead of persisting.
+Background contexts retain only span context and tracestate.
 
 For requests with a Router Replay record, accepted attempts reserve capacity for
 `scheduled` and one terminal receipt, protecting both from queue saturation.

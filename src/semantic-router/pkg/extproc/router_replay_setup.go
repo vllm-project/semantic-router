@@ -28,6 +28,11 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 }
 
 func shareReplayOutcomeQueue(recorders map[string]*routerreplay.Recorder) {
+	// A failed initialization and a config with no replay decisions both arrive
+	// here empty; neither should allocate a queue and its writer context.
+	if len(recorders) == 0 {
+		return
+	}
 	group := make([]*routerreplay.Recorder, 0, len(recorders))
 	for _, recorder := range recorders {
 		group = append(group, recorder)

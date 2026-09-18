@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,12 +21,14 @@ func testMemoryPersistenceBoundsAtConfigLoad(t *testing.T, source ConfigSource) 
 	t.Helper()
 	for _, field := range []struct {
 		name string
-		max  int
+		max  int64
 	}{
-		{"concurrency", MaxMemoryPersistenceConcurrency},
-		{"queue", MaxMemoryPersistenceQueue},
+		{"timeout_seconds", MaxMemoryPersistenceDurationSeconds},
+		{"concurrency", int64(MaxMemoryPersistenceConcurrency)},
+		{"queue", int64(MaxMemoryPersistenceQueue)},
+		{"shutdown_grace_seconds", MaxMemoryPersistenceDurationSeconds},
 	} {
-		for _, value := range []int{-1, 0, 1, field.max, field.max + 1, int(^uint(0) >> 1)} {
+		for _, value := range []int64{-1, 0, 1, field.max, field.max + 1, math.MaxInt64} {
 			for _, enabled := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%d/enabled=%t", field.name, value, enabled), func(t *testing.T) {
 					payload := globalValidationDocument(t, source, fmt.Sprintf(`stores:
@@ -75,10 +78,18 @@ func testMemoryPersistenceBoundsAtConfigLoad(t *testing.T, source ConfigSource) 
 }
 
 func TestMemoryPersistenceBoundsAtKubernetesValidation(t *testing.T) {
-	for _, persistence := range []MemoryPersistenceConfig{
+	persistenceCases := []MemoryPersistenceConfig{
 		{Concurrency: MaxMemoryPersistenceConcurrency + 1},
 		{Queue: MaxMemoryPersistenceQueue + 1},
-	} {
+	}
+	durationAboveMax := MaxMemoryPersistenceDurationSeconds + 1
+	if durationAboveMax <= int64(^uint(0)>>1) {
+		persistenceCases = append(persistenceCases,
+			MemoryPersistenceConfig{TimeoutSeconds: int(durationAboveMax)},
+			MemoryPersistenceConfig{ShutdownGraceSeconds: int(durationAboveMax)},
+		)
+	}
+	for _, persistence := range persistenceCases {
 		cfg := &RouterConfig{Memory: MemoryConfig{Persistence: persistence}}
 		if err := ValidateKubernetesConfigContracts(cfg); err == nil || !strings.Contains(err.Error(), "global memory persistence") {
 			t.Fatalf("unsafe persistence config must be rejected before runtime construction: %v", err)

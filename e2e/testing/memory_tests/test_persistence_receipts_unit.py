@@ -45,6 +45,88 @@ class PersistenceReceiptAssertionsTest(unittest.TestCase):
         self.assertIn(record_path, contract["paths"])
         self.assertIn("get", contract["paths"][record_path])
 
+    def test_receipt_endpoints_follow_stack_port_offset(self):
+        for offset in (0, 200, 4200):
+            with (
+                self.subTest(offset=offset),
+                patch.object(receipts.MemoryFeaturesTest, "setUp"),
+                patch.dict(
+                    receipts.os.environ,
+                    {"VLLM_SR_PORT_OFFSET": str(offset)},
+                    clear=True,
+                ),
+                patch.object(
+                    receipts.requests, "get", return_value=Mock(status_code=200)
+                ) as get,
+            ):
+                self.case.setUp()
+                self.assertEqual(
+                    self.case.metrics_url, f"http://localhost:{9190 + offset}/metrics"
+                )
+                self.assertEqual(
+                    self.case.replay_url,
+                    f"http://localhost:{8080 + offset}/api/v1/observability/replays",
+                )
+                get.assert_called_once_with(self.case.metrics_url, timeout=5)
+
+    def test_explicit_receipt_endpoints_override_stack_defaults(self):
+        metrics_url = "http://custom-router:7000/metrics"
+        replay_url = "http://custom-router:8000/api/v1/observability/replays"
+        with (
+            patch.object(receipts.MemoryFeaturesTest, "setUp"),
+            patch.dict(
+                receipts.os.environ,
+                {
+                    "VLLM_SR_PORT_OFFSET": "4200",
+                    "ROUTER_METRICS_URL": metrics_url,
+                    "ROUTER_REPLAY_URL": replay_url + "/",
+                },
+                clear=True,
+            ),
+            patch.object(
+                receipts.requests, "get", return_value=Mock(status_code=200)
+            ) as get,
+        ):
+            self.case.setUp()
+        self.assertEqual(self.case.metrics_url, metrics_url)
+        self.assertEqual(self.case.replay_url, replay_url)
+        get.assert_called_once_with(metrics_url, timeout=5)
+
+    def test_milvus_container_follows_runtime_stack_export(self):
+        with (
+            patch.object(receipts.MemoryFeaturesTest, "setUp"),
+            patch.object(self.case, "_resolve_metrics_url"),
+            patch.dict(
+                receipts.os.environ,
+                {"MILVUS_CONTAINER_NAME": "ci-memory-vllm-sr-milvus"},
+                clear=True,
+            ),
+        ):
+            self.case.setUp()
+
+        self.assertEqual(self.case.milvus_container, "ci-memory-vllm-sr-milvus")
+
+    def test_unavailable_stack_metrics_do_not_probe_another_stack(self):
+        for failure in (
+            Mock(status_code=503),
+            receipts.requests.exceptions.ConnectionError("unreachable"),
+        ):
+            with (
+                self.subTest(failure=failure),
+                patch.object(receipts.MemoryFeaturesTest, "setUp"),
+                patch.dict(
+                    receipts.os.environ, {"VLLM_SR_PORT_OFFSET": "4200"}, clear=True
+                ),
+                patch.object(
+                    receipts.requests,
+                    "get",
+                    side_effect=[failure, Mock(status_code=200)],
+                ) as get,
+            ):
+                with self.assertRaises(AssertionError):
+                    self.case.setUp()
+                get.assert_called_once_with("http://localhost:13390/metrics", timeout=5)
+
     def test_terminal_receipt_is_read_from_the_response_replay_id(self):
         terminal = outcome("timeout", reason="persist_timeout")
         response = Mock(status_code=receipts.HTTP_OK)
@@ -214,7 +296,7 @@ class PersistenceReceiptAssertionsTest(unittest.TestCase):
                     else self.assertRaises(AssertionError)
                 )
                 with patch.object(receipts.time, "sleep"), expected:
-                    case.test_02_store_failure_keeps_response_fail_open()
+                    case.test_05_store_failure_keeps_response_fail_open()
                 self.assertEqual(
                     [call.args[0] for call in case._container_command.call_args_list],
                     ["stop", "start"],

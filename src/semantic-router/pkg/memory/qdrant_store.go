@@ -211,7 +211,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbeddingContext(ctx, mem.Content, s.embeddingConfig)
+		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
@@ -332,7 +332,7 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbeddingWithContext(ctx, mem.Content, s.embeddingConfig)
+		emb, err = embedForWrite(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}

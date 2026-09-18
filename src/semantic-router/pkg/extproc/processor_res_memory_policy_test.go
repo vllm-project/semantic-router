@@ -117,7 +117,9 @@ func TestResponseMemoryClientOptOutSurvivesProviderMaterialization(t *testing.T)
 func memoryPolicyContext(autoStore *bool) *RequestContext {
 	return &RequestContext{
 		RequestModel: "model",
-		Headers:      map[string]string{headers.AuthzUserID: "memory-user", ":path": "/v1/responses"},
+		// Match the ingress snapshot taken by prepareProtocolRequest.
+		RequestAutoStore: cloneBoolPtr(autoStore),
+		Headers:          map[string]string{headers.AuthzUserID: "memory-user", ":path": "/v1/responses"},
 		SemanticRequest: &llmprotocol.Request{
 			Generation: 1, Model: "model", AutoStore: autoStore,
 			Messages: []llmprotocol.Message{neutralTextMessage(llmprotocol.RoleUser, "Please remember the detailed conference itinerary with a morning meeting and an afternoon workshop.")},

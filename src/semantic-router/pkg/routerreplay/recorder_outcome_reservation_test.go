@@ -99,3 +99,20 @@ func TestOutcomeReservationKeepsStorageOwnedDuringDrain(t *testing.T) {
 		return backend.closed
 	}, time.Second, time.Millisecond)
 }
+
+func TestOutcomeReservationAbandonedByItsOwnerReleasesStorage(t *testing.T) {
+	backend := &gatedOutcomeStore{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	close(backend.release)
+	recorder := NewRecorder(backend)
+	recorder.outcomes = newOutcomeQueue(1, 10*time.Millisecond)
+	// The owner never reports: the writer must still exit after the drain
+	// deadline instead of holding the store for the process lifetime.
+	require.NotNil(t, recorder.TryReserveOutcome("abandoned"))
+	require.ErrorIs(t, recorder.Close(), context.DeadlineExceeded)
+	awaitOutcomeSignal(t, recorder.outcomes.done)
+	require.Eventually(t, func() bool {
+		backend.mu.Lock()
+		defer backend.mu.Unlock()
+		return backend.closed
+	}, time.Second, time.Millisecond)
+}

@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,6 +12,88 @@ import (
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 )
+
+func TestPersistenceReservationShutdownAbandonsUnpreparedJobs(t *testing.T) {
+	for _, expired := range []bool{false, true} {
+		t.Run(map[bool]string{false: "shutdown", true: "already_timed_out"}[expired], func(t *testing.T) {
+			timeout := time.Minute
+			if expired {
+				timeout = 20 * time.Millisecond
+			}
+			runner := NewPersistenceRunner(timeout, 1, 1)
+			receipts := newOutcomeRecorder()
+			first := runner.TryReserve(context.Background(), receipts.report)
+			require.NotNil(t, first)
+			require.Eventually(t, func() bool { return len(runner.jobs) == 0 }, time.Second, time.Millisecond)
+			second := runner.TryReserve(context.Background(), receipts.report)
+			require.NotNil(t, second)
+			t.Cleanup(func() {
+				first.Abort(PersistenceOutcome{}, nil)
+				second.Abort(PersistenceOutcome{}, nil)
+				_ = runner.RetireAndWait(time.Millisecond)
+			})
+			if expired {
+				require.Eventually(t, func() bool {
+					return receipts.count("timeout/persist_timeout") == 2
+				}, time.Second, time.Millisecond)
+			}
+			require.ErrorIs(t, runner.RetireAndWait(time.Millisecond), ErrPersistenceShutdownDeadline)
+			select {
+			case <-runner.Done():
+			case <-time.After(time.Second):
+				t.Fatal("unprepared reservations prevented generation cleanup")
+			}
+			for _, reservation := range []*PersistenceReservation{first, second} {
+				reservation.Start(func(context.Context) (PersistenceOutcome, error) {
+					t.Error("abandoned work executed")
+					return PersistenceOutcome{}, nil
+				})
+				reservation.Abort(PersistenceOutcome{}, nil)
+				require.Nil(t, reservation.queued.job.Run, "late publication retained abandoned work")
+			}
+			terminal := "cancelled/shutdown"
+			if expired {
+				terminal = "timeout/persist_timeout"
+			}
+			assert.Equal(t, map[string]int{"scheduled/queue_accepted": 2, terminal: 2}, receipts.snapshot())
+		})
+	}
+}
+
+func TestPersistenceReservationShutdownRacesPublication(t *testing.T) {
+	runner := NewPersistenceRunner(time.Minute, 2, 32)
+	receipts := newOutcomeRecorder()
+	var publishers sync.WaitGroup
+	var runs atomic.Int32
+	for range 32 {
+		reservation := runner.TryReserve(context.Background(), receipts.report)
+		require.NotNil(t, reservation)
+		for _, abort := range []bool{false, true} {
+			publishers.Add(1)
+			go func() {
+				defer publishers.Done()
+				<-reservation.Context().Done()
+				if abort {
+					reservation.Abort(PersistenceOutcome{}, nil)
+					return
+				}
+				reservation.Start(func(context.Context) (PersistenceOutcome, error) {
+					runs.Add(1)
+					return PersistenceOutcome{}, nil
+				})
+			}()
+		}
+	}
+	require.ErrorIs(t, runner.RetireAndWait(time.Millisecond), ErrPersistenceShutdownDeadline)
+	publishers.Wait()
+	select {
+	case <-runner.Done():
+	case <-time.After(time.Second):
+		t.Fatal("publication raced shutdown and stranded a worker")
+	}
+	assert.Zero(t, runs.Load())
+	assert.Equal(t, map[string]int{"scheduled/queue_accepted": 32, "cancelled/shutdown": 32}, receipts.snapshot())
+}
 
 func TestPersistenceReservationTimeoutRetainsPreparationCapacity(t *testing.T) {
 	receipts := newOutcomeRecorder()

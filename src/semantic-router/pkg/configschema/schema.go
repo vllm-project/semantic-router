@@ -131,7 +131,9 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	// Offline consumers resolve the same named defaults as the Router without
 	// copying artifact identities or materializing them in authoring documents.
 	deployments.Default = routerconfig.DefaultCanonicalGlobal().ModelCatalog.Deployments
-	setMemoryPersistenceBounds(schema)
+	if err := setMemoryPersistenceBounds(schema); err != nil {
+		return nil, err
+	}
 
 	pluginRefs, err := addPluginDefinitions(reflector, schema)
 	if err != nil {

@@ -1,12 +1,19 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+	"time"
+)
 
 const (
 	// MaxMemoryPersistenceConcurrency limits worker allocation at startup and reload.
 	MaxMemoryPersistenceConcurrency = 64
 	// MaxMemoryPersistenceQueue limits queued snapshots at startup and reload.
 	MaxMemoryPersistenceQueue = 1024
+	// MaxMemoryPersistenceDurationSeconds is the largest whole-second value that
+	// can be converted to time.Duration without overflow.
+	MaxMemoryPersistenceDurationSeconds = math.MaxInt64 / int64(time.Second)
 )
 
 // validateMemoryContracts validates the long-term-memory similarity threshold
@@ -45,8 +52,12 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 // Zero values use runtime defaults. Reject invalid resource bounds before any
 // persistence workers or queue entries are allocated.
 func validateMemoryPersistence(cfg MemoryPersistenceConfig) error {
-	if cfg.TimeoutSeconds < 0 {
-		return fmt.Errorf("global memory persistence timeout_seconds must be >= 0, got %d", cfg.TimeoutSeconds)
+	if cfg.TimeoutSeconds < 0 || int64(cfg.TimeoutSeconds) > MaxMemoryPersistenceDurationSeconds {
+		return fmt.Errorf(
+			"global memory persistence timeout_seconds must be between 0 and %d, got %d",
+			MaxMemoryPersistenceDurationSeconds,
+			cfg.TimeoutSeconds,
+		)
 	}
 	if cfg.Concurrency < 0 || cfg.Concurrency > MaxMemoryPersistenceConcurrency {
 		return fmt.Errorf("global memory persistence concurrency must be between 0 and %d, got %d", MaxMemoryPersistenceConcurrency, cfg.Concurrency)
@@ -54,9 +65,10 @@ func validateMemoryPersistence(cfg MemoryPersistenceConfig) error {
 	if cfg.Queue < 0 || cfg.Queue > MaxMemoryPersistenceQueue {
 		return fmt.Errorf("global memory persistence queue must be between 0 and %d, got %d", MaxMemoryPersistenceQueue, cfg.Queue)
 	}
-	if cfg.ShutdownGraceSeconds < 0 {
+	if cfg.ShutdownGraceSeconds < 0 || int64(cfg.ShutdownGraceSeconds) > MaxMemoryPersistenceDurationSeconds {
 		return fmt.Errorf(
-			"global memory persistence shutdown_grace_seconds must be >= 0, got %d",
+			"global memory persistence shutdown_grace_seconds must be between 0 and %d, got %d",
+			MaxMemoryPersistenceDurationSeconds,
 			cfg.ShutdownGraceSeconds,
 		)
 	}

@@ -89,7 +89,12 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	registry := r.ProtocolCodecs
+	return protocolEngineFor(r.ProtocolCodecs)
+}
+
+// protocolEngineFor serves callers that hold only the registry, such as
+// detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}

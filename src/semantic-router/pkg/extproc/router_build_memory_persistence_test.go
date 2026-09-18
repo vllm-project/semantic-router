@@ -13,40 +13,27 @@ import (
 )
 
 func memoryPersistenceConfig(persistence config.MemoryPersistenceConfig) *config.RouterConfig {
-	return &config.RouterConfig{Memory: config.MemoryConfig{Persistence: persistence}}
+	return &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Persistence: persistence}}
 }
 
-func TestMemoryPersistenceGraceFallsBackToDefault(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		cfg  *config.RouterConfig
-		want time.Duration
-	}{
-		{"nil config", nil, memory.DefaultPersistenceShutdownGrace},
-		{"unset", memoryPersistenceConfig(config.MemoryPersistenceConfig{}), memory.DefaultPersistenceShutdownGrace},
-		{
-			"non-positive",
-			memoryPersistenceConfig(config.MemoryPersistenceConfig{ShutdownGraceSeconds: -1}),
-			memory.DefaultPersistenceShutdownGrace,
-		},
-		{
-			"configured",
-			memoryPersistenceConfig(config.MemoryPersistenceConfig{ShutdownGraceSeconds: 12}),
-			12 * time.Second,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, memoryPersistenceGrace(tc.cfg))
-		})
-	}
+func memoryPersistenceExtractor() *memory.MemoryExtractor {
+	return memory.NewMemoryChunkStore(&noopMemoryStore{})
 }
 
 func TestCreateMemoryPersistenceRunnerReturnsNilWithoutConfig(t *testing.T) {
-	assert.Nil(t, createMemoryPersistenceRunner(nil))
+	assert.Nil(t, createMemoryPersistenceRunner(nil, memoryPersistenceExtractor()))
+	assert.Nil(t, createMemoryPersistenceRunner(&config.RouterConfig{}, memoryPersistenceExtractor()))
+}
+
+// An unreachable backend leaves createMemoryRuntime with a nil extractor while
+// enablement still reads true, and every write would be suppressed as
+// "no_extractor". No workers or queue storage may be allocated for that.
+func TestCreateMemoryPersistenceRunnerReturnsNilWithoutExtractor(t *testing.T) {
+	assert.Nil(t, createMemoryPersistenceRunner(memoryPersistenceConfig(config.MemoryPersistenceConfig{}), nil))
 }
 
 func TestCreateMemoryPersistenceRunnerRunsWorkOnUnsetBounds(t *testing.T) {
-	runner := createMemoryPersistenceRunner(memoryPersistenceConfig(config.MemoryPersistenceConfig{}))
+	runner := createMemoryPersistenceRunner(memoryPersistenceConfig(config.MemoryPersistenceConfig{}), memoryPersistenceExtractor())
 	require.NotNil(t, runner)
 
 	done := make(chan string, 2)

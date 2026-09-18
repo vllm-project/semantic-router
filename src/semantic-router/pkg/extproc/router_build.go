@@ -277,9 +277,10 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		components.resources.add(components.memoryStore.Close)
 	}
 	// Resources close in reverse order, so retire writes before closing the store.
-	components.memoryPersistence = createMemoryPersistenceRunner(cfg)
+	components.memoryPersistence = createMemoryPersistenceRunner(cfg, components.memoryExtractor)
 	if components.memoryPersistence != nil {
-		grace := memoryPersistenceGrace(cfg)
+		// RetireAndWait treats a non-positive grace as its own default.
+		grace := time.Duration(cfg.Memory.Persistence.ShutdownGraceSeconds) * time.Second
 		components.resources.addDraining(func() error {
 			return components.memoryPersistence.RetireAndWait(grace)
 		}, components.memoryPersistence.Done())
@@ -371,8 +372,11 @@ func registerRouterSessionStore(
 	})
 }
 
-func createMemoryPersistenceRunner(cfg *config.RouterConfig) *memory.PersistenceRunner {
-	if cfg == nil {
+func createMemoryPersistenceRunner(cfg *config.RouterConfig, extractor *memory.MemoryExtractor) *memory.PersistenceRunner {
+	// Workers and queue storage follow the memory store that was actually built:
+	// enablement alone still yields a nil extractor when the backend is
+	// unreachable, and every write would then be suppressed as "no_extractor".
+	if cfg == nil || extractor == nil || !isMemoryEnabled(cfg) {
 		return nil
 	}
 	persistence := cfg.Memory.Persistence
@@ -381,13 +385,6 @@ func createMemoryPersistenceRunner(cfg *config.RouterConfig) *memory.Persistence
 		persistence.Concurrency,
 		persistence.Queue,
 	)
-}
-
-func memoryPersistenceGrace(cfg *config.RouterConfig) time.Duration {
-	if cfg == nil || cfg.Memory.Persistence.ShutdownGraceSeconds <= 0 {
-		return memory.DefaultPersistenceShutdownGrace
-	}
-	return time.Duration(cfg.Memory.Persistence.ShutdownGraceSeconds) * time.Second
 }
 
 func registerModelSelectorResources(

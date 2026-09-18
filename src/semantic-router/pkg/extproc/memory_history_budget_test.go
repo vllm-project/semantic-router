@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -11,6 +10,47 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
+
+func TestMemorySnapshotBudgetCountsPreferredOutputOnce(t *testing.T) {
+	ctx := newBudgetHistory()
+	for range 90 {
+		ctx.retained = append(ctx.retained, &responseapi.StoredResponse{
+			Input:      []responseapi.InputItem{{Type: "message", Role: "user", Content: json.RawMessage(`"question"`)}},
+			OutputText: "answer",
+			Output: []responseapi.OutputItem{
+				{Type: "reasoning"},
+				{Type: "message", Role: "assistant", Content: []responseapi.ContentPart{{Type: "output_text", Text: "answer"}}},
+			},
+		})
+	}
+	require.NoError(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, ctx.response), "90 retained turns contribute 180 messages")
+	ctx.retained = append(ctx.retained, ctx.retained[:38]...)
+	require.ErrorIs(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge, "256 retained messages plus the current user exceed the limit")
+
+	text := strings.Repeat("x", maxMemorySnapshotBytes)
+	stored := &responseapi.StoredResponse{
+		OutputText: text,
+		Output:     []responseapi.OutputItem{{Type: "message", Content: []responseapi.ContentPart{{Type: "output_text", Text: text}}}},
+	}
+	require.NoError(t, validateMemorySnapshotBudget(nil, []*responseapi.StoredResponse{stored}, nil))
+	stored.OutputText += "x"
+	require.ErrorIs(t, validateMemorySnapshotBudget(nil, []*responseapi.StoredResponse{stored}, nil), errMemoryHistoryTooLarge)
+}
+
+func TestMemorySnapshotBudgetCountsFallbackOutputMessages(t *testing.T) {
+	ignored := strings.Repeat("x", maxMemorySnapshotBytes+1)
+	stored := &responseapi.StoredResponse{Output: []responseapi.OutputItem{
+		{Type: "reasoning", Content: []responseapi.ContentPart{{Text: ignored}}},
+		{Type: "message", Content: []responseapi.ContentPart{{Type: "refusal", Text: ignored}}},
+		{Type: "message", Role: "assistant", Content: []responseapi.ContentPart{{Type: "output_text", Text: "answer"}}},
+	}}
+	messages := make([]llmprotocol.Message, maxMemorySnapshotMessages-1)
+	require.NoError(t, validateMemorySnapshotBudget(messages, []*responseapi.StoredResponse{stored}, nil))
+	stored.Output = append(stored.Output, stored.Output[2])
+	require.ErrorIs(t, validateMemorySnapshotBudget(messages, []*responseapi.StoredResponse{stored}, nil), errMemoryHistoryTooLarge)
+	stored.Output = make([]responseapi.OutputItem, maxMemorySnapshotNodes+1)
+	require.ErrorIs(t, validateMemorySnapshotBudget(nil, []*responseapi.StoredResponse{stored}, nil), errMemoryHistoryTooLarge, "ignored fallback items still require bounded traversal")
+}
 
 func TestMemorySnapshotBudgetRejectsBeforeSnapshot(t *testing.T) {
 	for _, tc := range []struct {
@@ -56,14 +96,11 @@ func TestMemorySnapshotBudgetRejectsBeforeSnapshot(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := newBudgetHistory()
 			tc.mutate(ctx)
-			require.ErrorIs(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge)
+			require.ErrorIs(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge)
 		})
 	}
 	ctx := newBudgetHistory()
-	require.NoError(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response))
-	cancelled, cancel := context.WithCancel(context.Background())
-	cancel()
-	require.ErrorIs(t, validateMemorySnapshotBudget(cancelled, ctx.messages, ctx.retained, ctx.response), context.Canceled)
+	require.NoError(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, ctx.response))
 }
 
 func TestMemorySnapshotBudgetSharesResponseAndHistoryBytes(t *testing.T) {
@@ -75,10 +112,10 @@ func TestMemorySnapshotBudgetSharesResponseAndHistoryBytes(t *testing.T) {
 		{Kind: llmprotocol.ContentText, Text: strings.Repeat("x", responseBytes-3)},
 		{Kind: llmprotocol.ContentRefusal, Text: "界"}, // Three UTF-8 bytes, one rune.
 	}
-	require.NoError(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response))
+	require.NoError(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, ctx.response))
 	ctx.response.Output[0].Content[1].Text += "x"
-	require.ErrorIs(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge)
-	require.NoError(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, nil))
+	require.ErrorIs(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge)
+	require.NoError(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, nil))
 }
 
 type budgetHistory struct {

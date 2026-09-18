@@ -232,7 +232,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		embedding = memory.Embedding
 	} else {
 		var err error
-		embedding, err = GenerateEmbeddingContext(ctx, memory.Content, v.embeddingConfig)
+		embedding, err = embedForWrite(ctx, memory.Content, v.embeddingConfig)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)

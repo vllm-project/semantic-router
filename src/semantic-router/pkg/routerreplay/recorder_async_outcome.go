@@ -56,6 +56,7 @@ type outcomeQueue struct {
 	reserved  chan queuedOutcome
 	attempts  int
 	done      chan struct{}
+	abandoned chan struct{}
 	ctx       context.Context
 	cancel    context.CancelFunc
 	grace     time.Duration
@@ -70,8 +71,8 @@ func newOutcomeQueue(capacity int, grace time.Duration) *outcomeQueue {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &outcomeQueue{
 		events: make(chan queuedOutcome, capacity), done: make(chan struct{}),
-		reserved: make(chan queuedOutcome, 2*capacity),
-		ctx:      ctx, cancel: cancel, grace: grace,
+		reserved: make(chan queuedOutcome, 2*capacity), abandoned: make(chan struct{}),
+		ctx: ctx, cancel: cancel, grace: grace,
 	}
 }
 
@@ -96,6 +97,10 @@ func (q *outcomeQueue) run() {
 	for events != nil || reserved != nil {
 		var event queuedOutcome
 		select {
+		// A reservation whose owner never reported cannot hold the writer, and
+		// with it the replay store, past the drain deadline.
+		case <-q.abandoned:
+			return
 		case next, ok := <-events:
 			if !ok {
 				events = nil
@@ -135,6 +140,19 @@ func (q *outcomeQueue) write(event queuedOutcome) {
 	}
 }
 
+// abandonStalledReservations bounds how long a reservation whose owner never
+// reported can hold the writer, and with it the replay store, after the drain
+// deadline. A late terminal event still reaches the writer within the window.
+func (q *outcomeQueue) abandonStalledReservations() {
+	timer := time.NewTimer(q.grace)
+	defer timer.Stop()
+	select {
+	case <-q.done:
+	case <-timer.C:
+		close(q.abandoned)
+	}
+}
+
 func (q *outcomeQueue) close() error {
 	q.closeOnce.Do(func() {
 		q.mu.Lock()
@@ -152,9 +170,11 @@ func (q *outcomeQueue) close() error {
 		defer timer.Stop()
 		select {
 		case <-q.done:
+			return
 		case <-timer.C:
-			q.closeErr = context.DeadlineExceeded
 		}
+		q.closeErr = context.DeadlineExceeded
+		go q.abandonStalledReservations()
 	})
 	return q.closeErr
 }

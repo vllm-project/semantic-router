@@ -22,7 +22,7 @@ func (r *Recorder) TryReserveOutcome(id string) *OutcomeReservation {
 	q := r.outcomes
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.closed || q.attempts == cap(q.reserved)/2 {
+	if q.closed || q.attempts >= cap(q.reserved)/2 {
 		return nil
 	}
 	q.attempts++

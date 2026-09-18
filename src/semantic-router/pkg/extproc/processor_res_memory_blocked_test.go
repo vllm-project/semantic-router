@@ -74,3 +74,46 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 		})
 	}
 }
+
+// A response that never reaches scheduling still leaves exactly one terminal
+// receipt, reported with the same enablement precedence as a scheduled write.
+func TestUnscheduledResponseMemoryStoreRecordsTerminalReceipt(t *testing.T) {
+	for _, tc := range []struct {
+		name, status, reason string
+		autoStoreOff         bool
+		noExtractor          bool
+	}{
+		{name: "blocked", status: "policy_blocked", reason: "hallucination_blocked"},
+		{name: "opt_out", status: "disabled", reason: "auto_store_off", autoStoreOff: true},
+		{name: "no_extractor", status: "disabled", reason: "no_extractor", noExtractor: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+			t.Cleanup(func() { assert.NoError(t, recorder.Close()) })
+			router := &OpenAIRouter{
+				Config: &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+			}
+			if !tc.noExtractor {
+				router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
+			}
+			ctx := memoryPolicyContext(nil)
+			if tc.autoStoreOff {
+				off := false
+				ctx.RequestAutoStore = &off
+			}
+			ctx.RequestID, ctx.RouterReplayID = tc.name, tc.name
+			ctx.RouterReplayRecorder = recorder
+			_, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: tc.name})
+			require.NoError(t, err)
+
+			router.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
+			require.NoError(t, recorder.DrainOutcomes())
+			record, found := recorder.GetRecord(tc.name)
+			require.True(t, found)
+			require.Len(t, record.Outcomes, 1)
+			assert.Equal(t, tc.status, record.Outcomes[0].Verdict)
+			assert.Equal(t, tc.reason, record.Outcomes[0].Reason)
+			assert.Equal(t, "terminal", record.Outcomes[0].Metadata["phase"])
+		})
+	}
+}

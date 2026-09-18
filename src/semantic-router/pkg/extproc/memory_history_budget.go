@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"errors"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -42,8 +41,12 @@ func (b *memoryHistoryBudget) strings(values ...string) bool {
 
 // validateMemorySnapshotBudget walks only bounded structure and string lengths
 // before admission, cloning, JSON decoding, text joining, or think-tag stripping.
-func validateMemorySnapshotBudget(jobCtx context.Context, messages []llmprotocol.Message, retained []*responseapi.StoredResponse, response *llmprotocol.Response) error {
-	b := memoryHistoryBudget{maxMemorySnapshotBytes, maxMemorySnapshotNodes, maxMemorySnapshotMessages}
+func validateMemorySnapshotBudget(messages []llmprotocol.Message, retained []*responseapi.StoredResponse, response *llmprotocol.Response) error {
+	b := memoryHistoryBudget{
+		bytes:    maxMemorySnapshotBytes,
+		nodes:    maxMemorySnapshotNodes,
+		messages: maxMemorySnapshotMessages,
+	}
 	if !b.assistantResponse(response) {
 		return errMemoryHistoryTooLarge
 	}
@@ -51,9 +54,6 @@ func validateMemorySnapshotBudget(jobCtx context.Context, messages []llmprotocol
 		return errMemoryHistoryTooLarge
 	}
 	for _, message := range messages {
-		if err := jobCtx.Err(); err != nil {
-			return err
-		}
 		if !b.strings(message.ID, string(message.Role)) || !b.contents(message.Content, 0) {
 			return errMemoryHistoryTooLarge
 		}
@@ -63,18 +63,10 @@ func validateMemorySnapshotBudget(jobCtx context.Context, messages []llmprotocol
 			return errMemoryHistoryTooLarge
 		}
 		for _, stored := range retained {
-			if err := jobCtx.Err(); err != nil {
-				return err
-			}
 			if stored == nil {
 				continue
 			}
-			if !takeMemoryBudget(&b.messages, len(stored.Input)) ||
-				!takeMemoryBudget(&b.messages, len(stored.Output)) || !b.strings(stored.OutputText) {
-				return errMemoryHistoryTooLarge
-			}
-			// OutputText produces a message even when Output is absent.
-			if stored.OutputText != "" && len(stored.Output) == 0 && !takeMemoryBudget(&b.messages, 1) {
+			if !takeMemoryBudget(&b.messages, len(stored.Input)) || !b.storedOutput(stored) {
 				return errMemoryHistoryTooLarge
 			}
 			for _, input := range stored.Input {
@@ -82,19 +74,42 @@ func validateMemorySnapshotBudget(jobCtx context.Context, messages []llmprotocol
 					return errMemoryHistoryTooLarge
 				}
 			}
-			for _, output := range stored.Output {
-				if !takeMemoryBudget(&b.nodes, len(output.Content)) || !b.strings(output.Role) {
-					return errMemoryHistoryTooLarge
-				}
-				for _, part := range output.Content {
-					if !b.strings(part.Text) {
-						return errMemoryHistoryTooLarge
-					}
+		}
+	}
+	return nil
+}
+
+// Match appendOutputMessages: OutputText replaces all output items. Otherwise
+// only nonempty output_text parts of message items enter the snapshot. Bound
+// fallback traversal separately so ignored items cannot cause unbounded work.
+func (b *memoryHistoryBudget) storedOutput(stored *responseapi.StoredResponse) bool {
+	if stored.OutputText != "" {
+		return takeMemoryBudget(&b.messages, 1) && b.strings(stored.OutputText)
+	}
+	if !takeMemoryBudget(&b.nodes, len(stored.Output)) {
+		return false
+	}
+	for _, output := range stored.Output {
+		if output.Type != "message" {
+			continue
+		}
+		if !takeMemoryBudget(&b.nodes, len(output.Content)) {
+			return false
+		}
+		hasText := false
+		for _, part := range output.Content {
+			if part.Type == "output_text" && part.Text != "" {
+				hasText = true
+				if !b.strings(part.Text) {
+					return false
 				}
 			}
 		}
+		if hasText && (!takeMemoryBudget(&b.messages, 1) || !b.strings(output.Role)) {
+			return false
+		}
 	}
-	return jobCtx.Err()
+	return true
 }
 
 // Count the same primary assistant text consumed by semanticAssistantContent.

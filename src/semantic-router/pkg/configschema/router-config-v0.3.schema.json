@@ -3560,6 +3560,7 @@
       "properties": {
         "timeout_seconds": {
           "type": "integer",
+          "maximum": 9223372036,
           "minimum": 0
         },
         "concurrency": {
@@ -3574,6 +3575,7 @@
         },
         "shutdown_grace_seconds": {
           "type": "integer",
+          "maximum": 9223372036,
           "minimum": 0
         }
       },

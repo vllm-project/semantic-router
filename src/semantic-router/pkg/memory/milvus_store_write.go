@@ -88,7 +88,7 @@ func memoryEmbedding(ctx context.Context, memory *Memory, cfg EmbeddingConfig) (
 	if len(memory.Embedding) > 0 {
 		return memory.Embedding, nil
 	}
-	embedding, err := GenerateEmbeddingContext(ctx, memory.Content, cfg)
+	embedding, err := embedForWrite(ctx, memory.Content, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}

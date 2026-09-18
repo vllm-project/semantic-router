@@ -18,11 +18,7 @@ FAILURE_RECEIPTS = {"store_failed": "persist_error", "timeout": "persist_timeout
 # The fixture uses the default 30-second attempt timeout; allow receipt I/O
 # and polling five more seconds, without waiting for backend recovery.
 FAILURE_RECEIPT_BUDGET_SECONDS = 35
-MILVUS_CONTAINER = "milvus-semantic-cache"
-METRICS_CANDIDATES = (
-    "http://localhost:9190/metrics",
-    "http://localhost:9390/metrics",
-)
+DEFAULT_MILVUS_CONTAINER = "milvus-semantic-cache"
 LABEL_PATTERN = re.compile(r'(\w+)="([^"]*)"')
 
 
@@ -31,23 +27,30 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
 
     def setUp(self):
         super().setUp()
+        self.port_offset = int(os.environ.get("VLLM_SR_PORT_OFFSET", "0"))
         self.metrics_url = self._resolve_metrics_url()
         self.replay_url = os.environ.get(
-            "ROUTER_REPLAY_URL", "http://localhost:8080/api/v1/observability/replays"
+            "ROUTER_REPLAY_URL",
+            f"http://localhost:{8080 + self.port_offset}/api/v1/observability/replays",
         ).rstrip("/")
         self.container_runtime = os.environ.get("CONTAINER_RUNTIME", "docker")
+        self.milvus_container = os.environ.get(
+            "MILVUS_CONTAINER_NAME", DEFAULT_MILVUS_CONTAINER
+        )
 
     def _resolve_metrics_url(self) -> str:
-        configured = os.environ.get("ROUTER_METRICS_URL")
-        candidates = (configured,) if configured else METRICS_CANDIDATES
-        for url in candidates:
-            try:
-                response = requests.get(url, timeout=5)
-            except requests.exceptions.RequestException:
-                continue
-            if response.status_code == HTTP_OK:
-                return url
-        self.fail("router metrics endpoint is not reachable")
+        url = os.environ.get(
+            "ROUTER_METRICS_URL",
+            f"http://localhost:{9190 + self.port_offset}/metrics",
+        )
+        try:
+            response = requests.get(url, timeout=5)
+        except requests.exceptions.RequestException as e:
+            self.fail(f"router metrics endpoint {url} is not reachable: {e}")
+        self.assertEqual(
+            response.status_code, HTTP_OK, f"router metrics endpoint {url} failed"
+        )
+        return url
 
     def _receipt_count(self, status: str) -> float:
         try:
@@ -126,11 +129,11 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
             text=True,
             check=False,
         )
-        return MILVUS_CONTAINER in result.stdout.split()
+        return self.milvus_container in result.stdout.split()
 
     def _container_command(self, action: str) -> None:
         subprocess.run(
-            [self.container_runtime, action, MILVUS_CONTAINER],
+            [self.container_runtime, action, self.milvus_container],
             capture_output=True,
             text=True,
             check=True,
@@ -202,7 +205,7 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
         self.assertEqual(receipt["reason"], "history_too_large", receipt)
         self.assertEqual(receipt["metadata"].get("fail_open"), "true", receipt)
 
-    def test_02_store_failure_keeps_response_fail_open(self):
+    def test_05_store_failure_keeps_response_fail_open(self):
         """A dead backend returns model output and a request-correlated failure receipt."""
         self.print_test_header(
             "Persistence Receipt: Fail-Open",
@@ -211,7 +214,7 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
 
         if not self._container_available():
             self.skipTest(
-                f"{MILVUS_CONTAINER} is not a running container for this runtime"
+                f"{self.milvus_container} is not a running container for this runtime"
             )
 
         baseline = {status: self._receipt_count(status) for status in FAILURE_RECEIPTS}

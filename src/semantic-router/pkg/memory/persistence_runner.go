@@ -39,6 +39,7 @@ type queuedJob struct {
 	job           PersistenceJob
 	scheduledDone chan struct{}
 	preparedDone  chan struct{}
+	preparedOnce  sync.Once
 	finish        func()
 }
 
@@ -111,7 +112,9 @@ func (r *PersistenceRunner) Submit(traceCtx context.Context, job PersistenceJob)
 }
 
 // TryReserve admits preparation before request-owned data is copied. A reserved
-// job occupies queue/worker capacity until Start or Abort publishes its work.
+// job occupies queue/worker capacity until Start or Abort publishes its work,
+// or shutdown abandons it. Preparation may only use request-owned state; the
+// caller must keep its generation lease until preparation returns.
 // Callers must defer Abort so preparation failures cannot strand the reservation.
 func (r *PersistenceRunner) TryReserve(traceCtx context.Context, report func(string, string, bool, error)) *PersistenceReservation {
 	job := PersistenceJob{Report: report}
@@ -141,20 +144,23 @@ func (r *PersistenceRunner) TryReserve(traceCtx context.Context, report func(str
 
 type PersistenceReservation struct {
 	queued *queuedJob
-	once   sync.Once
 }
 
 func (r *PersistenceReservation) Context() context.Context { return r.queued.ctx }
 
 func (r *PersistenceReservation) Start(run func(context.Context) (PersistenceOutcome, error)) {
-	r.once.Do(func() {
-		r.queued.job.Run = run
-		close(r.queued.preparedDone)
+	r.queued.prepare(run)
+}
+
+func (q *queuedJob) prepare(run func(context.Context) (PersistenceOutcome, error)) {
+	q.preparedOnce.Do(func() {
+		q.job.Run = run
+		close(q.preparedDone)
 	})
 }
 
 // Abort is harmless after Start. Until either is called, even a timed-out
-// preparation retains capacity and generation resources.
+// preparation retains capacity until runner shutdown abandons it.
 func (r *PersistenceReservation) Abort(outcome PersistenceOutcome, err error) {
 	r.Start(func(context.Context) (PersistenceOutcome, error) { return outcome, err })
 }
@@ -163,7 +169,15 @@ func (r *PersistenceRunner) worker() {
 	defer r.workers.Done()
 	for queued := range r.jobs {
 		<-queued.scheduledDone
-		<-queued.preparedDone
+		select {
+		case <-queued.preparedDone:
+		case <-r.baseCtx.Done():
+			// Abandon unpublished work only on shutdown: ordinary timeouts must
+			// not admit more preparation while the request still owns its slot.
+			// Sharing publication with Start makes late Start/Abort harmless.
+			queued.prepare(nil)
+			<-queued.ctx.Done()
+		}
 		r.run(queued)
 	}
 }

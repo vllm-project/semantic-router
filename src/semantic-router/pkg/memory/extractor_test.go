@@ -44,10 +44,11 @@ func TestProcessResponse_StoresChunk(t *testing.T) {
 	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"What is the capital of France?",
 		"The capital of France is Paris.",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -67,10 +68,11 @@ func TestProcessResponse_StripsThinkTags(t *testing.T) {
 	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"What is the sum of two plus two?",
 		"<think>Let me calculate... 2+2=4</think>The answer is 4.",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -86,10 +88,11 @@ func TestProcessResponse_StripsUnclosedThinkTags(t *testing.T) {
 	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"Tell me an interesting fact about geography",
 		"<think>Reasoning about this...",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -107,9 +110,10 @@ func TestProcessResponse_EmptyTurnSkipped(t *testing.T) {
 	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"", "",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -122,9 +126,10 @@ func TestProcessResponse_OnlyUserMessage(t *testing.T) {
 	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"What is the capital city of France and why is it famous?", "",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -138,9 +143,10 @@ func TestProcessResponse_OnlyAssistantResponse(t *testing.T) {
 	store := newTestInMemoryStore()
 	extractor := NewMemoryChunkStore(store)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"", "Here is the detailed answer to your question about geography.",
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -157,18 +163,20 @@ func TestProcessResponse_StoreDisabled(t *testing.T) {
 	}
 	extractor := NewMemoryChunkStore(disabledStore)
 
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"test", "response",
+		nil,
 	)
 	assert.NoError(t, err, "should return nil when store is disabled")
 }
 
 func TestProcessResponse_NilExtractor(t *testing.T) {
 	var extractor *MemoryExtractor
-	err := extractor.ProcessResponse(
+	_, err := extractor.ProcessResponseWithHistoryCount(
 		context.Background(), "session1", "user1",
 		"test", "response",
+		nil,
 	)
 	assert.NoError(t, err, "nil extractor should not panic")
 }
@@ -179,9 +187,10 @@ func TestProcessResponse_MultipleTurns(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		err := extractor.ProcessResponse(ctx, "session1", "user1",
+		_, err := extractor.ProcessResponseWithHistoryCount(ctx, "session1", "user1",
 			"What is the weather forecast for tomorrow?",
 			"Tomorrow will be sunny with a high of 75 degrees.",
+			nil,
 		)
 		require.NoError(t, err)
 	}

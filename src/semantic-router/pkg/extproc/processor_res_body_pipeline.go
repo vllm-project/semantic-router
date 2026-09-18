@@ -62,6 +62,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
+		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
 		return hallucinationResponse
 	}
 

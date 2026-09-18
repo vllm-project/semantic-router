@@ -2,6 +2,7 @@ package configschema
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/invopop/jsonschema"
@@ -9,16 +10,25 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func setMemoryPersistenceBounds(root *jsonschema.Schema) {
-	for _, property := range []string{"timeout_seconds", "concurrency", "queue", "shutdown_grace_seconds"} {
-		setDefinitionPropertyMinimum(root, "MemoryPersistenceConfig", property, 0)
+// setMemoryPersistenceBounds mirrors the bounds Parse enforces. A missing
+// definition or property is a generator error: offline validators would
+// otherwise accept documents the Router rejects at startup.
+func setMemoryPersistenceBounds(root *jsonschema.Schema) error {
+	maximums := map[string]int64{
+		"timeout_seconds":        routerconfig.MaxMemoryPersistenceDurationSeconds,
+		"concurrency":            int64(routerconfig.MaxMemoryPersistenceConcurrency),
+		"queue":                  int64(routerconfig.MaxMemoryPersistenceQueue),
+		"shutdown_grace_seconds": routerconfig.MaxMemoryPersistenceDurationSeconds,
 	}
-	for property, maximum := range map[string]int{
-		"concurrency": routerconfig.MaxMemoryPersistenceConcurrency,
-		"queue":       routerconfig.MaxMemoryPersistenceQueue,
-	} {
-		if field := definitionProperty(root, "MemoryPersistenceConfig", property); field != nil {
-			field.Maximum = json.Number(strconv.Itoa(maximum))
+	for _, property := range []string{"timeout_seconds", "concurrency", "queue", "shutdown_grace_seconds"} {
+		field := definitionProperty(root, "MemoryPersistenceConfig", property)
+		if field == nil {
+			return fmt.Errorf("memory persistence schema is missing %q", property)
+		}
+		field.Minimum = json.Number("0")
+		if maximum, ok := maximums[property]; ok {
+			field.Maximum = json.Number(strconv.FormatInt(maximum, 10))
 		}
 	}
+	return nil
 }

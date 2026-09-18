@@ -147,7 +147,7 @@ const DefaultSessionStride = 3
 // Usage:
 //
 //	store := NewMemoryChunkStore(milvusStore)
-//	err := store.ProcessResponse(ctx, sessionID, userID, userMsg, assistantMsg)
+//	count, err := store.ProcessResponseWithHistoryCount(ctx, sessionID, userID, userMsg, assistantMsg, history)
 type MemoryExtractor struct {
 	store             Store
 	sessionWindowSize int
@@ -191,8 +191,7 @@ func StripThinkTags(s string) string {
 // Direct Chunk Storage
 // =============================================================================
 
-// ProcessResponse stores the current conversation turn. Delegates to
-// ProcessResponseWithHistory with nil history for backward compatibility.
+// ProcessResponse stores the current conversation turn without prior history.
 func (e *MemoryExtractor) ProcessResponse(
 	ctx context.Context,
 	sessionID string,
@@ -203,9 +202,14 @@ func (e *MemoryExtractor) ProcessResponse(
 	return e.ProcessResponseWithHistory(ctx, sessionID, userID, userMessage, assistantResponse, nil)
 }
 
-// ProcessResponseWithHistory preserves the error-only API for existing callers.
+// ProcessResponseWithHistory stores the current turn and any due session chunk.
+// Call ProcessResponseWithHistoryCount when the successful-write count is needed.
 func (e *MemoryExtractor) ProcessResponseWithHistory(
-	ctx context.Context, sessionID, userID, userMessage, assistantResponse string,
+	ctx context.Context,
+	sessionID string,
+	userID string,
+	userMessage string,
+	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
 ) error {
 	_, err := e.ProcessResponseWithHistoryCount(ctx, sessionID, userID, userMessage, assistantResponse, history)

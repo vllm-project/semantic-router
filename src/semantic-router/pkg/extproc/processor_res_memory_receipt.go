@@ -50,15 +50,12 @@ func (r *OpenAIRouter) recordMemoryPersistenceOutcome(
 }
 
 func (receipt memoryPersistenceReceipt) record(status, reason string, failOpen bool, cause error) {
-	if status != "scheduled" {
+	scheduled := status == "scheduled"
+	if !scheduled {
 		metrics.RecordPluginExecution("memory_persistence", receipt.decisionKey, status, 0)
 	}
-	receipt.appendReplayOutcome(status, reason, failOpen)
-	if status == "scheduled" {
-		return
-	}
-
-	if !failOpen && cause == nil && status != "rejected" {
+	receipt.appendReplayOutcome(status, reason, failOpen, scheduled)
+	if scheduled || (!failOpen && cause == nil && status != "rejected") {
 		return
 	}
 
@@ -78,6 +75,7 @@ func (receipt memoryPersistenceReceipt) appendReplayOutcome(
 	status string,
 	reason string,
 	failOpen bool,
+	scheduled bool,
 ) {
 	if receipt.replayID == "" {
 		return
@@ -87,7 +85,7 @@ func (receipt memoryPersistenceReceipt) appendReplayOutcome(
 		return
 	}
 	phase := "terminal"
-	if status == "scheduled" {
+	if scheduled {
 		phase = "scheduled"
 	}
 	outcome := routerreplay.Outcome{
@@ -104,7 +102,7 @@ func (receipt memoryPersistenceReceipt) appendReplayOutcome(
 		},
 	}
 	if receipt.reservation != nil {
-		if phase == "scheduled" {
+		if scheduled {
 			receipt.reservation.Scheduled(outcome)
 		} else {
 			receipt.reservation.Finish(outcome)

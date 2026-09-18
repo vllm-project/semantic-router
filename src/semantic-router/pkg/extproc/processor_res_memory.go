@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/openai/openai-go"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -20,33 +22,32 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	if r == nil || ctx == nil {
 		return
 	}
-	autoStoreEnabled := r.responseMemoryAutoStoreEnabled(ctx)
-	logging.Infof(
-		"Memory store check: MemoryExtractor=%v, autoStore=%v, responseJailbreakPassed=%v",
-		r.MemoryExtractor != nil,
-		autoStoreEnabled,
-		!ctx.ResponseJailbreakDetected,
-	)
-	if r.MemoryExtractor == nil {
-		r.recordMemoryPersistenceOutcome(ctx, "disabled", "no_extractor", false, nil)
-		return
-	}
-	if !autoStoreEnabled {
-		r.recordMemoryPersistenceOutcome(ctx, "disabled", "auto_store_off", false, nil)
-		return
-	}
-	if ctx.ResponseJailbreakDetected {
-		reason := "response_jailbreak"
-		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
-			reason = "jailbreak_unverified"
+	// Snapshot preparation runs on the response path, so an unexpected payload
+	// shape must be logged rather than failing a request whose answer is already
+	// generated (#1843). The reservation's deferred Abort still publishes its
+	// receipt first, because deferred calls unwind in reverse order.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logging.ComponentErrorEvent("extproc", "memory_snapshot_panic", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"panic":      recovered,
+				"stack":      string(debug.Stack()),
+			})
 		}
-		r.recordMemoryPersistenceOutcome(ctx, "policy_blocked", reason, false, nil)
+	}()
+	status, reason, suppressed := r.suppressedResponseMemoryStore(ctx)
+	logging.Infof(
+		"Memory store check: MemoryExtractor=%v, suppressed=%v, reason=%s",
+		r.MemoryExtractor != nil, suppressed, reason,
+	)
+	if suppressed {
+		r.recordMemoryPersistenceOutcome(ctx, status, reason, false, nil)
 		return
 	}
 
 	// Reject missing identity before inspecting or copying conversation content.
 	if ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 || extractUserID(ctx) == "" {
-		r.recordMemoryPersistenceOutcome(ctx, "skipped", "memory_info_unavailable", false, nil)
+		r.recordMemoryPersistenceOutcome(ctx, "skipped", "memory_info_unavailable", true, nil)
 		return
 	}
 	var retained []*responseapi.StoredResponse
@@ -55,13 +56,17 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	}
 	// Inspect bounded structure and lengths before admission. Rejected snapshots
 	// must not occupy capacity while workers are blocked. No text is copied here.
-	if err := validateMemorySnapshotBudget(context.Background(), ctx.SemanticRequest.Messages, retained, response); err != nil {
+	if err := validateMemorySnapshotBudget(ctx.SemanticRequest.Messages, retained, response); err != nil {
 		r.recordMemoryPersistenceOutcome(ctx, "skipped", "history_too_large", true, err)
 		return
 	}
 	receipt := r.snapshotMemoryPersistenceReceipt(ctx)
 	if !receipt.reserve() {
 		receipt.record("rejected", "receipt_queue_full", true, nil)
+		return
+	}
+	if r.memoryPersistence == nil {
+		receipt.record("disabled", "no_runner", false, nil)
 		return
 	}
 	reservation := r.memoryPersistence.TryReserve(ctx.TraceContext, receipt.record)
@@ -78,46 +83,100 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	currentUserMessage := extractCurrentUserMessage(ctx)
 	sessionID, userID, history, infoErr := extractMemoryInfo(ctx)
 	if infoErr != nil {
-		reservation.Abort(memory.PersistenceOutcome{Status: "skipped", Reason: "memory_info_unavailable"}, infoErr)
+		reservation.Abort(memory.PersistenceOutcome{Status: "skipped", Reason: "memory_info_unavailable", FailOpen: true}, infoErr)
 		return
 	}
-	historyCount := len(history)
-	extractor := r.MemoryExtractor
-	reservation.Start(func(jobCtx context.Context) (memory.PersistenceOutcome, error) {
-		extractorHistory, historyErr := r.memoryHistoryForExtractor(history)
-		if historyErr != nil {
-			return memory.PersistenceOutcome{
-				Status:   "extraction_failed",
-				Reason:   "history_encode_error",
-				FailOpen: true,
-			}, historyErr
-		}
+	reservation.Start(memoryPersistenceJob{
+		extractor:         r.MemoryExtractor,
+		codecs:            r.ProtocolCodecs,
+		sessionID:         sessionID,
+		userID:            userID,
+		userMessage:       currentUserMessage,
+		assistantResponse: currentAssistantResponse,
+		history:           history,
+	}.run)
+}
 
-		logging.Infof(
-			"Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars, history=%d msgs",
-			sessionID,
-			userID,
-			len(currentUserMessage),
-			len(currentAssistantResponse),
-			historyCount,
-		)
+// memoryPersistenceJob owns everything the worker needs, so a queued write
+// never keeps a router generation alive through a captured receiver.
+type memoryPersistenceJob struct {
+	extractor         *memory.MemoryExtractor
+	codecs            *protocolcodec.Registry
+	sessionID         string
+	userID            string
+	userMessage       string
+	assistantResponse string
+	history           []llmprotocol.Message
+}
 
-		storedCount, err := extractor.ProcessResponseWithHistoryCount(
-			jobCtx,
-			sessionID,
-			userID,
-			currentUserMessage,
-			currentAssistantResponse,
-			extractorHistory,
-		)
-		if err != nil {
-			return memory.PersistenceOutcome{}, err
+func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceOutcome, error) {
+	extractorHistory, historyErr := memoryHistoryForExtractor(job.codecs, job.history)
+	if historyErr != nil {
+		return memory.PersistenceOutcome{
+			Status:   "extraction_failed",
+			Reason:   "history_encode_error",
+			FailOpen: true,
+		}, historyErr
+	}
+
+	logging.Infof(
+		"Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars, history=%d msgs",
+		job.sessionID,
+		job.userID,
+		len(job.userMessage),
+		len(job.assistantResponse),
+		len(job.history),
+	)
+
+	storedCount, err := job.extractor.ProcessResponseWithHistoryCount(
+		jobCtx,
+		job.sessionID,
+		job.userID,
+		job.userMessage,
+		job.assistantResponse,
+		extractorHistory,
+	)
+	if err != nil {
+		return memory.PersistenceOutcome{}, err
+	}
+	if storedCount == 0 {
+		return memory.PersistenceOutcome{Status: "skipped", Reason: "no_write"}, nil
+	}
+	return memory.PersistenceOutcome{}, nil
+}
+
+// recordUnscheduledResponseMemoryStore reports the terminal receipt for a
+// response that never reaches scheduling. Enablement and response-stage policy
+// outrank the caller's reason, so a suppressed write reads the same either way.
+func (r *OpenAIRouter) recordUnscheduledResponseMemoryStore(
+	ctx *RequestContext,
+	status, reason string,
+	failOpen bool,
+) {
+	if r == nil || ctx == nil {
+		return
+	}
+	if suppressedStatus, suppressedReason, suppressed := r.suppressedResponseMemoryStore(ctx); suppressed {
+		status, reason, failOpen = suppressedStatus, suppressedReason, false
+	}
+	r.recordMemoryPersistenceOutcome(ctx, status, reason, failOpen, nil)
+}
+
+// suppressedResponseMemoryStore is the single enablement and response-stage
+// policy ladder: every path that owes a receipt reports the same verdict.
+func (r *OpenAIRouter) suppressedResponseMemoryStore(ctx *RequestContext) (string, string, bool) {
+	switch {
+	case r.MemoryExtractor == nil:
+		return "disabled", "no_extractor", true
+	case !r.responseMemoryAutoStoreEnabled(ctx):
+		return "disabled", "auto_store_off", true
+	case ctx.ResponseJailbreakDetected:
+		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
+			return "policy_blocked", "jailbreak_unverified", true
 		}
-		if storedCount == 0 {
-			return memory.PersistenceOutcome{Status: "skipped", Reason: "no_write"}, nil
-		}
-		return memory.PersistenceOutcome{}, nil
-	})
+		return "policy_blocked", "response_jailbreak", true
+	}
+	return "", "", false
 }
 
 // responseMemoryAutoStoreEnabled applies server policy before client choices.
@@ -137,19 +196,19 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 		return requestAutoStore
 	}
 	if memoryConfig != nil && memoryConfig.AutoStore != nil {
-		autoStore, _ := extractAutoStore(ctx)
-		return autoStore
+		return *memoryConfig.AutoStore
 	}
 	return r.Config.Memory.AutoStore
 }
 
-func (r *OpenAIRouter) memoryHistoryForExtractor(
+func memoryHistoryForExtractor(
+	codecs *protocolcodec.Registry,
 	history []llmprotocol.Message,
 ) ([]openai.ChatCompletionMessageParamUnion, error) {
 	if len(history) == 0 {
 		return nil, nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := protocolEngineFor(codecs)
 	if err != nil {
 		return nil, err
 	}

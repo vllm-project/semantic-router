@@ -56,7 +56,7 @@ func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 		return err
 	}
 	if len(memory.Embedding) == 0 {
-		embedding, err := GenerateEmbeddingContext(ctx, memory.Content, s.embeddingConfig)
+		embedding, err := embedForWrite(ctx, memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}
@@ -243,7 +243,7 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 
 	// Regenerate embedding before overwriting Content so the comparison is valid.
 	if existing.Content != memory.Content {
-		embedding, err := GenerateEmbeddingWithContext(ctx, memory.Content, s.embeddingConfig)
+		embedding, err := embedForWrite(ctx, memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}

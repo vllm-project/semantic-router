@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,55 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
+
+func TestMemorySchedulingRetainedOutputUsesSnapshotBudget(t *testing.T) {
+	for _, mode := range []string{"ninety_turns", "duplicated_output_bytes"} {
+		t.Run(mode, func(t *testing.T) {
+			backend := &persistenceRegressionStore{InMemoryStore: memory.NewInMemoryStore()}
+			recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+			t.Cleanup(func() { assert.NoError(t, recorder.Close()) })
+			_, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: mode})
+			require.NoError(t, err)
+			runner := memory.NewPersistenceRunner(10*time.Second, 1, 1)
+			t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
+			router := &OpenAIRouter{
+				Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+				MemoryExtractor:   memory.NewMemoryChunkStore(backend),
+				memoryPersistence: runner,
+				ReplayRecorder:    recorder,
+			}
+			ctx := persistenceRegressionContext(mode)
+			ctx.RouterReplayID = mode
+			ctx.ResponseObjectState = &ResponseObjectState{}
+			turns, answer := 90, "I will remember your deployment preference."
+			if mode == "duplicated_output_bytes" {
+				turns, answer = 1, strings.Repeat("x", maxMemorySnapshotBytes/2+1)
+			}
+			for range turns {
+				ctx.ResponseObjectState.ConversationHistory = append(ctx.ResponseObjectState.ConversationHistory, &responseapi.StoredResponse{
+					Input:      []responseapi.InputItem{{Type: "message", Role: "user", Content: json.RawMessage(`"Remember my deployment preference."`)}},
+					OutputText: answer,
+					Output: []responseapi.OutputItem{
+						{Type: "reasoning"},
+						{Type: "message", Role: "assistant", Content: []responseapi.ContentPart{{Type: "output_text", Text: answer}}},
+					},
+				})
+			}
+			require.Len(t, convertStoredResponsesToMessages(ctx.ResponseObjectState.ConversationHistory), turns*2)
+			router.scheduleSemanticResponseMemoryStore(ctx, memoryTestResponse("Deploy the service using a regional cluster and a load balancer."))
+			require.NoError(t, runner.RetireAndWait(5*time.Second))
+			require.NoError(t, recorder.DrainOutcomes())
+			record, found := recorder.GetRecord(mode)
+			require.True(t, found)
+			require.Len(t, record.Outcomes, 2)
+			assert.Equal(t, "scheduled", record.Outcomes[0].Verdict)
+			assert.Equal(t, "completed", record.Outcomes[1].Verdict)
+			stored, err := backend.List(context.Background(), memory.ListOptions{UserID: "original-user", Limit: 10})
+			require.NoError(t, err)
+			require.NotEmpty(t, stored.Memories)
+		})
+	}
+}
 
 func TestMemorySchedulingRejectsLargeHistoryBeforePreparation(t *testing.T) {
 	for _, mode := range []string{"queue_full", "receipt_queue_full", "shutting_down", "missing_user", "history_too_large"} {

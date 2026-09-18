@@ -13,6 +13,31 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
+func TestResourceScopeClosesAfterAbandonedPersistenceReservation(t *testing.T) {
+	runner := memory.NewPersistenceRunner(time.Minute, 1, 1)
+	reservation := runner.TryReserve(context.Background(), func(string, string, bool, error) {})
+	require.NotNil(t, reservation)
+	t.Cleanup(func() {
+		reservation.Abort(memory.PersistenceOutcome{}, nil)
+		_ = runner.RetireAndWait(time.Millisecond)
+	})
+	scope := newResourceScope()
+	closed := make(chan struct{})
+	scope.add(func() error { close(closed); return nil })
+	scope.addDraining(func() error { return runner.RetireAndWait(time.Millisecond) }, runner.Done())
+	require.ErrorIs(t, scope.close(), memory.ErrPersistenceShutdownDeadline)
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("abandoned reservation leaked generation resources")
+	}
+	reservation.Start(func(context.Context) (memory.PersistenceOutcome, error) {
+		t.Error("late work ran after its resources closed")
+		return memory.PersistenceOutcome{}, nil
+	})
+	require.NoError(t, scope.close())
+}
+
 func TestResourceScopeRetainsGenerationUntilPersistenceExits(t *testing.T) {
 	runner := memory.NewPersistenceRunner(time.Minute, 1, 1)
 	scope := newResourceScope()

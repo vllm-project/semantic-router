@@ -10,26 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
-
-// extractAutoStore returns the per-decision auto_store value and whether it is set.
-// Explicit false must remain distinct from an omitted value so only omitted
-// decision controls fall back to the router default.
-// Supported for both Response API and Chat Completions.
-func extractAutoStore(ctx *RequestContext) (bool, bool) {
-	if ctx.VSRSelectedDecision != nil {
-		memoryPluginConfig := ctx.VSRSelectedDecision.GetMemoryConfig()
-		if memoryPluginConfig != nil && memoryPluginConfig.AutoStore != nil {
-			logging.Infof("extractAutoStore: Using per-decision plugin config, AutoStore=%v (decision: %s)",
-				*memoryPluginConfig.AutoStore, ctx.VSRSelectedDecisionName)
-			return *memoryPluginConfig.AutoStore, true
-		}
-	}
-
-	return false, false
-}
 
 // extractRequestAutoStore is defined in dev/prod build-tagged files.
 
