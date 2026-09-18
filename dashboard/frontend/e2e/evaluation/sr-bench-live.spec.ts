@@ -3,6 +3,8 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
 interface LiveAcceptancePlan {
   base_url: string
+  active_run_id?: string
+  active_expected_total?: number
   baseline_run_id?: string
   balance_run_ids?: [string, string, string]
   final_target_id?: string
@@ -75,6 +77,76 @@ async function openRun(page: Page, id: string) {
   await expect(page.getByRole('button', { name: 'Refresh evidence', exact: true })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
 }
+
+test('live active long-running evaluation keeps identity and progress after reload', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !plan?.active_run_id,
+    'Provide an already-running evaluation ID; this test never starts one.',
+  )
+  const blocked = await openAcceptance(page)
+  const id = plan!.active_run_id!
+  const read = async () => {
+    const response = await page.request.get(
+      `${plan!.base_url}/api/sr-bench/v1/runs/${encodeURIComponent(id)}`,
+    )
+    expect(response.ok()).toBe(true)
+    const observed = (await response.json()) as {
+      id: string
+      status: string
+      manifest: { plan_sha256: string }
+      progress: { total: number; completed: number; failed: number }
+    }
+    return {
+      id: observed.id,
+      status: observed.status,
+      manifest: { plan_sha256: observed.manifest.plan_sha256 },
+      progress: observed.progress,
+    }
+  }
+  const before = await read()
+  expect(before.manifest.plan_sha256).toMatch(/^[a-f0-9]{64}$/)
+  if (plan!.active_expected_total !== undefined)
+    expect(before.progress.total).toBe(plan!.active_expected_total)
+  expect(
+    ['queued', 'running'],
+    'Active-refresh acceptance requires a genuinely active run.',
+  ).toContain(before.status)
+  await openRun(page, id)
+  await expect(page.getByRole('progressbar', { name: 'Evaluation progress' })).toBeVisible()
+  await screenshot(page, testInfo, 'live-active-before-reload.png')
+  await page.reload()
+  await expect(page).toHaveURL(new RegExp(`run=${encodeURIComponent(id)}`))
+  await expect(page.getByRole('progressbar', { name: 'Evaluation progress' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  const after = await read()
+  expect(after.id).toBe(id)
+  expect(after.manifest.plan_sha256).toBe(before.manifest.plan_sha256)
+  expect(after.progress.total).toBe(before.progress.total)
+  expect(after.progress.completed + after.progress.failed).toBeGreaterThanOrEqual(
+    before.progress.completed + before.progress.failed,
+  )
+  expect(['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted']).toContain(
+    after.status,
+  )
+  await screenshot(page, testInfo, 'live-active-after-reload.png')
+  await testInfo.attach('active-reload-evidence.json', {
+    body: JSON.stringify(
+      {
+        before,
+        after,
+        mutation_requests: blocked,
+        model_requests: 0,
+        scope: 'Existing active run; terminal transition during reload is allowed and recorded.',
+      },
+      null,
+      2,
+    ),
+    contentType: 'application/json',
+  })
+  expect(blocked).toEqual([])
+})
 
 test('live inventory, frozen dataset and persisted CLI run are visible', async ({
   page,

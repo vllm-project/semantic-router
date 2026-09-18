@@ -268,25 +268,39 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     parentID = ((await startHTTP.json()) as Run).id
     evidence.parent_run_id = parentID
     save()
-    await expect(page).toHaveURL(new RegExp(`run=${parentID}`))
-    await expect(page.getByRole('progressbar', { name: 'Evaluation progress' })).toBeVisible()
     let parentCalls: CallRecord[] = []
-    await expect
-      .poll(async () => {
-        parentCalls = (await read<{ calls: CallRecord[] }>(page, `/runs/${parentID}/calls`)).calls
-        return parentCalls.length
-      })
-      .toBeGreaterThan(0)
-    await capture(page, info, 'synthetic-live-progress.png')
+    // The synthetic scope can finish quickly. Observe dispatch and the actual UI
+    // concurrently, then cancel immediately; never prolong the model workload.
+    const cancelButton = page.getByRole('button', { name: 'Cancel evaluation', exact: true })
+    await Promise.all([
+      expect(page).toHaveURL(new RegExp(`run=${parentID}`)),
+      expect(cancelButton).toBeVisible(),
+      expect
+        .poll(async () => {
+          parentCalls = (await read<{ calls: CallRecord[] }>(page, `/runs/${parentID}/calls`)).calls
+          return parentCalls.length
+        })
+        .toBeGreaterThan(0),
+    ])
+    const cancelResponse = page.waitForResponse(responseFor(`/runs/${parentID}/cancel`))
+    await cancelButton.click()
+    expect((await cancelResponse).ok()).toBe(true)
+    evidence.cancel_requested_after_durable_call = true
+    await capture(page, info, 'synthetic-cancellation-requested.png')
+    const parent = await waitForTerminal(page, parentID)
+    expect(parent.status).toBe('cancelled')
     await page.reload()
     await expect(page.getByRole('progressbar', { name: 'Evaluation progress' })).toBeVisible()
     await expect(page).toHaveURL(new RegExp(`run=${parentID}`))
+    await expect(
+      page.getByText('This run is cancelled. Partial results are not a completed evaluation.', {
+        exact: true,
+      }),
+    ).toBeVisible()
     evidence.persisted_after_reload = true
-    const cancelResponse = page.waitForResponse(responseFor(`/runs/${parentID}/cancel`))
-    await page.getByRole('button', { name: 'Cancel evaluation', exact: true }).click()
-    expect((await cancelResponse).ok()).toBe(true)
-    const parent = await waitForTerminal(page, parentID)
-    expect(parent.status).toBe('cancelled')
+    evidence.persisted_after_reload_scope =
+      'Cancelled parent identity and terminal status; active-run reload is verified separately.'
+    await capture(page, info, 'synthetic-cancelled-parent-after-reload.png')
     evidence.parent_progress = parent.progress
     parentCalls = (await read<{ calls: CallRecord[] }>(page, `/runs/${parentID}/calls`)).calls
     const dispatched = new Set(parentCalls.map(key))
