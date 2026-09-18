@@ -5,9 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -754,5 +759,119 @@ func TestWorkflowsPersistentStateKeepsPriorStepOutputs(t *testing.T) {
 	}
 	if !finalSawThinkerEvidence {
 		t.Fatal("final synthesis did not receive prior step output after file-state resume")
+	}
+}
+
+func TestWorkflowsResumeLongerThanLeaseConcurrentRetry(t *testing.T) {
+	setWorkflowStateClaimLease(t, 80*time.Millisecond)
+
+	t.Run("memory", func(t *testing.T) {
+		s := newWorkflowMemoryToolStateStore(time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		assertResumeLongerThanLeaseConcurrentRetry(t, s, nil)
+	})
+	t.Run("file", func(t *testing.T) {
+		s := newWorkflowFileToolStateStore(filepath.Join(t.TempDir(), "state"), time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		assertResumeLongerThanLeaseConcurrentRetry(t, s, nil)
+	})
+	t.Run("redis", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+			Address:   mr.Addr(),
+			KeyPrefix: "test-resume-lease:",
+		}, time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		assertResumeLongerThanLeaseConcurrentRetry(t, s, mr)
+	})
+}
+
+func assertResumeLongerThanLeaseConcurrentRetry(t *testing.T, store workflowToolStateStore, mr *miniredis.Miniredis) {
+	t.Helper()
+	var workerResumes atomic.Int32
+	inWorker := make(chan struct{})
+	releaseWorker := make(chan struct{})
+	var startOnce sync.Once
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Model    string                   `json:"model"`
+			Messages []map[string]interface{} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch payload.Model {
+		case "worker-model":
+			if payloadHasToolMessage(payload.Messages) {
+				if workerResumes.Add(1) == 1 {
+					startOnce.Do(func() { close(inWorker) })
+					<-releaseWorker
+				}
+				_, _ = w.Write(workflowChatCompletion("worker-model", "worker completed with tool result"))
+				return
+			}
+			_, _ = w.Write(workflowToolCallCompletion("worker-model", "call_lookup"))
+		case "verifier-model":
+			_, _ = w.Write(workflowChatCompletion("verifier-model", "final answer after tool"))
+		default:
+			t.Errorf("unexpected model call: %s", payload.Model)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	newLooper := func() *WorkflowsLooper {
+		return &WorkflowsLooper{
+			BaseLooper: NewBaseLooper(workflowToolLooperConfig(server.URL, t.TempDir())),
+			toolStates: store,
+		}
+	}
+
+	firstResp, err := newLooper().Execute(context.Background(), workflowToolLooperRequest(workflowToolTestRequest()))
+	if err != nil {
+		t.Fatalf("pause Execute failed: %v", err)
+	}
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	resumeReq := workflowToolLooperRequest(workflowToolResumeRequest(t, assistantMessage, toolCallID))
+
+	firstErr := make(chan error, 1)
+	go func() {
+		_, execErr := newLooper().Execute(context.Background(), resumeReq)
+		firstErr <- execErr
+	}()
+	select {
+	case <-inWorker:
+	case execErr := <-firstErr:
+		t.Fatalf("first resume ended before hold: %v", execErr)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for first resume to hold the claim")
+	}
+
+	holdClaimPastLease(mr)
+
+	_, retryErr := newLooper().Execute(context.Background(), resumeReq)
+	if retryErr == nil {
+		t.Fatal("retry resumed a live workflow after the original lease elapsed")
+	}
+	if !strings.Contains(retryErr.Error(), "not found or expired") {
+		t.Fatalf("retry error = %v, want a busy claim", retryErr)
+	}
+
+	close(releaseWorker)
+	if execErr := <-firstErr; execErr != nil {
+		t.Fatalf("first resume failed: %v", execErr)
+	}
+	if got := workerResumes.Load(); got != 1 {
+		t.Fatalf("worker resumes = %d, want 1", got)
+	}
+}
+
+func holdClaimPastLease(mr *miniredis.Miniredis) {
+	for i := 0; i < 6; i++ {
+		time.Sleep(40 * time.Millisecond)
+		if mr != nil {
+			mr.FastForward(40 * time.Millisecond)
+		}
 	}
 }
