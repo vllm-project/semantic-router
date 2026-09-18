@@ -2673,6 +2673,60 @@ providers:
     featured: true
   conformance:
     status: unverified
+  models:
+  - catalog: minimax/minimax-m3
+    relationship: managed_cloud
+    id: MiniMaxAI/MiniMax-M3
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.3
+      cached_input_per_1m: 0.06
+      completion_per_1m: 1.2
+    restrictions:
+      context_window_size: 524288
+      quantization: FP4
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-16'
+      source: https://docs.together.ai/docs/serverless/models
+  - catalog: moonshot/kimi-k3
+    relationship: managed_cloud
+    id: moonshotai/Kimi-K3
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 3.0
+      cached_input_per_1m: 0.3
+      completion_per_1m: 15.0
+    restrictions:
+      context_window_size: 1048576
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-16'
+      source: https://docs.together.ai/docs/serverless/models
+  - catalog: zai/glm-5.2
+    relationship: managed_cloud
+    id: zai-org/GLM-5.2
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.4
+      cached_input_per_1m: 0.26
+      completion_per_1m: 4.4
+    restrictions:
+      context_window_size: 1048575
+      quantization: FP4
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-16'
+      source: https://docs.together.ai/docs/serverless/models
 - id: triton
   display_name: NVIDIA Triton
   description: Connect a private NVIDIA Triton endpoint.
