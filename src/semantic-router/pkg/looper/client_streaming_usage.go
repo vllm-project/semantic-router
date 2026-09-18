@@ -40,7 +40,13 @@ func sseDataPayload(line []byte) ([]byte, bool) {
 // stream_options.include_usage), so the last non-null usage block wins. Returns
 // zero usage when none is present.
 func parseStreamingUsage(body []byte) TokenUsage {
+	usage, _ := parseStreamingUsageWithPresence(body)
+	return usage
+}
+
+func parseStreamingUsageWithPresence(body []byte) (TokenUsage, UsagePresence) {
 	var usage TokenUsage
+	var presence UsagePresence
 	for _, line := range bytes.Split(body, []byte("\n")) {
 		data, ok := sseDataPayload(line)
 		if !ok {
@@ -51,15 +57,26 @@ func parseStreamingUsage(body []byte) TokenUsage {
 			continue
 		}
 
-		var chunk struct {
-			Usage *TokenUsage `json:"usage"`
-		}
+		var chunk map[string]json.RawMessage
 		if err := json.Unmarshal(data, &chunk); err != nil {
 			continue
 		}
-		if chunk.Usage != nil {
-			usage = *chunk.Usage
+		rawUsage, ok := chunk["usage"]
+		if !ok || bytes.Equal(bytes.TrimSpace(rawUsage), []byte("null")) {
+			continue
 		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(rawUsage, &fields); err != nil {
+			continue
+		}
+		var decoded TokenUsage
+		if err := json.Unmarshal(rawUsage, &decoded); err != nil {
+			continue
+		}
+		usage = decoded
+		_, presence.PromptTokens = fields["prompt_tokens"]
+		_, presence.CompletionTokens = fields["completion_tokens"]
+		_, presence.TotalTokens = fields["total_tokens"]
 	}
-	return usage
+	return usage, presence
 }

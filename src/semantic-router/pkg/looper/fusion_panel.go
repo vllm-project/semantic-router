@@ -156,7 +156,7 @@ func (l *FusionLooper) executeFusionPanel(
 				return
 			}
 			defer func() { <-sem }()
-			resp, err := l.callFusionModel(panelCtx, req, req.OriginalRequest, cfg, modelName, false, false, index+1, cfg.AnalysisOverrides[modelName])
+			resp, err := l.callFusionModelStage(panelCtx, req, req.OriginalRequest, cfg, modelName, false, false, index+1, CallStageGenerate, cfg.AnalysisOverrides[modelName])
 			results <- fusionPanelResult{index: index, model: modelName, resp: resp, err: err}
 		}(i, model)
 	}
