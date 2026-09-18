@@ -157,6 +157,8 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     install -d -o nonroot -g root -m 0770 /app/data && \
+    find /app/frontend -type d -exec chmod 0755 {} + && \
+    find /app/frontend -type f -exec chmod 0644 {} + && \
     chown -R root:root /app/cli && \
     find /app/cli -type d -exec chmod 0555 {} + && \
     find /app/cli -type f -exec chmod 0444 {} + && \
