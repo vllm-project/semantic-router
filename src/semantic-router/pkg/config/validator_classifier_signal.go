@@ -357,7 +357,13 @@ func validateLLMClassifierReasoningControl(
 }
 
 func externalReasoningFamilyCanDisable(family *ReasoningFamilyConfig) bool {
-	if family != nil && family.Type == ReasoningFamilyTypeTopLevelReasoningEffort {
+	if family == nil {
+		return false
+	}
+	if len(family.Modes) > 0 && !reasoningFamilyModeAllowed(family, ReasoningModeDisabled) {
+		return false
+	}
+	if family.Type == ReasoningFamilyTypeTopLevelReasoningEffort {
 		return family.Disabled != ""
 	}
 	return reasoningFamilyCanDisableConfig(family)

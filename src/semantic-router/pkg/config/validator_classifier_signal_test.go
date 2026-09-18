@@ -259,6 +259,36 @@ routing:
 	}
 }
 
+func TestParseYAMLBytesRejectsDisabledAlwaysOnLLMClassifierReasoning(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: risk-judge
+          port: 8000
+        llm_model_name: qwen/qwen3.8
+        reasoning:
+          family: qwen3.8-always-on
+          use_reasoning: false
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: llm
+        model: risk-judge
+        labels: [SAFE, RISKY]
+        instructions: Classify the request.
+`))
+	if err == nil || !strings.Contains(err.Error(), `cannot disable always-on family "qwen3.8-always-on"`) {
+		t.Fatalf("ParseYAMLBytes() error = %v, want always-on family rejection", err)
+	}
+}
+
 func TestValidateClassifierSignalContractsRejectsCaseCollidingNames(t *testing.T) {
 	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
 		Signals: Signals{ClassifierRules: []ClassifierSignalRule{
