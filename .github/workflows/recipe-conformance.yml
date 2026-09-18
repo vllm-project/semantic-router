@@ -27,7 +27,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - uses: ./.github/actions/setup-go-ci\n
+      - uses: ./.github/actions/setup-go-ci
+
       - name: Install conformance dependencies
         run: python -m pip install -r tools/agent/requirements.txt -e src/vllm-sr
 
@@ -128,7 +129,9 @@ jobs:
           shopt -s globstar nullglob
           for summary in .agent-harness/recipe-conformance/**/summary.md; do
             cat "$summary" >> "$GITHUB_STEP_SUMMARY"
-            printf '\n---\n' >> "$GITHUB_STEP_SUMMARY"
+            printf '
+---
+' >> "$GITHUB_STEP_SUMMARY"
           done
 
       - name: Upload conformance artifacts
