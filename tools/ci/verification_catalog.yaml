@@ -95,7 +95,7 @@ verifications:
     executor: local
     workflow: .github/workflows/test-local.yml
     suite: cli
-    images: [vllm-sr, dashboard]
+    images: [vllm-sr, dashboard, llm-katan]
     services: [docker, envoy, controlled-backend]
     runtime: candle
     device: cpu
