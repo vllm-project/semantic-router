@@ -8,6 +8,8 @@ listeners:
     address: 0.0.0.0
     port: 8899
     timeout: 300s
+    # Optional bearer credentials for CLI-managed Envoy listeners.
+    api_keys: []
 
 providers:
   defaults:
@@ -1506,6 +1508,7 @@ routing:
       algorithm:
         type: multi_factor
         multi_factor:
+          expected_output_tokens: 4096
           objective:
             strategy: weighted
           quality:

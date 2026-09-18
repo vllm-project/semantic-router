@@ -150,7 +150,10 @@ an empty answer, or a truncated response is not successful delivery. Use a
 completion budget that fits the actual input and leaves room for the final
 answer. When the request omits a limit, a configured
 `request_params.default_max_tokens` supplies the decision default; otherwise
-the backend default applies.
+the backend default applies. For supported vLLM deployments,
+[`default_max_tokens: auto`](../installation/configuration#recipe-wide-candidate-and-replay-policies)
+uses each model's remaining native capacity. Keep the selector's output cost
+forecast separate from this capacity and report the effective deployment limits.
 
 Assign at least two eligible, reachable models when comparing selection policies.
 With one candidate, the test verifies delivery but cannot measure a choice between

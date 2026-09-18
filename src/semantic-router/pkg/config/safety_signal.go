@@ -136,7 +136,8 @@ func (c SequenceHeadModelConfig) ValidateWindow() error {
 	if c.Window.Size <= 0 || c.Window.Size > c.InputLimit() {
 		return fmt.Errorf("window.size must be positive and at most max_sequence_length")
 	}
-	// The native tokenizer additionally checks that special tokens leave
-	// enough content room for this overlap when scanning the model.
+	// This checks the document budget, not the loaded model's forward capacity.
+	// Native preparation additionally checks that the window fits that capacity
+	// and special tokens leave enough content room for this overlap.
 	return c.Window.validateGeometry()
 }

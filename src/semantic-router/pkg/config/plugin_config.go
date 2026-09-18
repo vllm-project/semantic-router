@@ -186,7 +186,7 @@ type FastResponsePluginConfig struct {
 // This plugin validates and strips request body parameters per decision.
 type RequestParamsPluginConfig struct {
 	// DefaultMaxTokens supplies an output bound only when the caller omits it.
-	DefaultMaxTokens *int `json:"default_max_tokens,omitempty" yaml:"default_max_tokens,omitempty" jsonschema:"minimum=1"`
+	DefaultMaxTokens *OutputTokenDefault `json:"default_max_tokens,omitempty" yaml:"default_max_tokens,omitempty"`
 	// BlockedParams is a list of parameters that should be blocked/stripped.
 	BlockedParams []string `json:"blocked_params,omitempty" yaml:"blocked_params,omitempty"`
 	// MaxTokensLimit sets the maximum allowed value for max_tokens.

@@ -67,7 +67,7 @@ func TestLoadBindsActualFilesAndMetadata(t *testing.T) {
 	if p.VerifyArtifacts(ctx, spec.Deployment.Artifact) == nil {
 		t.Fatal("post-load replacement accepted")
 	}
-	for name, mutate := range map[string]func(map[string]any, map[string]any){"softmax": func(m, t map[string]any) { m["problem_type"] = "single_label_classification" }, "unknown pooling": func(m, t map[string]any) { m["classifier_pooling"] = "max" }, "missing label": func(m, t map[string]any) { m["label2id"] = map[string]int{"one": 0} }, "short capacity": func(m, t map[string]any) { m["max_position_embeddings"] = 9 }, "envelope": func(m, t map[string]any) { t["post_processor"] = nil }} {
+	for name, mutate := range map[string]func(map[string]any, map[string]any){"softmax": func(m, t map[string]any) { m["problem_type"] = "single_label_classification" }, "unknown pooling": func(m, t map[string]any) { m["classifier_pooling"] = "max" }, "missing label": func(m, t map[string]any) { m["label2id"] = map[string]int{"one": 0} }, "short capacity": func(m, t map[string]any) { m["max_position_embeddings"] = 4 }, "envelope": func(m, t map[string]any) { t["post_processor"] = nil }} {
 		t.Run(name, func(t *testing.T) {
 			if _, err = Load(ctx, fixtureSpec(t, mutate), []string{"one", "two"}); err == nil {
 				t.Fatal("incompatible metadata accepted despite self-consistent hashes")
@@ -139,5 +139,21 @@ func TestExportPreservesScorePolicyAndRejectsChangedWeights(t *testing.T) {
 	}
 	if _, err = BindArtifact(context.Background(), source, spec.Deployment.Artifact); err == nil {
 		t.Fatal("writer silently rebound thresholds to different weights")
+	}
+}
+
+func TestOperatingPointPositionsBoundTheWindowNotTheDocument(t *testing.T) {
+	spec := fixtureSpec(t, func(metadata, _ map[string]any) { metadata["max_position_embeddings"] = 5 })
+	policy, err := Load(context.Background(), spec, []string{"one", "two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy.Window().Size != 5 || policy.MaxTokens() != 10 {
+		t.Fatal("fixture lost its distinct window and document budgets")
+	}
+	// A deployer cannot extend the frozen document policy by changing only config.
+	spec.Deployment.Input.MaxTokens = 11
+	if _, err = Load(context.Background(), spec, []string{"one", "two"}); err == nil {
+		t.Fatal("changed frozen document budget accepted")
 	}
 }
