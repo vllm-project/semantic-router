@@ -478,6 +478,7 @@ test-riscv-qemu: download-riscv-classifier ## Cross-compile Candle CPU classifie
 		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
 		-test.list '$(BINDING_MINIMAL_GO_TESTS)' >"$(MODEL_TEST_REPORT_DIR)/binding-list.txt"
 	@cd candle-binding || exit; status=0; \
+		QEMU_LD_PREFIX="$(RISCV_SYSROOT)" \
 		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/release" \
 		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
 		-test.run '$(BINDING_MINIMAL_GO_TESTS)' -test.skip '$(BINDING_MINIMAL_GO_SKIP)' -test.v=test2json -test.count=1 -test.timeout 90m \
