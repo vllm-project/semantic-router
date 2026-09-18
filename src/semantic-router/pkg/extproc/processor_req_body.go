@@ -242,7 +242,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// empty one, which makes every shadow outcome drop silently.
 	dispatched := false
 	defer func() {
-		r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+		r.startRouterReplay(ctx, originalModel, dispatch.logicalModel, decisionName)
 		if dispatched {
 			r.dispatchShadowIfConfigured(ctx, dispatch)
 		}
