@@ -140,6 +140,17 @@ func parseLLMLabelClassification(
 	labels []string,
 	disableRationale bool,
 ) (labelClassification, error) {
+	// Some reasoning models return their trace in content rather than a
+	// separate reasoning field. Strip only complete leading blocks, leaving
+	// JSON strings and the strict final-answer validation untouched.
+	content = strings.TrimSpace(content)
+	for strings.HasPrefix(content, "<think>") {
+		_, answer, closed := strings.Cut(content, "</think>")
+		if !closed {
+			return labelClassification{}, fmt.Errorf("classifier returned unterminated reasoning block")
+		}
+		content = strings.TrimSpace(answer)
+	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(content), &raw); err != nil {
 		return labelClassification{}, fmt.Errorf("classifier returned invalid JSON: %w", err)
