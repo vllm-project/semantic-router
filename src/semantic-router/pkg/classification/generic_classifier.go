@@ -40,6 +40,7 @@ type llmLabelClassifier struct {
 	disableRationale bool
 	timeout          time.Duration
 	maxTokens        int
+	reasoning        *reasoningRequestControl
 	handle           *binding.Resolved[string, labelClassification]
 	recipe           string
 }
@@ -47,6 +48,7 @@ type llmLabelClassifier struct {
 func newLLMLabelClassifier(
 	rule config.ClassifierSignalRule,
 	external *config.ExternalModelConfig,
+	reasoning *reasoningRequestControl,
 	models ...*classifierModelRuntime,
 ) (labelClassifier, error) {
 	if external == nil {
@@ -72,6 +74,7 @@ func newLLMLabelClassifier(
 		disableRationale: rule.DisableRationale,
 		timeout:          timeout,
 		maxTokens:        maxTokens,
+		reasoning:        reasoning,
 	}
 	runtime := consumerModelRuntime(models)
 	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Protocol: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractLabelDistribution}
@@ -123,6 +126,7 @@ func (c *llmLabelClassifier) classify(
 			MaxTokens:   c.maxTokens,
 			Temperature: 0,
 			JSONMode:    true,
+			reasoning:   c.reasoning,
 		},
 	)
 	if err != nil {
@@ -237,9 +241,19 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 		case config.ClassifierSignalTypeLocal:
 			classifier, err = newLocalLabelClassifier(rule, b.models)
 		case config.ClassifierSignalTypeLLM:
+			external := b.cfg.FindExternalModelByName(rule.Model)
+			reasoning, reasoningErr := resolveExternalModelReasoningControl(
+				b.cfg.ReasoningFamilies,
+				external,
+			)
+			if reasoningErr != nil {
+				err = fmt.Errorf("external model %q: %w", rule.Model, reasoningErr)
+				break
+			}
 			classifier, err = newLLMLabelClassifier(
 				rule,
-				b.cfg.FindExternalModelByName(rule.Model),
+				external,
+				reasoning,
 				b.models,
 			)
 		case config.ClassifierSignalTypeSequenceClassifier:
