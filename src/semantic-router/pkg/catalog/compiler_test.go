@@ -798,3 +798,47 @@ func TestEffectiveModelLookupIsDefensive(t *testing.T) {
 		t.Fatalf("effective registry was mutated through lookup: %+v", second)
 	}
 }
+
+func TestBuiltInRegistryOwnsIBMWatsonxProviderContract(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := registry.Provider("ibm-watsonx")
+	if !ok {
+		t.Fatal("ibm-watsonx provider is missing")
+	}
+	if provider.Category != "model_api" || provider.SupportTier != "native" {
+		t.Fatalf("unexpected classification: category = %q, support tier = %q", provider.Category, provider.SupportTier)
+	}
+	if provider.DefaultBaseURL != "" {
+		t.Fatalf("region-scoped provider declared a default base URL: %q", provider.DefaultBaseURL)
+	}
+	if len(provider.Protocols) != 1 || provider.Protocols[0] != "openai/chat-completions@1" {
+		t.Fatalf("unexpected protocols: %+v", provider.Protocols)
+	}
+	if provider.DefaultProtocol != "openai/chat-completions@1" {
+		t.Fatalf("default protocol = %q", provider.DefaultProtocol)
+	}
+	wantOperations := []string{"openai/chat-completions@1#create", "openai/chat-completions@1#list_models"}
+	if len(provider.SupportedOperations) != len(wantOperations) {
+		t.Fatalf("unexpected operations: %+v", provider.SupportedOperations)
+	}
+	for index, want := range wantOperations {
+		if provider.SupportedOperations[index] != want {
+			t.Fatalf("operation %d = %q, want %q", index, provider.SupportedOperations[index], want)
+		}
+	}
+	if len(provider.PathOverrides) != 0 {
+		t.Fatalf("path overrides are no-ops for a configured base path: %+v", provider.PathOverrides)
+	}
+	if provider.APIVersionQuery {
+		t.Fatal("the watsonx model gateway takes no version query parameter")
+	}
+	if provider.Auth.Strategy != "bearer" || provider.Auth.Header != "Authorization" || provider.Auth.Prefix != "Bearer" {
+		t.Fatalf("unexpected auth contract: %+v", provider.Auth)
+	}
+	if provider.Presentation.Logo != "monogram" || provider.Presentation.Monogram != "IBM" {
+		t.Fatalf("unexpected presentation: %+v", provider.Presentation)
+	}
+}
