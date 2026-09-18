@@ -1,8 +1,12 @@
-name: vllm-sr Python Publisher
+name: Python Package Publisher
 
 on:
   workflow_call:
     inputs:
+      prebuilt-dist:
+        description: Promote the exact distribution qualified by package-check.yml.
+        type: boolean
+        default: false
       channel:
         description: Package channel, stable for releases or dev for validated main commits.
         required: false
@@ -45,7 +49,8 @@ permissions:
 
 jobs:
   build:
-    name: Build vllm-sr package
+    name: Python Package
+    if: ${{ !inputs.prebuilt-dist }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -175,7 +180,7 @@ jobs:
           retention-days: 7
 
   testpypi:
-    name: Publish vllm-sr to TestPyPI
+    name: Publish to TestPyPI
     if: github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
@@ -194,24 +199,35 @@ jobs:
         run: twine upload --repository testpypi dist/*
 
   pypi:
-    name: Publish vllm-sr to PyPI
+    name: Publish to PyPI
     if: >-
-      github.repository == 'vllm-project/semantic-router'
+      !cancelled() && !failure()
+      && github.repository == 'vllm-project/semantic-router'
       && github.event_name == 'push'
       && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
         || (inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')))
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
           name: vllm-sr-dist
           path: dist
 
+      - name: Verify qualified source and package content
+        if: inputs.prebuilt-dist
+        env:
+          MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
+          TAG: ${{ inputs.tag }}
+        run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
       - run: pip install twine
 
       - name: Publish verified package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/* --skip-existing
+        run: twine upload dist/*.whl dist/*.tar.gz --skip-existing

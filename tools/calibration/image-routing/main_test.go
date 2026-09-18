@@ -13,6 +13,34 @@ import (
 
 const testRule = "rule"
 
+func TestStructuredThresholdAssertionsMatchTheGate(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		diff         float64
+		changeMatrix bool
+		passed       bool
+	}{
+		{"equal", 0, false, true},
+		{"serialization_tolerance", 0.00004, false, true},
+		{"threshold_drift", 0.00006, false, false},
+		{"confusion_drift", 0, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := ruleReport{Name: testRule, Shipped: thresholdResult{Threshold: 0.5, TP: 2}, Selected: thresholdResult{Threshold: 0.5 + tc.diff, TP: 2}}
+			if tc.changeMatrix {
+				rule.Selected.FP = 1
+			}
+			checks := thresholdAssertions([]ruleReport{rule})
+			if len(checks) != 1 || checks[0].ID != "threshold/"+testRule || checks[0].Passed != tc.passed {
+				t.Fatalf("wrong structured threshold evidence: %+v", checks)
+			}
+			if passed := checkShippedThresholds(calibrationReport{Rules: []ruleReport{rule}}, "pin", "pin", true) == 0; passed != checks[0].Passed {
+				t.Fatal("JSON assertion and executable gate disagree")
+			}
+		})
+	}
+}
+
 // scoredFixtures builds one fixture per score; the positive set is by path.
 func scoredFixtures(scores map[string]float64, positives ...string) ([]fixtureReport, map[string]bool) {
 	fixtures := make([]fixtureReport, 0, len(scores))

@@ -140,22 +140,18 @@ test-rust-flash-attn-module: rust-flash-attn
 	@echo "Running Rust Flash Attention tests for module: $(MODULE) (GPU $(TEST_GPU_DEVICE))"
 	@cd candle-binding && CUDA_VISIBLE_DEVICES=$(TEST_GPU_DEVICE) cargo test --release --features flash-attn $(MODULE) --lib -- --nocapture
 
-# Shared with test-riscv-qemu. Keep the two targets on the same Go cases.
-# The MultiModal entries are the hermetic (no-network) subset of the
-# MULTIMODAL_MODEL_PATH-gated tests; they skip cleanly when the variable is
-# unset and run against models/mom-embedding-multimodal in CI, where
-# download-models has already fetched it (issue #2319). The image-encode
-# binding tests (TestMultiModalEncodeImageFrom*) stay out of this lane because
-# they download fixture images from Wikimedia at test time; run them via
-# make test-binding-multimodal.
-BINDING_MINIMAL_GO_TESTS ?= ^Test(OwnedNative.*|InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$
+# Hermetic Go/C ABI contracts. Published checkpoint inference is a separate
+# required suite (make test-models), not a whitelist of optional legacy tests.
+# The same contracts run under RISC-V QEMU without the unsupported race detector.
+BINDING_MINIMAL_GO_TESTS ?= ^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions|EmbeddingCapabilitiesConformance|EmbeddingDimensionStateValidation)$$
+# This checkpoint case belongs to legacy-hallucination-checkpoints in core_test_profiles.json.
+BINDING_MINIMAL_GO_SKIP ?= ^TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata$$
 
-test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal models (BERT, ModernBERT)
+test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run model-free owned native binding contracts
 	@$(LOG_TARGET)
-	@echo "Running candle-binding tests with minimal models (BERT, ModernBERT classifiers)..."
 	@export $(NATIVE_ENV) && \
-		cd candle-binding && CGO_ENABLED=1 go test -v -race \
-		-run "^Test(OwnedNative.*|InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation|EmbeddingCapabilitiesConformance|EmbeddingDimensionStateValidation)$$"
+		cd candle-binding && CGO_ENABLED=1 go test -v -race -count=1 \
+		-run '$(BINDING_MINIMAL_GO_TESTS)' -skip '$(BINDING_MINIMAL_GO_SKIP)' .
 
 # Tiny checked-in/generated tensors exercise the actual native libraries without
 # downloading checkpoints. CI uses the same API22 CPU runtime as the CPU image;
@@ -307,6 +303,10 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support (
 	cargo build --release'
 
 # Build the Rust library without CUDA (for CI/CD environments)
+ifeq ($(PREBUILT_NATIVE_LIBS),1)
+rust-ci: ## Verify shared native libraries instead of rebuilding them
+	@python3 tools/ci/native_artifact.py verify --directory "$(NATIVE_ARTIFACT_DIR)"
+else
 rust-ci: build-onnx-binding
 rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
 	@$(LOG_TARGET)
@@ -330,6 +330,7 @@ rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
 	rm -f target/release/libnlp_binding.dylib target/release/deps/libnlp_binding.dylib \
 		target/release/libnlp_binding.so target/release/deps/libnlp_binding.so && \
 	cargo build --release'
+endif
 
 rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA environment)
 	@$(LOG_TARGET)
@@ -350,8 +351,8 @@ rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA env
 # Cross-compile Candle CPU classifiers for riscv64 and run them under qemu-user.
 # This is ISA smoke, not hardware qualification. Go coverage matches
 # test-binding-minimal except -race (unsupported on linux/riscv64).
-# Requires the Vela Domain checkpoint. Do not call download-models here; CI
-# core-tests already fetches the full set. Pin must match DefaultModelRegistry.
+# Provisions only the registry-pinned Vela Domain checkpoint and records the
+# same immutable artifact identity used by the other published-model suites.
 # After binding tests, build-router-riscv links a Candle-only process and the
 # QEMU smoke hits /health plus one classify/intent call.
 RISCV_GNU_TARGET ?= riscv64gc-unknown-linux-gnu
@@ -360,9 +361,8 @@ RISCV_GNU_CXX ?= riscv64-linux-gnu-g++
 RISCV_SYSROOT ?= /usr/riscv64-linux-gnu
 RISCV_QEMU ?= $(firstword $(wildcard /usr/bin/qemu-riscv64-static /usr/bin/qemu-riscv64))
 RISCV_QEMU_TEST ?= $(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/candle-riscv64.test
-RISCV_CLASSIFIER_REPO ?= llm-semantic-router/Vela-1.0-Encoder-307M-Domain
-RISCV_CLASSIFIER_REVISION ?= f6354f54adcf38770f635ad903be2b00577f6c11
-RISCV_CLASSIFIER_MODEL ?= $(CURDIR)/models/Vela-1.0-Encoder-307M-Domain
+RISCV_MODEL_MANIFEST ?= $(MODEL_TEST_REPORT_DIR)/models.json
+RISCV_CLASSIFIER_MODEL ?= $(shell python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["models"][0]["path"])' "$(RISCV_MODEL_MANIFEST)")
 RISCV_CLASSIFIER_PARITY_GOLDEN ?= $(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/classifier-parity.json
 RISCV_CANDLE_LIBDIR ?= $(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/release
 RISCV_ROUTER_BIN ?= $(CURDIR)/bin/router-riscv64
@@ -371,23 +371,20 @@ RISCV_ROUTER_API_PORT ?= 18080
 
 download-riscv-classifier: ## Download only the Vela Domain checkpoint used by test-riscv-qemu
 	@$(LOG_TARGET)
-	@if [ -f "$(RISCV_CLASSIFIER_MODEL)/config.json" ]; then \
-		echo "already present: $(RISCV_CLASSIFIER_MODEL)"; \
-	else \
-		command -v hf >/dev/null 2>&1 || { echo "missing hf; pip install 'huggingface_hub[cli]'"; exit 1; }; \
-		mkdir -p "$(RISCV_CLASSIFIER_MODEL)"; \
-		hf download "$(RISCV_CLASSIFIER_REPO)" \
-			--revision "$(RISCV_CLASSIFIER_REVISION)" \
-			--exclude "reproduction/*" --exclude "reproducibility/*" --exclude "lora/*" \
-			--local-dir "$(RISCV_CLASSIFIER_MODEL)"; \
-	fi
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--provider candle --suite riscv --output "$(MODEL_TEST_MODELS_DIR)" \
+		--manifest "$(RISCV_MODEL_MANIFEST)" --download
 
 RISCV_QEMU_LIB_TESTS ?= \
 	model_architectures::traditional::modernbert_test::test_candle_context_classifier_loaders_execute_beyond_default \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense
 
-test-riscv-qemu: ## Cross-compile Candle CPU classifiers and smoke the Candle-only router under qemu-user riscv64
+test-riscv-qemu: download-riscv-classifier ## Cross-compile Candle CPU classifiers and smoke the Candle-only router under qemu-user riscv64
 	@$(LOG_TARGET)
+	@mkdir -p "$(MODEL_TEST_REPORT_DIR)"
+	@printf '%s\n' $(RISCV_QEMU_LIB_TESTS) >"$(MODEL_TEST_REPORT_DIR)/rust-required.txt"
+	@printf '%s\n' '$(BINDING_MINIMAL_GO_TESTS)' >"$(MODEL_TEST_REPORT_DIR)/minimal-pattern.txt"
+	@printf '%s\n' '$(BINDING_MINIMAL_GO_SKIP)' >"$(MODEL_TEST_REPORT_DIR)/minimal-skip.txt"
 	@if ! command -v $(RISCV_GNU_CC) >/dev/null 2>&1; then \
 		echo "missing $(RISCV_GNU_CC); install gcc-riscv64-linux-gnu"; \
 		exit 1; \
@@ -404,18 +401,19 @@ test-riscv-qemu: ## Cross-compile Candle CPU classifiers and smoke the Candle-on
 		echo "missing $(RISCV_CLASSIFIER_MODEL); run make download-riscv-classifier"; \
 		exit 1; \
 	fi
-	@if [ ! -f candle-binding/target/release/libcandle_semantic_router.so ] && \
-	    [ ! -f candle-binding/target/release/libcandle_semantic_router.dylib ]; then \
-		echo "Building host Candle CPU library for amd64/arm64 parity snapshot"; \
-		cd candle-binding && cargo build --release --no-default-features; \
-	fi
+	@echo "Building host Candle CPU library for amd64/arm64 parity snapshot"
+	@cd candle-binding && cargo build --release --no-default-features
 	@echo "Recording host classifier outputs for RISC-V parity"
 	@export $(NATIVE_ENV) && \
 		cd candle-binding && CGO_ENABLED=1 \
 		CANDLE_CLASSIFIER_MODEL="$(RISCV_CLASSIFIER_MODEL)" \
 		CANDLE_CLASSIFIER_PARITY_MODE=record \
 		CANDLE_CLASSIFIER_PARITY_GOLDEN="$(RISCV_CLASSIFIER_PARITY_GOLDEN)" \
-		go test -v -count=1 -timeout 30m -run '^TestCandleClassifierParity$$'
+		go test -json -count=1 -timeout 30m -run '^TestCandleClassifierParity$$' \
+		>"$(MODEL_TEST_REPORT_DIR)/host-parity.jsonl" 2>&1 || { \
+			cat "$(MODEL_TEST_REPORT_DIR)/host-parity.jsonl"; exit 1; \
+		}
+	@cat "$(MODEL_TEST_REPORT_DIR)/host-parity.jsonl"
 	@rustup target add $(RISCV_GNU_TARGET)
 	@echo "Building Candle CPU library for $(RISCV_GNU_TARGET)"
 	@cd candle-binding && \
@@ -430,40 +428,63 @@ test-riscv-qemu: ## Cross-compile Candle CPU classifiers and smoke the Candle-on
 			CXX_riscv64gc_unknown_linux_gnu=$(RISCV_GNU_CXX) \
 			CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_RUNNER="$(RISCV_QEMU) -L $(RISCV_SYSROOT)" \
 			cargo test --release --no-default-features --target $(RISCV_GNU_TARGET) --lib -- --list)" && \
+		printf '%s\n' "$$test_list" >"$(MODEL_TEST_REPORT_DIR)/rust-list.txt" && \
+		index=0 && \
 		for test_filter in $(RISCV_QEMU_LIB_TESTS); do \
 			echo "$$test_list" | grep -F "$${test_filter}:" >/dev/null || { \
 				echo "Configured RISC-V QEMU test not found: $$test_filter"; \
 				exit 1; \
 			}; \
 			echo "Running $$test_filter"; \
+			status=0; \
 			CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=$(RISCV_GNU_CC) \
 				CC_riscv64gc_unknown_linux_gnu=$(RISCV_GNU_CC) \
 				CXX_riscv64gc_unknown_linux_gnu=$(RISCV_GNU_CXX) \
 				CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_RUNNER="$(RISCV_QEMU) -L $(RISCV_SYSROOT)" \
-				cargo test --release --no-default-features --target $(RISCV_GNU_TARGET) --lib "$$test_filter" -- --exact --test-threads=1 --nocapture || exit 1; \
+				cargo test --release --no-default-features --target $(RISCV_GNU_TARGET) --lib "$$test_filter" -- --exact --test-threads=1 --nocapture \
+				>"$(MODEL_TEST_REPORT_DIR)/rust-$$index.log" 2>&1 || status=$$?; \
+			cat "$(MODEL_TEST_REPORT_DIR)/rust-$$index.log"; \
+			[ "$$status" -eq 0 ] || exit "$$status"; \
+			index=$$((index + 1)); \
 		done
 	@echo "Linking Go Candle FFI for linux/riscv64"
 	@cd candle-binding && \
 		CGO_ENABLED=1 GOOS=linux GOARCH=riscv64 CC=$(RISCV_GNU_CC) CXX=$(RISCV_GNU_CXX) \
 		go test -c -o "$(RISCV_QEMU_TEST)" .
 	@echo "Proving the riscv64 binary linked Candle instead of the unavailable stub"
-	@cd candle-binding && \
+	@cd candle-binding || exit; status=0; \
 		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/release" \
 		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
-		-test.run '^TestNativeClassifierFFIIsLinked$$' -test.v -test.count=1 -test.timeout 10m
+		-test.run '^TestNativeClassifierFFIIsLinked$$' -test.v=test2json -test.count=1 -test.timeout 10m \
+		>"$(MODEL_TEST_REPORT_DIR)/ffi.log" 2>&1 || status=$$?; \
+		cat "$(MODEL_TEST_REPORT_DIR)/ffi.log"; \
+		go tool test2json -p candle-binding -t <"$(MODEL_TEST_REPORT_DIR)/ffi.log" >"$(MODEL_TEST_REPORT_DIR)/qemu-ffi.jsonl" && \
+		[ "$$status" -eq 0 ]
 	@echo "Comparing RISC-V classifier outputs against the host snapshot"
-	@cd candle-binding && \
+	@cd candle-binding || exit; status=0; \
 		CANDLE_CLASSIFIER_MODEL="$(RISCV_CLASSIFIER_MODEL)" \
 		CANDLE_CLASSIFIER_PARITY_MODE=compare \
 		CANDLE_CLASSIFIER_PARITY_GOLDEN="$(RISCV_CLASSIFIER_PARITY_GOLDEN)" \
 		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/release" \
 		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
-		-test.run '^TestCandleClassifierParity$$' -test.v -test.count=1 -test.timeout 60m
+		-test.run '^TestCandleClassifierParity$$' -test.v=test2json -test.count=1 -test.timeout 60m \
+		>"$(MODEL_TEST_REPORT_DIR)/parity.log" 2>&1 || status=$$?; \
+		cat "$(MODEL_TEST_REPORT_DIR)/parity.log"; \
+		go tool test2json -p candle-binding -t <"$(MODEL_TEST_REPORT_DIR)/parity.log" >"$(MODEL_TEST_REPORT_DIR)/qemu-parity.jsonl" && \
+		[ "$$status" -eq 0 ]
 	@echo "Running test-binding-minimal Go cases under qemu-user (no -race)"
 	@cd candle-binding && \
 		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/release" \
 		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
-		-test.run '$(BINDING_MINIMAL_GO_TESTS)' -test.v -test.count=1 -test.timeout 90m
+		-test.list '$(BINDING_MINIMAL_GO_TESTS)' >"$(MODEL_TEST_REPORT_DIR)/binding-list.txt"
+	@cd candle-binding || exit; status=0; \
+		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/release" \
+		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
+		-test.run '$(BINDING_MINIMAL_GO_TESTS)' -test.skip '$(BINDING_MINIMAL_GO_SKIP)' -test.v=test2json -test.count=1 -test.timeout 90m \
+		>"$(MODEL_TEST_REPORT_DIR)/binding.log" 2>&1 || status=$$?; \
+		cat "$(MODEL_TEST_REPORT_DIR)/binding.log"; \
+		go tool test2json -p candle-binding -t <"$(MODEL_TEST_REPORT_DIR)/binding.log" >"$(MODEL_TEST_REPORT_DIR)/qemu-minimal.jsonl" && \
+		[ "$$status" -eq 0 ]
 	@$(MAKE) build-router-riscv
 	@echo "Starting the linux/riscv64 router under qemu-user"
 	@RISCV_QEMU="$(RISCV_QEMU)" \
@@ -472,6 +493,8 @@ test-riscv-qemu: ## Cross-compile Candle CPU classifiers and smoke the Candle-on
 		RISCV_ROUTER_BIN="$(RISCV_ROUTER_BIN)" \
 		RISCV_ROUTER_CONFIG="$(RISCV_ROUTER_CONFIG)" \
 		RISCV_ROUTER_API_PORT="$(RISCV_ROUTER_API_PORT)" \
+		MODEL_TEST_MANIFEST="$(RISCV_MODEL_MANIFEST)" \
+		MODEL_TEST_REPORT_DIR="$(MODEL_TEST_REPORT_DIR)" \
 		bash tools/ci/riscv-qemu-router-smoke.sh
 
 # Candle-only linux/riscv64 router. Skips the ORT ABI check, does not

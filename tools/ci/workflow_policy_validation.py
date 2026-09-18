@@ -7,8 +7,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
-from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
-from domain_registry import job_records
+from ci_plan import EXECUTORS
+from classify_pr_changes import PRODUCTION_RELEASE_IMAGES
+from domain_registry import job_records, load_domain_registry
+from image_artifacts import publication_tags
+from verification_catalog import catalog_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
@@ -41,188 +44,95 @@ def needs(job: dict[str, Any]) -> set[str]:
     return set()
 
 
-def validate_pr_images_contract(
-    dispatcher: WorkflowLike,
-    workflows: dict[str, WorkflowLike],
-    errors: list[str],
-) -> None:
-    images = dispatcher.jobs.get("images", {})
-    if not isinstance(images, dict) or local_target(images) != "docker-validate.yml":
-        errors.append(
-            ".github/workflows/pr.yml: images must call the read-only "
-            "docker-validate.yml workflow"
-        )
-    validation = workflows.get("docker-validate.yml")
-    if validation is None:
-        errors.append(
-            ".github/workflows/docker-validate.yml: missing PR image validator"
-        )
-        return
-    permissions = validation.data.get("permissions")
-    if permissions != {"contents": "read"}:
-        errors.append(
-            ".github/workflows/docker-validate.yml: permissions must be "
-            "exactly contents: read"
-        )
-    validation_text = validation.path.read_text(encoding="utf-8")
-    if "docker/login-action" in validation_text or "push: true" in validation_text:
-        errors.append(
-            ".github/workflows/docker-validate.yml: PR image validation "
-            "must not authenticate or publish"
-        )
-
-
-def validate_pr_selection_contract(
-    dispatcher: WorkflowLike,
-    workflows: dict[str, WorkflowLike],
-    errors: list[str],
-) -> None:
-    validate_pr_images_contract(dispatcher, workflows, errors)
-    if "bindings" in dispatcher.jobs:
-        errors.append(
-            ".github/workflows/pr.yml: duplicate standalone bindings job remains"
-        )
-    performance = dispatcher.jobs.get("performance", {})
-    if isinstance(performance, dict) and "outputs.full" in str(
-        performance.get("if", "")
-    ):
-        errors.append(
-            ".github/workflows/pr.yml: ci/full must not enable performance tests"
-        )
-    validate_classifier_contract(workflows, errors)
-
-
 def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
     dispatcher = workflows.get("pr.yml")
-    if dispatcher is None:
-        errors.append(".github/workflows/pr.yml: missing PR dispatcher")
+    if not dispatcher or "pull_request" not in dispatcher.events:
+        errors.append("missing pull-request dispatcher")
         return
-    if "pull_request" not in dispatcher.events:
-        errors.append(".github/workflows/pr.yml: missing pull_request trigger")
-
-    if "compatibility" in dispatcher.jobs:
-        errors.append(".github/workflows/pr.yml: compatibility matrix must be removed")
     gate = dispatcher.jobs.get("pr-gate", {})
-    if not isinstance(gate, dict) or gate.get("name") != "PR Gate":
-        errors.append(".github/workflows/pr.yml: missing stable 'PR Gate' aggregate")
-    else:
-        expected_needs = {"changes", *job_records()}
-        actual_needs = needs(gate)
-        if actual_needs != expected_needs:
-            errors.append(
-                ".github/workflows/pr.yml: PR Gate must aggregate exactly the "
-                "classifier and registered jobs"
-            )
-
-    validate_pr_selection_contract(dispatcher, workflows, errors)
-    validate_registry_dispatch_contract(dispatcher, workflows, errors)
-
-    classifier_callers = []
-    for workflow in workflows.values():
-        if "pull_request" not in workflow.events:
-            continue
-        for job in workflow.jobs.values():
-            if isinstance(job, dict) and local_target(job) == "ci-changes.yml":
-                classifier_callers.append(workflow.path.name)
-    if classifier_callers != ["pr.yml"]:
+    if (
+        gate.get("name") != "PR Gate"
+        or gate.get("if") != "always()"
+        or needs(gate) != {"ci"}
+    ):
         errors.append(
-            "PR change classification must run only in pr.yml; callers: "
-            + ", ".join(sorted(classifier_callers))
+            "pr.yml must retain the always-running stable PR Gate behind shared CI"
         )
-
+    for filename, profile in (
+        ("pr.yml", "pr"),
+        ("main.yml", "main"),
+        ("nightly-build.yml", "nightly"),
+        ("release.yml", "release"),
+    ):
+        workflow = workflows.get(filename)
+        call = workflow.jobs.get("ci", {}) if workflow else {}
+        if (
+            local_target(call) != "ci.yml"
+            or call.get("with", {}).get("profile") != profile
+        ):
+            errors.append(
+                f"{filename}: must use the single CI planner/executor with profile {profile}"
+            )
+        for job in workflow.jobs.values() if workflow else ():
+            if local_target(job) in {
+                record["workflow"].split("/")[-1] for record in job_records().values()
+            }:
+                errors.append(
+                    f"{filename}: duplicated verification dispatch outside ci.yml"
+                )
+    shared = workflows.get("ci.yml")
+    if not shared:
+        errors.append("missing shared ci.yml")
+        return
+    expected = {"plan", "images", "native-build", *EXECUTORS}
+    gate = shared.jobs.get("gate", {})
+    if needs(gate) != expected or gate.get("if") != "always()":
+        errors.append(
+            "ci.yml gate must aggregate every executor and build prerequisite"
+        )
+    text = shared.path.read_text()
+    if (
+        "check_ci_gate.py" not in text
+        or "--plan" not in text
+        or "ci-result-*" not in text
+    ):
+        errors.append(
+            "ci.yml must reconcile execution artifacts against the pre-execution plan"
+        )
+    for record in job_records().values():
+        call = shared.jobs.get(record["executor"], {})
+        if local_target(call) != Path(record["workflow"]).name:
+            errors.append(f"ci.yml: no executor for {record['workflow']}")
+    errors.extend(catalog_errors(load_domain_registry()))
+    planner = workflows.get("ci-changes.yml")
+    if not planner or "tools/ci/ci_plan.py" not in planner.path.read_text():
+        errors.append("ci-changes.yml must call the tested plan generator")
+    builder = workflows.get("build-artifacts.yml")
+    if not builder:
+        errors.append("missing shared read-only image producer")
+    elif any(
+        word in builder.path.read_text()
+        for word in ("docker/login-action", "push: true")
+    ):
+        errors.append("shared image producer must not authenticate or publish")
     community = workflows.get("community.yml")
-    pull_request = community.events.get("pull_request", {}) if community else {}
-    types = pull_request.get("types", []) if isinstance(pull_request, dict) else []
-    if "synchronize" in types:
-        errors.append(
-            ".github/workflows/community.yml: metadata checks must not run on synchronize"
-        )
-
-
-def validate_registry_dispatch_contract(
-    dispatcher: WorkflowLike,
-    workflows: dict[str, WorkflowLike],
-    errors: list[str],
-) -> None:
-    for job_id, registered_job in job_records().items():
-        workflow_name = Path(registered_job["workflow"]).name
-        job = dispatcher.jobs.get(job_id)
-        if not isinstance(job, dict):
-            errors.append(
-                f".github/workflows/pr.yml: missing registered job {job_id!r}"
-            )
-            continue
-        if local_target(job) != workflow_name:
-            errors.append(
-                f".github/workflows/pr.yml: registered job {job_id!r} must call "
-                f"{workflow_name!r}"
-            )
-        workflow = workflows.get(workflow_name)
-        if workflow is None or "workflow_call" not in workflow.events:
-            errors.append(
-                f"{registered_job['workflow']}: registered workflow must be reusable"
-            )
+    trigger = community.events.get("pull_request", {}) if community else {}
+    if "synchronize" in (trigger or {}).get("types", []):
+        errors.append("community metadata must not repeat on every synchronization")
 
 
 def validate_release_contract(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
     release = workflows.get("release.yml")
-    if release is None:
-        errors.append(".github/workflows/release.yml: missing release orchestrator")
+    if not release:
+        errors.append("missing release orchestrator")
         return
-
     validate_release_publishers(release, errors)
     validate_release_images(release, errors)
     validate_stable_tag_owner(workflows, errors)
     validate_nightly_docker_owner(workflows, errors)
     validate_fixture_tag_policy(workflows, errors)
-
-
-def validate_classifier_contract(
-    workflows: dict[str, WorkflowLike], errors: list[str]
-) -> None:
-    classifier = workflows.get("ci-changes.yml")
-    if classifier is None:
-        errors.append(".github/workflows/ci-changes.yml: missing classifier")
-        return
-    text = classifier.path.read_text(encoding="utf-8")
-    if "tools/ci/classify_pr_changes.py" not in text:
-        errors.append(
-            ".github/workflows/ci-changes.yml: must use the tested classifier contract"
-        )
-    if "dorny/paths-filter" in text:
-        errors.append(
-            ".github/workflows/ci-changes.yml: hidden dorny product filters remain"
-        )
-    call_contract = classifier.events.get("workflow_call", {})
-    workflow_outputs = (
-        set(call_contract.get("outputs", {}))
-        if isinstance(call_contract, dict)
-        else set()
-    )
-    expected_outputs = {
-        str(job["output"]) for job in job_records().values() if job.get("output")
-    }
-    expected_outputs.update(
-        {
-            "website",
-            "helm",
-            "e2e",
-            "e2e_profiles",
-            "full_e2e_profiles",
-            "images",
-            "pr_images",
-            "publish_images",
-            "docs_only",
-            "full",
-        }
-    )
-    if workflow_outputs != expected_outputs:
-        errors.append(
-            ".github/workflows/ci-changes.yml: outputs must match the consumed "
-            "registry contract exactly"
-        )
 
 
 def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> None:
@@ -246,20 +156,13 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
 
 def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
     docker_job = release.jobs.get("docker", {})
-    raw_images = (
+    images = (
         docker_job.get("with", {}).get("images")
         if isinstance(docker_job, dict)
         else None
     )
-    try:
-        images = set(json.loads(raw_images))
-    except (TypeError, json.JSONDecodeError):
-        images = set()
-    if images != RELEASE_IMAGES:
-        errors.append(
-            ".github/workflows/release.yml: release image inventory differs "
-            "from production deliverables"
-        )
+    if images != "${{ needs.ci.outputs.publish_images }}":
+        errors.append("release images must consume the planner publication inventory")
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
         "- `anthropic-shim`",
@@ -305,33 +208,19 @@ def validate_nightly_docker_owner(
             + ", ".join(sorted(nightly_docker_calls))
         )
     nightly = workflows.get("nightly-build.yml")
-    docker_job = nightly.jobs.get("docker", {}) if nightly else {}
-    raw_images = (
-        docker_job.get("with", {}).get("images")
-        if isinstance(docker_job, dict)
-        else None
-    )
-    try:
-        images = set(json.loads(raw_images))
-    except (TypeError, json.JSONDecodeError):
-        images = set()
-    if images != set(NIGHTLY_IMAGES):
-        errors.append(
-            ".github/workflows/nightly-build.yml: nightly image inventory must "
-            "include production, companion, and test images"
-        )
+    docker = nightly.jobs.get("docker", {}) if nightly else {}
+    if docker.get("with", {}).get("images") != "${{ needs.ci.outputs.publish_images }}":
+        errors.append("nightly images must consume the planner publication inventory")
 
 
 def validate_fixture_tag_policy(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
-    publisher = workflows.get("docker-publish.yml")
-    text = publisher.path.read_text(encoding="utf-8") if publisher else ""
-    if "anthropic-shim|llm-katan" not in text or "${IMAGE}:nightly" not in text:
-        errors.append(
-            ".github/workflows/docker-publish.yml: nightly test fixtures need "
-            "the mutable nightly tag"
-        )
+    for image in ("anthropic-shim", "llm-katan"):
+        if "nightly" not in publication_tags(image, "nightly", "", False, "20260101"):
+            errors.append(
+                f"nightly fixture {image} must retain its mutable nightly tag"
+            )
 
 
 def validate_security_boundary(
@@ -370,6 +259,10 @@ def validate_removed_workflows(errors: list[str]) -> None:
         "anti-spam-filter.yml",
         "performance-nightly.yml",
         "skill-review.yml",
+        "paper-build.yml",
+        "router-learning-eval.yml",
+        "recipe-distribution.yml",
+        "docker-validate.yml",
     }
     existing = sorted(name for name in removed if (WORKFLOW_DIR / name).exists())
     if existing:

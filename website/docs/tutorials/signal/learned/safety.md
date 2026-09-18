@@ -119,13 +119,23 @@ tokens. For a tokenizer adding two special tokens, this example advances by
 255 content tokens. Each window restores the original special tokens and
 starts positions at zero. Empty content and invalid window budgets fail.
 
+For a named local binding, deployment `input.max_tokens` replaces the module's
+complete-document budget. A document budget of 65,536 and a `window.size` of
+32,768 are valid when the loaded checkpoint and graph support 32K forwards.
+Only the window must fit the single-forward capacity; the document may require
+multiple windows. Counts come from the classifier tokenizer, not the downstream
+generative model's tokenizer. A failed window fails the complete scan instead of
+returning a successful score for only the inspected prefix.
+
 The scan uses original token IDs, covers every content token, and leaves the
 last window short. It sums selected unsafe probabilities within each window,
 then takes the largest window score and applies the rule's threshold once.
 Hazard similarly takes the maximum selected category probability across
 windows. Set a separate `window` under the `hazard` head if that artifact has
 been evaluated with scanning. External classifiers retain their own input
-processing contract.
+processing contract. The published Vela Hazard operating point retains its
+supplied 2,048-token windows and 32K document policy; configuring a larger
+document budget does not qualify that operating point for a different scan.
 
 Choose thresholds evaluated with the exact model, window size, overlap and
 precision you deploy. Window scanning can recover local risks that a whole-input

@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configschema"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
@@ -37,6 +38,13 @@ func apiHealthRoutes() []apiRoute {
 			jsonResponse[startupstatus.State](http.StatusOK, "Successful response"),
 			jsonResponse[startupstatus.State](http.StatusServiceUnavailable, "Startup state or readiness is unavailable"),
 			emptyResponse(http.StatusInternalServerError, "Startup status could not be encoded"),
+		),
+		managedRoute(
+			EndpointMetadata{Path: apiStatusPath, Method: "GET", Description: "Versioned replica-local startup and configuration status; not a deployment probe"},
+			routePolicy{Permission: PermReadyRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleStatus,
+			jsonResponse[routerruntime.StatusReport](http.StatusOK, "Replica-local observations; unknown readiness is not ready"),
+			errorResponses(http.StatusServiceUnavailable),
 		),
 		managedRoute(
 			EndpointMetadata{
