@@ -37,7 +37,8 @@ jobs:
       ROUTER_REPLAY_TEST_POSTGRES_CONFIG: '{"host":"localhost","port":5432,"database":"router_test","user":"router","password":"router-test","ssl_mode":"disable"}'
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-go-ci\n      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-go-ci
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Load shared native libraries
@@ -104,7 +105,8 @@ jobs:
       - name: Configure isolated PostgreSQL registry tests
         run: |
           mkdir -p .agent-harness/core/storage
-          printf '%s\n' "$ROUTER_REPLAY_TEST_POSTGRES_CONFIG" > .agent-harness/core/storage/postgres.json
+          printf '%s
+' "$ROUTER_REPLAY_TEST_POSTGRES_CONFIG" > .agent-harness/core/storage/postgres.json
           echo "VSR_TEST_POSTGRES_CONFIG=$GITHUB_WORKSPACE/.agent-harness/core/storage/postgres.json" >> "$GITHUB_ENV"
       - name: Run selected storage inventory and reject skips
         run: |
