@@ -78,6 +78,7 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, r *ht
 			"models":            apiInventoryModelsPath,
 			"health":            "/health",
 			"ready":             "/ready",
+			"status":            apiStatusPath,
 		},
 	}
 

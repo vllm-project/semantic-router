@@ -143,7 +143,7 @@ var _ = Describe("ToolsDatabase", func() {
 			os.RemoveAll(tempDir)
 		})
 
-		It("should load tools from file when enabled", func() {
+		It("should load tools from file when enabled", Label("model-artifacts"), func() {
 			if toolsEmbeddingProvider == nil {
 				Skip("Skipping test: embedding models are not available")
 			}
@@ -209,7 +209,7 @@ var _ = Describe("ToolsDatabase", func() {
 	})
 
 	Describe("AddTool", func() {
-		It("should add tool when enabled", func() {
+		It("should add tool when enabled", Label("model-artifacts"), func() {
 			if toolsEmbeddingProvider == nil {
 				Skip("Skipping test: embedding models are not available")
 			}
@@ -256,7 +256,7 @@ var _ = Describe("ToolsDatabase", func() {
 		})
 	})
 
-	Describe("FindSimilarTools", func() {
+	Describe("FindSimilarTools", Label("model-artifacts"), func() {
 		var db *tools.ToolsDatabase
 
 		BeforeEach(func() {
@@ -322,7 +322,7 @@ var _ = Describe("ToolsDatabase", func() {
 	})
 
 	Describe("GetAllTools", func() {
-		It("should return all tools when enabled", func() {
+		It("should return all tools when enabled", Label("model-artifacts"), func() {
 			if toolsEmbeddingProvider == nil {
 				Skip("Skipping test: embedding models are not available")
 			}
@@ -366,7 +366,7 @@ var _ = Describe("ToolsDatabase", func() {
 	})
 
 	Describe("GetToolCount", func() {
-		It("should return correct count when enabled", func() {
+		It("should return correct count when enabled", Label("model-artifacts"), func() {
 			if toolsEmbeddingProvider == nil {
 				Skip("Skipping test: embedding models are not available")
 			}

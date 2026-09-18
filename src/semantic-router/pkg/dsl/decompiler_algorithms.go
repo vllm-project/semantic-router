@@ -274,6 +274,9 @@ func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields m
 	if m.Objective != nil {
 		fields["objective"] = multiFactorObjectiveValue(m.Objective)
 	}
+	if m.ExpectedOutputTokens != nil {
+		fields["expected_output_tokens"] = IntValue{V: *m.ExpectedOutputTokens}
+	}
 	setStringValue(fields, "latency_metric", m.LatencyMetric)
 	setIntValue(fields, "latency_percentile", m.LatencyPercentile)
 	setStringValue(fields, "on_no_candidates", m.OnNoCandidates)

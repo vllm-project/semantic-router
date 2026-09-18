@@ -20,6 +20,30 @@ NEEDS_OUTPUT_RE = re.compile(r"needs\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+
 CALL_OUTPUT_RE = re.compile(r"jobs\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)")
 
 
+class UniqueKeyLoader(getattr(yaml, "CSafeLoader", yaml.SafeLoader)):
+    """Do not silently discard duplicate workflow outputs or job keys."""
+
+
+def _unique_mapping(loader, node, deep=False):
+    result = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in result:
+            raise yaml.constructor.ConstructorError(
+                "while reading workflow mapping",
+                node.start_mark,
+                f"duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        result[key] = loader.construct_object(value_node, deep=deep)
+    return result
+
+
+UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping
+)
+
+
 @dataclass(frozen=True)
 class Workflow:
     path: Path
@@ -51,7 +75,10 @@ def load_workflows(errors: list[str]) -> dict[str, Workflow]:
     workflows: dict[str, Workflow] = {}
     for path in sorted(WORKFLOW_DIR.glob("*.yml")):
         try:
-            loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            loaded = (
+                yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+                or {}
+            )
         except yaml.YAMLError as error:
             errors.append(f"{path.relative_to(REPO_ROOT)}: invalid YAML: {error}")
             continue
@@ -250,7 +277,9 @@ def validate_needs_outputs(
             )
 
 
-def validate_call_outputs(workflow: Workflow, errors: list[str]) -> None:
+def validate_call_outputs(
+    workflow: Workflow, errors: list[str], workflows: dict[str, Workflow] | None = None
+) -> None:
     contract = workflow.call_contract
     if contract is None:
         return
@@ -259,7 +288,7 @@ def validate_call_outputs(workflow: Workflow, errors: list[str]) -> None:
         errors.append(f"{workflow.relative_path}: workflow_call.outputs is not a map")
         return
     for output_name, specification in outputs.items():
-        validate_call_output(workflow, output_name, specification, errors)
+        validate_call_output(workflow, output_name, specification, errors, workflows)
 
 
 def validate_call_output(
@@ -267,6 +296,7 @@ def validate_call_output(
     output_name: str,
     specification: Any,
     errors: list[str],
+    workflows: dict[str, Workflow] | None = None,
 ) -> None:
     references = CALL_OUTPUT_RE.findall(json.dumps(specification))
     if not references:
@@ -282,7 +312,7 @@ def validate_call_output(
                 f"{workflow.relative_path}: workflow output '{output_name}' "
                 f"references missing job '{job_id}'"
             )
-        elif job_output not in available_outputs(job, {}):
+        elif job_output not in available_outputs(job, workflows or {}):
             errors.append(
                 f"{workflow.relative_path}: workflow output '{output_name}' "
                 f"references missing output '{job_output}' on '{job_id}'"
@@ -295,7 +325,7 @@ def main() -> int:
     for workflow in workflows.values():
         validate_permissions(workflow, errors)
         validate_local_calls(workflow, workflows, errors)
-        validate_call_outputs(workflow, errors)
+        validate_call_outputs(workflow, errors, workflows)
     validate_workflow_policies(workflows, errors)
 
     if errors:

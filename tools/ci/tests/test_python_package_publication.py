@@ -61,9 +61,9 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertEqual(publisher["with"]["channel"], "dev")
         for job_name in ("pypi", "images", "helm"):
             job = main.jobs[job_name]
-            self.assertIn("gate", needs(job))
+            self.assertIn("ci", needs(job))
             self.assertIn("!cancelled()", job["if"])
-            self.assertIn("needs.gate.result == 'success'", job["if"])
+            self.assertIn("needs.ci.result == 'success'", job["if"])
 
     def test_only_trusted_main_and_release_events_can_publish(self) -> None:
         condition = " ".join(self.publisher.jobs["pypi"]["if"].split())
@@ -107,12 +107,14 @@ class PythonPublisherContractTests(unittest.TestCase):
         )
         self.assertLess(smoke_index, upload_index)
         self.assertEqual(needs(self.publisher.jobs["pypi"]), {"build"})
-        integration = self.workflows["integration-test-vllm-sr-cli.yml"]
-        self.assertIn(
-            "check_cli_wheel.py",
-            str(integration.jobs["package-tests"]["steps"]),
-        )
-        self.assertNotIn("secrets.", str(integration.jobs["package-tests"]))
+        package = self.workflows["package-check.yml"]
+        self.assertIn("package_contract.py", str(package.jobs))
+        implementation = (REPO_ROOT / "tools/ci/package_contract.py").read_text()
+        self.assertIn("check_wheel(wheels[0])", implementation)
+        for filename in ("main.yml", "release.yml"):
+            self.assertTrue(
+                self.workflows[filename].jobs["pypi"]["with"]["prebuilt-dist"]
+            )
 
     def _run_version_contract(
         self, *, channel: str, version: str, tag: str, snapshot: str

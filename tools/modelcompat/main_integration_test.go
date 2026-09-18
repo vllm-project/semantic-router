@@ -15,8 +15,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/compatibility"
 )
 
-// Run with CANDLE_MODEL_PATH pointing at the pinned tiny BERT fixture described
-// in tools/make/models.mk. Each native qualification gets a fresh process because
+// Run make test-modelcompat-native with CANDLE_MODEL_PATH pointing at the pinned
+// tiny BERT fixture in tools/make/models.mk. Each qualification gets a fresh process because
 // Candle initializes a process-global classifier. No model downloads occur here.
 func TestNativeCandleCPUCommandRoundTrip(t *testing.T) {
 	modelPath := os.Getenv("CANDLE_MODEL_PATH")

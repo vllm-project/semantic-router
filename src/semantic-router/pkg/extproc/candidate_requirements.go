@@ -83,6 +83,9 @@ func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateReq
 }
 
 func (r *OpenAIRouter) decisionEligibleModelRefs(decision *config.Decision, ctx *RequestContext) ([]config.ModelRef, error) {
+	if decisionUsesAutomaticOutput(ctx.SemanticRequest, decision) {
+		return r.automaticEligibleRefs(decision.ModelRefs, ctx)
+	}
 	requirements := r.candidateRequirements(ctx)
 	if !selection.CandidateRequirementsEnabled(requirements) {
 		return r.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, ctx)

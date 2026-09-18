@@ -100,7 +100,7 @@ func TestRecordSelectionFallbackPersistsBoundedReason(t *testing.T) {
 	before := testutil.ToFloat64(counter)
 
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	router.recordSelectionFallback(
+	_, fallbackErr := router.recordSelectionFallback(
 		selection.MethodPrompt,
 		selectionFallbackError,
 		selectionContext,
@@ -109,6 +109,9 @@ func TestRecordSelectionFallbackPersistsBoundedReason(t *testing.T) {
 		nil,
 		requestContext,
 	)
+	if fallbackErr != nil {
+		t.Fatal(fallbackErr)
+	}
 
 	if requestContext.VSRSelectionReasoning != selectionFallbackError {
 		t.Fatalf(
