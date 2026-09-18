@@ -14,6 +14,10 @@ import (
 // workflowStateFileNameMaxBytes is Linux NAME_MAX. Redis keys stay unhashed.
 const workflowStateFileNameMaxBytes = 255
 
+// workflowStateStoreTempSuffixMaxBytes is ".tmp-" plus a 24-char state ID appended
+// to the final .json basename during atomic file writes.
+const workflowStateStoreTempSuffixMaxBytes = len(".tmp-") + 24
+
 var errWorkflowStateUnscoped = errors.New("workflow tool state is unscoped and cannot be resumed")
 
 func normalizeWorkflowRecipeName(recipe config.RecipeName) config.RecipeName {
@@ -41,7 +45,8 @@ func workflowNamespacedStateID(recipe config.RecipeName, id string) (string, err
 // forms cannot collide. Redis keys keep the namespaced ID unhashed.
 func workflowStateStoreFileName(namespaced string) string {
 	name := namespaced + ".json"
-	if len(name) <= workflowStateFileNameMaxBytes {
+	maxUnhashed := workflowStateFileNameMaxBytes - len(".json") - workflowStateStoreTempSuffixMaxBytes
+	if len(namespaced) <= maxUnhashed {
 		return name
 	}
 	sum := sha256.Sum256([]byte(namespaced))

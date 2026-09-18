@@ -1494,36 +1494,40 @@ func TestStateStore_DistinctRecipesKeepIndependentState(t *testing.T) {
 }
 
 func TestFileStateStore_LongRecipeNameUsesHashedFilename(t *testing.T) {
-	dir := t.TempDir()
-	store := newWorkflowFileToolStateStore(dir, time.Hour)
-	defer store.Close()
+	for _, recipeLength := range []int{150, 170} {
+		t.Run(fmt.Sprintf("recipe-%d", recipeLength), func(t *testing.T) {
+			dir := t.TempDir()
+			store := newWorkflowFileToolStateStore(dir, time.Hour)
+			defer store.Close()
 
-	recipe := config.RecipeName(strings.Repeat("a", 170))
-	id := strings.Repeat("b", 24)
-	st := makeTestState(id)
-	st.RecipeName = string(recipe)
-	if _, err := store.Put(context.Background(), st); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
+			recipe := config.RecipeName(strings.Repeat("a", recipeLength))
+			id := strings.Repeat("b", 24)
+			st := makeTestState(id)
+			st.RecipeName = string(recipe)
+			if _, err := store.Put(context.Background(), st); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
 
-	namespaced, err := workflowNamespacedStateID(recipe, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plainPath := filepath.Join(dir, namespaced+".json")
-	hashedPath := filepath.Join(dir, workflowStateStoreFileName(namespaced))
-	if hashedPath == plainPath {
-		t.Fatal("fixture did not require a hashed filename")
-	}
-	if _, statErr := os.Stat(plainPath); statErr == nil {
-		t.Fatal("wrote overlong namespaced filename")
-	}
-	if _, statErr := os.Stat(hashedPath); statErr != nil {
-		t.Fatalf("hashed state missing: %v", statErr)
-	}
+			namespaced, err := workflowNamespacedStateID(recipe, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plainPath := filepath.Join(dir, namespaced+".json")
+			hashedPath := filepath.Join(dir, workflowStateStoreFileName(namespaced))
+			if hashedPath == plainPath {
+				t.Fatal("fixture did not require a hashed filename")
+			}
+			if _, statErr := os.Stat(plainPath); statErr == nil {
+				t.Fatal("wrote unhashed namespaced filename")
+			}
+			if _, statErr := os.Stat(hashedPath); statErr != nil {
+				t.Fatalf("hashed state missing: %v", statErr)
+			}
 
-	got, ok, consumeErr := consumeWorkflowStateForRecipe(store, recipe, id)
-	if consumeErr != nil || !ok || got == nil {
-		t.Fatalf("consume hashed state: ok=%v err=%v", ok, consumeErr)
+			got, ok, consumeErr := consumeWorkflowStateForRecipe(store, recipe, id)
+			if consumeErr != nil || !ok || got == nil {
+				t.Fatalf("consume hashed state: ok=%v err=%v", ok, consumeErr)
+			}
+		})
 	}
 }
