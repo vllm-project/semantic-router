@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_LIMITS,
+  effectiveRequestProfile,
   reportDistribution,
   makeManifest,
   money,
@@ -69,6 +70,33 @@ describe('sr-bench run contract', () => {
       }),
     ).toBe(120)
     expect(tokenTotal({ input_tokens: 100 })).toBeNull()
+  })
+  it('preserves registered overrides and rejects a fixed output profile above the run cap', () => {
+    const native = {
+      ...single,
+      request_params: { max_tokens: 4096, temperature: 1, top_p: 0.95, seed: 42 },
+    }
+    const manifest = makeManifest('Native', 'live', 'quick', dataset, [native], {
+      ...DEFAULT_LIMITS,
+      max_output_tokens: 512,
+    })
+    const before = JSON.stringify(manifest)
+    expect(effectiveRequestProfile(native, manifest.sampling)).toMatchObject({
+      max_tokens: 4096,
+      temperature: 1,
+      top_p: 0.95,
+      seed: 42,
+    })
+    expect(validateManifest(manifest)).toContain(
+      'Target baseline has a registered output limit of 4096 tokens, above the run cap of 512',
+    )
+    expect(JSON.stringify(manifest)).toBe(before)
+    expect(
+      validateManifest({ ...manifest, limits: { ...manifest.limits, max_output_tokens: 4096 } }),
+    ).toBeNull()
+    const noFixedCap = { ...single, request_params: { temperature: 1, top_p: 0.95 } }
+    expect(effectiveRequestProfile(noFixedCap, manifest.sampling).max_tokens).toBe(512)
+    expect(validateManifest({ ...manifest, targets: [noFixedCap] })).toBeNull()
   })
   it('uses full report routing counts while keeping targets separate', () => {
     expect(

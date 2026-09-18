@@ -1,5 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { expect, test, type Page, type Response, type TestInfo } from '@playwright/test'
+import {
+  acceptanceOrigin,
+  authenticateAcceptance,
+  type AcceptanceConnection,
+} from '../support/liveAcceptance'
 import type {
   CallRecord,
   Manifest,
@@ -8,8 +13,7 @@ import type {
   Run,
 } from '../../src/components/sr-bench/types'
 
-interface LifecyclePlan {
-  base_url: string
+interface LifecyclePlan extends AcceptanceConnection {
   execution_authorized: boolean
   expected_deployment_sha: string
   purpose: 'synthetic-dashboard-lifecycle-only'
@@ -20,6 +24,8 @@ interface LifecyclePlan {
   case_ids: string[]
   target_id: string
   target_model: string
+  registry_sha256: string
+  expected_native_request_params: Record<string, unknown>
   limits: {
     max_cost_usd: number
     max_run_seconds: number
@@ -36,23 +42,16 @@ const plan: LifecyclePlan | null = planPath
   : null
 const purpose = 'synthetic-dashboard-lifecycle-only'
 if (plan) {
-  const origin = new URL(plan.base_url)
-  if (
-    origin.protocol !== 'http:' ||
-    !['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname) ||
-    origin.username ||
-    origin.password ||
-    origin.pathname !== '/' ||
-    origin.search ||
-    origin.hash
-  )
-    throw new Error('Lifecycle acceptance requires an explicit credential-free loopback origin.')
-  plan.base_url = origin.origin
+  plan.base_url = acceptanceOrigin(plan)
   if (
     plan.execution_authorized !== true ||
     plan.purpose !== purpose ||
     !/^[a-f0-9]{40}$/.test(plan.expected_deployment_sha) ||
     !/^[a-f0-9]{64}$/.test(plan.dataset_sha256) ||
+    !/^[a-f0-9]{64}$/.test(plan.registry_sha256) ||
+    !plan.expected_native_request_params ||
+    typeof plan.expected_native_request_params !== 'object' ||
+    Array.isArray(plan.expected_native_request_params) ||
     !plan.run_name.toLowerCase().includes('synthetic') ||
     !['smoke', 'quick', 'standard'].includes(plan.profile) ||
     plan.case_ids.length < 3 ||
@@ -73,6 +72,7 @@ if (plan) {
       'Lifecycle plan lacks authorization, a fresh synthetic scope, or bounded limits.',
     )
 }
+test.use({ storageState: plan?.auth_state_path })
 
 test.skip(!plan, 'Opt in with an explicitly authorized SR_BENCH_LIFECYCLE_PLAN.')
 
@@ -125,6 +125,8 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     dataset_sha256: approved.dataset_sha256,
     source_cell_count: approved.case_ids.length,
     target_id: approved.target_id,
+    registry_sha256: approved.registry_sha256,
+    expected_native_request_params: approved.expected_native_request_params,
     limits_per_attempt: approved.limits,
     combined_attempt_budget_ceiling_usd: approved.limits.max_cost_usd * 2,
     recovery_scope: 'Exactly one cell with no prior dispatched call',
@@ -160,6 +162,12 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     expect(manifest.sampling.max_tokens).toBe(approved.limits.max_output_tokens)
     expect(manifest.sampling.temperature).toBe(0)
     expect(manifest.sampling.top_p).toBe(1)
+    expect(target.request_params).toEqual(approved.expected_native_request_params)
+    const effectiveSampling = { ...manifest.sampling, ...target.request_params }
+    expect(effectiveSampling.max_tokens).toBe(approved.limits.max_output_tokens)
+    evidence.effective_sampling = effectiveSampling
+    evidence.sampling_note =
+      'Registered native request parameters override run defaults; the effective output cap remains 512.'
   }
 
   await page.route(`**${api}/**`, async (route) => {
@@ -210,12 +218,14 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
   })
 
   try {
-    await page.goto(`${approved.base_url}/__acceptance/login`)
-    await page.getByRole('button', { name: 'Start acceptance session', exact: true }).click()
-    await page.waitForURL((url) => url.pathname !== '/__acceptance/login')
+    await authenticateAcceptance(page, approved)
     await page.goto(`${approved.base_url}/evaluation?view=new`)
     await expect(page.getByRole('heading', { name: 'Create evaluation' })).toBeVisible()
     const existing = await read<{ runs: Run[] }>(page, '/runs')
+    expect(
+      existing.runs.every(terminal),
+      'The authorized lifecycle requires the worker to be idle.',
+    ).toBe(true)
     expect(
       existing.runs.some(
         (run) =>
@@ -225,9 +235,8 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
       'This dataset must have no previous evaluation attempt',
     ).toBe(false)
     await page.getByLabel('Run name', { exact: true }).fill(approved.run_name)
-    await page
-      .getByRole('combobox', { name: 'Profile', exact: true })
-      .selectOption(approved.profile)
+    await page.getByRole('radio', { name: new RegExp(`^${approved.profile}`, 'i') }).check()
+    await page.getByText('Prepared source collection', { exact: true }).click()
     await page
       .getByRole('combobox', { name: 'Prepared dataset', exact: true })
       .selectOption(approved.dataset_id)
@@ -404,6 +413,7 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
       parent_snapshot_spend_complete: recovery.parent.spend_complete,
     }
     await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click()
+    await page.getByRole('tab', { name: 'Evidence', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Recovery lineage', exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Open parent run', exact: true })).toHaveAttribute(
       'href',

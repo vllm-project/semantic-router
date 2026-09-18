@@ -263,6 +263,16 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 		wantRequired     []string
 	}{
 		{
+			name: "dataset composition requires write", path: "/api/sr-bench/v1/datasets/compose",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset composition needs no generation permission", path: "/api/sr-bench/v1/datasets/compose",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
 			name: "create requires write", path: "/api/sr-bench/v1/runs",
 			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
 			wantRequired: []string{PermEvalWrite, PermEvalRun},
@@ -340,6 +350,38 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 			handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, writer, http.MethodPost, test.path, `{}`))
 			if response.Code != test.wantStatus || called != (test.wantStatus == http.StatusNoContent) {
 				t.Fatalf("status=%d called=%v want=%d", response.Code, called, test.wantStatus)
+			}
+		})
+	}
+}
+
+func TestAuthenticateRequestRequiresDatasetReadPermission(t *testing.T) {
+	for _, suffix := range []string{"", "/cases"} {
+		path := "/api/sr-bench/v1/datasets/" + strings.Repeat("a", 64) + suffix
+		t.Run(suffix, func(t *testing.T) {
+			svc := newTestAuthService(t)
+			reader := newTestUser(t, svc, "dataset-reader@example.com", RoleRead, "active")
+			if actual := RequiredPermissions(http.MethodGet, path); !reflect.DeepEqual(actual, []string{PermEvalRead}) {
+				t.Fatalf("dataset read requires unexpected permissions: %v", actual)
+			}
+			called := false
+			handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, reader, http.MethodGet, path, ""))
+			if response.Code != http.StatusNoContent || !called {
+				t.Fatalf("read-only user rejected: status=%d", response.Code)
+			}
+			if _, err := svc.store.db.Exec(`DELETE FROM role_permissions WHERE role = ? AND permission_key = ?`, RoleRead, PermEvalRead); err != nil {
+				t.Fatal(err)
+			}
+			called = false
+			response = httptest.NewRecorder()
+			handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, reader, http.MethodGet, path, ""))
+			if response.Code != http.StatusForbidden || called {
+				t.Fatalf("missing dataset permission accepted: status=%d", response.Code)
 			}
 		})
 	}

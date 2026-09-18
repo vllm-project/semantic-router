@@ -122,7 +122,7 @@ func srBenchRouteMethod(path string) (string, bool) {
 	switch rest {
 	case "/health", "/catalog", "/datasets", "/targets":
 		return http.MethodGet, true
-	case "/plans", "/comparisons", "/replays":
+	case "/plans", "/comparisons", "/replays", "/datasets/compose":
 		return http.MethodPost, true
 	case "/runs":
 		// GET and POST are the only collection methods; the caller selects
@@ -130,6 +130,12 @@ func srBenchRouteMethod(path string) (string, bool) {
 		return "", true
 	}
 	parts := strings.Split(strings.TrimPrefix(rest, "/"), "/")
+	if len(parts) >= 2 && parts[0] == "datasets" && validSRBenchDatasetID(parts[1]) {
+		if len(parts) == 2 || len(parts) == 3 && parts[2] == "cases" {
+			return http.MethodGet, true
+		}
+		return "", false
+	}
 	if len(parts) < 2 || parts[0] != "runs" || !validSRBenchRunID(parts[1]) {
 		return "", false
 	}
@@ -148,6 +154,20 @@ func srBenchRouteMethod(path string) (string, bool) {
 		return http.MethodGet, true
 	}
 	return "", false
+}
+
+func validSRBenchDatasetID(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, char := range value {
+		switch {
+		case char >= 'a' && char <= 'f', char >= '0' && char <= '9':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func validSRBenchRunID(value string) bool {

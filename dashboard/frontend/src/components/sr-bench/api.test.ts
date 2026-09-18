@@ -29,6 +29,40 @@ describe('sr-bench evidence read deadlines', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it.each(['compose', 'plan', 'comparison'])(
+    'bounds a stalled %s review without retrying or dispatching generation',
+    async (operation) => {
+      const fetch = vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+          }),
+      )
+      vi.stubGlobal('fetch', fetch)
+      const outcome = expect(
+        operation === 'compose'
+          ? benchApi.composeDatasets(['a'.repeat(64)], ['mmlu-pro'])
+          : operation === 'comparison'
+            ? benchApi.compare('baseline', 'candidate')
+            : benchApi.plan({} as Manifest),
+      ).rejects.toMatchObject({
+        status: 408,
+        message: expect.stringContaining(
+          operation === 'comparison'
+            ? 'timed out after 30 seconds'
+            : 'No model generation was requested',
+        ),
+      })
+      await vi.advanceTimersByTimeAsync(30000)
+      await outcome
+      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(fetch.mock.calls[0][0]).not.toBe('/api/sr-bench/v1/runs')
+      expect(vi.getTimerCount()).toBe(0)
+    },
+  )
+
   it('preserves caller cancellation and clears the read deadline', async () => {
     vi.stubGlobal(
       'fetch',

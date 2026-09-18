@@ -273,3 +273,98 @@ The next capability decision requires a frozen final recipe, prespecified
 quality and cost criteria, and independent validation without tuning against
 its outcomes. Larger development matrices can improve routing estimates, but
 they must remain distinct from that validation evidence.
+
+## Adapter and lifecycle acceptance
+
+All nine dataset adapters were prepared from pinned sources for the smoke,
+quick, and standard profiles in the [sr-bench guide](./sr-bench). Gated HLE
+access used an authorized local account; credentials and original dataset
+content are not part of this publication. The four-benchmark development
+study above exercised MMLU-Pro and GPQA final-answer grading and SimpleQA's
+fixed judge. All 12 ARC-AGI-2 subject responses reached their output ceiling,
+so those model runs did not reach the puzzle-output grader. The additional
+Flash smokes below exercised the remaining five subject-execution paths.
+
+These are functional acceptance observations, not a uniform capability
+comparison. The code and agent smokes used a 4,096-token ceiling; HLE used a
+separately frozen 16,384-token ceiling. All used concurrency two. A completed
+run can contain incorrect or truncated answers: completion describes the
+planned denominator and retained evidence, not task success.
+
+| Benchmark | Completed cases; correct | Subject / auxiliary calls | Subject cost | Auxiliary cost | Run wall time |
+| --- | --- | ---: | ---: | ---: | ---: |
+| LiveCodeBench | 2; 1 | 2 / 0 | 0.01491035 | 0 | 42.67 s |
+| SciCode | 1; 0 | 2 / 0 | 0.01602640 | 0 | 76.84 s |
+| Terminal-Bench 2.1 | 1; 0 | 17 / 0 | 0.08673873 | 0 | 100.56 s |
+| τ³ | 3; 2 | 41 / 21 | 0.07429266 | 0.02434185 | 87.55 s |
+| HLE | 4; 0 | 4 / 0 | 0.12880855 | 0 | 347.66 s |
+
+Costs use the same frozen, size-based **simulated** Flash rates shown above;
+they are not invoices. τ³'s 21 auxiliary calls were simulator calls. Its
+observed tasks needed no LLM judge call. HLE made no judge call because every
+subject response was truncated. The five completed smokes contain 66 subject
+calls and 21 simulator calls, totaling **0.34511854 USD-equivalent**. They are
+separate from the 170-call Balance comparison and from failed or UI attempts.
+
+Recorded exclusive usage buckets, with auxiliary usage kept separate:
+
+| Benchmark / role | Fresh input | Cache read | Cache write | Output |
+| --- | ---: | ---: | ---: | ---: |
+| LiveCodeBench / subject | 1,171 | 0 | 0 | 7,256 |
+| SciCode / subject | 1,988 | 0 | 0 | 7,556 |
+| Terminal-Bench 2.1 / subject | 14,215 | 257,152 | 58,016 | 6,998 |
+| τ³ / subject | 29,015 | 271,264 | 28,224 | 7,625 |
+| τ³ / simulator | 18,148 | 39,200 | 4,704 | 3,167 |
+| HLE / subject | 1,559 | 0 | 0 | 65,536 |
+
+The retained execution evidence has the following boundaries:
+
+- **ARC-AGI-2:** the 12 development subject responses counted as incorrect after
+  truncation. Separate zero-LLM controls passed the official complete output
+  grids for each of the two sampled puzzles to the installed grader; both
+  passed. Changing one output cell to another valid color made each puzzle
+  fail, preserving the rule that all test grids must match. These four controls
+  exercise the actual grader without changing model results or adding model
+  capability evidence.
+- **LiveCodeBench:** one generated solution passed all 34 sandbox tests. The
+  other response reached its output ceiling and counted as incorrect without
+  running that solution's grader.
+- **SciCode:** the model completed the first subproblem and reached the output
+  ceiling on the second. Its model run never reached the complete H5 grader.
+  Separate zero-LLM controls used an official development reference: all three
+  subproblems passed, while a deliberately incorrect final subproblem failed.
+  Both controls used the actual pinned grader and H5 data in bounded,
+  network-disabled containers, with successful cleanup. These controls validate
+  grading behavior; they add no model capability score and do not replace the
+  truncated model run.
+- **Terminal-Bench 2.1:** the sole task was a reviewed, benign path-tracing
+  exercise. The actual Harbor verifier completed and returned reward zero;
+  its receipt recorded no verifier exception or retry. The subject reached
+  its output ceiling, and owned container cleanup completed. This is evidence
+  of a real verifier path, not successful task completion.
+- **τ³:** the original attempt failed during simulator initialization because
+  required pinned assets were missing, before any subject, simulator, or judge
+  call. That failed parent remains unchanged. Explicit setup filled those
+  assets at the same upstream commit; all three domains then initialized with
+  network and model calls disabled. A reviewed `recover-plan` selected exactly
+  the three undispatched cells. One separately authorized child inherited the
+  frozen cases and limits, while capturing its new runner provenance. Airline
+  and retail returned reward one; telecom reached its step limit and returned
+  zero. All three real trajectories and rewards were retained. No previously
+  sent generation was retried.
+- **HLE:** all four subjects returned `finish_reason=length` at 16,384 output
+  tokens. Each counted as incorrect in the four-case denominator, and its
+  complete usage was retained. There were **zero judge calls**. This validates
+  bounded execution and accounting, but leaves HLE's live reference-judge path
+  unexercised. The configured judge is not a claim of official HLE leaderboard
+  equivalence.
+
+Independent saved-stream audits passed 339 checks for the first three smokes
+and 1,008 checks for the τ³ child and HLE, covering all 87 calls. Checks included
+response identity, final-only content, native request parameters, exclusive
+four-bucket costs, single dispatch receipts, output limits, and concurrency.
+No audit issued inference requests. This evidence covers all nine subject
+adapter paths, with the grader limitations above; it is **not** nine fully
+qualified model-to-grader paths or a complete sr-bench score. Dashboard
+lifecycle acceptance and independent capability validation remain separate
+checks.

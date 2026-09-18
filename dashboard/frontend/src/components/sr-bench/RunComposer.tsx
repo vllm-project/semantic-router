@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { benchApi, SrBenchRequestError } from './api'
-import { DEFAULT_LIMITS, makeManifest, number, validateManifest } from './model'
+import {
+  DEFAULT_LIMITS,
+  effectiveRequestProfile,
+  makeManifest,
+  number,
+  validateManifest,
+} from './model'
 import type { Catalog, Dataset, Manifest, Plan, Run, Target } from './types'
 import styles from './SrBench.module.css'
+import ProductIcon from '../ProductIcon'
+import {
+  benchmarkTitle,
+  friendlyDatasetName,
+  profileTitle,
+  profileDescription,
+} from './datasetPresentation'
 import {
   clearSubmission,
   readSubmission,
@@ -41,7 +54,11 @@ export default function RunComposer({
   const [profile, setProfile] = useState(
     datasets.find((item) => item.id === initialDataset)?.profile ?? 'quick',
   )
-  const [datasetID, setDatasetID] = useState(initialDataset ?? '')
+  const initialSource =
+    datasets.find((item) => item.id === initialDataset) ??
+    datasets.find((item) => !item.profile || item.profile === 'quick')
+  const [datasetID, setDatasetID] = useState(initialSource?.id ?? '')
+  const [benchmarks, setBenchmarks] = useState<string[]>(initialSource?.benchmarks ?? [])
   const [targets, setTargets] = useState<Target[]>(() =>
     registeredTargets.filter((target) => target.model === initialModel),
   )
@@ -65,7 +82,9 @@ export default function RunComposer({
       requestSequence.current += 1
     }
   }, [])
-  const profiles = catalog.profiles.map((item) => item.id)
+  const profiles = ['smoke', 'quick', 'standard'].filter((value) =>
+    catalog.profiles.some((item) => item.id === value),
+  )
   const dataset = datasets.find((item) => item.id === datasetID)
   const formManifest = useMemo(
     () => ({
@@ -74,7 +93,48 @@ export default function RunComposer({
     }),
     [name, mode, profile, dataset, targets, limits, costPolicy],
   )
-  const fingerprint = advanced ? json : JSON.stringify(formManifest)
+  const fingerprint = advanced ? json : JSON.stringify({ manifest: formManifest, benchmarks })
+  const sources = datasets.filter((item) => !item.profile || item.profile === profile)
+  const compatibleSources = dataset
+    ? sources.filter((item) => item.seed === dataset.seed && item.split === dataset.split)
+    : []
+  const availableBenchmarks = new Set(compatibleSources.flatMap((item) => item.benchmarks ?? []))
+  function chooseProfile(value: string) {
+    const source = datasets.find((item) => !item.profile || item.profile === value)
+    setProfile(value)
+    setDatasetID(source?.id ?? '')
+    setBenchmarks(source?.benchmarks ?? [])
+  }
+  function selectedSourceIDs(): string[] {
+    if (!dataset) return []
+    const compatible = compatibleSources
+    const selected = [dataset]
+    for (const benchmark of benchmarks) {
+      if (selected.some((item) => item.benchmarks?.includes(benchmark))) continue
+      const covered = new Set(
+        selected.flatMap((item) => item.benchmarks ?? []).filter((id) => benchmarks.includes(id)),
+      )
+      const source = compatible
+        .filter((item) => item.benchmarks?.includes(benchmark))
+        .sort((a, b) => {
+          const overlap = (item: Dataset) =>
+            item.benchmarks?.filter((id) => covered.has(id)).length ?? 0
+          return (
+            overlap(a) - overlap(b) ||
+            (a.benchmarks?.length ?? 0) - (b.benchmarks?.length ?? 0) ||
+            a.id.localeCompare(b.id)
+          )
+        })[0]
+      if (!source)
+        throw new Error(
+          `No compatible prepared source for ${benchmark}. Choose another source collection; development and holdout data cannot be mixed.`,
+        )
+      selected.push(source)
+    }
+    return selected
+      .filter((item) => item.benchmarks?.some((benchmark) => benchmarks.includes(benchmark)))
+      .map((item) => item.id)
+  }
   const planCurrent = plan?.fingerprint === fingerprint
 
   async function reviewPlan() {
@@ -85,9 +145,18 @@ export default function RunComposer({
     setPending(true)
     setPlan(null)
     try {
-      const manifest = advanced ? (JSON.parse(json) as Manifest) : formManifest
+      let manifest = advanced ? (JSON.parse(json) as Manifest) : formManifest
       const issue = validateManifest(manifest)
       if (issue) throw new Error(issue)
+      if (!advanced) {
+        if (!benchmarks.length) throw new Error('Select at least one prepared benchmark.')
+        const composed = await benchApi.composeDatasets(selectedSourceIDs(), benchmarks)
+        if (!current()) return
+        manifest = {
+          ...manifest,
+          dataset: { path: composed.dataset.path, sha256: composed.dataset.sha256 },
+        }
+      }
       const evidence = await benchApi.plan(manifest)
       if (!current()) return
       setPlan({
@@ -199,6 +268,98 @@ export default function RunComposer({
         </div>
         <span className={styles.badge}>sr-bench 1.0</span>
       </div>
+      <h3>1. Choose scope</h3>
+      <div className={styles.profileCards} role="radiogroup" aria-label="Evaluation size">
+        {profiles.map((value) => (
+          <label
+            key={value}
+            className={`${styles.profileCard} ${profile === value ? styles.profileSelected : ''}`}
+          >
+            <input
+              type="radio"
+              name="evaluation-profile"
+              checked={profile === value}
+              onChange={() => chooseProfile(value)}
+            />
+            <strong>{profileTitle(value)}</strong>
+            <span>{profileDescription(value)}</span>
+          </label>
+        ))}
+      </div>
+      {!sources.length && (
+        <p className={styles.notice}>
+          No prepared {profileTitle(profile).toLowerCase()} datasets are registered. Prepare a
+          dataset with the CLI to use this size.
+        </p>
+      )}
+      <div className={styles.sectionHeading}>
+        <h4>Benchmarks</h4>
+        <button
+          onClick={() =>
+            setBenchmarks(
+              benchmarks.length === availableBenchmarks.size ? [] : [...availableBenchmarks],
+            )
+          }
+          disabled={!availableBenchmarks.size}
+        >
+          {benchmarks.length === availableBenchmarks.size && benchmarks.length
+            ? 'Clear benchmarks'
+            : 'Select all benchmarks'}
+        </button>
+      </div>
+      <div className={styles.benchmarkChoices} role="group" aria-label="Included benchmarks">
+        {catalog.benchmarks.map((benchmark) => (
+          <label key={benchmark.id} className={styles.benchmarkChoice}>
+            <input
+              type="checkbox"
+              checked={benchmarks.includes(benchmark.id)}
+              disabled={!availableBenchmarks.has(benchmark.id)}
+              onChange={(event) =>
+                setBenchmarks((previous) =>
+                  event.target.checked
+                    ? [...previous, benchmark.id]
+                    : previous.filter((id) => id !== benchmark.id),
+                )
+              }
+            />
+            <span>
+              {benchmarkTitle(benchmark.id)}
+              <small>
+                {availableBenchmarks.has(benchmark.id)
+                  ? 'Prepared'
+                  : 'No compatible prepared source'}
+              </small>
+            </span>
+          </label>
+        ))}
+      </div>
+      <details className={styles.details}>
+        <summary>Prepared source collection</summary>
+        <label>
+          Prepared dataset
+          <select
+            value={datasetID}
+            onChange={(event) => {
+              setDatasetID(event.target.value)
+              setBenchmarks(
+                datasets.find((item) => item.id === event.target.value)?.benchmarks ?? [],
+              )
+            }}
+          >
+            <option value="">Select a prepared source</option>
+            {sources.map((item) => (
+              <option key={item.id} value={item.id}>
+                {friendlyDatasetName(item)} · {number(item.case_count)} cases ·{' '}
+                {item.split ?? 'split unspecified'}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className={styles.muted}>
+          Selected benchmarks are composed without resampling. Sources must share the same size,
+          seed and split.
+        </p>
+      </details>
       <div className={styles.formGrid}>
         <label>
           Run name
@@ -212,33 +373,6 @@ export default function RunComposer({
           >
             <option value="live">Live evaluation</option>
             <option value="preview">Route preview</option>
-          </select>
-        </label>
-        <label>
-          Profile
-          <select
-            value={profile}
-            onChange={(event) => {
-              setProfile(event.target.value)
-              setDatasetID('')
-            }}
-          >
-            {(profiles.length ? profiles : ['smoke', 'quick', 'standard']).map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Prepared dataset
-          <select value={datasetID} onChange={(event) => setDatasetID(event.target.value)}>
-            <option value="">Select a dataset</option>
-            {datasets
-              .filter((item) => !item.profile || item.profile === profile)
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name ?? item.id} · {number(item.case_count)} cases
-                </option>
-              ))}
           </select>
         </label>
       </div>
@@ -256,14 +390,12 @@ export default function RunComposer({
       )}
       {dataset && (
         <p className={styles.muted}>
-          {number(dataset.case_count)} frozen cases ·{' '}
-          {dataset.benchmarks?.join(', ') || 'Benchmark scope recorded in the dataset'}
-          <br />
-          SHA-256 <code className={styles.hash}>{dataset.sha256}</code>
+          {benchmarks.length} benchmarks selected. The reviewed plan shows the exact frozen case
+          count.
         </p>
       )}
       <div className={styles.sectionHeading}>
-        <h3>Targets</h3>
+        <h3>2. Choose targets</h3>
         <div className={styles.actions}>
           {registeredTargets.length > 0 && (
             <label className={styles.inlineLabel}>
@@ -297,34 +429,60 @@ export default function RunComposer({
       <div className={styles.targetList}>
         {targets.map((target, index) => (
           <fieldset key={index} className={styles.target}>
-            <legend>Target {index + 1}</legend>
-            <div className={styles.formGrid}>
-              <label>
-                Name
-                <input value={target.id} readOnly />
-              </label>
-              <label>
-                Type
-                <input
-                  value={target.kind === 'mom' ? 'Mixture of models' : 'Single model'}
-                  readOnly
-                />
-              </label>
-              <label>
-                Model / entrypoint
-                <input value={target.model} readOnly />
-              </label>
-              <label>
-                Endpoint
-                <input value={target.base_url} readOnly />
-              </label>
-              {target.config_hash && (
-                <label>
-                  Frozen configuration
-                  <input value={target.config_hash} readOnly />
-                </label>
+            <legend>
+              <ProductIcon name={target.kind === 'mom' ? 'mixture' : 'model'} />
+              {target.id}
+            </legend>
+            <p>
+              <strong>{target.kind === 'mom' ? 'Mixture of models' : 'Single model'}</strong> ·{' '}
+              {target.model}
+            </p>
+            <details className={styles.details}>
+              <summary>Connection and configuration</summary>
+              <dl className={styles.identity}>
+                <dt>Endpoint</dt>
+                <dd>{target.base_url}</dd>
+                {target.config_hash && (
+                  <>
+                    <dt>Frozen configuration</dt>
+                    <dd>
+                      <code>{target.config_hash}</code>
+                    </dd>
+                  </>
+                )}
+              </dl>
+            </details>
+            <section aria-label={`${target.id} request profile`}>
+              {!advanced && (
+                <>
+                  <h4>Effective request profile</h4>
+                  <p>
+                    Output tokens:{' '}
+                    {number(effectiveRequestProfile(target, formManifest.sampling).max_tokens)}
+                    {target.request_params?.max_tokens === undefined
+                      ? ' (run default)'
+                      : ' (registered override)'}
+                  </p>
+                </>
               )}
-            </div>
+              {advanced && (
+                <p className={styles.muted}>
+                  Request parameters come from the edited manifest and reviewed plan.
+                </p>
+              )}
+              {target.request_params && Object.keys(target.request_params).length > 0 && (
+                <details>
+                  <summary>Registered sampling overrides</summary>
+                  <pre>{JSON.stringify(target.request_params, null, 2)}</pre>
+                </details>
+              )}
+              <p className={styles.muted}>
+                Fixed server-registered values override run sampling defaults. Select another
+                registered target to use a different fixed profile. The run output cap still
+                applies; this form does not change the registered profile or raise the cap
+                automatically.
+              </p>
+            </section>
             <div className={styles.targetFooter}>
               <span>
                 Credentials stay on the server.
@@ -364,7 +522,7 @@ export default function RunComposer({
           still apply; this run cannot prove cost savings.
         </p>
       )}
-      <h3>Run budget and limits</h3>
+      <h3>3. Set budget and limits</h3>
       <div className={styles.formGrid}>
         <label>
           Budget (USD)

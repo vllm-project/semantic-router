@@ -260,6 +260,16 @@ cost coverage, latency, tokens, selected-model distribution and case evidence.
 Comparison selects compatible runs and explains incompatibility instead of
 silently intersecting away failures.
 
+Creation first selects the actual smoke/quick/standard profile, then one or more
+prepared benchmarks. Dataset composition reuses compatible frozen sources without
+acquisition, resampling or model calls. The dataset library provides pagination,
+coverage and question input views with reference answers and hidden tests excluded;
+raw reproducibility details remain collapsed. Run navigation separates Results,
+Questions, Calls, Evidence and Recipe. Comparison supports arbitrary completed
+candidate selections, chronological iteration charts and CSV/JSON export rather
+than a fixed number of optimization slots. Implementation and local regression
+coverage do not replace the live Dashboard acceptance requirement below.
+
 The operations skill gains a dedicated sr-bench reference covering installation,
 data preparation, preview/config/live iteration, reporting, abnormal-run handling
 and train/dev/holdout boundaries. Generated public skill copies ship with it.
@@ -276,10 +286,10 @@ on 25 reused development cases, with 170 retained calls and qualified offline
 accounting corrections. Its simulated-price savings and small-sample scores do
 not establish holdout quality, all-adapter acceptance, or production savings.
 
-- [ ] Replace old CLI/API/UI evaluation surfaces and stale active documentation.
-- [ ] Install from a built wheel and discover the same catalog from CLI and UI.
-- [ ] Prepare reproducible datasets; verify disjoint splits and source digests.
-- [ ] Verify deadline, continuous-stream repetition, cancellation, crash/unknown
+- [x] Replace old CLI/API/UI evaluation surfaces and stale active documentation.
+- [x] Install from a built wheel and discover the same catalog from CLI and UI.
+- [x] Prepare reproducible datasets; verify disjoint splits and source digests.
+- [x] Verify deadline, continuous-stream repetition, cancellation, crash/unknown
   dispatch, budget stop and incomplete accounting with deterministic fault tests.
 - [x] Run actual single models and MoM through the CLI using fixed task IDs;
   verify saved responses, final-channel scoring, identities and metric arithmetic.

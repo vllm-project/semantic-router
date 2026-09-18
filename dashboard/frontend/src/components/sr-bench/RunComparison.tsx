@@ -5,8 +5,10 @@ import AccountingCorrection from './AccountingCorrection'
 import { money, number, percent, seconds, tokenTotal } from './model'
 import type { Comparison, Report, Run } from './types'
 import styles from './SrBench.module.css'
+import ProductLoadingState from '../ProductLoadingState'
+import ProductIcon from '../ProductIcon'
+import { IterationChart, QualityCostChart, type QualityCostPoint } from './EvaluationCharts'
 
-const stages = ['Current Balance', 'Optimization 1', 'Optimization 2']
 interface IterationEvidence {
   id: string
   stage: string
@@ -18,9 +20,10 @@ interface IterationEvidence {
 export default function RunComparison({ runs }: { runs: Run[] }) {
   const [search, setSearch] = useSearchParams()
   const savedBaseline = search.get('baseline') ?? ''
-  const savedIterations = [0, 1, 2].map((index) => search.get(`iteration${index}`) ?? '').join('|')
+  const savedIterations = search.getAll('candidate').join('|')
   const [baseline, setBaseline] = useState(savedBaseline)
-  const [candidates, setCandidates] = useState(savedIterations.split('|'))
+  const [candidates, setCandidates] = useState(savedIterations.split('|').filter(Boolean))
+  const [filter, setFilter] = useState('')
   const [results, setResults] = useState<IterationEvidence[]>([])
   const [baselineReport, setBaselineReport] = useState<Report | null>(null)
   const [pending, setPending] = useState(false)
@@ -34,14 +37,14 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
 
   useEffect(() => {
     setBaseline(savedBaseline)
-    setCandidates(savedIterations.split('|'))
+    setCandidates(savedIterations.split('|').filter(Boolean))
   }, [savedBaseline, savedIterations])
 
   useEffect(() => {
     let cancelled = false
     const selected = savedIterations
       .split('|')
-      .flatMap((id, index) => (id ? [{ id, stage: stages[index] }] : []))
+      .flatMap((id, index) => (id ? [{ id, stage: `Run ${index + 1}` }] : []))
     if (!savedBaseline || !selected.length || !completeIDs) {
       setPending(false)
       setResults([])
@@ -91,68 +94,236 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
 
   function compare() {
     const next = new URLSearchParams({ view: 'compare', baseline })
-    candidates.forEach((id, index) => {
-      if (id) next.set(`iteration${index}`, id)
+    const ordered = [...candidates].sort((a, b) => {
+      const created = (id: string) => runs.find((run) => run.id === id)?.created_at ?? ''
+      return created(a).localeCompare(created(b)) || a.localeCompare(b)
+    })
+    ordered.forEach((id) => {
+      if (id) next.append('candidate', id)
     })
     if (next.toString() === search.toString()) setRevision((value) => value + 1)
     else setSearch(next)
   }
   const selectedIDs = candidates.filter(Boolean)
+  const candidateOptions = complete.filter(
+    (run) =>
+      run.id !== baseline &&
+      `${run.manifest.name} ${run.manifest.targets.map((target) => target.id).join(' ')}`
+        .toLowerCase()
+        .includes(filter.toLowerCase()),
+  )
+  function download(format: 'json' | 'csv') {
+    const payload = {
+      baseline_run_id: savedBaseline,
+      baseline_report: baselineReport,
+      comparisons: results,
+      exported_at: new Date().toISOString(),
+      qualified,
+      cost_note:
+        'Costs apply frozen per-token prices to recorded usage, not invoice or hardware measurements.',
+    }
+    const csv = [
+      [
+        'run',
+        'target',
+        'baseline',
+        'paired_cases',
+        'quality_delta',
+        'ci95_low',
+        'ci95_high',
+        'model_cost_usd',
+        'cost_saving_percent',
+      ],
+      ...results.flatMap(
+        (item) =>
+          item.comparison?.comparisons.map((row) => [
+            item.id,
+            row.candidate_target_id,
+            row.baseline_target_id,
+            row.paired_cases,
+            row.quality_delta,
+            ...row.quality_delta_ci95,
+            row.candidate_cost_usd,
+            row.cost_saving_percent,
+          ]) ?? [],
+      ),
+    ]
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const url = URL.createObjectURL(
+      new Blob([format === 'json' ? JSON.stringify(payload, null, 2) : csv], {
+        type: format === 'json' ? 'application/json' : 'text/csv',
+      }),
+    )
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `sr-bench-comparison.${format}`
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
   const duplicate = new Set(selectedIDs).size !== selectedIDs.length
   const reviewedBaseline = runs.find((run) => run.id === savedBaseline)
 
+  const qualified =
+    baselineReport?.status === 'completed' &&
+    results.length > 0 &&
+    results.every(
+      (item) =>
+        !item.error &&
+        (item.comparison?.comparisons.length ?? 0) > 0 &&
+        item.report?.status === 'completed',
+    )
+  const points: QualityCostPoint[] = qualified
+    ? [
+        ...(baselineReport?.summary.targets
+          .filter((target) =>
+            reviewedBaseline?.manifest.targets.some(
+              (item) => item.id === target.id && item.kind === 'single',
+            ),
+          )
+          .flatMap((target) =>
+            typeof target.macro_accuracy === 'number' && typeof target.cost_usd === 'number'
+              ? [
+                  {
+                    name: target.id,
+                    quality: target.macro_accuracy * 100,
+                    cost: target.cost_usd,
+                    kind: 'single' as const,
+                  },
+                ]
+              : [],
+          ) ?? []),
+        ...results.flatMap(
+          (item) =>
+            item.comparison?.comparisons.flatMap((row) => {
+              const metric = item.report?.summary.targets.find(
+                (target) => target.id === row.candidate_target_id,
+              )
+              return typeof metric?.macro_accuracy === 'number' &&
+                typeof row.candidate_cost_usd === 'number'
+                ? [
+                    {
+                      name: `${item.stage} · ${row.candidate_target_id}`,
+                      quality: metric.macro_accuracy * 100,
+                      cost: row.candidate_cost_usd,
+                      kind:
+                        runs
+                          .find((run) => run.id === item.id)
+                          ?.manifest.targets.find((target) => target.id === row.candidate_target_id)
+                          ?.kind ?? ('mom' as const),
+                    },
+                  ]
+                : []
+            }) ?? [],
+        ),
+      ]
+    : []
+  const trajectory =
+    qualified && results.every((item) => item.comparison?.comparisons.length === 1)
+      ? results.map((item) => {
+          const row = item.comparison!.comparisons[0]
+          const metric = item.report?.summary.targets.find(
+            (target) => target.id === row.candidate_target_id,
+          )
+          return {
+            stage: item.stage,
+            quality:
+              typeof metric?.macro_accuracy === 'number' ? metric.macro_accuracy * 100 : null,
+            saving: row.cost_saving_percent,
+          }
+        })
+      : []
+  const baselineMetric = baselineReport?.summary.targets.find(
+    (target) => target.id === results[0]?.comparison?.comparisons[0]?.baseline_target_id,
+  )
   return (
     <section className={styles.panel}>
       <h2>Compare iterations</h2>
       <p>
-        Follow current Balance through two optimization rounds against your strongest observed
-        single model. Each comparison requires the same frozen cases, sampling, prices and limits.
+        Compare any completed runs against a single-model baseline. Only compatible frozen cases,
+        sampling, prices and limits support a paired comparison.
       </p>
       <p className={styles.muted}>
         Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost
         measurements.
       </p>
-      <div className={styles.formGrid}>
+      <div className={styles.comparisonSetup}>
         <label>
           Baseline run
           <select
             value={baseline}
             disabled={pending}
-            onChange={(event) => setBaseline(event.target.value)}
+            onChange={(event) => {
+              setBaseline(event.target.value)
+              setCandidates((previous) => previous.filter((id) => id !== event.target.value))
+            }}
           >
             <option value="">Select single-model baseline</option>
             {complete
               .filter((run) => run.manifest.targets.some((target) => target.kind === 'single'))
               .map((run) => (
                 <option key={run.id} value={run.id}>
-                  {run.manifest.name} · {run.id}
+                  {run.manifest.name}
                 </option>
               ))}
           </select>
         </label>
-        {stages.map((stage, index) => (
-          <label key={stage}>
-            {stage} run
-            <select
-              value={candidates[index]}
-              disabled={pending}
-              onChange={(event) =>
-                setCandidates((previous) =>
-                  previous.map((value, i) => (i === index ? event.target.value : value)),
-                )
-              }
-            >
-              <option value="">
-                {index ? 'Optional: select completed iteration' : 'Select current Balance run'}
-              </option>
-              {complete.map((run) => (
-                <option key={run.id} value={run.id}>
-                  {run.manifest.name} · {run.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
+        <div className={styles.sectionHeading}>
+          <h3>Runs to compare</h3>
+          <button
+            disabled={pending || !candidateOptions.length}
+            onClick={() =>
+              setCandidates(
+                candidateOptions.every((run) => candidates.includes(run.id))
+                  ? candidates.filter((id) => !candidateOptions.some((run) => run.id === id))
+                  : [...new Set([...candidates, ...candidateOptions.map((run) => run.id)])],
+              )
+            }
+          >
+            {candidateOptions.length > 0 &&
+            candidateOptions.every((run) => candidates.includes(run.id))
+              ? 'Clear selection'
+              : 'Select all'}
+          </button>
+        </div>
+        <label>
+          Find comparison runs
+          <input
+            type="search"
+            placeholder="Run or model name"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+        </label>
+        <div className={styles.runChoices} role="group" aria-label="Comparison runs">
+          {candidateOptions.map((run) => (
+            <label key={run.id} className={styles.runChoice}>
+              <input
+                type="checkbox"
+                disabled={pending}
+                checked={candidates.includes(run.id)}
+                onChange={(event) =>
+                  setCandidates((previous) =>
+                    event.target.checked
+                      ? [...previous, run.id]
+                      : previous.filter((id) => id !== run.id),
+                  )
+                }
+              />
+              <span>
+                <strong>{run.manifest.name}</strong>
+                <small>
+                  {run.manifest.targets.map((target) => target.id).join(', ')} ·{' '}
+                  {run.progress.total} cells · {run.manifest.profile}
+                </small>
+              </span>
+            </label>
+          ))}
+        </div>
+        <p className={styles.muted}>
+          {selectedIDs.length} runs selected, ordered by creation time. Incompatible evidence is
+          reported and excluded from continuous trends.
+        </p>
       </div>
       {duplicate && <p className={styles.error}>Choose a different run for each iteration.</p>}
       <div className={styles.actions}>
@@ -161,6 +332,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
           disabled={pending || !baseline || !selectedIDs.length || duplicate}
           onClick={compare}
         >
+          <ProductIcon name="chart" />
           {pending ? 'Comparing…' : 'Compare runs'}
         </button>
         <span className={styles.muted}>
@@ -172,56 +344,142 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
           {error}
         </p>
       )}
+      {pending && <ProductLoadingState compact label="Comparing saved evaluation evidence…" />}
+      {qualified && (
+        <div className={styles.chartGrid}>
+          <QualityCostChart points={points} />
+          {trajectory.length > 1 && (
+            <IterationChart
+              points={trajectory}
+              baselineQuality={
+                typeof baselineMetric?.macro_accuracy === 'number'
+                  ? baselineMetric.macro_accuracy * 100
+                  : null
+              }
+            />
+          )}
+        </div>
+      )}
+      {results.length > 0 && !qualified && !pending && (
+        <p className={styles.notice}>
+          A continuous trend is withheld until every selected iteration has a complete, compatible
+          comparison.
+        </p>
+      )}
+      {results.length > 0 && (
+        <div className={styles.iterationCards}>
+          {results.map((item) => (
+            <article className={styles.iterationCard} key={item.id}>
+              <p className={styles.eyebrow}>{item.stage}</p>
+              <h3>{runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}</h3>
+              {item.error ? (
+                <p className={styles.error}>Comparison withheld: {item.error}</p>
+              ) : (
+                item.comparison?.comparisons.map((row) => (
+                  <div key={row.candidate_target_id}>
+                    <div className={styles.iterationNumbers}>
+                      <div>
+                        <span>Quality Δ</span>
+                        <strong>{number(row.quality_delta * 100, 2)} pp</strong>
+                      </div>
+                      <div>
+                        <span>Cost saving</span>
+                        <strong>
+                          {row.cost_saving_percent === null
+                            ? 'Unknown'
+                            : `${number(row.cost_saving_percent, 2)}%`}
+                        </strong>
+                      </div>
+                    </div>
+                    <p className={styles.muted}>
+                      95% paired interval{' '}
+                      {row.quality_delta_ci95
+                        .map((value) => `${number(value * 100, 2)} pp`)
+                        .join(' to ')}{' '}
+                      · {number(row.paired_cases)} cases
+                    </p>
+                    <p className={styles.muted}>
+                      {row.quality_delta_ci95[0] <= 0 && row.quality_delta_ci95[1] >= 0
+                        ? 'Interval includes zero; improvement is not established.'
+                        : 'See the comparison assumptions before making a quality claim.'}
+                    </p>
+                  </div>
+                ))
+              )}
+              {item.report?.provenance.accounting_correction && (
+                <p className={styles.notice}>
+                  {item.report.provenance.accounting_correction.qualified
+                    ? 'Accounting verified'
+                    : 'Partial accounting'}{' '}
+                  · {number(item.report.provenance.accounting_correction.corrected_call_count)}{' '}
+                  corrected calls. Original receipts preserved; full correction evidence below.
+                </p>
+              )}
+              <a href={`?view=runs&run=${encodeURIComponent(item.id)}`}>
+                Open run <ProductIcon name="arrow-right" />
+              </a>
+            </article>
+          ))}
+        </div>
+      )}
       {baselineReport && (
         <>
-          <h3>Single-model baseline</h3>
           <AccountingCorrection report={baselineReport} />
-          <p>{reviewedBaseline?.manifest.name ?? savedBaseline}</p>
-          <div className={styles.tableScroll}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Single model</th>
-                  <th>Macro accuracy</th>
-                  <th>Correct / denominator</th>
-                  <th>Observed model cost</th>
-                  <th>Cache-neutral estimate</th>
-                  <th>Tokens</th>
-                  <th>Latency p50 / p95</th>
-                </tr>
-              </thead>
-              <tbody>
-                {baselineReport.summary.targets
-                  .filter((target) =>
-                    reviewedBaseline?.manifest.targets.some(
-                      (item) => item.id === target.id && item.kind === 'single',
-                    ),
-                  )
-                  .map((target) => (
-                    <tr key={target.id}>
-                      <th scope="row">{target.id}</th>
-                      <td>{percent(target.macro_accuracy)}</td>
-                      <td>
-                        {number(target.correct)} / {number(target.total)}
-                      </td>
-                      <td>{money(target.cost_usd)}</td>
-                      <td title={target.cache_neutral_cost_basis}>
-                        {money(target.cache_neutral_cost_usd)}
-                      </td>
-                      <td>{number(tokenTotal(target.tokens))}</td>
-                      <td>
-                        {seconds(target.latency_p50_s)} / {seconds(target.latency_p95_s)}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          <details className={styles.details}>
+            <summary>Single-model baseline metrics</summary>
+            <p>{reviewedBaseline?.manifest.name ?? savedBaseline}</p>
+            <div className={styles.tableScroll}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Single model</th>
+                    <th>Macro accuracy</th>
+                    <th>Correct / denominator</th>
+                    <th>Observed model cost</th>
+                    <th>Cache-neutral estimate</th>
+                    <th>Tokens</th>
+                    <th>Latency p50 / p95</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {baselineReport.summary.targets
+                    .filter((target) =>
+                      reviewedBaseline?.manifest.targets.some(
+                        (item) => item.id === target.id && item.kind === 'single',
+                      ),
+                    )
+                    .map((target) => (
+                      <tr key={target.id}>
+                        <th scope="row">{target.id}</th>
+                        <td>{percent(target.macro_accuracy)}</td>
+                        <td>
+                          {number(target.correct)} / {number(target.total)}
+                        </td>
+                        <td>{money(target.cost_usd)}</td>
+                        <td title={target.cache_neutral_cost_basis}>
+                          {money(target.cache_neutral_cost_usd)}
+                        </td>
+                        <td>{number(tokenTotal(target.tokens))}</td>
+                        <td>
+                          {seconds(target.latency_p50_s)} / {seconds(target.latency_p95_s)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </>
       )}
       {!!results.length && (
         <>
-          <h3>Balance optimization trajectory</h3>
+          <div className={styles.sectionHeading}>
+            <h3>Comparison evidence</h3>
+            <div className={styles.actions}>
+              <button onClick={() => download('csv')}>Export comparison CSV</button>
+              <button onClick={() => download('json')}>Export comparison JSON</button>
+            </div>
+          </div>
           <p className={styles.mobileHint}>Swipe the tables horizontally to inspect all metrics.</p>
           <p className={styles.muted}>
             Quality differences are percentage points. Intervals that include zero do not establish
@@ -233,162 +491,188 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             prompt token at the frozen fresh-input rate plus output. This counterfactual excludes
             cache discounts and premiums; it is neither billed spend nor a measured cache-free run.
           </p>
-          <div className={styles.tableScroll}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Iteration / target</th>
-                  <th>Macro accuracy</th>
-                  <th>Correct / denominator</th>
-                  <th>Quality Δ vs best single</th>
-                  <th>95% paired interval</th>
-                  <th>Observed cost / saving</th>
-                  <th>Cache-neutral estimate / saving</th>
-                  <th>Tokens</th>
-                  <th>Latency p50 / p95</th>
-                  <th>Wall time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.flatMap(
-                  (item) =>
-                    item.comparison?.comparisons.map((row) => {
-                      const metrics = item.report?.summary.targets.find(
-                        (target) => target.id === row.candidate_target_id,
-                      )
-                      const candidateRun = runs.find((run) => run.id === item.id)
-                      return (
-                        <tr key={`${item.id}:${row.candidate_target_id}`}>
-                          <th scope="row">
-                            {item.stage}
-                            <small>
-                              <a href={`?view=runs&run=${encodeURIComponent(item.id)}`}>
-                                {candidateRun?.manifest.name ?? item.id}
-                              </a>{' '}
-                              · {row.candidate_target_id}
-                            </small>
-                          </th>
-                          <td>{percent(metrics?.macro_accuracy)}</td>
-                          <td>
-                            {number(metrics?.correct)} / {number(metrics?.total)}
-                          </td>
-                          <td>
-                            {number(row.quality_delta * 100, 2)} pp
-                            <small>vs {row.baseline_target_id}</small>
-                          </td>
-                          <td>
-                            {row.quality_delta_ci95
-                              .map((value) => `${number(value * 100, 2)} pp`)
-                              .join(' to ')}
-                            {row.quality_delta_ci95_method && (
+          <details className={styles.details}>
+            <summary>Detailed iteration metrics and uncertainty</summary>
+            <div className={styles.tableScroll}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Iteration / target</th>
+                    <th>Macro accuracy</th>
+                    <th>Correct / denominator</th>
+                    <th>Quality Δ vs best single</th>
+                    <th>95% paired interval</th>
+                    <th>Observed cost / saving</th>
+                    <th>Cache-neutral estimate / saving</th>
+                    <th>Tokens</th>
+                    <th>Latency p50 / p95</th>
+                    <th>Wall time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.flatMap(
+                    (item) =>
+                      item.comparison?.comparisons.map((row) => {
+                        const metrics = item.report?.summary.targets.find(
+                          (target) => target.id === row.candidate_target_id,
+                        )
+                        const candidateRun = runs.find((run) => run.id === item.id)
+                        return (
+                          <tr key={`${item.id}:${row.candidate_target_id}`}>
+                            <th scope="row">
+                              {item.stage}
                               <small>
-                                {row.quality_delta_ci95_method === 'weighted-paired-hoeffding'
-                                  ? 'Conservative weighted Hoeffding'
-                                  : row.quality_delta_ci95_method}
-                              </small>
-                            )}
-                            <small>{number(row.paired_cases)} paired cases</small>
-                            {(row.quality_delta_ci95_qualification ||
-                              row.quality_delta_bootstrap_ci95) && (
-                              <details>
-                                <summary>Uncertainty details</summary>
-                                {row.quality_delta_ci95_qualification && (
-                                  <p>{row.quality_delta_ci95_qualification}</p>
-                                )}
-                                {row.quality_delta_bootstrap_ci95 && (
-                                  <p>
-                                    Bootstrap diagnostic (95%):{' '}
-                                    {row.quality_delta_bootstrap_ci95
-                                      .map((value) => `${number(value * 100, 2)} pp`)
-                                      .join(' to ')}
-                                    . Use the conservative interval above for quality claims;
-                                    resampling identical paired outcomes can produce a zero-width
-                                    diagnostic interval.
+                                {item.report?.provenance.accounting_correction && (
+                                  <p className={styles.notice}>
+                                    {item.report.provenance.accounting_correction.qualified
+                                      ? 'Accounting verified'
+                                      : 'Partial accounting'}{' '}
+                                    ·{' '}
+                                    {number(
+                                      item.report.provenance.accounting_correction
+                                        .corrected_call_count,
+                                    )}{' '}
+                                    corrected calls. Original receipts preserved; full correction
+                                    evidence below.
                                   </p>
                                 )}
-                              </details>
-                            )}
-                          </td>
-                          <td>
-                            {money(row.candidate_cost_usd)}
-                            <small>
-                              {row.cost_saving_percent === null
-                                ? 'Saving unknown'
-                                : `${number(row.cost_saving_percent, 2)}% saving`}
-                            </small>
-                          </td>
-                          <td title={row.cache_neutral_cost_basis}>
-                            {money(row.cache_neutral_candidate_cost_usd)}
-                            <small>
-                              {row.cache_neutral_cost_saving_percent == null
-                                ? 'Saving unknown'
-                                : `${number(row.cache_neutral_cost_saving_percent, 2)}% estimated saving`}
-                            </small>
-                            <small>Baseline {money(row.cache_neutral_baseline_cost_usd)}</small>
-                          </td>
-                          <td>{number(tokenTotal(metrics?.tokens))}</td>
-                          <td>
-                            {seconds(metrics?.latency_p50_s)} / {seconds(metrics?.latency_p95_s)}
-                          </td>
-                          <td>{seconds(item.report?.summary.wall_time_s)}</td>
-                        </tr>
-                      )
-                    }) ?? [],
+                                <a href={`?view=runs&run=${encodeURIComponent(item.id)}`}>
+                                  {candidateRun?.manifest.name ?? item.id}
+                                </a>{' '}
+                                · {row.candidate_target_id}
+                              </small>
+                            </th>
+                            <td>{percent(metrics?.macro_accuracy)}</td>
+                            <td>
+                              {number(metrics?.correct)} / {number(metrics?.total)}
+                            </td>
+                            <td>
+                              {number(row.quality_delta * 100, 2)} pp
+                              <small>vs {row.baseline_target_id}</small>
+                            </td>
+                            <td>
+                              {row.quality_delta_ci95
+                                .map((value) => `${number(value * 100, 2)} pp`)
+                                .join(' to ')}
+                              {row.quality_delta_ci95_method && (
+                                <small>
+                                  {row.quality_delta_ci95_method === 'weighted-paired-hoeffding'
+                                    ? 'Conservative weighted Hoeffding'
+                                    : row.quality_delta_ci95_method}
+                                </small>
+                              )}
+                              <small>{number(row.paired_cases)} paired cases</small>
+                              {(row.quality_delta_ci95_qualification ||
+                                row.quality_delta_bootstrap_ci95) && (
+                                <details>
+                                  <summary>Uncertainty details</summary>
+                                  {row.quality_delta_ci95_qualification && (
+                                    <p>{row.quality_delta_ci95_qualification}</p>
+                                  )}
+                                  {row.quality_delta_bootstrap_ci95 && (
+                                    <p>
+                                      Bootstrap diagnostic (95%):{' '}
+                                      {row.quality_delta_bootstrap_ci95
+                                        .map((value) => `${number(value * 100, 2)} pp`)
+                                        .join(' to ')}
+                                      . Use the conservative interval above for quality claims;
+                                      resampling identical paired outcomes can produce a zero-width
+                                      diagnostic interval.
+                                    </p>
+                                  )}
+                                </details>
+                              )}
+                            </td>
+                            <td>
+                              {money(row.candidate_cost_usd)}
+                              <small>
+                                {row.cost_saving_percent === null
+                                  ? 'Saving unknown'
+                                  : `${number(row.cost_saving_percent, 2)}% saving`}
+                              </small>
+                            </td>
+                            <td title={row.cache_neutral_cost_basis}>
+                              {money(row.cache_neutral_candidate_cost_usd)}
+                              <small>
+                                {row.cache_neutral_cost_saving_percent == null
+                                  ? 'Saving unknown'
+                                  : `${number(row.cache_neutral_cost_saving_percent, 2)}% estimated saving`}
+                              </small>
+                              <small>Baseline {money(row.cache_neutral_baseline_cost_usd)}</small>
+                            </td>
+                            <td>{number(tokenTotal(metrics?.tokens))}</td>
+                            <td>
+                              {seconds(metrics?.latency_p50_s)} / {seconds(metrics?.latency_p95_s)}
+                            </td>
+                            <td>{seconds(item.report?.summary.wall_time_s)}</td>
+                          </tr>
+                        )
+                      }) ?? [],
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </details>
+          <details className={styles.details}>
+            <summary>Technical comparison evidence</summary>
+            {results.map((item) => (
+              <section className={styles.comparisonRow} key={item.id}>
+                <h4>
+                  {item.stage} · {runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}
+                </h4>
+                {item.error ? (
+                  <p className={styles.error} role="alert">
+                    Comparison withheld: {item.error}
+                  </p>
+                ) : (
+                  <>
+                    <AccountingCorrection report={item.report ?? null} />
+                    <details className={styles.details}>
+                      <summary>Baseline selection policy</summary>
+                      <p className={styles.muted}>{item.comparison?.baseline_selection}</p>
+                      {(item.comparison?.baseline_tied_best_target_ids?.length ?? 0) > 1 && (
+                        <p className={styles.notice}>
+                          Tied best single models:{' '}
+                          {item.comparison?.baseline_tied_best_target_ids?.join(', ')}.{' '}
+                          {item.comparison?.baseline_tie_policy}
+                        </p>
+                      )}
+                    </details>
+                    {item.comparison?.baseline_cost_comparison_eligible === false && (
+                      <p className={styles.notice}>
+                        Cost saving withheld:{' '}
+                        {item.comparison.baseline_cost_comparison_reason ??
+                          'Baseline cost evidence is incomplete.'}
+                      </p>
+                    )}
+                    <details className={styles.details}>
+                      <summary>Frozen configuration identity</summary>
+                      <dl className={styles.identity}>
+                        {runs
+                          .find((run) => run.id === item.id)
+                          ?.manifest.targets.filter((target) => target.kind === 'mom')
+                          .map((target) => (
+                            <div key={target.id}>
+                              <dt>{target.id} frozen configuration</dt>
+                              <dd>
+                                <code>
+                                  {target.config_hash ?? 'Configuration identity unavailable'}
+                                </code>
+                              </dd>
+                            </div>
+                          ))}
+                      </dl>
+                    </details>
+                    <details className={styles.details}>
+                      <summary>Full comparison, provenance and exclusions</summary>
+                      <pre>{JSON.stringify(item.comparison, null, 2)}</pre>
+                      <pre>{JSON.stringify(item.report?.provenance, null, 2)}</pre>
+                    </details>
+                  </>
                 )}
-              </tbody>
-            </table>
-          </div>
-          {results.map((item) => (
-            <section className={styles.comparisonRow} key={item.id}>
-              <h4>
-                {item.stage} · {runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}
-              </h4>
-              {item.error ? (
-                <p className={styles.error} role="alert">
-                  Comparison withheld: {item.error}
-                </p>
-              ) : (
-                <>
-                  <AccountingCorrection report={item.report ?? null} />
-                  <p className={styles.muted}>{item.comparison?.baseline_selection}</p>
-                  {(item.comparison?.baseline_tied_best_target_ids?.length ?? 0) > 1 && (
-                    <p className={styles.notice}>
-                      Tied best single models:{' '}
-                      {item.comparison?.baseline_tied_best_target_ids?.join(', ')}.{' '}
-                      {item.comparison?.baseline_tie_policy}
-                    </p>
-                  )}
-                  {item.comparison?.baseline_cost_comparison_eligible === false && (
-                    <p className={styles.notice}>
-                      Cost saving withheld:{' '}
-                      {item.comparison.baseline_cost_comparison_reason ??
-                        'Baseline cost evidence is incomplete.'}
-                    </p>
-                  )}
-                  <dl className={styles.identity}>
-                    {runs
-                      .find((run) => run.id === item.id)
-                      ?.manifest.targets.filter((target) => target.kind === 'mom')
-                      .map((target) => (
-                        <div key={target.id}>
-                          <dt>{target.id} frozen configuration</dt>
-                          <dd>
-                            <code>
-                              {target.config_hash ?? 'Configuration identity unavailable'}
-                            </code>
-                          </dd>
-                        </div>
-                      ))}
-                  </dl>
-                  <details className={styles.details}>
-                    <summary>Full comparison, provenance and exclusions</summary>
-                    <pre>{JSON.stringify(item.comparison, null, 2)}</pre>
-                    <pre>{JSON.stringify(item.report?.provenance, null, 2)}</pre>
-                  </details>
-                </>
-              )}
-            </section>
-          ))}
+              </section>
+            ))}
+          </details>
         </>
       )}
     </section>

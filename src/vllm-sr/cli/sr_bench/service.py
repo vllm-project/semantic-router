@@ -19,6 +19,7 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 from . import VERSION
 from .accounting import reconcile_usage
 from .contracts import catalog, plan, planned_cells
+from .datasets import DatasetReader
 from .engine import Engine
 from .offline import export_training, regrade, replay
 from .recovery import RecoveryPlanError, recover, recovery_plan
@@ -67,6 +68,7 @@ class Server(ThreadingHTTPServer):
     def __init__(self, address, store, token=None, store_identity=None):
         self.store = store
         self.engine = Engine(store)
+        self.datasets = DatasetReader(store.root)
         self.token = token
         self.store_identity = (
             store_identity or hashlib.sha256(str(store.root).encode()).hexdigest()
@@ -219,6 +221,36 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, catalog())
             if route == ["datasets"] and method == "GET":
                 return self._send(200, {"datasets": datasets(self.server.store)})
+            if route == ["datasets", "compose"] and method == "POST":
+                body = self._body()
+                return self._send(
+                    200,
+                    {
+                        "dataset": self.server.datasets.compose(
+                            body.get("dataset_ids"), body.get("benchmarks")
+                        )
+                    },
+                )
+            if route[0] == "datasets" and method == "GET":
+                if len(route) == RUN_ROUTE_PARTS:
+                    return self._send(200, self.server.datasets.detail(route[1]))
+                if len(route) == RUN_ACTION_ROUTE_PARTS and route[2] == "cases":
+                    query = parse_qs(parsed.query, max_num_fields=5)
+                    if set(query) - {
+                        "cursor",
+                        "limit",
+                        "benchmark",
+                        "category",
+                        "q",
+                    } or any(len(values) != 1 for values in query.values()):
+                        raise ValueError("Invalid dataset page filters")
+                    return self._send(
+                        200,
+                        self.server.datasets.page(
+                            route[1],
+                            **{key: values[0] for key, values in query.items()},
+                        ),
+                    )
             if route == ["targets"] and method == "GET":
                 return self._send(200, {"targets": self._registry_targets()})
             if route == ["plans"] and method == "POST":

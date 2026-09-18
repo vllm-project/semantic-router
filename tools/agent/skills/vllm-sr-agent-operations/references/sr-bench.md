@@ -56,6 +56,16 @@ Prepare data with `benchmark dataset prepare --benchmark ID --profile PROFILE`;
 combine compatible prepared manifests with `dataset combine`. Sources, revision,
 case IDs, stratification, seed and content digest accompany each dataset. Never
 edit bound task files. Changing a source or selection creates a new identity.
+The Dashboard follows the same contract: choose the actual `smoke`, `quick` or
+`standard` profile, then select prepared benchmarks or select all. Composition
+only uses existing sources with matching profile, seed and split. It keeps whole
+benchmark groups, makes zero model calls, and does not download or resample data.
+Using one complete source preserves its identity. Conflicting source selections
+must be resolved explicitly; never mix dev and holdout to make a checkbox work.
+The dataset library supports pagination, question search, coverage and subject
+groups. Its input-only question view excludes reference answers, hidden tests and
+tool credentials; reproducibility hashes are behind disclosure controls. Treat
+inspected holdout tasks as unsuitable tuning evidence even when labels are hidden.
 Do not route on benchmark names, expected answers or split labels. Previously
 seen GPQA labels require a retest disclosure; public tasks are not guaranteed
 uncontaminated.
@@ -68,6 +78,11 @@ for every billed model; unsupported compound usage cannot be priced from only
 the selected model. The direct MoM adapter requires complete single-call
 accounting. Choose `capability_only` explicitly if prices are unavailable and
 make no savings claim.
+
+Resolve the effective request as run sampling plus the target's frozen
+`request_params` overrides. Do not mistake form defaults for native settings.
+An output cap below a target's fixed `max_tokens` is invalid; select another
+operator-registered profile instead of silently changing the existing one.
 
 ```bash
 vllm-sr benchmark plan --manifest candidate.json --output frozen.json
@@ -174,9 +189,13 @@ tuning selection and source contamination remain outside its coverage.
 For requested Dashboard acceptance, verify the same service/run IDs, launch a
 bounded run, inspect metrics and case artifacts, compare, cancel and reload the
 page. Verify task filters, data-set identity, read reconnection, explicit recovery
-scope/lineage, and same-key reconciliation after a lost recovery response. Compare
-current Balance plus both optimization revisions against a compatible single-model
-baseline using the URL-persisted selections. Inspect/download the captured recipe
+scope/lineage, and same-key reconciliation after a lost recovery response. Check
+the Results, Questions, Calls, Evidence and Recipe tabs instead of relying on one
+large raw-data view. Compare a compatible single-model baseline with any number
+of completed candidate runs using the URL-persisted checkboxes; verify creation
+order, quality/cost and iteration charts, and CSV/JSON comparison exports. For a
+two-loop study, include current Balance and both optimization revisions, while
+keeping the interface usable for subsequent candidates. Inspect/download the captured recipe
 and verify cost/quality uncertainty and full denominators. Review narrow-screen
 layout and avoid clipping controls or claiming gains from incompatible datasets.
 A page load or mocked browser test alone is not live acceptance.

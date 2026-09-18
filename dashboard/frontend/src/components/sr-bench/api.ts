@@ -5,6 +5,8 @@ import type {
   CaseResult,
   EvidencePage,
   Dataset,
+  DatasetDetail,
+  DatasetCasePage,
   Manifest,
   Plan,
   Report,
@@ -35,7 +37,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // No request is automatically retried by this layer.
   const reading = !init.method || ['GET', 'HEAD'].includes(init.method)
   const submitting = path === '/runs' && init.method === 'POST'
-  const controller = reading || submitting ? new AbortController() : null
+  const preparing = ['/plans', '/datasets/compose'].includes(path) && init.method === 'POST'
+  const computing =
+    (path === '/comparisons' || path.endsWith('/recover-plan')) && init.method === 'POST'
+  const controller = reading || submitting || preparing || computing ? new AbortController() : null
   let timedOut = false
   const abort = () => controller?.abort()
   init.signal?.addEventListener('abort', abort, { once: true })
@@ -79,7 +84,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       throw new SrBenchRequestError(
         submitting
           ? 'The evaluation submission response timed out. Reconcile the saved submission before starting another attempt.'
-          : 'Reading saved sr-bench evidence timed out after 30 seconds. Existing runs continue independently.',
+          : preparing
+            ? 'Preparing the evaluation timed out after 30 seconds. No model generation was requested. You can review again using the same selection.'
+            : 'Reading saved sr-bench evidence timed out after 30 seconds. Existing runs continue independently.',
         408,
       )
     throw error
@@ -96,6 +103,29 @@ const runPath = (id: string) => `/runs/${encodeURIComponent(id)}`
 export const benchApi = {
   catalog: (signal?: AbortSignal) => request<Catalog>('/catalog', { signal }),
   datasets: (signal?: AbortSignal) => request<{ datasets: Dataset[] }>('/datasets', { signal }),
+  dataset: (id: string, signal?: AbortSignal) =>
+    request<DatasetDetail>(`/datasets/${encodeURIComponent(id)}`, { signal }),
+  datasetCases: (
+    id: string,
+    filters: {
+      cursor?: string
+      limit?: number
+      benchmark?: string
+      category?: string
+      q?: string
+    } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') query.set(key, String(value))
+    }
+    return request<DatasetCasePage>(`/datasets/${encodeURIComponent(id)}/cases?${query}`, {
+      signal,
+    })
+  },
+  composeDatasets: (datasetIDs: string[], benchmarks: string[]) =>
+    post<{ dataset: Dataset }>('/datasets/compose', { dataset_ids: datasetIDs, benchmarks }),
   targets: (signal?: AbortSignal) => request<{ targets: Target[] }>('/targets', { signal }),
   runs: (signal?: AbortSignal) => request<{ runs: Run[] }>('/runs', { signal }),
   run: (id: string, signal?: AbortSignal) => request<Run>(runPath(id), { signal }),

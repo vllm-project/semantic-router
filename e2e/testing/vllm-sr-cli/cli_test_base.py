@@ -10,6 +10,7 @@ Signed-off-by: vLLM-SR Team
 """
 
 import os
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ import time
 import unittest
 from contextlib import suppress
 from pathlib import Path
+from unittest.mock import patch
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -99,6 +101,15 @@ class CLITestBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test class - ensure clean state."""
+        if not os.getenv("VLLM_SR_STACK_NAME", "").strip():
+            # Lifecycle locks and container names are host-wide, not cwd-scoped.
+            # Keep independent test processes away from each other and live stacks.
+            environment = patch.dict(
+                os.environ,
+                {"VLLM_SR_STACK_NAME": f"cli-test-{secrets.token_hex(6)}"},
+            )
+            environment.start()
+            cls.addClassCleanup(environment.stop)
         cls.runtime_stack = resolve_runtime_stack()
         stack_name = cls.runtime_stack.stack_name
         cls.CONTAINER_NAME = (
@@ -143,7 +154,15 @@ class CLITestBase(unittest.TestCase):
 
     def setUp(self):
         """Set up each test - create temp directory."""
-        self.test_dir = tempfile.mkdtemp(prefix="vllm-sr-cli-test-")
+        self.test_dir = str(
+            Path(tempfile.mkdtemp(prefix="vllm-sr-cli-test-")).resolve()
+        )
+        environment = patch.dict(
+            os.environ,
+            {"VLLM_SR_STATE_ROOT_DIR": self.test_dir},
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
         self.original_dir = os.getcwd()
         os.chdir(self.test_dir)
         print(f"\nTest directory: {self.test_dir}")

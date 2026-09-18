@@ -1,12 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import {
+  acceptanceOrigin,
+  authenticateAcceptance,
+  type AcceptanceConnection,
+} from '../support/liveAcceptance'
 
-interface LiveAcceptancePlan {
-  base_url: string
+interface LiveAcceptancePlan extends AcceptanceConnection {
   active_run_id?: string
   active_expected_total?: number
+  active_dataset_sha256?: string
   baseline_run_id?: string
-  balance_run_ids?: [string, string, string]
+  balance_run_ids?: string[]
   final_target_id?: string
   final_config_hash?: string
   dataset_id?: string
@@ -17,22 +22,8 @@ const planPath = process.env.SR_BENCH_LIVE_PLAN
 const plan: LiveAcceptancePlan | null = planPath
   ? (JSON.parse(readFileSync(planPath, 'utf8')) as LiveAcceptancePlan)
   : null
-if (plan) {
-  const origin = new URL(plan.base_url)
-  if (
-    origin.protocol !== 'http:' ||
-    !['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname) ||
-    origin.username ||
-    origin.password ||
-    origin.pathname !== '/' ||
-    origin.search ||
-    origin.hash
-  )
-    throw new Error(
-      'Live sr-bench acceptance requires an explicit loopback Dashboard origin without credentials.',
-    )
-  plan.base_url = origin.origin
-}
+if (plan) plan.base_url = acceptanceOrigin(plan)
+test.use({ storageState: plan?.auth_state_path })
 
 test.skip(!plan, 'Opt in with SR_BENCH_LIVE_PLAN; never run against a real deployment implicitly.')
 
@@ -53,12 +44,7 @@ async function openAcceptance(page: Page) {
     }
     await route.continue()
   })
-  await page.goto(`${plan!.base_url}/__acceptance/login`)
-  await expect(page.getByRole('heading', { name: 'sr-bench 1.0 acceptance' })).toBeVisible()
-  // This form carries no credentials. The already-running isolated relay handles
-  // authentication privately; tests never inspect cookies or operator secrets.
-  await page.getByRole('button', { name: 'Start acceptance session', exact: true }).click()
-  await page.waitForURL((url) => url.pathname !== '/__acceptance/login')
+  await authenticateAcceptance(page, plan!)
   await page.goto(`${plan!.base_url}/evaluation?view=runs`)
   await expect(page.getByRole('heading', { name: 'sr-bench 1.0' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
@@ -95,13 +81,18 @@ test('live active long-running evaluation keeps identity and progress after relo
     const observed = (await response.json()) as {
       id: string
       status: string
-      manifest: { plan_sha256: string }
+      updated_at: string
+      manifest: { plan_sha256: string; dataset?: { sha256?: string } }
       progress: { total: number; completed: number; failed: number }
     }
     return {
       id: observed.id,
       status: observed.status,
-      manifest: { plan_sha256: observed.manifest.plan_sha256 },
+      updated_at: observed.updated_at,
+      manifest: {
+        plan_sha256: observed.manifest.plan_sha256,
+        dataset_sha256: observed.manifest.dataset?.sha256,
+      },
       progress: observed.progress,
     }
   }
@@ -109,6 +100,11 @@ test('live active long-running evaluation keeps identity and progress after relo
   expect(before.manifest.plan_sha256).toMatch(/^[a-f0-9]{64}$/)
   if (plan!.active_expected_total !== undefined)
     expect(before.progress.total).toBe(plan!.active_expected_total)
+  if (plan!.active_dataset_sha256)
+    expect(before.manifest.dataset_sha256).toBe(plan!.active_dataset_sha256)
+  expect(Date.now() - Date.parse(before.updated_at), 'Active evidence must be fresh.').toBeLessThan(
+    300000,
+  )
   expect(
     ['queued', 'running'],
     'Active-refresh acceptance requires a genuinely active run.',
@@ -123,6 +119,7 @@ test('live active long-running evaluation keeps identity and progress after relo
   const after = await read()
   expect(after.id).toBe(id)
   expect(after.manifest.plan_sha256).toBe(before.manifest.plan_sha256)
+  expect(Date.parse(after.updated_at)).toBeGreaterThanOrEqual(Date.parse(before.updated_at))
   expect(after.progress.total).toBe(before.progress.total)
   expect(after.progress.completed + after.progress.failed).toBeGreaterThanOrEqual(
     before.progress.completed + before.progress.failed,
@@ -172,14 +169,15 @@ test('live inventory, frozen dataset and persisted CLI run are visible', async (
   ).toBe(true)
   await screenshot(page, testInfo, 'live-run-management.png')
   await page.getByRole('button', { name: 'Datasets', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Prepared datasets', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
   if (plan!.dataset_id) {
-    await page.getByLabel('Search datasets', { exact: true }).fill(plan!.dataset_id)
-    await expect(
-      page.getByRole('button', { name: 'Evaluate this dataset', exact: true }),
-    ).toHaveCount(1)
+    await page.goto(
+      `${plan!.base_url}/evaluation?view=datasets&dataset=${encodeURIComponent(plan!.dataset_id)}`,
+    )
+    await expect(page.getByRole('button', { name: 'Evaluate dataset', exact: true })).toBeVisible()
     await screenshot(page, testInfo, 'live-frozen-dataset.png')
-    await page.getByRole('button', { name: 'Evaluate this dataset', exact: true }).click()
+    await page.getByRole('button', { name: 'Evaluate dataset', exact: true }).click()
+    await page.getByText('Prepared source collection', { exact: true }).click()
     await expect(page.getByRole('combobox', { name: 'Prepared dataset', exact: true })).toHaveValue(
       plan!.dataset_id,
     )
@@ -196,11 +194,14 @@ test('live inventory, frozen dataset and persisted CLI run are visible', async (
         { exact: true },
       ),
     ).toBeVisible()
+    await screenshot(page, testInfo, 'live-single-model-baseline.png')
+    await page.getByRole('tab', { name: 'Calls', exact: true }).click()
     const calls = page.getByRole('region', { name: 'Persisted call records', exact: true })
     expect(
       await calls.evaluate((element) => element.clientHeight <= window.innerHeight * 0.6 + 1),
     ).toBe(true)
-    await screenshot(page, testInfo, 'live-single-model-baseline.png')
+    await screenshot(page, testInfo, 'live-single-model-calls.png')
+    await page.getByRole('tab', { name: 'Results', exact: true }).click()
     await page.reload()
     await expect(
       page.getByRole('heading', { name: 'Target comparison', exact: true }),
@@ -220,7 +221,7 @@ test('live comparison retains current Balance and two optimization revisions', a
   page,
 }, testInfo) => {
   test.skip(
-    !plan?.baseline_run_id || plan.balance_run_ids?.length !== 3,
+    !plan?.baseline_run_id || !plan.balance_run_ids?.length,
     'Requires one real single-model baseline and three completed Balance revisions.',
   )
   const blocked = await openAcceptance(page)
@@ -234,29 +235,39 @@ test('live comparison retains current Balance and two optimization revisions', a
   await page
     .getByRole('combobox', { name: 'Baseline run', exact: true })
     .selectOption(plan!.baseline_run_id!)
-  for (const [index, label] of [
-    'Current Balance run',
-    'Optimization 1 run',
-    'Optimization 2 run',
-  ].entries())
+  const inventory = await page.request.get(`${plan!.base_url}/api/sr-bench/v1/runs`)
+  expect(inventory.ok()).toBe(true)
+  const savedRuns = (await inventory.json()).runs as Array<{
+    id: string
+    manifest: { name: string }
+  }>
+  for (const id of plan!.balance_run_ids!) {
+    const selected = savedRuns.find((run) => run.id === id)
+    expect(selected).toBeTruthy()
     await page
-      .getByRole('combobox', { name: label, exact: true })
-      .selectOption(plan!.balance_run_ids![index])
+      .getByRole('group', { name: 'Comparison runs', exact: true })
+      .locator('label')
+      .filter({ has: page.getByText(selected!.manifest.name, { exact: true }) })
+      .getByRole('checkbox')
+      .check()
+  }
   await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
   await expect(
-    page.getByRole('heading', { name: 'Balance optimization trajectory', exact: true }),
+    page.getByRole('heading', { name: 'Comparison evidence', exact: true }),
   ).toBeVisible()
   await expect(page.getByText('Comparison withheld:', { exact: false })).toHaveCount(0)
   await expect(page.getByRole('alert')).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: /^Optimization 2 ·/ })).toBeVisible()
+  await expect(
+    page.getByRole('article').getByText(`Run ${plan!.balance_run_ids!.length}`, { exact: true }),
+  ).toBeVisible()
   await screenshot(page, testInfo, 'live-balance-two-optimization-loops.png')
   const comparisonURL = page.url()
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Compare iterations', exact: true })).toBeVisible()
+  await expect(page.getByText('Single-model baseline metrics', { exact: true })).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'Single-model baseline', exact: true }),
+    page.getByRole('article').getByText(`Run ${plan!.balance_run_ids!.length}`, { exact: true }),
   ).toBeVisible()
-  await expect(page.getByRole('heading', { name: /^Optimization 2 ·/ })).toBeVisible()
   await expect(page.getByText('Comparison withheld:', { exact: false })).toHaveCount(0)
   await expect(page).toHaveURL(comparisonURL)
   await page.setViewportSize({ width: 390, height: 844 })
@@ -288,11 +299,12 @@ test('live final recipe is verified and downloadable without launching a job', a
   page,
 }, testInfo) => {
   test.skip(
-    plan?.balance_run_ids?.length !== 3 || !plan.final_target_id || !plan.final_config_hash,
+    !plan?.balance_run_ids?.length || !plan.final_target_id || !plan.final_config_hash,
     'Requires the completed final Balance run and its independently recorded configuration hash.',
   )
   const blocked = await openAcceptance(page)
-  await openRun(page, plan!.balance_run_ids![2])
+  await openRun(page, plan!.balance_run_ids!.at(-1)!)
+  await page.getByRole('tab', { name: 'Recipe', exact: true }).click()
   const recipes = page.locator('#run-recipe')
   await expect(
     recipes.getByRole('heading', {

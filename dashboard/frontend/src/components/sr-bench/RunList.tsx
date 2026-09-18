@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { active, number, percent } from './model'
 import type { Run } from './types'
+import { profileTitle } from './datasetPresentation'
 import styles from './SrBench.module.css'
 
 export function RunStatus({ status }: { status: string }) {
@@ -115,7 +116,7 @@ export default function RunList({
                       <button className={styles.linkButton} onClick={() => onSelect(run.id)}>
                         {run.manifest.name}
                       </button>
-                      <small title={run.id}>{run.id}</small>
+
                       <div className={styles.targetChips}>
                         {run.manifest.targets.map((target) => (
                           <span className={styles.badge} key={target.id}>
@@ -125,7 +126,12 @@ export default function RunList({
                       </div>
                     </td>
                     <td>
-                      {run.manifest.mode} / {run.manifest.profile}
+                      {run.manifest.mode === 'live'
+                        ? 'Live'
+                        : run.manifest.mode === 'preview'
+                          ? 'Preview'
+                          : 'Replay'}{' '}
+                      / {profileTitle(run.manifest.profile)}
                     </td>
                     <td>
                       <RunStatus status={run.status} />

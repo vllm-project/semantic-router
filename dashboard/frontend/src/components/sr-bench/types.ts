@@ -15,6 +15,59 @@ export interface Dataset {
   profile?: string
   benchmarks?: string[]
   name?: string
+  split?: string
+  custom_subset?: boolean
+}
+
+export interface DatasetDetail {
+  id: string
+  name?: string
+  profile?: string
+  split?: string
+  custom_subset?: boolean
+  case_count: number
+  benchmarks: Array<{
+    id: string
+    title: string
+    count: number
+    categories: Array<{ name: string; count: number }>
+  }>
+  categories: Array<{ benchmark: string; name: string; count: number }>
+  provenance: {
+    sha256?: string
+    seed?: number
+    selection?: unknown
+    sources: Array<{
+      benchmark: string
+      url?: string
+      revision?: string
+      revision_verification?: string
+      normalizer?: string
+      access_note?: string
+      license_url?: string
+      file_count?: number
+    }>
+  }
+}
+
+export interface DatasetCase {
+  id: string
+  benchmark: string
+  category?: string
+  question: string
+  messages: Array<{ role: string; content: string }>
+  choices?: string[]
+  input_status: 'available' | 'unavailable'
+  input_notice?: string
+}
+
+export interface DatasetCasePage {
+  dataset_id: string
+  cases: DatasetCase[]
+  total: number
+  dataset_total: number
+  next_cursor: string | null
+  limit: number
 }
 
 export interface Target {
@@ -27,6 +80,7 @@ export interface Target {
   capture_recipe?: boolean
   preview_url?: string
   max_inference_calls?: number
+  request_params?: Record<string, unknown>
   prices?: Record<
     string,
     { input: number; cached_input: number; cache_write: number; output: number }

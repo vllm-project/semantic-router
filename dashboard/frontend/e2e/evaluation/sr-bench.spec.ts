@@ -87,8 +87,23 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
             path: '/prepared/quick.jsonl',
             sha256: 'a'.repeat(64),
             case_count: 2,
+            profile: 'quick',
+            seed: 42,
+            split: 'dev',
+            benchmarks: ['mmlu-pro'],
           },
         ],
+      }
+    else if (path === '/datasets/compose')
+      body = {
+        dataset: {
+          id: 'quick-v1',
+          path: '/prepared/quick.jsonl',
+          sha256: 'a'.repeat(64),
+          case_count: 2,
+          profile: 'quick',
+          benchmarks: ['mmlu-pro'],
+        },
       }
     else if (path === '/targets') body = { targets: [target] }
     else if (path === '/plans') {
@@ -160,11 +175,22 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
   return requests
 }
 
+async function chooseDataset(page: Page, id: string) {
+  const selector = page.getByRole('combobox', { name: 'Prepared dataset', exact: true })
+  if (!(await selector.isVisible()))
+    await page.getByText('Prepared source collection', { exact: true }).click()
+  await selector.selectOption(id)
+}
+
+async function section(page: Page, name: string) {
+  await page.getByRole('tab', { name, exact: true }).click()
+}
+
 test('plans and launches a reusable frozen dataset from the normal form', async ({ page }) => {
   const requests = await mockBench(page)
   await page.goto('/evaluation?view=new')
   await expect(page.getByRole('heading', { name: 'sr-bench 1.0' })).toBeVisible()
-  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await chooseDataset(page, 'quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
   await expect(page.getByRole('button', { name: 'Start evaluation' })).toBeDisabled()
   await page.getByRole('button', { name: 'Review plan' }).click()
@@ -184,6 +210,52 @@ test('plans and launches a reusable frozen dataset from the normal form', async 
   })
 })
 
+test('preserves registered profiles and blocks output cap conflicts before planning', async ({
+  page,
+}) => {
+  const requests = await mockBench(page)
+  const requestParams = { max_tokens: 4096, temperature: 1, top_p: 0.95, seed: 42 }
+  await page.route('**/api/sr-bench/v1/targets', (route) =>
+    route.fulfill({ json: { targets: [{ ...target, request_params: requestParams }] } }),
+  )
+  await page.goto('/evaluation?view=new')
+  await chooseDataset(page, 'quick-v1')
+  await page
+    .getByRole('combobox', { name: 'Add configured target', exact: true })
+    .selectOption('single')
+  const profile = page.getByRole('region', { name: 'single request profile', exact: true })
+  await expect(
+    profile.getByText('Output tokens: 4,096 (registered override)', { exact: true }),
+  ).toBeVisible()
+  await profile.getByText('Registered sampling overrides', { exact: true }).click()
+  await expect(profile.locator('pre')).toContainText('4096')
+  await page.getByText('Advanced manifest', { exact: true }).click()
+  await page.getByLabel('Use edited manifest', { exact: true }).check()
+  await expect(profile.getByRole('heading', { name: 'Effective request profile' })).toHaveCount(0)
+  await expect(profile.getByText('Output tokens:', { exact: false })).toHaveCount(0)
+  await expect(
+    profile.getByText('Request parameters come from the edited manifest and reviewed plan.'),
+  ).toBeVisible()
+  await expect(profile.locator('pre')).toContainText('4096')
+  await page.getByLabel('Use edited manifest', { exact: true }).uncheck()
+  await page.getByLabel('Max output tokens', { exact: true }).fill('512')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText(
+    'Target single has a registered output limit of 4096 tokens, above the run cap of 512',
+  )
+  expect(requests).toHaveLength(0)
+  await expect(page.getByLabel('Max output tokens', { exact: true })).toHaveValue('512')
+  await page.getByLabel('Max output tokens', { exact: true }).fill('4096')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Plan ready for review', exact: true }),
+  ).toBeVisible()
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toMatchObject({
+    manifest: { targets: [{ request_params: requestParams }], limits: { max_output_tokens: 4096 } },
+  })
+})
+
 test('shows truthful metrics, routing distribution and case evidence', async ({ page }) => {
   await mockBench(page)
   await page.goto('/evaluation?view=runs&run=run-1')
@@ -197,8 +269,10 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
   ).toBeVisible()
   await expect(page.getByText('Subset evaluation; not a complete sr-bench score.')).toBeVisible()
   await expect(page.getByRole('cell', { name: '$0.00000' })).toHaveCount(0)
+  await section(page, 'Questions')
   await page.getByRole('button', { name: 'case-a' }).click()
   await expect(page.getByRole('heading', { name: 'Final answer' })).toBeVisible()
+  await section(page, 'Evidence')
   await expect(page.getByRole('link', { name: 'Open report JSON' })).toHaveAttribute(
     'href',
     '/api/sr-bench/v1/runs/run-1/report',
@@ -231,7 +305,7 @@ test('reconciles a lost initial submission after reload with the same identity a
     await route.fulfill({ json: run })
   })
   await page.goto('/evaluation?view=new')
-  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await chooseDataset(page, 'quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
@@ -283,7 +357,7 @@ test('ignores an old response after remount without clearing a newer submission'
     await route.fulfill({ json: { ...run, id: index === 3 ? 'run-2' : 'run-1' } })
   })
   await page.goto('/evaluation?view=new')
-  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await chooseDataset(page, 'quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
@@ -295,7 +369,7 @@ test('ignores an old response after remount without clearing a newer submission'
   expect(submissions[1]).toEqual(submissions[0])
   await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
   await page.getByLabel('Run name', { exact: true }).fill('Newer submission')
-  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await chooseDataset(page, 'quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
@@ -349,7 +423,7 @@ test('does not navigate a new account from a prior account delayed submission', 
     }),
   )
   await page.goto('/evaluation?view=new')
-  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await chooseDataset(page, 'quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
@@ -399,7 +473,7 @@ test('fails closed when an initial submission cannot be preserved in session sto
     }
   })
   await page.goto('/evaluation?view=new')
-  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await chooseDataset(page, 'quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
@@ -419,7 +493,7 @@ test('clears an initial submission only after the service proves no dispatch occ
     })
   })
   await page.goto('/evaluation?view=new')
-  await page.getByLabel('Prepared dataset').selectOption('quick-v1')
+  await chooseDataset(page, 'quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
@@ -517,6 +591,7 @@ test('shows learning preview selection and snapshot evidence without a capabilit
     page.getByText('Some model selections require live execution.', { exact: false }),
   ).toBeVisible()
   await expect(page.getByRole('cell', { name: '50%', exact: true })).toHaveCount(0)
+  await section(page, 'Questions')
   await page.getByRole('button', { name: 'learned-case', exact: true }).click()
   const evidence = page.getByRole('region', { name: 'Routing preview evidence' })
   await expect(evidence.getByText('model-a', { exact: true })).toBeVisible()
@@ -527,6 +602,7 @@ test('shows learning preview selection and snapshot evidence without a capabilit
   await expect(
     evidence.getByText('This sampled choice is not a guarantee of a later live selection.'),
   ).toBeVisible()
+  await page.getByRole('button', { name: 'Back to questions', exact: true }).click()
   await page.getByRole('button', { name: 'unresolved-case', exact: true }).click()
   await expect(evidence.getByText('Execution is still required', { exact: true })).toBeVisible()
   await expect(evidence.getByText('model-a', { exact: true })).toHaveCount(0)
@@ -556,7 +632,12 @@ test('distinguishes pending, unavailable and genuinely empty run evidence', asyn
   }
   await page.goto('/evaluation?view=runs&run=run-1')
   await expect(page.getByText('Loading report metrics…', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Complete quality and cost evidence is needed for this chart.', { exact: true }),
+  ).toHaveCount(0)
+  await section(page, 'Questions')
   await expect(page.getByText('Loading persisted case results…', { exact: true })).toBeVisible()
+  await section(page, 'Calls')
   await expect(page.getByText('Loading persisted call records…', { exact: true })).toBeVisible()
   await expect(page.getByText('No matching persisted results.', { exact: true })).toHaveCount(0)
   await expect(
@@ -565,12 +646,15 @@ test('distinguishes pending, unavailable and genuinely empty run evidence', asyn
   await expect(page.getByText('No persisted call records yet.', { exact: true })).toHaveCount(0)
   mode = 'failed'
   release()
+  await section(page, 'Results')
   await expect(
     page.getByText('Report metrics are unavailable. Refresh evidence to retry.', { exact: true }),
   ).toBeVisible()
+  await section(page, 'Questions')
   await expect(
     page.getByText('Case results are unavailable: Saved evidence read failed', { exact: true }),
   ).toBeVisible()
+  await section(page, 'Calls')
   await expect(
     page.getByText('Call records are unavailable: Saved evidence read failed', { exact: true }),
   ).toBeVisible()
@@ -578,8 +662,11 @@ test('distinguishes pending, unavailable and genuinely empty run evidence', asyn
   await expect(page.getByText('No persisted call records yet.', { exact: true })).toHaveCount(0)
   mode = 'empty'
   await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click()
+  await section(page, 'Questions')
   await expect(page.getByText('No persisted case results yet.', { exact: true })).toBeVisible()
+  await section(page, 'Calls')
   await expect(page.getByText('No persisted call records yet.', { exact: true })).toBeVisible()
+  await section(page, 'Results')
   await expect(
     page.getByText('Summary metrics will appear as results are persisted.', { exact: true }),
   ).toBeVisible()
@@ -612,6 +699,7 @@ test('recovers every event page after a temporary read failure', async ({ page }
   })
   await page.goto('/evaluation?view=runs&run=run-1')
   await expect(page.getByRole('alert')).toContainText('Event page unavailable')
+  await section(page, 'Evidence')
   await expect(page.getByText('Run events (1001)', { exact: true })).toBeVisible({ timeout: 10000 })
   expect(cursors.slice(0, 4)).toEqual([0, 1000, 0, 1000])
   await expect(page.getByRole('alert')).toHaveCount(0)
@@ -705,9 +793,11 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
     })
   })
   await page.goto('/evaluation?view=runs&run=run-1')
+  await section(page, 'Questions')
   await expect(
     page.getByText('Loaded 100 of 250 persisted results.', { exact: false }),
   ).toBeVisible()
+  await section(page, 'Calls')
   await expect(
     page.getByText('Showing 100 of 201 persisted call summaries.', { exact: false }),
   ).toBeVisible()
@@ -731,12 +821,14 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
     ).toBe(true)
   }
   await page.setViewportSize({ width: 1280, height: 844 })
+  await section(page, 'Results')
   await expect(page.getByText('single: full-report-model', { exact: true })).toBeVisible()
   await expect(page.getByText('single: full-report-decision', { exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: '125 / 250', exact: true })).toBeVisible()
   expect(resultReads).toEqual([0])
   expect(callReads).toEqual([0])
   expect(detailReads).toEqual([])
+  await section(page, 'Questions')
   await page.getByRole('button', { name: 'Load more results', exact: true }).click()
   await expect(
     page.getByText('Loaded 200 of 250 persisted results.', { exact: false }),
@@ -744,6 +836,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
   await page.getByLabel('Filter loaded results').fill('case-150')
   await page.getByRole('button', { name: 'case-150', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'case-150 · single' })).toBeVisible()
+  await page.getByRole('button', { name: 'Back to questions', exact: true }).click()
   await page.getByRole('button', { name: 'Load more results', exact: true }).click()
   await expect(page.getByText('Evidence read temporarily unavailable')).toBeVisible()
   expect(resultReads).toEqual([0, 100, 200])
@@ -755,13 +848,16 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
     page.getByText('Loaded 250 of 250 persisted results.', { exact: false }),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Load more results', exact: true })).toHaveCount(0)
+  await section(page, 'Calls')
   await page.getByRole('button', { name: 'Load more call records', exact: true }).click()
   await expect(
     page.getByText('Showing 200 of 201 persisted call summaries.', { exact: false }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'call-150', exact: true }).click()
+  await page.getByText('Original call receipt', { exact: true }).click()
   await expect(page.getByText('Saved call prompt', { exact: false })).toBeVisible()
   expect(detailReads).toEqual(['call-150'])
+  await section(page, 'Results')
   await expect(page.getByRole('cell', { name: '125 / 250', exact: true })).toBeVisible()
 })
 
@@ -775,12 +871,15 @@ test('compares complete runs using paired results', async ({ page }) => {
     ),
   ).toBeVisible()
   await page.getByLabel('Baseline run').selectOption('run-1')
-  await page.getByLabel('Current Balance run').selectOption('run-2')
+  await page.getByRole('checkbox', { name: /Candidate test/ }).check()
   await page.getByRole('button', { name: 'Compare runs' }).click()
-  await expect(page.getByRole('heading', { name: 'Balance optimization trajectory' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeVisible()
+  await page.getByText('Technical comparison evidence', { exact: true }).click()
+  await page.getByText('Baseline selection policy', { exact: true }).click()
   await expect(
     page.getByText('Tied best single models: single, another-single.', { exact: false }),
   ).toBeVisible()
+  await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
   await expect(page.getByRole('cell', { name: '-10 pp to 30 pp', exact: false })).toBeVisible()
 })
 
@@ -904,6 +1003,7 @@ test('replays saved answers and labels estimated metrics separately', async ({ p
     return route.fulfill({ json: body })
   })
   await page.goto('/evaluation?view=compare')
+  await page.getByText('Reuse saved answers for diagnostic replay', { exact: true }).click()
   await page.getByLabel('Saved single-model baseline').selectOption('run-1')
   await page.getByLabel('Routing preview').selectOption('preview-1')
   await page.getByRole('button', { name: 'Create diagnostic replay' }).click()
@@ -928,6 +1028,7 @@ test('regrades saved answers and exports development evidence with holdout error
     route.fulfill({ status: 400, json: { error: 'Holdout rows cannot be exported for training' } }),
   )
   await page.goto('/evaluation?view=runs&run=run-1')
+  await section(page, 'Evidence')
   await page.getByRole('button', { name: 'Regrade saved answers' }).click()
   await expect(page.getByText('0 changed grades · 0 model requests')).toBeVisible()
   const download = page.waitForEvent('download')
@@ -971,9 +1072,9 @@ test('manages long-lived runs and uses a dataset from its frozen inventory', asy
   await page.getByLabel('Run status').selectOption('failed')
   await expect(page.getByText('No runs match these filters.')).toBeVisible()
   await page.getByRole('button', { name: 'Datasets', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Prepared datasets' })).toBeVisible()
-  await page.getByRole('button', { name: 'Evaluate this dataset' }).click()
-  await expect(page.getByLabel('Prepared dataset')).toHaveValue('quick-v1')
+  await expect(page.getByRole('heading', { name: 'Dataset library' })).toBeVisible()
+  await page.getByRole('button', { name: 'Evaluate' }).click()
+  await expect(page.getByRole('radio', { name: /^Quick/ })).toBeChecked()
   await expect(page).toHaveURL(/dataset=quick-v1/)
 })
 
@@ -1000,38 +1101,68 @@ test('automatically reconnects the task list without submitting evaluations', as
   expect(reads).toBeGreaterThan(1)
 })
 
-test('reopens all three optimization comparisons from the saved URL', async ({
+test('reopens arbitrary optimization comparisons from the saved URL', async ({
   page,
 }, testInfo) => {
   await mockBench(page)
-  const iterations = ['Current Balance', 'Balance round 1', 'Balance round 2'].map(
-    (name, index) => ({
-      ...run,
-      id: `balance-${index}`,
-      manifest: {
-        ...manifest,
-        name,
-        targets: [{ ...target, id: 'balance', kind: 'mom', config_hash: String(index).repeat(64) }],
-      },
-    }),
-  )
+  const iterations = [
+    'Current Balance',
+    'Balance round 1',
+    'Balance round 2',
+    'Balance round 3',
+  ].map((name, index) => ({
+    ...run,
+    id: `balance-${index}`,
+    manifest: {
+      ...manifest,
+      name,
+      targets: [{ ...target, id: 'balance', kind: 'mom', config_hash: String(index).repeat(64) }],
+    },
+  }))
   await page.route('**/api/sr-bench/v1/runs', (route) =>
     route.fulfill({ json: { runs: [run, ...iterations] } }),
   )
+  await page.route('**/api/sr-bench/v1/runs/*/report', (route) => {
+    const baseline = route.request().url().includes('/run-1/')
+    return route.fulfill({
+      json: {
+        ...report,
+        summary: {
+          ...report.summary,
+          targets: [
+            {
+              ...report.summary.targets[0],
+              id: baseline ? 'single' : 'balance',
+              macro_accuracy: baseline ? 0.5 : 0.6,
+              cost_usd: baseline ? 1 : 0.8,
+            },
+          ],
+        },
+      },
+    })
+  })
   await page.goto('/evaluation?view=compare')
   await page.getByLabel('Baseline run').selectOption('run-1')
-  await page.getByLabel('Current Balance run').selectOption('balance-0')
-  await page.getByLabel('Optimization 1 run').selectOption('balance-1')
-  await page.getByLabel('Optimization 2 run').selectOption('balance-2')
+  await page.getByRole('button', { name: 'Select all', exact: true }).click()
+  await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(4)
   await page.getByRole('button', { name: 'Compare runs' }).click()
-  await expect(page.getByRole('cell', { name: '20% saving', exact: false })).toHaveCount(3)
-  await expect(page).toHaveURL(/iteration2=balance-2/)
+  await expect(page.getByRole('article').getByText('20%', { exact: true })).toHaveCount(4)
+  await expect(page).toHaveURL(/candidate=balance-3/)
   await page.reload()
   await expect(
-    page.getByRole('heading', { name: 'Optimization 2 · Balance round 2' }),
+    page.getByRole('article').getByRole('heading', { name: 'Balance round 3', exact: true }),
   ).toBeVisible()
+  await page.getByText('Technical comparison evidence', { exact: true }).click()
+  await page.getByText('Frozen configuration identity', { exact: true }).nth(2).click()
   await expect(page.getByText('2'.repeat(64), { exact: true })).toBeVisible()
-  await expect(page.getByRole('cell', { name: '20% saving', exact: false })).toHaveCount(3)
+  await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
+  await expect(page.getByRole('cell', { name: '20% saving', exact: false })).toHaveCount(4)
+  const exported = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export comparison CSV', exact: true }).click()
+  expect((await exported).suggestedFilename()).toBe('sr-bench-comparison.csv')
+  await page.getByText('Frozen configuration identity', { exact: true }).nth(2).click()
+  await page.getByText('Technical comparison evidence', { exact: true }).click()
+  await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
   await page.screenshot({
     path: testInfo.outputPath('optimization-comparison-desktop.png'),
     fullPage: true,
@@ -1063,21 +1194,15 @@ test('shows available datasets while a run read stalls and recovers without fals
     if (!stalled) await route.fulfill({ json: { runs: [run] } })
   })
   await page.goto('/evaluation?view=datasets')
-  await expect(page.getByRole('heading', { name: 'Prepared datasets', exact: true })).toBeVisible()
-  await expect(
-    page.getByRole('button', { name: 'Evaluate this dataset', exact: true }),
-  ).toBeVisible()
-  await expect(
-    page.getByText('Associated runs are not yet available.', { exact: true }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Evaluate', exact: true })).toBeVisible()
+  await expect(page.getByText('Runs loading', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Runs (0)', exact: true })).toHaveCount(0)
   await page.clock.fastForward(30001)
   await expect(page.getByRole('alert')).toContainText(
     'runs: Reading saved sr-bench evidence timed out',
   )
-  await expect(
-    page.getByRole('button', { name: 'Evaluate this dataset', exact: true }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Evaluate', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Runs', exact: true }).click()
   await expect(page.getByText('Run inventory is unavailable.', { exact: true })).toBeVisible()
   await expect(page.getByText('No evaluation runs yet.', { exact: true })).toHaveCount(0)
@@ -1357,6 +1482,7 @@ test('displays and downloads a matching server-captured recipe', async ({ page }
     }),
   )
   await page.goto('/evaluation?view=runs&run=run-1')
+  await section(page, 'Recipe')
   await expect(
     page.getByRole('heading', { name: 'balance · Verified config snapshot' }),
   ).toBeVisible()
@@ -1435,6 +1561,7 @@ test('keeps recovery lineage separate from the child denominator and spend', asy
     }),
   )
   await page.goto('/evaluation?view=runs&run=run-1')
+  await section(page, 'Evidence')
   await expect(page.getByRole('heading', { name: 'Recovery lineage' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Open parent run' })).toHaveAttribute(
     'href',
@@ -1444,7 +1571,9 @@ test('keeps recovery lineage separate from the child denominator and spend', asy
     page.getByText('Parent snapshot: 30 / 50 completed', { exact: false }),
   ).toContainText('$2.50000 (incomplete accounting)')
   await expect(page.getByRole('link', { name: 'child-1', exact: true })).toBeVisible()
+  await section(page, 'Results')
   await expect(page.getByRole('cell', { name: '1 / 2', exact: true })).toBeVisible()
+  await section(page, 'Evidence')
   await expect(page.getByRole('cell', { name: '1 / 1', exact: true })).toBeVisible()
 })
 
@@ -1510,17 +1639,20 @@ test('distinguishes corrected report accounting from unchanged call and case rec
   const notice = page.getByRole('note', { name: 'Accounting correction' })
   await expect(notice.getByText('Accounting verified', { exact: true })).toBeVisible()
   await expect(notice.getByText('New model requests', { exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '$1.50000', exact: true })).toBeVisible()
+  await notice.getByText('Accounting correction receipt', { exact: true }).click()
+  await expect(notice.getByText('sr-bench-accounting-v1', { exact: true })).toBeVisible()
+  await section(page, 'Questions')
   await expect(
     page.getByRole('columnheader', { name: 'Cost (original)', exact: true }),
   ).toBeVisible()
+  await section(page, 'Calls')
   await expect(
     page.getByRole('columnheader', { name: 'Original cost / latency', exact: true }),
   ).toBeVisible()
-  await expect(page.getByRole('cell', { name: '$1.50000', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: '$1.00000 / 1 s', exact: true })).toBeVisible()
-  await notice.getByText('Accounting correction receipt', { exact: true }).click()
-  await expect(notice.getByText('sr-bench-accounting-v1', { exact: true })).toBeVisible()
   qualified = false
+  await section(page, 'Results')
   await page.reload()
   await expect(notice.getByText('Partial accounting', { exact: true })).toBeVisible()
   await expect(
@@ -1539,9 +1671,13 @@ test('keeps accounting correction provenance visible for both sides of a compari
       json: { ...report, provenance: { accounting_correction: accountingCorrection } },
     }),
   )
-  await page.goto('/evaluation?view=compare&baseline=run-1&iteration0=run-2')
+  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await expect(
+    page.getByRole('article').getByText('Accounting verified', { exact: false }),
+  ).toBeVisible()
+  await page.getByText('Technical comparison evidence', { exact: true }).click()
   await expect(page.getByRole('note', { name: 'Accounting correction' })).toHaveCount(2)
-  await expect(page.getByRole('heading', { name: 'Balance optimization trajectory' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeVisible()
 })
 
 test('uses conservative quality uncertainty and identifies a zero-width bootstrap diagnostic', async ({
@@ -1571,7 +1707,8 @@ test('uses conservative quality uncertainty and identifies a zero-width bootstra
       },
     }),
   )
-  await page.goto('/evaluation?view=compare&baseline=run-1&iteration0=run-2')
+  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
   const uncertainty = page.getByRole('cell').filter({ hasText: 'Conservative weighted Hoeffding' })
   await expect(uncertainty).toContainText('-47 pp to 47 pp')
   await expect(uncertainty).toContainText('25 paired cases')
@@ -1635,11 +1772,16 @@ test('separates observed savings from cache-neutral estimates and preserves unkn
     page.getByRole('columnheader', { name: 'Observed model cost', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('cell', { name: '$1.00000', exact: true })).toBeVisible()
+  await section(page, 'Evidence')
+  await page.getByText('Token buckets and evaluation overhead', { exact: true }).click()
   await expect(page.getByRole('cell', { name: '$2.00000', exact: true })).toBeVisible()
+  await section(page, 'Results')
+  await page.getByText('Cost and timing interpretation', { exact: true }).click()
   await expect(
     page.getByText('neither billed spend nor a measured cache-free run.', { exact: false }),
   ).toBeVisible()
-  await page.goto('/evaluation?view=compare&baseline=run-1&iteration0=run-2')
+  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
   await expect(page.getByRole('cell', { name: '$0.80000 20% saving', exact: true })).toBeVisible()
   await expect(
     page.getByRole('cell', {
@@ -1649,10 +1791,208 @@ test('separates observed savings from cache-neutral estimates and preserves unkn
   ).toBeVisible()
   complete = false
   await page.reload()
+  await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
   await expect(page.getByRole('cell', { name: '$0.80000 20% saving', exact: true })).toBeVisible()
   await expect(
     page.getByRole('cell', { name: '— Saving unknown Baseline —', exact: true }),
   ).toBeVisible()
   await expect(page.getByText('10% estimated saving', { exact: true })).toHaveCount(0)
   expect(submissions).toHaveLength(0)
+})
+
+test('composes selected benchmarks under one size without resampling or generation', async ({
+  page,
+}, testInfo) => {
+  const submissions = await mockBench(page)
+  const prepared = [
+    {
+      id: 'quick-suite',
+      profile: 'quick',
+      seed: 42,
+      split: 'dev',
+      benchmarks: ['mmlu-pro', 'gpqa-diamond'],
+      case_count: 10,
+    },
+    {
+      id: 'smoke-suite',
+      profile: 'smoke',
+      seed: 42,
+      split: 'dev',
+      benchmarks: ['mmlu-pro', 'gpqa-diamond'],
+      case_count: 2,
+    },
+    {
+      id: 'wrong-seed',
+      profile: 'quick',
+      seed: 43,
+      split: 'dev',
+      benchmarks: ['hle'],
+      case_count: 2,
+    },
+    {
+      id: 'standard-suite',
+      profile: 'standard',
+      seed: 42,
+      split: 'holdout',
+      benchmarks: ['mmlu-pro', 'gpqa-diamond'],
+      case_count: 100,
+    },
+  ].map((value) => ({
+    ...value,
+    name: `${value.profile} suite`,
+    path: `/prepared/${value.id}.json`,
+    sha256: 'a'.repeat(64),
+  }))
+  const compositions: unknown[] = []
+  await page.route('**/api/sr-bench/v1/datasets', (route) =>
+    route.fulfill({ json: { datasets: prepared } }),
+  )
+  await page.route('**/api/sr-bench/v1/datasets/compose', (route) => {
+    compositions.push(route.request().postDataJSON())
+    return route.fulfill({
+      json: {
+        dataset: { ...prepared[0], path: '/prepared/composed.json', sha256: 'd'.repeat(64) },
+      },
+    })
+  })
+  await page.goto('/evaluation?view=new')
+  await expect(page.getByRole('radio')).toHaveCount(3)
+  await page.getByRole('radio', { name: /^Smoke/ }).check()
+  await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
+  await page.getByRole('radio', { name: /^Standard/ }).check()
+  await page.getByRole('radio', { name: /^Quick/ }).check()
+  await page.getByRole('button', { name: 'Clear benchmarks', exact: true }).click()
+  await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Select all benchmarks', exact: true }).click()
+  await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(2)
+  await page.getByRole('checkbox', { name: /GPQA Diamond/ }).uncheck()
+  await expect(page.getByRole('checkbox', { name: /Humanity/ })).toBeDisabled()
+  await page.getByLabel('Add configured target').selectOption('single')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  expect(compositions).toEqual([{ dataset_ids: ['quick-suite'], benchmarks: ['mmlu-pro'] }])
+  expect(submissions).toHaveLength(1)
+  expect(submissions[0]).toMatchObject({
+    manifest: {
+      profile: 'quick',
+      dataset: { path: '/prepared/composed.json', sha256: 'd'.repeat(64) },
+      targets: [target],
+    },
+  })
+  await page.screenshot({
+    path: testInfo.outputPath('create-evaluation-desktop.png'),
+    fullPage: true,
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true)
+  await page.screenshot({
+    path: testInfo.outputPath('create-evaluation-mobile.png'),
+    fullPage: true,
+  })
+})
+
+test('navigates paginated runs to a dedicated detail view with persistent tabs and bounded charts', async ({
+  page,
+}, testInfo) => {
+  await mockBench(page)
+  const runs = Array.from({ length: 15 }, (_, index) => ({
+    ...run,
+    id: `run-${index + 1}`,
+    manifest: { ...manifest, name: `Evaluation ${index + 1}` },
+  }))
+  await page.route('**/api/sr-bench/v1/runs', (route) => route.fulfill({ json: { runs } }))
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        summary: {
+          ...report.summary,
+          total_spend_usd: 0.012,
+          targets: [{ ...report.summary.targets[0], cost_usd: 0.012 }],
+        },
+      },
+    }),
+  )
+  await page.goto('/evaluation')
+  await expect(page.getByRole('button', { name: 'Evaluation 11', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Next runs', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Evaluation 11', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Previous runs', exact: true }).click()
+  await page.getByRole('button', { name: 'Evaluation 1', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Evaluation runs', exact: true })).toHaveCount(0)
+  await expect(
+    page.getByRole('region', { name: 'Quality and cost chart', exact: true }),
+  ).toContainText('$0.01200')
+  await section(page, 'Questions')
+  await expect(page.getByRole('button', { name: 'case-a', exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('tab', { name: 'Questions', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await page.getByRole('button', { name: 'case-a', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Final answer', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Filter loaded results')).not.toBeVisible()
+  await page.getByRole('button', { name: 'Back to questions', exact: true }).click()
+  await section(page, 'Results')
+  await expect(
+    page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('region', { name: 'Quality and cost chart', exact: true }).locator('svg'),
+  ).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('run-summary-desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('run-summary-mobile.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Back to runs', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Evaluation runs', exact: true })).toBeVisible()
+})
+
+test('withholds trend charts for incompatible comparisons and never plots unknown cost', async ({
+  page,
+}) => {
+  await mockBench(page)
+  let incompatible = false
+  await page.route('**/api/sr-bench/v1/comparisons', (route) =>
+    route.fulfill(
+      incompatible
+        ? { status: 400, json: { error: 'Dataset digest mismatch' } }
+        : {
+            json: {
+              baseline_selection: 'Identical cases only',
+              comparisons: [
+                {
+                  baseline_target_id: 'single',
+                  candidate_target_id: 'single',
+                  paired_cases: 2,
+                  quality_delta: 0,
+                  quality_delta_ci95: [-0.5, 0.5],
+                  baseline_cost_usd: null,
+                  candidate_cost_usd: null,
+                  cost_saving_percent: null,
+                },
+              ],
+            },
+          },
+    ),
+  )
+  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await expect(
+    page.getByText('Complete quality and cost evidence is needed for this chart.', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByText('Unknown', { exact: true })).toBeVisible()
+  incompatible = true
+  await page.reload()
+  await expect(page.getByText('A continuous trend is withheld', { exact: false })).toBeVisible()
+  await expect(
+    page.getByRole('region', { name: 'Quality and cost chart', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('region', { name: 'Iteration progress chart', exact: true }),
+  ).toHaveCount(0)
 })

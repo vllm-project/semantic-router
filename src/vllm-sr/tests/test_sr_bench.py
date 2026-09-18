@@ -196,6 +196,82 @@ def test_wall_deadline_stops_even_with_stream_progress(target):
     assert time.monotonic() - started < 1
 
 
+@pytest.mark.parametrize("channel", ["content", "reasoning_content"])
+def test_continuous_repetition_stops_and_retains_partial_without_retry(
+    tmp_path, channel
+):
+    stop = threading.Event()
+    requests_seen = []
+    piece = "abc123!?"
+
+    class RepeatingTarget(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            requests_seen.append(
+                json.loads(self.rfile.read(int(self.headers["content-length"])))
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            event = {
+                "model": "model",
+                "choices": [{"index": 0, "delta": {channel: piece}}],
+            }
+            wire = ("data: " + json.dumps(event) + "\n\n").encode()
+            try:
+                # The stream keeps progressing and never emits a finish or usage.
+                while not stop.wait(0.02):
+                    self.wfile.write(wire)
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), RepeatingTarget)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        m = manifest(server)
+        m["limits"].update(
+            total_timeout_s=3,
+            idle_timeout_s=1,
+            repetition_window=len(piece),
+            repetition_limit=3,
+        )
+        store = Store(tmp_path)
+        engine = Engine(store)
+        run = engine.start(m, request_key="continuous-repetition-once")
+        terminal = wait_run(store, run["id"])
+        assert terminal["status"] == "failed"
+        calls = store.calls(run["id"])
+        assert len(calls) == len(requests_seen) == 1
+        call = calls[0]
+        assert call["status"] == "failed"
+        assert call["error"] == "Repeated output guard triggered"
+        assert call["latency_s"] < m["limits"]["total_timeout_s"]
+        assert call["final"] == (piece * 3 if channel == "content" else "")
+        assert call["reasoning"] == (
+            piece * 3 if channel == "reasoning_content" else ""
+        )
+        assert call["usage"] is None and call["cost_usd"] is None
+        streams = list((tmp_path / "runs" / run["id"]).glob("*/*.sse"))
+        assert len(streams) == 1
+        retained = streams[0].read_text()
+        assert retained.count('"delta"') == 3 and piece in retained
+        assert "[DONE]" not in retained
+        assert (
+            make_report(store, run["id"])["summary"]["targets"][0]["cost_usd"] is None
+        )
+        again = engine.start(m, request_key="continuous-repetition-once")
+        assert again["id"] == run["id"] and len(requests_seen) == 1
+    finally:
+        stop.set()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+
 def test_mom_runtime_identity_is_mandatory(tmp_path, target):
     m = manifest(target)
     m["targets"][0].update(kind="mom", config_hash="fixed")

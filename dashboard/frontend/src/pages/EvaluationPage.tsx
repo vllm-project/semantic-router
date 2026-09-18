@@ -13,6 +13,8 @@ import RunList from '../components/sr-bench/RunList'
 import DatasetInventory from '../components/sr-bench/DatasetInventory'
 import type { Catalog, Dataset, Run, Target } from '../components/sr-bench/types'
 import styles from '../components/sr-bench/SrBench.module.css'
+import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 
 type Inventory = 'catalog' | 'datasets' | 'targets' | 'runs'
 
@@ -100,7 +102,9 @@ export default function EvaluationPage() {
     <section className={styles.page} aria-label="sr-bench workspace">
       <header className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>Evaluation</p>
+          <p className={styles.eyebrow}>
+            <ProductIcon name="evaluation" /> Evaluation
+          </p>
           <h1>
             sr-bench <span>1.0</span>
           </h1>
@@ -108,23 +112,34 @@ export default function EvaluationPage() {
             Measure capability, cost and speed. Improve Balance against your strongest single model.
           </p>
         </div>
-        <button onClick={refresh} disabled={loading}>
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className={styles.actions}>
+          <button onClick={refresh} disabled={loading}>
+            <ProductIcon name="refresh" />
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+          {view !== 'new' && (
+            <button className={styles.primary} onClick={() => setSearch({ view: 'new' })}>
+              <ProductIcon name="plus" />
+              Create evaluation
+            </button>
+          )}
+        </div>
       </header>
       <nav className={styles.tabs} aria-label="Evaluation views">
-        {[
-          ['runs', 'Runs'],
-          ['new', 'Create evaluation'],
-          ['datasets', 'Datasets'],
-          ['compare', 'Compare iterations'],
-          ['catalog', 'Benchmarks'],
-        ].map(([key, label]) => (
+        {(
+          [
+            ['runs', 'Runs', 'list'],
+            ['compare', 'Compare iterations', 'chart'],
+            ['datasets', 'Datasets', 'database'],
+            ['catalog', 'Benchmarks', 'evaluation'],
+          ] as const
+        ).map(([key, label, icon]) => (
           <button
             key={key}
             aria-current={view === key ? 'page' : undefined}
             onClick={() => setSearch({ view: key })}
           >
+            <ProductIcon name={icon} />
             {label}
             {key === 'runs' && loaded.runs ? ` (${runs.length})` : ''}
           </button>
@@ -144,7 +159,13 @@ export default function EvaluationPage() {
           </p>
         </div>
       )}
-      {!catalog && loading && <p role="status">Loading sr-bench…</p>}
+      {!catalog && loading && <ProductLoadingState compact label="Loading sr-bench…" />}
+      {(view === 'new' || (view === 'runs' && selectedID)) && (
+        <button className={styles.backLink} onClick={() => setSearch({ view: 'runs' })}>
+          <ProductIcon name="arrow-left" />
+          Back to runs
+        </button>
+      )}
       {view === 'new' && catalog && loaded.datasets && loaded.targets && (
         <RunComposer
           catalog={catalog}
@@ -164,21 +185,34 @@ export default function EvaluationPage() {
       )}
       {view === 'runs' && (
         <>
-          {loaded.runs ? (
-            <RunList
-              runs={runs}
-              selectedID={selectedID}
-              onSelect={(id) => setSearch({ view: 'runs', run: id })}
-            />
-          ) : (
-            <p role="status">
-              {readErrors.runs ? 'Run inventory is unavailable.' : 'Loading evaluation runs…'}
-            </p>
-          )}
+          {!selectedID &&
+            (loaded.runs ? (
+              <RunList
+                runs={runs}
+                selectedID={selectedID}
+                onSelect={(id) => setSearch({ view: 'runs', run: id })}
+              />
+            ) : readErrors.runs ? (
+              <p role="status">Run inventory is unavailable.</p>
+            ) : (
+              <ProductLoadingState compact label="Loading evaluation runs…" />
+            ))}
           {selectedID && (
             <RunDetails
               key={`${user?.id ?? ''}:${selectedID}`}
               id={selectedID}
+              section={
+                ['results', 'questions', 'calls', 'evidence', 'recipe'].includes(
+                  search.get('section') ?? '',
+                )
+                  ? search.get('section')!
+                  : 'results'
+              }
+              onSectionChange={(section) => {
+                const next = new URLSearchParams(search)
+                next.set('section', section)
+                setSearch(next)
+              }}
               actorID={user?.id ?? ''}
               canRun={canRun}
               onChanged={refresh}
@@ -196,35 +230,46 @@ export default function EvaluationPage() {
           runs={runs}
           runsLoaded={!!loaded.runs}
           canRun={canRun}
+          selectedDatasetId={search.get('dataset') ?? ''}
+          onSelectDataset={(id) => setSearch({ view: 'datasets', dataset: id })}
+          onBackToDatasets={() => setSearch({ view: 'datasets' })}
           onUse={(dataset) => setSearch({ view: 'new', dataset: dataset.id })}
         />
       )}
-      {view === 'datasets' && !loaded.datasets && (
-        <p role="status">
-          {readErrors.datasets ? 'Dataset inventory is unavailable.' : 'Loading prepared datasets…'}
-        </p>
-      )}
+      {view === 'datasets' &&
+        !loaded.datasets &&
+        (readErrors.datasets ? (
+          <p role="status">Dataset inventory is unavailable.</p>
+        ) : (
+          <ProductLoadingState compact label="Loading prepared datasets…" />
+        ))}
       {view === 'new' && (!catalog || !loaded.datasets || !loaded.targets) && (
-        <p role="status">
-          Waiting for the benchmark catalog, prepared datasets and configured targets.
-        </p>
+        <ProductLoadingState
+          compact
+          label="Waiting for the benchmark catalog, prepared datasets and configured targets."
+        />
       )}
-      {view === 'compare' && !loaded.runs && (
-        <p role="status">
-          {readErrors.runs ? 'Run inventory is unavailable.' : 'Loading evaluation runs…'}
-        </p>
-      )}
+      {view === 'compare' &&
+        !loaded.runs &&
+        (readErrors.runs ? (
+          <p role="status">Run inventory is unavailable.</p>
+        ) : (
+          <ProductLoadingState compact label="Loading evaluation runs…" />
+        ))}
       {view === 'compare' && loaded.runs && (
         <>
           <RunComparison runs={runs} />
-          <ReplayComposer
-            runs={runs}
-            canRun={canRun}
-            onCreated={(run) => {
-              setSearch({ view: 'runs', run: run.id })
-              refresh()
-            }}
-          />
+          <details className={styles.panel}>
+            <summary>Reuse saved answers for diagnostic replay</summary>
+            <ReplayComposer
+              runs={runs}
+              canRun={canRun}
+              onCreated={(run) => {
+                setSearch({ view: 'runs', run: run.id })
+                refresh()
+              }}
+            />
+          </details>
         </>
       )}
       {view === 'catalog' && catalog && (

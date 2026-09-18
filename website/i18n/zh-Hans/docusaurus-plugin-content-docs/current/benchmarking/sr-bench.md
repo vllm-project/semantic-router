@@ -68,6 +68,8 @@ vllm-sr benchmark --store ./data/sr-bench target register --file targets.json
 
 目标字段包括 `id`、`kind: single|mom`、`base_url`、`model` 和可选的 `api_key_env`。计价运行需按实际模型身份提供四类 USD/百万 token 价格：`input`、`cached_input`、`cache_write`、`output`。MoM 还需固定实际配置 `config_hash`，预览使用 `preview_url`，计价时声明 `max_inference_calls`。当前直接 MoM 适配器要求完整的一次推理计量；不能用最终模型的价格代替未计量的组合调用。
 
+运维可用目标的 `request_params` 固定原生生成参数；它们覆盖运行的 `sampling` 默认值，包括温度、推理选项以及显式设置的输出长度。对比前检查实际生效参数。运行的输出上限必须容纳目标固定的 `max_tokens`；降低上限不会改写模型 profile。需要其他原生参数时，应选择另一个由运维注册的 profile。
+
 HLE/SimpleQA 需固定裁判和 `grader_version: sr-bench-reference-judge-v1`；τ³ 需固定模拟器和 `release: 1.0.1`。运维在 store 的 `benchmark-options.json` 配置这些依赖。外部适配器默认发现 `benchmark setup` 安装的固定环境；可用 `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON` 和对应 `_ROOT` 覆盖其位置。源码和沙箱镜像仍须固定版本。预检会在付费派发前报告缺失依赖。
 
 ## 冻结并运行
@@ -121,9 +123,15 @@ Replay 是答案复用产生的诊断估计，不是实测能力、延迟或节�
 
 配对质量差值默认展示基于独立题目差值的保守加权 Hoeffding 区间。即使所有配对结果相同或全部答错，区间也不会退化为零。分层 bootstrap 区间保留为诊断值；小样本产生 `[0, 0]` 不能证明能力持平。两种区间都不包含最强基线选择、调优选择或数据污染带来的不确定性。
 
-Dashboard 默认进入 **Runs**，按名称、模型、状态和模式筛选任务，展示完成分母、失败数、持久化更新时间和目标类型。只读轮询会在断网后恢复，并发现 CLI 新建的任务；关闭或刷新页面不会重启任务。**Datasets** 展示冻结题量、profile、benchmark 范围与题目哈希，点击 **Evaluate this dataset** 可复用同一数据集。
+Dashboard 默认进入 **Runs**，按名称、模型、状态和模式筛选任务，展示完成分母、失败数、持久化更新时间和目标类型。只读轮询会在断网后恢复，并发现 CLI 新建的任务；关闭或刷新页面不会重启任务。
 
-**Compare iterations** 同屏展示单模型基线、当前 Balance、优化 1、优化 2。所选运行 ID 保存在 URL 中，重新打开即可查看同一组结果。质量差值和置信区间与成本节省率、token、延迟、wall time、配置哈希一起展示。范围不兼容或未完成的运行不能生成对比结果；点估计为正但区间跨零时，不能认定已经提升。
+在 **Create evaluation** 中，先选择 **smoke**、**quick** 或 **standard**，再勾选一个或多个已准备 benchmark，或使用 **Select all benchmarks**。它们对应真实运行 profile，standard 使用 holdout split。来源必须具有相同的 profile、seed 和 split。**Review plan** 只从这些冻结来源组合完整 benchmark 题组，不下载数据、不重新抽样，也不调用模型。完整使用一个来源时保留原数据集身份；选择子集或组合多个来源时生成可复用的冻结数据集。存在冲突时明确拒绝，不静默合并。
+
+**Datasets** 支持搜索、按 profile/benchmark 筛选和分页。点击数据集可查看题目、benchmark 覆盖和学科分组。题目每页 25 条，可按 benchmark、学科和文本搜索；打开题目可阅读任务说明与选项，固定来源可用时也能展示代码和 agent 任务的完整输入。参考答案、隐藏测试和工具凭据不会返回。来源信息和哈希默认折叠，点击 **Evaluate dataset** 可复用所选数据。能浏览公开题目不代表题目从未被见过；不要用 standard 题目调优。
+
+运行详情分为 **Results**、**Questions**、**Calls**、**Evidence** 和 **Recipe**，先看汇总结果，再按需查看逐题响应、计量和冻结配置。
+
+**Compare iterations** 先选择单模型基线，再用复选框选择任意数量的已完成候选运行，不限制为两轮优化。候选按创建时间排序，选择保存在 URL 中。质量/成本图和迭代图配合成对置信区间、节省率、token、延迟和 wall time 展示，并支持 CSV、JSON 比较导出。范围不兼容或未完成的运行不能生成对比结果；点估计为正但区间跨零时，不能认定已经提升。
 
 MoM 目标可由运维人员在注册信息中设置 `capture_recipe: true`，并固定 `config_hash` 和规范的 `preview_url`。worker 仅在捕获前后生成配置和生效运行时哈希均匹配目标、源配置 ETag 保持不变时，捕获脱敏 recipe；**Frozen recipes** 支持查看、下载及核对采集时间、投影哈希。真实调用独立确认实际配置哈希。下载省略部署连接信息和凭据，是 recipe 产物，不是完整可部署配置。旧运行没有快照时明确显示不可用，不借用后续配置。
 

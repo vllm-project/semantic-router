@@ -66,7 +66,16 @@ export function validateManifest(manifest: Manifest): string | null {
     return 'Every run limit must be a positive number.'
   if (manifest.limits.idle_timeout_s > manifest.limits.total_timeout_s)
     return 'Idle timeout must not exceed the total request deadline.'
+  for (const target of manifest.targets) {
+    const fixed = target.request_params?.max_tokens
+    if (typeof fixed === 'number' && fixed > manifest.limits.max_output_tokens)
+      return `Target ${target.id} has a registered output limit of ${fixed} tokens, above the run cap of ${manifest.limits.max_output_tokens}. Select another registered target profile or explicitly raise the run cap; registered overrides are not changed here.`
+  }
   return null
+}
+
+export function effectiveRequestProfile(target: Target, defaults: Manifest['sampling']) {
+  return { ...defaults, ...target.request_params }
 }
 
 export const number = (value: unknown, digits = 0): string =>

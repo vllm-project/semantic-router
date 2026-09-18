@@ -125,6 +125,13 @@ MoM adapter requires one fully accounted inference call; unsupported compound
 usage cannot be priced from the final selected model alone. Dashboard can
 select registered targets but cannot edit their destinations or credentials.
 
+An operator can freeze native generation settings in a target's `request_params`.
+These settings override the run's `sampling` defaults, including temperature,
+reasoning options and output length when present. Inspect the effective profile
+before comparing targets. The run's output cap must accommodate a target's fixed
+`max_tokens`; lowering the cap does not rewrite that profile. Choose another
+operator-registered profile when different native settings are required.
+
 Judged benchmarks require a fixed single-model judge and
 `grader_version: sr-bench-reference-judge-v1`. τ³ also needs a fixed simulator
 and release `1.0.1`. Operators supply these in `benchmark-options.json` in the
@@ -281,15 +288,36 @@ Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
 row shows the completed denominator, failures, persisted update time and target
 kind. Read-only polling reconnects after a temporary network failure and discovers
 CLI-created runs. Closing or refreshing the page does not restart a run.
-**Datasets** lists frozen case counts, profiles, benchmark scope and case hashes;
-choose **Evaluate this dataset** to reuse that exact identity.
 
-**Compare iterations** presents a single-model baseline and three explicit
-selections: current Balance, optimization 1 and optimization 2. The selected run
-IDs are preserved in the URL. It shows paired quality differences and confidence
-intervals alongside cost savings, tokens, latency, wall time and frozen config
-hashes. Incompatible or incomplete scopes cannot become a comparison row. A
-positive point estimate with an interval spanning zero is not proof of a gain.
+In **Create evaluation**, first choose **smoke**, **quick** or **standard**, then
+select one or more prepared benchmarks, or **Select all benchmarks**. These are
+the actual run profiles; standard uses the holdout split. Available sources must
+share a profile, seed and split. **Review plan** composes whole benchmark groups
+from those frozen sources without downloading data, resampling questions or
+calling a model. Selecting all benchmarks from one source reuses its original
+identity; a subset or multi-source composition creates a reusable frozen dataset.
+Conflicting selections are rejected rather than silently merged.
+
+**Datasets** provides search, profile/benchmark filters and pagination. Open a
+dataset to browse its questions, benchmark coverage and subject groups. Questions
+load in pages of 25 with benchmark/category filters and text search; opening one
+shows the task instructions and choices, including complete code/agent task
+inputs when the pinned source is available. Reference answers, hidden tests and
+tool credentials are excluded. Source details and hashes are behind disclosure
+controls. **Evaluate dataset** reuses the chosen data. Browsing public questions
+does not establish that they are unseen; never use standard tasks for tuning.
+
+Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
+**Recipe**. Start with the aggregate results, then inspect individual responses,
+accounting and frozen configuration as needed.
+
+**Compare iterations** selects a single-model baseline, then uses checkboxes for
+any number of completed candidate runs. Candidates are ordered by creation
+time, and selections are preserved in the URL. Quality/cost and iteration charts
+accompany paired confidence intervals, savings, tokens, latency and wall time;
+CSV and JSON export the comparison. The interface is not limited to two tuning
+iterations. Incompatible or incomplete scopes cannot become a comparison row.
+A positive estimate with an interval spanning zero is not proof of a gain.
 
 For a MoM target, the operator can register `capture_recipe: true` with its
 `config_hash` and canonical `preview_url`. The worker captures a redacted recipe
