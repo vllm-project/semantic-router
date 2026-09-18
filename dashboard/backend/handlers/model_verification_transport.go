@@ -36,10 +36,6 @@ func (service *modelVerificationService) call(ctx context.Context, target modelV
 		}
 		request.Header.Set(target.authHeader, value)
 	}
-	if target.dialect == "anthropic" && request.Header.Get("anthropic-version") == "" {
-		request.Header.Set("anthropic-version", "2023-06-01")
-	}
-
 	response, err := service.client.Do(request)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
@@ -82,6 +78,19 @@ func (service *modelVerificationService) call(ctx context.Context, target modelV
 }
 
 func buildModelVerificationPayload(target modelVerificationTarget) ([]byte, error) {
+	if target.dialect == "responses" {
+		return json.Marshal(struct {
+			Model           string `json:"model"`
+			Input           string `json:"input"`
+			Stream          bool   `json:"stream"`
+			MaxOutputTokens int    `json:"max_output_tokens"`
+		}{
+			Model:           target.providerModel,
+			Input:           modelVerificationPrompt,
+			Stream:          false,
+			MaxOutputTokens: modelVerificationMaxTokens,
+		})
+	}
 	if target.dialect == "anthropic" {
 		return json.Marshal(struct {
 			Model     string `json:"model"`
@@ -132,6 +141,9 @@ func readBoundedModelVerificationResponse(reader io.Reader) ([]byte, error) {
 }
 
 func decodeModelVerificationContent(body []byte, dialect string) (string, error) {
+	if dialect == "responses" {
+		return decodeResponsesVerificationContent(body)
+	}
 	if dialect == "anthropic" {
 		var response struct {
 			Content []struct {
@@ -175,4 +187,41 @@ func decodeModelVerificationContent(body []byte, dialect string) (string, error)
 		return "Inference responded successfully.", nil
 	}
 	return content, nil
+}
+
+func decodeResponsesVerificationContent(body []byte) (string, error) {
+	var response struct {
+		OutputText string `json:"output_text"`
+		Output     []struct {
+			Type    string `json:"type"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", err
+	}
+	if content := strings.TrimSpace(response.OutputText); content != "" {
+		return content, nil
+	}
+	parts := make([]string, 0, len(response.Output))
+	for _, item := range response.Output {
+		for _, content := range item.Content {
+			if content.Type == "output_text" && strings.TrimSpace(content.Text) != "" {
+				parts = append(parts, strings.TrimSpace(content.Text))
+			}
+		}
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, " "), nil
+	}
+	if len(response.Output) > 0 {
+		// A reasoning-only or tool-only Responses result still proves that the
+		// configured inference endpoint accepted and executed the request. Do
+		// not surface private reasoning or tool arguments in verification UI.
+		return "Inference responded successfully.", nil
+	}
+	return "", errors.New("response has no output")
 }

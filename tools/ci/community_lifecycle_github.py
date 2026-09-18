@@ -12,6 +12,7 @@ from urllib.parse import quote
 from community_lifecycle_policy import (
     ACCEPTED,
     API_PAGE_SIZE,
+    ISSUE_DELIVERY_STATE_LABELS,
     MAINTAINER_PERMISSIONS,
     NEEDS_ACCEPTANCE,
     PR_STATE_LABELS,
@@ -119,17 +120,25 @@ def comment_once(
     )
 
 
-def sync_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
-    repo = repository_name(event)
-    number = int(event["issue"]["number"])
-    issue = client.request(f"repos/{repo}/issues/{number}")
-    event_label = (event.get("label") or {}).get("name")
-    sender = (event.get("sender") or {}).get("login")
+def sync_issue(
+    client: GitHubClient,
+    repo: str,
+    number: int,
+    *,
+    event_action: str = "",
+    event_label: str | None = None,
+    actor_can_manage: bool = False,
+) -> None:
+    """Fetch one issue and apply its current label plan."""
+
+    issue = client.request(f"repos/{repo}/issues/{number}", ignore_not_found=True)
+    if not issue:
+        return
     plan = plan_issue(
         issue,
-        event_action=event.get("action", ""),
+        event_action=event_action,
         event_label=event_label,
-        actor_can_manage=actor_can_manage(client, repo, sender),
+        actor_can_manage=actor_can_manage,
     )
 
     remove_labels(client, repo, number, plan.remove_labels)
@@ -148,6 +157,50 @@ def sync_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
         )
     for code, message in plan.comments:
         comment_once(client, repo, number, code, message)
+
+
+def sync_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
+    repo = repository_name(event)
+    number = int(event["issue"]["number"])
+    event_label = (event.get("label") or {}).get("name")
+    sender = (event.get("sender") or {}).get("login")
+    sync_issue(
+        client,
+        repo,
+        number,
+        event_action=event.get("action", ""),
+        event_label=event_label,
+        actor_can_manage=actor_can_manage(client, repo, sender),
+    )
+
+
+def sync_labeled_closed_issues(client: GitHubClient, repo: str) -> None:
+    """Sweep closed issues that still carry a stale delivery-state label."""
+
+    numbers: set[int] = set()
+    for label in sorted(ISSUE_DELIVERY_STATE_LABELS):
+        page = 1
+        while True:
+            issues = (
+                client.request(
+                    f"repos/{repo}/issues?state=closed"
+                    f"&labels={quote(label, safe='')}"
+                    f"&per_page={API_PAGE_SIZE}&page={page}"
+                )
+                or []
+            )
+            numbers.update(
+                int(issue["number"]) for issue in issues if "pull_request" not in issue
+            )
+            if len(issues) < API_PAGE_SIZE:
+                break
+            page += 1
+    for number in sorted(numbers):
+        sync_issue(client, repo, number)
+
+
+def sync_issue_queue(client: GitHubClient, event: dict[str, Any]) -> None:
+    sync_labeled_closed_issues(client, repository_name(event))
 
 
 def sync_issue_kind_event(client: GitHubClient, event: dict[str, Any]) -> None:

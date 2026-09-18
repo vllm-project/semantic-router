@@ -1,9 +1,9 @@
 package classification
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
 // probabilitySumTolerance bounds how far an http_classify response's scores
@@ -58,13 +58,9 @@ type sequenceLabelMapping interface {
 // external model (a 14-label category classifier) during #2918, not just a
 // synthetic mock.
 type HTTPClassifierInference struct {
-	httpClient       *http.Client
-	baseURL          string
-	accessKey        string
-	timeout          time.Duration
-	maxRequestBytes  int64
-	maxResponseBytes int64
-	mapping          sequenceLabelMapping
+	connector *connector.Client
+	timeout   time.Duration
+	mapping   sequenceLabelMapping
 }
 
 // NewHTTPClassifierInference creates a new http_classify-backed inference
@@ -114,14 +110,21 @@ func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 	}
 
+	remote, err := connector.New(baseURL, bearerAuthorizer(cfg.AccessKey), connector.Options{
+		AttemptTimeout:   timeout,
+		MaxRetries:       1,
+		MaxRequestBytes:  cfg.GetMaxRequestBytes(),
+		MaxResponseBytes: cfg.GetMaxResponseBytes(),
+		MaxErrorBytes:    maxClassifyErrorBodyBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create http_classify connector: %w", err)
+	}
+
 	return &HTTPClassifierInference{
-		httpClient:       &http.Client{Timeout: timeout},
-		baseURL:          baseURL,
-		accessKey:        cfg.AccessKey,
-		timeout:          timeout,
-		maxRequestBytes:  cfg.GetMaxRequestBytes(),
-		maxResponseBytes: cfg.GetMaxResponseBytes(),
-		mapping:          mapping,
+		connector: remote,
+		timeout:   timeout,
+		mapping:   mapping,
 	}, nil
 }
 
@@ -138,11 +141,16 @@ func isNilMapping(mapping sequenceLabelMapping) bool {
 		return true
 	}
 	v := reflect.ValueOf(mapping)
-	return v.Kind() == reflect.Ptr && v.IsNil()
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
 type httpClassifyRequest struct {
 	Inputs string `json:"inputs"`
+	// Parameters carries task inputs that are not the classified text, the
+	// way the HuggingFace pipelines accept a parameters object next to
+	// inputs. Grounded detection sends context and question here; offsets in
+	// the response still index Inputs alone.
+	Parameters map[string]string `json:"parameters,omitempty"`
 }
 
 type httpClassifyLabelScore struct {
@@ -150,81 +158,83 @@ type httpClassifyLabelScore struct {
 	Score float32 `json:"score"`
 }
 
+var httpClassifyOperation = connector.Operation{
+	Name:      "http_classify",
+	Method:    http.MethodPost,
+	Path:      "/classify",
+	RetrySafe: true,
+}
+
 // Classify implements the SequenceClassifierBackend interface. It derives its
 // deadline from the caller's ctx (so the request can be cancelled if the
 // caller gives up first) bounded by h.timeout, rather than always running to
 // its own internal timeout regardless of the caller's lifecycle.
 func (h *HTTPClassifierInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, h.timeout)
-	defer cancel()
-
-	httpReq, err := h.buildClassifyRequest(ctx, text)
+	scores, err := h.fetchLabelScores(ctx, text)
 	if err != nil {
 		return SequenceClassificationResult{}, err
 	}
-
-	scores, err := h.doClassifyRequest(httpReq)
-	if err != nil {
-		return SequenceClassificationResult{}, err
-	}
-
 	return alignScoresToMapping(h.mapping, scores)
 }
 
-// buildClassifyRequest builds the outgoing http_classify HTTP request.
-func (h *HTTPClassifierInference) buildClassifyRequest(ctx context.Context, text string) (*http.Request, error) {
+func (h *HTTPClassifierInference) fetchLabelScores(ctx context.Context, text string) ([]httpClassifyLabelScore, error) {
+	ctx, cancel := context.WithTimeout(ctx, h.timeout)
+	defer cancel()
+
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal http_classify request: %w", err)
 	}
-	if int64(len(reqBody)) > h.maxRequestBytes {
-		return nil, fmt.Errorf(
-			"http_classify request body is %d bytes, exceeding the limit of %d bytes", len(reqBody), h.maxRequestBytes)
-	}
-
-	url := fmt.Sprintf("%s/classify", h.baseURL)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
+	responseBody, err := h.connector.Do(ctx, httpClassifyOperation, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create http_classify request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
-	if h.accessKey != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.accessKey))
-	}
-	return httpReq, nil
-}
-
-const maxClassifyErrorBodyBytes int64 = 8 * 1024
-
-// doClassifyRequest sends the request and parses the label/score list from a
-// successful response.
-func (h *HTTPClassifierInference) doClassifyRequest(httpReq *http.Request) ([]httpClassifyLabelScore, error) {
-	resp, err := h.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("http_classify request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		errBody, truncated := httputil.ReadTruncatedBody(resp.Body, maxClassifyErrorBodyBytes)
-		return nil, fmt.Errorf(
-			"http_classify endpoint returned status %d: %s (truncated=%t)", resp.StatusCode, string(errBody), truncated)
-	}
-
-	body, err := httputil.ReadLimitedBody(resp.Body, h.maxResponseBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read http_classify response: %w", err)
+		return nil, formatHTTPClassifyConnectorError(err)
 	}
 
 	var scores []httpClassifyLabelScore
-	if err := json.Unmarshal(body, &scores); err != nil {
+	if err := json.Unmarshal(responseBody, &scores); err != nil {
 		return nil, fmt.Errorf("failed to parse http_classify response: %w", err)
 	}
 	if len(scores) == 0 {
 		return nil, fmt.Errorf("http_classify response contained no labels")
 	}
 	return scores, nil
+}
+
+const maxClassifyErrorBodyBytes int64 = 8 * 1024
+
+func formatHTTPClassifyConnectorError(err error) error {
+	var connectorErr *connector.Error
+	if !errors.As(err, &connectorErr) {
+		return fmt.Errorf("http_classify request failed: %w", err)
+	}
+	switch connectorErr.Kind {
+	case connector.KindStatus:
+		// The remote body is deliberately not interpolated. This error reaches
+		// operational logs, and a classifier's error body routinely echoes the
+		// text it was asked to classify - a user prompt - along with whatever
+		// internal detail the endpoint chose to report. Its size is still
+		// worth reporting, because "the endpoint said nothing" and "the
+		// endpoint said more than we would read" are different faults.
+		// connector.Error.ResponseBody stays available for a caller that
+		// needs the body for something other than a log line.
+		body, truncated := connectorErr.ResponseBody()
+		return fmt.Errorf(
+			"http_classify endpoint returned status %d (response body %d bytes, truncated=%t, not logged): %w",
+			connectorErr.StatusCode, len(body), truncated, connectorErr,
+		)
+	case connector.KindResponse:
+		return fmt.Errorf("failed to read http_classify response: %w", connectorErr)
+	default:
+		return fmt.Errorf("http_classify request failed: %w", connectorErr)
+	}
+}
+
+// Close releases idle connections owned by the remote connector.
+func (h *HTTPClassifierInference) Close() error {
+	if h == nil || h.connector == nil {
+		return nil
+	}
+	return h.connector.Close()
 }
 
 // alignScoresToMapping matches response labels against the configured label
@@ -237,37 +247,41 @@ func (h *HTTPClassifierInference) doClassifyRequest(httpReq *http.Request) ([]ht
 // be any classifier's label mapping (JailbreakMapping, CategoryMapping, ...)
 // that satisfies sequenceLabelMapping.
 func alignScoresToMapping(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) (SequenceClassificationResult, error) {
-	numClasses := mapping.LabelCount()
-	probabilities := make([]float32, numClasses)
-	seenIdx := make([]bool, numClasses)
-	seenLabels := make([]string, 0, len(scores))
+	probabilities, err := alignIndependentLabelScores(mapping, scores)
+	if err != nil {
+		return SequenceClassificationResult{}, err
+	}
 	var sum float32
-
-	for _, s := range scores {
-		seenLabels = append(seenLabels, s.Label)
-		idx, err := assignScoreToMapping(mapping, seenIdx, s)
-		if err != nil {
-			return SequenceClassificationResult{}, err
-		}
-		probabilities[idx] = s.Score
-		sum += s.Score
+	for _, probability := range probabilities {
+		sum += probability
 	}
-
-	for idx, present := range seenIdx {
-		if present {
-			continue
-		}
-		missingLabel, _ := mapping.LabelFromIndex(idx)
-		return SequenceClassificationResult{}, fmt.Errorf(
-			"http_classify response is missing label %q from the configured label mapping (got %v)", missingLabel, seenLabels)
+	if math.Abs(float64(sum)-1) > probabilitySumTolerance {
+		return SequenceClassificationResult{}, fmt.Errorf("http_classify response scores sum to %v, want ~1.0", sum)
 	}
-
-	if math.Abs(float64(sum)-1.0) > probabilitySumTolerance {
-		return SequenceClassificationResult{}, fmt.Errorf(
-			"http_classify response scores sum to %v, want ~1.0 (labels: %v)", sum, seenLabels)
-	}
-
 	return SequenceClassificationResult{Probabilities: probabilities}, nil
+}
+
+// Independent probabilities use the same exhaustive label validation, without
+// creating a categorical result or changing the supplied values.
+func alignIndependentLabelScores(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) ([]float32, error) {
+	probabilities := make([]float32, mapping.LabelCount())
+	seenIdx := make([]bool, len(probabilities))
+	seenLabels := make([]string, 0, len(scores))
+	for _, score := range scores {
+		seenLabels = append(seenLabels, score.Label)
+		idx, err := assignScoreToMapping(mapping, seenIdx, score)
+		if err != nil {
+			return nil, err
+		}
+		probabilities[idx] = score.Score
+	}
+	for idx, present := range seenIdx {
+		if !present {
+			missing, _ := mapping.LabelFromIndex(idx)
+			return nil, fmt.Errorf("http_classify response is missing label %q from the configured label mapping (got %v)", missing, seenLabels)
+		}
+	}
+	return probabilities, nil
 }
 
 // assignScoreToMapping validates a single response label/score pair against

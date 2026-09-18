@@ -1,96 +1,86 @@
-"""Strict, versioned input contracts for an evaluation run."""
+"""Strict, versioned workload and run contracts for evaluation execution."""
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
-from typing import Annotated, Literal
-from urllib.parse import urlsplit
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
+from typing_extensions import Self
 
-from cli.evaluation.constants import SCHEMA_VERSION, TRACK_IDS
+from cli.evaluation import target_contracts as _target_contracts
+from cli.evaluation.capacity_load_contract import (
+    CAPACITY_LOAD_CONFIDENCE_LEVEL,
+    CAPACITY_LOAD_KIND,
+    CAPACITY_MAX_ERROR_RATE_CLUSTER_RANGE,
+    MAX_CAPACITY_MEASUREMENT_REQUESTS,
+    MAX_CAPACITY_REPETITIONS,
+    MAX_CAPACITY_STABILITY_CV,
+    MAX_CAPACITY_WARMUP_MULTIPLIER,
+    MIN_CAPACITY_MEASUREMENT_CLUSTERS_PER_LEVEL,
+    MIN_CAPACITY_MEASUREMENT_REQUESTS,
+    MIN_CAPACITY_REPETITIONS,
+    MIN_CAPACITY_WARMUP_MULTIPLIER,
+    capacity_concurrency_levels,
+)
+from cli.evaluation.constants import BUILTIN_SUITE_IDS, SCHEMA_VERSION, TRACK_IDS
+from cli.evaluation.contract_primitives import (
+    ArtifactRef as _ArtifactRef,
+)
+from cli.evaluation.contract_primitives import (
+    Message as _Message,
+)
+from cli.evaluation.contract_primitives import (
+    StrictModel as _StrictModel,
+)
+from cli.evaluation.contract_validation import (
+    is_portable_id,
+    is_valid_suite_revision,
+    validate_canonical_uuid,
+    validate_portable_id,
+    validate_run_description,
+    validate_run_name,
+)
 from cli.evaluation.gate_contract import GATE_CONTRACT_VERSION, ChangeProfile
+from cli.evaluation.manifest_identity import (
+    require_manifest_digest,
+    seal_manifest_fields,
+)
 
-_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-_ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
-_MAX_SUITE_REVISION_LENGTH = 160
-
-
-class StrictModel(BaseModel):
-    """Base contract that rejects silent schema drift."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
+_MAX_SUITE_EXECUTOR_ID_LENGTH = 128
+_MINIMUM_MIXTURE_ARM_COUNT = 2
+_MINIMUM_LIVE_CAPACITY_CONCURRENCY = 2
 
 
-def _validate_id(value: str) -> str:
-    if not _ID_RE.fullmatch(value):
-        raise ValueError(
-            "must be a portable identifier (letters, digits, '.', '_' or '-')"
-        )
-    return value
-
-
-class ArtifactRef(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    media_type: str = Field(min_length=1, max_length=128)
-    size_bytes: int = Field(ge=0)
-
-
-class SecretRef(StrictModel):
-    """Credential reference; literal credentials are intentionally unsupported."""
-
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    env: str
-
-    @field_validator("env")
-    @classmethod
-    def validate_env(cls, value: str) -> str:
-        if not _ENV_RE.fullmatch(value):
-            raise ValueError(
-                "secret env must be an uppercase environment variable name"
-            )
-        return value
-
-
-class TextPart(StrictModel):
-    type: Literal["text"] = "text"
-    text: str
-
-
-class ImageURL(StrictModel):
-    url: str
-    detail: Literal["auto", "low", "high"] | None = None
-
-
-class ImagePart(StrictModel):
-    type: Literal["image_url"] = "image_url"
-    image_url: ImageURL
-
-
-ContentPart = Annotated[TextPart | ImagePart, Field(discriminator="type")]
-
-
-class Message(StrictModel):
-    role: Literal["system", "user", "assistant", "tool"]
-    content: str | tuple[ContentPart, ...]
-    name: str | None = None
-    tool_call_id: str | None = None
-
-
-class CaseVisible(StrictModel):
+class CaseVisible(_StrictModel):
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
     id: str
-    messages: tuple[Message, ...] = Field(min_length=1)
+    track_ids: tuple[str, ...] = Field(min_length=1)
+    messages: tuple[_Message, ...] = Field(min_length=1)
     modality: Literal["text", "image", "document", "audio", "video"] = "text"
     tags: tuple[str, ...] = ()
     trajectory_id: str | None = None
 
-    _id = field_validator("id")(_validate_id)
+    _id = field_validator("id")(validate_portable_id)
+
+    @field_validator("track_ids")
+    @classmethod
+    def validate_track_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("case track ids must be unique")
+        canonical = tuple(track_id for track_id in TRACK_IDS if track_id in value)
+        if value != canonical:
+            raise ValueError("case track ids must be known and use canonical order")
+        return value
+
+    @model_validator(mode="after")
+    def validate_track_applicability(self) -> CaseVisible:
+        if self.modality == "text" and "multimodal" in self.track_ids:
+            raise ValueError("text cases cannot plan multimodal evidence")
+        return self
 
 
-class CaseGrading(StrictModel):
+class CaseGrading(_StrictModel):
     """Hidden labels loaded only after policy/model execution."""
 
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
@@ -102,10 +92,10 @@ class CaseGrading(StrictModel):
     should_block: bool | None = None
     weight: float = Field(default=1.0, gt=0)
 
-    _case_id = field_validator("case_id")(_validate_id)
+    _case_id = field_validator("case_id")(validate_portable_id)
 
 
-class VisibleCaseSet(StrictModel):
+class VisibleCaseSet(_StrictModel):
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
     cases: tuple[CaseVisible, ...] = Field(min_length=1)
 
@@ -117,7 +107,7 @@ class VisibleCaseSet(StrictModel):
         return self
 
 
-class GradingCaseSet(StrictModel):
+class GradingCaseSet(_StrictModel):
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
     cases: tuple[CaseGrading, ...] = Field(min_length=1)
 
@@ -129,13 +119,13 @@ class GradingCaseSet(StrictModel):
         return self
 
 
-class WorkloadSnapshot(StrictModel):
+class WorkloadSnapshot(_StrictModel):
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
     id: str
-    visible_cases: ArtifactRef
-    grading_cases: ArtifactRef
+    visible_cases: _ArtifactRef
+    grading_cases: _ArtifactRef
 
-    _id = field_validator("id")(_validate_id)
+    _id = field_validator("id")(validate_portable_id)
 
     @model_validator(mode="after")
     def physically_separated(self) -> WorkloadSnapshot:
@@ -144,177 +134,86 @@ class WorkloadSnapshot(StrictModel):
         return self
 
 
-class HTTPServiceEndpoint(StrictModel):
+class CapacitySLO(_StrictModel):
+    """Frozen service-level objective for a repeated live load profile."""
+
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    url: str
-    api_key: SecretRef | None = None
-    timeout_seconds: float = Field(default=30.0, gt=0, le=600)
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, value: str) -> str:
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("endpoint must be an absolute HTTP(S) URL")
-        if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError(
-                "endpoint URL cannot contain credentials, query, or fragment"
-            )
-        return value.rstrip("/")
+    required_concurrency: int = Field(ge=1, le=128)
+    max_latency_p95_ms: float = Field(gt=0, allow_inf_nan=False)
+    max_error_rate: float = Field(ge=0, lt=1, allow_inf_nan=False)
+    min_throughput_rps: float = Field(gt=0, allow_inf_nan=False)
+    min_throughput_scaling_efficiency: float = Field(gt=0, le=1, allow_inf_nan=False)
 
 
-class ModelArm(StrictModel):
+class CapacityLoadProtocol(_StrictModel):
+    """Frozen repeated closed-loop measurement protocol for a live load claim."""
+
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    model: str = Field(min_length=1)
-    endpoint: HTTPServiceEndpoint | None = None
-    input_cost_per_million_tokens_usd: float = Field(default=0, ge=0)
-    output_cost_per_million_tokens_usd: float = Field(default=0, ge=0)
-
-    _id = field_validator("id")(_validate_id)
-
-
-class PoolDefinition(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    arm_ids: tuple[str, ...] = ()
-
-    _id = field_validator("id")(_validate_id)
-
-    @field_validator("arm_ids")
-    @classmethod
-    def unique_arms(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        if len(value) != len(set(value)):
-            raise ValueError("pool arm ids must be unique")
-        return value
-
-
-class PolicySnapshot(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    entrypoint_model: str = Field(min_length=1)
-    recipe_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-
-    _id = field_validator("id")(_validate_id)
-
-
-class BindingSnapshot(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    policy_id: str
-    pool_id: str
-
-    _id = field_validator("id")(_validate_id)
-
-
-class RunEnvironment(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    target_id: str
-    platform: str = Field(min_length=1)
-    hardware_class: str = Field(min_length=1)
-    backend_topology_digest: str | None = Field(
-        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    kind: Literal[CAPACITY_LOAD_KIND] = CAPACITY_LOAD_KIND
+    concurrency_levels: tuple[int, ...] = Field(min_length=2, max_length=8)
+    warmup_request_multiplier: int = Field(
+        ge=MIN_CAPACITY_WARMUP_MULTIPLIER,
+        le=MAX_CAPACITY_WARMUP_MULTIPLIER,
     )
-    route_eval: HTTPServiceEndpoint | None = None
-    routed_chat: HTTPServiceEndpoint | None = None
-    replay: HTTPServiceEndpoint | None = None
-    currency: Literal["USD"] = "USD"
-
-    _id = field_validator("id")(_validate_id)
-
-
-class EvaluationTargetArm(StrictModel):
-    """Server-owned public model identity and pricing, never connectivity."""
-
-    id: str
-    model: str = Field(min_length=1, max_length=512)
-    provider_model_id_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    input_cost_per_million_tokens_usd: float = Field(
-        ge=0, strict=True, allow_inf_nan=False
+    measurement_requests_per_repetition: int = Field(
+        ge=MIN_CAPACITY_MEASUREMENT_REQUESTS,
+        le=MAX_CAPACITY_MEASUREMENT_REQUESTS,
     )
-    output_cost_per_million_tokens_usd: float = Field(
-        ge=0, strict=True, allow_inf_nan=False
+    repetitions_per_level: int = Field(
+        ge=MIN_CAPACITY_REPETITIONS,
+        le=MAX_CAPACITY_REPETITIONS,
     )
-    capabilities: tuple[str, ...] = ()
-    modalities: tuple[Literal["text", "image", "document", "audio", "video"], ...] = ()
-    context_window_tokens: int | None = Field(default=None, gt=0)
-    parameter_size: str | None = Field(default=None, min_length=1, max_length=64)
-    runtime_revision: str | None = Field(default=None, min_length=1, max_length=160)
-    config_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
-
-    _id = field_validator("id")(_validate_id)
-
-    @field_validator("model")
-    @classmethod
-    def validate_model(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("model must not be blank")
-        return value
-
-    @field_validator("capabilities", "modalities")
-    @classmethod
-    def unique_capability_values(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        if len(value) != len(set(value)):
-            raise ValueError("model arm capability values must be unique")
-        return value
-
-
-class EvaluationTarget(StrictModel):
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
-    id: str
-    kind: str = Field(min_length=1, max_length=64)
-    router_api_url: str | None = None
-    envoy_url: str | None = None
-    router_api_key: SecretRef | None = None
-    envoy_api_key: SecretRef | None = None
-    backend_topology_digest: str | None = Field(
-        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    minimum_measurement_clusters_per_level: Literal[
+        MIN_CAPACITY_MEASUREMENT_CLUSTERS_PER_LEVEL
+    ] = MIN_CAPACITY_MEASUREMENT_CLUSTERS_PER_LEVEL
+    confidence_level: Literal[CAPACITY_LOAD_CONFIDENCE_LEVEL] = (
+        CAPACITY_LOAD_CONFIDENCE_LEVEL
     )
-    model_arms: tuple[EvaluationTargetArm, ...] = ()
-
-    _id = field_validator("id")(_validate_id)
-
-    @field_validator("router_api_url", "envoy_url")
-    @classmethod
-    def validate_optional_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("target URL must be absolute HTTP(S)")
-        if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError(
-                "target URL cannot contain credentials, query, or fragment"
-            )
-        return value.rstrip("/")
+    max_error_rate_cluster_range: Literal[CAPACITY_MAX_ERROR_RATE_CLUSTER_RANGE] = (
+        CAPACITY_MAX_ERROR_RATE_CLUSTER_RANGE
+    )
+    max_throughput_cv: float = Field(
+        gt=0, le=MAX_CAPACITY_STABILITY_CV, allow_inf_nan=False
+    )
+    max_latency_p95_cv: float = Field(
+        gt=0, le=MAX_CAPACITY_STABILITY_CV, allow_inf_nan=False
+    )
 
     @model_validator(mode="after")
-    def unique_model_arms(self) -> EvaluationTarget:
-        arm_ids = [arm.id for arm in self.model_arms]
-        if len(arm_ids) != len(set(arm_ids)):
-            raise ValueError("evaluation target arm ids must be unique")
-        models = [arm.model for arm in self.model_arms]
-        if len(models) != len(set(models)):
-            raise ValueError("evaluation target arm models must be unique")
+    def validate_load_ladder(self) -> CapacityLoadProtocol:
+        if self.concurrency_levels != capacity_concurrency_levels(
+            self.concurrency_levels[-1]
+        ):
+            raise ValueError(
+                "capacity concurrency_levels must use the geometric platform ladder"
+            )
+        if self.minimum_measurement_clusters_per_level > self.repetitions_per_level:
+            raise ValueError(
+                "capacity repetitions_per_level must cover the minimum independent clusters"
+            )
         return self
 
 
-class RunManifest(StrictModel):
+class RunManifest(_StrictModel):
     """Fixed public worker manifest shared with the Dashboard backend."""
 
-    schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
+    schema_version: Literal[SCHEMA_VERSION]
     manifest_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     run_id: str
+    name: str
+    description: str
     mode: Literal["replay", "live"]
-    target: EvaluationTarget
+    target: _target_contracts.EvaluationTarget
     change_profile: ChangeProfile
     gate_contract_version: Literal[GATE_CONTRACT_VERSION]
     suite_ids: tuple[str, ...] = Field(min_length=1)
     suite_revisions: dict[str, str] = Field(min_length=1)
+    suite_executors: dict[str, str] = Field(min_length=1)
     track_ids: tuple[str, ...] = Field(min_length=1)
     sample_limit: int = Field(gt=0, le=100000)
     concurrency: int = Field(ge=1, le=128)
+    capacity_slo: CapacitySLO | None = None
+    capacity_load_protocol: CapacityLoadProtocol | None = None
     seed: int = Field(ge=0, le=2**32 - 1)
     baseline_run_id: str | None = None
     created_at: datetime
@@ -323,7 +222,28 @@ class RunManifest(StrictModel):
     config_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     redaction_policy: str = Field(min_length=1, max_length=160)
 
-    _run_id = field_validator("run_id")(_validate_id)
+    _run_id = field_validator("run_id")(validate_canonical_uuid)
+    _name = field_validator("name")(validate_run_name)
+    _description = field_validator("description")(validate_run_description)
+
+    @classmethod
+    def from_semantic_fields(cls, **fields: object) -> Self:
+        if "manifest_digest" in fields:
+            raise ValueError("manifest_digest is derived from semantic fields")
+        semantic_fields = {"schema_version": SCHEMA_VERSION, **fields}
+        return cls.model_validate(seal_manifest_fields(semantic_fields))
+
+    def with_semantic_updates(self, **updates: object) -> Self:
+        if "manifest_digest" in updates:
+            raise ValueError("manifest_digest is derived from semantic fields")
+        fields = self.model_dump(mode="python", exclude={"manifest_digest"})
+        fields.update(updates)
+        return type(self).model_validate(seal_manifest_fields(fields))
+
+    @field_validator("baseline_run_id")
+    @classmethod
+    def validate_baseline_run_id(cls, value: str | None) -> str | None:
+        return validate_canonical_uuid(value) if value is not None else None
 
     @field_validator("track_ids")
     @classmethod
@@ -333,32 +253,101 @@ class RunManifest(StrictModel):
             raise ValueError(f"unknown track ids: {', '.join(unknown)}")
         if len(value) != len(set(value)):
             raise ValueError("track ids must be unique")
+        canonical = tuple(track_id for track_id in TRACK_IDS if track_id in value)
+        if value != canonical:
+            raise ValueError("track ids must use canonical catalog order")
+        return value
+
+    @field_validator("suite_ids")
+    @classmethod
+    def validate_suites(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("suite ids must be unique")
+        for suite_id in value:
+            validate_portable_id(suite_id)
+        builtin = set(value).intersection(BUILTIN_SUITE_IDS)
+        if builtin:
+            if len(builtin) != len(value):
+                raise ValueError("builtin and installed suite ids cannot be mixed")
+            canonical = tuple(
+                suite_id for suite_id in BUILTIN_SUITE_IDS if suite_id in value
+            )
+            if value != canonical:
+                raise ValueError("builtin suite ids must use canonical catalog order")
+        elif value != tuple(sorted(value)):
+            raise ValueError("installed suite ids must use lexical canonical order")
         return value
 
     @model_validator(mode="after")
-    def validate_target(self) -> RunManifest:
+    def validate_frozen_manifest_structure(self) -> RunManifest:
+        self._validate_suite_bindings()
+        self._validate_mixture_binding()
+        self._validate_capacity_binding()
+        require_manifest_digest(self)
+        return self
+
+    def _validate_suite_bindings(self) -> None:
         if set(self.suite_revisions) != set(self.suite_ids) or any(
-            not revision.strip() or len(revision) > _MAX_SUITE_REVISION_LENGTH
+            not is_valid_suite_revision(revision)
             for revision in self.suite_revisions.values()
         ):
             raise ValueError(
                 "suite_revisions must contain one non-empty immutable identity per suite_id"
             )
-        if self.mode == "replay" and self.target.id != "fixture":
-            raise ValueError("replay mode requires the catalog target 'fixture'")
-        if self.mode == "live":
-            if self.target.id != "runtime":
-                raise ValueError("live mode requires the catalog target 'runtime'")
-            if self.target.router_api_url is None and self.target.envoy_url is None:
+        if set(self.suite_executors) != set(self.suite_ids) or any(
+            not executor_id.strip()
+            or len(executor_id) > _MAX_SUITE_EXECUTOR_ID_LENGTH
+            or not is_portable_id(executor_id)
+            for executor_id in self.suite_executors.values()
+        ):
+            raise ValueError(
+                "suite_executors must contain one portable identity per suite_id"
+            )
+        if len(set(self.suite_executors.values())) != 1:
+            raise ValueError("one evaluation run cannot mix executor implementations")
+
+    def _validate_mixture_binding(self) -> None:
+        # The wire contract can validate frozen mixture facts, but executor
+        # capability belongs to the registry that resolves suite_executors.
+        mixture = self.target.mixture
+        if mixture is not None:
+            if self.policy_snapshot_digest != mixture.recipe_digest:
                 raise ValueError(
-                    "live runtime target requires router_api_url or envoy_url"
+                    "policy_snapshot_digest must equal the selected mixture recipe digest"
                 )
-            if self.target.backend_topology_digest is None:
-                raise ValueError("live runtime target requires backend_topology_digest")
-        return self
+            if len(mixture.model_arms) < _MINIMUM_MIXTURE_ARM_COUNT:
+                raise ValueError(
+                    "Mixture-of-Models evaluation requires at least two arms"
+                )
+        elif self.mode == "live":
+            raise ValueError("live evaluation requires a frozen target mixture")
+
+    def _validate_capacity_binding(self) -> None:
+        capacity_selected = "capacity" in self.track_ids
+        if capacity_selected and self.mode == "live":
+            if self.concurrency < _MINIMUM_LIVE_CAPACITY_CONCURRENCY:
+                raise ValueError(
+                    "live capacity track requires concurrency of at least 2"
+                )
+            if self.capacity_slo is None:
+                raise ValueError("live capacity track requires capacity_slo")
+            if self.capacity_load_protocol is None:
+                raise ValueError("live capacity track requires capacity_load_protocol")
+            if self.capacity_slo.required_concurrency > self.concurrency:
+                raise ValueError(
+                    "capacity_slo required_concurrency cannot exceed run concurrency"
+                )
+            if self.capacity_load_protocol.concurrency_levels[-1] != self.concurrency:
+                raise ValueError(
+                    "capacity_load_protocol must terminate at run concurrency"
+                )
+        elif self.capacity_slo is not None or self.capacity_load_protocol is not None:
+            raise ValueError(
+                "capacity_slo and capacity_load_protocol are valid only for a live capacity track"
+            )
 
 
-class ExecutorMetadata(StrictModel):
+class ExecutorMetadata(_StrictModel):
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
     track_id: str
     executor_id: str
@@ -372,17 +361,17 @@ class ExecutorMetadata(StrictModel):
         return value
 
 
-class ResolvedRunSnapshot(StrictModel):
+class ResolvedRunSnapshot(_StrictModel):
     """Content-addressed run graph resolved from the fixed public manifest."""
 
     schema_version: Literal[SCHEMA_VERSION] = SCHEMA_VERSION
     manifest_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     workload: WorkloadSnapshot
-    policy: PolicySnapshot
-    binding: BindingSnapshot
-    pool: PoolDefinition
-    arms: tuple[EvaluationTargetArm, ...]
-    environment: RunEnvironment
-    fixture_ref: ArtifactRef | None = None
+    policy: _target_contracts.PolicySnapshot
+    binding: _target_contracts.BindingSnapshot
+    pool: _target_contracts.PoolDefinition
+    arms: tuple[_target_contracts.EvaluationTargetArm, ...]
+    environment: _target_contracts.RunEnvironment
+    fixture_ref: _ArtifactRef | None = None
     discovered_entrypoints: tuple[str, ...] = ()
     executors: tuple[ExecutorMetadata, ...]

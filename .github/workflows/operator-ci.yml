@@ -1,8 +1,14 @@
-name: Operator CI
+name: Operator Tests
 
 on:
   workflow_call:
     inputs:
+      verification:
+        type: string
+        default: '{}'
+      prebuilt-images:
+        type: boolean
+        default: false
       run_integration:
         description: Run operator Kind integration coverage.
         required: false
@@ -19,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   GO_VERSION: '1.25'
@@ -26,12 +33,14 @@ env:
   GOPROXY: 'https://proxy.golang.org|direct'
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
+  checks:
+    name: Operator Checks
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./deploy/operator
+    env:
+      OPERATOR_TEST_REPORT_DIR: ${{ github.workspace }}/.agent-harness/operator-unit
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,9 +51,11 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Download dependencies
+        id: dependencies
         run: go mod download
 
-      - name: Run go fmt
+      - name: Check Go Formatting
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: |
           if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
             echo "Code is not formatted:"
@@ -52,78 +63,83 @@ jobs:
             exit 1
           fi
 
-      - name: Run go vet
+      - name: Vet Operator Code
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: go vet ./...
 
-      - name: Run golangci-lint
+      - name: Resolve golangci-lint version
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        id: golangci_lint
+        working-directory: ${{ github.workspace }}
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+
+      - name: Lint Operator Code
+        if: ${{ !cancelled() && steps.golangci_lint.outcome == 'success' }}
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           working-directory: deploy/operator
           args: --timeout=5m
 
-  test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./deploy/operator
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Discover Operator Unit Tests
+        id: discovery
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: |
+          mkdir -p "$OPERATOR_TEST_REPORT_DIR"
+          go test -json -list '^Test' ./... > "$OPERATOR_TEST_REPORT_DIR/operator-discovery.jsonl"
+      - name: Run Operator Unit Tests
+        id: tests
+        if: ${{ !cancelled() && steps.discovery.outcome == 'success' }}
+        run: go test -json -race -count=1 -coverprofile=coverage.out -covermode=atomic ./... > "$OPERATOR_TEST_REPORT_DIR/operator-events.jsonl"
+      - name: Check Complete Unit Test Inventory
+        if: ${{ !cancelled() && steps.discovery.outcome == 'success' && steps.tests.outcome != 'skipped' }}
+        run: |
+          python3 ../../tools/ci/deployment_test_results.py operator-unit \
+            --discovery "$OPERATOR_TEST_REPORT_DIR/operator-discovery.jsonl" \
+            --events "$OPERATOR_TEST_REPORT_DIR/operator-events.jsonl" \
+            --output "$OPERATOR_TEST_REPORT_DIR/operator-unit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          name: operator-unit
+          path: .agent-harness/operator-unit/
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Upload coverage to Codecov
+        if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
         uses: codecov/codecov-action@v4
         with:
           files: ./deploy/operator/coverage.out
           flags: operator
           name: operator-coverage
 
-  manifests:
-    name: Verify Manifests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./deploy/operator
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Download dependencies
-        run: go mod download
-
       - name: Install controller-gen
+        id: controller_gen
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: |
           GOBIN=$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.19.0
 
-      - name: Generate manifests
-        run: make manifests
+      - name: Generate manifests and API code
+        id: manifests
+        if: ${{ !cancelled() && steps.controller_gen.outcome == 'success' }}
+        run: make manifests generate
 
       - name: Verify no changes
+        if: ${{ !cancelled() && steps.manifests.outcome == 'success' }}
         run: |
-          git diff --exit-code || (echo "Generated manifests are out of date. Run 'make manifests' and commit the changes." && exit 1)
+          git add -A -- .
+          if ! git diff --cached --quiet -- .; then
+            echo "Generated operator artifacts are out of date. Run 'make manifests generate' in deploy/operator and commit the changes."
+            git diff --cached -- .
+            exit 1
+          fi
 
   docker-build:
-    name: Operator smoke images
-    if: inputs.run_integration
-    runs-on: ubuntu-latest
+    name: Operator Smoke Images
+    if: inputs.run_integration && !inputs.prebuilt-images
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -152,18 +168,6 @@ jobs:
           cache-from: type=gha,scope=operator
           cache-to: type=gha,mode=max,scope=operator,ignore-error=true
 
-      - name: Build bundle image (local for tests)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./deploy/operator
-          file: ./deploy/operator/bundle/Dockerfile
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ steps.local-tags.outputs.bundle }}
-          cache-from: type=gha,scope=operator-bundle
-          cache-to: type=gha,mode=max,scope=operator-bundle,ignore-error=true
-
       - name: Build extproc image (local for tests)
         uses: docker/build-push-action@v5
         with:
@@ -176,11 +180,18 @@ jobs:
           cache-from: type=gha,scope=extproc
           cache-to: type=gha,mode=max,scope=extproc,ignore-error=true
 
+      - name: Build request-observing backend fixture
+        run: |
+          docker build -t semantic-router-operator-mock:test tools/test/services/mock-vllm
+          docker save -o /tmp/operator-mock-image.tar semantic-router-operator-mock:test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: operator-mock-image
+          path: /tmp/operator-mock-image.tar
+          retention-days: 1
+
       - name: Save operator image for integration tests
         run: docker save -o /tmp/operator-image.tar ${{ steps.local-tags.outputs.operator }}
-
-      - name: Save bundle image for validation
-        run: docker save -o /tmp/bundle-image.tar ${{ steps.local-tags.outputs.bundle }}
 
       - name: Save extproc image for integration tests
         run: docker save -o /tmp/extproc-image.tar ${{ steps.local-tags.outputs.extproc }}
@@ -192,13 +203,6 @@ jobs:
           path: /tmp/operator-image.tar
           retention-days: 1
 
-      - name: Upload bundle image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bundle-image
-          path: /tmp/bundle-image.tar
-          retention-days: 1
-
       - name: Upload extproc image artifact
         uses: actions/upload-artifact@v4
         with:
@@ -207,8 +211,8 @@ jobs:
           retention-days: 1
 
   bundle-validate:
-    name: Validate OLM Bundle
-    runs-on: ubuntu-latest
+    name: OLM Bundle
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./deploy/operator
@@ -238,14 +242,37 @@ jobs:
             exit 1
           fi
 
+      - name: Load validated bundle image
+        if: inputs.prebuilt-images
+        uses: ./.github/actions/load-ci-images
+        with:
+          images: '["operator-bundle"]'
+      - name: Inspect shared bundle image
+        if: inputs.prebuilt-images
+        run: docker image inspect "$E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"
+      - name: Build standalone bundle image
+        if: ${{ !inputs.prebuilt-images }}
+        run: docker build -f bundle/Dockerfile -t semantic-router-operator-bundle:test .
+      - name: Preserve consumed bundle identity
+        env:
+          PREBUILT: ${{ inputs.prebuilt-images }}
+        run: |
+          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: operator-bundle
+          path: deploy/operator/artifacts.json
+          if-no-files-found: error
+
   integration-test:
-    name: Integration Test (${{ matrix.cache-backend }})
-    if: inputs.run_integration
-    runs-on: ubuntu-latest
+    name: Routed Requests (${{ matrix.cache-backend }})
+    if: ${{ !cancelled() && inputs.run_integration && (inputs.prebuilt-images || needs.docker-build.result == 'success') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [docker-build]
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         include: ${{ fromJSON(inputs.integration_matrix) }}
     steps:
@@ -257,11 +284,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Install kind
-        run: |
-          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+      - name: Set up Kind
+        uses: ./.github/actions/setup-kind
 
       - name: Install kubectl
         run: |
@@ -271,7 +295,7 @@ jobs:
 
       - name: Create kind cluster
         run: |
-          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040 --config=-
+          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image "${KIND_NODE_IMAGE}" --config=-
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           nodes:
@@ -312,6 +336,14 @@ jobs:
                 containers:
                 - name: redis
                   image: redis/redis-stack-server:latest
+                  env:
+                  - name: REDIS_ARGS
+                    value: "--requirepass testpassword"
+                  readinessProbe:
+                    exec:
+                      command: ["redis-cli", "-a", "testpassword", "ping"]
+                    periodSeconds: 2
+                    failureThreshold: 30
                   ports:
                   - containerPort: 6379
                     name: redis
@@ -483,13 +515,43 @@ jobs:
               -n semantic-router-test
           fi
 
+      - name: Load verified operator and request-path images
+        if: inputs.prebuilt-images
+        uses: ./.github/actions/load-ci-images
+        with:
+          images: '["operator","extproc","mock-vllm"]'
+      - name: Assign verified local tags
+        if: inputs.prebuilt-images
+        run: |
+          docker tag "$E2E_PREBUILT_OPERATOR_IMAGE" semantic-router-operator:test
+          docker tag "$E2E_PREBUILT_EXT_PROC_IMAGE" semantic-router-extproc:test
+          docker tag "$E2E_PREBUILT_MOCK_VLLM_IMAGE" semantic-router-operator-mock:test
+      - uses: actions/download-artifact@v4
+        if: ${{ !inputs.prebuilt-images }}
+        with:
+          name: operator-mock-image
+          path: /tmp
+      - name: Load standalone request backend fixture
+        if: ${{ !inputs.prebuilt-images }}
+        run: docker load --input /tmp/operator-mock-image.tar
+      - name: Deploy request-observing backend
+        run: |
+          kind load docker-image semantic-router-operator-mock:test --name operator-test-${{ matrix.cache-backend }}
+          kubectl create namespace semantic-router-test --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n semantic-router-test create deployment operator-mock --image=semantic-router-operator-mock:test --port=8000 --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n semantic-router-test patch deployment operator-mock -p '{"spec":{"template":{"spec":{"containers":[{"name":"semantic-router-operator-mock","imagePullPolicy":"Never"}]}}}}'
+          kubectl -n semantic-router-test expose deployment operator-mock --port=8000 --target-port=8000 --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n semantic-router-test rollout status deployment/operator-mock --timeout=120s
+
       - name: Download operator image artifact
+        if: ${{ !inputs.prebuilt-images }}
         uses: actions/download-artifact@v4
         with:
           name: operator-image
           path: /tmp
 
       - name: Load operator image into Docker
+        if: ${{ !inputs.prebuilt-images }}
         run: docker load --input /tmp/operator-image.tar
 
       - name: Verify operator image loaded
@@ -516,12 +578,14 @@ jobs:
           }
 
       - name: Download extproc image artifact
+        if: ${{ !inputs.prebuilt-images }}
         uses: actions/download-artifact@v4
         with:
           name: extproc-image
           path: /tmp
 
       - name: Load extproc image into Docker
+        if: ${{ !inputs.prebuilt-images }}
         run: docker load --input /tmp/extproc-image.tar
 
       - name: Verify extproc image loaded
@@ -657,8 +721,7 @@ jobs:
                     topk: 1
                   development:
                     drop_index_on_startup: false
-                    auto_create_index: true
-                    verbose_errors: true'
+                    auto_create_index: true'
               ;;
             milvus)
               CACHE_CONFIG='
@@ -699,26 +762,9 @@ jobs:
                       ef: 64
                     topk: 10
                     consistency_level: Session
-                  performance:
-                    connection_pool:
-                      max_connections: 10
-                      max_idle_connections: 5
-                      acquire_timeout: 30
-                    batch:
-                      insert_batch_size: 100
-                      timeout: 60
-                  data_management:
-                    ttl:
-                      enabled: true
-                      timestamp_field: created_at
-                      cleanup_interval: 3600
-                    compaction:
-                      enabled: false
-                      interval: 86400
                   development:
                     drop_collection_on_startup: false
-                    auto_create_collection: true
-                    verbose_errors: true'
+                    auto_create_collection: true'
               ;;
             qdrant)
               CACHE_CONFIG='
@@ -782,26 +828,9 @@ jobs:
                       ef: 128
                     topk: 20
                     consistency_level: Eventually
-                  performance:
-                    connection_pool:
-                      max_connections: 20
-                      max_idle_connections: 10
-                      acquire_timeout: 30
-                    batch:
-                      insert_batch_size: 200
-                      timeout: 60
-                  data_management:
-                    ttl:
-                      enabled: true
-                      timestamp_field: created_at
-                      cleanup_interval: 1800
-                    compaction:
-                      enabled: true
-                      interval: 43200
                   development:
                     drop_collection_on_startup: false
-                    auto_create_collection: true
-                    verbose_errors: false'
+                    auto_create_collection: true'
               ;;
             mmbert)
               CACHE_CONFIG='
@@ -859,6 +888,16 @@ jobs:
             namespace: semantic-router-test
           spec:
             replicas: 1
+            vllmEndpoints:
+              - name: operator-mock
+                model: operator-ci-model
+                backend:
+                  type: service
+                  service:
+                    name: operator-mock
+                    namespace: semantic-router-test
+                    port: 8000
+                weight: 1
             image:
               repository: semantic-router-extproc
               tag: test
@@ -886,8 +925,17 @@ jobs:
               timeoutSeconds: 5
               failureThreshold: 60
             config:
+              routing:
+                strategy: priority
+                decisions:
+                  - name: operator_ci_route
+                    rules:
+                      operator: AND
+                    modelRefs:
+                      - model: operator-ci-model
+                        use_reasoning: false
               embedding_models:
-                mmbert_model_path: "models/mmbert-embed-32k-2d-matryoshka"
+                mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
                 use_cpu: true
                 embedding_config:
                   model_type: "mmbert"
@@ -899,13 +947,7 @@ jobs:
                 enabled: false
               prompt_guard:
                 enabled: false
-              classifier:
-                category_model:
-                  model_id: "models/mmbert32k-intent-classifier-merged"
-                  use_cpu: true
-                pii_model:
-                  model_id: "models/mmbert32k-pii-detector-merged"
-                  use_cpu: true
+              # Domain and PII inherit the operator's canonical Vela CPU defaults.
               api:
                 batch_classification:
                   max_batch_size: 50
@@ -1019,10 +1061,28 @@ jobs:
             exit 1
           fi
 
-      - name: Test service connectivity
+      - name: Verify a routed request through reconciled Envoy and backend
+        env:
+          ROUTER_NAME: ${{ matrix.router-name }}
         run: |
-          echo "=== Testing Service Endpoints ==="
-          kubectl get endpoints -n semantic-router-test ${{ matrix.router-name }} || true
+          kubectl -n semantic-router-test port-forward "service/$ROUTER_NAME" 18801:8801 > /tmp/operator-port-forward.log 2>&1 &
+          forward_pid=$!
+          trap 'kill "$forward_pid" 2>/dev/null || true' EXIT
+          python3 tools/ci/check_operator_request.py --url http://127.0.0.1:18801 --model operator-ci-model --output operator-request.json
+      - name: Preserve consumed request-path image identities
+        if: always()
+        env:
+          PREBUILT: ${{ inputs.prebuilt-images }}
+        run: |
+          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: operator-request-${{ matrix.cache-backend }}
+          path: |
+            operator-request.json
+            artifacts.json
+          if-no-files-found: error
 
       - name: Upload operator logs
         if: always()
@@ -1058,3 +1118,29 @@ jobs:
         if: always()
         run: |
           kind delete cluster --name operator-test-${{ matrix.cache-backend }} || true
+
+  result:
+    name: Operator Results
+    if: always() && inputs.verification != '{}'
+    needs: [checks, bundle-validate, integration-test]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: operator-*
+          path: operator-evidence
+      - name: Validate every selected variant and prerequisite
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+          VARIANTS: ${{ inputs.integration_matrix }}
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 tools/ci/deployment_test_results.py operator --directory operator-evidence --variants "$VARIANTS" --jobs "$JOB_RESULTS" --output operator-evidence.json
+          python3 tools/ci/ci_results.py record --verification "$VERIFICATION" --evidence operator-evidence.json --output operator-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-result-${{ fromJSON(inputs.verification).id }}
+          path: operator-result.json
+          if-no-files-found: error

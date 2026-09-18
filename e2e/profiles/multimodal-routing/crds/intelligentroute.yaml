@@ -15,7 +15,7 @@ spec:
     embeddings:
       - name: "identifier_document_imagery"
         queryModality: "image"
-        threshold: 0.10
+        threshold: 0.61
         aggregationMethod: "max"
         candidates:
           - "photograph of a passport page"
@@ -29,7 +29,7 @@ spec:
 
       - name: "code_or_terminal_imagery"
         queryModality: "image"
-        threshold: 0.10
+        threshold: 0.47
         aggregationMethod: "max"
         candidates:
           - "screenshot of source code in an editor"
@@ -43,7 +43,7 @@ spec:
 
       - name: "ambient_office_imagery"
         queryModality: "image"
-        threshold: 0.10
+        threshold: 0.54
         aggregationMethod: "max"
         candidates:
           - "photograph of a whiteboard with handwritten notes"

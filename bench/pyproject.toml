@@ -82,13 +82,15 @@ vllm-semantic-router-bench = "reasoning.cli:main"
 router-bench = "reasoning.router_reason_bench_multi_dataset:main"
 bench-plot = "reasoning.bench_plot:main"
 reasoning-mode-eval = "reasoning.reasoning_mode_eval:main"
+looper-tts = "looper_tts.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["reasoning*"]
+include = ["reasoning*", "looper_tts*"]
 
 [tool.setuptools.package-data]
 reasoning = ["*.md", "dataset_implementations/*.py"]
+looper_tts = ["testdata/*.json"]
 
 [tool.black]
 line-length = 88

@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RouterModelInventory from '../components/RouterModelInventory'
+import ViewModal from '../components/ViewModal'
 import ProductLoadingState from '../components/ProductLoadingState'
 import ProductIcon from '../components/ProductIcon'
 import {
   getLoadedModelCount,
+  getRouterModelConsumers,
   getModelStatusSummary,
   getTotalKnownModelCount,
+  type RouterModelInfo,
   type SystemStatus,
 } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
@@ -33,6 +36,7 @@ const DashboardPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<RouterModelInfo | null>(null)
 
   const fetchStatus = useCallback(async () => {
     const statusRes = await fetch('/api/status')
@@ -125,7 +129,6 @@ const DashboardPage: React.FC = () => {
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
   const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
   const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
-  const previewModelLimit = 6
 
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
@@ -444,12 +447,40 @@ const DashboardPage: React.FC = () => {
         </div>
         <RouterModelInventory
           mode="preview"
-          previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
           modelsInfo={status?.models}
           emptyMessage="Learned routing models will appear here when the router loads them."
-          onSelectModel={() => navigate('/config/models')}
+          onSelectModel={setSelectedRuntimeModel}
         />
       </div>
+
+      {selectedRuntimeModel && (
+        <ViewModal
+          isOpen
+          title="Runtime model details"
+          onClose={() => setSelectedRuntimeModel(null)}
+          sections={[
+            {
+              fields: [
+                {
+                  label: 'Runtime',
+                  fullWidth: true,
+                  value: (
+                    <RouterModelInventory
+                      mode="detail"
+                      modelsInfo={{
+                        models: getRouterModelConsumers(
+                          status?.models?.models ?? [],
+                          selectedRuntimeModel,
+                        ),
+                      }}
+                    />
+                  ),
+                },
+              ],
+            },
+          ]}
+        />
+      )}
 
       <div className={styles.bottomGrid}>
         {signalStats.total > 0 && (

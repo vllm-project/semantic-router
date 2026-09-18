@@ -114,7 +114,7 @@ dev-serve:
 # Development test - validate config and render router/envoy outputs
 dev-test: install
 	@echo "Testing canonical configuration rendering..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 	python -m cli.main config router --config $(CONFIG_FILE) >/dev/null
 	python -m cli.main config envoy --config $(CONFIG_FILE) >/dev/null
 	@echo ""
@@ -218,7 +218,7 @@ install:
 # Configuration commands
 validate: install
 	@echo "Validating configuration..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 
 config-router: install
 	@echo "Printing canonical router configuration..."
@@ -306,7 +306,7 @@ rebuild-and-test: install
 	@read -p "Press Enter to continue or Ctrl+C to cancel..." dummy
 	@echo ""
 	@echo "1. Cleaning up old containers..."
-	@docker rm -f vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-prometheus vllm-sr-grafana vllm-sr-jaeger 2>/dev/null || echo "  No containers to remove"
+	@docker rm -f vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-prometheus vllm-sr-grafana vllm-sr-jaeger 2>/dev/null || echo "  No containers to remove"
 	@echo ""
 	@echo "2. Rebuilding Docker images..."
 	@echo "  Building from: $$(cd ../.. && pwd)"

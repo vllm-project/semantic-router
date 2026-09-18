@@ -58,14 +58,16 @@ entrypoints:
     recipe: default
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
+          provider: vllm
 `
 
 func newEntrypointTestRouter(t *testing.T) *OpenAIRouter {
@@ -437,14 +439,16 @@ entrypoints:
     recipe: privacy
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
+          provider: vllm
 `
 
 func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
@@ -543,11 +547,12 @@ entrypoints:
     recipe: screening
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 `
 
 func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {

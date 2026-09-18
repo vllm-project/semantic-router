@@ -12,12 +12,13 @@ listeners:
     timeout: 300s
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - name: llm_katan
+          provider: vllm
           weight: 1
           endpoint: host.docker.internal:8000
           protocol: http
@@ -115,7 +116,7 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384
+        dimension: 768
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 256
@@ -131,10 +132,10 @@ global:
       semantic:
         qwen3_model_path: ""
         gemma_model_path: ""
-        mmbert_model_path: ""
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: ""
         bert_model_path: ""
         use_cpu: true
         embedding_config:
           model_type: mmbert
-          target_dimension: 384
+          target_dimension: 768

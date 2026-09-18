@@ -63,7 +63,23 @@ declares.
 
 ### Selection Algorithms
 
-Selection algorithms return one candidate model.
+Selection algorithms return one candidate model. For a full inference request,
+the Router filters exact candidate references by context, backend wire support,
+and declared model task capabilities **before** scoring. The configured
+algorithm compares the surviving pool; it does not choose an incapable winner
+and then replace it with the first compatible sibling.
+
+Capability checks include Router-retained conversation content and preview the
+decision's request-parameter and no-tools policies without executing those
+plugins twice. Unannotated models retain wire-only compatibility checks. Hard
+quality/SLO constraints still apply, and Router Learning checks the same
+capabilities when considering additional candidates.
+
+An empty pool or a violated `minimum_candidates` requirement fails closed.
+Dispatch validates the final request again after mutations: a late capability
+mismatch returns an error rather than restarting decision evaluation, rescoring,
+or silently changing the selected candidate. Explicitly pinned models use the
+same final validation but are not replaced by another model.
 
 | Type | Status | Goal | Main dependency | Guide |
 |---|---|---|---|---|
@@ -73,6 +89,7 @@ Selection algorithms return one candidate model.
 | `multi_factor` | supported | Balance quality, latency, cost, and load with optional SLO filters | Model metadata and live local metrics | [Multi Factor](./selection/multi-factor) |
 | `hybrid` | supported | Blend several selector scores | Component selector inputs | [Hybrid](./selection/hybrid) |
 | `automix` | experimental | Optimize an estimated cost-quality value | Candidate pricing and quality metadata | [AutoMix](./selection/automix) |
+| `gmtrouter` | experimental | Personalize an intelligence-seeded model rank | Model evidence and user feedback | [GMT Router](./selection/gmtrouter) |
 | `prompt` | experimental | Let a bounded helper model choose from declared candidates | OpenAI-compatible helper model and Looper endpoint | [Prompt](./selection/prompt) |
 | `knn` | experimental | Follow similar labeled examples | Trained selector artifact and embeddings | [KNN](./selection/knn) |
 | `kmeans` | experimental | Route through learned traffic clusters | Trained selector artifact and embeddings | [KMeans](./selection/kmeans) |
@@ -99,6 +116,18 @@ traffic before using them for production routing.
 
 ## Operational Boundaries
 
+- Where an algorithm accepts repeated model references, the candidate includes
+  its LoRA and reasoning controls, not just its model name. Scoring, composition,
+  and dispatch retain the exact winning reference. A legacy model-only result
+  that matches multiple different candidates is rejected rather than resolved
+  to the first reference.
+- Router Learning session memory retains the selected candidate's controls.
+  Protection can hold that exact choice across tool-loop continuations even
+  when a later base selection prefers another effort of the same model. If that
+  exact owner is excluded during an active tool loop or nonportable continuation,
+  routing rejects the request rather than restoring the owner or falling back
+  to a different effort. Portable turns may select a new eligible candidate;
+  observe and bypass modes do not enforce the protection decision.
 - Candidate model names must resolve through `routing.modelCards` and
   `providers.models` in a complete config.
 - Learned selectors need artifacts produced for the same embedding dimension
@@ -110,4 +139,4 @@ traffic before using them for production routing.
 - Looper-generated planner, worker, verifier, judge, and synthesis prompts are
   checked against each target Model's known context window before dispatch.
   Missing context metadata remains eligible for compatibility.
-- Validate a complete config with `vllm-sr validate --config config.yaml`.
+- Validate a complete config with `vllm-sr config validate --config config.yaml`.

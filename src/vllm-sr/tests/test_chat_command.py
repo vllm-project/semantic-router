@@ -1,4 +1,4 @@
-"""Tests for vllm-sr chat and chat_client helpers."""
+"""Tests for ``vllm-sr request chat`` and its HTTP helpers."""
 
 from __future__ import annotations
 
@@ -99,14 +99,33 @@ def test_extract_assistant_text_api_error():
         )
 
 
-def test_chat_completions_url():
-    u = chat_client.chat_completions_url("http://localhost:8899")
-    assert u.endswith("/v1/chat/completions")
-    assert u.startswith("http://localhost:8899")
+@pytest.mark.parametrize(
+    ("base_url", "expected"),
+    [
+        (
+            "http://localhost:8899",
+            "http://localhost:8899/v1/chat/completions",
+        ),
+        (
+            "http://localhost:8899/v1/",
+            "http://localhost:8899/v1/chat/completions",
+        ),
+        (
+            "https://router.example.test/prefix/v1",
+            "https://router.example.test/prefix/v1/chat/completions",
+        ),
+        (
+            "https://router.example.test/v1/chat/completions",
+            "https://router.example.test/v1/chat/completions",
+        ),
+    ],
+)
+def test_chat_completions_url(base_url: str, expected: str):
+    assert chat_client.chat_completions_url(base_url) == expected
 
 
 def test_cli_chat_help_uses_namespaced_auto_model():
-    result = CliRunner().invoke(main, ["chat", "--help"])
+    result = CliRunner().invoke(main, ["request", "chat", "--help"])
 
     assert result.exit_code == 0
     assert "vllm-sr/auto" in result.output
@@ -143,7 +162,7 @@ def test_cli_chat_invokes_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     runner = CliRunner()
     result = runner.invoke(
         main,
-        ["chat", "hello", "--config", str(cfg)],
+        ["request", "chat", "hello", "--config", str(cfg)],
     )
 
     assert result.exit_code == 0
@@ -171,6 +190,7 @@ def test_cli_chat_base_url_skips_local_container_check(
     result = CliRunner().invoke(
         main,
         [
+            "request",
             "chat",
             "hello",
             "--base-url",
@@ -212,7 +232,9 @@ def test_cli_chat_json_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
 
     runner = CliRunner()
-    result = runner.invoke(main, ["chat", "--json", "hi", "--config", str(cfg)])
+    result = runner.invoke(
+        main, ["request", "chat", "--json", "hi", "--config", str(cfg)]
+    )
 
     assert result.exit_code == 0
     assert json.loads(result.output) == body
@@ -237,7 +259,7 @@ def test_cli_chat_not_running(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: False)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["chat", "hello", "--config", str(cfg)])
+    result = runner.invoke(main, ["request", "chat", "hello", "--config", str(cfg)])
 
     assert result.exit_code != 0
     assert result.stdout == ""
@@ -269,7 +291,7 @@ def test_cli_chat_connection_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     )
 
     runner = CliRunner()
-    result = runner.invoke(main, ["chat", "hello", "--config", str(cfg)])
+    result = runner.invoke(main, ["request", "chat", "hello", "--config", str(cfg)])
 
     assert result.exit_code != 0
     assert result.stdout == ""

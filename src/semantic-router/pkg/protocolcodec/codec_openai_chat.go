@@ -25,6 +25,8 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityReasoningEffort,
 		llmprotocol.CapabilityReasoningBudget, llmprotocol.CapabilitySamplingSeed,
 		llmprotocol.CapabilitySamplingPenalties, llmprotocol.CapabilityStopSequences,
+		llmprotocol.CapabilitySamplingTopK, llmprotocol.CapabilitySamplingMinP,
+		llmprotocol.CapabilityRepetitionPenalty, llmprotocol.CapabilityCacheIsolation,
 		llmprotocol.CapabilityRequestMetadata, llmprotocol.CapabilityRequestStorage,
 	)
 }
@@ -68,6 +70,11 @@ type chatRequestWire struct {
 	TopLogprobs          json.RawMessage        `json:"top_logprobs,omitempty"`
 	Verbosity            json.RawMessage        `json:"verbosity,omitempty"`
 	WebSearchOptions     json.RawMessage        `json:"web_search_options,omitempty"`
+	ChatTemplateKwargs   json.RawMessage        `json:"chat_template_kwargs,omitempty"`
+	TopK                 *int64                 `json:"top_k,omitempty"`
+	MinP                 *float64               `json:"min_p,omitempty"`
+	RepetitionPenalty    *float64               `json:"repetition_penalty,omitempty"`
+	CacheSalt            *string                `json:"cache_salt,omitempty"`
 }
 
 type chatStreamOptionsWire struct {
@@ -241,9 +248,11 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 		ReasoningEffort: wire.ReasoningEffort, ReasoningBudgetTokens: wire.ReasoningBudget,
 		Sampling: llmprotocol.Sampling{
 			Temperature: wire.Temperature, TopP: wire.TopP, Seed: wire.Seed,
+			TopK: wire.TopK, MinP: wire.MinP, RepetitionPenalty: wire.RepetitionPenalty,
 			FrequencyPenalty: wire.FrequencyPenalty, PresencePenalty: wire.PresencePenalty,
 		},
-		Trusted: llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
+		Trusted:            llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
+		ChatTemplateKwargs: wire.ChatTemplateKwargs, CacheSalt: wire.CacheSalt,
 	}
 	if wire.StreamOptions != nil {
 		request.StreamOptions = llmprotocol.StreamOptions{

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useId } from 'react'
 
 import type { BoolExprNode, EditorMode } from '@/types/dsl'
 import { useDSLStore } from '@/stores/dslStore'
@@ -24,41 +24,54 @@ const SidebarSection: React.FC<SidebarSectionProps> = ({
   onToggle,
   onAdd,
   children,
-}) => (
-  <div className={styles.sidebarSection}>
-    <div className={styles.sidebarSectionHeader} onClick={onToggle}>
-      <span className={styles.sidebarSectionTitle}>
-        {title}
-        <span className={styles.sidebarCount}>{count}</span>
-      </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-        {onAdd && (
-          <button
-            className={styles.sidebarAddBtn}
-            onClick={(e) => {
-              e.stopPropagation()
-              onAdd()
-            }}
-            title={`Add ${title.slice(0, -1)}`}
-            style={{ width: 'auto', padding: '0.125rem 0.25rem' }}
-          >
-            +
-          </button>
-        )}
-        <svg
-          className={`${styles.sidebarSectionChevron} ${open ? styles.sidebarSectionChevronOpen : ''}`}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
+}) => {
+  const listId = useId()
+
+  return (
+    <div className={styles.sidebarSection}>
+      <div className={styles.sidebarSectionHeader}>
+        <button
+          type="button"
+          className={styles.sidebarSectionToggle}
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={listId}
         >
-          <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
+          <span className={styles.sidebarSectionTitle}>
+            {title}
+            <span className={styles.sidebarCount}>{count}</span>
+          </span>
+        </button>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          {onAdd && (
+            <button
+              className={styles.sidebarAddBtn}
+              onClick={onAdd}
+              title={`Add ${title.slice(0, -1)}`}
+              style={{ width: 'auto', padding: '0.125rem 0.25rem' }}
+            >
+              +
+            </button>
+          )}
+          <svg
+            className={`${styles.sidebarSectionChevron} ${open ? styles.sidebarSectionChevronOpen : ''}`}
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </div>
+      {open && (
+        <ul id={listId} className={styles.sidebarList}>
+          {children}
+        </ul>
+      )}
     </div>
-    {open && <ul className={styles.sidebarList}>{children}</ul>}
-  </div>
-)
+  )
+}
 
 // ===================================================================
 // Dashboard View (no entity selected)

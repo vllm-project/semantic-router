@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/alecthomas/participle/v2/lexer"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // Position represents a source location.
@@ -171,7 +173,7 @@ type rawModelDecl struct {
 type RouteOpt struct {
 	Pos   lexer.Position
 	Key   string `parser:"@Ident '='"`
-	Value *Val   `parser:"@@"`
+	Value *Val   `parser:"@@ ','?"`
 }
 
 // rawRouteItem: a single element inside a route body
@@ -184,8 +186,16 @@ type rawRouteItem struct {
 	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	Description  *string              `parser:"| 'DESCRIPTION' @String"`
+	Action       *rawActionDecl       `parser:"| 'ACTION' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
 	Emit         *rawEmitDecl         `parser:"| @@"`
+}
+
+// rawActionDecl: ACTION <type> <destination>, e.g. ACTION route "safe-model".
+type rawActionDecl struct {
+	Pos         lexer.Position
+	Type        string `parser:"@Ident"`
+	Destination string `parser:"@(Ident | String)"`
 }
 
 // rawCandidateForDecl: FOR <var> IN decision.candidates|[models...] { body... }
@@ -294,13 +304,18 @@ type FieldEntry struct {
 // Val: value union (string, int, float, bool, array, object, bare ident)
 type Val struct {
 	Pos      lexer.Position
-	Str      *string       `parser:"  @String"`
-	Float    *float64      `parser:"| @Float"`
-	Int      *int          `parser:"| @Int"`
-	Bool     *string       `parser:"| @('true' | 'false')"`
-	ArrayVal *ArrayVal     `parser:"| @@"`
-	Object   []*FieldEntry `parser:"| '{' @@* '}'"`
-	BareStr  *string       `parser:"| @Ident"`
+	Str      *string    `parser:"  @String"`
+	Float    *float64   `parser:"| @Float"`
+	Int      *int       `parser:"| @Int"`
+	Bool     *string    `parser:"| @('true' | 'false')"`
+	ArrayVal *ArrayVal  `parser:"| @@"`
+	Object   *ObjectVal `parser:"| @@"`
+	BareStr  *string    `parser:"| @Ident"`
+}
+
+// ObjectVal preserves the presence of an empty object independently of its fields.
+type ObjectVal struct {
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
 // ArrayVal wraps array parsing to handle empty arrays.
@@ -313,17 +328,20 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
-	Strategy             string
-	Entrypoints          []*EntrypointDecl
-	Recipes              []*RecipeDecl
-	Signals              []*SignalDecl
-	ProjectionPartitions []*ProjectionPartitionDecl
-	ProjectionScores     []*ProjectionScoreDecl
-	ProjectionMappings   []*ProjectionMappingDecl
-	Routes               []*RouteDecl
-	Models               []*ModelDecl
-	Plugins              []*PluginDecl
-	TestBlocks           []*TestBlockDecl
+	CandidateRequirements *config.CandidateRequirements
+	DataPolicy            *config.RoutingDataPolicy
+	ModelBindings         map[string]config.ModelBinding
+	Strategy              string
+	Entrypoints           []*EntrypointDecl
+	Recipes               []*RecipeDecl
+	Signals               []*SignalDecl
+	ProjectionPartitions  []*ProjectionPartitionDecl
+	ProjectionScores      []*ProjectionScoreDecl
+	ProjectionMappings    []*ProjectionMappingDecl
+	Routes                []*RouteDecl
+	Models                []*ModelDecl
+	Plugins               []*PluginDecl
+	TestBlocks            []*TestBlockDecl
 }
 
 // EntrypointDecl is the DSL form of one request-facing recipe binding.
@@ -429,6 +447,7 @@ type RouteDecl struct {
 	Name                string
 	Description         string
 	OnUnknown           string
+	Action              *ActionDecl
 	Priority            int
 	Tier                int
 	When                BoolExpr
@@ -438,6 +457,13 @@ type RouteDecl struct {
 	CandidateIterations []*CandidateIterationDecl
 	Emits               []*EmitDecl
 	Pos                 Position
+}
+
+// ActionDecl is the resolved AST node for a route ACTION statement.
+type ActionDecl struct {
+	Type        string
+	Destination string
+	Pos         Position
 }
 
 // EmitDecl is the resolved AST node for an EMIT block. The Retention pointer
@@ -560,6 +586,7 @@ func (s *SignalRefExpr) GetPos() Position { return s.Pos }
 type ModelRef struct {
 	Model     string
 	Reasoning *bool
+	Mode      string
 	Effort    string
 	LoRA      string
 	ParamSize string

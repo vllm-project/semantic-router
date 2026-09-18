@@ -93,7 +93,6 @@ global:
     modules:
       hallucination_mitigation:
         enabled: true
-        on_hallucination_detected: annotate
 
 routing:
   decisions:

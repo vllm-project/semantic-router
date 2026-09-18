@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 )
 
 func writeJSONAtomic(path string, value any) error {
@@ -42,6 +45,9 @@ func writeJSONAtomic(path string, value any) error {
 	if err := os.Rename(tempName, path); err != nil {
 		return fmt.Errorf("publish evaluation bundle: %w", err)
 	}
+	if err := syncEvaluationDirectory(dir, "evaluation bundle"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -53,7 +59,11 @@ func readJSON(path string, destination any) error {
 		}
 		return fmt.Errorf("read evaluation bundle: %w", err)
 	}
+	if err := rejectDuplicateJSONKeys(data); err != nil {
+		return fmt.Errorf("decode evaluation bundle: %w", err)
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(destination); err != nil {
 		return fmt.Errorf("decode evaluation bundle: %w", err)
 	}
@@ -87,12 +97,7 @@ func openBundleFile(path string, flags int) (*os.File, error) {
 }
 
 func readBundleFile(path string) ([]byte, error) {
-	file, err := openBundleFile(path, os.O_RDONLY)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = file.Close() }()
-	return io.ReadAll(file)
+	return readEvidenceBytes(path, maxStructuredArtifactBytes)
 }
 
 func requirePrivateDirectory(path string) error {
@@ -120,7 +125,7 @@ func ensureJSONEOF(decoder *json.Decoder) error {
 	return nil
 }
 
-func lastEventSequence(path string) (uint64, error) {
+func lastEventSequence(path, runID string) (uint64, error) {
 	file, err := openBundleFile(path, os.O_RDONLY)
 	if err != nil {
 		return 0, fmt.Errorf("open evaluation event log: %w", err)
@@ -142,20 +147,100 @@ func lastEventSequence(path string) (uint64, error) {
 		if count > maxEventsPerRun {
 			return 0, fmt.Errorf("%w: evaluation event log exceeds its per-run event limit", ErrInvalid)
 		}
-		var event Event
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			return 0, fmt.Errorf("decode evaluation event: %w", err)
+		event, err := decodeStoredEvent(scanner.Bytes())
+		if err != nil {
+			return 0, err
+		}
+		if terminalWorkerEventType(event.Type) {
+			return 0, fmt.Errorf("%w: control event log contains a derived terminal event", ErrInvalid)
 		}
 		sequence, err := strconv.ParseUint(event.ID, 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("decode evaluation event id: %w", err)
 		}
-		if sequence > last {
-			last = sequence
+		if event.RunID != runID || sequence != count || event.ID != strconv.FormatUint(count, 10) {
+			return 0, fmt.Errorf("evaluation event history is not a strictly monotonic run-local sequence")
 		}
+		last = sequence
 	}
 	if err := scanner.Err(); err != nil {
 		return 0, fmt.Errorf("scan evaluation event log: %w", err)
 	}
 	return last, nil
+}
+
+func decodeStoredEvent(line []byte) (Event, error) {
+	if len(line) == 0 || len(line) > maxWorkerEventLineBytes || !utf8.Valid(line) {
+		return Event{}, fmt.Errorf("%w: evaluation event exceeds the durable envelope", ErrInvalid)
+	}
+	if err := rejectDuplicateJSONKeys(line); err != nil {
+		return Event{}, fmt.Errorf("decode evaluation event: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.DisallowUnknownFields()
+	var event Event
+	if err := decoder.Decode(&event); err != nil {
+		return Event{}, fmt.Errorf("decode evaluation event: %w", err)
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return Event{}, err
+	}
+	if err := validateStoredEvent(event); err != nil {
+		return Event{}, err
+	}
+	return event, nil
+}
+
+func validateStoredEvent(event Event) error {
+	sequence, err := strconv.ParseUint(event.ID, 10, 64)
+	if err != nil || sequence == 0 || event.ID != strconv.FormatUint(sequence, 10) ||
+		!validClientRequestID(event.RunID) || !allowedWorkerEventType(event.Type) || event.Timestamp.IsZero() {
+		return fmt.Errorf("%w: evaluation event identity is invalid", ErrInvalid)
+	}
+	if event.Message != strings.TrimSpace(event.Message) || event.Message == "" || len(event.Message) > maxWorkerMessageBytes {
+		return fmt.Errorf("%w: evaluation event message is invalid", ErrInvalid)
+	}
+	if event.TrackID != "" && !containsTrack(allTrackIDs, event.TrackID) {
+		return fmt.Errorf("%w: evaluation event track is invalid", ErrInvalid)
+	}
+	if event.Progress != nil {
+		progress := event.Progress
+		if math.IsNaN(progress.Percent) || math.IsInf(progress.Percent, 0) ||
+			progress.Percent < 0 || progress.Percent > 100 || progress.Completed < 0 ||
+			progress.Total < 0 || progress.Total > len(allTrackIDs) || progress.Completed > progress.Total ||
+			(progress.CurrentTrackID != "" && !containsTrack(allTrackIDs, progress.CurrentTrackID)) ||
+			progress.Message != strings.TrimSpace(progress.Message) || len(progress.Message) > maxWorkerMessageBytes {
+			return fmt.Errorf("%w: evaluation event progress is invalid", ErrInvalid)
+		}
+	}
+	if err := validateDurableEventPayload(event.Type, event.Payload); err != nil {
+		return fmt.Errorf("%w: evaluation event payload is invalid: %w", ErrInvalid, err)
+	}
+	return nil
+}
+
+func validateDurableEventPayload(eventType string, payload *WorkerEventPayload) error {
+	if eventType == "completed" {
+		if payload != nil {
+			return fmt.Errorf("server-owned completed event cannot contain a worker payload")
+		}
+		return nil
+	}
+	return validateWorkerEventPayload(eventType, payload)
+}
+
+func syncEvaluationDirectory(path, description string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open %s directory: %w", description, err)
+	}
+	syncErr := directory.Sync()
+	closeErr := directory.Close()
+	if syncErr != nil {
+		return fmt.Errorf("sync %s directory: %w", description, syncErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close %s directory: %w", description, closeErr)
+	}
+	return nil
 }

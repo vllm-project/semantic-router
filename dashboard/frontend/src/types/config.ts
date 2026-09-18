@@ -18,19 +18,20 @@ export interface ProviderEndpoint {
   endpoint: string // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
   base_url?: string
-  provider?: 'openai' | 'anthropic'
+  provider?: string
   api_key?: string
   api_key_env?: string
 }
 
 export interface ProviderModel {
   name: string // e.g., "openai/gpt-oss-120b"
-  reasoning_family?: string
+  catalog?: string
+  reasoning?: ReasoningConfig
   provider_model_id?: string
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
   access_key?: string
-  api_format?: 'anthropic'
+  api_format?: 'openai' | 'responses' | 'anthropic'
   external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
@@ -53,14 +54,28 @@ export interface ProviderModel {
 }
 
 export interface ProviderDefaults {
-  default_model?: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
+  model?: string
+  reasoning_effort?: string
 }
 
 export interface ReasoningFamily {
-  type: 'reasoning_effort' | 'chat_template_kwargs'
+  type:
+    | 'reasoning_effort'
+    | 'reasoning_mode'
+    | 'chat_template_kwargs'
+    | 'top_level_reasoning_effort'
   parameter: string // e.g., "reasoning_effort", "enable_thinking"
+  activation_parameter?: string
+  effort_flags?: Record<string, string>
+  levels?: string[]
+  default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
+  disabled?: string
+}
+
+export interface ReasoningConfig extends Partial<ReasoningFamily> {
+  family?: string
 }
 
 export interface Providers {
@@ -97,6 +112,12 @@ export interface FactCheckSignal {
   description: string
 }
 
+export interface HallucinationSignal {
+  name: string
+  use_nli?: boolean // Ask the detector for span-level NLI explanations
+  description?: string
+}
+
 export interface UserFeedbackSignal {
   name: string
   description: string
@@ -123,8 +144,10 @@ export interface LanguageSignal {
 
 export interface ContextSignal {
   name: string
-  min_tokens: string
-  max_tokens: string
+  /** Inclusive lower bound. Defaults to 0 when omitted. */
+  min_tokens?: string
+  /** Inclusive upper bound. Omit for an open-ended band (no upper limit). */
+  max_tokens?: string
   description?: string
 }
 
@@ -187,6 +210,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 
@@ -239,9 +263,25 @@ export interface JailbreakSignal {
   threshold: number
   method?: string // "classifier" (default) or "contrastive"
   include_history?: boolean
+  direction?: 'request' | 'response' // "request" (default) scores the prompt, "response" the model's output
   jailbreak_patterns?: string[] // Known jailbreak prompts (contrastive KB)
   benign_patterns?: string[] // Known benign prompts (contrastive KB)
   description?: string
+}
+
+export interface SafetySignal {
+  name: string
+  description?: string
+  model?: string
+  labels?: string[]
+  unsafe_labels?: string[]
+  threshold: number
+  hazard?: {
+    model?: string
+    labels: string[]
+    categories: string[]
+    threshold: number
+  }
 }
 
 export interface PIISignal {
@@ -267,6 +307,8 @@ export interface Signals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  safety?: SafetySignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   conversation?: ConversationSignal[]
   metadata?: MetadataSignal[]
@@ -293,6 +335,7 @@ export type DecisionConditionType =
   | 'modality'
   | 'authz'
   | 'jailbreak'
+  | 'safety'
   | 'pii'
   | 'kb'
   | 'conversation'
@@ -319,6 +362,7 @@ export interface ModelRef {
   model: string
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
   lora_name?: string
   weight?: number
@@ -338,6 +382,7 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_jailbreak'
     | 'context_compression'
+    | 'shadow_dispatch'
   configuration: Record<string, unknown>
 }
 
@@ -571,6 +616,7 @@ export function hasFlatSignals(config: unknown): boolean {
     (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
     (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
     (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
+    (Array.isArray(root?.hallucination) && root.hallucination.length > 0) ||
     (Array.isArray(root?.pii) && root.pii.length > 0)
   )
 }

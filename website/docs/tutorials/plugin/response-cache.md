@@ -78,11 +78,22 @@ deprecated aliases and normalize to `response_cache`. Likewise,
 document. Export, Dashboard saves, and DSL decompilation always emit the
 canonical names.
 
+For local `mmbert` embeddings, including Vela Embedding, changing the model,
+tokenizer, representation size, or inference settings starts a separate cache
+space. The router retains your tenant namespace and explicit cache revision;
+historical entries remain stored until their normal expiry or explicit cleanup.
+The first requests after a model upgrade are cache misses. Restarting with the
+same representation reuses its compatible cache. This binding does not infer
+the identity of a mutable remote embedding endpoint.
+
 ## Operations
 
 The management API exposes redacted health, capabilities, statistics, candidate
-configuration testing, scoped invalidation, epoch-based flush, and a
-hash-chained audit view under `/api/v1/response-cache/*`. Invalidation defaults
+configuration testing, scoped invalidation, and epoch-based flush under
+`/api/v1/storage/response-cache/*`. The plugin descriptor at
+`/api/v1/plugins/response_cache` links to these operations. Hash-chained audit
+is shared across management operations at `/api/v1/observability/audit`
+(`audit.read`). Invalidation defaults
 to dry-run. Flush requires the explicit confirmation phrase
 `flush response cache` and never calls backend-wide `FLUSHALL`.
 
@@ -96,7 +107,10 @@ rejections stay diagnosable.
 
 Cached responses can contain user or tenant data. Choose an appropriate scope,
 TTL, backend authentication, encryption, and invalidation process. Semantic
-thresholds must be calibrated for the configured embedding model, and routes
+thresholds must be calibrated for the configured embedding model. A query longer
+than the embedding model's context window (512 tokens for the default `bert`
+model) is not cached, because a truncated embedding would match every query
+sharing that prefix. Routes
 with personalized RAG or memory should not reuse pre-enrichment responses
 without an explicit policy. See complete examples:
 [`high-recall.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/high-recall.yaml)

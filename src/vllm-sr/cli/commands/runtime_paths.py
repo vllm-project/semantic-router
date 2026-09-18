@@ -9,6 +9,7 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
@@ -24,7 +25,6 @@ MAX_PROVENANCE_BYTES = 64 * 1024
 _SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PRIVATE_STATE_DIRECTORY = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PRIVATE_DIRECTORY_MODE = 0o700
-_RECIPE_ASSET_MODE = 0o644
 STATE_ROOT_DIR_ENV = "VLLM_SR_STATE_ROOT_DIR"
 PRIVATE_STATE_FILE_MODE = 0o600
 CONTAINER_READABLE_STATE_FILE_MODE = 0o644
@@ -287,19 +287,54 @@ def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
     return path
 
 
-def write_runtime_recipe_asset_bytes(path: Path, data: bytes) -> Path:
-    """Atomically write an embedded Recipe asset inside a private directory.
+def runtime_config_projection_receipt(path: Path, data: bytes) -> dict[str, object]:
+    """Describe a projection before publishing it under the runtime config lock."""
+    try:
+        provenance = _load_provenance(_runtime_config_provenance_path(path))
+    except ValueError:
+        provenance = None
+    return {
+        "pre_projection_digest": _digest_bytes(path.read_bytes()),
+        "projected_digest": _digest_bytes(data),
+        "provenance": provenance,
+    }
 
-    The containing runtime-state directories remain owner-only. Files use the
-    read-only asset mode expected by the non-root Dashboard after bind mount.
+
+def recover_runtime_config_projection(path: Path, receipt: dict[str, object]) -> None:
+    """Finish only the provenance write for an exact CLI-owned projection.
+
+    A differing active document or provenance belongs to another edit. Never
+    adopt it, even when its tracing block happens to match the projection.
     """
+    provenance = receipt.get("provenance")
+    if not isinstance(provenance, dict) or provenance.get(
+        "last_materialized_active_digest"
+    ) != receipt.get("pre_projection_digest"):
+        return
+    if not path.exists() or _digest_bytes(path.read_bytes()) != receipt.get(
+        "projected_digest"
+    ):
+        return
+    provenance_path = _runtime_config_provenance_path(path)
+    try:
+        current = _load_provenance(provenance_path)
+    except ValueError:
+        return
+    if current != provenance:
+        return
+    updated = dict(provenance)
+    updated["last_materialized_active_digest"] = receipt["projected_digest"]
+    write_private_state_bytes(
+        provenance_path, (json.dumps(updated, sort_keys=True) + "\n").encode()
+    )
 
-    path = path.expanduser().absolute()
-    if path.parent.is_symlink() or not path.parent.is_dir():
-        raise ValueError(
-            f"Runtime Recipe parent must be an owned directory: {path.parent}"
-        )
-    _atomic_write_bytes(path, data, _RECIPE_ASSET_MODE)
+
+def write_runtime_config_projection(
+    path: Path, data: bytes, receipt: dict[str, object]
+) -> Path:
+    """Publish a journaled projection without adopting unrelated active edits."""
+    write_runtime_config_bytes(path, data)
+    recover_runtime_config_projection(path, receipt)
     return path
 
 
@@ -446,12 +481,18 @@ def materialize_runtime_config(
     *,
     state_root_dir: str | Path | None = None,
     stack_name: str | None = None,
+    replace_active: bool = False,
+    before_replace: Callable[[], None] | None = None,
 ) -> Path:
     """Reconcile one runtime-owned active config without overwriting edits.
 
     The CLI records the digest it last materialized. A Dashboard or package
     activation changes the active digest without changing that receipt, so a
     later ``serve`` preserves the active file and reports the divergence.
+    ``replace_active`` is the explicit deployment boundary for replacing that
+    drifted active document from the selected source config.
+    ``before_replace`` lets restart orchestration stop old file consumers before
+    an existing active document changes. It is not called for a preserved file.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
@@ -472,6 +513,18 @@ def materialize_runtime_config(
         active_data = runtime_config_path.read_bytes()
         if active_data == effective_data:
             _write_provenance(provenance_path, source_data, active_data)
+            return runtime_config_path
+
+        if replace_active:
+            log.info(
+                "Replacing active runtime config %s from source config %s",
+                runtime_config_path,
+                source_config_path,
+            )
+            if before_replace is not None:
+                before_replace()
+            _atomic_write_private_bytes(runtime_config_path, effective_data)
+            _write_provenance(provenance_path, source_data, effective_data)
             return runtime_config_path
 
         try:
@@ -501,6 +554,8 @@ def materialize_runtime_config(
             )
             return runtime_config_path
 
+    if runtime_config_path.exists() and before_replace is not None:
+        before_replace()
     _atomic_write_private_bytes(runtime_config_path, effective_data)
     _write_provenance(provenance_path, source_data, effective_data)
     return runtime_config_path

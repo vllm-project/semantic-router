@@ -4,60 +4,39 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 )
 
-func TestRegisterFleetSimRoutesReturnsBadGatewayWhenDisabled(t *testing.T) {
+type routerProxyCredentialProvider struct {
+	token string
+}
+
+func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	registerFleetSimRoutes(mux, &config.Config{})
+	registerProxyRoutes(mux, &config.Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
+	_, pattern := mux.Handler(req)
+	if pattern != "/api/" {
+		t.Fatalf("matched route = %q, want generic API fallback %q", pattern, "/api/")
+	}
+
 	recorder := httptest.NewRecorder()
 	mux.ServeHTTP(recorder, req)
-
 	if recorder.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadGateway)
 	}
-}
-
-func TestRegisterFleetSimRoutesProxiesSimulatorPaths(t *testing.T) {
-	t.Parallel()
-
-	var proxiedPath string
-	var forwardedPrefix string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		proxiedPath = r.URL.Path
-		forwardedPrefix = r.Header.Get("X-Forwarded-Prefix")
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"ok":true}`)
-	}))
-	defer server.Close()
-
-	mux := http.NewServeMux()
-	registerFleetSimRoutes(mux, &config.Config{FleetSimURL: server.URL})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
-	recorder := httptest.NewRecorder()
-	mux.ServeHTTP(recorder, req)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	if !strings.Contains(recorder.Body.String(), "No API handler configured for this path") {
+		t.Fatalf("response body = %q, want generic API fallback", recorder.Body.String())
 	}
-	if proxiedPath != "/api/workloads" {
-		t.Fatalf("proxied path = %q, want %q", proxiedPath, "/api/workloads")
-	}
-	if forwardedPrefix != "/api/fleet-sim" {
-		t.Fatalf("forwarded prefix = %q, want %q", forwardedPrefix, "/api/fleet-sim")
-	}
-}
-
-type routerProxyCredentialProvider struct {
-	token string
 }
 
 func (provider routerProxyCredentialProvider) ManagementCredential() (string, error) {
@@ -93,6 +72,134 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 	}
 }
 
+func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *testing.T) {
+	t.Setenv("VLLM_SR_PORT_OFFSET", "0")
+	type upstreamRequest struct {
+		method  string
+		path    string
+		query   string
+		headers http.Header
+		body    string
+	}
+	received := make(chan upstreamRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read proxied request: %v", err)
+		}
+		received <- upstreamRequest{r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Clone(), string(body)}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	target, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "runtime.yaml")
+	runtimeConfig := "version: v0.3\nlisteners:\n  - name: public\n    address: 127.0.0.1\n    port: " + target.Port() + "\n"
+	if err := os.WriteFile(configPath, []byte(runtimeConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{EnvoyURL: server.URL, RouterAPIURL: server.URL, AbsConfigPath: configPath}
+	mux := http.NewServeMux()
+	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), routerProxyCredentialProvider{token: "management-only-token"})
+
+	for _, conversation := range []string{"conversation-one", "conversation-one", "conversation-two"} {
+		body := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"hello"}]}`
+		request := httptest.NewRequest(http.MethodPost,
+			"/api/router/v1/chat/completions?authToken=browser-query-token&keep=trace", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Session-ID", "session-one")
+		request.Header.Set("X-Conversation-ID", conversation)
+		request.Header.Set("Authorization", "Bearer browser-token")
+		request.Header.Set("Proxy-Authorization", "Bearer browser-proxy-token")
+		request.Header.Set("Cookie", "vsr_session=browser-cookie")
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("chat proxy status = %d: %s", response.Code, response.Body.String())
+		}
+		got := <-received
+		if got.method != http.MethodPost || got.path != "/v1/chat/completions" || got.query != "keep=trace" || got.body != body {
+			t.Fatalf("proxied chat request changed: %#v", got)
+		}
+		if got.headers.Get("X-Session-ID") != "session-one" || got.headers.Get("X-Conversation-ID") != conversation {
+			t.Fatalf("conversation identity not preserved: %v", got.headers)
+		}
+		for _, name := range []string{"Authorization", "Proxy-Authorization", "Cookie"} {
+			if got.headers.Get(name) != "" {
+				t.Fatalf("browser credential %s reached Envoy", name)
+			}
+		}
+	}
+}
+
+func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
+	t.Parallel()
+
+	requested := make([]string, 0, 3)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = append(requested, r.URL.RequestURI())
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"source":"router"}`))
+	}))
+	defer server.Close()
+
+	mux := http.NewServeMux()
+	registerRouterAPIProxy(
+		mux,
+		&config.Config{RouterAPIURL: server.URL},
+		nil,
+		routerProxyCredentialProvider{token: "router-service-token"},
+	)
+	for _, target := range []string{
+		"/api/router/api/v1",
+		"/api/router/openapi.json?path=%2Fconfig%2Frouter&method=PATCH",
+		"/api/router/docs",
+	} {
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s returned %d: %s", target, recorder.Code, recorder.Body.String())
+		}
+	}
+
+	want := []string{
+		"/api/v1",
+		"/openapi.json?method=PATCH&path=%2Fconfig%2Frouter",
+		"/docs",
+	}
+	if strings.Join(requested, ",") != strings.Join(want, ",") {
+		t.Fatalf("Router requests = %v, want %v", requested, want)
+	}
+}
+
+func TestRouterAPIProxyExposesKnowledgeBaseActivationHash(t *testing.T) {
+	t.Parallel()
+	const snapshot = `{"activation_status":"pending","active_runtime_hash":"old","generated_runtime_hash":"candidate"}`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/config/hash" {
+			t.Errorf("unexpected upstream request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer router-service-token" {
+			t.Error("activation polling did not use the router service credential")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(snapshot))
+	}))
+	defer upstream.Close()
+	mux := http.NewServeMux()
+	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, nil, routerProxyCredentialProvider{token: "router-service-token"})
+	request := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
+	request.Header.Set("Authorization", "Bearer dashboard-user-jwt")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != snapshot {
+		t.Fatalf("activation snapshot = %d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 	var authorization string
 	var proxyAuthorization string
@@ -114,7 +221,7 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
-	req := httptest.NewRequest(http.MethodPost, "/api/router/v1/router/outcomes?authToken=query-user-jwt", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes?authToken=query-user-jwt", nil)
 	req.Header.Set("Authorization", "Bearer dashboard-feedback-user-jwt")
 	req.Header.Set("Proxy-Authorization", "Bearer proxy-user-jwt")
 	req.Header.Set("Cookie", "vsr_session=cookie-user-jwt")
@@ -167,17 +274,23 @@ func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
 		path   string
 		want   bool
 	}{
+		{method: http.MethodGet, path: "/api/router/api/v1/config/hash", want: true},
+		{method: http.MethodPost, path: "/api/router/api/v1/config/hash", want: false},
 		{method: http.MethodGet, path: "/api/router/v1/models", want: true},
-		{method: http.MethodGet, path: "/api/router/v1/router_replay", want: true},
-		{method: http.MethodGet, path: "/api/router/v1/router_replay/replay-1", want: true},
-		{method: http.MethodHead, path: "/api/router/v1/router_replay", want: false},
-		{method: http.MethodPost, path: "/api/router/v1/router_replay", want: false},
-		{method: http.MethodPost, path: "/api/router/v1/router/outcomes", want: true},
-		{method: http.MethodGet, path: "/api/router/api/v1/response-cache/stats", want: true},
-		{method: http.MethodPost, path: "/api/router/api/v1/response-cache/invalidate", want: true},
-		{method: http.MethodPost, path: "/api/router/api/v1/context-compression/preview", want: true},
-		{method: http.MethodDelete, path: "/api/router/api/v1/context-compression/stats", want: false},
-		{method: http.MethodPost, path: "/api/router/config/router", want: false},
+		{method: http.MethodGet, path: "/api/router/api/v1", want: true},
+		{method: http.MethodGet, path: "/api/router/openapi.json", want: true},
+		{method: http.MethodHead, path: "/api/router/docs", want: true},
+		{method: http.MethodPost, path: "/api/router/openapi.json", want: false},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", want: true},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/replay-1", want: true},
+		{method: http.MethodHead, path: "/api/router/api/v1/observability/replays", want: false},
+		{method: http.MethodPost, path: "/api/router/api/v1/observability/replays", want: false},
+		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", want: true},
+		{method: http.MethodGet, path: "/api/router/api/v1/storage/response-cache/stats", want: true},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", want: true},
+		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", want: true},
+		{method: http.MethodDelete, path: "/api/router/api/v1/plugins/context_compression/stats", want: false},
+		{method: http.MethodPost, path: "/api/router/api/v1/config", want: false},
 		{method: http.MethodPost, path: "/api/router/unknown", want: false},
 	}
 	for _, test := range tests {

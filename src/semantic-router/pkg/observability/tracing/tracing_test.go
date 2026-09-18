@@ -2,9 +2,11 @@ package tracing
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -338,4 +340,59 @@ func TestSpanAttributeConstants(t *testing.T) {
 			t.Errorf("Attribute key constant is empty")
 		}
 	}
+}
+
+func TestInjectSpanContextToSliceOmitsBaggage(t *testing.T) {
+	cfg := TracingConfig{
+		Enabled:               true,
+		Provider:              "opentelemetry",
+		ExporterType:          "stdout",
+		SamplingType:          "always_on",
+		ServiceName:           "test-service",
+		ServiceVersion:        "v1.0.0",
+		DeploymentEnvironment: "test",
+	}
+	if err := InitTracing(context.Background(), cfg); err != nil {
+		t.Fatalf("Failed to initialize tracing: %v", err)
+	}
+	defer func() { _ = ShutdownTracing(context.Background()) }()
+
+	// A client sent baggage on the inbound request and the router extracted
+	// it, as ExtractTraceContext does with the default propagator installed.
+	inbound := ExtractTraceContext(context.Background(), map[string]string{
+		"baggage": "token=client-secret,tenant=acme",
+	})
+	if got := baggage.FromContext(inbound).Member("token").Value(); got != "client-secret" {
+		t.Fatalf("baggage not extracted by the default propagator: token=%q", got)
+	}
+	spanCtx, span := StartSpan(inbound, SpanUpstreamRequest)
+	defer span.End()
+
+	// The global propagator carries that baggage forward.
+	if got := pairsToMap(InjectTraceContextToSlice(spanCtx)); got["baggage"] == "" {
+		t.Fatalf("precondition: InjectTraceContextToSlice should carry baggage, got %v", got)
+	}
+
+	// Span-context injection never does, while the trace itself still links.
+	got := pairsToMap(InjectSpanContextToSlice(spanCtx))
+	if _, leaked := got["baggage"]; leaked {
+		t.Fatalf("InjectSpanContextToSlice carried baggage: %v", got)
+	}
+	traceID := span.SpanContext().TraceID().String()
+	if tp := got["traceparent"]; tp == "" || !strings.Contains(tp, traceID) {
+		t.Fatalf("traceparent = %q, want the span's trace %s", tp, traceID)
+	}
+	for key := range got {
+		if key != "traceparent" && key != "tracestate" {
+			t.Fatalf("InjectSpanContextToSlice emitted %q, want only W3C trace-context headers: %v", key, got)
+		}
+	}
+}
+
+func pairsToMap(pairs [][2]string) map[string]string {
+	out := make(map[string]string, len(pairs))
+	for _, pair := range pairs {
+		out[pair[0]] = pair[1]
+	}
+	return out
 }

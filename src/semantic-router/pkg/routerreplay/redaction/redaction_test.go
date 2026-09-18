@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 func TestRedactResponseBodyRemovesTrajectoryContentAndArguments(t *testing.T) {
@@ -125,5 +127,47 @@ func assertRedactedOutcome(t *testing.T, record map[string]any) {
 	}
 	if outcome["source"] != "user" || outcome["target"] != "model" || outcome["verdict"] != "failed" {
 		t.Fatalf("outcome structure changed: %#v", outcome)
+	}
+}
+
+func TestRedactResponseBodyRetainsFusionQuorumDiagnostics(t *testing.T) {
+	const private = "private-fusion-selection-reason"
+	body, err := json.Marshal(store.Record{
+		ID: "fusion-quorum",
+		RouteDiagnostics: &store.RouteDiagnostics{
+			SelectionMethod:    "fusion",
+			SelectionReasoning: private,
+			FusionQuorum: &store.FusionQuorumDiagnostics{
+				RequiredCount: 2,
+				UsableCount:   1,
+				Attempts: []store.FusionPanelAttemptDiagnostics{
+					{Model: "panel-a", State: "usable", PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12},
+					{Model: "panel-b", State: "unusable", PromptTokens: 20, CompletionTokens: 3, TotalTokens: 23},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal Fusion Replay record: %v", err)
+	}
+
+	redacted := mustRedactChanged(t, body)
+	if bytes.Contains(redacted, []byte(private)) {
+		t.Fatalf("redacted Fusion record retained free text: %s", redacted)
+	}
+	record := decodeRedactedRecord(t, redacted)
+	routeDiagnostics := record["route_diagnostics"].(map[string]any)
+	if routeDiagnostics["selection_reasoning"] != "" {
+		t.Fatalf("selection reasoning was not cleared: %#v", routeDiagnostics["selection_reasoning"])
+	}
+	quorum := routeDiagnostics["fusion_quorum"].(map[string]any)
+	if quorum["required_count"] != float64(2) || quorum["usable_count"] != float64(1) {
+		t.Fatalf("Fusion quorum counts changed during redaction: %#v", quorum)
+	}
+	attempts := quorum["attempts"].([]any)
+	second := attempts[1].(map[string]any)
+	if second["model"] != "panel-b" || second["state"] != "unusable" ||
+		second["prompt_tokens"] != float64(20) || second["completion_tokens"] != float64(3) || second["total_tokens"] != float64(23) {
+		t.Fatalf("Fusion attempt diagnostics changed during redaction: %#v", second)
 	}
 }

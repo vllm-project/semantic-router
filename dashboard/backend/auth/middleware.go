@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
 type contextKey string
@@ -76,10 +78,16 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			required := RequiredPermission(r.Method, r.URL.Path)
-			if required != "" && !perms[required] {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+			if !routerGatewayRequestAllowed(r.Method, r.URL.Path) {
+				http.Error(w, "Router management route is not exposed by the Dashboard", http.StatusForbidden)
 				return
+			}
+
+			for _, required := range RequiredPermissions(r.Method, r.URL.Path) {
+				if !perms[required] {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
@@ -115,8 +123,10 @@ func ServiceUnavailableGuard() func(http.Handler) http.Handler {
 	}
 }
 
-func RequiredPermission(method, path string) string {
-	path = strings.TrimSpace(strings.ToLower(path))
+func requiredPermission(method, path string) string {
+	if !strings.HasPrefix(path, "/api/router/") {
+		path = strings.TrimSpace(strings.ToLower(path))
+	}
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
 		settingsPermission,
@@ -125,7 +135,6 @@ func RequiredPermission(method, path string) string {
 		toolsPermission,
 		observabilityPermission,
 		recipePermission,
-		fleetSimPermission,
 		featurePermission,
 	} {
 		if permission, ok := resolver(method, path); ok {
@@ -138,6 +147,26 @@ func RequiredPermission(method, path string) string {
 	}
 
 	return ""
+}
+
+// RequiredPermissions returns every permission needed by a request. Most
+// routes require one permission; controlled-pair creation is both an evidence
+// write and an immediate two-worker launch, so it deliberately requires both.
+func RequiredPermissions(method, path string) []string {
+	if policy, ok := routercontract.LookupManagement(method, path); ok {
+		return policy.Permissions
+	}
+	if !strings.HasPrefix(path, "/api/router/") {
+		path = strings.TrimSpace(strings.ToLower(path))
+	}
+	if method == http.MethodPost && path == "/api/evaluation/v1/controlled-pairs" {
+		return []string{PermEvalWrite, PermEvalRun}
+	}
+	primary := requiredPermission(method, path)
+	if primary == "" {
+		return nil
+	}
+	return []string{primary}
 }
 
 func recipePermission(_ string, path string) (string, bool) {
@@ -208,6 +237,9 @@ func settingsPermission(method, path string) (string, bool) {
 }
 
 func routerPermission(method, path string) (string, bool) {
+	if policy, ok := routercontract.LookupManagement(method, path); ok {
+		return policy.Permissions[0], true
+	}
 	switch {
 	case path == "/api/models/catalog":
 		return PermConfigRead, true
@@ -215,30 +247,33 @@ func routerPermission(method, path string) (string, bool) {
 		return PermConfigWrite, true
 	case path == "/api/models/verify":
 		return PermEvalRun, true
-	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
-		return PermFeedbackSubmit, true
-	case strings.HasPrefix(path, "/api/router/v1/router_replay"):
-		return PermReplayRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/response-cache/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/api/v1/context-compression/preview":
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/context-compression/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/config/deploy",
-		path == "/api/router/config/deploy/preview",
-		path == "/api/router/config/rollback":
+	case path == "/api/router/config/deploy", path == "/api/router/config/deploy/preview", path == "/api/router/config/rollback":
 		return PermConfigDeploy, true
 	case strings.HasPrefix(path, "/api/router/config/"):
 		if method == http.MethodGet {
 			return PermConfigRead, true
 		}
 		return PermConfigWrite, true
-	case strings.HasPrefix(path, "/api/router/"):
+	case path == "/api/router/v1/chat/completions" && method == http.MethodPost:
 		return PermConfigRead, true
+	case strings.HasPrefix(path, "/api/router/"):
+		return "", true
 	default:
 		return "", false
 	}
+}
+
+// Dashboard-owned config handlers and inference dispatch have their own policy.
+// Every management gateway request must exist in the shared exact allowlist.
+func routerGatewayRequestAllowed(method, path string) bool {
+	if !strings.HasPrefix(path, "/api/router/") || strings.HasPrefix(path, "/api/router/config/") {
+		return true
+	}
+	if path == "/api/router/v1/chat/completions" && (method == http.MethodPost || method == http.MethodOptions) {
+		return true
+	}
+	_, ok := routercontract.LookupManagement(method, path)
+	return ok
 }
 
 func knowledgePermission(_ string, path string) (string, bool) {
@@ -291,17 +326,10 @@ func observabilityPermission(_ string, path string) (string, bool) {
 	}
 }
 
-func fleetSimPermission(method, path string) (string, bool) {
-	if !strings.HasPrefix(path, "/api/fleet-sim/") && path != "/api/fleet-sim" {
-		return "", false
-	}
-	return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-}
-
 func featurePermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
-		if isEvaluationRunAction(path) {
+		if isEvaluationRunAction(path) || isControlledPairCancelAction(path) {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -315,6 +343,13 @@ func featurePermission(method, path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func isControlledPairCancelAction(path string) bool {
+	path = strings.TrimRight(path, "/")
+	rest := strings.TrimPrefix(path, "/api/evaluation/v1/controlled-pairs/")
+	parts := strings.Split(rest, "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] == "cancel"
 }
 
 func isEvaluationRunAction(path string) bool {

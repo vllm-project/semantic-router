@@ -4,7 +4,7 @@ package apiserver
 
 // This file exposes read-only exports over the route catalog for tooling that
 // needs API surface information without starting the router (e.g. docs
-// generation in tools/openapi-gen). The runtime endpoint at /openapi.json and
+// generation in tools/codegen/openapi). The runtime endpoint at /openapi.json and
 // this export share the same generateOpenAPISpec(), so generated docs cannot
 // diverge from what the server serves.
 
@@ -12,6 +12,13 @@ package apiserver
 type ExportedRoute struct {
 	Path        string
 	Method      string
+	Description string
+	Contract    EndpointContract
+}
+
+// ExportedCapability is the documentation-facing capability definition.
+type ExportedCapability struct {
+	Name        string
 	Description string
 }
 
@@ -24,7 +31,17 @@ func ExportedRoutes() []ExportedRoute {
 			Path:        route.Path,
 			Method:      route.Method,
 			Description: route.Description,
+			Contract:    route.EndpointContract,
 		})
+	}
+	return out
+}
+
+// ExportedCapabilities returns capability metadata in discovery order.
+func ExportedCapabilities() []ExportedCapability {
+	out := make([]ExportedCapability, 0, len(capabilityRegistry))
+	for _, capability := range capabilityRegistry {
+		out = append(out, ExportedCapability(capability))
 	}
 	return out
 }

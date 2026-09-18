@@ -3,7 +3,7 @@
 import os
 
 from cli.commands.runtime_paths import resolve_state_root_dir
-from cli.consts import IMAGE_PULL_POLICY_NEVER
+from cli.consts import HEALTH_CHECK_TIMEOUT, IMAGE_PULL_POLICY_NEVER
 from cli.container_cli import (
     container_logs,
     container_logs_output,
@@ -16,7 +16,7 @@ from cli.container_cli import (
     container_stop_container,
     load_openclaw_registry,
 )
-from cli.container_images import get_fleet_sim_container_image, get_runtime_images
+from cli.container_images import get_runtime_images
 from cli.logo import print_vllm_logo
 from cli.recipe_activation_recovery import (
     active_recipe_package_for_stack,
@@ -35,8 +35,8 @@ from cli.runtime_lifecycle import (
     maybe_finish_setup_mode,
     recover_openclaw_containers,
     resolve_openclaw_data_dir,
-    start_fleet_sim_sidecar,
     start_observability_stack,
+    validate_startup_timeout,
 )
 from cli.runtime_lifecycle import (
     wait_and_verify_runtime as _wait_and_verify_runtime,
@@ -82,7 +82,6 @@ def _prepare_runtime_network(
     router_image,
     envoy_image,
     dashboard_image,
-    sim_image,
     pull_policy,
     dashboard_disabled,
 ):
@@ -97,7 +96,6 @@ def _prepare_runtime_network(
         router_image,
         envoy_image,
         dashboard_image,
-        sim_image,
         pull_policy,
         env_vars,
         dashboard_disabled=dashboard_disabled,
@@ -110,7 +108,6 @@ def ensure_runtime_images_for_pull_policy(
     router_image,
     envoy_image,
     dashboard_image,
-    sim_image=None,
     pull_policy=None,
     env_vars=None,
     dashboard_disabled=False,
@@ -127,20 +124,6 @@ def ensure_runtime_images_for_pull_policy(
         platform=env_vars.get("VLLM_SR_PLATFORM"),
         include_dashboard=not dashboard_disabled,
     )
-    if _fleet_sim_required(env_vars):
-        get_fleet_sim_container_image(image=sim_image, pull_policy=pull_policy)
-
-
-def _fleet_sim_required(env_vars):
-    external_url = env_vars.get("TARGET_FLEET_SIM_URL") or os.getenv(
-        "TARGET_FLEET_SIM_URL"
-    )
-    if external_url:
-        return False
-    raw_enabled = env_vars.get(
-        "VLLM_SR_SIM_ENABLED", os.getenv("VLLM_SR_SIM_ENABLED", "true")
-    )
-    return str(raw_enabled).lower() != "false"
 
 
 def start_vllm_sr(
@@ -150,15 +133,16 @@ def start_vllm_sr(
     router_image=None,
     envoy_image=None,
     dashboard_image=None,
-    sim_image=None,
     topology=None,
     pull_policy=None,
     enable_observability=True,
     source_config_file=None,
     runtime_config_file=None,
     runtime_config_lock: RuntimeConfigLock | None = None,
+    startup_timeout: int = HEALTH_CHECK_TIMEOUT,
 ):
     """Start vLLM Semantic Router."""
+    validate_startup_timeout(startup_timeout)
     env_vars = env_vars if env_vars is not None else {}
     stack_layout = resolve_runtime_stack()
     runtime_topology = resolve_runtime_topology(topology)
@@ -182,9 +166,9 @@ def start_vllm_sr(
             router_image=router_image,
             envoy_image=envoy_image,
             dashboard_image=dashboard_image,
-            sim_image=sim_image,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
+            startup_timeout=startup_timeout,
         )
 
 
@@ -224,9 +208,9 @@ def _start_vllm_sr_locked(
     router_image,
     envoy_image,
     dashboard_image,
-    sim_image,
     pull_policy,
     enable_observability,
+    startup_timeout=HEALTH_CHECK_TIMEOUT,
 ):
     user_config, listeners = _preflight_runtime_config(
         source_config_file,
@@ -235,6 +219,12 @@ def _start_vllm_sr_locked(
         stack_layout,
     )
     management_port = _configured_management_port(user_config)
+    stack_layout.host_port(management_port, name="management API host port")
+    for listener in listeners:
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
     readiness_token_env = _configured_management_readiness_token_env(
         user_config, env_vars
     )
@@ -253,19 +243,16 @@ def _start_vllm_sr_locked(
         router_image,
         envoy_image,
         dashboard_image,
-        sim_image,
         pull_policy,
         dashboard_disabled,
     )
 
-    started_backends, runtime_network_name, fleet_sim_enabled = _start_support_services(
+    started_backends, runtime_network_name = _start_support_services(
         user_config,
         shared_network_name,
         state_root_dir,
         env_vars,
         stack_layout,
-        sim_image,
-        pull_policy,
         enable_observability,
     )
 
@@ -293,11 +280,17 @@ def _start_vllm_sr_locked(
 
     log.info("vLLM Semantic Router container started successfully")
     connect_runtime_container(shared_network_name, stack_layout)
-    if maybe_finish_setup_mode(setup_mode, dashboard_disabled, stack_layout):
+    if maybe_finish_setup_mode(
+        setup_mode, dashboard_disabled, stack_layout, startup_timeout=startup_timeout
+    ):
         return
 
     _wait_and_verify_runtime(
-        stack_layout, dashboard_disabled, management_port, readiness_token_env
+        stack_layout,
+        dashboard_disabled,
+        management_port,
+        readiness_token_env,
+        startup_timeout=startup_timeout,
     )
     recover_openclaw_containers(state_root_dir, env_vars, shared_network_name)
     log_runtime_summary(
@@ -305,8 +298,8 @@ def _start_vllm_sr_locked(
         stack_layout,
         dashboard_disabled,
         enable_observability,
-        fleet_sim_enabled,
         started_backends=started_backends,
+        config=user_config,
     )
 
 
@@ -316,10 +309,10 @@ def _start_support_services(
     state_root_dir,
     env_vars,
     stack_layout,
-    sim_image,
-    pull_policy,
     enable_observability,
 ):
+    if not enable_observability:
+        _stop_observability_containers(stack_layout)
     started_backends = provision_storage_backends(
         user_config, stack_layout, state_root_dir=state_root_dir
     )
@@ -332,16 +325,7 @@ def _start_support_services(
         stack_layout,
     )
     runtime_network_name = observability_network_name or shared_network_name
-    fleet_sim_enabled = start_fleet_sim_sidecar(
-        state_root_dir,
-        env_vars,
-        stack_layout,
-        sim_image=sim_image,
-        pull_policy=pull_policy,
-    )
-    if fleet_sim_enabled:
-        env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
-    return started_backends, runtime_network_name, fleet_sim_enabled
+    return started_backends, runtime_network_name
 
 
 def _start_runtime_containers(
@@ -402,13 +386,6 @@ def stop_vllm_sr():
             stopped_message=f"{container_name} stopped",
         ):
             failures.append(container_name)
-    if not _stop_managed_container(
-        stack_layout.fleet_sim_container_name,
-        container_statuses[stack_layout.fleet_sim_container_name],
-        stop_message=f"Stopping {stack_layout.fleet_sim_container_name}...",
-        stopped_message=f"{stack_layout.fleet_sim_container_name} stopped",
-    ):
-        failures.append(stack_layout.fleet_sim_container_name)
     for container_name in _observability_container_names(stack_layout):
         if not _stop_managed_container(
             container_name,
@@ -447,7 +424,6 @@ def stop_vllm_sr():
 def _managed_container_statuses(stack_layout: RuntimeStackLayout) -> dict[str, str]:
     container_names = [
         *_runtime_container_names(stack_layout),
-        stack_layout.fleet_sim_container_name,
         *_observability_container_names(stack_layout),
         *_storage_container_names(stack_layout),
     ]
@@ -568,6 +544,27 @@ def _observability_container_names(stack_layout: RuntimeStackLayout) -> tuple[st
     )
 
 
+def _stop_observability_containers(stack_layout: RuntimeStackLayout) -> None:
+    """Stop this stack's old collectors when switching to minimal mode.
+
+    Keep containers and their data for the next full-mode start. Strict checks
+    prevent an unavailable container runtime from looking like an empty stack.
+    The caller holds the stack lifecycle lock throughout deployment.
+    """
+    names = _observability_container_names(stack_layout)
+    stopped_states = {"not found", "exited", "created", "dead"}
+    states = {name: container_status_strict(name) for name in names}
+    for name, state in states.items():
+        if state in {"running", "paused", "restarting"}:
+            if not container_stop_container(name):
+                raise RuntimeError(f"Failed to stop observability container: {name}")
+        elif state not in stopped_states:
+            raise RuntimeError(f"Observability container is not stopped: {name}")
+    for name in names:
+        if container_status_strict(name) not in stopped_states:
+            raise RuntimeError(f"Observability container is not stopped: {name}")
+
+
 def _storage_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...]:
     return stack_layout.storage_container_names
 
@@ -591,11 +588,7 @@ def show_logs(service: str, follow: bool = False):
     """Show logs from a runtime service."""
     _validate_runtime_service(service)
     stack_layout = resolve_runtime_stack()
-    container_name = (
-        stack_layout.fleet_sim_container_name
-        if service == "simulator"
-        else runtime_service_container_name(service, stack_layout)
-    )
+    container_name = runtime_service_container_name(service, stack_layout)
     _ensure_runtime_container_available(container_name)
 
     if follow:
@@ -619,18 +612,9 @@ def show_logs(service: str, follow: bool = False):
 def show_status(service: str = "all"):
     """Show runtime service status."""
     stack_layout = resolve_runtime_stack()
-    status, sim_status = _resolve_runtime_status_snapshot(stack_layout)
+    status = _resolve_runtime_status_snapshot(stack_layout)
     if status == "not found":
         heading("Runtime status")
-        if sim_status == "running":
-            fields(
-                (
-                    ("Router stack", "Not running"),
-                    ("Simulator", f"Running ({stack_layout.fleet_sim_url})"),
-                )
-            )
-            echo("Stop with: vllm-sr stop")
-            return
         fields((("State", "Not running"),))
         echo("Start with: vllm-sr serve")
         return
@@ -652,35 +636,32 @@ def show_status(service: str = "all"):
         report_service_status(requested_service, stack_layout)
 
     echo()
-    echo("Detailed logs: vllm-sr logs <envoy|router|dashboard|simulator>")
+    echo("Detailed logs: vllm-sr logs <envoy|router|dashboard>")
 
 
 def _resolve_runtime_status_snapshot(
     stack_layout: RuntimeStackLayout,
-) -> tuple[str, str]:
+) -> str:
     try:
-        return (
-            _runtime_stack_status(stack_layout),
-            container_status(stack_layout.fleet_sim_container_name),
-        )
+        return _runtime_stack_status(stack_layout)
     except SystemExit:
         warning(
             "Docker daemon is not reachable, so local container status cannot be inspected"
         )
-        return "not found", "not found"
+        return "not found"
 
 
 def _validate_runtime_service(service: str) -> None:
-    if service == "simulator" or service in RUNTIME_LOG_SERVICES:
+    if service in RUNTIME_LOG_SERVICES:
         return
     log.error(f"Invalid service: {service}")
-    log.error("Must be 'envoy', 'router', 'dashboard', or 'simulator'")
+    log.error("Must be 'envoy', 'router', or 'dashboard'")
     raise SystemExit(1)
 
 
 def _requested_services(service: str) -> list[str]:
     if service == "all":
-        return ["router", "envoy", "dashboard", "simulator"]
+        return ["router", "envoy", "dashboard"]
     _validate_runtime_service(service)
     return [service]
 

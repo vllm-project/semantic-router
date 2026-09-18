@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useId, useState } from 'react'
 import { ThinkingOrb } from 'thinking-orbs'
 
 import styles from './ChatComponent.module.css'
@@ -138,7 +138,10 @@ function AssistantRatingsMessage({
               </ErrorBoundary>
               {message.isStreaming && index === 0 ? <StreamingResponseIndicator /> : null}
             </div>
-            {!message.isStreaming && choice.model && message.headers?.['x-vsr-replay-id'] ? (
+            {!message.isStreaming &&
+            !message.incomplete &&
+            choice.model &&
+            message.headers?.['x-vsr-replay-id'] ? (
               <div className={styles.choiceActions}>
                 <FeedbackButtons
                   modelId={choice.model}
@@ -205,6 +208,34 @@ interface MessageCardProps {
   prevUserQuery?: string
 }
 
+function UserMessageText({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const contentId = useId()
+  // Bound the preview by both characters and lines without splitting a surrogate pair.
+  const preview = content
+    .slice(0, 1200)
+    .replace(/[\uD800-\uDBFF]$/u, '')
+    .split('\n', 9)
+    .slice(0, 8)
+    .join('\n')
+  if (preview.length === content.length) return <span>{content}</span>
+
+  return (
+    <>
+      <span id={contentId}>{expanded ? content : `${preview}…`}</span>
+      <button
+        type="button"
+        className={styles.userMessageToggle}
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        {expanded ? 'Show less' : 'Show more'}
+      </button>
+    </>
+  )
+}
+
 function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
   const attachmentItems = message.attachments ?? []
 
@@ -227,7 +258,13 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
         </div>
       ) : null}
       <MessageImages message={message} />
-      {message.content || message.isStreaming ? <span>{message.content}</span> : null}
+      {message.content || message.isStreaming ? (
+        message.role === 'user' ? (
+          <UserMessageText content={message.content} />
+        ) : (
+          <span>{message.content}</span>
+        )
+      ) : null}
       {message.isStreaming ? <StreamingResponseIndicator /> : null}
     </div>
   )
@@ -273,6 +310,11 @@ const MessageCard = memo(
               onToggleToolCard={onToggleToolCard}
             />
           )}
+          {message.role === 'assistant' && message.incomplete ? (
+            <div className={styles.incompleteResponse} role="status">
+              <strong>Incomplete response.</strong> {message.incomplete}
+            </div>
+          ) : null}
           {message.role === 'assistant' && message.headers ? (
             <HeaderDisplay headers={message.headers} />
           ) : null}
@@ -283,6 +325,7 @@ const MessageCard = memo(
             <div className={styles.messageActionRow}>
               <MessageActionBar content={message.content} />
               {message.role === 'assistant' &&
+              !message.incomplete &&
               message.headers?.['x-vsr-selected-model'] &&
               message.headers?.['x-vsr-replay-id'] ? (
                 <FeedbackButtons

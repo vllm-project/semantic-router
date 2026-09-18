@@ -97,11 +97,11 @@ func (c *EmbeddingClassifier) sortMatches(matches []MatchedRule) []MatchedRule {
 
 func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []MatchedRule {
 	matches = c.sortMatches(matches)
-	topK := 1
+	topK := 0
 	if c.optimizationConfig.TopK != nil {
 		topK = *c.optimizationConfig.TopK
 	}
-	if topK == 0 || len(matches) <= topK {
+	if topK <= 0 || len(matches) <= topK {
 		return matches
 	}
 
@@ -114,7 +114,7 @@ func (c *EmbeddingClassifier) embeddingAggregationOptions(rule config.EmbeddingR
 	case config.AggregationMethodMean:
 		return prototypeScoreOptions{BestWeight: 0, TopM: 0}
 	default:
-		return defaultPrototypeScoreOptions(c.optimizationConfig.PrototypeScoring)
+		return defaultPrototypeScoreOptions(rule.PrototypeScoring.Resolve(c.optimizationConfig.PrototypeScoring))
 	}
 }
 
@@ -147,8 +147,8 @@ func (c *EmbeddingClassifier) GetPreloadStats() int {
 
 func (c *EmbeddingClassifier) rebuildRulePrototypeBanks() {
 	c.rulePrototypeBanks = make(map[string]*prototypeBank, len(c.rules))
-	prototypeCfg := c.optimizationConfig.PrototypeScoring.WithDefaults()
 	for _, rule := range c.rules {
+		prototypeCfg := rule.PrototypeScoring.Resolve(c.optimizationConfig.PrototypeScoring)
 		examples := make([]prototypeExample, 0, len(rule.Candidates))
 		for _, candidate := range rule.Candidates {
 			embedding, ok := c.candidateEmbeddings[candidate]

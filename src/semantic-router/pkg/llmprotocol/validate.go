@@ -38,6 +38,9 @@ func ValidateRequest(request Request, limits Limits) error {
 	if err := validateSampling(request.Sampling, limits); err != nil {
 		return err
 	}
+	if err := validateCacheSalt(request.CacheSalt); err != nil {
+		return err
+	}
 	return validateReasoning(request, limits)
 }
 
@@ -338,6 +341,12 @@ func validateSampling(sampling Sampling, limits Limits) error {
 }
 
 func validateSamplingScalars(sampling Sampling) error {
+	if sampling.MinP != nil && (!finiteFloat(*sampling.MinP) || *sampling.MinP < 0 || *sampling.MinP > 1) {
+		return NewError(ErrorInvalidRequest, "invalid_min_p", "min_p must be between 0 and 1", nil)
+	}
+	if sampling.RepetitionPenalty != nil && (!finiteFloat(*sampling.RepetitionPenalty) || *sampling.RepetitionPenalty <= 0) {
+		return NewError(ErrorInvalidRequest, "invalid_repetition_penalty", "repetition_penalty must be finite and positive", nil)
+	}
 	if err := validateSamplingProbability(sampling); err != nil {
 		return err
 	}
@@ -367,8 +376,8 @@ func finiteFloat(value float64) bool {
 }
 
 func validateSamplingCounts(sampling Sampling) error {
-	if sampling.TopK != nil && *sampling.TopK < 0 {
-		return NewError(ErrorInvalidRequest, "invalid_top_k", "top_k cannot be negative", nil)
+	if sampling.TopK != nil && *sampling.TopK < -1 {
+		return NewError(ErrorInvalidRequest, "invalid_top_k", "top_k must be -1, zero, or positive", nil)
 	}
 	if sampling.MaxOutputTokens != nil && *sampling.MaxOutputTokens < 0 {
 		return NewError(ErrorInvalidRequest, "invalid_max_output_tokens", "max output tokens cannot be negative", nil)
@@ -435,9 +444,13 @@ func validateReasoningDisplay(request Request) error {
 func validateReasoningMode(request Request) error {
 	switch request.ReasoningMode {
 	case "", ReasoningModeEnabled:
-	case ReasoningModeDisabled, ReasoningModeAdaptive:
+	case ReasoningModeDisabled:
 		if request.ReasoningBudgetTokens != nil || strings.TrimSpace(request.ReasoningEffort) != "" {
-			return NewError(ErrorInvalidRequest, "conflicting_reasoning_control", string(request.ReasoningMode)+" reasoning cannot include an effort or token budget", nil)
+			return NewError(ErrorInvalidRequest, "conflicting_reasoning_control", "disabled reasoning cannot include an effort or token budget", nil)
+		}
+	case ReasoningModeAdaptive:
+		if request.ReasoningBudgetTokens != nil {
+			return NewError(ErrorInvalidRequest, "conflicting_reasoning_control", "adaptive reasoning cannot include a token budget", nil)
 		}
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_mode", "reasoning mode is invalid", nil)

@@ -98,8 +98,7 @@ Treat small sample counts as smoke tests, not evidence of model quality.
 
 Use the live routing scripts when the behavior under test depends on multiple
 turns, stable identity, tool loops, backend faults, or Router headers. Each
-script exposes threshold flags; set them explicitly when the run is intended to
-gate a change.
+script exposes threshold flags for a standalone local regression decision.
 
 ```bash
 python3 bench/agentic_routing_live_benchmark.py --help
@@ -111,6 +110,15 @@ These scripts write run artifacts under `.agent-harness/experiments/` by
 default. Keep generated reports out of public claims unless the report records
 the source commit, configuration, endpoints or model revisions, workload,
 sample count, exclusions, and acceptance thresholds.
+
+These scripts are diagnostic and regression utilities. Their thresholds are
+not Evaluation Campaign gates, and their artifacts do not implement the sealed
+`evaluation-agent-task-ledger.v1` / `evaluation-agent-task-attempt.v1` contract
+or the `live-fault-recovery` evidence contract. They therefore cannot claim
+Evaluation agentic E5, G6, or Campaign qualification. Use the Evaluation
+Plane's `live-agent-tasks` source for decision-grade repeated-task evidence;
+that source can earn agentic E5 after server validation, but deliberately has
+no Campaign gate and never qualifies G6.
 
 ### Router Learning
 

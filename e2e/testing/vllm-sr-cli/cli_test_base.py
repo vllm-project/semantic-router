@@ -28,6 +28,15 @@ AGENT_SMOKE_CONFIG_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "config.agent-smoke.cpu.yaml"
 )
 
+
+def stack_scoped_test_container_name(stack_name: str, base_name: str) -> str:
+    """Keep test-only containers inside the selected runtime stack namespace."""
+
+    if stack_name == DEFAULT_STACK_NAME:
+        return base_name
+    return f"{stack_name}-{base_name}"
+
+
 # Services whose store backends the CLI provisions locally. They are written
 # out in full rather than left to the canonical defaults: a test that rides on
 # a default is silently retargeted the day that default changes, and these two
@@ -64,7 +73,6 @@ class CLITestBase(unittest.TestCase):
     ROUTER_CONTAINER_NAME = "vllm-sr-router-container"
     ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
     DASHBOARD_CONTAINER_NAME = "vllm-sr-dashboard-container"
-    SIM_CONTAINER_NAME = "vllm-sr-sim-container"
     REDIS_CONTAINER_NAME = "vllm-sr-redis"
     POSTGRES_CONTAINER_NAME = "vllm-sr-postgres"
     MILVUS_CONTAINER_NAME = "vllm-sr-milvus"
@@ -100,12 +108,14 @@ class CLITestBase(unittest.TestCase):
         cls.ROUTER_CONTAINER_NAME = cls.runtime_stack.router_container_name
         cls.ENVOY_CONTAINER_NAME = cls.runtime_stack.envoy_container_name
         cls.DASHBOARD_CONTAINER_NAME = cls.runtime_stack.dashboard_container_name
-        cls.SIM_CONTAINER_NAME = cls.runtime_stack.fleet_sim_container_name
         cls.REDIS_CONTAINER_NAME = cls.runtime_stack.redis_container_name
         cls.POSTGRES_CONTAINER_NAME = cls.runtime_stack.postgres_container_name
         cls.MILVUS_CONTAINER_NAME = cls.runtime_stack.milvus_container_name
         cls.NETWORK_NAME = cls.runtime_stack.network_name
         cls.DATA_NETWORK_NAME = cls.runtime_stack.data_network_name
+        cls.PROBE_CONTAINER_NAME = stack_scoped_test_container_name(
+            stack_name, "vllm-sr-cli-test-probe"
+        )
         cls.AUXILIARY_CONTAINER_NAMES = (
             cls.runtime_stack.grafana_container_name,
             cls.runtime_stack.prometheus_container_name,
@@ -209,7 +219,6 @@ class CLITestBase(unittest.TestCase):
             cls.ROUTER_CONTAINER_NAME,
             cls.ENVOY_CONTAINER_NAME,
             cls.DASHBOARD_CONTAINER_NAME,
-            cls.SIM_CONTAINER_NAME,
             cls.PROBE_CONTAINER_NAME,
             *cls.AUXILIARY_CONTAINER_NAMES,
         )
@@ -336,10 +345,12 @@ class CLITestBase(unittest.TestCase):
         model_name: str = "test-model",
         endpoint: str = "host.docker.internal:8000",
         base_url: str | None = None,
-        provider: str | None = None,
+        provider: str | None = "vllm",
         api_key_env: str | None = None,
         api_only: bool = False,
         managed_storage: bool = False,
+        skip_processing: bool = False,
+        looper: bool = False,
     ) -> str:
         """Write a minimal runnable canonical v0.3 config into the temp workspace.
 
@@ -361,6 +372,24 @@ class CLITestBase(unittest.TestCase):
         if api_key_env is not None:
             backend_ref["api_key_env"] = api_key_env
 
+        decision: dict[str, object] = {
+            "name": "default-route",
+            "description": "Default route for CLI test coverage",
+            "priority": 100,
+            "rules": {"operator": "AND", "conditions": []},
+            "modelRefs": [{"model": model_name, "use_reasoning": False}],
+        }
+        if looper:
+            decision["algorithm"] = {
+                "type": "remom",
+                "remom": {
+                    "breadth_schedule": [1],
+                    "model_distribution": "first_only",
+                    "min_successful_responses": 1,
+                    "on_error": "fail",
+                },
+            }
+
         config = {
             "version": "v0.3",
             "listeners": [
@@ -373,8 +402,8 @@ class CLITestBase(unittest.TestCase):
             ],
             "providers": {
                 "defaults": {
-                    "default_model": model_name,
-                    "default_reasoning_effort": "medium",
+                    "model": model_name,
+                    "reasoning_effort": "medium",
                 },
                 "models": [
                     {
@@ -386,19 +415,22 @@ class CLITestBase(unittest.TestCase):
             },
             "routing": {
                 "modelCards": [{"name": model_name}],
-                "decisions": [
-                    {
-                        "name": "default-route",
-                        "description": "Default route for CLI test coverage",
-                        "priority": 100,
-                        "rules": {"operator": "AND", "conditions": []},
-                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
-                    }
-                ],
+                "decisions": [decision],
             },
         }
         if api_only:
             config["global"] = _api_only_global_config()
+        if skip_processing:
+            global_config = config.setdefault("global", {})
+            global_config.setdefault("router", {})["skip_processing"] = {
+                "enabled": True
+            }
+        if looper:
+            global_config = config.setdefault("global", {})
+            integrations = global_config.setdefault("integrations", {})
+            integrations["looper"] = {
+                "endpoint": f"http://localhost:{port}/v1/chat/completions"
+            }
         if managed_storage:
             global_config = config.get("global")
             if not isinstance(global_config, dict):

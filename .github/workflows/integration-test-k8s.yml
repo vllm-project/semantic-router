@@ -1,8 +1,18 @@
-name: Integration Test [Kubernetes]
+name: Kubernetes Integration
 
 on:
   workflow_call:
     inputs:
+      verification:
+        type: string
+        default: '{}'
+      prebuilt-images:
+        type: boolean
+        default: false
+      baseline-suite:
+        description: standard runs every non-stress baseline case; full includes pressure cases.
+        type: string
+        default: standard
       profiles:
         description: JSON array of E2E profile names.
         required: true
@@ -10,13 +20,16 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   integration-test:
-    runs-on: ubuntu-latest
+    name: ${{ fromJSON(inputs.verification).display_name || format('Kubernetes ({0})', matrix.profile) }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
+      E2E_BASELINE_SUITE: ${{ inputs.baseline-suite }}
       # Pipe falls back to direct on any proxy error; comma only on 404 and 410
       GOPROXY: 'https://proxy.golang.org|direct'
     strategy:
@@ -28,29 +41,17 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Free disk space and relocate Docker to /mnt
-        run: |
-          echo "=== Before cleanup ==="
-          df -h / /mnt
+      - name: Set up Kind
+        uses: ./.github/actions/setup-kind
+        with:
+          show-usage: "true"
+          relocate-docker: "true"
 
-          # Remove large pre-installed toolchains that E2E tests don't need
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
-            /usr/local/share/boost /usr/local/graalvm /usr/local/.ghcup \
-            /usr/share/swift /usr/local/lib/node_modules 2>/dev/null || true
-          sudo docker image prune -af 2>/dev/null || true
-
-          # Move Docker data root to /mnt (75 GB+ free vs ~14 GB on /)
-          sudo systemctl stop docker
-          sudo mv /var/lib/docker /mnt/docker
-          sudo ln -s /mnt/docker /var/lib/docker
-          sudo systemctl start docker
-
-          # Redirect temp dir so `kind load docker-image` tarballs land on /mnt
-          sudo mkdir -p /mnt/tmp
-          sudo chmod 1777 /mnt/tmp
-
-          echo "=== After cleanup ==="
-          df -h / /mnt
+      - name: Load verified extproc image
+        if: inputs.prebuilt-images
+        uses: ./.github/actions/load-ci-images
+        with:
+          images: ${{ toJSON(fromJSON(inputs.verification).images) }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -74,35 +75,6 @@ jobs:
             make \
             build-essential \
             pkg-config
-
-      - name: Install Kind
-        run: |
-          ARCH="$(uname -m)"
-          case "$ARCH" in
-            x86_64) KIND_ARCH="amd64" ;;
-            aarch64) KIND_ARCH="arm64" ;;
-            *) echo "unsupported arch: $ARCH" && exit 1 ;;
-          esac
-          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-${KIND_ARCH}"
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-      - name: Pre-pull Kind node image
-        run: |
-          KIND_NODE_IMAGE="kindest/node:v1.29.2"
-          echo "Pre-pulling ${KIND_NODE_IMAGE} with retries..."
-          for attempt in 1 2 3 4 5; do
-            if docker pull "${KIND_NODE_IMAGE}"; then
-              echo "Successfully pulled ${KIND_NODE_IMAGE}"
-              break
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              echo "ERROR: Failed to pull ${KIND_NODE_IMAGE} after 5 attempts"
-              exit 1
-            fi
-            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
-            sleep $((attempt * 15))
-          done
 
       - name: Download E2E test dependencies
         run: |
@@ -132,16 +104,6 @@ jobs:
           trap cleanup_router_log_stream EXIT
 
           set +e
-          if [ "${{ matrix.profile }}" = "envoy-ai-gateway" ]; then
-            # Temporarily skip the stress / pressure coverage until the suite is stable again.
-            ENVOY_AI_GATEWAY_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,semantic-cache-polarity,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,tool-selection,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
-            make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${ENVOY_AI_GATEWAY_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
-            TEST_EXIT_CODE=$?
-            set -e
-            echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
-            exit ${TEST_EXIT_CODE}
-          fi
-
           make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
           TEST_EXIT_CODE=$?
           set -e
@@ -171,6 +133,21 @@ jobs:
           else
             echo "✅ semantic-router-logs.txt already exists (collected by Go framework)"
           fi
+
+      - name: Record complete Kubernetes test inventory
+        if: always() && inputs.verification != '{}'
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          python3 tools/ci/deployment_test_results.py kubernetes --report test-report.json --profile "$PROFILE" --output e2e-evidence.json
+          python3 tools/ci/ci_results.py record --verification "$VERIFICATION" --evidence e2e-evidence.json --output e2e-result.json
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.verification != '{}'
+        with:
+          name: ci-result-${{ fromJSON(inputs.verification).id }}
+          path: e2e-result.json
+          if-no-files-found: error
 
       - name: Upload test reports
         if: always()

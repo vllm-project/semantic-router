@@ -69,11 +69,6 @@ logging:
   # Log level for Redis client operations (debug, info, warn, error)
   level: "info"
 
-  # Enable query/search logging for debugging
-  enable_query_log: false
-
-  # Enable performance metrics collection
-  enable_metrics: true
 
 # Development and debugging settings
 development:
@@ -83,8 +78,6 @@ development:
   # Create index if it doesn't exist
   auto_create_index: true
 
-  # Print detailed error messages
-  verbose_errors: true
 
 # Example configurations for different environments:
 #

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -58,6 +59,59 @@ func TestWarmupRouterTreatsTaskFailureAsBestEffort(t *testing.T) {
 	}
 }
 
+func TestExecuteReturnsWhenStartupCancellationFindsAStuckTask(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := Execute(ctx, []Task{{
+			Name: "stuck-startup-task",
+			Run: func(context.Context) error {
+				close(started)
+				<-release
+				return nil
+			},
+		}}, Options{MaxParallelism: 1})
+		done <- err
+	}()
+
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Execute() error = %v, want context canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Execute() did not return after startup cancellation")
+	}
+}
+
+func TestWarmupRouterDoesNotStartLoadAfterCancellation(t *testing.T) {
+	loadCalled := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := WarmupRouter(ctx, []RouterWarmupTask{{
+		Name:  "cancelled-warmup",
+		Ready: true,
+		Load: func() error {
+			loadCalled <- struct{}{}
+			return nil
+		},
+	}}, WarmupRouterOptions{MaxParallelism: 1})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("WarmupRouter() error = %v, want context canceled", err)
+	}
+	select {
+	case <-loadCalled:
+		t.Fatal("WarmupRouter() called Load after cancellation")
+	case <-time.After(25 * time.Millisecond):
+	}
+}
+
 func TestEmbeddingRuntimeTasksUseOnlyRemoteProviderWhenConfigured(t *testing.T) {
 	cfg := remoteEmbeddingRuntimeConfig("http://embedding-service:8000/v1")
 	paths := resolveEmbeddingPaths(cfg)
@@ -68,6 +122,21 @@ func TestEmbeddingRuntimeTasksUseOnlyRemoteProviderWhenConfigured(t *testing.T) 
 	}
 	if tasks[0].Name != "router.embedding.remote_provider" {
 		t.Fatalf("task name = %q, want router.embedding.remote_provider", tasks[0].Name)
+	}
+}
+
+func TestEmbeddingRuntimeTasksDoNotUseCandleForOpenVINO(t *testing.T) {
+	cfg := &config.RouterConfig{InlineModels: config.InlineModels{EmbeddingModels: config.EmbeddingModels{
+		Qwen3ModelPath: "models/openvino-embedding",
+		EmbeddingConfig: config.HNSWConfig{
+			Backend:   config.EmbeddingBackendOpenVINO,
+			ModelType: config.EmbeddingModelTypeQwen3,
+		},
+	}}}
+
+	_, tasks, _ := embeddingRuntimeTasks(cfg, "test", resolveEmbeddingPaths(cfg))
+	if len(tasks) != 0 {
+		t.Fatalf("embeddingRuntimeTasks() returned %d task(s), want no Candle tasks for OpenVINO", len(tasks))
 	}
 }
 

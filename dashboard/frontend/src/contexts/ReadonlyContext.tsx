@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useAuth } from './AuthContext'
 import { preloadPlatformAssets } from '../utils/platformAssets'
+import { decodeDashboardSettings } from './dashboardSettings'
 
 interface ReadonlyContextType {
   isReadonly: boolean
@@ -11,7 +12,8 @@ interface ReadonlyContextType {
   platform: string
   envoyUrl: string
   routerEvalEndpoint: string
-  fleetSimEnabled: boolean
+  evaluationAvailable: boolean
+  evaluationUnavailableReason: string
 }
 
 const ReadonlyContext = createContext<ReadonlyContextType>({
@@ -23,7 +25,8 @@ const ReadonlyContext = createContext<ReadonlyContextType>({
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
-  fleetSimEnabled: false,
+  evaluationAvailable: false,
+  evaluationUnavailableReason: 'Evaluation availability has not been loaded.',
 })
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -43,7 +46,10 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [platform, setPlatform] = useState('')
   const [envoyUrl, setEnvoyUrl] = useState('')
   const [routerEvalEndpoint, setRouterEvalEndpoint] = useState('')
-  const [fleetSimEnabled, setFleetSimEnabled] = useState(false)
+  const [evaluationAvailable, setEvaluationAvailable] = useState(false)
+  const [evaluationUnavailableReason, setEvaluationUnavailableReason] = useState(
+    'Evaluation availability has not been loaded.',
+  )
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -51,6 +57,11 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setServerReadonly(true)
       setRuntimeConfigWritable(false)
       setRecipeStoreWritable(false)
+      setEvaluationAvailable(false)
+      setEvaluationUnavailableReason('Evaluation is unavailable without an authenticated session.')
+      setPlatform('')
+      setEnvoyUrl('')
+      setRouterEvalEndpoint('')
       setIsLoading(false)
       return undefined
     }
@@ -65,43 +76,27 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setServerReadonly(true)
       setRuntimeConfigWritable(false)
       setRecipeStoreWritable(false)
+      setEvaluationAvailable(false)
+      setEvaluationUnavailableReason('Evaluation availability is being checked.')
       try {
         const response = await fetch('/api/settings', { signal: controller.signal })
-        if (response.ok) {
-          const data = await response.json()
-          if (controller.signal.aborted) return
-          if (typeof data.readonlyMode !== 'boolean') {
-            console.warn('Dashboard settings omitted the readonlyMode safety boundary')
-            return
-          }
-          const effectiveReadonly = data.readonlyMode
-          // Older Dashboard responses exposed only readonlyMode. Preserve the
-          // safe all-or-nothing fallback while consuming split capabilities
-          // whenever the server provides them.
-          setIsReadonly(effectiveReadonly)
-          setServerReadonly(
-            typeof data.serverReadonly === 'boolean' ? data.serverReadonly : effectiveReadonly,
-          )
-          setRuntimeConfigWritable(
-            typeof data.runtimeConfigWritable === 'boolean'
-              ? data.runtimeConfigWritable
-              : !effectiveReadonly,
-          )
-          setRecipeStoreWritable(
-            typeof data.recipeStoreWritable === 'boolean'
-              ? data.recipeStoreWritable
-              : !effectiveReadonly,
-          )
-          const platformValue = data.platform || ''
-          setPlatform(platformValue)
-          setEnvoyUrl(data.envoyUrl || '')
-          setRouterEvalEndpoint(data.routerEvalEndpoint || '')
-          setFleetSimEnabled(Boolean(data.fleetSimEnabled))
-          // Preload platform-specific assets immediately
-          preloadPlatformAssets(platformValue)
-        }
+        if (!response.ok) throw new Error(`Dashboard settings request failed (${response.status})`)
+        const data = decodeDashboardSettings(await response.json())
+        if (controller.signal.aborted) return
+        setIsReadonly(data.readonlyMode)
+        setServerReadonly(data.serverReadonly)
+        setRuntimeConfigWritable(data.runtimeConfigWritable)
+        setRecipeStoreWritable(data.recipeStoreWritable)
+        setEvaluationAvailable(data.evaluationAvailable)
+        setEvaluationUnavailableReason(data.evaluationUnavailableReason)
+        const platformValue = data.platform
+        setPlatform(platformValue)
+        setEnvoyUrl(data.envoyUrl)
+        setRouterEvalEndpoint(data.routerEvalEndpoint)
+        preloadPlatformAssets(platformValue)
       } catch (error) {
         if (!controller.signal.aborted) {
+          setEvaluationUnavailableReason('Dashboard settings are unavailable.')
           console.warn('Failed to fetch dashboard settings:', error)
         }
       } finally {
@@ -124,7 +119,8 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         platform,
         envoyUrl,
         routerEvalEndpoint,
-        fleetSimEnabled,
+        evaluationAvailable,
+        evaluationUnavailableReason,
       }}
     >
       {children}

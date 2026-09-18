@@ -1,12 +1,94 @@
 {
   "cases": [
     {
+      "name": "cache_salt",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "cache_salt": "phase-salt",
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "min_p",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "min_p": 0,
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "repetition_penalty",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "repetition_penalty": 1.1
+        }
+      }
+    },
+    {
+      "name": "top_k",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_k": -1
+        }
+      }
+    },
+    {
       "name": "audio",
       "outcome": {
         "status": "error",
         "error": {
           "category": "unsupported_feature",
           "code": "unsupported_audio"
+        }
+      }
+    },
+    {
+      "name": "chat_template_kwargs",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
         }
       }
     },

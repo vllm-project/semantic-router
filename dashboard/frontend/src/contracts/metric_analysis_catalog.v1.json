@@ -1,0 +1,3019 @@
+{
+  "schema_version": "metric-analysis-catalog.v1",
+  "provenance_contract_version": "metric-analysis.v1",
+  "identifier_encoding": {
+    "scheme": "portable-segment-base64url.v1",
+    "raw_pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+    "direct_pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$",
+    "reserved_prefix": "u-",
+    "encoded_pattern": "^u-[A-Za-z0-9_-]{2,171}$",
+    "vectors": [
+      {
+        "raw": "classifier:risk:RISKY",
+        "encoded": "u-Y2xhc3NpZmllcjpyaXNrOlJJU0tZ"
+      },
+      {
+        "raw": "domain:reasoning",
+        "encoded": "u-ZG9tYWluOnJlYXNvbmluZw"
+      },
+      {
+        "raw": "fast",
+        "encoded": "fast"
+      },
+      {
+        "raw": "model-A_1",
+        "encoded": "model-A_1"
+      },
+      {
+        "raw": "signal.topic.v1",
+        "encoded": "u-c2lnbmFsLnRvcGljLnYx"
+      },
+      {
+        "raw": "u-reserved",
+        "encoded": "u-dS1yZXNlcnZlZA"
+      },
+      {
+        "raw": "quality.score.v2",
+        "encoded": "u-cXVhbGl0eS5zY29yZS52Mg"
+      }
+    ]
+  },
+  "analysis_templates": [
+    {
+      "id": "agentic.recovery.cluster-count",
+      "track_id": "agentic",
+      "estimator_id": "recovery-ledger-independent-cluster-count",
+      "estimator_version": "v2",
+      "analysis_unit": "recovery_cluster",
+      "cluster_unit": "cluster_id",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "recovery.cluster_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.recovery.cluster-mean",
+      "track_id": "agentic",
+      "estimator_id": "recovery-ledger-cluster-worst-mean",
+      "estimator_version": "v2",
+      "analysis_unit": "recovery_cluster",
+      "cluster_unit": "cluster_id",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "recovery.cluster_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.recovery.cluster-ratio",
+      "track_id": "agentic",
+      "estimator_id": "recovery-ledger-all-pairs-cluster-ratio",
+      "estimator_version": "v2",
+      "analysis_unit": "recovery_cluster",
+      "cluster_unit": "cluster_id",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "recovery.cluster_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.recovery.cluster-wilson-bounds",
+      "track_id": "agentic",
+      "estimator_id": "recovery-ledger-one-sided-cluster-wilson-bounds",
+      "estimator_version": "v2",
+      "analysis_unit": "recovery_cluster",
+      "cluster_unit": "cluster_id",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "recovery.cluster_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.recovery.frozen-threshold",
+      "track_id": "agentic",
+      "estimator_id": "recovery-ledger-frozen-threshold",
+      "estimator_version": "v2",
+      "analysis_unit": "recovery_plan",
+      "cluster_unit": "cluster_id",
+      "weighting": "unweighted",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "recovery.ledger_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.recovery.pair-count",
+      "track_id": "agentic",
+      "estimator_id": "recovery-ledger-distinct-pair-count",
+      "estimator_version": "v2",
+      "analysis_unit": "recovery_pair",
+      "cluster_unit": "cluster_id",
+      "weighting": "nested_pair_count",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "recovery.cohort_pair_id",
+          "recovery.repetition_id"
+        ],
+        "required_dimensions": [
+          "recovery.cluster_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.recovery.pair-max",
+      "track_id": "agentic",
+      "estimator_id": "recovery-ledger-observed-pair-maximum",
+      "estimator_version": "v2",
+      "analysis_unit": "recovery_pair",
+      "cluster_unit": "cluster_id",
+      "weighting": "worst_pair",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "recovery.cohort_pair_id",
+          "recovery.repetition_id"
+        ],
+        "required_dimensions": [
+          "recovery.cluster_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.attempt-count",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-distinct-count",
+      "estimator_version": "v1",
+      "analysis_unit": "agent_attempt",
+      "cluster_unit": "case",
+      "weighting": "uniform_attempt",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.attempt-mean",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-observed-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "agent_attempt",
+      "cluster_unit": "case",
+      "weighting": "uniform_attempt",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.attempt-ratio",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "agent_attempt",
+      "cluster_unit": "case",
+      "weighting": "uniform_attempt",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.attempt-wilson-lower",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-one-sided-wilson-lower",
+      "estimator_version": "v1",
+      "analysis_unit": "agent_attempt",
+      "cluster_unit": "case",
+      "weighting": "uniform_attempt",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.complete-cost-ratio",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-complete-cost-per-success",
+      "estimator_version": "v1",
+      "analysis_unit": "successful_agent_attempt",
+      "cluster_unit": "case",
+      "weighting": "uniform_attempt",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.complete-cost-sum",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-complete-cost-sum",
+      "estimator_version": "v1",
+      "analysis_unit": "agent_attempt",
+      "cluster_unit": "case",
+      "weighting": "uniform_attempt",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.task-ratio",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-all-attempt-reliability",
+      "estimator_version": "v1",
+      "analysis_unit": "agent_task",
+      "cluster_unit": "case",
+      "weighting": "uniform_task",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.task_id"
+        ],
+        "required_dimensions": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.task-wilson-lower",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-one-sided-wilson-lower",
+      "estimator_version": "v1",
+      "analysis_unit": "agent_task",
+      "cluster_unit": "case",
+      "weighting": "uniform_task",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.task_id"
+        ],
+        "required_dimensions": [
+          "agent_task.attempt_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.task.tool-call-ratio",
+      "track_id": "agentic",
+      "estimator_id": "agent-task-ledger-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "tool_call",
+      "cluster_unit": "case",
+      "weighting": "uniform_tool_call",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "agentic",
+        "coordinates": [
+          "agent_task.tool_call_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.trajectory.complete-cost-ratio",
+      "track_id": "agentic",
+      "estimator_id": "deterministic-trajectory-complete-cost-per-success",
+      "estimator_version": "v1",
+      "analysis_unit": "successful_trajectory",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "agentic",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.trajectory.mean",
+      "track_id": "agentic",
+      "estimator_id": "deterministic-trajectory-observed-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "trajectory",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "agentic",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "agentic.trajectory.ratio",
+      "track_id": "agentic",
+      "estimator_id": "deterministic-trajectory-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "trajectory",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "agentic",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.elapsed",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-repetition-complete-elapsed",
+      "estimator_version": "v1",
+      "analysis_unit": "load_repetition",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_repetition",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.qualification",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-slo-qualification",
+      "estimator_version": "v1",
+      "analysis_unit": "load_level",
+      "cluster_unit": "repetition",
+      "weighting": "unweighted",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency"
+        ],
+        "required_dimensions": [
+          "measurement_request",
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.repetition-mean",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-repetition-observed-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "load_repetition",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_repetition",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.repetition-ratio",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-repetition-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "load_repetition",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_repetition",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.request-count",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-measurement-request-count",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "measurement_request"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.request-quantile",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-measurement-request-quantile",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "measurement_request"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.request-repetition-count",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-measurement-cluster-count",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_cluster",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "load_phase",
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.request-repetition-rate-mean",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-cluster-rate-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_cluster",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "load_phase",
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.request-repetition-rate-range",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-cluster-rate-range",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_cluster",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "load_phase",
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.request-sum",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-complete-runtime-cost-sum",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "measurement_request"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.request-worst-cluster-wilson-upper",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-worst-cluster-one-sided-wilson-upper",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_cluster",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "worst_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "load_phase",
+          "load_repetition"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.level.warmup-count",
+      "track_id": "capacity",
+      "estimator_id": "capacity-level-warmup-request-count",
+      "estimator_version": "v1",
+      "analysis_unit": "warmup_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "warmup_request"
+        ],
+        "filters": [
+          {
+            "field": "concurrency",
+            "capture": "concurrency"
+          }
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.complete-cost-ratio",
+      "track_id": "capacity",
+      "estimator_id": "capacity-complete-cost-per-success",
+      "estimator_version": "v1",
+      "analysis_unit": "successful_measurement_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "measurement_request"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.level-cluster-count-min",
+      "track_id": "capacity",
+      "estimator_id": "capacity-minimum-cluster-count-by-level",
+      "estimator_version": "v1",
+      "analysis_unit": "load_level",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "minimum_level",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "load_phase",
+          "load_repetition"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.level-error-cluster-range-max",
+      "track_id": "capacity",
+      "estimator_id": "capacity-worst-level-cluster-error-rate-range",
+      "estimator_version": "v1",
+      "analysis_unit": "load_level",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "worst_level",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "load_phase",
+          "load_repetition"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.level-max",
+      "track_id": "capacity",
+      "estimator_id": "capacity-load-level-envelope",
+      "estimator_version": "v1",
+      "analysis_unit": "load_level",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_level",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.repetition-max",
+      "track_id": "capacity",
+      "estimator_id": "capacity-repetition-stability-maximum",
+      "estimator_version": "v1",
+      "analysis_unit": "load_repetition",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_repetition",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "load_repetition"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.request-count",
+      "track_id": "capacity",
+      "estimator_id": "capacity-measurement-request-count",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "measurement_request"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.request-quantile",
+      "track_id": "capacity",
+      "estimator_id": "capacity-measurement-request-quantile",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "measurement_request"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.request-repetition-rate-mean",
+      "track_id": "capacity",
+      "estimator_id": "capacity-cluster-rate-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_cluster",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "uniform_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "load_phase",
+          "load_repetition"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.request-worst-cluster-wilson-upper",
+      "track_id": "capacity",
+      "estimator_id": "capacity-worst-cluster-one-sided-wilson-upper",
+      "estimator_version": "v1",
+      "analysis_unit": "measurement_cluster",
+      "cluster_unit": "measurement_cluster",
+      "weighting": "worst_cluster",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "load_phase",
+          "load_repetition"
+        ]
+      }
+    },
+    {
+      "id": "capacity.summary.warmup-count",
+      "track_id": "capacity",
+      "estimator_id": "capacity-warmup-request-count",
+      "estimator_version": "v1",
+      "analysis_unit": "warmup_request",
+      "cluster_unit": "repetition",
+      "weighting": "uniform_request",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "capacity_load_plan",
+        "track_id": "capacity",
+        "coordinates": [
+          "concurrency",
+          "warmup_request"
+        ]
+      }
+    },
+    {
+      "id": "experiment.assignment.balance-p-value",
+      "track_id": "preference",
+      "estimator_id": "production-assignment-balance-chi-square",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "uniform_assignment",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "experiment.assignment.control-boolean",
+      "track_id": "preference",
+      "estimator_id": "production-control-plane-attestation",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment_ledger",
+      "cluster_unit": "case",
+      "weighting": "unweighted",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.ledger_id"
+        ]
+      }
+    },
+    {
+      "id": "experiment.assignment.frozen-threshold",
+      "track_id": "preference",
+      "estimator_id": "production-experiment-frozen-threshold",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment_ledger",
+      "cluster_unit": "case",
+      "weighting": "unweighted",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.ledger_id"
+        ]
+      }
+    },
+    {
+      "id": "experiment.assignment.risk-ratio",
+      "track_id": "preference",
+      "estimator_id": "production-assignment-risk-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "uniform_assignment",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "experiment.assignment.risk-wilson-upper",
+      "track_id": "preference",
+      "estimator_id": "production-assignment-one-sided-wilson-upper",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "uniform_assignment",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "experiment.assignment.support",
+      "track_id": "preference",
+      "estimator_id": "production-assignment-arm-support",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "uniform_assignment",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "joint.case.complete-cost-ratio",
+      "track_id": "joint",
+      "estimator_id": "deterministic-joint-complete-cost-per-success",
+      "estimator_version": "v1",
+      "analysis_unit": "successful_routed_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "joint",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "joint.case.mean",
+      "track_id": "joint",
+      "estimator_id": "deterministic-joint-case-observed-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "routed_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "joint",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "joint.case.quantile",
+      "track_id": "joint",
+      "estimator_id": "deterministic-joint-case-quantile",
+      "estimator_version": "v1",
+      "analysis_unit": "routed_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "joint",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "joint.case.ratio",
+      "track_id": "joint",
+      "estimator_id": "deterministic-joint-case-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "routed_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "joint",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.arm.case-mean",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-frozen-arm-case-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id"
+        ],
+        "filters": [
+          {
+            "field": "arm_id",
+            "capture": "arm_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "model-pool.arm.case-ratio",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-frozen-arm-case-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id"
+        ],
+        "filters": [
+          {
+            "field": "arm_id",
+            "capture": "arm_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "model-pool.dense-case.count",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-dense-case-count",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "arm_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.dense-case.mean",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-dense-case-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "arm_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.dense-case.ratio",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-dense-case-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "arm_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.failure-pair.mean",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-failure-pair-jaccard-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "arm_pair",
+      "cluster_unit": "case",
+      "weighting": "uniform_arm_pair",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "arm_pair"
+        ],
+        "required_dimensions": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.pool-arm.count",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-arm-dominance-count",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_arm",
+      "cluster_unit": "case",
+      "weighting": "uniform_arm",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "arm_id"
+        ],
+        "required_dimensions": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.pool-arm.worst-ratio",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-worst-arm-reliability",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_arm",
+      "cluster_unit": "case",
+      "weighting": "uniform_arm",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "arm_id"
+        ],
+        "required_dimensions": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.selection.coverage",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-selection-arm-coverage",
+      "estimator_version": "v1",
+      "analysis_unit": "routed_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "joint",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.selection.entropy",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-selection-shannon-entropy",
+      "estimator_version": "v1",
+      "analysis_unit": "routed_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "joint",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "model-pool.snapshot.arm-count",
+      "track_id": "model_pool",
+      "estimator_id": "model-pool-frozen-arm-count",
+      "estimator_version": "v1",
+      "analysis_unit": "pool_snapshot",
+      "cluster_unit": "case",
+      "weighting": "unweighted",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "frozen_model_pool_matrix",
+        "track_id": "model_pool",
+        "coordinates": [
+          "arm_id"
+        ]
+      }
+    },
+    {
+      "id": "multimodal.case.mean",
+      "track_id": "multimodal",
+      "estimator_id": "deterministic-multimodal-case-observed-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "multimodal_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "multimodal",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "multimodal.case.ratio",
+      "track_id": "multimodal",
+      "estimator_id": "deterministic-multimodal-case-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "multimodal_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "multimodal",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "multimodal.modality.case-mean",
+      "track_id": "multimodal",
+      "estimator_id": "multimodal-modality-case-observed-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "multimodal_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "multimodal",
+        "coordinates": [
+          "case_id"
+        ],
+        "filters": [
+          {
+            "field": "modality",
+            "capture": "modality"
+          }
+        ]
+      }
+    },
+    {
+      "id": "multimodal.modality.case-ratio",
+      "track_id": "multimodal",
+      "estimator_id": "multimodal-modality-case-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "multimodal_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "multimodal",
+        "coordinates": [
+          "case_id"
+        ],
+        "filters": [
+          {
+            "field": "modality",
+            "capture": "modality"
+          }
+        ]
+      }
+    },
+    {
+      "id": "preference.offline.case-ratio",
+      "track_id": "preference",
+      "estimator_id": "offline-preference-case-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "preference_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "preference",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.offline.ipw-effective-size",
+      "track_id": "preference",
+      "estimator_id": "offline-preference-kish-effective-sample-size",
+      "estimator_version": "v1",
+      "analysis_unit": "propensity_observation",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "preference",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.offline.ipw-ratio",
+      "track_id": "preference",
+      "estimator_id": "offline-preference-kish-effective-sample-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "propensity_observation",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "preference",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.offline.snips",
+      "track_id": "preference",
+      "estimator_id": "offline-preference-self-normalized-ips",
+      "estimator_version": "v1",
+      "analysis_unit": "propensity_observation",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "preference",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.assignment-ratio",
+      "track_id": "preference",
+      "estimator_id": "production-assignment-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "uniform_assignment",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.eligibility",
+      "track_id": "preference",
+      "estimator_id": "production-causal-eligibility-decision",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment_ledger",
+      "cluster_unit": "case",
+      "weighting": "unweighted",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.ledger_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.frozen-threshold",
+      "track_id": "preference",
+      "estimator_id": "production-preference-frozen-threshold",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment_ledger",
+      "cluster_unit": "case",
+      "weighting": "unweighted",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.ledger_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.ips",
+      "track_id": "preference",
+      "estimator_id": "production-inverse-propensity-score",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.ipw-effective-size",
+      "track_id": "preference",
+      "estimator_id": "production-kish-effective-sample-size",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.ipw-ratio",
+      "track_id": "preference",
+      "estimator_id": "production-kish-effective-sample-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.segment-count",
+      "track_id": "preference",
+      "estimator_id": "production-observed-segment-count",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "uniform_assignment",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.segment-coverage",
+      "track_id": "preference",
+      "estimator_id": "production-minimum-sample-segment-coverage",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "uniform_assignment",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.snips",
+      "track_id": "preference",
+      "estimator_id": "production-self-normalized-ips",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "preference.production.snips-delta",
+      "track_id": "preference",
+      "estimator_id": "production-paired-self-normalized-ips-delta",
+      "estimator_version": "v1",
+      "analysis_unit": "assignment",
+      "cluster_unit": "case",
+      "weighting": "inverse_propensity",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "preference",
+        "coordinates": [
+          "production.assignment_id"
+        ]
+      }
+    },
+    {
+      "id": "r2.case-action-budget.audc",
+      "track_id": "model_pool",
+      "estimator_id": "compound-budget-shared-domain-trapezoidal-area",
+      "estimator_version": "v1",
+      "analysis_unit": "case_action_budget",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "compound_budget_plan",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id",
+          "action_id",
+          "budget_tokens"
+        ]
+      }
+    },
+    {
+      "id": "r2.case-action-budget.nauc",
+      "track_id": "model_pool",
+      "estimator_id": "compound-budget-shared-domain-normalized-area",
+      "estimator_version": "v1",
+      "analysis_unit": "case_action_budget",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "compound_budget_plan",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id",
+          "action_id",
+          "budget_tokens"
+        ]
+      }
+    },
+    {
+      "id": "r2.case-action-budget.peak",
+      "track_id": "model_pool",
+      "estimator_id": "compound-budget-shared-domain-peak",
+      "estimator_version": "v1",
+      "analysis_unit": "case_action_budget",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "compound_budget_plan",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id",
+          "action_id",
+          "budget_tokens"
+        ]
+      }
+    },
+    {
+      "id": "r2.case-action-budget.qnc",
+      "track_id": "model_pool",
+      "estimator_id": "compound-budget-largest-shared-budget-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "case_action_budget",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "compound_budget_plan",
+        "track_id": "model_pool",
+        "coordinates": [
+          "case_id",
+          "action_id",
+          "budget_tokens"
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e1.decision-ratio",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e1-fixed-denominator",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e1.input-latency",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e1-present-input-quantile",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_input",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id",
+          "input_id"
+        ],
+        "filters": [
+          {
+            "field": "input_kind",
+            "capture": "kind"
+          },
+          {
+            "field": "input_id",
+            "capture": "subject_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e1.input-rate",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e1-fixed-denominator",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_input",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id",
+          "input_id"
+        ],
+        "filters": [
+          {
+            "field": "input_kind",
+            "capture": "kind"
+          },
+          {
+            "field": "input_id",
+            "capture": "subject_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e2.calibration-brier",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e2-brier-score",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "eligible_arm_id"
+        ],
+        "filters": [
+          {
+            "field": "projection_id",
+            "capture": "subject_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e2.calibration-ece10",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e2-ece-10-bin",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "eligible_arm_id"
+        ],
+        "filters": [
+          {
+            "field": "projection_id",
+            "capture": "subject_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e2.feasible-recall",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e2-ties-aware-feasible-recall-at-k",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "eligible_arm_id"
+        ],
+        "filters": [
+          {
+            "field": "top_k",
+            "capture": "top_k"
+          }
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e2.oracle-regret",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e2-server-posthoc-regret",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "eligible_arm_id"
+        ]
+      }
+    },
+    {
+      "id": "routing-recipe.e2.projection-spearman",
+      "track_id": "routing",
+      "estimator_id": "routing-recipe-e2-ties-aware-spearman",
+      "estimator_version": "v1",
+      "analysis_unit": "decision_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "routing_recipe_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ],
+        "required_dimensions": [
+          "eligible_arm_id"
+        ],
+        "filters": [
+          {
+            "field": "projection_id",
+            "capture": "subject_id"
+          }
+        ]
+      }
+    },
+    {
+      "id": "routing.case.distinct-arm-count",
+      "track_id": "routing",
+      "estimator_id": "deterministic-routing-distinct-arm-count",
+      "estimator_version": "v1",
+      "analysis_unit": "route_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "routing.case.entropy",
+      "track_id": "routing",
+      "estimator_id": "deterministic-routing-selection-shannon-entropy",
+      "estimator_version": "v1",
+      "analysis_unit": "route_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "routing.case.quantile",
+      "track_id": "routing",
+      "estimator_id": "deterministic-routing-case-quantile",
+      "estimator_version": "v1",
+      "analysis_unit": "route_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "routing.case.ratio",
+      "track_id": "routing",
+      "estimator_id": "deterministic-routing-case-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "route_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "routing",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "routing.robustness.pair-ratio",
+      "track_id": "routing",
+      "estimator_id": "declared-shift-pair-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "robustness_pair",
+      "cluster_unit": "case",
+      "weighting": "uniform_pair",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "routing",
+        "coordinates": [
+          "robustness.pair_id"
+        ]
+      }
+    },
+    {
+      "id": "routing.robustness.worst-slice-ratio",
+      "track_id": "routing",
+      "estimator_id": "declared-shift-worst-slice-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "robustness_pair",
+      "cluster_unit": "case",
+      "weighting": "uniform_pair",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "routing",
+        "coordinates": [
+          "robustness.pair_id"
+        ],
+        "required_dimensions": [
+          "robustness.slice_id"
+        ]
+      }
+    },
+    {
+      "id": "safety.case.mean",
+      "track_id": "safety",
+      "estimator_id": "deterministic-policy-case-observed-mean",
+      "estimator_version": "v1",
+      "analysis_unit": "policy_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "safety",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "safety.case.ratio",
+      "track_id": "safety",
+      "estimator_id": "deterministic-policy-case-observed-ratio",
+      "estimator_version": "v1",
+      "analysis_unit": "policy_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "safety",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "safety.case.wilson-upper",
+      "track_id": "safety",
+      "estimator_id": "deterministic-policy-case-wilson-upper",
+      "estimator_version": "v1",
+      "analysis_unit": "policy_case",
+      "cluster_unit": "case",
+      "weighting": "uniform_case",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "evaluation_case_plan",
+        "track_id": "safety",
+        "coordinates": [
+          "case_id"
+        ]
+      }
+    },
+    {
+      "id": "safety.hard-policy.ledger",
+      "track_id": "safety",
+      "estimator_id": "hard-policy-ledger-attestation",
+      "estimator_version": "v1",
+      "analysis_unit": "policy_observation",
+      "cluster_unit": "case",
+      "weighting": "uniform_observation",
+      "missingness": "fail_closed",
+      "exclusion_policy": "exclude_unavailable_evidence",
+      "planned_unit_projection": {
+        "source": "method_ledger",
+        "track_id": "safety",
+        "coordinates": [
+          "hard_policy.observation_id"
+        ]
+      }
+    }
+  ],
+  "static_metrics": [
+    {
+      "id": "agentic.invalid_tool_rate",
+      "analysis_ref": "agentic.trajectory.ratio"
+    },
+    {
+      "id": "agentic.mean_trajectory_steps",
+      "analysis_ref": "agentic.trajectory.mean"
+    },
+    {
+      "id": "agentic.privacy_exposures_per_trajectory",
+      "analysis_ref": "agentic.trajectory.mean"
+    },
+    {
+      "id": "agentic.recovery_baseline_success_rate",
+      "analysis_ref": "agentic.recovery.cluster-ratio"
+    },
+    {
+      "id": "agentic.recovery_cluster_count",
+      "analysis_ref": "agentic.recovery.cluster-count"
+    },
+    {
+      "id": "agentic.recovery_cluster_pass_rate",
+      "analysis_ref": "agentic.recovery.cluster-ratio"
+    },
+    {
+      "id": "agentic.recovery_cluster_pass_rate_lower_95",
+      "analysis_ref": "agentic.recovery.cluster-wilson-bounds"
+    },
+    {
+      "id": "agentic.recovery_distinct_seed_count",
+      "analysis_ref": "agentic.recovery.pair-count"
+    },
+    {
+      "id": "agentic.recovery_max_retry_amplification",
+      "analysis_ref": "agentic.recovery.pair-max"
+    },
+    {
+      "id": "agentic.recovery_maximum_latency_ms",
+      "analysis_ref": "agentic.recovery.frozen-threshold"
+    },
+    {
+      "id": "agentic.recovery_mean_latency_delta_ms",
+      "analysis_ref": "agentic.recovery.cluster-mean"
+    },
+    {
+      "id": "agentic.recovery_minimum_cluster_count",
+      "analysis_ref": "agentic.recovery.frozen-threshold"
+    },
+    {
+      "id": "agentic.recovery_minimum_distinct_seed_count",
+      "analysis_ref": "agentic.recovery.frozen-threshold"
+    },
+    {
+      "id": "agentic.recovery_pair_count",
+      "analysis_ref": "agentic.recovery.pair-count"
+    },
+    {
+      "id": "agentic.recovery_retry_amplification_threshold",
+      "analysis_ref": "agentic.recovery.frozen-threshold"
+    },
+    {
+      "id": "agentic.recovery_success_delta",
+      "analysis_ref": "agentic.recovery.cluster-mean"
+    },
+    {
+      "id": "agentic.recovery_treatment_success_rate",
+      "analysis_ref": "agentic.recovery.cluster-ratio"
+    },
+    {
+      "id": "agentic.runtime_cost_per_success",
+      "analysis_ref": "agentic.trajectory.complete-cost-ratio"
+    },
+    {
+      "id": "agentic.success_rate",
+      "analysis_ref": "agentic.trajectory.ratio"
+    },
+    {
+      "id": "agentic.task_attempt_count",
+      "analysis_ref": "agentic.task.attempt-count"
+    },
+    {
+      "id": "agentic.task_attempt_success_rate",
+      "analysis_ref": "agentic.task.attempt-ratio"
+    },
+    {
+      "id": "agentic.task_attempt_success_rate_lower_95",
+      "analysis_ref": "agentic.task.attempt-wilson-lower"
+    },
+    {
+      "id": "agentic.task_cost_per_success_usd",
+      "analysis_ref": "agentic.task.complete-cost-ratio"
+    },
+    {
+      "id": "agentic.task_distinct_count",
+      "analysis_ref": "agentic.task.attempt-count"
+    },
+    {
+      "id": "agentic.task_invalid_tool_rate",
+      "analysis_ref": "agentic.task.tool-call-ratio"
+    },
+    {
+      "id": "agentic.task_mean_score",
+      "analysis_ref": "agentic.task.attempt-mean"
+    },
+    {
+      "id": "agentic.task_mean_steps",
+      "analysis_ref": "agentic.task.attempt-mean"
+    },
+    {
+      "id": "agentic.task_privacy_exposures_per_attempt",
+      "analysis_ref": "agentic.task.attempt-mean"
+    },
+    {
+      "id": "agentic.task_pure_reasoning_attempt_count",
+      "analysis_ref": "agentic.task.attempt-count"
+    },
+    {
+      "id": "agentic.task_reliability",
+      "analysis_ref": "agentic.task.task-ratio"
+    },
+    {
+      "id": "agentic.task_reliability_lower_95",
+      "analysis_ref": "agentic.task.task-wilson-lower"
+    },
+    {
+      "id": "agentic.task_required_tool_receipt_coverage",
+      "analysis_ref": "agentic.task.attempt-ratio"
+    },
+    {
+      "id": "agentic.task_score",
+      "analysis_ref": "agentic.trajectory.mean"
+    },
+    {
+      "id": "agentic.task_tool_required_attempt_count",
+      "analysis_ref": "agentic.task.attempt-count"
+    },
+    {
+      "id": "agentic.task_total_cost_usd",
+      "analysis_ref": "agentic.task.complete-cost-sum"
+    },
+    {
+      "id": "capacity.cost_per_successful_request",
+      "analysis_ref": "capacity.summary.complete-cost-ratio"
+    },
+    {
+      "id": "capacity.error_rate",
+      "analysis_ref": "capacity.summary.request-repetition-rate-mean"
+    },
+    {
+      "id": "capacity.error_rate_cluster_range_max",
+      "analysis_ref": "capacity.summary.level-error-cluster-range-max"
+    },
+    {
+      "id": "capacity.error_rate_upper_bound",
+      "analysis_ref": "capacity.summary.request-worst-cluster-wilson-upper"
+    },
+    {
+      "id": "capacity.latency_p95_ms",
+      "analysis_ref": "capacity.summary.request-quantile"
+    },
+    {
+      "id": "capacity.latency_p95_stability_cv_max",
+      "analysis_ref": "capacity.summary.repetition-max"
+    },
+    {
+      "id": "capacity.latency_p99_ms",
+      "analysis_ref": "capacity.summary.request-quantile"
+    },
+    {
+      "id": "capacity.measurement_cluster_count_min",
+      "analysis_ref": "capacity.summary.level-cluster-count-min"
+    },
+    {
+      "id": "capacity.measurement_request_count",
+      "analysis_ref": "capacity.summary.request-count"
+    },
+    {
+      "id": "capacity.saturation_concurrency",
+      "analysis_ref": "capacity.summary.level-max"
+    },
+    {
+      "id": "capacity.saturation_concurrency_lower_bound",
+      "analysis_ref": "capacity.summary.level-max"
+    },
+    {
+      "id": "capacity.saturation_observed",
+      "analysis_ref": "capacity.summary.level-max"
+    },
+    {
+      "id": "capacity.slo_headroom",
+      "analysis_ref": "capacity.summary.level-max"
+    },
+    {
+      "id": "capacity.success_concurrency_upper_bound",
+      "analysis_ref": "capacity.summary.level-max"
+    },
+    {
+      "id": "capacity.success_rate",
+      "analysis_ref": "capacity.summary.request-repetition-rate-mean"
+    },
+    {
+      "id": "capacity.throughput_rps",
+      "analysis_ref": "capacity.summary.level-max"
+    },
+    {
+      "id": "capacity.throughput_stability_cv_max",
+      "analysis_ref": "capacity.summary.repetition-max"
+    },
+    {
+      "id": "capacity.warmup_error_count",
+      "analysis_ref": "capacity.summary.warmup-count"
+    },
+    {
+      "id": "experiment.assignment_balance_p_value",
+      "analysis_ref": "experiment.assignment.balance-p-value"
+    },
+    {
+      "id": "experiment.assignment_support",
+      "analysis_ref": "experiment.assignment.support"
+    },
+    {
+      "id": "experiment.candidate_safe",
+      "analysis_ref": "experiment.assignment.control-boolean"
+    },
+    {
+      "id": "experiment.controls_operational",
+      "analysis_ref": "experiment.assignment.control-boolean"
+    },
+    {
+      "id": "experiment.minimum_assignment_count",
+      "analysis_ref": "experiment.assignment.frozen-threshold"
+    },
+    {
+      "id": "experiment.risk_budget_max_rate",
+      "analysis_ref": "experiment.assignment.frozen-threshold"
+    },
+    {
+      "id": "experiment.risk_event_rate",
+      "analysis_ref": "experiment.assignment.risk-ratio"
+    },
+    {
+      "id": "experiment.risk_event_upper_confidence_bound",
+      "analysis_ref": "experiment.assignment.risk-wilson-upper"
+    },
+    {
+      "id": "joint.latency_p95_ms",
+      "analysis_ref": "joint.case.quantile"
+    },
+    {
+      "id": "joint.normalized_regret",
+      "analysis_ref": "joint.case.mean"
+    },
+    {
+      "id": "joint.oracle_capture_ratio",
+      "analysis_ref": "joint.case.ratio"
+    },
+    {
+      "id": "joint.oracle_regret",
+      "analysis_ref": "joint.case.mean"
+    },
+    {
+      "id": "joint.realized_quality",
+      "analysis_ref": "joint.case.mean"
+    },
+    {
+      "id": "joint.reliability",
+      "analysis_ref": "joint.case.ratio"
+    },
+    {
+      "id": "joint.runtime_cost_per_success",
+      "analysis_ref": "joint.case.complete-cost-ratio"
+    },
+    {
+      "id": "model_pool.all_arm_failure_rate",
+      "analysis_ref": "model-pool.dense-case.ratio"
+    },
+    {
+      "id": "model_pool.arm_count",
+      "analysis_ref": "model-pool.snapshot.arm-count"
+    },
+    {
+      "id": "model_pool.best_single_quality",
+      "analysis_ref": "model-pool.dense-case.mean"
+    },
+    {
+      "id": "model_pool.mean_pairwise_failure_jaccard",
+      "analysis_ref": "model-pool.failure-pair.mean"
+    },
+    {
+      "id": "model_pool.oracle_gain",
+      "analysis_ref": "model-pool.dense-case.mean"
+    },
+    {
+      "id": "model_pool.oracle_quality",
+      "analysis_ref": "model-pool.dense-case.mean"
+    },
+    {
+      "id": "model_pool.pareto_dominated_arm_count",
+      "analysis_ref": "model-pool.pool-arm.count"
+    },
+    {
+      "id": "model_pool.pareto_evaluable_arm_count",
+      "analysis_ref": "model-pool.pool-arm.count"
+    },
+    {
+      "id": "model_pool.quality_cost_shared_support_cases",
+      "analysis_ref": "model-pool.dense-case.count"
+    },
+    {
+      "id": "model_pool.quality_cost_shared_support_fraction",
+      "analysis_ref": "model-pool.dense-case.ratio"
+    },
+    {
+      "id": "model_pool.quality_dominated_arm_count",
+      "analysis_ref": "model-pool.pool-arm.count"
+    },
+    {
+      "id": "model_pool.quality_shared_support_cases",
+      "analysis_ref": "model-pool.dense-case.count"
+    },
+    {
+      "id": "model_pool.quality_shared_support_fraction",
+      "analysis_ref": "model-pool.dense-case.ratio"
+    },
+    {
+      "id": "model_pool.selection_arm_coverage",
+      "analysis_ref": "model-pool.selection.coverage"
+    },
+    {
+      "id": "model_pool.selection_entropy_bits",
+      "analysis_ref": "model-pool.selection.entropy"
+    },
+    {
+      "id": "model_pool.unique_win_rate",
+      "analysis_ref": "model-pool.dense-case.ratio"
+    },
+    {
+      "id": "model_pool.unique_wins",
+      "analysis_ref": "model-pool.dense-case.count"
+    },
+    {
+      "id": "model_pool.worst_arm_reliability",
+      "analysis_ref": "model-pool.pool-arm.worst-ratio"
+    },
+    {
+      "id": "multimodal.privacy_violations",
+      "analysis_ref": "multimodal.case.mean"
+    },
+    {
+      "id": "multimodal.quality",
+      "analysis_ref": "multimodal.case.mean"
+    },
+    {
+      "id": "multimodal.support_rate",
+      "analysis_ref": "multimodal.case.ratio"
+    },
+    {
+      "id": "preference.agreement",
+      "analysis_ref": "preference.offline.case-ratio"
+    },
+    {
+      "id": "preference.effective_sample_ratio",
+      "analysis_ref": "preference.offline.ipw-ratio"
+    },
+    {
+      "id": "preference.effective_sample_size",
+      "analysis_ref": "preference.offline.ipw-effective-size"
+    },
+    {
+      "id": "preference.minimum_reward_lift",
+      "analysis_ref": "preference.production.frozen-threshold"
+    },
+    {
+      "id": "preference.online_causal_eligible",
+      "analysis_ref": "preference.production.eligibility"
+    },
+    {
+      "id": "preference.online_effective_sample_ratio",
+      "analysis_ref": "preference.production.ipw-ratio"
+    },
+    {
+      "id": "preference.online_effective_sample_size",
+      "analysis_ref": "preference.production.ipw-effective-size"
+    },
+    {
+      "id": "preference.online_ips_reward",
+      "analysis_ref": "preference.production.ips"
+    },
+    {
+      "id": "preference.online_minimum_effective_sample_ratio",
+      "analysis_ref": "preference.production.frozen-threshold"
+    },
+    {
+      "id": "preference.online_minimum_effective_sample_size",
+      "analysis_ref": "preference.production.frozen-threshold"
+    },
+    {
+      "id": "preference.online_outcome_coverage",
+      "analysis_ref": "preference.production.assignment-ratio"
+    },
+    {
+      "id": "preference.online_reward_lift",
+      "analysis_ref": "preference.production.snips-delta"
+    },
+    {
+      "id": "preference.online_reward_lift_passed",
+      "analysis_ref": "preference.production.eligibility"
+    },
+    {
+      "id": "preference.online_segment_count",
+      "analysis_ref": "preference.production.segment-count"
+    },
+    {
+      "id": "preference.online_segment_coverage",
+      "analysis_ref": "preference.production.segment-coverage"
+    },
+    {
+      "id": "preference.online_snips_reward",
+      "analysis_ref": "preference.production.snips"
+    },
+    {
+      "id": "preference.propensity_coverage",
+      "analysis_ref": "preference.offline.case-ratio"
+    },
+    {
+      "id": "preference.reference_effective_sample_ratio",
+      "analysis_ref": "preference.production.ipw-ratio"
+    },
+    {
+      "id": "preference.reference_effective_sample_size",
+      "analysis_ref": "preference.production.ipw-effective-size"
+    },
+    {
+      "id": "preference.reference_snips_reward",
+      "analysis_ref": "preference.production.snips"
+    },
+    {
+      "id": "preference.self_normalized_ips_agreement",
+      "analysis_ref": "preference.offline.snips"
+    },
+    {
+      "id": "r2.compound_model_budget.audc",
+      "analysis_ref": "r2.case-action-budget.audc"
+    },
+    {
+      "id": "r2.compound_model_budget.nauc",
+      "analysis_ref": "r2.case-action-budget.nauc"
+    },
+    {
+      "id": "r2.compound_model_budget.peak",
+      "analysis_ref": "r2.case-action-budget.peak"
+    },
+    {
+      "id": "r2.compound_model_budget.qnc",
+      "analysis_ref": "r2.case-action-budget.qnc"
+    },
+    {
+      "id": "routing.abstention_rate",
+      "analysis_ref": "routing.case.ratio"
+    },
+    {
+      "id": "routing.accuracy",
+      "analysis_ref": "routing.case.ratio"
+    },
+    {
+      "id": "routing.coverage",
+      "analysis_ref": "routing.case.ratio"
+    },
+    {
+      "id": "routing.fallback_rate",
+      "analysis_ref": "routing.case.ratio"
+    },
+    {
+      "id": "routing.latency_p50_ms",
+      "analysis_ref": "routing.case.quantile"
+    },
+    {
+      "id": "routing.latency_p95_ms",
+      "analysis_ref": "routing.case.quantile"
+    },
+    {
+      "id": "routing.robustness_pass_rate",
+      "analysis_ref": "routing.robustness.pair-ratio"
+    },
+    {
+      "id": "routing.robustness_worst_slice_pass_rate",
+      "analysis_ref": "routing.robustness.worst-slice-ratio"
+    },
+    {
+      "id": "routing.selected_arm_count",
+      "analysis_ref": "routing.case.distinct-arm-count"
+    },
+    {
+      "id": "routing.selection_entropy_bits",
+      "analysis_ref": "routing.case.entropy"
+    },
+    {
+      "id": "routing.success_rate",
+      "analysis_ref": "routing.case.ratio"
+    },
+    {
+      "id": "routing_recipe.e1.eligibility_complete_rate",
+      "analysis_ref": "routing-recipe.e1.decision-ratio"
+    },
+    {
+      "id": "routing_recipe.e1.selected_feasible_rate",
+      "analysis_ref": "routing-recipe.e1.decision-ratio"
+    },
+    {
+      "id": "routing_recipe.e2.oracle_regret",
+      "analysis_ref": "routing-recipe.e2.oracle-regret"
+    },
+    {
+      "id": "safety.block_accuracy",
+      "analysis_ref": "safety.case.ratio"
+    },
+    {
+      "id": "safety.false_negative_rate",
+      "analysis_ref": "safety.case.ratio"
+    },
+    {
+      "id": "safety.false_positive_rate",
+      "analysis_ref": "safety.case.ratio"
+    },
+    {
+      "id": "safety.hard_policy_observation_count",
+      "analysis_ref": "safety.hard-policy.ledger"
+    },
+    {
+      "id": "safety.hard_policy_static_passed",
+      "analysis_ref": "safety.hard-policy.ledger"
+    },
+    {
+      "id": "safety.violation_case_rate",
+      "analysis_ref": "safety.case.ratio"
+    },
+    {
+      "id": "safety.violation_rate",
+      "analysis_ref": "safety.case.mean"
+    },
+    {
+      "id": "safety.violation_upper_95",
+      "analysis_ref": "safety.case.wilson-upper"
+    }
+  ],
+  "dynamic_families": [
+    {
+      "id": "capacity-level",
+      "literal_prefix": "capacity.level.",
+      "pattern": "^capacity\\.level\\.([1-9][0-9]{0,5})\\.(elapsed_seconds|error_rate|error_rate_cluster_range|error_rate_upper_bound|latency_p95_cv|latency_p95_ms|latency_p99_ms|measurement_cluster_count|measurement_request_count|qualified|runtime_cost_usd|success_rate|throughput_cv|throughput_rps|throughput_scaling_efficiency|warmup_error_count|warmup_request_count)$",
+      "captures": [
+        {
+          "name": "concurrency",
+          "group": 1,
+          "type": "positive_int",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        {
+          "name": "statistic",
+          "group": 2,
+          "type": "enum",
+          "values": [
+            "elapsed_seconds",
+            "error_rate",
+            "error_rate_cluster_range",
+            "error_rate_upper_bound",
+            "latency_p95_cv",
+            "latency_p95_ms",
+            "latency_p99_ms",
+            "measurement_cluster_count",
+            "measurement_request_count",
+            "qualified",
+            "runtime_cost_usd",
+            "success_rate",
+            "throughput_cv",
+            "throughput_rps",
+            "throughput_scaling_efficiency",
+            "warmup_error_count",
+            "warmup_request_count"
+          ]
+        }
+      ],
+      "selector_capture": "statistic",
+      "variants": [
+        {
+          "value": "elapsed_seconds",
+          "analysis_ref": "capacity.level.elapsed"
+        },
+        {
+          "value": "error_rate",
+          "analysis_ref": "capacity.level.request-repetition-rate-mean"
+        },
+        {
+          "value": "error_rate_cluster_range",
+          "analysis_ref": "capacity.level.request-repetition-rate-range"
+        },
+        {
+          "value": "error_rate_upper_bound",
+          "analysis_ref": "capacity.level.request-worst-cluster-wilson-upper"
+        },
+        {
+          "value": "latency_p95_cv",
+          "analysis_ref": "capacity.level.repetition-mean"
+        },
+        {
+          "value": "latency_p95_ms",
+          "analysis_ref": "capacity.level.request-quantile"
+        },
+        {
+          "value": "latency_p99_ms",
+          "analysis_ref": "capacity.level.request-quantile"
+        },
+        {
+          "value": "measurement_cluster_count",
+          "analysis_ref": "capacity.level.request-repetition-count"
+        },
+        {
+          "value": "measurement_request_count",
+          "analysis_ref": "capacity.level.request-count"
+        },
+        {
+          "value": "qualified",
+          "analysis_ref": "capacity.level.qualification"
+        },
+        {
+          "value": "runtime_cost_usd",
+          "analysis_ref": "capacity.level.request-sum"
+        },
+        {
+          "value": "success_rate",
+          "analysis_ref": "capacity.level.request-repetition-rate-mean"
+        },
+        {
+          "value": "throughput_cv",
+          "analysis_ref": "capacity.level.repetition-mean"
+        },
+        {
+          "value": "throughput_rps",
+          "analysis_ref": "capacity.level.repetition-mean"
+        },
+        {
+          "value": "throughput_scaling_efficiency",
+          "analysis_ref": "capacity.level.repetition-ratio"
+        },
+        {
+          "value": "warmup_error_count",
+          "analysis_ref": "capacity.level.warmup-count"
+        },
+        {
+          "value": "warmup_request_count",
+          "analysis_ref": "capacity.level.warmup-count"
+        }
+      ],
+      "examples": [
+        {
+          "metric_id": "capacity.level.16.latency_p95_ms",
+          "captures": {
+            "concurrency": "16",
+            "statistic": "latency_p95_ms"
+          },
+          "analysis_ref": "capacity.level.request-quantile"
+        }
+      ]
+    },
+    {
+      "id": "model-pool-arm",
+      "literal_prefix": "model_pool.arm.",
+      "pattern": "^model_pool\\.arm\\.([A-Za-z0-9][A-Za-z0-9_-]{0,172})\\.(marginal_contribution|quality|success_rate)$",
+      "captures": [
+        {
+          "name": "arm_id",
+          "group": 1,
+          "type": "encoded_portable_id"
+        },
+        {
+          "name": "statistic",
+          "group": 2,
+          "type": "enum",
+          "values": [
+            "marginal_contribution",
+            "quality",
+            "success_rate"
+          ]
+        }
+      ],
+      "selector_capture": "statistic",
+      "variants": [
+        {
+          "value": "marginal_contribution",
+          "analysis_ref": "model-pool.arm.case-mean"
+        },
+        {
+          "value": "quality",
+          "analysis_ref": "model-pool.arm.case-mean"
+        },
+        {
+          "value": "success_rate",
+          "analysis_ref": "model-pool.arm.case-ratio"
+        }
+      ],
+      "examples": [
+        {
+          "metric_id": "model_pool.arm.fast.quality",
+          "captures": {
+            "arm_id": "fast",
+            "statistic": "quality"
+          },
+          "analysis_ref": "model-pool.arm.case-mean"
+        },
+        {
+          "metric_id": "model_pool.arm.u-bW9kZWwudjE.quality",
+          "captures": {
+            "arm_id": "u-bW9kZWwudjE",
+            "statistic": "quality"
+          },
+          "analysis_ref": "model-pool.arm.case-mean"
+        }
+      ]
+    },
+    {
+      "id": "multimodal-modality",
+      "literal_prefix": "multimodal.",
+      "pattern": "^multimodal\\.(audio|document|image|video)\\.(quality|support_rate)$",
+      "captures": [
+        {
+          "name": "modality",
+          "group": 1,
+          "type": "enum",
+          "values": [
+            "audio",
+            "document",
+            "image",
+            "video"
+          ]
+        },
+        {
+          "name": "statistic",
+          "group": 2,
+          "type": "enum",
+          "values": [
+            "quality",
+            "support_rate"
+          ]
+        }
+      ],
+      "selector_capture": "statistic",
+      "variants": [
+        {
+          "value": "quality",
+          "analysis_ref": "multimodal.modality.case-mean"
+        },
+        {
+          "value": "support_rate",
+          "analysis_ref": "multimodal.modality.case-ratio"
+        }
+      ],
+      "examples": [
+        {
+          "metric_id": "multimodal.image.support_rate",
+          "captures": {
+            "modality": "image",
+            "statistic": "support_rate"
+          },
+          "analysis_ref": "multimodal.modality.case-ratio"
+        }
+      ]
+    },
+    {
+      "id": "routing-recipe-e1-input",
+      "literal_prefix": "routing_recipe.e1.",
+      "pattern": "^routing_recipe\\.e1\\.(projection|signal)\\.([A-Za-z0-9][A-Za-z0-9_-]{0,172})\\.(error_rate|latency_p50_ms|latency_p95_ms|missing_rate|present_rate|timeout_rate)$",
+      "captures": [
+        {
+          "name": "kind",
+          "group": 1,
+          "type": "enum",
+          "values": [
+            "projection",
+            "signal"
+          ]
+        },
+        {
+          "name": "subject_id",
+          "group": 2,
+          "type": "encoded_portable_id"
+        },
+        {
+          "name": "statistic",
+          "group": 3,
+          "type": "enum",
+          "values": [
+            "error_rate",
+            "latency_p50_ms",
+            "latency_p95_ms",
+            "missing_rate",
+            "present_rate",
+            "timeout_rate"
+          ]
+        }
+      ],
+      "selector_capture": "statistic",
+      "variants": [
+        {
+          "value": "error_rate",
+          "analysis_ref": "routing-recipe.e1.input-rate"
+        },
+        {
+          "value": "latency_p50_ms",
+          "analysis_ref": "routing-recipe.e1.input-latency"
+        },
+        {
+          "value": "latency_p95_ms",
+          "analysis_ref": "routing-recipe.e1.input-latency"
+        },
+        {
+          "value": "missing_rate",
+          "analysis_ref": "routing-recipe.e1.input-rate"
+        },
+        {
+          "value": "present_rate",
+          "analysis_ref": "routing-recipe.e1.input-rate"
+        },
+        {
+          "value": "timeout_rate",
+          "analysis_ref": "routing-recipe.e1.input-rate"
+        }
+      ],
+      "examples": [
+        {
+          "metric_id": "routing_recipe.e1.signal.u-c2lnbmFsLnRvcGljLnYx.present_rate",
+          "captures": {
+            "kind": "signal",
+            "subject_id": "u-c2lnbmFsLnRvcGljLnYx",
+            "statistic": "present_rate"
+          },
+          "analysis_ref": "routing-recipe.e1.input-rate"
+        }
+      ]
+    },
+    {
+      "id": "routing-recipe-e2-projection",
+      "literal_prefix": "routing_recipe.e2.projection.",
+      "pattern": "^routing_recipe\\.e2\\.projection\\.([A-Za-z0-9][A-Za-z0-9_-]{0,172})\\.(brier|ece_10|spearman)$",
+      "captures": [
+        {
+          "name": "subject_id",
+          "group": 1,
+          "type": "encoded_portable_id"
+        },
+        {
+          "name": "statistic",
+          "group": 2,
+          "type": "enum",
+          "values": [
+            "brier",
+            "ece_10",
+            "spearman"
+          ]
+        }
+      ],
+      "selector_capture": "statistic",
+      "variants": [
+        {
+          "value": "brier",
+          "analysis_ref": "routing-recipe.e2.calibration-brier"
+        },
+        {
+          "value": "ece_10",
+          "analysis_ref": "routing-recipe.e2.calibration-ece10"
+        },
+        {
+          "value": "spearman",
+          "analysis_ref": "routing-recipe.e2.projection-spearman"
+        }
+      ],
+      "examples": [
+        {
+          "metric_id": "routing_recipe.e2.projection.quality.spearman",
+          "captures": {
+            "subject_id": "quality",
+            "statistic": "spearman"
+          },
+          "analysis_ref": "routing-recipe.e2.projection-spearman"
+        }
+      ]
+    },
+    {
+      "id": "routing-recipe-e2-recall",
+      "literal_prefix": "routing_recipe.e2.feasible_oracle_recall_at_",
+      "pattern": "^routing_recipe\\.e2\\.feasible_oracle_recall_at_([1-9][0-9]?)$",
+      "captures": [
+        {
+          "name": "top_k",
+          "group": 1,
+          "type": "positive_int",
+          "minimum": 1,
+          "maximum": 64
+        }
+      ],
+      "selector_capture": "top_k",
+      "variants": [
+        {
+          "value": "*",
+          "analysis_ref": "routing-recipe.e2.feasible-recall"
+        }
+      ],
+      "examples": [
+        {
+          "metric_id": "routing_recipe.e2.feasible_oracle_recall_at_4",
+          "captures": {
+            "top_k": "4"
+          },
+          "analysis_ref": "routing-recipe.e2.feasible-recall"
+        }
+      ]
+    }
+  ]
+}

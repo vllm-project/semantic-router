@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,19 +17,30 @@ import (
 const evaluationAPIBase = "/api/evaluation/v1"
 
 type EvaluationPlaneHandler struct {
-	service  *evaluationplane.Service
-	readonly bool
+	service            *evaluationplane.Service
+	readonly           bool
+	responseStreams    *evaluationResponseStreamLimiter
+	streamWriteTimeout time.Duration
 }
 
 func NewEvaluationPlaneHandler(service *evaluationplane.Service, readonly bool) *EvaluationPlaneHandler {
-	return &EvaluationPlaneHandler{service: service, readonly: readonly}
+	return &EvaluationPlaneHandler{
+		service: service, readonly: readonly,
+		responseStreams:    newEvaluationResponseStreamLimiter(),
+		streamWriteTimeout: evaluationResponseWriteTimeout,
+	}
 }
 
 func (h *EvaluationPlaneHandler) Catalog(w http.ResponseWriter, r *http.Request) {
 	if preflightOrMethod(w, r, http.MethodGet) {
 		return
 	}
-	writeEvaluationJSON(w, http.StatusOK, h.service.Catalog())
+	catalog, err := h.service.Catalog()
+	if err != nil {
+		writeEvaluationError(w, err)
+		return
+	}
+	writeEvaluationJSON(w, http.StatusOK, catalog)
 }
 
 func (h *EvaluationPlaneHandler) Runs(w http.ResponseWriter, r *http.Request) {
@@ -39,22 +49,40 @@ func (h *EvaluationPlaneHandler) Runs(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		runs, err := h.service.ListRuns()
+		actor, ok := h.evaluationActor(w, r)
+		if !ok {
+			return
+		}
+		query, err := evaluationRunListQuery(r)
 		if err != nil {
 			writeEvaluationError(w, err)
 			return
 		}
-		writeEvaluationJSON(w, http.StatusOK, runs)
+		ledger, err := h.service.ListRunLedgerPageAs(actor, query)
+		if err != nil {
+			writeEvaluationError(w, err)
+			return
+		}
+		writeEvaluationJSON(w, http.StatusOK, ledger)
 	case http.MethodPost:
+		actor, ok := h.evaluationActor(w, r)
+		if !ok {
+			return
+		}
 		if h.denyReadonly(w) {
 			return
 		}
-		var request evaluationplane.CreateRunRequest
-		if err := decodeStrictJSON(r, &request); err != nil {
+		var wire evaluationCreateRunWireRequest
+		if err := decodeStrictJSON(r, &wire); err != nil {
 			writeEvaluationError(w, fmt.Errorf("%w: %w", evaluationplane.ErrInvalid, err))
 			return
 		}
-		run, err := h.service.CreateRun(r.Context(), request)
+		request, err := wire.domainRequest()
+		if err != nil {
+			writeEvaluationError(w, fmt.Errorf("%w: %w", evaluationplane.ErrInvalid, err))
+			return
+		}
+		run, err := h.service.CreateRunAs(r.Context(), actor, request)
 		if err != nil {
 			writeEvaluationError(w, err)
 			return
@@ -63,6 +91,25 @@ func (h *EvaluationPlaneHandler) Runs(w http.ResponseWriter, r *http.Request) {
 	default:
 		methodNotAllowed(w, http.MethodGet, http.MethodPost)
 	}
+}
+
+func evaluationRunListQuery(r *http.Request) (evaluationplane.RunListQuery, error) {
+	if !onlyQueryKeys(r, "limit", "cursor") {
+		return evaluationplane.RunListQuery{}, fmt.Errorf("%w: unsupported run list query field", evaluationplane.ErrInvalid)
+	}
+	values := r.URL.Query()
+	if len(values["limit"]) > 1 || len(values["cursor"]) > 1 {
+		return evaluationplane.RunListQuery{}, fmt.Errorf("%w: run list query fields cannot be repeated", evaluationplane.ErrInvalid)
+	}
+	query := evaluationplane.RunListQuery{Cursor: strings.TrimSpace(values.Get("cursor"))}
+	if raw := strings.TrimSpace(values.Get("limit")); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			return evaluationplane.RunListQuery{}, fmt.Errorf("%w: run list limit must be an integer", evaluationplane.ErrInvalid)
+		}
+		query.Limit = limit
+	}
+	return query, nil
 }
 
 func (h *EvaluationPlaneHandler) RunRoute(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +137,8 @@ func (h *EvaluationPlaneHandler) RunRoute(w http.ResponseWriter, r *http.Request
 			h.report(w, r, runID)
 		case "events":
 			h.events(w, r, runID)
+		case "lifecycle":
+			h.runLifecycle(w, r, runID)
 		default:
 			http.NotFound(w, r)
 		}
@@ -106,6 +155,10 @@ func (h *EvaluationPlaneHandler) Compare(w http.ResponseWriter, r *http.Request)
 	if preflightOrMethod(w, r, http.MethodGet) {
 		return
 	}
+	actor, ok := h.evaluationActor(w, r)
+	if !ok {
+		return
+	}
 	if !onlyQueryKeys(r, "baseline_run_id", "candidate_run_id") {
 		writeEvaluationError(w, fmt.Errorf("%w: unsupported comparison query field", evaluationplane.ErrInvalid))
 		return
@@ -116,7 +169,7 @@ func (h *EvaluationPlaneHandler) Compare(w http.ResponseWriter, r *http.Request)
 		writeEvaluationError(w, fmt.Errorf("%w: baseline_run_id and candidate_run_id are required", evaluationplane.ErrInvalid))
 		return
 	}
-	comparison, err := h.service.Compare(baselineID, candidateID)
+	comparison, err := h.service.CompareAs(actor, baselineID, candidateID)
 	if err != nil {
 		writeEvaluationError(w, err)
 		return
@@ -127,17 +180,25 @@ func (h *EvaluationPlaneHandler) Compare(w http.ResponseWriter, r *http.Request)
 func (h *EvaluationPlaneHandler) runResource(w http.ResponseWriter, r *http.Request, runID string) {
 	switch r.Method {
 	case http.MethodGet:
-		run, err := h.service.GetRun(runID)
+		actor, ok := h.evaluationActor(w, r)
+		if !ok {
+			return
+		}
+		run, err := h.service.GetRunAs(actor, runID)
 		if err != nil {
 			writeEvaluationError(w, err)
 			return
 		}
 		writeEvaluationJSON(w, http.StatusOK, run)
 	case http.MethodDelete:
+		actor, ok := h.evaluationActor(w, r)
+		if !ok {
+			return
+		}
 		if h.denyReadonly(w) {
 			return
 		}
-		if err := h.service.DeleteRun(runID); err != nil {
+		if err := h.service.DeleteRunAs(actor, runID); err != nil {
 			writeEvaluationError(w, err)
 			return
 		}
@@ -152,17 +213,21 @@ func (h *EvaluationPlaneHandler) runAction(w http.ResponseWriter, r *http.Reques
 		methodNotAllowed(w, http.MethodPost)
 		return
 	}
-	if h.denyReadonly(w) {
-		return
-	}
 	var (
 		run evaluationplane.Run
 		err error
 	)
+	actor, ok := h.evaluationActor(w, r)
+	if !ok {
+		return
+	}
+	if h.denyReadonly(w) {
+		return
+	}
 	if action == "start" {
-		run, err = h.service.StartRun(r.Context(), runID)
+		run, err = h.service.StartRunAs(r.Context(), actor, runID)
 	} else {
-		run, err = h.service.CancelRun(runID)
+		run, err = h.service.CancelRunAs(actor, runID)
 	}
 	if err != nil {
 		writeEvaluationError(w, err)
@@ -176,7 +241,11 @@ func (h *EvaluationPlaneHandler) report(w http.ResponseWriter, r *http.Request, 
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	report, err := h.service.ReportJSON(runID)
+	actor, ok := h.evaluationActor(w, r)
+	if !ok {
+		return
+	}
+	report, err := h.service.ReportJSONAs(actor, runID)
 	if err != nil {
 		writeEvaluationError(w, err)
 		return
@@ -191,7 +260,17 @@ func (h *EvaluationPlaneHandler) artifact(w http.ResponseWriter, r *http.Request
 		methodNotAllowed(w, http.MethodGet)
 		return
 	}
-	artifact, err := h.service.OpenArtifact(runID, artifactID)
+	actor, ok := h.evaluationActor(w, r)
+	if !ok {
+		return
+	}
+	releaseStream, streamErr := h.responseStreams.acquire(actor)
+	if streamErr != nil {
+		writeEvaluationError(w, streamErr)
+		return
+	}
+	defer releaseStream()
+	artifact, err := h.service.OpenArtifactAs(actor, runID, artifactID)
 	if err != nil {
 		writeEvaluationError(w, err)
 		return
@@ -201,7 +280,12 @@ func (h *EvaluationPlaneHandler) artifact(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Length", strconv.FormatInt(artifact.Size, 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", artifact.Name))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(w, r, artifact.Name, time.Time{}, artifact.File)
+	deadlineWriter := newEvaluationDeadlineWriter(w, h.streamWriteTimeout)
+	defer deadlineWriter.clearDeadline()
+	if err := deadlineWriter.arm(); err != nil {
+		return
+	}
+	http.ServeContent(deadlineWriter, r, artifact.Name, time.Time{}, artifact.File)
 }
 
 func (h *EvaluationPlaneHandler) denyReadonly(w http.ResponseWriter) bool {
@@ -212,23 +296,6 @@ func (h *EvaluationPlaneHandler) denyReadonly(w http.ResponseWriter) bool {
 		"error": map[string]string{"message": "Operation not allowed in readonly mode"},
 	})
 	return true
-}
-
-func decodeStrictJSON(r *http.Request, destination any) error {
-	defer func() { _ = r.Body.Close() }()
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(destination); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("request contains trailing JSON")
-		}
-		return err
-	}
-	return nil
 }
 
 func writeEvaluationJSON(w http.ResponseWriter, status int, payload any) {
@@ -246,6 +313,10 @@ func writeEvaluationError(w http.ResponseWriter, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, evaluationplane.ErrConflict):
 		status = http.StatusConflict
+	case errors.Is(err, evaluationplane.ErrForbidden):
+		status = http.StatusForbidden
+	case errors.Is(err, evaluationplane.ErrQuota):
+		status = http.StatusInsufficientStorage
 	}
 	message := err.Error()
 	if status == http.StatusInternalServerError {

@@ -3,7 +3,7 @@
 The Dashboard is the authenticated control and observability UI for a Semantic
 Router deployment. It combines a React frontend with a Go backend that serves
 the SPA, stores dashboard state, and proxies Router, Envoy, Grafana,
-Prometheus, Jaeger, and Fleet Simulator endpoints.
+Prometheus, and Jaeger endpoints.
 
 Use it to:
 
@@ -52,19 +52,22 @@ The current installation and first-run workflow is documented in
 ```bash
 make dashboard-build
 make dashboard-check
+make dashboard-test-e2e-evaluation
 make dashboard-test-backend
 ```
 
-`dashboard-check` is the single entrypoint for dashboard quality, and the required
-`Dashboard` CI workflow runs the **same target** — nothing here is CI-only, and
-nothing in CI is missing locally. Run it before pushing. It runs, in order:
+The required `Dashboard` CI workflow runs `dashboard-check`, then the Evaluation
+browser acceptance target shown above. Both gates are available locally; run
+`dashboard-check` before every Dashboard change and the browser acceptance gate
+when changing Evaluation UI or workflows. `dashboard-check` runs, in order:
 
 | Step | What it covers |
 | --- | --- |
+| `dashboard-evaluation-catalog-check` | Verifies the generated Evaluation catalog mirrors match their canonical CLI sources. |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
 | `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
 | `dashboard-test-frontend` | Frontend unit tests |
-| `dashboard-test-backend` | `go test ./...` on `dashboard/backend` |
+| `dashboard-test-backend` | `go test ./...` on `dashboard/backend`, including the real Go → sandboxed Python Evaluation worker contract |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
 
 The dashboard backend is a **separate Go module**, so `go test ./...` from the
@@ -107,7 +110,6 @@ variables. Defaults are defined in
 | `TARGET_GRAFANA_URL` | Optional Grafana base URL. |
 | `TARGET_PROMETHEUS_URL` | Optional Prometheus base URL. |
 | `TARGET_JAEGER_URL` | Optional Jaeger base URL. |
-| `TARGET_FLEET_SIM_URL` | Optional Fleet Simulator service URL. |
 
 Feature controls:
 
@@ -119,13 +121,22 @@ Feature controls:
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
 | `EVALUATION_ENABLED` | Enable evaluation jobs. |
 | `EVALUATION_DATA_DIR` | Durable Evaluation Plane artifact store; default `./data/evaluation`. |
+| `EVALUATION_DEPLOYMENTS_DIR` | Optional read-only directory containing a strict `evaluation-deployments.v1` `registry.json` plus relative deployment configs. Enables deployment-scoped baseline and candidate targets; unset preserves the single-runtime target. |
 | `EVALUATION_ENVOY_API_KEY_ENV` | Optional server-owned environment variable name containing the Envoy evaluation credential; the browser never supplies or receives it. |
+| `EVALUATION_AGENT_TASK_LEDGER_URL`, `_API_KEY_ENV`, `_TIMEOUT` | Optional typed server-owned endpoint for a complete sealed provider-observed agent-task ledger. Its credential and URL remain outside public catalog responses and worker argv. |
 | `VLLM_SR_SOURCE_REVISION` | Immutable source identity required to create an evaluation run: a full 40-character Git commit or `sha256:` source-tree digest. Dashboard images set this from their build argument. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
 | `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
+
+Deployment registries support Linux and macOS through descriptor-relative reads
+that reject symlinks in the registry path and its files. Use a canonical registry
+directory; macOS also requires read permission on its directory components.
+Other platforms reject a configured registry. Leaving `EVALUATION_DEPLOYMENTS_DIR`
+unset retains the single-runtime target. Evaluation workers require Linux for
+their sandbox.
 
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
 `DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
@@ -137,13 +148,27 @@ The Dashboard container defaults this store to `/app/data/evaluation`; its
 entrypoint excludes that subtree from shared-data permission widening and
 reapplies the private modes before every restart.
 
+For a local multi-deployment experiment, export
+`EVALUATION_DEPLOYMENTS_DIR` before the canonical `vllm-sr serve` command. The
+CLI validates every host path component, mounts the directory read-only into
+Dashboard only, and rewrites the environment value to the container path.
+Router and Envoy do not inherit the mount or variable. The registry accepts
+only deployment ID/name/description, a confined relative config path, and exact
+Router/Envoy origins. It rejects symlinks, traversal, unknown fields,
+duplicates, and literal credential or ledger configuration. Public catalog
+responses expose the safe deployment label but never origins, paths, or secret
+references. See the [Evaluation Plane guide](../website/docs/benchmarking/evaluation-plane.md#address-baseline-and-candidate-deployments-together)
+for the versioned schema and controlled-pair contract.
+
 Dashboard image builds accept `VLLM_SR_SOURCE_REVISION` as a build argument and
 embed it in the runtime image. The Dockerfile default is `unavailable`, which
 keeps the Dashboard usable but makes Evaluation Plane run creation fail closed;
 release and CI builds must pass an immutable full commit or source-tree digest.
-Repository Make targets derive the full commit only from a clean checkout; a
-dirty checkout resolves to `unavailable` unless the caller explicitly supplies
-a canonical `sha256:` source-tree digest.
+Repository Make targets derive the full commit from a clean checkout and a
+deterministic `sha256:` source-tree digest from tracked or untracked local
+changes. Git-ignored caches and environments are excluded. Callers may still
+override the value with `VLLM_SR_SOURCE_REVISION` when reproducing a separately
+attested source tree.
 
 ## Authentication and write safety
 
@@ -151,6 +176,20 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
+
+To keep local Docker or Podman sessions valid when recreating the stack:
+
+1. Load the same `DASHBOARD_JWT_SECRET` into the host environment before every
+   `vllm-sr serve` invocation. Use your existing secret store; do not generate a
+   new value on each launch.
+2. Keep the Dashboard authentication database on its persistent volume.
+3. Start the stack normally. This variable configures Dashboard only; do not
+   pass it through `--recipe-env`.
+
+Without a stable key, each Dashboard restart requires users to log in again.
+Rotating the key also ends existing sessions, but does not change stored
+administrator accounts. If a temporary connection or server error interrupts
+session verification, choose **Retry** to reconnect without signing in again.
 
 Writes authenticated by the session cookie must carry an `X-CSRF-Token` header
 and a matching `Origin`. The frontend does this on its own. Set
@@ -221,6 +260,15 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 - **An unreadable or unparsable config resolves to "not in setup mode", deliberately.** Failing closed is the only safe posture for something gating unauthenticated admin creation; the resolver never falls back to the legacy flag on an error path. `/api/setup/state` answers `200` with a diagnostic `reason` (rather than a `500` the frontend silently coerced to "not in setup mode") so the condition is visible instead of silent. The reason never contains config file contents.
 - **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
 
+## Router contract access
+
+The **System → Platform & Access → Router API Docs** entry opens the running
+Router's Swagger UI through the authenticated Dashboard origin. Its companion
+proxies are `/api/router/api/v1` and `/api/router/openapi.json`; they expose the
+Router's `/api/v1` and `/openapi.json` responses through the existing read-only
+management proxy and do not maintain another API definition. Agents should
+query the Router endpoints directly and do not depend on the Dashboard.
+
 ## Architecture
 
 ```text
@@ -229,7 +277,7 @@ Browser
   -> Go API and reverse proxy (dashboard/backend)
        -> Router management API
        -> Envoy inference listener
-       -> optional monitoring and simulator services
+       -> optional monitoring services
        -> local SQLite and config/Recipe storage
 ```
 

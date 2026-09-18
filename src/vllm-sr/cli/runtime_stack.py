@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from cli.consts import (
     DEFAULT_API_PORT,
     DEFAULT_DASHBOARD_PORT,
-    DEFAULT_FLEET_SIM_PORT,
     DEFAULT_METRICS_PORT,
     DEFAULT_MILVUS_PORT,
     DEFAULT_ROUTER_PORT,
     DEFAULT_STACK_NAME,
-    VLLM_SR_SIM_CONTAINER_NAME,
 )
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
@@ -27,6 +25,7 @@ DEFAULT_PROMETHEUS_PORT = 9090
 DEFAULT_GRAFANA_PORT = 3000
 DEFAULT_REDIS_PORT = 6379
 DEFAULT_POSTGRES_PORT = 5432
+_MAX_HOST_PORT = 65_535
 
 STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -36,7 +35,7 @@ class RuntimeStackLayout:
     """Every name and port one local stack owns.
 
     A stack runs on two bridge networks. *network_name* is the application
-    network: Envoy, Dashboard, the simulator, the observability containers, and
+    network: Envoy, Dashboard, the observability containers, and
     any OpenClaw workload join it. *data_network_name* carries the storage
     services alone, so nothing that merely shares the stack can reach Redis,
     Postgres, or Milvus over the network. Router is the one container on both.
@@ -47,7 +46,6 @@ class RuntimeStackLayout:
     router_container_name: str
     envoy_container_name: str
     dashboard_container_name: str
-    fleet_sim_container_name: str
     network_name: str
     data_network_name: str
     jaeger_container_name: str
@@ -60,7 +58,6 @@ class RuntimeStackLayout:
     metrics_port: int
     dashboard_port: int
     api_port: int
-    fleet_sim_port: int
     jaeger_otlp_port: int
     jaeger_ui_port: int
     prometheus_port: int
@@ -68,6 +65,24 @@ class RuntimeStackLayout:
     redis_port: int
     postgres_port: int
     milvus_port: int
+
+    def __post_init__(self) -> None:
+        for field in fields(self):
+            if not field.name.endswith("_port"):
+                continue
+            self._validate_host_port(getattr(self, field.name), field.name)
+
+    def host_port(self, container_port: int, *, name: str) -> int:
+        """Apply the stack offset and validate a configured service's host port."""
+        return self._validate_host_port(container_port + self.port_offset, name)
+
+    def _validate_host_port(self, port: int, name: str) -> int:
+        if not 1 <= port <= _MAX_HOST_PORT:
+            raise ValueError(
+                f"{PORT_OFFSET_ENV}={self.port_offset} produces invalid "
+                f"{name} {port}; host ports must be between 1 and {_MAX_HOST_PORT}"
+            )
+        return port
 
     @property
     def dashboard_url(self) -> str:
@@ -109,10 +124,6 @@ class RuntimeStackLayout:
         return f"http://localhost:{self.prometheus_port}"
 
     @property
-    def fleet_sim_url(self) -> str:
-        return f"http://localhost:{self.fleet_sim_port}"
-
-    @property
     def jaeger_service_url(self) -> str:
         return f"http://{self.jaeger_container_name}:16686"
 
@@ -123,10 +134,6 @@ class RuntimeStackLayout:
     @property
     def grafana_service_url(self) -> str:
         return f"http://{self.grafana_container_name}:3000"
-
-    @property
-    def fleet_sim_service_url(self) -> str:
-        return f"http://{self.fleet_sim_container_name}:8000"
 
     @property
     def otlp_service_endpoint(self) -> str:
@@ -175,8 +182,6 @@ class RuntimeStackLayout:
             return self.envoy_container_name
         if service == "dashboard":
             return self.dashboard_container_name
-        if service == "simulator":
-            return self.fleet_sim_container_name
         raise KeyError(f"unknown runtime service: {service}")
 
 
@@ -194,7 +199,6 @@ def resolve_runtime_stack(
         router_container_name = "vllm-sr-router-container"
         envoy_container_name = DEFAULT_ENVOY_CONTAINER_NAME
         dashboard_container_name = "vllm-sr-dashboard-container"
-        fleet_sim_container_name = VLLM_SR_SIM_CONTAINER_NAME
         network_name = f"{DEFAULT_STACK_NAME}-network"
         data_network_name = f"{DEFAULT_STACK_NAME}-data-network"
         jaeger_container_name = f"{DEFAULT_STACK_NAME}-jaeger"
@@ -207,7 +211,6 @@ def resolve_runtime_stack(
         router_container_name = f"{resolved_stack_name}-vllm-sr-router-container"
         envoy_container_name = f"{resolved_stack_name}-vllm-sr-envoy-container"
         dashboard_container_name = f"{resolved_stack_name}-vllm-sr-dashboard-container"
-        fleet_sim_container_name = f"{resolved_stack_name}-vllm-sr-sim"
         network_name = f"{resolved_stack_name}-vllm-sr-network"
         data_network_name = f"{resolved_stack_name}-vllm-sr-data-network"
         jaeger_container_name = f"{resolved_stack_name}-vllm-sr-jaeger"
@@ -223,7 +226,6 @@ def resolve_runtime_stack(
         router_container_name=router_container_name,
         envoy_container_name=envoy_container_name,
         dashboard_container_name=dashboard_container_name,
-        fleet_sim_container_name=fleet_sim_container_name,
         network_name=network_name,
         data_network_name=data_network_name,
         jaeger_container_name=jaeger_container_name,
@@ -236,7 +238,6 @@ def resolve_runtime_stack(
         metrics_port=DEFAULT_METRICS_PORT + resolved_port_offset,
         dashboard_port=DEFAULT_DASHBOARD_PORT + resolved_port_offset,
         api_port=DEFAULT_API_PORT + resolved_port_offset,
-        fleet_sim_port=DEFAULT_FLEET_SIM_PORT + resolved_port_offset,
         jaeger_otlp_port=DEFAULT_JAEGER_OTLP_PORT + resolved_port_offset,
         jaeger_ui_port=DEFAULT_JAEGER_UI_PORT + resolved_port_offset,
         prometheus_port=DEFAULT_PROMETHEUS_PORT + resolved_port_offset,

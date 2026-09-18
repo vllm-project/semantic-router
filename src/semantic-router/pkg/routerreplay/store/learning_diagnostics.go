@@ -103,6 +103,7 @@ type LearningProtectionDiagnostics struct {
 	CacheWarmth                   float64                           `json:"cache_warmth,omitempty"`
 	CacheWarmthOK                 bool                              `json:"cache_warmth_ok,omitempty"`
 	StayBias                      float64                           `json:"stay_bias,omitempty"`
+	CandidateModels               []string                          `json:"candidate_models,omitempty"`
 	BaseScores                    map[string]float64                `json:"base_scores,omitempty"`
 	FinalScores                   map[string]float64                `json:"final_scores,omitempty"`
 	CandidateTraces               map[string]LearningCandidateTrace `json:"candidate_traces,omitempty"`

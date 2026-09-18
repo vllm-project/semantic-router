@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Link from '@docusaurus/Link'
+import Translate from '@docusaurus/Translate'
 import { useLocation } from '@docusaurus/router'
 import clsx from 'clsx'
 import React from 'react'
@@ -22,7 +23,7 @@ export default function WebsiteMegaNav(): ReactNode {
           })}
           to={item.to}
         >
-          {item.label}
+          <Translate id={item.translateId}>{item.label}</Translate>
         </Link>
       ))}
     </nav>

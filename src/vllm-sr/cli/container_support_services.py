@@ -1,6 +1,6 @@
 """Starters for the auxiliary containers a local stack runs alongside the router.
 
-Jaeger, Prometheus, Grafana, and the fleet simulator are all optional companions
+Jaeger, Prometheus, and Grafana are optional companions
 to a `vllm-sr serve`: nothing in the request path depends on them, and
 `runtime_lifecycle` starts them as one group. They live here rather
 than in `container_services` so that module keeps its one dominant
@@ -13,7 +13,6 @@ lifecycle primitives; the dependency runs one way only.
 
 import os
 
-from cli.container_images import get_fleet_sim_container_image
 from cli.container_observability import (
     _ensure_hidden_config_dir,
     _render_template_copy,
@@ -173,45 +172,3 @@ def container_start_grafana(
         "docker.io/grafana/grafana:11.5.1",
     ]
     return _run_service_start(cmd, "Grafana")
-
-
-def container_start_fleet_sim(
-    *,
-    image: str | None = None,
-    pull_policy: str | None = None,
-    network_name: str | None = None,
-    config_dir: str | None = None,
-    stack_layout: RuntimeStackLayout | None = None,
-):
-    """Start the vllm-sr-sim sidecar container."""
-    runtime = get_container_runtime()
-    stack_layout = stack_layout or resolve_runtime_stack()
-    container_name = stack_layout.fleet_sim_container_name
-    network_name = network_name or stack_layout.network_name
-    sim_image = get_fleet_sim_container_image(image=image, pull_policy=pull_policy)
-    _replace_existing_container(container_name)
-
-    sim_state_dir = os.path.join(
-        _ensure_hidden_config_dir(config_dir), "fleet-sim-state"
-    )
-    os.makedirs(sim_state_dir, exist_ok=True)
-
-    cmd = [
-        runtime,
-        "run",
-        "-d",
-        "--name",
-        container_name,
-        "--network",
-        network_name,
-        "-e",
-        "PYTHONUNBUFFERED=1",
-        "-e",
-        "VLLM_SR_SIM_STATE_DIR=/state",
-        "-v",
-        f"{os.path.abspath(sim_state_dir)}:/state",
-        "-p",
-        f"{stack_layout.fleet_sim_port}:8000",
-        sim_image,
-    ]
-    return _run_service_start(cmd, "vllm-sr-sim")

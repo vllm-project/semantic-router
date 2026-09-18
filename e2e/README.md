@@ -55,7 +55,7 @@ make build-e2e
 ./bin/e2e -help
 ```
 
-[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
+[`tools/agent/domains.yaml`](../tools/agent/domains.yaml)
 records CI ownership, selection mode, and path triggers. Profile code remains
 the source of truth for deployment behavior and its exact test list.
 
@@ -115,6 +115,7 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
@@ -122,6 +123,7 @@ until the selected cases are known to be isolated.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
 - **category-remote-backend**: shared remote category `http_classify` backend.
+- **complexity-remote-backend**: shared remote complexity `score.v1` backend, with no local candidates so a verdict can only come from the remote score.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
 - **looper**: deterministic Looper algorithm contracts.
 - **istio**: sidecar, mTLS, and tracing behavior.
@@ -133,25 +135,27 @@ until the selected cases are known to be isolated.
 - **streaming**: streamed request bodies and cache round trips.
 - **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.
 - **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
+- **route-action**: decision route action for detected prompt attacks and benign traffic.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
-- **router-replay**: manual management-boundary and restart-recovery coverage.
+- **router-replay**: manual management-boundary, restart-recovery, and single-shadow failure-isolation coverage.
 - **dynamo**: manual NVIDIA Dynamo batching and GPU health coverage.
 - **vectorstore-registry**: manual metadata restart-recovery coverage.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
+- **response-jailbreak**: response-direction jailbreak signal and response_jailbreak plugin coverage for LLM output carrying jailbreak content past the classifier's sequence window, and the streamed-response pass-through contract.
 
 ### Coverage Ownership Matrix
 
 | Selection | Meaning | Source of truth |
 | --- | --- | --- |
-| Default local | Runs when no profile is specified | `default_local: true` in the test-domain registry |
-| Full CI | Runs in the complete E2E matrix | `full_ci: true` in the test-domain registry |
-| Affected | Selected when owned paths change | `selection: pr` and `paths` in the test-domain registry |
-| Manual only | Requires explicit selection and profile prerequisites | `selection: manual` in the test-domain registry |
+| Default local | Runs when no profile is specified | `default_local: true` in the domain registry |
+| Full CI | Runs in the complete E2E matrix | `full_ci: true` in the domain registry |
+| Affected | Selected only by declared contract paths | `selection: pr` and `paths` in the domain registry |
+| Manual only | Requires explicit selection and profile prerequisites | `selection: manual` in the domain registry |
 
-[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
+[`tools/agent/domains.yaml`](../tools/agent/domains.yaml)
 owns the exact selection mode, path triggers, and coverage role for every entry.
 “Manual” describes lifecycle and prerequisites; it is not evidence that the
 profile passed in another environment.
@@ -166,6 +170,55 @@ backend output, and the absence of leaked backend wire shapes. The same profiles
 also cover tool-call lifecycles, structured JSON Schema output, provider transport
 errors, incomplete streams, and midstream failures.
 
+### Single-shadow failure isolation
+
+The manual `router-replay` profile covers the existing single-shadow feature.
+This is a bounded slice related to
+[the failure-isolation tracker](https://github.com/vllm-project/semantic-router/issues/3284);
+multi-arm dispatch, judging, privacy enforcement, dataset qualification,
+training, promotion, and rollback are outside this profile's shadow coverage.
+
+The profile uses real Envoy, Router, and Postgres with the local `mock-vllm`
+image. It requires CPU capacity for that stack, but no GPU or external provider
+credentials. Its manifest explicitly enables the provider's shadow controls;
+other profiles retain the default simulator behavior. The E2E owner and manual
+selection are recorded in `tools/agent/domains.yaml`.
+Response caching and tool retrieval are disabled in this profile because these
+cases exercise dispatch and Replay.
+
+| Test | Required result |
+| --- | --- |
+| `shadow-dispatch-observes-candidate-model` | The candidate completes without changing the primary response. |
+| `shadow-dispatch-fail-open-unreachable-backend` | The unavailable candidate records a transport failure or timeout. |
+| `shadow-dispatch-fail-open-timeout` | A held shadow reaches its five-second deadline; the primary finishes before it, and the same route recovers. |
+| `shadow-dispatch-fail-open-malformed-response` | HTTP 200 with an invalid JSON response shape records `malformed_response`; the same route recovers. |
+| `shadow-dispatch-fail-open-queue-full` | With concurrency and queue depth both one, exactly three requests produce one running shadow, one queued shadow, and one `queue_full` drop. |
+
+Each case sends two primary warmups. The second warmup and every measured
+primary must finish within two seconds and return exactly
+`Hello from openai/gpt-oss-20b.` with that model. Complete response bodies must
+match the baseline except for the provider's `created` timestamp. Replay rows
+must retain the same primary response and exist in Postgres.
+
+The queue case waits for provider and Router readiness signals before each
+request. After release, only the two admitted shadows may reach the provider.
+The dropped request retains its primary Replay row without a shadow outcome;
+the drop counter must increase by exactly one. A subsequent request must succeed
+on both paths. The queue deadline is 30 seconds and the fixture barrier expires
+after 60 seconds, independently of cleanup.
+
+Run all five cases explicitly and sequentially:
+
+```bash
+make e2e-test E2E_PROFILE=router-replay E2E_CLUSTER_NAME=sr-shadow-3284 \
+  E2E_PARALLEL=false \
+  E2E_TESTS=shadow-dispatch-observes-candidate-model,shadow-dispatch-fail-open-unreachable-backend,shadow-dispatch-fail-open-timeout,shadow-dispatch-fail-open-malformed-response,shadow-dispatch-fail-open-queue-full
+```
+
+The runner's report retains primary bodies, elapsed times and ceilings, Replay
+IDs and outcomes, provider counts, and queue metric snapshots. Verbose logs
+include the response and Replay evidence for diagnosing a failed contract.
+
 ## Add or change a profile
 
 1. Add or update a package under `e2e/profiles/<name>`.
@@ -173,7 +226,7 @@ errors, incomplete streams, and midstream failures.
    access.
 3. Register it in `e2e/profiles/all/imports.go`.
 4. Add its ownership and selection mode to
-   `tools/agent/test-domain-registry.yaml`.
+   `tools/agent/domains.yaml`.
 5. Reuse test cases where the contract is shared; add a new test only for a new
    externally visible behavior.
 6. Add deterministic assertions. A request that merely returned any response
@@ -186,12 +239,11 @@ For test-case boundaries, read [`testcases/AGENTS.md`](testcases/AGENTS.md).
 ```bash
 make build-e2e
 (cd e2e && go test ./...)
-make agent-report ENV=cpu CHANGED_FILES='e2e/...'
+make impact ENV=cpu CHANGED_FILES='e2e/...'
 ```
 
-Then run the smallest affected profile. Use
-`make agent-e2e-affected CHANGED_FILES='...'` when the repository harness can
-resolve the profile set from changed paths.
+Then run the relevant profile explicitly with
+`make verify PROFILE=<profile>`.
 
 ## Diagnose a failed run
 
