@@ -224,3 +224,65 @@ func TestVectorStoreSearchAnswersWithAPreparedRemoteEmbedder(t *testing.T) {
 		t.Fatalf("prepared remote embedder was asked to embed %d times, want 1", plain.calls)
 	}
 }
+
+// countingSearchEmbedder records how often it was asked to embed, so a test can
+// show that a rejected query never reaches the model.
+type countingSearchEmbedder struct{ calls int }
+
+func (e *countingSearchEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
+	e.calls++
+	return []float32{1, 0, 0}, nil
+}
+
+func (e *countingSearchEmbedder) Dimension() int { return 3 }
+
+func TestVectorStoreSearchRejectsABlankQueryAsAClientError(t *testing.T) {
+	for name, query := range map[string]string{
+		"empty":      "",
+		"spaces":     "   ",
+		"whitespace": "   \n\t  ",
+	} {
+		t.Run(name, func(t *testing.T) {
+			embedder := &countingSearchEmbedder{}
+			server, storeID := vectorStoreSearchFixture(t, embedder)
+			body, err := json.Marshal(SearchRequest{Query: query, MaxNumResults: 2})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			request := httptest.NewRequest(http.MethodPost, apiStorageVectorStoresPath+"/"+storeID+"/search", strings.NewReader(string(body)))
+			response := httptest.NewRecorder()
+			server.handleSearchVectorStore(response, request)
+
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("blank query answered %d, want 400: %s", response.Code, response.Body.String())
+			}
+			if code := parseErrorResponse(t, response.Body.Bytes()); code != "INVALID_INPUT" {
+				t.Fatalf("blank query reported %q, want INVALID_INPUT", code)
+			}
+			if embedder.calls != 0 {
+				t.Fatalf("a rejected query still reached the embedder %d times", embedder.calls)
+			}
+		})
+	}
+}
+
+func TestVectorStoreSearchStillAnswersAQueryWithSurroundingSpace(t *testing.T) {
+	embedder := &countingSearchEmbedder{}
+	server, storeID := vectorStoreSearchFixture(t, embedder)
+	body, err := json.Marshal(SearchRequest{Query: "  how long does a refund take  ", MaxNumResults: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, apiStorageVectorStoresPath+"/"+storeID+"/search", strings.NewReader(string(body)))
+	response := httptest.NewRecorder()
+	server.handleSearchVectorStore(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("padded query answered %d, want 200: %s", response.Code, response.Body.String())
+	}
+	if embedder.calls == 0 {
+		t.Fatal("a query with real text never reached the embedder")
+	}
+}
