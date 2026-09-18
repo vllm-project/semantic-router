@@ -23,7 +23,6 @@ func init() {
 type stickyPrefixRequest struct {
 	Model     string                `json:"model"`
 	MaxTokens int                   `json:"max_tokens"`
-	Metadata  map[string]string     `json:"metadata"`
 	Messages  []anthropicMessage    `json:"messages"`
 	Tools     []stickyAnthropicTool `json:"tools"`
 }
@@ -165,7 +164,6 @@ func runStickyProviderPrefixTurn(
 		stickyPrefixRequest{
 			Model:     "MoM",
 			MaxTokens: 8,
-			Metadata:  map[string]string{"user_id": "sticky-prefix-contract"},
 			Messages:  []anthropicMessage{{Role: "user", Content: prompt}},
 			Tools:     tools,
 		},

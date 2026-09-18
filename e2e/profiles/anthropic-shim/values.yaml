@@ -34,7 +34,7 @@ config:
         rules:
           operator: OR
           conditions:
-            - type: metadata
+            - type: conversation
               name: sticky_provider_prefix
         modelRefs:
           - model: MoM
@@ -77,12 +77,16 @@ config:
             # needs a signal match to route, and the gateway provides a
             # safety-net in case the router produces no match.
             - ""
-      metadata:
+      conversation:
         - name: sticky_provider_prefix
-          description: Select the isolated sticky provider-prefix E2E route
-          key: user_id
+          description: Select the isolated two-tool sticky provider-prefix E2E route
+          feature:
+            type: count
+            source:
+              type: tool_definition
           predicate:
-            equals: sticky-prefix-contract
+            gte: 2
+            lte: 2
     modelCards:
       - name: MoM
         param_size: 0.5b
