@@ -1,7 +1,9 @@
 # sr-bench 1.0
 
-Status: implementation and acceptance in progress. This document specifies the
-release contract; unchecked acceptance items are not claims of availability.
+Status: implementation and real-deployment acceptance recorded below. Release
+readiness additionally requires the final revision's selected checks on
+[PR #3913](https://github.com/vllm-project/semantic-router/pull/3913) to pass.
+The Balance quality objective remains unmet on independent validation.
 
 ## Outcome and scope
 
@@ -280,11 +282,25 @@ The PR includes implementation, this proposal, user documentation, updated skill
 and sanitized acceptance evidence. Private infrastructure identifiers and raw
 gated benchmark answers do not belong in the PR.
 
-The [September 18 development study](../../../../website/docs/benchmarking/sr-bench-development-study-20260918.md)
+The [September 18 development and validation study](../../../../website/docs/benchmarking/sr-bench-development-study-20260918.md)
 records the completed three-single-model baseline and three Balance revisions
 on 25 reused development cases, with 170 retained calls and qualified offline
-accounting corrections. Its simulated-price savings and small-sample scores do
-not establish holdout quality, all-adapter acceptance, or production savings.
+accounting corrections. A separate frozen validation compares the final Balance
+recipe with all three singles on 136 cases: 124 non-GPQA cases held out within
+the recorded preparation scope, plus 12 explicitly disclosed GPQA retests.
+Its 544 subject and 39 judge calls are complete and independently reconciled.
+The final recipe saved 77.16% of simulated subject cost against the strongest
+weighted single, but scored 7.89 percentage points lower. The wide paired
+interval does not establish non-inferiority. Completing the harness and two
+development loops does not mean the Balance quality objective was achieved.
+
+All nine adapters have real subject-execution evidence. MMLU-Pro, GPQA,
+SimpleQA, LiveCodeBench, Terminal-Bench and τ³ reached their grading paths in
+those model runs. Truncated ARC, SciCode and HLE responses remain incorrect;
+separate positive and negative controls exercised their actual graders. The
+ARC and SciCode controls made no model calls; the HLE controls made two judge
+calls and no subject calls. This functional coverage is not nine successful
+model-to-grader evaluations or a complete sr-bench capability score.
 
 - [x] Replace old CLI/API/UI evaluation surfaces and stale active documentation.
 - [x] Install from a built wheel and discover the same catalog from CLI and UI.
@@ -301,15 +317,30 @@ not establish holdout quality, all-adapter acceptance, or production savings.
 - [x] Complete optimization loop 2: inspect the first iteration, apply and
   preview a second revision, then measure it on the same development cases.
   Compare all three Balance revisions with the complete single-model baseline.
-- [ ] Evaluate the frozen final recipe and the chosen baseline on a disjoint
-  holdout without tuning against it. Publish the final recipe and uncertainty;
+- [x] Evaluate the frozen final recipe and all single baselines without tuning
+  against validation outcomes. Separate the 124-case non-GPQA held-out scope
+  from the 12 prior-label GPQA retests. Publish the final recipe and uncertainty;
   report measured regressions or inconclusive improvements without hiding them.
-- [ ] Exercise all nine adapter execution/grade paths against real prerequisites;
-  distinguish functional smoke acceptance from statistical capability claims.
-- [ ] Use the real Dashboard to launch and inspect a run, compare CLI-created
+- [x] Exercise all nine adapter execution paths against real prerequisites;
+  qualify graders separately when truncated model responses cannot reach them.
+  Keep reference controls distinct from statistical capability claims.
+- [x] Use the real Dashboard to launch and inspect a run, compare CLI-created
   runs, inspect failures and cancel safely; verify persistence across UI reload.
-- [ ] Run relevant CLI, backend, frontend, integration and generated-skill checks.
-- [ ] Publish one signed-off PR, inspect its final-head checks and resolve blockers.
+- [x] Run relevant CLI, backend, frontend, integration and generated-skill checks.
+- [x] Publish one signed-off PR with the implementation, proposal and acceptance
+  evidence. Its final-head CI gate remains the authoritative release condition.
+
+Public browser acceptance covered dataset paging and question details, arbitrary
+iteration comparisons, exports, recipe capture, and single/MoM plan review.
+The live lifecycle created one bounded synthetic parent, cancelled it after
+dispatch, then continued one previously undispatched cell in a separate child.
+An overly strict test assertion stopped after the child completed; the failure
+was retained, the assertion corrected, and the remaining UI and accounting
+checks completed read-only against those same runs. No generation was retried.
+Cancelled-parent and completed-child reloads passed; the two conditional
+active-run reload scenarios were skipped because their observed runs were
+already terminal. The study records these boundaries and excludes UI expenses
+from capability comparisons.
 
 Real acceptance uses new bounded runs and a new evidence namespace. It never
 resumes an aborted or frozen historical campaign. A pre-existing model quality

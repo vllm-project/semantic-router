@@ -1,15 +1,23 @@
 ---
-title: Balance development study — September 18, 2026
-description: A bounded sr-bench study of three single models, the current Balance recipe, and two routing revisions, with corrected accounting and explicit uncertainty.
+title: Balance development and validation — September 18, 2026
+description: Two Balance development revisions followed by frozen 136-case validation, with a separate 124-case non-GPQA scope, measured usage, simulated costs, and explicit quality limitations.
 ---
 
-# Balance development study — September 18, 2026
+# Balance development and validation — September 18, 2026
 
-The final development revision, R2, matched Flash's observed weighted score on
-25 development cases while using 53.29% less token-equivalent subject cost at
-the frozen simulated prices. Its cache-neutral saving was 51.32%. These are
-small-sample development observations: they do not establish capability
-equivalence, production savings, or a complete sr-bench 1.0 score.
+**The development match did not generalize to the frozen validation.** Balance
+R2 matched the strongest observed single, Flash, on 25 reused development
+cases. On the subsequent 136-case validation, R2 scored **31.00% weighted
+accuracy versus GLM's 38.89%**, while reducing simulated subject cost by
+77.16% (76.88% on a cache-neutral basis). Excluding the 12 prior-label-seen
+GPQA retests, the separate 124-case scope also retained a quality deficit:
+25.67% for R2 versus 33.33% for GLM.
+
+The goal of matching or exceeding the strongest single model **has not been
+met**. These results demonstrate a measured quality/cost tradeoff under the
+frozen protocol, not capability equivalence, billed production savings, or a
+complete sr-bench 1.0 score. The development results and reusable R2 recipe
+remain below so the full two-round loop can be inspected.
 
 Requests, response usage, and latency were measured from real executions.
 **Prices were a size-based simulation for this deployment, not provider billing
@@ -17,7 +25,298 @@ or measured GPU cost.** Every monetary value below applies those frozen prices
 to recorded usage. See the [sr-bench guide](./sr-bench) for the reusable
 dataset, CLI, Dashboard, and reporting workflow.
 
-## Scope and frozen protocol
+## Frozen validation: the development match did not generalize
+
+R2 was frozen before this validation and was not changed after observing its
+outcomes. The three single models each generated once on 136 cases; the same
+frozen R2 then generated once on the identical cases. Both jobs completed: **544
+subject calls and 39 separate Flash judge calls, 583 calls in total**. There
+were no application generation retries and no resumed development attempt.
+
+The dataset is a custom subset of the standard profile. Its 12 GPQA cases
+remain prior-label-seen retests; they are not unseen validation. The other 124
+cases were disjoint from the development and previously dispatched cases
+within the recorded preparation audit. That narrower held-out scope is shown
+separately; it is not a claim that benchmark content was absent from model
+pretraining or all previous exposure.
+
+| Benchmark | Cases in full validation | Weight in 136-case scope | Cases in non-GPQA scope | Weight in 124-case scope |
+| --- | ---: | ---: | ---: | ---: |
+| MMLU-Pro | 100 | 2/9 | 100 | 1/3 |
+| SimpleQA Verified | 20 | 2/9 | 20 | 1/3 |
+| GPQA Diamond | 12 | 1/3 | 0 | Excluded |
+| ARC-AGI-2 | 4 | 2/9 | 4 | 1/3 |
+| Total | 136 | 1 | 124 | 1 |
+
+The validation retained the 4,096-token ceiling, concurrency four, 600-second
+request deadline, 45-second idle deadline, 1,300-second case deadline, native
+request profiles and prices used below. Each job had a 14,400-second run bound
+and an $8 simulated-price dispatch budget. The latter is a reservation/stop
+policy, not a guaranteed provider invoice cap. Final-channel-only scoring,
+fixed denominators and output-limit failures were unchanged.
+
+### Quality and the primary comparator
+
+The **predeclared comparison rule** chooses the strongest observed single by
+exact weighted benchmark accuracy. On these validation cases that single is
+**GLM**, with `7/18`, not Flash, whose micro accuracy is higher. Weighted and
+micro accuracy answer different questions because benchmark sample counts
+differ. The same rule also selects GLM in the 124-case scope; there is no tie.
+
+**All 136 cases, including GPQA retests**
+
+| Target | Correct / planned | Weighted accuracy | Micro accuracy | Micro Wilson 95% interval | Output-limit cases |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM | 82/136 | 38.89% | 60.29% | 51.90% to 68.13% | 25 |
+| Flash | 87/136 | 35.67% | 63.97% | 55.62% to 71.55% | 40 |
+| Qwen27 | 71/136 | 29.44% | 52.21% | 43.87% to 60.42% | 52 |
+| Balance R2 | 74/136 | 31.00% | 54.41% | 46.03% to 62.55% | 50 |
+
+**The 124-case scope excluding GPQA**
+
+| Target | Correct / planned | Weighted accuracy | Micro accuracy | Micro Wilson 95% interval | Output-limit cases |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM | 76/124 | 33.33% | 61.29% | 52.50% to 69.40% | 21 |
+| Flash | 82/124 | 32.67% | 66.13% | 57.43% to 73.86% | 34 |
+| Qwen27 | 66/124 | 23.33% | 53.23% | 44.48% to 61.78% | 46 |
+| Balance R2 | 69/124 | 25.67% | 55.65% | 46.86% to 64.09% | 44 |
+
+R2 therefore **did not meet the goal of matching or exceeding the strongest
+single model**: its weighted deficit is 7.89 percentage points over 136 cases
+and 7.67 points over the 124 non-GPQA cases. Completing the jobs and reducing
+cost do not qualify that quality goal. The reported Wilson intervals apply
+to ordinary micro accuracy, not to weighted accuracy or equivalence.
+
+Per-benchmark correct counts retain every planned case. Parentheses show the
+number stopped at the fixed output limit; these are included as incorrect,
+not removed from the denominator.
+
+| Target | MMLU-Pro | SimpleQA | GPQA retest | ARC-AGI-2 |
+| --- | ---: | ---: | ---: | ---: |
+| GLM | 70/100 (11 capped) | 6/20 (6 capped) | 6/12 (4 capped) | 0/4 (4 capped) |
+| Flash | 78/100 (19 capped) | 4/20 (11 capped) | 5/12 (6 capped) | 0/4 (4 capped) |
+| Qwen27 | 65/100 (30 capped) | 1/20 (12 capped) | 5/12 (6 capped) | 0/4 (4 capped) |
+| Balance R2 | 67/100 (28 capped) | 2/20 (12 capped) | 5/12 (6 capped) | 0/4 (4 capped) |
+
+All 16 ARC subject responses in this validation reached the output ceiling.
+Those zeros are outcomes of this 4K protocol; they do not establish
+unconstrained puzzle-solving ability. In particular, a scope with four ARC
+cases carrying 2/9 or 1/3 of the weight has substantial uncertainty.
+
+### Subject cost, judge cost and the cache counterfactual
+
+All amounts remain **USD-equivalent at the frozen size-based simulated
+prices**, calculated from real returned usage. Subject cost excludes the
+Flash judge. No validation receipt required accounting correction: original
+receipts, independent four-bucket recomputation and application reports agreed.
+The earlier development corrections are retained separately below.
+
+**136-case cost scope**
+
+| Target | Subject cost | Judge calls | Judge cost | Total cost | Cache-neutral subject cost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM | 0.67338720 | 14 | 0.00809705 | 0.68148425 | 0.67338720 |
+| Flash | 0.50208535 | 9 | 0.00366470 | 0.50575005 | 0.49877295 |
+| Qwen27 | 0.08846550 | 8 | 0.00300495 | 0.09147045 | 0.08793630 |
+| Balance R2 | 0.15381303 | 8 | 0.00355810 | 0.15737113 | 0.15571815 |
+
+**124-case cost scope, excluding GPQA**
+
+| Target | Subject cost | Judge calls | Judge cost | Total cost | Cache-neutral subject cost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM | 0.58210560 | 14 | 0.00809705 | 0.59020265 | 0.58210560 |
+| Flash | 0.44099640 | 9 | 0.00366470 | 0.44466110 | 0.43768400 |
+| Qwen27 | 0.07972330 | 8 | 0.00300495 | 0.08272825 | 0.07919410 |
+| Balance R2 | 0.14503903 | 8 | 0.00355810 | 0.14859713 | 0.14694415 |
+
+The 136-case single-model matrix cost 1.26393805 in subject calls plus
+0.01476670 for judging. R2 cost 0.15381303 plus 0.00355810. Together these
+validation jobs cost **1.43607588 USD-equivalent**. The 124-case tables are
+subsets of those same calls, not additional runs or additional expense.
+
+R2 used cache reads where earlier runs had written cache entries. Its
+cache-neutral counterfactual prices every prompt token as fresh input, plus
+output at the same model rate; it is neither billed spend nor a measured
+cache-free run. Keeping both views avoids attributing every cache discount to
+routing quality. R2 is cheaper than GLM and Flash but more expensive than
+Qwen27 in both scopes.
+
+### Paired comparisons against all three singles
+
+The primary comparison is R2 versus GLM; the other two comparisons remain
+visible. Differences and intervals below are percentage points of **weighted**
+accuracy. The conservative paired Hoeffding interval uses the frozen weights
+and independent-case assumption described in the development analysis.
+Bootstrap intervals are diagnostics only. Both exclude strongest-single
+selection, source contamination and tuning-selection uncertainty. An interval
+covering zero does not establish equivalence or non-inferiority.
+
+**136 paired cases**
+
+| R2 versus | Wins / losses / ties | Weighted change, pp | Conservative 95%, pp | Bootstrap diagnostic 95%, pp | Subject saving | Cache-neutral saving |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| GLM (primary) | 9 / 17 / 110 | -7.89 | -50.46 to +34.69 | -18.33 to +3.11 | 77.16% | 76.88% |
+| Flash | 1 / 14 / 121 | -4.67 | -47.24 to +37.91 | -9.33 to -0.44 | 69.37% | 68.78% |
+| Qwen27 | 6 / 3 / 127 | +1.56 | -41.02 to +44.13 | -0.44 to +4.44 | -73.87% | -77.08% |
+
+**124 paired non-GPQA cases**
+
+| R2 versus | Wins / losses / ties | Weighted change, pp | Conservative 95%, pp | Bootstrap diagnostic 95%, pp | Subject saving | Cache-neutral saving |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| GLM (primary) | 8 / 15 / 101 | -7.67 | -58.08 to +42.74 | -15.33 to +0.00 | 75.08% | 74.76% |
+| Flash | 1 / 14 / 109 | -7.00 | -57.41 to +43.41 | -13.33 to -0.33 | 67.11% | 66.43% |
+| Qwen27 | 6 / 3 / 115 | +2.33 | -48.08 to +52.74 | -0.67 to +6.33 | -81.93% | -85.55% |
+
+### Measured latency, wall time and routing distribution
+
+Subject request latency excludes the separate judge call. TTFT is the time
+to the first nonempty streamed final or reasoning token. A sum of concurrent
+request durations is not elapsed job time.
+
+| Target / 136 cases | Subject p50, s | Subject p95, s | TTFT p50, s | Subject request-time sum, s |
+| --- | ---: | ---: | ---: | ---: |
+| GLM | 34.73 | 298.56 | 0.231 | 12524.92 |
+| Flash | 7.96 | 40.51 | 0.139 | 2344.52 |
+| Qwen27 | 19.22 | 79.30 | 0.079 | 4977.27 |
+| Balance R2 | 17.75 | 90.37 | 0.138 | 5257.09 |
+
+The single-model matrix took **5,066.215 seconds (84m26s)** for 408 subject
+cells and 31 judge calls; R2 took **1,370.506 seconds (22m51s)** for 136 subject
+cells and eight judge calls. These different job sizes are not a throughput
+speedup comparison. The interleaved matrix provides no separate wall time for
+each single model, nor was a standalone wall time measured for the 124-case
+subset. R2's p95 request latency was worse than both Flash and Qwen27.
+
+A build lasting **49.85 seconds**, from 18:51:22.931 to 18:52:12.777 UTC,
+overlapped late single-model validation on a shared host. CPU, disk or network
+contention was possible. No causal slowdown was established, and no post hoc
+latency correction was applied. This is a limitation on timing comparisons,
+not evidence that the build changed model quality or token accounting.
+
+| Benchmark | R2 Qwen27 calls | R2 Flash calls | R2 GLM calls |
+| --- | ---: | ---: | ---: |
+| MMLU-Pro | 86 | 14 | 0 |
+| SimpleQA | 16 | 4 | 0 |
+| GPQA retest | 12 | 0 | 0 |
+| ARC-AGI-2 | 4 | 0 | 0 |
+| Total | 118 | 18 | 0 |
+
+R2's recorded decisions were `medium` 96, `factual_guard` 18, `reasoning`
+15 and `simple` seven. Excluding GPQA, selections were Qwen27 106 and Flash
+18; decisions were `medium` 85, `factual_guard` 18, `reasoning` 14 and `simple`
+seven. These distributions describe executed requests, not a preview or a
+per-question oracle. No validation result was used to change the frozen R2.
+
+<details>
+<summary>Exclusive token buckets, per-bucket costs and 124-case timing</summary>
+
+Fresh input, cache read, cache write and output are disjoint buckets. The
+judge rows contain only Flash judge calls. Each cost bucket uses the selected
+model's frozen rate; the Balance rows sum those per-call model costs.
+
+**136 cases: tokens**
+
+| Target / role | Calls | Fresh input | Cache read | Cache write | Output |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM / subject | 136 | 45,900 | 0 | 0 | 171,752 |
+| GLM / judge | 14 | 4,255 | 0 | 0 | 2,734 |
+| Flash / subject | 136 | 32,455 | 0 | 20,384 | 238,168 |
+| Flash / judge | 9 | 1,936 | 0 | 0 | 1,234 |
+| Qwen27 / subject | 136 | 31,671 | 0 | 21,168 | 275,508 |
+| Qwen27 / judge | 8 | 1,644 | 0 | 0 | 993 |
+| Balance R2 / subject | 136 | 31,671 | 21,168 | 0 | 262,929 |
+| Balance R2 / judge | 8 | 1,712 | 0 | 0 | 1,254 |
+
+**136 cases: simulated cost by token bucket**
+
+| Target / role | Fresh input cost | Cache-read cost | Cache-write cost | Output cost | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM / subject | 0.05508000 | 0.00000000 | 0.00000000 | 0.61830720 | 0.67338720 |
+| GLM / judge | 0.00276575 | 0.00000000 | 0.00000000 | 0.00533130 | 0.00809705 |
+| Flash / subject | 0.02109575 | 0.00000000 | 0.01656200 | 0.46442760 | 0.50208535 |
+| Flash / judge | 0.00125840 | 0.00000000 | 0.00000000 | 0.00240630 | 0.00366470 |
+| Qwen27 / subject | 0.00316710 | 0.00000000 | 0.00264600 | 0.08265240 | 0.08846550 |
+| Qwen27 / judge | 0.00106860 | 0.00000000 | 0.00000000 | 0.00193635 | 0.00300495 |
+| Balance R2 / subject | 0.00616350 | 0.00021168 | 0.00000000 | 0.14743785 | 0.15381303 |
+| Balance R2 / judge | 0.00111280 | 0.00000000 | 0.00000000 | 0.00244530 | 0.00355810 |
+
+**124 non-GPQA cases: tokens**
+
+| Target / role | Calls | Fresh input | Cache read | Cache write | Output |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM / subject | 124 | 43,332 | 0 | 0 | 147,252 |
+| GLM / judge | 14 | 4,255 | 0 | 0 | 2,734 |
+| Flash / subject | 124 | 29,321 | 0 | 20,384 | 207,885 |
+| Flash / judge | 9 | 1,936 | 0 | 0 | 1,234 |
+| Qwen27 / subject | 124 | 28,537 | 0 | 21,168 | 247,412 |
+| Qwen27 / judge | 8 | 1,644 | 0 | 0 | 993 |
+| Balance R2 / subject | 124 | 28,537 | 21,168 | 0 | 234,727 |
+| Balance R2 / judge | 8 | 1,712 | 0 | 0 | 1,254 |
+
+**124 non-GPQA cases: simulated cost by token bucket**
+
+| Target / role | Fresh input cost | Cache-read cost | Cache-write cost | Output cost | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GLM / subject | 0.05199840 | 0.00000000 | 0.00000000 | 0.53010720 | 0.58210560 |
+| GLM / judge | 0.00276575 | 0.00000000 | 0.00000000 | 0.00533130 | 0.00809705 |
+| Flash / subject | 0.01905865 | 0.00000000 | 0.01656200 | 0.40537575 | 0.44099640 |
+| Flash / judge | 0.00125840 | 0.00000000 | 0.00000000 | 0.00240630 | 0.00366470 |
+| Qwen27 / subject | 0.00285370 | 0.00000000 | 0.00264600 | 0.07422360 | 0.07972330 |
+| Qwen27 / judge | 0.00106860 | 0.00000000 | 0.00000000 | 0.00193635 | 0.00300495 |
+| Balance R2 / subject | 0.00585010 | 0.00021168 | 0.00000000 | 0.13897725 | 0.14503903 |
+| Balance R2 / judge | 0.00111280 | 0.00000000 | 0.00000000 | 0.00244530 | 0.00355810 |
+
+**Request timing within the 124-case scope**
+
+| Target | Subject p50, s | Subject p95, s | TTFT p50, s | Subject request-time sum, s |
+| --- | ---: | ---: | ---: | ---: |
+| GLM | 31.76 | 298.52 | 0.230 | 10743.69 |
+| Flash | 7.67 | 40.58 | 0.141 | 2047.71 |
+| Qwen27 | 19.22 | 79.38 | 0.080 | 4491.59 |
+| Balance R2 | 16.50 | 88.03 | 0.138 | 4615.58 |
+
+</details>
+
+### Validation evidence and limits
+
+Independent read-only audits checked **7,906 assertions over all 439 calls in
+the single-model matrix**, then **2,737 assertions over all 144 R2 calls**. All
+passed.
+Each terminal report was read once for this audit; scoring and accounting
+were recomputed from retained streams and journal records. Checks covered
+unique planned cells, final-versus-reasoning separation, strict answer grading,
+truncation, Flash judge identity and payload, native client request parameters,
+actual selected models, per-response R2 hash acknowledgements, exclusive
+usage buckets, frozen prices, fixed denominators, Wilson intervals and paired
+statistics. They issued no model requests and changed no original evidence.
+
+The audit does not human-adjudicate judge semantics, prove hidden provider
+retry behavior, attest model weight files, or remove benchmark contamination.
+The raw prompts, references, responses, private endpoints, host identities and
+credentials remain private. Fingerprints below identify the evidence without
+redistributing that content. The inherited GLM qualification failures remain
+applicable: **64K strict-format failure**, **900K semantic result 4/6**, and
+`semantic_quality_passed=false`.
+
+<details>
+<summary>Frozen validation and audit fingerprints</summary>
+
+| Artifact | SHA-256 |
+| --- | ---: |
+| Common canonical cases | 715d02c4da7cb18ef843494bf009270c097b555e81ead487aa7d8a6c67ad7ff7 |
+| Three-single validation plan | c704611603b8954bc35c09a83a9a7a209431519686ebddf3ecc83c69981170a8 |
+| R2 validation plan | c26a833d85bb25c5a22284f81c950312d051daedeb7143c90f63a929947211da |
+| R2 active runtime | 4f1d0400dd7803c798f84806048afd1316ae3e8adcebcbff661b7005efa82a90 |
+| Prepared dataset bytes | 358c3307ab3937585269920cadb4e26bc6d3ee7bdf190ec1e47c740df210fcf2 |
+
+The run protocol retained source commit
+`5f5bbdb80b30f277dbf3661907a1a0dfe853a132`. Subsequent product deployment does not
+retroactively change this runner provenance. The source/runtime fingerprints
+identify this experiment, not a portable provider configuration.
+
+</details>
+
+## Development scope and frozen protocol
 
 The study ran a complete three-single-model matrix once, followed by current
 Balance (R0), optimization round one (R1), and optimization round two (R2), on
@@ -117,7 +416,7 @@ use. The full R2 runtime hash above identifies the original deployment, not a
 new merged configuration. The fragment's own SHA-256 is
 `e565da7fa6a7c1e70aa0da8368681e622cd854487e4644cde1764f85e14fcd64`.
 
-## Quality, cost, and latency
+## Development quality, cost, and latency
 
 Costs are USD-equivalent at simulated prices. “Subject” excludes judge calls.
 Latency percentiles measure individual subject requests, not end-to-end run
@@ -150,7 +449,7 @@ and R2 4m40s. The matrix interleaved targets, so its wall time cannot be assigne
 to individual single models. R2's request p50 and p95 were worse than Flash's;
 its cost reduction did not translate into a latency improvement.
 
-## Paired comparisons and uncertainty
+## Development paired comparisons and uncertainty
 
 Flash was the unique strongest observed single model by the exact frozen
 weighted score, `169/315`. The comparator is an actual single model, not a
@@ -178,7 +477,7 @@ and R2 because no correctness indicators differ on these cases, and
 reused cases is not proof of equivalence. Per-target and per-benchmark reports
 also retain Wilson intervals for their ordinary accuracy denominators.
 
-## Four-bucket accounting and the cache confound
+## Development accounting and the cache confound
 
 The four token buckets below are exclusive: fresh input, cache read, cache
 write, and output. Prompt totals include all three input buckets exactly once.
@@ -247,15 +546,17 @@ All checks passed. Original call-receipt digests remained unchanged for all
 These audit counts describe evidence verification, not additional generations.
 
 This establishes the bounded CLI development loop and report arithmetic for
-the four included benchmarks. It does not establish all-adapter execution,
-independent holdout quality, full benchmark completion, or Dashboard lifecycle
-acceptance. Those release checks remain separately tracked; setup, preflight,
-and mocked UI tests cannot substitute for live acceptance.
+the four included benchmarks. The separately audited validation above adds
+held-out evidence within its disclosed scope, and shows that R2 did not meet
+the quality target. Neither phase establishes full benchmark completion or
+Dashboard lifecycle acceptance by itself. The separate live Dashboard evidence
+is recorded below; setup, preflight and mocked UI tests do not substitute for it.
 
 The following qualifications remain attached to these results:
 
-- These are reused development cases. No holdout result is included here, and
-  no production workload distribution is represented by 25 benchmark cases.
+- The 25 development cases were reused for tuning. They remain distinct from
+  the 124-case non-GPQA held-out scope and the 12 GPQA validation retests above.
+  Neither sample represents a measured production workload distribution.
 - GPQA is a retest after earlier project labels were seen. A locally disjoint
   GPQA sample must still carry that prior-label disclosure.
 - GLM's earlier **64K strict-format qualification failed**. Its **900K semantic
@@ -269,17 +570,18 @@ The following qualifications remain attached to these results:
 - The earlier aborted evaluation campaign was not resumed. This development
   study does not claim completion of its 48,920-generation formal protocol.
 
-The next capability decision requires a frozen final recipe, prespecified
-quality and cost criteria, and independent validation without tuning against
-its outcomes. Larger development matrices can improve routing estimates, but
-they must remain distinct from that validation evidence.
+Further optimization needs a new development cycle and fresh independent
+validation. Using these published validation outcomes to change the recipe
+would make those cases development evidence for that later revision. Larger
+development matrices can improve routing estimates, but must remain distinct
+from the evidence used to judge a frozen candidate.
 
 ## Adapter and lifecycle acceptance
 
 All nine dataset adapters were prepared from pinned sources for the smoke,
 quick, and standard profiles in the [sr-bench guide](./sr-bench). Gated HLE
 access used an authorized local account; credentials and original dataset
-content are not part of this publication. The four-benchmark development
+content are not part of this publication. The 25-case, four-benchmark development
 study above exercised MMLU-Pro and GPQA final-answer grading and SimpleQA's
 fixed judge. All 12 ARC-AGI-2 subject responses reached their output ceiling,
 so those model runs did not reach the puzzle-output grader. The additional
@@ -354,10 +656,11 @@ The retained execution evidence has the following boundaries:
   sent generation was retried.
 - **HLE:** all four subjects returned `finish_reason=length` at 16,384 output
   tokens. Each counted as incorrect in the four-case denominator, and its
-  complete usage was retained. There were **zero judge calls**. This validates
-  bounded execution and accounting, but leaves HLE's live reference-judge path
-  unexercised. The configured judge is not a claim of official HLE leaderboard
-  equivalence.
+  complete usage was retained. There were **zero judge calls in that model
+  run**. A separate reference-judge control, described below, exercised the
+  installed judge without repeating subject generation or changing the four
+  truncated outcomes. The configured judge is not a claim of official HLE
+  leaderboard equivalence.
 
 Independent saved-stream audits passed 339 checks for the first three smokes
 and 1,008 checks for the τ³ child and HLE, covering all 87 calls. Checks included
@@ -366,5 +669,100 @@ four-bucket costs, single dispatch receipts, output limits, and concurrency.
 No audit issued inference requests. This evidence covers all nine subject
 adapter paths, with the grader limitations above; it is **not** nine fully
 qualified model-to-grader paths or a complete sr-bench score. Dashboard
-lifecycle acceptance and independent capability validation remain separate
-checks.
+lifecycle acceptance is reported separately below. The frozen capability
+validation above is separately audited and retains its observed quality gap.
+
+### Independent HLE reference-judge conformance
+
+A separate, explicitly authorized control used one benign programming case's
+private official reference as its positive fixture and a deliberately wrong
+final answer as its negative fixture. An operator extension supplied those
+fixture finals to the unchanged installed HLE grading function. Fixture receipt
+events were not model calls. Only the function's two Flash judge requests went
+through the ordinary instrumented request and accounting path.
+
+Both controls passed: the reference was judged `correct`, and the wrong answer
+was judged `incorrect`. There were **zero subject generations and exactly two
+judge calls**, with no retry. The frozen control used concurrency one, a
+2,048-token output ceiling, 60-second request and 30-second idle deadlines,
+a 180-second run bound, and a 0.10 USD-equivalent simulated-price budget.
+Both judge streams finished normally before their limits.
+
+| Fixture | Expected / observed verdict | Fresh input tokens | Output tokens | Simulated judge cost | Request latency / TTFT, seconds |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Official reference | correct / correct | 585 | 117 | 0.00060840 | 1.224 / 0.113 |
+| Deliberately wrong final | incorrect / incorrect | 557 | 144 | 0.00064285 | 1.603 / 0.231 |
+| Total | Two controls passed | 1,142 | 261 | 0.00125125 | Run wall time: 2.839 |
+
+Cache-read and cache-write tokens were both zero. The exclusive cost buckets
+were 0.00074230 fresh input, zero cache read, zero cache write, and 0.00050895
+output. These are actual judge tokens at the same simulated Flash rates, not
+an invoice. This separate **0.00125125 USD-equivalent control expense** is
+excluded from the model capability runs, their savings comparisons, and the
+five-smoke total above.
+
+An independent audit passed 341 checks over the saved streams, frozen native
+parameters, final-only verdicts, expected fixture outcomes, call counts,
+exclusive usage and costs. It verified that the original four-case HLE run's
+logical journal digest was unchanged. The isolated control service stopped
+cleanly after its exact process identity was checked; both owned processes
+exited, and the shared acceptance slot was released.
+
+The frozen control plan is
+`268e5507569d06d73a82e24c95af9d37e3f717661c34c4537f6f66434e21ab23`.
+It retained the original `5f5bbdb80` runner; the installed HLE grading module
+was byte-identical to the subsequent `9e3922e58` product deployment. This is
+bounded evidence that the installed reference-judge path executes and
+separates these two fixtures. It does not human-validate all judge decisions,
+prove official leaderboard parity, repair the truncated model run, or add a
+model capability score. The original question, reference and responses remain
+private.
+
+## Public Dashboard acceptance
+
+The matching Dashboard and worker were deployed after the frozen validation
+finished. Actual Chromium tests used the authenticated public HTTPS application,
+with fresh browser contexts and no test retries. Seven zero-generation scenarios
+passed: persisted single-model runs, arbitrary two- and three-revision
+comparisons with URL persistence and CSV export, final recipe download, all six
+pages of the 136-question dataset with coverage and question details, separate
+112-case single-model and MoM plan reviews, and the completed 136-case comparison.
+Desktop and mobile screenshots were reviewed. The tests observed no failed API
+or asset requests, page errors, or unrelated configuration-compiler downloads.
+Two conditional active-run reload scenarios were skipped because their runs
+were already terminal; they are not reported as successful active-run tests.
+
+A separate synthetic lifecycle exercised the real create/review/start UI with
+one Flash target, concurrency one and a 512-token output bound. The user-visible
+cancel action followed the first observed durable call. The 16-case parent
+retained six completed cases, one cancelled call and nine undispatched cases.
+Its completed receipts account for **0.00134875 USD-equivalent**, while its total
+cost remains unknown because the cancelled call supplied no complete usage.
+The cancelled parent and its status survived a browser reload.
+
+The UI then selected exactly one never-dispatched case and created one linked
+recovery child. That child completed one call, with a denominator of one and its
+own **0.00013975 USD-equivalent** cost: 116 fresh input and 33 output tokens,
+with no cache-read or cache-write tokens. Its 0.431-second run wall time and
+separate parent lineage remained visible after reload on desktop and mobile.
+The child inherited neither the parent's cost nor its full denominator. No
+previously dispatched cell was repeated, and these functional expenses are
+excluded from all capability and optimization comparisons.
+
+The original paid browser test stopped after the child completed because its
+strict progress-object assertion omitted the valid `running: 0` field. That
+failed test and its once-only submission receipt were preserved. The assertion
+was corrected, and a separate read-only browser continuation verified the
+existing parent and child, costs, lineage, reload and unchanged run inventory.
+It issued no mutations or model calls. An independent raw-evidence audit passed
+127 checks over the eight subject dispatches, native request parameters,
+final-only scoring, token buckets, denominators and absence of duplicate calls.
+No active or ambiguous-dispatch calls remained.
+
+The retained pre-child evidence proves the parent's progress and dispatched
+case identities. A complete historical parent-report digest was not saved
+before child creation, so this acceptance does not claim a byte-for-byte
+comparison of every parent field across that boundary. Current parent costs
+were independently recomputed from its own receipts. The failed browser attempt
+is not relabeled as a pass; the combined observed workflow and read-only
+reconciliation establish the functional result.

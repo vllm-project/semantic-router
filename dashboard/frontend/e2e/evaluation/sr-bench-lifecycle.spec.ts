@@ -380,7 +380,7 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
       (approved.limits.max_run_seconds + 10) * 1000,
     )
     expect(child.status).toBe('completed')
-    expect(child.progress).toEqual({ total: 1, completed: 1, failed: 0 })
+    expect(child.progress).toMatchObject({ total: 1, completed: 1, failed: 0, running: 0 })
     const childCalls = (await read<{ calls: CallRecord[] }>(page, `/runs/${childID}/calls`)).calls
     expect(childCalls).toHaveLength(1)
     expect(key(childCalls[0])).toBe(key(selected!))
