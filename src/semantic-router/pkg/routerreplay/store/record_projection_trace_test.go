@@ -21,7 +21,14 @@ func TestRecordJSONRoundTripProjectionTrace(t *testing.T) {
 			}},
 		},
 		Mappings: []projectiontrace.MappingDecision{
-			{MappingName: "m1", SourceScore: "s1", ScoreValue: 1.5, SelectedOutput: "out1", Confidence: 0.9},
+			{
+				MappingName:    "m1",
+				SourceScore:    "s1",
+				ScoreValue:     1.5,
+				MatchedOutputs: []string{"out1", "out2"},
+				SelectedOutput: "out1",
+				Confidence:     0.9,
+			},
 		},
 	}
 	rec := Record{
@@ -70,22 +77,29 @@ func assertProjectionTraceRoundTrip(
 	if got.SchemaVersion != want.SchemaVersion {
 		t.Fatalf("schema version = %q", got.SchemaVersion)
 	}
-	if len(got.Partitions) != 1 || got.Partitions[0].Winner != "a" {
+	if len(got.Partitions) != 1 {
 		t.Fatalf("partitions = %+v", got.Partitions)
 	}
-	if len(got.Scores) != 1 || got.Scores[0].Total != 1.5 {
+	if got.Partitions[0].Winner != "a" {
+		t.Fatalf("partitions = %+v", got.Partitions)
+	}
+	if len(got.Scores) != 1 {
 		t.Fatalf("scores = %+v", got.Scores)
 	}
-	if len(got.Mappings) != 1 || got.Mappings[0].SelectedOutput != "out1" {
+	if got.Scores[0].Total != 1.5 {
+		t.Fatalf("scores = %+v", got.Scores)
+	}
+	if len(got.Mappings) != 1 {
 		t.Fatalf("mappings = %+v", got.Mappings)
 	}
-}
-
-func assertRouteDiagnosticsRoundTrip(t *testing.T, got *RouteDiagnostics) {
-	t.Helper()
-
-	if got == nil || got.SessionAction != "switch" {
-		t.Fatalf("route diagnostics = %+v", got)
+	if got.Mappings[0].SelectedOutput != "out1" {
+		t.Fatalf("mappings = %+v", got.Mappings)
+	}
+	if len(got.Mappings[0].MatchedOutputs) != 2 {
+		t.Fatalf("matched outputs = %+v", got.Mappings[0].MatchedOutputs)
+	}
+	if got.Mappings[0].MatchedOutputs[1] != "out2" {
+		t.Fatalf("matched outputs = %+v", got.Mappings[0].MatchedOutputs)
 	}
 }
 
@@ -114,5 +128,13 @@ func TestCloneRecordCopiesProjectionTrace(t *testing.T) {
 	}
 	if len(cl.ProjectionTrace.Mappings) != 1 {
 		t.Fatalf("mappings len = %d", len(cl.ProjectionTrace.Mappings))
+	}
+}
+
+func assertRouteDiagnosticsRoundTrip(t *testing.T, got *RouteDiagnostics) {
+	t.Helper()
+
+	if got == nil || got.SessionAction != "switch" {
+		t.Fatalf("route diagnostics = %+v", got)
 	}
 }
