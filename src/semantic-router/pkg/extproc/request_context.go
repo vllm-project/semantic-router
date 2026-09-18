@@ -58,6 +58,7 @@ type EnhancedHallucinationInfo struct {
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	AutomaticCandidateDemands map[string]selection.CandidateDemand
+	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
 
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32

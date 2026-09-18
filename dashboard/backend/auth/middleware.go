@@ -150,8 +150,8 @@ func requiredPermission(method, path string) string {
 }
 
 // RequiredPermissions returns every permission needed by a request. Most
-// routes require one permission; controlled-pair creation is both an evidence
-// write and an immediate two-worker launch, so it deliberately requires both.
+// routes require one permission; sr-bench run creation persists a manifest and
+// immediately launches work, so it requires both write and run permissions.
 func RequiredPermissions(method, path string) []string {
 	if policy, ok := routercontract.LookupManagement(method, path); ok {
 		return policy.Permissions
@@ -159,7 +159,7 @@ func RequiredPermissions(method, path string) []string {
 	if !strings.HasPrefix(path, "/api/router/") {
 		path = strings.TrimSpace(strings.ToLower(path))
 	}
-	if method == http.MethodPost && path == "/api/evaluation/v1/controlled-pairs" {
+	if method == http.MethodPost && path == "/api/sr-bench/v1/runs" {
 		return []string{PermEvalWrite, PermEvalRun}
 	}
 	primary := requiredPermission(method, path)
@@ -328,8 +328,8 @@ func observabilityPermission(_ string, path string) (string, bool) {
 
 func featurePermission(method, path string) (string, bool) {
 	switch {
-	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
-		if isEvaluationRunAction(path) || isControlledPairCancelAction(path) {
+	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
+		if isSRBenchCancelAction(path) {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -345,18 +345,10 @@ func featurePermission(method, path string) (string, bool) {
 	}
 }
 
-func isControlledPairCancelAction(path string) bool {
-	path = strings.TrimRight(path, "/")
-	rest := strings.TrimPrefix(path, "/api/evaluation/v1/controlled-pairs/")
+func isSRBenchCancelAction(path string) bool {
+	rest := strings.TrimPrefix(strings.TrimRight(path, "/"), "/api/sr-bench/v1/runs/")
 	parts := strings.Split(rest, "/")
 	return len(parts) == 2 && parts[0] != "" && parts[1] == "cancel"
-}
-
-func isEvaluationRunAction(path string) bool {
-	path = strings.TrimRight(path, "/")
-	rest := strings.TrimPrefix(path, "/api/evaluation/v1/runs/")
-	parts := strings.Split(rest, "/")
-	return len(parts) == 2 && parts[0] != "" && (parts[1] == "start" || parts[1] == "cancel")
 }
 
 func openclawPermission(method, path string) (string, bool) {

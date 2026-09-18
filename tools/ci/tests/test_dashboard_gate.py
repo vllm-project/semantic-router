@@ -122,15 +122,14 @@ class DashboardGateTest(unittest.TestCase):
             f"{check.prereqs}.",
         )
 
-    def test_dashboard_check_requires_fresh_evaluation_catalog_mirrors(self) -> None:
+    def test_sr_bench_uses_the_service_catalog_without_generated_mirrors(self) -> None:
         check = TARGETS.get("dashboard-check")
         self.assertIsNotNone(check)
-        self.assertIn("dashboard-evaluation-catalog-check", check.prereqs)
-
-        catalog_check = TARGETS.get("dashboard-evaluation-catalog-check")
-        self.assertIsNotNone(catalog_check)
-        recipe = _expand(" ".join(catalog_check.recipe), VARIABLES)
-        self.assertIn("tools/ci/sync_evaluation_catalogs.py --check", recipe)
+        self.assertNotIn("dashboard-evaluation-catalog-check", check.prereqs)
+        self.assertFalse((REPO_ROOT / "tools/ci/sync_evaluation_catalogs.py").exists())
+        api = (REPO_ROOT / "dashboard/frontend/src/components/sr-bench/api.ts").read_text()
+        self.assertIn("/api/sr-bench/v1", api)
+        self.assertIn("'/catalog'", api)
 
     def test_dashboard_test_backend_runs_go_test_in_the_backend_directory(self) -> None:
         backend = TARGETS.get("dashboard-test-backend")

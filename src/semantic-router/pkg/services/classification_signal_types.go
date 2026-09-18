@@ -21,6 +21,7 @@ const (
 
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
+	ExpectedConfigHash  string            `json:"-"`
 	Text                string            `json:"text,omitempty"`
 	Messages            []IntentMessage   `json:"messages,omitempty"`
 	Tools               []json.RawMessage `json:"tools,omitempty"`
@@ -90,6 +91,7 @@ type EvalDecisionResult struct {
 
 // EvalResponse represents the eval classification response with comprehensive signal information.
 type EvalResponse struct {
+	ConfigHash             string                                  `json:"config_hash,omitempty"`
 	SignalErrorMatches     map[string]bool                         `json:"signal_error_matches,omitempty"`
 	OriginalText           string                                  `json:"original_text"` // The evaluated user turn or fallback query text
 	RequestedModel         string                                  `json:"requested_model,omitempty"`

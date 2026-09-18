@@ -35,7 +35,7 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
         container_start, "resolve_container_cli_path", lambda **kwargs: str(docker)
     )
 
-    def capture_specs(specs, *, storage_secret_values):
+    def capture_specs(specs, *, storage_secret_values, bench_secret_values, bench_token_env):
         captured.extend(specs)
         return 0, "", ""
 
@@ -54,7 +54,7 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
     envoy = yaml.safe_load((tmp_path / ".vllm-sr" / "envoy.yaml").read_text())
     assert envoy["static_resources"]["listeners"]
     services = {name: commands for name, _, commands in captured}
-    assert set(services) == {"router", "envoy", "dashboard"}
+    assert set(services) == {"router", "envoy", "sr-bench", "dashboard"}
     assert services["router"][0][1] == "create"
     assert services["envoy"][0][1] == "create"
     assert services["dashboard"][0][1] == "run"

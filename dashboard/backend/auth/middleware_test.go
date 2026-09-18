@@ -179,6 +179,10 @@ func TestRequiredPermissions(t *testing.T) {
 		path     string
 		expected string
 	}{
+		{method: http.MethodGet, path: "/api/sr-bench/v1/catalog", expected: PermEvalRead},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/plans", expected: PermEvalWrite},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/runs", expected: PermEvalWrite},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/runs/run-1/cancel", expected: PermEvalRun},
 		{method: http.MethodGet, path: "/api/admin/users", expected: PermUsersView},
 		{method: http.MethodPatch, path: "/api/admin/users/user-1", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
@@ -202,24 +206,6 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", expected: PermEvalRun},
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/context-recovery/invalidate", expected: PermConfigWrite},
-		{method: http.MethodGet, path: "/api/evaluation/v1/catalog", expected: PermEvalRead},
-		{method: http.MethodPost, path: "/api/evaluation/v1/runs", expected: PermEvalWrite},
-		{method: http.MethodDelete, path: "/api/evaluation/v1/runs/task-1", expected: PermEvalWrite},
-		{method: http.MethodPost, path: "/api/evaluation/v1/runs/task-1/start", expected: PermEvalRun},
-		{method: http.MethodPost, path: "/api/evaluation/v1/runs/task-1/start/", expected: PermEvalRun},
-		{method: http.MethodPost, path: "/api/evaluation/v1/runs/task-1/cancel", expected: PermEvalRun},
-		{method: http.MethodPost, path: "/api/evaluation/v1/runs/task-1/cancel/", expected: PermEvalRun},
-		{method: http.MethodPost, path: "/api/evaluation/v1/controlled-pairs", expected: PermEvalWrite},
-		{method: http.MethodPost, path: "/api/evaluation/v1/controlled-pairs/pair-1/cancel", expected: PermEvalRun},
-		{method: http.MethodGet, path: "/api/evaluation/v1/controlled-pairs/pair-1", expected: PermEvalRead},
-		{method: http.MethodDelete, path: "/api/evaluation/v1/controlled-pairs/pair-1", expected: PermEvalWrite},
-		{method: http.MethodPost, path: "/api/evaluation/v1/campaign-readiness", expected: PermEvalWrite},
-		{method: http.MethodGet, path: "/api/evaluation/v1/campaigns/campaign-1", expected: PermEvalRead},
-		{method: http.MethodDelete, path: "/api/evaluation/v1/campaigns/campaign-1", expected: PermEvalWrite},
-		{method: http.MethodPost, path: "/api/evaluation/v1/campaigns/campaign-1/lifecycle", expected: PermEvalWrite},
-		{method: http.MethodGet, path: "/api/evaluation/v1/lifecycle/usage", expected: PermEvalRead},
-		{method: http.MethodPost, path: "/api/evaluation/v1/runs/task-1/lifecycle", expected: PermEvalWrite},
-		{method: http.MethodPost, path: "/api/evaluation/v1/lifecycle/collection", expected: PermEvalWrite},
 		{method: http.MethodGet, path: "/api/openclaw/teams", expected: PermOpenClawRead},
 		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
 		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
@@ -256,7 +242,7 @@ func TestRequiredPermissions(t *testing.T) {
 		t.Run(tc.path, func(t *testing.T) {
 			t.Parallel()
 			expected := []string{tc.expected}
-			if tc.method == http.MethodPost && tc.path == "/api/evaluation/v1/controlled-pairs" {
+			if tc.method == http.MethodPost && tc.path == "/api/sr-bench/v1/runs" {
 				expected = append(expected, PermEvalRun)
 			}
 			if actual := RequiredPermissions(tc.method, tc.path); !reflect.DeepEqual(actual, expected) {
@@ -266,7 +252,7 @@ func TestRequiredPermissions(t *testing.T) {
 	}
 }
 
-func TestAuthenticateRequestRequiresControlledPairWriteAndRunPermissions(t *testing.T) {
+func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) {
 	tests := []struct {
 		name             string
 		path             string
@@ -275,22 +261,22 @@ func TestAuthenticateRequestRequiresControlledPairWriteAndRunPermissions(t *test
 		wantRequired     []string
 	}{
 		{
-			name: "create requires write", path: "/api/evaluation/v1/controlled-pairs",
+			name: "create requires write", path: "/api/sr-bench/v1/runs",
 			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
 			wantRequired: []string{PermEvalWrite, PermEvalRun},
 		},
 		{
-			name: "create requires run", path: "/api/evaluation/v1/controlled-pairs",
+			name: "create requires run", path: "/api/sr-bench/v1/runs",
 			removePermission: PermEvalRun, wantStatus: http.StatusForbidden,
 			wantRequired: []string{PermEvalWrite, PermEvalRun},
 		},
 		{
-			name: "cancel requires run not write", path: "/api/evaluation/v1/controlled-pairs/pair-1/cancel",
+			name: "cancel requires run not write", path: "/api/sr-bench/v1/runs/run-1/cancel",
 			removePermission: PermEvalWrite, wantStatus: http.StatusNoContent,
 			wantRequired: []string{PermEvalRun},
 		},
 		{
-			name: "cancel rejects missing run", path: "/api/evaluation/v1/controlled-pairs/pair-1/cancel",
+			name: "cancel rejects missing run", path: "/api/sr-bench/v1/runs/run-1/cancel",
 			removePermission: PermEvalRun, wantStatus: http.StatusForbidden,
 			wantRequired: []string{PermEvalRun},
 		},

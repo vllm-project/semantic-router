@@ -521,15 +521,14 @@ def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> 
     )
 
 
-def test_dashboard_dockerfile_ships_evaluation_worker_without_legacy_model_eval() -> (
+def test_dashboard_dockerfile_ships_sr_bench_service_without_legacy_model_eval() -> (
     None
 ):
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
     assert "COPY src/vllm-sr/cli/ /app/cli/" in content
-    assert "libseccomp2" in content
-    assert (REPO_ROOT / "src/vllm-sr/cli/evaluation/sandbox_worker.py").is_file()
-    assert (REPO_ROOT / "src/vllm-sr/cli/evaluation/sandbox.py").is_file()
+    assert (REPO_ROOT / "src/vllm-sr/cli/sr_bench/service.py").is_file()
+    assert not (REPO_ROOT / "src/vllm-sr/cli/evaluation").exists()
     assert (
         '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt'
         in content

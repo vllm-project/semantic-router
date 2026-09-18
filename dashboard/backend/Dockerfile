@@ -162,7 +162,6 @@ RUN groupadd --gid 65532 nonroot && \
     chown -R root:root /app/cli && \
     find /app/cli -type d -exec chmod 0555 {} + && \
     find /app/cli -type f -exec chmod 0444 {} + && \
-    chmod 0555 /app/cli/evaluation/sandbox_worker.py && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \

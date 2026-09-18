@@ -85,6 +85,14 @@ class RuntimeStackLayout:
         return port
 
     @property
+    def sr_bench_container_name(self) -> str:
+        return self.dashboard_container_name.replace("dashboard-container", "sr-bench-container")
+
+    @property
+    def sr_bench_port(self) -> int:
+        return self.host_port(8090, name="sr-bench API host port")
+
+    @property
     def dashboard_url(self) -> str:
         return f"http://localhost:{self.dashboard_port}"
 

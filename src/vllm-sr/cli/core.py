@@ -378,7 +378,7 @@ def stop_vllm_sr():
         stack_network_names,
         load_openclaw_registry(openclaw_data_dir),
     )
-    for container_name in _runtime_container_names(stack_layout):
+    for container_name in (*_runtime_container_names(stack_layout), stack_layout.sr_bench_container_name):
         if not _stop_managed_container(
             container_name,
             container_statuses[container_name],
@@ -424,6 +424,7 @@ def stop_vllm_sr():
 def _managed_container_statuses(stack_layout: RuntimeStackLayout) -> dict[str, str]:
     container_names = [
         *_runtime_container_names(stack_layout),
+        stack_layout.sr_bench_container_name,
         *_observability_container_names(stack_layout),
         *_storage_container_names(stack_layout),
     ]

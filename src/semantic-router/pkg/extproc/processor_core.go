@@ -225,6 +225,7 @@ func (r *OpenAIRouter) processRequestHeaders(
 		return err
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
+	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "request header"); err != nil {
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
@@ -246,6 +247,7 @@ func (r *OpenAIRouter) processRequestBody(
 		}
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
+	r.bindBenchmarkConfigResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
@@ -288,6 +290,7 @@ func (r *OpenAIRouter) processResponseHeaders(
 	if err != nil {
 		return err
 	}
+	r.bindBenchmarkConfigResponse(response, ctx)
 	return sendResponse(stream, response, "response header")
 }
 
@@ -300,6 +303,7 @@ func (r *OpenAIRouter) processResponseBody(
 	if err != nil {
 		return err
 	}
+	r.bindBenchmarkConfigResponse(response, ctx)
 	return sendResponse(stream, response, "response body")
 }
 
