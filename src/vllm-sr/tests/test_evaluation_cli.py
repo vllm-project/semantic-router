@@ -31,6 +31,7 @@ def test_catalog_and_clean_command_surface():
         "target",
         "replay",
         "regrade",
+        "reconcile-usage",
         "recover-plan",
         "recover",
         "export",

@@ -10,6 +10,7 @@ from fractions import Fraction
 from statistics import mean
 
 from . import VERSION
+from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, planned_cells
 from .failures import first_saved_failure
 
@@ -35,6 +36,13 @@ def wilson(correct, total):
     center = (p + z * z / (2 * total)) / den
     half = z * math.sqrt(p * (1 - p) / total + z * z / (4 * total * total)) / den
     return [max(0, center - half), min(1, center + half)]
+
+
+def paired_conservative_interval(delta, groups, weights, alpha=0.05):
+    """Hoeffding bound for independent paired differences in [-1, 1]."""
+    squared_weights = sum(weights[b] ** 2 / len(values) for b, values in groups.items())
+    radius = math.sqrt(2 * math.log(2 / alpha) * squared_weights)
+    return [max(-1, delta - radius), min(1, delta + radius)]
 
 
 def sum_cost(calls):
@@ -74,6 +82,13 @@ def metric(target_id, results, calls, total):
         "complete": len(completed) == total and len(scored) == total,
         "accuracy_ci95": wilson(correct, total),
         "cost_usd": sum_cost(subject),
+        "cache_neutral_cost_usd": (
+            sum(c["cache_neutral_cost_usd"] for c in subject)
+            if subject
+            and all(c.get("cache_neutral_cost_usd") is not None for c in subject)
+            else None
+        ),
+        "cache_neutral_cost_basis": "Counterfactual token-equivalent subject cost: all prompt tokens at the frozen fresh-input rate plus output; not billed spend.",
         "known_cost_usd": known,
         "cost_complete": bool(subject)
         and all(c.get("cost_usd") is not None for c in subject),
@@ -91,8 +106,13 @@ def metric(target_id, results, calls, total):
             Counter(
                 c.get("selected_model") or c.get("model")
                 for c in subject
-                if c.get("selected_model") or c.get("model")
+                if c.get("selected_model")
+                or (c.get("status") == "completed" and c.get("model"))
             )
+        ),
+        "pending_selection_count": sum(
+            c.get("status") in {"sent", "running"} and not c.get("selected_model")
+            for c in subject
         ),
         "decisions": dict(Counter(c["decision"] for c in subject if c.get("decision"))),
         "queue_wait_p50_s": percentile(
@@ -120,7 +140,11 @@ def make_report(store, run_id):
     run = store.get(run_id)
     manifest = run["manifest"]
     results = store.results(run_id)
-    calls = store.calls(run_id, summary=True)
+    calls = effective_calls(store, run_id, summary=True)
+    calls = [
+        {**call, "cache_neutral_cost_usd": cache_neutral_cost(manifest, call)}
+        for call in calls
+    ]
     metrics = []
     benchmarks = []
     cells = planned_cells(manifest)
@@ -241,6 +265,7 @@ def make_report(store, run_id):
                 "accuracy",
                 "macro_accuracy",
                 "cost_usd",
+                "cache_neutral_cost_usd",
                 "latency_p50_s",
                 "latency_p95_s",
                 "ttft_p50_s",
@@ -286,6 +311,11 @@ def make_report(store, run_id):
     )
     metadata = manifest.get("limitations", [])
     limitations.extend(metadata)
+    accounting = correction_metadata(store, run_id)
+    if accounting:
+        limitations.append(
+            "Accounting was reconciled offline from saved stream evidence and frozen prices. Original call/result detail receipts are unchanged; report totals use the versioned correction."
+        )
     runner = store.provenance(run_id)
     if runner is None:
         limitations.append(
@@ -327,6 +357,7 @@ def make_report(store, run_id):
         "benchmarks": benchmarks,
         "limitations": limitations,
         "provenance": {
+            "accounting_correction": accounting,
             "runner": runner,
             "plan_sha256": manifest["plan_sha256"],
             "case_sha256": manifest["case_sha256"],
@@ -524,6 +555,8 @@ def compare(store, baseline_id, candidate_id):
         )
         bc = base_metric["cost_usd"]
         cc = cand_metric["cost_usd"]
+        neutral_base = base_metric["cache_neutral_cost_usd"]
+        neutral_candidate = cand_metric["cache_neutral_cost_usd"]
         savings = (
             (1 - cc / bc) * 100
             if bc is not None
@@ -541,10 +574,27 @@ def compare(store, baseline_id, candidate_id):
                 "quality_delta": macro_delta,
                 "micro_quality_delta": mean(diffs),
                 "quality_metric": "fixed-weight benchmark macro accuracy",
-                "quality_delta_ci95": [samples[49], samples[1949]],
+                "quality_delta_ci95": paired_conservative_interval(
+                    macro_delta, groups, weights
+                ),
+                "quality_delta_ci95_method": "weighted-paired-hoeffding",
+                "quality_delta_ci95_qualification": "Case-independent bounded-difference interval with frozen benchmark weights; excludes strongest-baseline-selection, source contamination and tuning-selection uncertainty.",
+                "quality_delta_bootstrap_ci95": [samples[49], samples[1949]],
                 "cost_saving_percent": savings,
                 "baseline_cost_usd": bc,
                 "candidate_cost_usd": cc,
+                "cache_neutral_baseline_cost_usd": neutral_base,
+                "cache_neutral_candidate_cost_usd": neutral_candidate,
+                "cache_neutral_cost_saving_percent": (
+                    (1 - neutral_candidate / neutral_base) * 100
+                    if neutral_base is not None
+                    and neutral_base > 0
+                    and neutral_candidate is not None
+                    and tied_costs_complete
+                    and bm["cost_policy"] == cm["cost_policy"] == "require_priced"
+                    else None
+                ),
+                "cache_neutral_cost_basis": "Counterfactual fresh-input token-equivalent cost against the same selected baseline; excludes cache-read/write discounts and premiums, not measured billing.",
                 "wins": sum(d > 0 for d in diffs),
                 "losses": sum(d < 0 for d in diffs),
                 "ties": sum(d == 0 for d in diffs),

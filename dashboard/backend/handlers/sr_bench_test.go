@@ -70,6 +70,8 @@ func TestSRBenchProxyRejectsUntrustedAndUnsupportedRequests(t *testing.T) {
 		{name: "anonymous", method: "GET", path: "/catalog", token: "service-secret", anonymous: true, status: 401},
 		{name: "unconfigured", method: "GET", path: "/catalog", status: 503},
 		{name: "readonly", method: "POST", path: "/runs", token: "service-secret", readonly: true, status: 403},
+		{name: "readonly accounting reconciliation", method: "POST", path: "/runs/run-1/reconcile-usage", token: "service-secret", readonly: true, status: 403},
+		{name: "accounting reconciliation requires POST", method: "GET", path: "/runs/run-1/reconcile-usage", token: "service-secret", status: 405},
 		{name: "unsupported method", method: "DELETE", path: "/runs", token: "service-secret", status: 405},
 		{name: "unknown route", method: "GET", path: "/proxy", token: "service-secret", status: 404},
 		{name: "invalid ID", method: "GET", path: "/runs/a.b", token: "service-secret", status: 404},
@@ -143,10 +145,34 @@ func TestSRBenchProxyDoesNotFollowRedirectsOrLeakTransportErrors(t *testing.T) {
 }
 
 func TestSRBenchOfflineRoutes(t *testing.T) {
-	for _, path := range []string{"/replays", "/runs/run-1/regrade", "/runs/run-1/export", "/runs/run-1/recover-plan", "/runs/run-1/recover"} {
+	for _, path := range []string{"/replays", "/runs/run-1/regrade", "/runs/run-1/export", "/runs/run-1/recover-plan", "/runs/run-1/recover", "/runs/run-1/reconcile-usage"} {
 		if method, found := srBenchRouteMethod(SRBenchAPIPath + path); !found || method != http.MethodPost {
 			t.Fatalf("offline route missing: %s", path)
 		}
+	}
+}
+
+func TestSRBenchUsageReconciliationForwardsServiceReceipt(t *testing.T) {
+	const path = SRBenchAPIPath + "/runs/run-1/reconcile-usage"
+	const receipt = `{"run_id":"run-1","corrected_calls":2,"model_requests":0}`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path || r.Method != http.MethodPost {
+			t.Errorf("unexpected reconciliation request: %s %s", r.Method, r.URL)
+		}
+		if r.Header.Get("X-SR-Bench-Actor-ID") != "owner-123" {
+			t.Error("reconciliation lost the authenticated owner")
+		}
+		_, _ = w.Write([]byte(receipt))
+	}))
+	defer upstream.Close()
+	handler, err := NewSRBenchHandler(upstream.URL, "service-secret", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, srBenchTestRequest(http.MethodPost, path, "{}"))
+	if response.Code != http.StatusOK || response.Body.String() != receipt {
+		t.Fatalf("reconciliation response: %d %s", response.Code, response.Body.String())
 	}
 }
 

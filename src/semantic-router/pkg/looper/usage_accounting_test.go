@@ -2,6 +2,7 @@ package looper
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
@@ -39,5 +40,39 @@ func TestUsageAccountingStreamingFinalInvalidDoesNotReuseEarlierUsage(t *testing
 	}
 	if parseStreamingUsage([]byte("data: [DONE]\n")).Complete() {
 		t.Fatal("absent streaming usage marked known")
+	}
+}
+
+func TestUsageAccountingCacheWriteAliases(t *testing.T) {
+	for _, tc := range []struct {
+		name, fields string
+		complete     bool
+	}{
+		{"provider created cache", `"prompt_tokens_details":{"created_cache_tokens":20}`, true},
+		{"provider cache creation", `"prompt_tokens_details":{"cache_creation_tokens":20}`, true},
+		{"matching aliases", `"cache_write_tokens":20,"cache_creation_input_tokens":20,"prompt_tokens_details":{"cache_write_tokens":20,"cache_creation_tokens":20,"created_cache_tokens":20}`, true},
+		{"conflicting creation aliases", `"prompt_tokens_details":{"cache_creation_tokens":19,"created_cache_tokens":20}`, false},
+		{"conflicting detail write", `"prompt_tokens_details":{"cache_write_tokens":19,"created_cache_tokens":20}`, false},
+		{"conflicting top level write", `"cache_write_tokens":0,"prompt_tokens_details":{"created_cache_tokens":20}`, false},
+		{"conflicting top level creation", `"cache_creation_input_tokens":19,"prompt_tokens_details":{"cache_creation_tokens":20}`, false},
+		{"negative write", `"prompt_tokens_details":{"created_cache_tokens":-1}`, false},
+		{"write exceeds remaining prompt", `"prompt_tokens_details":{"cached_tokens":90,"created_cache_tokens":20}`, false},
+		{"noninteger write", `"prompt_tokens_details":{"created_cache_tokens":20.5}`, false},
+		{"string write", `"prompt_tokens_details":{"cache_creation_tokens":"20"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fmt.Appendf(nil, `{"usage":{"prompt_tokens":100,"completion_tokens":10,"total_tokens":110,%s}}`, tc.fields)
+			for name, usage := range map[string]TokenUsage{
+				"json": parseResponseUsage(body),
+				"sse":  parseStreamingUsage(fmt.Appendf(nil, "data: %s\n\ndata: [DONE]\n\n", body)),
+			} {
+				if usage.Complete() != tc.complete || tc.complete && usage.CacheWriteTokens != 20 {
+					t.Errorf("%s usage=%+v complete=%t, want complete=%t", name, usage, usage.Complete(), tc.complete)
+				}
+				if !tc.complete && actualAttemptCost(modelpricing.Rates{Currency: "USD", PromptPer1M: 1}, usage) != nil {
+					t.Errorf("%s priced incomplete or conflicting cache usage", name)
+				}
+			}
+		})
 	}
 }

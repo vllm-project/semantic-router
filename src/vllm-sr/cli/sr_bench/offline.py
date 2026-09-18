@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 
 from . import VERSION
+from .accounting import BUCKETS, correction_metadata, effective_calls
 from .contracts import digest
 from .engine import basic_grade
 from .provenance import capture_runner
@@ -22,7 +23,7 @@ def regrade(store, run_id):
         raise ValueError(
             "Offline regrading supports MCQ and grid graders only; judges and harnesses require an explicit new protocol"
         )
-    calls = store.calls(run_id)
+    calls = effective_calls(store, run_id)
     results = []
     changed = 0
     for original in store.results(run_id):
@@ -84,7 +85,7 @@ def export_training(store, run_id):
             "Training export accepts only explicitly marked dev cases; holdout and unknown splits are excluded"
         )
     results = {(r["case_id"], r["target_id"]): r for r in store.results(run_id)}
-    calls = store.calls(run_id)
+    calls = effective_calls(store, run_id)
     rows = []
     for case in manifest["cases"]:
         entries = []
@@ -114,6 +115,17 @@ def export_training(store, run_id):
                             "subject_latency_s",
                         )
                     },
+                    "usage": (
+                        {k: sum(c["usage"][k] for c in subject) for k in BUCKETS}
+                        if subject and all(c.get("usage") is not None for c in subject)
+                        else None
+                    ),
+                    "cost_usd": (
+                        sum(c["cost_usd"] for c in subject)
+                        if subject
+                        and all(c.get("cost_usd") is not None for c in subject)
+                        else None
+                    ),
                     "final": subject[-1].get("final") if subject else None,
                 }
             )
@@ -125,6 +137,7 @@ def export_training(store, run_id):
         "split": "dev",
         "cases": rows,
         "source_plan_sha256": manifest["plan_sha256"],
+        "accounting_correction": correction_metadata(store, run_id),
         "model_requests": 0,
     }
 
@@ -155,7 +168,7 @@ def replay(store, baseline_id, preview_id, owner="local", request_key=None):
     baseline_rows = {
         (r["case_id"], r["target_id"]): r for r in store.results(baseline_id)
     }
-    baseline_calls = store.calls(baseline_id)
+    baseline_calls = effective_calls(store, baseline_id)
     preview_rows = {
         (r["case_id"], r["target_id"]): r for r in store.results(preview_id)
     }
@@ -239,6 +252,8 @@ def replay(store, baseline_id, preview_id, owner="local", request_key=None):
     for case, target, original, call, source_target in materialized:
         result = {
             **original,
+            "usage": call.get("usage"),
+            "cost_usd": call.get("cost_usd"),
             "details": {
                 **original.get("details", {}),
                 "evidence_mode": "offline_estimate",

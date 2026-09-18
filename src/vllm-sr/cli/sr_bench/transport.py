@@ -34,13 +34,26 @@ def final_content(content):
 
 
 def normalize_usage(raw):
+    if not isinstance(raw, dict):
+        raise CallFailure("Invalid token usage object")
     details = raw.get("prompt_tokens_details") or raw.get("input_tokens_details") or {}
+    if not isinstance(details, dict):
+        raise CallFailure("Invalid token usage details")
     total = raw.get("prompt_tokens", raw.get("input_tokens"))
     output = raw.get("completion_tokens", raw.get("output_tokens"))
     cached = details.get("cached_tokens", raw.get("cache_read_input_tokens", 0))
-    written = details.get(
-        "cache_creation_tokens", raw.get("cache_creation_input_tokens", 0)
-    )
+    writes = [
+        value
+        for value in (
+            details.get("cache_creation_tokens"),
+            details.get("created_cache_tokens"),
+            raw.get("cache_creation_input_tokens"),
+        )
+        if value is not None
+    ]
+    if any(value != writes[0] for value in writes):
+        raise CallFailure("Conflicting cache-write token usage")
+    written = writes[0] if writes else 0
     if total is None or output is None:
         return None
     values = (total, output, cached, written)

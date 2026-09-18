@@ -8,7 +8,12 @@ from cli.sr_bench.contracts import plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.offline import replay
 from cli.sr_bench.provenance import capture_runner
-from cli.sr_bench.report import compare, make_report
+from cli.sr_bench.report import (
+    compare,
+    make_report,
+    metric,
+    paired_conservative_interval,
+)
 from cli.sr_bench.store import Store
 from cli.sr_bench.transport import CallFailure
 
@@ -219,6 +224,47 @@ def test_stronger_quality_is_not_replaced_by_cheaper_lower_quality(tmp_path):
     result = compare(store, baseline, candidate)
     assert result["baseline_selected_target_id"] == "best"
     assert result["baseline_tied_best_target_ids"] == ["best"]
+
+
+@pytest.mark.parametrize("successes", [set(), {"0", "1", "2", "3", "4"}])
+def test_identical_or_all_wrong_pairs_do_not_prove_equivalence(tmp_path, successes):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(store, ["single"], {"single": 1}, {"single": successes})
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": successes}, candidate=True
+    )
+    result = compare(store, baseline, candidate)["comparisons"][0]
+    assert result["quality_delta"] == 0
+    assert result["quality_delta_bootstrap_ci95"] == [0, 0]
+    assert result["quality_delta_ci95"][0] < 0 < result["quality_delta_ci95"][1]
+    assert result["quality_delta_ci95_method"] == "weighted-paired-hoeffding"
+
+
+def test_conservative_paired_bound_accounts_for_strata_and_sample_size():
+    small = paired_conservative_interval(0, {"a": [0] * 25}, {"a": 1})
+    larger = paired_conservative_interval(0, {"a": [0] * 100}, {"a": 1})
+    assert small[1] == pytest.approx(2 * larger[1])
+    stratified = paired_conservative_interval(
+        0, {"a": [0] * 10, "b": [0] * 90}, {"a": 0.5, "b": 0.5}
+    )
+    assert stratified[1] > larger[1]
+    assert paired_conservative_interval(1, {"a": [1]}, {"a": 1}) == [-1, 1]
+
+
+def test_pending_model_alias_is_not_an_observed_backend():
+    calls = [
+        {"role": "subject", "status": "sent", "model": "vllm-sr/mom-v1-blend"},
+        {"role": "subject", "status": "completed", "model": "actual-backend"},
+        {
+            "role": "subject",
+            "status": "failed",
+            "model": "vllm-sr/mom-v1-blend",
+            "selected_model": "acknowledged-backend",
+        },
+    ]
+    result = metric("balance", [], calls, 3)
+    assert result["selected_models"] == {"actual-backend": 1, "acknowledged-backend": 1}
+    assert result["pending_selection_count"] == 1
 
 
 @pytest.mark.parametrize("change", ["prices", "limits", "native-profile", "judge"])

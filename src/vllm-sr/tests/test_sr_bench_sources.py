@@ -1,5 +1,6 @@
 """Dataset contracts that keep iteration and holdout evidence comparable."""
 
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -7,7 +8,12 @@ from pathlib import Path
 import pytest
 from cli.sr_bench.contracts import load_document
 from cli.sr_bench.setup import PACKAGES, TASK_SOURCES
-from cli.sr_bench.sources import _stratified_order, combine_datasets, prepare_dataset
+from cli.sr_bench.sources import (
+    _local_source,
+    _stratified_order,
+    combine_datasets,
+    prepare_dataset,
+)
 
 
 def _source(tmp_path, count=198):
@@ -129,3 +135,28 @@ def test_optional_harness_and_task_sources_are_pinned():
         assert len(spec["revision"]) == 40
         assert all(c in "0123456789abcdef" for c in spec["revision"])
         assert spec["repo"].startswith("https://github.com/")
+
+
+@pytest.mark.parametrize("suffix", [".csv", ".jsonl", ".parquet"])
+def test_local_cached_symlink_preserves_source_format_and_content_digest(
+    tmp_path, suffix
+):
+    blob = tmp_path / "extensionless-blob"
+    rows = [{"id": "example", "answer": "A"}]
+    if suffix == ".parquet":
+        pa = pytest.importorskip("pyarrow")
+        pq = pytest.importorskip("pyarrow.parquet")
+        pq.write_table(pa.Table.from_pylist(rows), blob)
+    elif suffix == ".csv":
+        blob.write_text("id,answer\nexample,A\n")
+    else:
+        blob.write_text(json.dumps(rows[0]) + "\n")
+    source = tmp_path / ("test" + suffix)
+    source.symlink_to(blob)
+
+    actual, provenance = _local_source("mmlu-pro", source, "fixture-v1")
+
+    assert actual == rows
+    assert provenance["files"] == [
+        {"name": source.name, "sha256": hashlib.sha256(blob.read_bytes()).hexdigest()}
+    ]

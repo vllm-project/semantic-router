@@ -158,12 +158,18 @@ def _acquire(benchmark, root):
 
 
 def _local_source(benchmark, path, revision):
-    path = Path(path).expanduser().resolve()
+    source_path = Path(path).expanduser()
+    path = source_path.resolve()
     files, records = [], []
     if path.is_file():
-        records = read_records(path)
+        # Hub cache filenames point to extensionless content-addressed blobs.
+        # Preserve the supplied format while hashing the actual source bytes.
+        records = read_records(source_path)
         files.append(
-            {"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            {
+                "name": source_path.name,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
         )
     elif benchmark == "arc-agi-2":
         task_dir = (

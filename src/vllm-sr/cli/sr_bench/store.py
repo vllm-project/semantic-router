@@ -35,14 +35,17 @@ class Store:
         os.chmod(self.path, 0o600)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
-        self.db.executescript("""
+        self.db.executescript(
+            """
         CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, owner TEXT NOT NULL, request_key TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, manifest TEXT NOT NULL, error TEXT, UNIQUE(owner,request_key));
         CREATE TABLE IF NOT EXISTS results(run_id TEXT, case_id TEXT, target_id TEXT, status TEXT, data TEXT, PRIMARY KEY(run_id,case_id,target_id));
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,run_id TEXT,case_id TEXT,target_id TEXT,role TEXT,status TEXT,data TEXT);
         CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT,at TEXT,kind TEXT,data TEXT);
         CREATE TABLE IF NOT EXISTS run_provenance(run_id TEXT PRIMARY KEY,data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS accounting_corrections(id TEXT PRIMARY KEY,run_id TEXT NOT NULL,created_at TEXT NOT NULL,evidence_sha256 TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(run_id,evidence_sha256));
         CREATE TABLE IF NOT EXISTS recovery_claims(parent_run_id TEXT,case_id TEXT,target_id TEXT,child_run_id TEXT,PRIMARY KEY(parent_run_id,case_id,target_id));
-        """)
+        """
+        )
         self.db.commit()
 
     def event(self, run_id, kind, data):
@@ -103,6 +106,45 @@ class Store:
                 "SELECT data FROM run_provenance WHERE run_id=?", (run_id,)
             ).fetchone()
             return json.loads(row[0]) if row else None
+
+    def accounting_correction(self, run_id):
+        with self.lock:
+            row = self.db.execute(
+                "SELECT data FROM accounting_corrections WHERE run_id=? ORDER BY rowid DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def append_accounting_correction(self, run_id, artifact):
+        """Preserve original call rows; identical evidence has one durable receipt."""
+        with self.lock, self.db:
+            row = self.db.execute(
+                "SELECT data FROM accounting_corrections WHERE run_id=? AND evidence_sha256=?",
+                (run_id, artifact["evidence_sha256"]),
+            ).fetchone()
+            if row:
+                return json.loads(row[0])
+            artifact = {**artifact, "created_at": now()}
+            self.db.execute(
+                "INSERT INTO accounting_corrections VALUES(?,?,?,?,?)",
+                (
+                    artifact["id"],
+                    run_id,
+                    artifact["created_at"],
+                    artifact["evidence_sha256"],
+                    canonical(artifact),
+                ),
+            )
+            self.event(
+                run_id,
+                "accounting_reconciled",
+                {
+                    "id": artifact["id"],
+                    "evidence_sha256": artifact["evidence_sha256"],
+                    "model_requests": 0,
+                },
+            )
+            return artifact
 
     def first_failure(self, run_id):
         with self.lock:

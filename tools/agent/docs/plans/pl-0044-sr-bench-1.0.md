@@ -226,6 +226,19 @@ selected model cannot price the whole trajectory. Self-hosted token-equivalent
 cost is labeled as such and does not prove GPU invoice or reserved-capacity
 savings. Pilot/UI/earlier unrelated runs are excluded from benchmark cost.
 
+`benchmark reconcile-usage` verifies retained terminal streams against original
+call identities and frozen prices, then appends an idempotent accounting receipt.
+It never generates an answer or rewrites historical calls. Reports identify the
+correction and leave unverifiable accounting unknown. Cache-write aliases must
+agree; conflicting values cannot produce a qualified price.
+
+Sequential runs can benefit from warmed prompt caches. Alongside observed
+four-bucket costs, comparisons expose a clearly labeled cache-neutral
+counterfactual: charge all prompt tokens at the frozen fresh-input rate and
+output tokens at the output rate. This separates the token-equivalent routing
+comparison from cache discounts; it is neither a billing receipt nor measured
+uncached latency.
+
 Saving is `100 × (1 − MoM subject cost / baseline subject cost)` on the same
 complete task set and accounting basis. Reports also show the absolute quality
 delta and paired uncertainty. Small quick samples diagnose direction; they do

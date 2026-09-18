@@ -436,6 +436,15 @@ def regrade_command(client, run_id, destination):
     )
 
 
+@benchmark.command("reconcile-usage")
+@click.argument("run_id")
+@click.pass_obj
+@guarded
+def reconcile_usage_command(client, run_id):
+    """Append an offline accounting correction from saved streams; no inference."""
+    output(client.request("POST", "/runs/" + run_id + "/reconcile-usage", {}))
+
+
 @benchmark.command("export")
 @click.argument("run_id")
 @click.option("--output", "destination", type=click.Path(path_type=Path), required=True)

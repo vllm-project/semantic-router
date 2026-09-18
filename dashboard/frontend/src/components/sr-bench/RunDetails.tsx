@@ -5,6 +5,7 @@ import type { CaseResult, Run, TargetMetrics } from './types'
 import { useRunEvidence } from './useRunEvidence'
 import RunArtifacts from './RunArtifacts'
 import CallEvidence from './CallEvidence'
+import AccountingCorrection from './AccountingCorrection'
 import PreviewEvidence from './PreviewEvidence'
 import RunRecovery from './RunRecovery'
 import RunLineage from './RunLineage'
@@ -31,7 +32,8 @@ function MetricsTable({
             {summary && <th>sr-bench score</th>}
             <th>Correct / denominator</th>
             <th>Failures</th>
-            <th>Model cost</th>
+            <th>Observed model cost</th>
+            <th>Cache-neutral estimate</th>
             <th>Tokens</th>
             <th>Latency p50 / p95</th>
             <th>TTFT p50</th>
@@ -55,6 +57,9 @@ function MetricsTable({
               <td>{preview ? '—' : `${number(target.correct)} / ${number(target.total)}`}</td>
               <td>{number(target.failed)}</td>
               <td>{money(target.cost_usd)}</td>
+              <td title={target.cache_neutral_cost_basis}>
+                {money(target.cache_neutral_cost_usd)}
+              </td>
               <td>{number(tokenTotal(target.tokens))}</td>
               <td>
                 {seconds(target.latency_p50_s)} / {seconds(target.latency_p95_s)}
@@ -284,6 +289,7 @@ export default function RunDetails({
               </div>
             </section>
           )}
+          <AccountingCorrection report={report} />
           <h3 id="run-targets">Target comparison</h3>
           {metrics.length ? (
             <MetricsTable targets={metrics} preview={run.manifest.mode === 'preview'} summary />
@@ -294,6 +300,11 @@ export default function RunDetails({
             “—” means unrecorded or unknown, not zero. Cost is reported model usage; simulator and
             judge overhead remain separate in the report. Wall time is elapsed run time, not the sum
             of request durations.
+          </p>
+          <p className={styles.muted}>
+            Cache-neutral estimates reprice every prompt token at the frozen fresh-input rate plus
+            output. This counterfactual excludes cache discounts and premiums; it is neither billed
+            spend nor a measured cache-free run.
           </p>
           {!!report?.benchmarks.length && (
             <section>
@@ -420,6 +431,12 @@ export default function RunDetails({
             Filtering applies to loaded results. Detail pages are snapshots; refresh evidence to
             reload them. Scores and costs above use the full report.
           </p>
+          {report?.provenance.accounting_correction && (
+            <p className={styles.notice}>
+              Original receipt accounting is shown in case and call details. See the report summary
+              for reconciled tokens and costs; original evidence has not been overwritten.
+            </p>
+          )}
           <div className={styles.tableScroll}>
             <table>
               <thead>
@@ -429,7 +446,7 @@ export default function RunDetails({
                   <th>Target</th>
                   <th>Status</th>
                   <th>Score</th>
-                  <th>Cost</th>
+                  <th>{report?.provenance.accounting_correction ? 'Cost (original)' : 'Cost'}</th>
                   <th>Latency / TTFT</th>
                 </tr>
               </thead>
@@ -504,7 +521,13 @@ export default function RunDetails({
               </details>
             </div>
           )}
-          <CallEvidence id={id} calls={calls} page={callsPage} loadMore={loadMoreCalls} />
+          <CallEvidence
+            id={id}
+            calls={calls}
+            page={callsPage}
+            loadMore={loadMoreCalls}
+            accountingReconciled={!!report?.provenance.accounting_correction}
+          />
           <details className={styles.details}>
             <summary id="run-events">Run events ({events.length})</summary>
             {events.length > eventLimit && (

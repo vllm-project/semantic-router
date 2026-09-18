@@ -239,6 +239,21 @@ costs; TTFT and latency percentiles; request-time sum and actual wall time. Miss
 metrics remain null. Failed and partial runs remain visible and do not qualify as
 completed evaluations.
 
+For a terminal live run, `vllm-sr benchmark reconcile-usage RUN_ID` verifies retained
+SSE usage and appends an idempotent, versioned accounting correction without model
+requests. Reports, comparisons and subsequent exports use this derived accounting;
+the original call/result detail receipts and frozen manifest remain unchanged.
+The report exposes the correction hash, time, verified/changed counts and old/new
+known spend. Missing or conflicting evidence stays unknown. Reconciliation supports
+single-model calls and proven direct MoM calls; a multi-call MoM cannot be repriced
+from its final response stream alone.
+
+Reports also provide `cache_neutral_cost_usd`: a counterfactual token-equivalent
+subject cost that prices all prompt tokens at the frozen fresh-input rate, plus
+output. Comparisons show its saving percentage against the same selected baseline,
+alongside observed four-bucket costs. Use both when sequential runs warm caches;
+the cache-neutral figure is not billed spend or a measured cache-free execution.
+
 The full sr-bench score uses fixed benchmark weights: MMLU-Pro 10%, SimpleQA 10%,
 GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% and
 τ³ 10%. It requires all nine complete benchmarks. A subset macro result retains
@@ -253,6 +268,13 @@ If any tied-best single has incomplete cost, savings remain unknown. Savings are
 compatible accounting. A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
+
+The default paired quality interval is a conservative weighted Hoeffding bound
+for independent case differences. It stays nonzero when every observed pair ties,
+including all-wrong samples. The stratified bootstrap interval is retained as a
+diagnostic; a degenerate `[0, 0]` bootstrap from a small tied sample does not prove
+equivalence. Neither interval includes selection of the strongest observed
+baseline, tuning selection or dataset contamination uncertainty.
 
 Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
 row shows the completed denominator, failures, persisted update time and target

@@ -28,6 +28,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark export`](#vllm-sr-benchmark-export) | Export a dev response matrix for training; holdout export is rejected. |
 | [`vllm-sr benchmark plan`](#vllm-sr-benchmark-plan) | Validate and freeze all cases, targets, profiles, and limits without inference. |
 | [`vllm-sr benchmark preview`](#vllm-sr-benchmark-preview) | Inspect routing decisions without producing quality scores. |
+| [`vllm-sr benchmark reconcile-usage`](#vllm-sr-benchmark-reconcile-usage) | Append an offline accounting correction from saved streams; no inference. |
 | [`vllm-sr benchmark recover`](#vllm-sr-benchmark-recover) | Create a separate attempt from a reviewed recovery plan; never auto-retry. |
 | [`vllm-sr benchmark recover-plan`](#vllm-sr-benchmark-recover-plan) | Inspect eligible continuation cells without making model requests. |
 | [`vllm-sr benchmark regrade`](#vllm-sr-benchmark-regrade) | Regrade saved MCQ/grid final outputs without mutating original evidence. |
@@ -249,6 +250,19 @@ Inspect routing decisions without producing quality scores.
 | `--idempotency-key TEXT` | Bind repeated submissions to the same frozen plan, without reissuing calls. |
 | `--detach` | Return immediately with a durable run ID. Default: false. |
 | `--manifest PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark reconcile-usage` {#vllm-sr-benchmark-reconcile-usage}
+
+```text
+Usage: vllm-sr benchmark reconcile-usage [OPTIONS] RUN_ID
+```
+
+Append an offline accounting correction from saved streams; no inference.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark recover` {#vllm-sr-benchmark-recover}

@@ -93,8 +93,10 @@ func (u *TokenUsage) UnmarshalJSON(data []byte) error {
 		Write      *int64 `json:"cache_write_tokens"`
 		Creation   *int64 `json:"cache_creation_input_tokens"`
 		Details    struct {
-			Cached *int64 `json:"cached_tokens"`
-			Write  *int64 `json:"cache_write_tokens"`
+			Cached   *int64 `json:"cached_tokens"`
+			Write    *int64 `json:"cache_write_tokens"`
+			Creation *int64 `json:"cache_creation_tokens"`
+			Created  *int64 `json:"created_cache_tokens"`
 		} `json:"prompt_tokens_details"`
 	}
 	*u = TokenUsage{Unreported: true}
@@ -116,7 +118,7 @@ func (u *TokenUsage) UnmarshalJSON(data []byte) error {
 			cachedSeen = true
 		}
 	}
-	for _, value := range []*int64{raw.Write, raw.Creation, raw.Details.Write} {
+	for _, value := range []*int64{raw.Write, raw.Creation, raw.Details.Write, raw.Details.Creation, raw.Details.Created} {
 		if value != nil {
 			if writeSeen && u.CacheWriteTokens != *value {
 				u.Unreported = true

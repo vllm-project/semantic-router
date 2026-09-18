@@ -77,9 +77,10 @@ type responsesUsageWire struct {
 }
 
 type responsesInputUsageDetails struct {
-	CachedTokens       *int64 `json:"cached_tokens"`
-	CacheWriteTokens   *int64 `json:"cache_write_tokens"`
-	CreatedCacheTokens *int64 `json:"created_cache_tokens,omitempty"`
+	CachedTokens        *int64 `json:"cached_tokens"`
+	CacheWriteTokens    *int64 `json:"cache_write_tokens"`
+	CreatedCacheTokens  *int64 `json:"created_cache_tokens,omitempty"`
+	CacheCreationTokens *int64 `json:"cache_creation_tokens,omitempty"`
 }
 
 type responsesOutputUsageDetails struct {
@@ -365,7 +366,7 @@ func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 	}
 	if wire.InputTokensDetails != nil {
 		details := wire.InputTokensDetails
-		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens); err != nil {
+		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
 		}
 	}

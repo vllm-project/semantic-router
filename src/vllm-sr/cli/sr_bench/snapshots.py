@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import ipaddress
+import json
 import os
 import re
 import time
@@ -80,12 +80,12 @@ def _public(value, redactions, path=""):
 def _origin(target):
     value = target.get("preview_url", "")
     if not isinstance(value, str) or any(
-        ord(char) < 33 or ord(char) == 127 for char in value
+        char <= " " or char == "\x7f" for char in value
     ):
         raise ValueError("Recipe capture requires the canonical management preview_url")
     try:
         preview = urlsplit(value)
-        preview.port  # Validate the authority before attaching credentials.
+        _ = preview.port  # Validate the authority before attaching credentials.
     except ValueError as exc:
         raise ValueError(
             "Recipe capture requires the canonical management preview_url"

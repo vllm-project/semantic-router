@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 from cli.runtime_env_names import runtime_env_name_is_allowed
 
 from . import VERSION
+from .accounting import reconcile_usage
 from .contracts import catalog, plan, planned_cells
 from .engine import Engine
 from .offline import export_training, regrade, replay
@@ -286,6 +287,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, self.server.store.call(run_id, route[3]))
                 if len(route) == RUN_ACTION_ROUTE_PARTS:
                     action = route[2]
+                    if action == "reconcile-usage" and method == "POST":
+                        return self._send(
+                            200, reconcile_usage(self.server.store, run_id)
+                        )
                     if action in {"recover-plan", "recover"} and method == "POST":
                         body = self._body()
                         result = (

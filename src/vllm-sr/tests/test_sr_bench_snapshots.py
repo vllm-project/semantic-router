@@ -165,11 +165,13 @@ def test_model_identity_routing_numbers_and_safe_environment_references_survive(
 
 @pytest.mark.parametrize("etag", [None, '"other"', f'"{HASH}"', f'W/"{SOURCE_HASH}"'])
 def test_config_etag_must_match_observed_source_hash(etag):
-    with patch.object(
-        snapshots.requests, "get", side_effect=sequence({"recipes": []}, etag=etag)
-    ) as get:
-        with pytest.raises(ValueError, match="source configuration acknowledgement"):
-            snapshots.capture_recipes({"targets": [TARGET]})
+    with (
+        patch.object(
+            snapshots.requests, "get", side_effect=sequence({"recipes": []}, etag=etag)
+        ) as get,
+        pytest.raises(ValueError, match="source configuration acknowledgement"),
+    ):
+        snapshots.capture_recipes({"targets": [TARGET]})
     assert get.call_count == 2
 
 
@@ -217,9 +219,11 @@ def test_source_change_during_capture_is_rejected_even_when_runtime_is_unchanged
 def test_redirects_are_rejected_at_each_observation(redirect_at):
     replies = sequence({"recipes": []})
     replies[redirect_at] = response({}, status=302)
-    with patch.object(snapshots.requests, "get", side_effect=replies) as get:
-        with pytest.raises(ValueError, match="HTTP 302"):
-            snapshots.capture_recipes({"targets": [TARGET]})
+    with (
+        patch.object(snapshots.requests, "get", side_effect=replies) as get,
+        pytest.raises(ValueError, match="HTTP 302"),
+    ):
+        snapshots.capture_recipes({"targets": [TARGET]})
     assert get.call_count == redirect_at + 1
 
 

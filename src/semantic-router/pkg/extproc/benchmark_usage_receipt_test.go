@@ -59,7 +59,10 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 func TestBenchmarkUsageLooperIncludesEveryCallAndFailsClosed(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	ctx := &RequestContext{VSRSelectedDecision: &config.Decision{Algorithm: &config.AlgorithmConfig{Type: "fusion"}}}
-	usage := looper.TokenUsage{PromptTokens: 100, CompletionTokens: 10, TotalTokens: 110, CachedInputTokens: 30, CacheWriteTokens: 20}
+	var usage looper.TokenUsage
+	if err := json.Unmarshal([]byte(`{"prompt_tokens":100,"completion_tokens":10,"total_tokens":110,"prompt_tokens_details":{"cached_tokens":30,"created_cache_tokens":20}}`), &usage); err != nil {
+		t.Fatal(err)
+	}
 	resp := &looper.Response{Usage: usage.Add(&looper.ModelResponse{Usage: usage}), ExecutionTrace: looper.ExecutionTrace{Version: 1, Attempts: []looper.AttemptTrace{
 		{Model: "a", Role: "candidate", Stage: "panel", Status: looper.AttemptStatusSucceeded, Usage: usage},
 		{Model: "b", Role: "synthesis", Stage: "final", Status: looper.AttemptStatusSucceeded, Usage: usage},
@@ -85,6 +88,13 @@ func TestBenchmarkUsageLooperIncludesEveryCallAndFailsClosed(t *testing.T) {
 		t.Fatal("missing usage marked complete")
 	}
 	resp.ExecutionTrace.Attempts[1].Usage.Unreported = false
+	if err := json.Unmarshal([]byte(`{"prompt_tokens":100,"completion_tokens":10,"total_tokens":110,"prompt_tokens_details":{"cached_tokens":30,"created_cache_tokens":20,"cache_creation_tokens":19}}`), &resp.ExecutionTrace.Attempts[1].Usage); err != nil {
+		t.Fatal(err)
+	}
+	if read().Complete {
+		t.Fatal("conflicting cache-write aliases marked complete")
+	}
+	resp.ExecutionTrace.Attempts[1].Usage = usage
 	ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{Type: "shadow_dispatch"}}
 	if read().Complete {
 		t.Fatal("untraced shadow calls omitted")

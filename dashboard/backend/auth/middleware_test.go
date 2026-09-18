@@ -184,6 +184,7 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/sr-bench/v1/plans", expected: PermEvalWrite},
 		{method: http.MethodPost, path: "/api/sr-bench/v1/runs", expected: PermEvalWrite},
 		{method: http.MethodPost, path: "/api/sr-bench/v1/runs/run-1/cancel", expected: PermEvalRun},
+		{method: http.MethodPost, path: "/api/sr-bench/v1/runs/run-1/reconcile-usage", expected: PermEvalWrite},
 		{method: http.MethodGet, path: "/api/admin/users", expected: PermUsersView},
 		{method: http.MethodPatch, path: "/api/admin/users/user-1", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
@@ -280,6 +281,16 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 			name: "cancel rejects missing run", path: "/api/sr-bench/v1/runs/run-1/cancel",
 			removePermission: PermEvalRun, wantStatus: http.StatusForbidden,
 			wantRequired: []string{PermEvalRun},
+		},
+		{
+			name: "reconciliation requires write", path: "/api/sr-bench/v1/runs/run-1/reconcile-usage",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "reconciliation needs no generation permission", path: "/api/sr-bench/v1/runs/run-1/reconcile-usage",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
 		},
 	}
 	for _, test := range tests {

@@ -903,3 +903,212 @@ test('keeps recovery lineage separate from the child denominator and spend', asy
   await expect(page.getByRole('cell', { name: '1 / 2', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: '1 / 1', exact: true })).toBeVisible()
 })
+
+const accountingCorrection = {
+  id: 'accounting-1',
+  version: 'sr-bench-accounting-v1',
+  created_at: '2026-09-18T12:00:00Z',
+  evidence_sha256: 'e'.repeat(64),
+  qualified: true,
+  corrected_call_count: 1,
+  verified_call_count: 2,
+  unverifiable_call_count: 0,
+  original_known_spend_usd: 1,
+  corrected_known_spend_usd: 1.5,
+  original_receipts_preserved: true,
+  model_requests: 0,
+}
+
+test('distinguishes corrected report accounting from unchanged call and case receipts', async ({
+  page,
+}) => {
+  const submissions = await mockBench(page)
+  let qualified = true
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        summary: {
+          ...report.summary,
+          targets: [{ ...report.summary.targets[0], cost_usd: qualified ? 1.5 : null }],
+        },
+        provenance: {
+          accounting_correction: {
+            ...accountingCorrection,
+            qualified,
+            unverifiable_call_count: qualified ? 0 : 1,
+          },
+        },
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/calls?*', (route) =>
+    route.fulfill({
+      json: {
+        total: 1,
+        limit: 100,
+        next_cursor: null,
+        calls: [
+          {
+            id: 'original-call',
+            target_id: 'single',
+            case_id: 'case-a',
+            role: 'subject',
+            status: 'completed',
+            cost_usd: 1,
+            latency_s: 1,
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  const notice = page.getByRole('note', { name: 'Accounting correction' })
+  await expect(notice.getByText('Accounting verified', { exact: true })).toBeVisible()
+  await expect(notice.getByText('New model requests', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: 'Cost (original)', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('columnheader', { name: 'Original cost / latency', exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('cell', { name: '$1.50000', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '$1.00000 / 1 s', exact: true })).toBeVisible()
+  await notice.getByText('Accounting correction receipt', { exact: true }).click()
+  await expect(notice.getByText('sr-bench-accounting-v1', { exact: true })).toBeVisible()
+  qualified = false
+  await page.reload()
+  await expect(notice.getByText('Partial accounting', { exact: true })).toBeVisible()
+  await expect(
+    notice.getByText('Unverifiable usage remains unknown', { exact: false }),
+  ).toBeVisible()
+  await expect(page.getByRole('cell', { name: '$1.50000', exact: true })).toHaveCount(0)
+  expect(submissions).toHaveLength(0)
+})
+
+test('keeps accounting correction provenance visible for both sides of a comparison', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/*/report', (route) =>
+    route.fulfill({
+      json: { ...report, provenance: { accounting_correction: accountingCorrection } },
+    }),
+  )
+  await page.goto('/evaluation?view=compare&baseline=run-1&iteration0=run-2')
+  await expect(page.getByRole('note', { name: 'Accounting correction' })).toHaveCount(2)
+  await expect(page.getByRole('heading', { name: 'Balance optimization trajectory' })).toBeVisible()
+})
+
+test('uses conservative quality uncertainty and identifies a zero-width bootstrap diagnostic', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/comparisons', (route) =>
+    route.fulfill({
+      json: {
+        baseline_selection: 'Best observed single model on identical cases.',
+        comparisons: [
+          {
+            baseline_target_id: 'single',
+            candidate_target_id: 'balance',
+            paired_cases: 25,
+            quality_delta: 0,
+            quality_delta_ci95: [-0.47, 0.47],
+            quality_delta_ci95_method: 'weighted-paired-hoeffding',
+            quality_delta_ci95_qualification:
+              'Case-independent bounded-difference interval with frozen benchmark weights; excludes strongest-baseline-selection, source contamination and tuning-selection uncertainty.',
+            quality_delta_bootstrap_ci95: [0, 0],
+            baseline_cost_usd: 1,
+            candidate_cost_usd: 0.8,
+            cost_saving_percent: 20,
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=compare&baseline=run-1&iteration0=run-2')
+  const uncertainty = page.getByRole('cell').filter({ hasText: 'Conservative weighted Hoeffding' })
+  await expect(uncertainty).toContainText('-47 pp to 47 pp')
+  await expect(uncertainty).toContainText('25 paired cases')
+  const diagnostic = uncertainty.getByText('Bootstrap diagnostic (95%):', { exact: false })
+  await expect(diagnostic).not.toBeVisible()
+  await uncertainty.getByText('Uncertainty details', { exact: true }).click()
+  await expect(diagnostic).toBeVisible()
+  await expect(diagnostic).toContainText('0 pp to 0 pp')
+  await expect(diagnostic).toContainText('Use the conservative interval above for quality claims')
+  await expect(uncertainty).toContainText('tuning-selection uncertainty')
+})
+
+test('separates observed savings from cache-neutral estimates and preserves unknown costs', async ({
+  page,
+}) => {
+  const submissions = await mockBench(page)
+  let complete = true
+  await page.route('**/api/sr-bench/v1/runs/*/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        summary: {
+          ...report.summary,
+          targets: [
+            {
+              ...report.summary.targets[0],
+              cost_usd: 1,
+              cache_neutral_cost_usd: complete ? 2 : null,
+              cache_neutral_cost_basis: 'Frozen fresh-input and output rates.',
+            },
+          ],
+        },
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/comparisons', (route) =>
+    route.fulfill({
+      json: {
+        baseline_selection: 'Best observed single model on identical cases.',
+        comparisons: [
+          {
+            baseline_target_id: 'single',
+            candidate_target_id: 'balance',
+            paired_cases: 2,
+            quality_delta: 0,
+            quality_delta_ci95: [-0.1, 0.1],
+            baseline_cost_usd: 1,
+            candidate_cost_usd: 0.8,
+            cost_saving_percent: 20,
+            cache_neutral_baseline_cost_usd: complete ? 2 : null,
+            cache_neutral_candidate_cost_usd: complete ? 1.8 : null,
+            cache_neutral_cost_saving_percent: complete ? 10 : null,
+            cache_neutral_cost_basis: 'Counterfactual cost against the same baseline.',
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(
+    page.getByRole('columnheader', { name: 'Observed model cost', exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('cell', { name: '$1.00000', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '$2.00000', exact: true })).toBeVisible()
+  await expect(
+    page.getByText('neither billed spend nor a measured cache-free run.', { exact: false }),
+  ).toBeVisible()
+  await page.goto('/evaluation?view=compare&baseline=run-1&iteration0=run-2')
+  await expect(page.getByRole('cell', { name: '$0.80000 20% saving', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('cell', {
+      name: '$1.80000 10% estimated saving Baseline $2.00000',
+      exact: true,
+    }),
+  ).toBeVisible()
+  complete = false
+  await page.reload()
+  await expect(page.getByRole('cell', { name: '$0.80000 20% saving', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('cell', { name: '— Saving unknown Baseline —', exact: true }),
+  ).toBeVisible()
+  await expect(page.getByText('10% estimated saving', { exact: true })).toHaveCount(0)
+  expect(submissions).toHaveLength(0)
+})

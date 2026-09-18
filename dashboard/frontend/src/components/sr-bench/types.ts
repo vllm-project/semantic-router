@@ -73,6 +73,8 @@ export interface TargetMetrics {
   correct?: number
   accuracy?: number | null
   cost_usd?: number | null
+  cache_neutral_cost_usd?: number | null
+  cache_neutral_cost_basis?: string
   tokens?: number | null | Record<string, number | null>
   latency_p50_s?: number | null
   latency_p95_s?: number | null
@@ -130,6 +132,21 @@ export interface CaseResult {
   [key: string]: unknown
 }
 
+export interface AccountingCorrectionReceipt {
+  id: string
+  version: string
+  created_at: string
+  evidence_sha256: string
+  qualified: boolean
+  corrected_call_count: number
+  verified_call_count: number
+  unverifiable_call_count: number
+  original_known_spend_usd: number
+  corrected_known_spend_usd: number
+  original_receipts_preserved: boolean
+  model_requests: number
+}
+
 export interface Report {
   version: string
   run_id: string
@@ -137,7 +154,9 @@ export interface Report {
   summary: { targets: TargetMetrics[]; wall_time_s?: number | null }
   benchmarks: Array<Record<string, unknown>>
   limitations: string[]
-  provenance: Record<string, unknown>
+  provenance: Record<string, unknown> & {
+    accounting_correction?: AccountingCorrectionReceipt | null
+  }
   failure?: {
     case_id: string
     target_id: string
@@ -192,9 +211,16 @@ export interface Comparison {
     paired_cases: number
     quality_delta: number
     quality_delta_ci95: [number, number]
+    quality_delta_ci95_method?: string
+    quality_delta_ci95_qualification?: string
+    quality_delta_bootstrap_ci95?: [number, number]
     cost_saving_percent: number | null
     baseline_cost_usd: number | null
     candidate_cost_usd: number | null
+    cache_neutral_baseline_cost_usd?: number | null
+    cache_neutral_candidate_cost_usd?: number | null
+    cache_neutral_cost_saving_percent?: number | null
+    cache_neutral_cost_basis?: string
     wins: number
     losses: number
     ties: number

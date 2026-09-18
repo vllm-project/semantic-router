@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { benchApi } from './api'
+import AccountingCorrection from './AccountingCorrection'
 import { money, number, percent, seconds, tokenTotal } from './model'
 import type { Comparison, Report, Run } from './types'
 import styles from './SrBench.module.css'
@@ -170,6 +171,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
       {baselineReport && (
         <>
           <h3>Single-model baseline</h3>
+          <AccountingCorrection report={baselineReport} />
           <p>{reviewedBaseline?.manifest.name ?? savedBaseline}</p>
           <div className={styles.tableScroll}>
             <table>
@@ -178,7 +180,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                   <th>Single model</th>
                   <th>Macro accuracy</th>
                   <th>Correct / denominator</th>
-                  <th>Model cost</th>
+                  <th>Observed model cost</th>
+                  <th>Cache-neutral estimate</th>
                   <th>Tokens</th>
                   <th>Latency p50 / p95</th>
                 </tr>
@@ -198,6 +201,9 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                         {number(target.correct)} / {number(target.total)}
                       </td>
                       <td>{money(target.cost_usd)}</td>
+                      <td title={target.cache_neutral_cost_basis}>
+                        {money(target.cache_neutral_cost_usd)}
+                      </td>
                       <td>{number(tokenTotal(target.tokens))}</td>
                       <td>
                         {seconds(target.latency_p50_s)} / {seconds(target.latency_p95_s)}
@@ -218,6 +224,11 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             an improvement. Unknown cost cannot support a saving claim. Development-set gains
             require a separate holdout check.
           </p>
+          <p className={styles.muted}>
+            Cache-neutral estimates use the same selected single-model baseline and reprice every
+            prompt token at the frozen fresh-input rate plus output. This counterfactual excludes
+            cache discounts and premiums; it is neither billed spend nor a measured cache-free run.
+          </p>
           <div className={styles.tableScroll}>
             <table>
               <thead>
@@ -227,7 +238,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                   <th>Correct / denominator</th>
                   <th>Quality Δ vs best single</th>
                   <th>95% paired interval</th>
-                  <th>Model cost / saving</th>
+                  <th>Observed cost / saving</th>
+                  <th>Cache-neutral estimate / saving</th>
                   <th>Tokens</th>
                   <th>Latency p50 / p95</th>
                   <th>Wall time</th>
@@ -264,7 +276,34 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                             {row.quality_delta_ci95
                               .map((value) => `${number(value * 100, 2)} pp`)
                               .join(' to ')}
+                            {row.quality_delta_ci95_method && (
+                              <small>
+                                {row.quality_delta_ci95_method === 'weighted-paired-hoeffding'
+                                  ? 'Conservative weighted Hoeffding'
+                                  : row.quality_delta_ci95_method}
+                              </small>
+                            )}
                             <small>{number(row.paired_cases)} paired cases</small>
+                            {(row.quality_delta_ci95_qualification ||
+                              row.quality_delta_bootstrap_ci95) && (
+                              <details>
+                                <summary>Uncertainty details</summary>
+                                {row.quality_delta_ci95_qualification && (
+                                  <p>{row.quality_delta_ci95_qualification}</p>
+                                )}
+                                {row.quality_delta_bootstrap_ci95 && (
+                                  <p>
+                                    Bootstrap diagnostic (95%):{' '}
+                                    {row.quality_delta_bootstrap_ci95
+                                      .map((value) => `${number(value * 100, 2)} pp`)
+                                      .join(' to ')}
+                                    . Use the conservative interval above for quality claims;
+                                    resampling identical paired outcomes can produce a zero-width
+                                    diagnostic interval.
+                                  </p>
+                                )}
+                              </details>
+                            )}
                           </td>
                           <td>
                             {money(row.candidate_cost_usd)}
@@ -273,6 +312,15 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                                 ? 'Saving unknown'
                                 : `${number(row.cost_saving_percent, 2)}% saving`}
                             </small>
+                          </td>
+                          <td title={row.cache_neutral_cost_basis}>
+                            {money(row.cache_neutral_candidate_cost_usd)}
+                            <small>
+                              {row.cache_neutral_cost_saving_percent == null
+                                ? 'Saving unknown'
+                                : `${number(row.cache_neutral_cost_saving_percent, 2)}% estimated saving`}
+                            </small>
+                            <small>Baseline {money(row.cache_neutral_baseline_cost_usd)}</small>
                           </td>
                           <td>{number(tokenTotal(metrics?.tokens))}</td>
                           <td>
@@ -297,6 +345,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                 </p>
               ) : (
                 <>
+                  <AccountingCorrection report={item.report ?? null} />
                   <p className={styles.muted}>{item.comparison?.baseline_selection}</p>
                   {(item.comparison?.baseline_tied_best_target_ids?.length ?? 0) > 1 && (
                     <p className={styles.notice}>

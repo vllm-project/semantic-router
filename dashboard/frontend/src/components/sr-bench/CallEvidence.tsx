@@ -9,11 +9,13 @@ export default function CallEvidence({
   calls,
   page,
   loadMore,
+  accountingReconciled = false,
 }: {
   id: string
   calls: CallRecord[]
   page: PageState
   loadMore: () => Promise<void>
+  accountingReconciled?: boolean
 }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [detail, setDetail] = useState<CallRecord | null>(null)
@@ -42,6 +44,12 @@ export default function CallEvidence({
         responses load only when you inspect a call. These pages are snapshots; refresh evidence to
         reload current statuses. Aggregate metrics above always come from the full report.
       </p>
+      {accountingReconciled && (
+        <p className={styles.muted}>
+          Original receipt accounting; see the report for reconciled totals. Saved usage and costs
+          below remain unchanged.
+        </p>
+      )}
       <div className={styles.tableScroll}>
         <table>
           <thead>
@@ -51,7 +59,7 @@ export default function CallEvidence({
               <th>Role</th>
               <th>Status</th>
               <th>Model</th>
-              <th>Cost / latency</th>
+              <th>{accountingReconciled ? 'Original cost / latency' : 'Cost / latency'}</th>
             </tr>
           </thead>
           <tbody>

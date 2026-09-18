@@ -142,6 +142,18 @@ simulator/judge overhead, TTFT/latency, actual wall time and accounting coverage
 Partial or failed runs cannot be presented as qualified. Replay estimates remain
 separate from measured live metrics. Regrading does not erase the prior grader.
 
+For a terminal live run with a discovered usage-normalization issue, use
+`benchmark reconcile-usage RUN_ID`. This offline action verifies retained SSE
+usage, preserves original call/result receipts and appends an idempotent versioned
+correction. Check `provenance.accounting_correction`, verified/changed counts,
+evidence hash and old/new known spend before using corrected reports/comparisons.
+Missing/conflicting usage stays unknown; final-stream evidence cannot reconstruct
+multi-call MoM billing. Never repeat generations to repair accounting.
+Keep raw detail receipts visibly distinct from corrected report totals.
+Show observed four-bucket costs and `cache_neutral_cost_usd` together when run
+order may warm caches. The latter reprices all input tokens as fresh input and
+is counterfactual token-equivalent cost, not billed spend or a cache-free rerun.
+
 The full score requires all nine complete benchmarks with fixed versioned
 weights. Show per-benchmark denominators and uncertainty with every aggregate.
 The baseline is the best observed single by the stated aggregate over identical
@@ -152,6 +164,12 @@ expensive quality tie to inflate savings. Savings use complete compatible subjec
 `100 * (1 - candidate_cost / baseline_cost)`. Small quick results show direction;
 quality equivalence requires a prespecified margin and holdout interval. Token
 prices for self-hosted inference are not GPU invoice savings.
+
+Use the default conservative weighted paired interval for quality claims.
+`quality_delta_bootstrap_ci95` is diagnostic: zero observed discordance can yield
+`[0, 0]` without proving equivalence. The Hoeffding interval assumes independent
+case differences and frozen benchmark weights; strongest-baseline selection,
+tuning selection and source contamination remain outside its coverage.
 
 For requested Dashboard acceptance, verify the same service/run IDs, launch a
 bounded run, inspect metrics and case artifacts, compare, cancel and reload the
