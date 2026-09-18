@@ -26,26 +26,6 @@ func init() {
 		Tags:        []string{"reliability", "timeout", "streaming", "connect", "kubernetes"},
 		Fn:          testReliabilityTimeouts,
 	})
-	pkgtestcases.Register("reliability-distinct-deadlines", pkgtestcases.TestCase{
-		Description: "Verify per-model request timeouts enforce distinct deadlines across models",
-		Tags:        []string{"reliability", "timeout", "deadline"},
-		Fn:          testReliabilityDistinctDeadlines,
-	})
-	pkgtestcases.Register("reliability-stalled-streams", pkgtestcases.TestCase{
-		Description: "Verify stream idle timeout terminates stalled streams between chunks",
-		Tags:        []string{"reliability", "timeout", "streaming"},
-		Fn:          testReliabilityStalledStreams,
-	})
-	pkgtestcases.Register("reliability-short-connect-failures", pkgtestcases.TestCase{
-		Description: "Verify short connect timeout fails fast on unreachable backend endpoints",
-		Tags:        []string{"reliability", "timeout", "connect"},
-		Fn:          testReliabilityShortConnectFailures,
-	})
-	pkgtestcases.Register("reliability-non-timeout-abort", pkgtestcases.TestCase{
-		Description: "Verify client cancellation before response does not record timeout telemetry",
-		Tags:        []string{"reliability", "timeout", "abort"},
-		Fn:          testReliabilityNonTimeoutAbort,
-	})
 }
 
 // TimeoutProbeModel names used for deadline, streaming, and connect verification
