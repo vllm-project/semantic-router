@@ -129,9 +129,7 @@ jobs:
           shopt -s globstar nullglob
           for summary in .agent-harness/recipe-conformance/**/summary.md; do
             cat "$summary" >> "$GITHUB_STEP_SUMMARY"
-            printf '
----
-' >> "$GITHUB_STEP_SUMMARY"
+            printf '\n---\n' >> "$GITHUB_STEP_SUMMARY"
           done
 
       - name: Upload conformance artifacts
