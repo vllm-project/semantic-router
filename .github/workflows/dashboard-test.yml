@@ -27,7 +27,9 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n
+      - name: Set up Go
+        uses: ./.github/actions/setup-go-ci
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
