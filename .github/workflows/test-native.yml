@@ -35,7 +35,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: ./.github/actions/setup-go-ci\n      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-go-ci
+      - uses: dtolnay/rust-toolchain@stable
         if: fromJSON(inputs.verification).runtime != 'openvino' && inputs.native-artifact == ''
         with:
           toolchain: "1.90"
