@@ -1,9 +1,12 @@
 package extproc
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -467,6 +470,9 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	if len(responseBody) > 0 {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
+	if isFinal {
+		attachPrimaryOutputDigest(ctx, recorder)
+	}
 	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); responseTrace != nil {
 		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
@@ -768,6 +774,46 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 
 	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"error":      err.Error(),
+		})
+	}
+}
+
+// primaryResponseOutcomeSource marks the outcome that carries the digest of
+// what the selected model answered. Shadow dispatch writes its arms the same
+// way, so an offline comparison reads both sides through one path instead of
+// hashing a stored body on one side and a decoded answer on the other.
+const primaryResponseOutcomeSource = "primary_response"
+
+// attachPrimaryOutputDigest records the primary answer under the same contract
+// shadow arms use: the assistant text of the decoded response, not the encoded
+// protocol body. The stored body carries the JSON envelope, the response id and
+// usage, so hashing it would give two models different digests for the same
+// answer.
+func attachPrimaryOutputDigest(ctx *RequestContext, recorder *routerreplay.Recorder) {
+	if ctx.SemanticResponse == nil {
+		return
+	}
+	text := semanticResponseText(*ctx.SemanticResponse)
+	if text == "" {
+		return
+	}
+	sum := sha256.Sum256([]byte(text))
+	outcome := routerreplay.Outcome{
+		Timestamp: time.Now().UTC(),
+		Source:    primaryResponseOutcomeSource,
+		Target:    "model",
+		TargetRef: ctx.VSRSelectedModel,
+		Verdict:   "completed",
+		Metadata: map[string]string{
+			"response_sha256": hex.EncodeToString(sum[:]),
+			"response_chars":  strconv.Itoa(utf8.RuneCountInString(text)),
+		},
+	}
+	if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+		logging.ComponentErrorEvent("extproc", "primary_output_digest_persist_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
 			"error":      err.Error(),

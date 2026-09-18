@@ -29,17 +29,41 @@ func shadowOutcome(model, digest string) store.Outcome {
 	}
 }
 
+func primaryOutcome(model, digest string) store.Outcome {
+	return store.Outcome{
+		Source:    primaryResponseSource,
+		Target:    "model",
+		TargetRef: model,
+		Verdict:   shadowVerdictCompleted,
+		Metadata:  map[string]string{"response_sha256": digest},
+	}
+}
+
+// protocolResponse is the shape the router stores for the primary: an encoded
+// response with an id and a usage block around the text. Hashing it would not
+// match a shadow digest of the text alone, which is what these tests hold.
+func protocolResponse(text string) string {
+	return `{"id":"resp_0001","model":"primary-model","usage":{"input_tokens":7,` +
+		`"output_tokens":3},"output":[{"content":[{"type":"output_text","text":"` +
+		text + `"}]}]}`
+}
+
+// comparedRecord is a finished, successful observation with a primary digest
+// already recorded, which is the only shape that becomes an example.
 func comparedRecord(id, request, response string, outcomes ...store.Outcome) store.Record {
+	all := append([]store.Outcome{primaryOutcome("primary-model", digestOf(response))}, outcomes...)
 	return store.Record{
-		ID:            id,
-		Timestamp:     time.Date(2026, 9, 18, 9, 0, 0, 0, time.UTC),
-		RequestID:     "req-" + id,
-		Recipe:        "vault",
-		Decision:      "guard",
-		SelectedModel: "primary-model",
-		RequestBody:   request,
-		ResponseBody:  response,
-		Outcomes:      outcomes,
+		ID:             id,
+		Timestamp:      time.Date(2026, 9, 18, 9, 0, 0, 0, time.UTC),
+		RequestID:      "req-" + id,
+		Recipe:         "vault",
+		Decision:       "guard",
+		SelectedModel:  "primary-model",
+		RequestBody:    request,
+		ResponseBody:   protocolResponse(response),
+		ResponseStatus: 200,
+		LifecycleState: store.LifecycleCompleted,
+		Outcomes:       all,
 	}
 }
 
@@ -128,11 +152,22 @@ func TestBuildExcludesEveryPartialObservation(t *testing.T) {
 				Metadata: map[string]string{"shadow_model": "candidate-a"},
 			}}
 		}},
-		"request cleared by the redactor":  {ExcludeRequestMissing, func(r *store.Record) { r.RequestBody = "" }},
-		"request cut":                      {ExcludeRequestTruncated, func(r *store.Record) { r.RequestBodyTruncated = true }},
-		"response cleared by the redactor": {ExcludePrimaryResponseMissing, func(r *store.Record) { r.ResponseBody = "" }},
-		"response cut":                     {ExcludeResponseTruncated, func(r *store.Record) { r.ResponseBodyTruncated = true }},
-		"primary model unknown":            {ExcludePrimaryModelMissing, func(r *store.Record) { r.SelectedModel = "" }},
+		"request cleared by the redactor": {ExcludeRequestMissing, func(r *store.Record) { r.RequestBody = "" }},
+		"request cut":                     {ExcludeRequestTruncated, func(r *store.Record) { r.RequestBodyTruncated = true }},
+		"primary model unknown":           {ExcludePrimaryModelMissing, func(r *store.Record) { r.SelectedModel = "" }},
+		"no primary digest recorded": {ExcludeNoPrimaryArm, func(r *store.Record) {
+			kept := r.Outcomes[:0]
+			for _, outcome := range r.Outcomes {
+				if outcome.Source != primaryResponseSource {
+					kept = append(kept, outcome)
+				}
+			}
+			r.Outcomes = kept
+		}},
+		"primary answered 429":     {ExcludePrimaryUnsuccessful, func(r *store.Record) { r.ResponseStatus = 429 }},
+		"primary answered 503":     {ExcludePrimaryUnsuccessful, func(r *store.Record) { r.ResponseStatus = 503 }},
+		"primary never finished":   {ExcludePrimaryUnsuccessful, func(r *store.Record) { r.LifecycleState = store.LifecycleInProgress }},
+		"primary lifecycle failed": {ExcludePrimaryUnsuccessful, func(r *store.Record) { r.LifecycleState = store.LifecycleFailed }},
 	}
 
 	for name, damaged := range damage {
@@ -154,11 +189,11 @@ func TestBuildExcludesEveryPartialObservation(t *testing.T) {
 
 func TestBuildKeepsTheWholeObservationsBesideTheExcludedOnes(t *testing.T) {
 	noShadow := comparedRecord("r1", "ask one", "answer one")
-	truncated := comparedRecord("r2", "ask two", "answer two", shadowOutcome("candidate-a", "d2"))
-	truncated.ResponseBodyTruncated = true
+	failed := comparedRecord("r2", "ask two", "answer two", shadowOutcome("candidate-a", "d2"))
+	failed.ResponseStatus = 503
 	kept := comparedRecord("r3", "ask three", "answer three", shadowOutcome("candidate-a", "d3"))
 
-	manifest := buildOrFail(t, []store.Record{noShadow, truncated, kept}, testPolicy())
+	manifest := buildOrFail(t, []store.Record{noShadow, failed, kept}, testPolicy())
 
 	if manifest.Counts.Records != 3 {
 		t.Fatalf("reported %d records, want 3", manifest.Counts.Records)
@@ -301,4 +336,48 @@ func otherSplit(name string) string {
 		return "eval"
 	}
 	return "train"
+}
+
+// TestBuildHashesTheSameRepresentationForBothArms is the regression for the
+// review on this branch. The router stores the primary answer as an encoded
+// protocol response, while a shadow arm is hashed from the assistant text. Two
+// models answering identically have to land on one digest, so the manifest
+// reads the digest the router recorded rather than hashing the stored body.
+func TestBuildHashesTheSameRepresentationForBothArms(t *testing.T) {
+	const answer = "hello"
+
+	record := comparedRecord("r1", "ask one", answer, shadowOutcome("candidate-a", digestOf(answer)))
+
+	manifest := buildOrFail(t, []store.Record{record}, testPolicy())
+
+	example := manifest.Examples[0]
+	if example.Primary.OutputDigest != example.Shadows[0].OutputDigest {
+		t.Fatalf("both models answered %q and got digests %s and %s",
+			answer, example.Primary.OutputDigest, example.Shadows[0].OutputDigest)
+	}
+	if example.Primary.OutputDigest == digestOf(record.ResponseBody) {
+		t.Fatal("the primary digest hashes the stored protocol body, which carries an id and a usage block a shadow digest never sees")
+	}
+	if example.Primary.OutputDigest != digestOf(answer) {
+		t.Fatalf("primary digest %s does not stand for the answer text", example.Primary.OutputDigest)
+	}
+}
+
+// TestBuildRefusesAFailedPrimaryBesideACompletedShadow is the other regression
+// from that review. A shadow that answered does not make a primary transport
+// failure into model evidence.
+func TestBuildRefusesAFailedPrimaryBesideACompletedShadow(t *testing.T) {
+	for _, status := range []int{400, 429, 503} {
+		record := comparedRecord("r1", "ask one", "upstream is busy", shadowOutcome("candidate-a", "d1"))
+		record.ResponseStatus = status
+
+		manifest := buildOrFail(t, []store.Record{record}, testPolicy())
+
+		if manifest.Counts.Examples != 0 {
+			t.Fatalf("a primary %d became an example", status)
+		}
+		if manifest.Counts.Excluded[ExcludePrimaryUnsuccessful] != 1 {
+			t.Fatalf("a primary %d was excluded under %v", status, manifest.Counts.Excluded)
+		}
+	}
 }

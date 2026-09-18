@@ -9,10 +9,16 @@
 // one, and a manifest is never repaired in place. A different rule set is a
 // different manifest.
 //
-// An observation enters the dataset whole or not at all. A record whose bodies
-// were truncated, cleared by the replay redactor, or never captured is excluded
-// under a counted reason, so the manifest never carries a digest of a fragment
-// and needs no per-example capture state to qualify one.
+// Both sides of a comparison arrive the same way, as an outcome the router
+// wrote carrying a digest of the assistant text. Neither side is hashed here
+// from a stored body, because the stored body is the encoded protocol response
+// and hashing it on one side only would give two models different digests for
+// the same answer.
+//
+// An observation enters the dataset whole or not at all. A request that failed,
+// is unfinished, lost its input to truncation, or never had a digest recorded
+// is excluded under a counted reason, so a manifest needs no per-example
+// capture state to qualify one.
 package shadowdataset
 
 import (
@@ -37,6 +43,14 @@ const ManifestVersion = "shadow-dataset.v1"
 // writes. Outcomes from anything else describe a different experiment.
 const shadowDispatchSource = "shadow_dispatch"
 
+// primaryResponseSource is the Outcome.Source the router writes for the answer
+// the selected model gave. Both sides of a comparison therefore arrive as an
+// outcome carrying a digest of the same thing, the assistant text of the
+// decoded response. The stored response body is not that: it is the encoded
+// protocol envelope with an id and a usage block, so two models answering
+// identically would hash differently if this read the body instead.
+const primaryResponseSource = "primary_response"
+
 // shadowVerdictCompleted marks a shadow arm that answered. A failed or dropped
 // arm is evidence about dispatch, not about the model, so it is not comparable
 // output and does not enter the dataset.
@@ -45,13 +59,13 @@ const shadowVerdictCompleted = "completed"
 // Exclusion reasons. Every record Build leaves out is counted under one of
 // these, so a manifest states what it dropped rather than only what it kept.
 const (
-	ExcludeNoShadowArm            = "no_completed_shadow_arm"
-	ExcludeRequestMissing         = "request_body_missing"
-	ExcludeRequestTruncated       = "request_body_truncated"
-	ExcludePrimaryResponseMissing = "primary_response_missing"
-	ExcludePrimaryModelMissing    = "primary_model_missing"
-	ExcludeResponseTruncated      = "primary_response_truncated"
-	ExcludeDuplicateInput         = "duplicate_input"
+	ExcludeNoShadowArm         = "no_completed_shadow_arm"
+	ExcludeNoPrimaryArm        = "no_primary_response_digest"
+	ExcludePrimaryUnsuccessful = "primary_request_unsuccessful"
+	ExcludeRequestMissing      = "request_body_missing"
+	ExcludeRequestTruncated    = "request_body_truncated"
+	ExcludePrimaryModelMissing = "primary_model_missing"
+	ExcludeDuplicateInput      = "duplicate_input"
 )
 
 // Split is one named part of the dataset. Weights are whole numbers so a split
@@ -92,10 +106,9 @@ type Lineage struct {
 // Example is one input with the primary answer and every shadow answer to it.
 //
 // There is no field for capture or redaction state because an example is built
-// only from an observation that still holds both payloads whole. A record whose
-// bodies were cut, cleared by the replay redactor, or never captured is
-// excluded and counted, so a digest in a manifest always hashes the text the
-// model actually saw or produced.
+// only from a successful observation whose input survived intact and whose
+// arms each recorded a digest. Everything else is excluded and counted, so a
+// digest in a manifest always stands for the whole answer a model gave.
 type Example struct {
 	ID          string  `json:"id"`
 	InputDigest string  `json:"input_digest"`
@@ -281,6 +294,12 @@ func (p Policy) splitFor(exampleID string) string {
 }
 
 func buildExample(rec store.Record) (Example, string) {
+	// A shadow arm that failed is excluded, so a primary that failed has to be
+	// too. The router keeps the error body of a 4xx or 5xx in the record, and
+	// without this check that body would be published as the model's answer.
+	if !primarySucceeded(rec) {
+		return Example{}, ExcludePrimaryUnsuccessful
+	}
 	shadows := completedShadowArms(rec)
 	if len(shadows) == 0 {
 		return Example{}, ExcludeNoShadowArm
@@ -294,21 +313,12 @@ func buildExample(rec store.Record) (Example, string) {
 	if rec.RequestBodyTruncated {
 		return Example{}, ExcludeRequestTruncated
 	}
-	if rec.ResponseBody == "" {
-		return Example{}, ExcludePrimaryResponseMissing
-	}
-	// A digest of a cut response says the model produced the fragment, which is
-	// not true. Drop it rather than publish a hash that cannot be reproduced by
-	// rerunning the model.
-	if rec.ResponseBodyTruncated {
-		return Example{}, ExcludeResponseTruncated
+	primary, ok := primaryArm(rec)
+	if !ok {
+		return Example{}, ExcludeNoPrimaryArm
 	}
 
 	inputDigest := digestOf(rec.RequestBody)
-	primary := Arm{
-		Model:        rec.SelectedModel,
-		OutputDigest: digestOf(rec.ResponseBody),
-	}
 	return Example{
 		ID:          exampleID(inputDigest, primary.Model, rec.ID),
 		InputDigest: inputDigest,
@@ -321,6 +331,34 @@ func buildExample(rec store.Record) (Example, string) {
 			Decision:  rec.Decision,
 		},
 	}, ""
+}
+
+// primarySucceeded reports whether the primary request is finished and was
+// answered. An unfinished record is not evidence yet, and a non 2xx answer is
+// a transport failure rather than something the model said.
+func primarySucceeded(rec store.Record) bool {
+	if rec.LifecycleState != store.LifecycleCompleted {
+		return false
+	}
+	return rec.ResponseStatus >= 200 && rec.ResponseStatus < 300
+}
+
+// primaryArm reads the digest the router recorded for the selected model. It
+// deliberately does not hash rec.ResponseBody, which holds the encoded protocol
+// response rather than the assistant text a shadow arm is hashed from.
+func primaryArm(rec store.Record) (Arm, bool) {
+	for _, outcome := range rec.Outcomes {
+		if outcome.Source != primaryResponseSource || outcome.Verdict != shadowVerdictCompleted {
+			continue
+		}
+		digest := outcome.Metadata["response_sha256"]
+		model := firstNonEmpty(outcome.TargetRef, rec.SelectedModel)
+		if digest == "" || model == "" {
+			continue
+		}
+		return Arm{Model: model, OutputDigest: digest}, true
+	}
+	return Arm{}, false
 }
 
 // completedShadowArms reads the arms the shadow dispatch plugin recorded. The

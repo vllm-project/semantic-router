@@ -43,14 +43,24 @@ func streamResponseStageAnswer(t *testing.T, router *OpenAIRouter, ctx *RequestC
 	}
 }
 
-// assertStreamedOutcome checks the one outcome a streamed response leaves: the
-// verdict it observed, and that nothing enforced it.
+// assertStreamedOutcome checks the one rule outcome a streamed response leaves:
+// the verdict it observed, and that nothing enforced it.
+//
+// A finished response also records the digest of what the selected model
+// answered, which is not a rule verdict, so the rule outcomes are selected by
+// source rather than counted from the whole record.
 func assertStreamedOutcome(t *testing.T, outcomes []routerreplay.Outcome, target, verdict string) {
 	t.Helper()
-	if len(outcomes) != 1 {
-		t.Fatalf("outcomes = %+v, want one per declared rule", outcomes)
+	rules := make([]routerreplay.Outcome, 0, len(outcomes))
+	for _, candidate := range outcomes {
+		if candidate.Source != primaryResponseOutcomeSource {
+			rules = append(rules, candidate)
+		}
 	}
-	outcome := outcomes[0]
+	if len(rules) != 1 {
+		t.Fatalf("rule outcomes = %+v, want one per declared rule", rules)
+	}
+	outcome := rules[0]
 	if outcome.Target != target || outcome.Verdict != verdict {
 		t.Fatalf("outcome = %+v, want verdict %q under %s", outcome, verdict, target)
 	}
