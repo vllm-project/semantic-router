@@ -1,3 +1,5 @@
+//go:build progress_gate_live
+
 package testcases
 
 import (
@@ -7,7 +9,8 @@ import (
 	"time"
 )
 
-// Runs the maintained profile assertion against an already running stack.
+// Runs the maintained profile assertion against an already running stack:
+// go test -c -tags progress_gate_live -o /tmp/progress-gate-e2e.test ./testcases
 func TestProgressGateLive(t *testing.T) {
 	public, management := os.Getenv("GATE_E2E_INFERENCE_URL"), os.Getenv("GATE_E2E_MANAGEMENT_URL")
 	if public == "" || management == "" {

@@ -996,6 +996,7 @@ profiles:
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
   progress-gate:
+    display_name: Progress Gate
     owner: e2e
     coverage_role: session-evidence-to-switch
     selection: pr
