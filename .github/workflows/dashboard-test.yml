@@ -27,11 +27,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
+      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -47,25 +43,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-dashboard-
 
-      - name: Cache Go dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-dashboard-${{ hashFiles('dashboard/backend/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-dashboard-
 
-      - name: Resolve golangci-lint version
-        id: golangci_lint
-        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up golangci-lint
-        uses: golangci/golangci-lint-action@v7
-        with:
-          version: ${{ steps.golangci_lint.outputs.version }}
-          install-mode: binary
-          args: --help
 
       - name: Load shared native libraries
         if: inputs.native-artifact != ''
