@@ -139,7 +139,7 @@ fn load_reference_outputs() -> Vec<ReferenceOutput> {
         eprintln!("⚠️  Reference data not found. Generating...");
 
         let status = std::process::Command::new("python")
-            .arg("tools/models/generate_gemma_reference.py")
+            .arg("candle-binding/scripts/generate_gemma_reference.py")
             .current_dir("../")
             .status()
             .expect("Failed to execute Python script");

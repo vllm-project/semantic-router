@@ -175,7 +175,9 @@ def run_verify(domains: tuple[str, ...], profiles: tuple[str, ...]) -> int:
     return run_test_commands(list(dict.fromkeys(commands)), "verification")
 
 
-def run_check(changed_files: list[str], base_ref: str | None) -> int:
+def run_check(
+    changed_files: list[str], base_ref: str | None, *, ci_static_only: bool = False
+) -> int:
     if not changed_files:
         print("No changed files detected.")
         return 0
@@ -189,15 +191,22 @@ def run_check(changed_files: list[str], base_ref: str | None) -> int:
 
     try:
         run_test_commands(["make codespell-tracked", *bootstrap], "baseline checks")
-        for check in (
-            lambda: run_precommit(changed_files, base_ref),
+        checks = [
+            lambda: run_precommit(
+                changed_files, base_ref, ci_static_only=ci_static_only
+            ),
             lambda: run_python_lint(changed_files),
             lambda: run_go_lint(changed_files, base_ref),
-            lambda: run_reference_config_lint(changed_files),
             lambda: run_rust_lint(changed_files),
-        ):
+        ]
+        if not ci_static_only:
+            checks.append(lambda: run_reference_config_lint(changed_files))
+        for check in checks:
             if (returncode := check()) != 0:
                 return returncode
+        if ci_static_only:
+            print("CI static checks complete; selected tests run in the test plan.")
+            return 0
         domains = classify(changed_files).domains
         return run_test_commands(
             list(commands_for_domains(domains, "checks")), "domain checks"
@@ -226,6 +235,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     checks = subparsers.add_parser("check")
     add_changed_file_args(checks)
+    checks.add_argument(
+        "--ci-static-only",
+        action="store_true",
+        help="CI: tests, generated contracts, and security have separate owners",
+    )
 
     verify = subparsers.add_parser("verify")
     verify.add_argument("--domains")
@@ -270,7 +284,7 @@ def main() -> int:
             print(impact_summary(impact))
         return 0
     if args.command == "check":
-        return run_check(changed_files, base_ref)
+        return run_check(changed_files, base_ref, ci_static_only=args.ci_static_only)
     parser.error(f"Unknown command: {args.command}")
     return 2
 

@@ -1,6 +1,13 @@
 package config
 
+// EmbeddingAPIConfig prepares the globally configured embedding for diagnostics
+// even when no routing recipe needs it. Explicit recipe requests stay isolated.
+type EmbeddingAPIConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type APIConfig struct {
+	Embeddings          EmbeddingAPIConfig        `yaml:"embeddings,omitempty"`
 	BatchClassification BatchClassificationConfig `yaml:"batch_classification"`
 	RoutingPreview      RoutingPreviewConfig      `yaml:"routing_preview,omitempty"`
 }

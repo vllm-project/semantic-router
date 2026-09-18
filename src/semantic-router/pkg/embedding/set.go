@@ -73,9 +73,8 @@ func (s *Set) Has(model string) bool {
 // providers prepared in this snapshot. It never loads a requested model.
 func (s *Set) Select(text string, quality, latency float32, dimension int) (string, error) {
 	words := len(strings.Fields(text))
-	if words > 32768 {
-		return "", fmt.Errorf("embedding auto selection supports at most 32768 whitespace tokens")
-	}
+	// Input budgets belong to the selected deployment's tokenizer and overflow
+	// policy; whitespace counts here only guide the existing model preference.
 	preferred := "qwen3"
 	if (words <= 512 && quality <= 0.7 && latency > 0.7) || (words > 512 && words <= 2048) || (dimension > 0 && dimension < 768 && latency > 0.5) {
 		preferred = "gemma"

@@ -296,11 +296,19 @@ describe('playground request stability', () => {
     ).toThrow('exceeds the 10 MB request limit')
   })
 
-  it('pins every turn in one conversation to the same Router session', () => {
-    expect(buildPlaygroundRequestHeaders('conv-demo')).toMatchObject({
-      'x-session-id': 'conv-demo',
-      'x-vsr-debug': 'true',
-    })
+  it('keeps both Router identities stable within a conversation and separate across conversations', () => {
+    for (const conversationId of ['conv-first', 'conv-second']) {
+      const headers = buildPlaygroundRequestHeaders(conversationId)
+      expect(headers).toMatchObject({
+        'x-session-id': conversationId,
+        'x-conversation-id': conversationId,
+        'x-vsr-debug': 'true',
+      })
+      expect(buildPlaygroundRequestHeaders(conversationId)).toEqual(headers)
+    }
+    expect(buildPlaygroundRequestHeaders('conv-first')).not.toEqual(
+      buildPlaygroundRequestHeaders('conv-second'),
+    )
   })
 })
 

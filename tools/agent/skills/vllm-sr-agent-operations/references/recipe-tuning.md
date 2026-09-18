@@ -1,7 +1,7 @@
 # Tune routing from application examples
 
 Use this reference after discovering the running schema and selecting the
-deployment through the [operations skill](../SKILL.md). Start with an application
+deployment through the [operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md). Start with an application
 objective: better answers, faster responses, lower cost, safer handling, or more
 stable agent runs. Record the acceptable tradeoffs before changing a threshold.
 
@@ -169,7 +169,7 @@ more of the total latency budget.
    long-input and multi-turn cases. Include instructions quoted as data, absent
    history, required tools, unknown signals, and insufficient backend capacity.
 3. Validate and activate the candidate through the
-   [configuration workflow](configuration-loop.md). Verify its active revision.
+   [configuration workflow](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md). Verify its active revision.
 4. Recombining saved signal values can isolate a policy change, provided the
    unchanged baseline reproduces its original heuristics and decisions exactly.
    Label this as offline recomposition, then run real Preview requests with full
@@ -188,6 +188,6 @@ more of the total latency budget.
    Otherwise restore the baseline and preserve the failed evidence. Keep raw test
    outputs outside Git; publish intentional recipes, documentation and code fixes.
 
-Use the [evaluation loop](evaluation-loop.md) for exact Preview, Probe, delivery
+Use the [evaluation loop](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md) for exact Preview, Probe, delivery
 and benchmark contracts. A partial benchmark can guide tuning, but it does not
 establish a full leaderboard score or performance on untested hardware.

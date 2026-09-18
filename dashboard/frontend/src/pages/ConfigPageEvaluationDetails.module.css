@@ -1,0 +1,23 @@
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.secondary {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.issue {
+  color: var(--color-warning, #a76b00);
+}
+
+.metadata {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
