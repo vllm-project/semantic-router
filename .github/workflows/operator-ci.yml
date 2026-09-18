@@ -28,7 +28,6 @@ permissions:
   actions: read
 
 env:
-  GO_VERSION: '1.25'
   # Pipe falls back to direct on any proxy error; comma only on 404 and 410
   GOPROXY: 'https://proxy.golang.org|direct'
 
@@ -257,8 +256,7 @@ jobs:
         env:
           PREBUILT: ${{ inputs.prebuilt-images }}
         run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]
-' > artifacts.json; fi
+          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
       - uses: actions/upload-artifact@v4
         with:
           name: operator-bundle
@@ -1075,8 +1073,7 @@ jobs:
         env:
           PREBUILT: ${{ inputs.prebuilt-images }}
         run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]
-' > artifacts.json; fi
+          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
