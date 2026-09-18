@@ -1,5 +1,3 @@
-// e2e/pkg/verification/cioverrides.go
-
 package verification
 
 import (

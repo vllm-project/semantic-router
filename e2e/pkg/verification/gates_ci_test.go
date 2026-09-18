@@ -1,5 +1,3 @@
-// e2e/pkg/verification/gates_ci_test.go
-
 package verification
 
 // Gate D below extends the derived execution contract with the fourth

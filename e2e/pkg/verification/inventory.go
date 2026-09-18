@@ -1,5 +1,3 @@
-// e2e/pkg/verification/inventory.go
-
 // Package verification derives read-only views of the E2E execution graph
 // from runtime sources of truth and gates their consistency.
 //

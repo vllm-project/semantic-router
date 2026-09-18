@@ -1,5 +1,3 @@
-// e2e/cmd/e2e-audit/main.go
-
 // Command e2e-audit emits the runtime-derived E2E execution graph as
 // deterministic JSON on stdout: registered testcases, canonical registered
 // profiles, each profile's resolved GetTestCases selection, the derived

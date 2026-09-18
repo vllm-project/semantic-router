@@ -1,5 +1,3 @@
-// e2e/pkg/verification/debt.go
-
 package verification
 
 // UnreachableDebt bounds one registered-but-unreachable testcase to a

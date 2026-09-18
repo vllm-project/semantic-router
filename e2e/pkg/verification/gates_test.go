@@ -1,5 +1,3 @@
-// e2e/pkg/verification/gates_test.go
-
 package verification
 
 // The gates in this file enforce the execution-graph invariants frozen for
