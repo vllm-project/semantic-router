@@ -18,6 +18,7 @@ package selection
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -247,6 +248,50 @@ func TestAutoMixSelector_Select(t *testing.T) {
 	// With cost awareness, cheaper model might be selected
 	if result.SelectedModel == "" {
 		t.Error("expected a selected model")
+	}
+}
+
+func TestAutoMixSelector_UsesCoverageForExactEffortTie(t *testing.T) {
+	for _, costAware := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cost_aware_%t", costAware), func(t *testing.T) {
+			cfg := DefaultAutoMixConfig()
+			cfg.CostAwareRouting = costAware
+			cfg.UsePOMDPRouter = false
+			selector := NewAutoMixSelector(cfg)
+			selector.InitializeFromConfig(map[string]config.ModelParams{
+				"a": addTestEvidence(config.ModelParams{}, 0.75, 0.6, "low"),
+				"b": addTestEvidence(config.ModelParams{}, 0.75, 1, "high"),
+			})
+			result, err := selector.Select(context.Background(), &SelectionContext{CandidateModels: []config.ModelRef{
+				{Model: "a", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+				{Model: "b", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.SelectedModel != "b" || !strings.Contains(result.Reasoning, "score=75.00 coverage=100%") {
+				t.Fatalf("coverage tie result = model %q reasoning %q", result.SelectedModel, result.Reasoning)
+			}
+		})
+	}
+}
+
+func TestAutoMixSelector_KeepsEffortSpecificScoresPerCandidate(t *testing.T) {
+	selector := NewAutoMixSelector(nil)
+	params := addTestEvidence(config.ModelParams{}, 0.6, 1, "low")
+	params = addTestEvidence(params, 0.9, 1, "high")
+	selector.InitializeFromConfig(map[string]config.ModelParams{"model": params})
+	result, err := selector.Select(context.Background(), &SelectionContext{CandidateModels: []config.ModelRef{
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedCandidate == nil || result.SelectedCandidate.ReasoningEffort != "high" ||
+		len(result.AllScores) != 2 || !strings.Contains(result.Reasoning, "effort=high score=90.00") {
+		t.Fatalf("duplicate-model selection = candidate %+v scores %v reasoning %q",
+			result.SelectedCandidate, result.AllScores, result.Reasoning)
 	}
 }
 

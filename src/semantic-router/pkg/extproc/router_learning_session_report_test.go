@@ -6,6 +6,7 @@ import (
 )
 
 type protectionRow struct {
+	Rejected        bool     `json:"rejected"`
 	Scenario        string   `json:"scenario"`
 	Step            string   `json:"step"`
 	Turn            int      `json:"turn"`
@@ -45,6 +46,9 @@ type protectionReport struct {
 
 func protectionFailures(row protectionRow, expected protectionExpectation) []string {
 	failures := []string{}
+	if row.Rejected != expected.Rejected {
+		failures = append(failures, "rejection outcome differs from expectation")
+	}
 	if slices.Contains([]string{"blocked", "hold", "opportunity", "boundary"}, expected.Category) && row.Previous == "" {
 		failures = append(failures, "continuation scenario did not retain the previous model")
 	}
@@ -90,7 +94,7 @@ func summarizeProtection(corpus protectionCorpus, digest string, rows []protecti
 		report.Passed = report.Passed && passed
 		report.add("contract_pass", passed)
 		report.add("replay_explainability", row.Action != "" && row.Reason != "")
-		switched := row.Previous != "" && row.Previous != row.Selected
+		switched := !row.Rejected && row.Previous != "" && row.Previous != row.Selected
 		if row.Previous != "" {
 			report.add("switch", switched)
 		}

@@ -26,6 +26,7 @@ func init() {
 
 type toolSelectionE2ECase struct {
 	Name                    string
+	Model                   string
 	Prompt                  string
 	Tools                   []fixtures.ChatTool
 	ExpectDecision          string
@@ -61,6 +62,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 	cases := []toolSelectionE2ECase{
 		{
 			Name:                "tools_passthrough_preserves_request_tools",
+			Model:               "e2e-plugins",
 			Prompt:              "__TOOLS_PASSTHROUGH__ What is the weather forecast for Boston tomorrow?",
 			Tools:               contractTools,
 			ExpectDecision:      "tools_passthrough_decision",
@@ -68,6 +70,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                "tools_filtered_applies_allow_list",
+			Model:               "e2e-plugins",
 			Prompt:              "__TOOLS_FILTERED__ keep only the weather tool",
 			Tools:               contractTools,
 			ExpectDecision:      "tools_filtered_decision",
@@ -75,6 +78,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                   "tools_none_removes_tools_and_choice",
+			Model:                  "e2e-plugins",
 			Prompt:                 "__TOOLS_NONE__ What is the weather forecast for Boston tomorrow?",
 			Tools:                  contractTools,
 			ExpectDecision:         "tools_none_decision",
@@ -83,6 +87,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                "add_mode_weather_query",
+			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_ADD_WEATHER__ What is the weather forecast for Boston tomorrow?",
 			Tools:               contractToolsExcept(contractTools, "get_weather"),
 			ExpectDecision:      "tool_selection_add_weather_decision",
@@ -92,6 +97,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                "add_mode_math_query",
+			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_ADD_CALC__ Compute 17 * 23 using the calculator tool.",
 			Tools:               contractToolsExcept(contractTools, "calculate"),
 			ExpectDecision:      "tool_selection_add_calc_decision",
@@ -101,6 +107,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                "filter_mode_drops_irrelevant_tools",
+			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_FILTER__ Will it rain in Seattle this weekend?",
 			ExpectDecision:      "tool_selection_filter_decision",
 			ExpectToolsStrategy: "filter",
@@ -114,6 +121,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                "filter_mode_strict_threshold",
+			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_FILTER_THRESHOLD__ Compare rainfall totals in Portland OR vs Seattle WA.",
 			ExpectDecision:      "tool_selection_filter_threshold_decision",
 			ExpectToolsStrategy: "filter",
@@ -127,6 +135,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                "add_mode_alternate_top_k",
+			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_ADD_TOPK_ONE__ Summarize how search_web could help research climate papers.",
 			Tools:               contractToolsExcept(contractTools, "search_web"),
 			ExpectDecision:      "tool_selection_add_topk_one_decision",
@@ -136,6 +145,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 		},
 		{
 			Name:                    "stacked_system_prompt_and_tool_selection",
+			Model:                   "e2e-plugins",
 			Prompt:                  "__TOOL_SELECTION_WITH_SYSTEM_PROMPT__ Search web resources for recent Mount Rainier trail information and get current weather for that location.",
 			Tools:                   contractToolsExcept(contractTools, "get_weather"),
 			ExpectDecision:          "tool_selection_with_system_prompt_decision",
@@ -148,6 +158,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 	frTrue := true
 	cases = append(cases, toolSelectionE2ECase{
 		Name:               "pii_decision_runs_before_tool_selection",
+		Model:              "MoM",
 		Prompt:             "__TOOL_SELECTION_ADD_WEATHER__ My payment card is 4111111111111111 and I need a weather forecast for Miami.",
 		ExpectDecision:     "block_pii",
 		ExpectFastResponse: &frTrue,
@@ -347,7 +358,7 @@ func providerToolNames(body map[string]any) ([]string, bool, error) {
 
 func buildToolSelectionChatRequest(tc toolSelectionE2ECase) fixtures.ChatCompletionsRequest {
 	req := fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: tc.Model,
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: tc.Prompt},
 		},

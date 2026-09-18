@@ -49,7 +49,10 @@ func TestReplaySessionProtectionActualAndObservedRouting(t *testing.T) {
 				SelectedModel: "beta", Method: selection.MethodStatic,
 				AllScores: map[string]float64{"alpha": 0.2, "beta": 0.9},
 			}
-			_, _, selected, _ := r.applyRouterLearning(selCtx, base, &refs[1], ctx)
+			_, _, selected, _, learningErr := r.applyRouterLearning(selCtx, base, &refs[1], ctx)
+			if learningErr != nil {
+				t.Fatal(learningErr)
+			}
 			wantModel, wantAction := "beta", replaySessionActionNone
 			switch mode {
 			case config.DecisionAdaptationModeApply:
@@ -186,7 +189,10 @@ func TestReplayProtectionDefaultConversationRequiresConfiguredIdentity(t *testin
 	refs := []config.ModelRef{{Model: "alpha"}, {Model: "beta"}}
 	selCtx := &selection.SelectionContext{CandidateModels: refs, DecisionName: "route"}
 	base := &selection.SelectionResult{SelectedModel: "beta", Method: selection.MethodStatic}
-	_, _, selected, _ := r.applyRouterLearning(selCtx, base, &refs[1], ctx)
+	_, _, selected, _, learningErr := r.applyRouterLearning(selCtx, base, &refs[1], ctx)
+	if learningErr != nil {
+		t.Fatal(learningErr)
+	}
 	diagnostics := buildReplayRouteDiagnostics(ctx, "public-model", selected.Model, "route", 0, 0)
 	if selected.Model != "beta" || diagnostics.SessionPolicyApplied || diagnostics.SessionAction != replaySessionActionNone || diagnostics.SessionReason != "missing_identity" {
 		t.Fatalf("missing conversation header must not claim protection: %+v", diagnostics)

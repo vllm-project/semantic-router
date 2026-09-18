@@ -102,7 +102,8 @@ instead of being silently dropped.
 | Prompt-cache directives | Supported | Not supported | Supported |
 | Reasoning token budget | Supported extension | Not supported | Supported |
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
-| `top_k` sampling | Not supported | Not supported | Supported |
+| `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
+| `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
 

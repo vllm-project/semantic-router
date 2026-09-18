@@ -512,7 +512,7 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 	})
 })
 
-var _ = Describe("FactCheckClassifier Integration", func() {
+var _ = Describe("FactCheckClassifier Integration", Label("model-artifacts"), func() {
 	var (
 		classifier *classification.FactCheckClassifier
 		cfg        *config.FactCheckModelConfig
@@ -573,7 +573,7 @@ var _ = Describe("FactCheckClassifier Integration", func() {
 	})
 })
 
-var _ = Describe("HallucinationDetector Integration", func() {
+var _ = Describe("HallucinationDetector Integration", Label("model-artifacts"), func() {
 	// NOTE: These tests require the hallucination detection model to be available
 	// Skip if model is not found at HALLUCINATION_MODEL_PATH env var
 

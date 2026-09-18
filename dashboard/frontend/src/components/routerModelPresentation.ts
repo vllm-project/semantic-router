@@ -1,13 +1,5 @@
 import type { RouterModelInfo } from '../utils/routerRuntime'
 
-// Local exports preserve the public Vela basename and append their derivation
-// identity. Only hide this recognized suffix in the title, never in provenance.
-const VELA_DERIVATION = /^(Vela-[\w.-]+)-CK-\d+[KM]?-local-[a-f\d]{8,64}$/i
-
-function basename(value: string): string {
-  return value.replace(/\\/g, '/').replace(/\/+$/, '').split('/').pop() || ''
-}
-
 export function getRouterModelArtifactPath(model: RouterModelInfo): string {
   const runtimePath = model.model_path?.match(/path=([^,)]+)/)?.[1]?.trim()
   return (
@@ -15,27 +7,23 @@ export function getRouterModelArtifactPath(model: RouterModelInfo): string {
   )
 }
 
-export function isLocalDerivedRouterModel(model: RouterModelInfo): boolean {
-  return VELA_DERIVATION.test(basename(getRouterModelArtifactPath(model)))
-}
-
 export function getRouterModelDisplayName(model: RouterModelInfo): string {
-  const artifactName = basename(getRouterModelArtifactPath(model))
-  const derived = artifactName.match(VELA_DERIVATION)
-  if (derived) return derived[1]
-  return basename(model.registry?.repo_id || '') || artifactName || model.name
+  // A local export path is provenance, not evidence of its upstream identity.
+  return model.registry?.repo_id?.trim() || model.name
 }
 
 export function getRouterModelPreviewName(model: RouterModelInfo): {
   title: string
   subtitle?: string
 } {
-  const name = getRouterModelDisplayName(model)
-  const vela = name.match(/^Vela-([\d.]+)-Encoder-(\d+[MB])-(Domain|FactCheck|Feedback|Embedding)$/)
-  if (!vela) return { title: name }
+  const repository = model.registry?.repo_id?.trim()
+  if (!repository) {
+    return { title: model.name, subtitle: 'Runtime identity · repository not reported' }
+  }
+  const separator = repository.lastIndexOf('/')
   return {
-    title: `Vela ${vela[3] === 'FactCheck' ? 'Fact Check' : vela[3]}`,
-    subtitle: `v${vela[1]} · ${vela[2]} encoder`,
+    title: repository.slice(separator + 1),
+    subtitle: separator > 0 ? repository.slice(0, separator) : undefined,
   }
 }
 
@@ -45,19 +33,62 @@ function positiveTokenCount(value: string | number | undefined): number | undefi
   return Number.isSafeInteger(count) && count > 0 ? count : undefined
 }
 
-export function getRouterModelContext(model: RouterModelInfo): {
-  tokens?: number
-  source: 'runtime' | 'registry' | 'unknown'
-  label: string
+export function formatRouterModelTokens(tokens?: number): string {
+  return tokens === undefined ? 'Not reported' : `${tokens.toLocaleString('en-US')} tokens`
+}
+
+export function getRouterModelInputLimits(model: RouterModelInfo): {
+  input?: number
+  document?: number
+  forward?: number
+  window?: number
+  overlap?: number
+  publishedContext?: number
+  overflow?: string
 } {
-  const runtime = positiveTokenCount(model.metadata?.max_sequence_length)
-  const registry = positiveTokenCount(model.registry?.max_context_length)
-  const tokens = runtime ?? registry
+  const metadata = model.metadata
+  const overlap = metadata?.window_overlap
+  const input =
+    positiveTokenCount(metadata?.input_max_tokens) ??
+    positiveTokenCount(metadata?.max_sequence_length)
   return {
-    tokens,
-    source: runtime !== undefined ? 'runtime' : registry !== undefined ? 'registry' : 'unknown',
-    label: tokens === undefined ? 'Not reported' : `${tokens.toLocaleString('en-US')} tokens`,
+    // max_sequence_length is the legacy name for the configured input budget.
+    // Never use it as a physical window when a document is scanned in chunks.
+    input,
+    document:
+      metadata?.overflow === 'window'
+        ? (positiveTokenCount(metadata?.document_max_tokens) ?? input)
+        : undefined,
+    forward: positiveTokenCount(metadata?.forward_max_tokens),
+    window: positiveTokenCount(metadata?.window_size),
+    overlap: overlap === '0' ? 0 : positiveTokenCount(overlap),
+    publishedContext: positiveTokenCount(model.registry?.max_context_length),
+    overflow: metadata?.overflow,
   }
+}
+
+export function getRouterModelKind(model: RouterModelInfo): string {
+  return formatRouterModelLabel(model.registry?.purpose || model.type)
+}
+
+export function formatRouterModelLabel(value?: string): string {
+  const overrides: Record<string, string> = {
+    amd: 'AMD',
+    cpu: 'CPU',
+    lora: 'LoRA',
+    mmbert: 'mmBERT',
+    nli: 'NLI',
+    pii: 'PII',
+    ort: 'ONNX Runtime',
+    rocm: 'ROCm',
+    migraphx: 'MIGraphX',
+  }
+  return (value || 'Unknown')
+    .replace(/[_-]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => overrides[word.toLowerCase()] ?? word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 }
 
 export function getRouterModelDevice(model: RouterModelInfo): {
