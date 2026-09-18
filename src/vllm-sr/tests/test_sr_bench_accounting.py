@@ -9,6 +9,8 @@ import pytest
 import requests
 from cli.sr_bench.accounting import reconcile_usage
 from cli.sr_bench.contracts import digest, plan
+from cli.sr_bench.engine import Engine
+from cli.sr_bench.recovery import RecoveryPlanError, recover, recovery_plan
 from cli.sr_bench.report import compare, make_report
 from cli.sr_bench.service import PREFIX, Server
 from cli.sr_bench.store import Store
@@ -248,6 +250,100 @@ def test_reconcile_rejects_active_run(tmp_path):
     with pytest.raises(ValueError, match="terminal live"):
         reconcile_usage(store, run)
     assert store.accounting_correction(run) is None
+
+
+def _failed_scoring_parent(store):
+    run, call, path = _saved(store)
+    store.result(
+        run,
+        "one",
+        "model",
+        "failed",
+        {"benchmark": "mmlu-pro", "correct": None, "error": "Scoring failed"},
+    )
+    store.status(run, "failed", "Scoring failed")
+    return run, call, path
+
+
+def test_recovery_snapshots_corrected_parent_spend_without_rewriting_history(
+    tmp_path, monkeypatch
+):
+    store = Store(tmp_path)
+    parent, call, _ = _failed_scoring_parent(store)
+    original_run = store.get(parent)
+    original_call = store.call(parent, call)
+    original_results = store.results(parent)
+    stale = recovery_plan(store, parent, "failed")
+    correction = reconcile_usage(store, parent)
+    fresh = recovery_plan(store, parent, "failed")
+    assert fresh["eligible_cells"] == stale["eligible_cells"]
+    assert fresh["plan_sha256"] != stale["plan_sha256"]
+    assert fresh["parent"]["known_spend_usd"] == pytest.approx(0.0001195)
+    assert fresh["parent"]["spend_complete"] is True
+    assert fresh["parent"]["accounting_correction"]["id"] == correction["id"]
+    assert "calls" not in fresh["parent"]["accounting_correction"]
+    assert make_report(store, parent)["summary"]["total_spend_usd"] == pytest.approx(
+        fresh["parent"]["known_spend_usd"]
+    )
+    engine = Engine(store)
+
+    def no_dispatch(*_args, **_kwargs):
+        pytest.fail("Recovery unexpectedly dispatched a model request")
+
+    monkeypatch.setattr(engine, "start", no_dispatch)
+    body = {
+        "mode": "failed",
+        "cells": fresh["eligible_cells"],
+        "acknowledge_new_attempt": True,
+        "idempotency_key": "new-recovery-attempt",
+        "plan_sha256": stale["plan_sha256"],
+    }
+    with pytest.raises(RecoveryPlanError, match="eligibility changed"):
+        recover(engine, parent, body, owner="alice")
+
+    def save_child(manifest, owner, key, *, recovery):
+        assert recovery is True
+        return store.create(plan(manifest), owner, key)[0]
+
+    monkeypatch.setattr(engine, "start", save_child)
+    child = recover(
+        engine,
+        parent,
+        {**body, "plan_sha256": fresh["plan_sha256"]},
+        owner="alice",
+    )
+    assert child["manifest"]["recovery"]["parent_snapshot"] == fresh["parent"]
+    assert store.get(parent) == original_run
+    assert store.call(parent, call) == original_call
+    assert store.results(parent) == original_results
+    store.db.close()
+    reopened = Store(tmp_path)
+    report = make_report(reopened, child["id"])
+    assert report["recovery"]["parent_snapshot"] == fresh["parent"]
+    assert report["summary"]["total_spend_usd"] is None
+    assert reopened.call(parent, call) == original_call
+
+
+def test_failed_recovery_excludes_accounting_reconciliation_unknowns(tmp_path):
+    store = Store(tmp_path)
+    parent, call, path = _failed_scoring_parent(store)
+    original = store.call(parent, call)
+    assert recovery_plan(store, parent, "failed")["counts"]["eligible"] == 1
+    path.unlink()
+    correction = reconcile_usage(store, parent)
+    assert not correction["qualified"]
+    proposed = recovery_plan(store, parent, "failed")
+    assert proposed["counts"]["eligible"] == 0
+    assert proposed["excluded"][0]["reason"] == (
+        "unfinished_or_unknown_accounting_requires_reconciliation"
+    )
+    assert proposed["parent"]["known_spend_usd"] == 0
+    assert proposed["parent"]["spend_complete"] is False
+    assert proposed["parent"]["accounting_correction"]["id"] == correction["id"]
+    report = make_report(store, parent)
+    assert report["summary"]["targets"][0]["known_cost_usd"] == 0
+    assert report["summary"]["total_spend_usd"] is None
+    assert store.call(parent, call) == original
 
 
 def test_reconcile_api_owner_and_editor_scope(tmp_path):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 
+from .accounting import correction_metadata, effective_calls
 from .contracts import digest, planned_cells
 from .store import TERMINAL, RecoveryClaimError
 
@@ -24,7 +25,9 @@ def recovery_plan(store, parent_id, mode="undispatched"):
     results = {
         (row["case_id"], row["target_id"]): row for row in store.results(parent_id)
     }
-    calls = store.calls(parent_id, summary=True)
+    with store.lock:
+        calls = effective_calls(store, parent_id, summary=True)
+        accounting = correction_metadata(store, parent_id)
     grouped = {}
     for call in calls:
         grouped.setdefault((call["case_id"], call["target_id"]), []).append(call)
@@ -66,6 +69,8 @@ def recovery_plan(store, parent_id, mode="undispatched"):
         "spend_complete": all(call.get("cost_usd") is not None for call in calls),
         "plan_sha256": parent["manifest"]["plan_sha256"],
     }
+    if accounting:
+        snapshot["accounting_correction"] = accounting
     proposed = {
         "parent_run_id": parent_id,
         "mode": mode,
