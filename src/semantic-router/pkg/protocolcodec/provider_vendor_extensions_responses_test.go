@@ -86,8 +86,8 @@ func TestAzureResponsesStreamReportsNestedItemVendorExtensions(t *testing.T) {
 	}
 	start := []byte("event: response.created\n" +
 		`data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1,"model":"provider-model","status":"in_progress","output":[]}}` + "\n\n")
-	if _, _, _, err := stream.Push(start); err != nil {
-		t.Fatalf("Push(start) error = %v", err)
+	if _, _, _, startErr := stream.Push(start); startErr != nil {
+		t.Fatalf("Push(start) error = %v", startErr)
 	}
 
 	frame := []byte("event: response.output_item.added\n" +
@@ -126,8 +126,8 @@ func TestResponsesStreamNestedVendorExtensionsRemainStrictWithoutAzure(t *testin
 	}
 	start := []byte("event: response.created\n" +
 		`data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1,"model":"provider-model","status":"in_progress","output":[]}}` + "\n\n")
-	if _, _, _, err := stream.Push(start); err != nil {
-		t.Fatalf("Push(start) error = %v", err)
+	if _, _, _, startErr := stream.Push(start); startErr != nil {
+		t.Fatalf("Push(start) error = %v", startErr)
 	}
 	frame := []byte("event: response.output_item.added\n" +
 		`data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","status":"in_progress","content":[],"azure_item":{}}}` + "\n\n")

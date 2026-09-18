@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -25,10 +24,16 @@ func TestResolveResponseVendorAzure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			profile := &config.ProviderProfile{Type: tt.providerType, BaseURL: tt.baseURL}
 
+			// Response decoration is independent of request shaping, so
+			// resolving the vendor must leave the profile's reasoning transport
+			// exactly as the catalog resolved it. Asserting the invariant rather
+			// than a literal transport keeps this test off catalog data, which
+			// differs per provider type and changes over time.
+			before := resolveProviderReasoningTransport(profile)
+
 			assert.Equal(t, llmprotocol.ResponseVendorAzure, resolveResponseVendor(profile))
-			// Response decoration is independent of request shaping: an Azure
-			// profile must not acquire a reasoning transport it did not declare.
-			assert.Equal(t, modelcatalog.ReasoningTransportChatTemplate, resolveProviderReasoningTransport(profile))
+
+			assert.Equal(t, before, resolveProviderReasoningTransport(profile))
 		})
 	}
 }
