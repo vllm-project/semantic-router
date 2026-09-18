@@ -553,6 +553,11 @@ func (s *ClassificationAPIServer) writeEmbeddingRuntimeError(w http.ResponseWrit
 		s.writeClassificationError(w, err)
 		return
 	}
+	if errors.Is(err, binding.ErrNotPrepared) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err))
+		return
+	}
 	s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
 }
 

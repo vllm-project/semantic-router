@@ -218,15 +218,24 @@ func withAuthzClassifier(authzClassifier *AuthzClassifier) option {
 }
 
 // IsPIIModelReady reports whether the PII token classifier model was loaded
-// successfully during runtime initialization.
+// successfully during runtime initialization. A configured remote PII backend
+// has no local model lifecycle, so assembly alone marks it ready.
 func (c *Classifier) IsPIIModelReady() bool {
-	return c.piiModelReady
+	return c.piiModelReady || (c.Config != nil && c.Config.PIIModel.Backend != nil)
 }
 
 // IsJailbreakModelReady reports whether the jailbreak detection model was
-// loaded successfully during runtime initialization.
+// loaded successfully during runtime initialization. A configured remote
+// jailbreak backend has no local model lifecycle, so assembly alone marks it
+// ready.
 func (c *Classifier) IsJailbreakModelReady() bool {
-	return c.jailbreakModelReady
+	if c.jailbreakModelReady {
+		return true
+	}
+	if c.Config == nil {
+		return false
+	}
+	return c.Config.PromptGuard.Backend != nil || c.Config.PromptGuard.Protocol != ""
 }
 
 // newClassifierWithOptions creates a new classifier with the given options
