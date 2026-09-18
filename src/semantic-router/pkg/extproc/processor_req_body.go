@@ -236,7 +236,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// Persist the final dispatch demand, including automatic output resolved
 	// below. Defer also preserves a record when finalization fails or panics;
 	// Process owns its terminal lifecycle and response headers run afterwards.
-	defer r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+	defer r.startRouterReplay(ctx, originalModel, dispatch.logicalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
