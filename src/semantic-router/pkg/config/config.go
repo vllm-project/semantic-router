@@ -278,10 +278,10 @@ type IntelligentRouting struct {
 	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
 	Signals               `yaml:",inline"`
-	Projections           Projections            `yaml:"projections,omitempty"`
-	Decisions             []Decision             `yaml:"decisions,omitempty"`
-	Strategy              RoutingStrategy        `yaml:"strategy,omitempty"`
-	ModelSelection        ModelSelectionConfig   `yaml:"model_selection,omitempty"`
+	Projections           Projections          `yaml:"projections,omitempty"`
+	Decisions             []Decision           `yaml:"decisions,omitempty"`
+	Strategy              RoutingStrategy      `yaml:"strategy,omitempty"`
+	ModelSelection        ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig       `yaml:",inline"`
 }
 
