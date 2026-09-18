@@ -168,8 +168,11 @@ type RequestContext struct {
 	VSRLearningProtectionPreflight      *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
 	VSRLearningSessionID                string                                      // Router Learning memory key used for this request
 	VSRLearningConversationID           string                                      // Client-declared conversation identity used by Router Learning
-	VSRCacheHit                         bool                                        // Whether this request hit the cache
-	VSRCacheSimilarity                  float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRProgressGateConfig               *config.ProgressGateConfig
+	VSRProgressOutcomeRecorded          bool
+	VSRProgressGateError                error
+	VSRCacheHit                         bool    // Whether this request hit the cache
+	VSRCacheSimilarity                  float32 // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRCacheHitKind                     string
 	VSRCacheSource                      string
 	VSRCacheEntryAgeSeconds             float64
@@ -328,6 +331,8 @@ type RequestContext struct {
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ResponseVendor           llmprotocol.ResponseVendor
+	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 
