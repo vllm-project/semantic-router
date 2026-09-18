@@ -45,11 +45,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
+      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n        with:\n          cache-dependency-path: deploy/operator/go.sum\n
       - name: Download dependencies
         id: dependencies
         run: go mod download
@@ -220,11 +216,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
+      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n        with:\n          cache-dependency-path: deploy/operator/go.sum\n
       - name: Regenerate bundle
         # 'make bundle' installs pinned controller-gen/kustomize/operator-sdk into
         # bin/, regenerates the manifests and OLM bundle, and runs
@@ -279,11 +271,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
+      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n        with:\n          cache-dependency-path: deploy/operator/go.sum\n
       - name: Set up Kind
         uses: ./.github/actions/setup-kind
 
