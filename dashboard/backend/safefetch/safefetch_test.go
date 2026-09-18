@@ -525,6 +525,62 @@ func TestRaceStartsNextImmediatelyOnFailure(t *testing.T) {
 	}
 }
 
+// trackedConn signals on closed when Close is called, so a test can tell
+// whether a connection that landed after the race was over was ever closed.
+type trackedConn struct {
+	fakeConn
+	closed chan struct{}
+}
+
+func (c trackedConn) Close() error {
+	close(c.closed)
+	return c.fakeConn.Close()
+}
+
+// Cancelling the caller's context while an attempt is still in flight must
+// not leak that attempt's connection if it goes on to succeed anyway: the
+// dial loop has already returned by then, so nothing else will ever close it
+// (review on #3617).
+func TestRaceClosesLateConnAfterCancellation(t *testing.T) {
+	policy := DefaultPolicy().
+		WithResolver(staticResolver{addresses: []netip.Addr{
+			netip.MustParseAddr("1.1.1.1"),
+		}})
+
+	dialStarted := make(chan struct{})
+	releaseDial := make(chan struct{})
+	closed := make(chan struct{})
+	policy.dialContext = func(context.Context, string, string) (net.Conn, error) {
+		close(dialStarted)
+		<-releaseDial
+		// Ignores ctx to stand in for the race a real dialer can lose: the
+		// handshake finishes right as the caller gives up.
+		return trackedConn{fakeConn{}, closed}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	var dialErr error
+	go func() {
+		_, dialErr = policy.dial(ctx, policy.Resolver, policy.dialContext, "tcp", "cloudflare.invalid:443")
+		close(done)
+	}()
+
+	<-dialStarted
+	cancel()
+	<-done
+	if !errors.Is(dialErr, context.Canceled) {
+		t.Fatalf("dial() = %v, want context.Canceled", dialErr)
+	}
+
+	close(releaseDial)
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("connection that completed after cancellation was never closed, leaking it")
+	}
+}
+
 // Every candidate failing is still a failure, and the error names them.
 func TestRaceReportsEveryFailure(t *testing.T) {
 	policy := DefaultPolicy().

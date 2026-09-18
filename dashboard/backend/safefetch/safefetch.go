@@ -333,6 +333,12 @@ func (p Policy) raceDial(
 			}
 
 		case <-ctx.Done():
+			// Same as the winner path: an attempt still in flight when the
+			// caller's context ends can still land a connection. Drain it so
+			// that one is closed instead of leaked.
+			if pending > 0 {
+				go discardLateConns(results, pending)
+			}
 			return nil, errors.Join(errs, ctx.Err())
 		}
 	}
