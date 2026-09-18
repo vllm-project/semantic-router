@@ -43,6 +43,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
 	r.updateResponseCache(ctx, clientBody)
+	r.updateKVAddressRegistry(ctx)
 
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
