@@ -54,6 +54,9 @@ func validateDecisionExecution(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
 		return err
 	}
+	if err := validateDecisionAutomaticOutput(decision); err != nil {
+		return err
+	}
 	if err := validateDecisionPromptModel(cfg, decision); err != nil {
 		return err
 	}
