@@ -187,6 +187,12 @@ type Sampling struct {
 	FrequencyPenalty  *float64
 	PresencePenalty   *float64
 	Stop              []string
+
+	// AutomaticOutput is router policy, never populated from or encoded onto
+	// a provider wire. Retaining it permits recalculation after model reroutes.
+	AutomaticOutput      bool
+	AutomaticOutputCap   *int64
+	AutomaticInputTokens *int64
 }
 
 // StreamOptions contains public response-stream preferences. These options

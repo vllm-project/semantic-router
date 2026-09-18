@@ -190,6 +190,9 @@ def component_batches(verifications: list[dict]) -> list[dict]:
 
 
 def github_outputs(plan: dict) -> dict[str, str]:
+    # Only labels enter the Actions matrix; full records stay outside it so
+    # GitHub cannot append their fields to a static caller name.
+    dispatch = {"tools": records_by_display_name(plan["component_batches"])}
     outputs = {
         "plan": json.dumps(plan, separators=(",", ":")),
         "images": json.dumps(plan["images"]),
@@ -205,11 +208,22 @@ def github_outputs(plan: dict) -> dict[str, str]:
     for executor in EXECUTORS:
         if executor == "tools":
             continue
-        outputs[executor] = json.dumps(
-            [r for r in plan["verifications"] if r["executor"] == executor],
-            separators=(",", ":"),
-        )
+        records = [r for r in plan["verifications"] if r["executor"] == executor]
+        outputs[executor] = json.dumps(records, separators=(",", ":"))
+        if executor not in {"quality", "generated"}:
+            dispatch[executor] = records_by_display_name(records)
+    outputs["dispatch"] = json.dumps(dispatch, separators=(",", ":"))
     return outputs
+
+
+def records_by_display_name(records: list[dict]) -> dict[str, dict]:
+    indexed = {}
+    for record in records:
+        label = record.get("display_name")
+        if not isinstance(label, str) or not label.strip() or label in indexed:
+            raise ValueError("CI matrix display names must be nonempty and unique")
+        indexed[label] = record
+    return indexed
 
 
 def previous_release(version: str, tags: list[str]) -> str:

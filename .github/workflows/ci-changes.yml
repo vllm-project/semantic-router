@@ -19,6 +19,8 @@ on:
     outputs:
       plan:
         value: ${{ jobs.plan.outputs.plan }}
+      dispatch:
+        value: ${{ jobs.plan.outputs.dispatch }}
       images:
         value: ${{ jobs.plan.outputs.images }}
       publish_images:
@@ -69,6 +71,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       plan: ${{ steps.plan.outputs.plan }}
+      dispatch: ${{ steps.plan.outputs.dispatch }}
       images: ${{ steps.plan.outputs.images }}
       publish_images: ${{ steps.plan.outputs.publish_images }}
       build_native: ${{ steps.plan.outputs.build_native }}

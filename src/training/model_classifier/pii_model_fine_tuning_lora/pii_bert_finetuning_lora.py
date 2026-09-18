@@ -68,20 +68,17 @@ Makefile Targets:
 """
 
 import json
-import logging
 import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List
 
 import requests
 import torch
-import torch.nn as nn
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from torch import nn
 from transformers import (
     AutoModelForTokenClassification,
     AutoTokenizer,
@@ -98,7 +95,6 @@ from common_lora_utils import (
     resolve_model_path,
     set_gpu_device,
     setup_logging,
-    validate_lora_config,
 )
 
 # Setup logging
@@ -185,7 +181,7 @@ def create_lora_token_model(model_name: str, num_labels: int, lora_config: dict)
 
 def download_presidio_dataset():
     """Download the Microsoft Presidio research dataset."""
-    url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/master/data/synth_dataset_v2.json"
+    url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/main/data/synth_dataset_v2.json"
     dataset_path = "presidio_synth_dataset_v2.json"
 
     if not Path(dataset_path).exists():
@@ -206,7 +202,7 @@ def load_presidio_dataset(max_samples=1000):
     """Load and parse Presidio dataset for token classification with FIXED BIO labeling."""
     dataset_path = download_presidio_dataset()
 
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Improve data balancing: ensure diverse PII entity types
@@ -410,7 +406,7 @@ def validate_bio_labels(texts, token_labels):
             stats["max_length"] = max(stats["lengths"])
             stats["min_length"] = min(stats["lengths"])
 
-    logger.info(f"📊 BIO Label Validation Results:")
+    logger.info("📊 BIO Label Validation Results:")
     logger.info(f"  Total samples: {total_samples}")
     logger.info(f"  Total tokens: {total_tokens}")
     logger.info(f"  BIO violations: {bio_violations}")
@@ -427,7 +423,7 @@ def validate_bio_labels(texts, token_labels):
 
     # Show entity statistics
     if entity_stats:
-        logger.info(f"Entity Statistics:")
+        logger.info("Entity Statistics:")
         for entity_type, stats in sorted(
             entity_stats.items(), key=lambda x: x[1]["count"], reverse=True
         )[:5]:
@@ -451,7 +447,7 @@ def validate_bio_labels(texts, token_labels):
 
 def analyze_data_quality(texts, token_labels, sample_size=5):
     """Analyze and display data quality with sample examples."""
-    logger.info(f"Data Quality Analysis:")
+    logger.info("Data Quality Analysis:")
 
     # Show sample examples with their labels
     logger.info(f"Sample Examples (showing first {sample_size}):")
@@ -491,7 +487,7 @@ def analyze_data_quality(texts, token_labels, sample_size=5):
         if entities:
             logger.info(f"    Entities: {', '.join(entities)}")
         else:
-            logger.info(f"    Entities: None")
+            logger.info("    Entities: None")
         logger.info("")
 
     # Check for potential data quality issues
@@ -523,7 +519,7 @@ def analyze_data_quality(texts, token_labels, sample_size=5):
             issues.append(f"Severe class imbalance: max={max_count}, min={min_count}")
 
     if issues:
-        logger.warning(f"⚠️  Data Quality Issues Found:")
+        logger.warning("⚠️  Data Quality Issues Found:")
         for issue in issues:
             logger.warning(f"    - {issue}")
     else:
@@ -637,7 +633,7 @@ def load_presidio_raw_data(max_samples=1000):
     """Load raw Presidio data with full_text and spans for char offset alignment."""
     dataset_path = download_presidio_dataset()
 
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Use same balanced sampling as load_presidio_dataset
@@ -1279,7 +1275,7 @@ def main(
 
     # Evaluate
     eval_results = trainer.evaluate()
-    logger.info(f"Validation Results:")
+    logger.info("Validation Results:")
     logger.info(f"  Accuracy: {eval_results['eval_accuracy']:.4f}")
     logger.info(f"  F1: {eval_results['eval_f1']:.4f}")
     logger.info(f"  Precision: {eval_results['eval_precision']:.4f}")
@@ -1303,7 +1299,7 @@ def merge_lora_adapter_to_full_model(
     logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
-    with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
+    with open(os.path.join(lora_adapter_path, "label_mapping.json")) as f:
         mapping_data = json.load(f)
     num_labels = len(mapping_data["id_to_label"])
 
@@ -1340,7 +1336,7 @@ def merge_lora_adapter_to_full_model(
     # Fix config.json to include correct id2label mapping for Rust compatibility
     config_path = os.path.join(output_path, "config.json")
     if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         # Update id2label mapping with actual PII labels
@@ -1369,7 +1365,7 @@ def demo_inference(
 
     try:
         # Load label mapping first to get the correct number of labels
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
             mapping_data = json.load(f)
         id_to_label = {int(k): v for k, v in mapping_data["id_to_label"].items()}
         num_labels = len(id_to_label)
