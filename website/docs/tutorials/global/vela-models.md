@@ -2,10 +2,11 @@
 
 ## Overview
 
-[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10-router-models-6aa555ba70cc6997d6d67798)
-is the model family for intelligent routing. Its eleven models share the Vela
-307M encoder base and cover routing, prompt protection, content safety, retrieval
-and reranking. The Router registry pins each release to an immutable revision.
+[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10)
+is a family of fourteen published model checkpoints for intelligent routing.
+The Router registry currently includes the Vela 307M encoder base and ten task
+models covering routing, prompt protection, content safety, retrieval and
+reranking. Each registered release is pinned to an immutable revision.
 
 | Model | Role |
 | --- | --- |
@@ -22,8 +23,14 @@ and reranking. The Router registry pins each release to an immutable revision.
 | Reranker | Relevance scoring for query-document pairs |
 
 The full model name is `Vela-1.0-Encoder-307M`, followed by the task suffix.
-Modality classifies text requests; Vela 1.0 does not contain multimodal encoders.
+Modality classifies the requested output modality from text.
 FactCheck requests verification and does not verify the truth of an answer.
+
+The public collection also includes **Halu** for answer evidence-support
+detection and **Omni Nano / Omni Mini** for text, image and audio embeddings.
+These three checkpoints are available for direct use and integration work;
+they are not yet the Router's default hallucination or multimodal components.
+See the [Vela 1.0 release announcement](/blog/introduce-vela) for the full family.
 
 ## What Problem Does It Solve?
 

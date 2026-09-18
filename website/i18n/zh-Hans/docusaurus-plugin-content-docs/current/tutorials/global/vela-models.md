@@ -2,8 +2,8 @@
 
 ## 概览 {#overview}
 
-[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10-router-models-6aa555ba70cc6997d6d67798)
-是面向智能路由的模型家族。十一个模型共享 Vela 307M Encoder 基座，覆盖路由、提示词保护、内容安全、检索和重排。Router 模型注册表将每个版本固定到不可变的 revision。
+[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10)
+是包含十四个已发布 checkpoint 的智能路由模型家族。当前 Router 模型注册表包含 Vela 307M Encoder 基座与十个任务模型，覆盖路由、提示词保护、内容安全、检索和重排，并将每个版本固定到不可变的 revision。
 
 | 模型 | 作用 |
 | --- | --- |
@@ -19,7 +19,9 @@
 | Embedding | 多语言检索和语义匹配 |
 | Reranker | 为查询与文档对计算相关性 |
 
-完整模型名由 `Vela-1.0-Encoder-307M` 和任务后缀组成。Modality 分类的是文本请求；Vela 1.0 不包含多模态编码器。FactCheck 判断是否需要核查，并不验证回答的事实真伪。
+完整模型名由 `Vela-1.0-Encoder-307M` 和任务后缀组成。Modality 从文本请求判断所需的输出模态。FactCheck 判断是否需要核查，并不验证回答的事实真伪。
+
+公开模型集合还包括检查回答证据支持情况的 **Halu**，以及生成文本、图像和音频嵌入的 **Omni Nano / Omni Mini**。这三个 checkpoint 可直接使用并开展集成工作，尚未成为 Router 默认的幻觉检测或多模态组件。完整模型家族见 [Vela 1.0 发布公告](/blog/introduce-vela)。
 
 ## 解决什么问题 {#what-problem-does-it-solve}
 
