@@ -12,12 +12,13 @@ func TestSwitchGateDowngradeRequiresComparableEvidence(t *testing.T) {
 	a := modelParamsWithTestQuality(0.9)
 	b := modelParamsWithTestQuality(0.6)
 	sel.InitializeFromConfig(map[string]config.ModelParams{"a": a, "b": b})
-	ctx := &SelectionContext{CandidateModels: []config.ModelRef{{Model: "a"}, {Model: "b"}}}
-	if !sel.IsDowngrade(ctx, "a", "b") || sel.IsDowngrade(ctx, "b", "a") {
+	current := &config.ModelRef{Model: "a"}
+	proposed := &config.ModelRef{Model: "b"}
+	if !sel.IsDowngrade(current, proposed) || sel.IsDowngrade(proposed, current) {
 		t.Fatal("same-index quality direction was not used")
 	}
-	ctx.CandidateModels[1].ReasoningEffort = "high"
-	if sel.IsDowngrade(ctx, "a", "b") {
+	proposed.ModelReasoningControl.ReasoningEffort = "high"
+	if sel.IsDowngrade(current, proposed) {
 		t.Fatal("missing exact-effort evidence must not borrow the preferred score")
 	}
 	low := 40.0
@@ -25,13 +26,60 @@ func TestSwitchGateDowngradeRequiresComparableEvidence(t *testing.T) {
 		"high": {testIntelligenceIndex: {Index: testIntelligenceIndex, Status: "available", Score: &low}},
 	}
 	sel.InitializeFromConfig(map[string]config.ModelParams{"a": a, "b": b})
-	if !sel.IsDowngrade(ctx, "a", "b") {
+	if !sel.IsDowngrade(current, proposed) {
 		t.Fatal("exact effort evidence was ignored")
 	}
 	b.QualityIndex = "different/index@1.0.0"
 	sel.InitializeFromConfig(map[string]config.ModelParams{"a": a, "b": b})
-	if sel.IsDowngrade(ctx, "a", "b") {
+	if sel.IsDowngrade(current, proposed) {
 		t.Fatal("unrelated indexes are not comparable")
+	}
+}
+
+func TestSwitchGateDowngradeUsesExactCandidateEffort(t *testing.T) {
+	a := config.ModelParams{}
+	a = addTestEvidence(a, 0.4, 1, "low")
+	a = addTestEvidence(a, 0.9, 1, "high")
+	b := modelParamsWithTestQuality(0.6)
+	sel := NewSessionAwareSelector(nil)
+	sel.InitializeFromConfig(map[string]config.ModelParams{"a": a, "b": b})
+
+	ref := func(model, effort string) *config.ModelRef {
+		return &config.ModelRef{
+			Model:                 model,
+			ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: effort},
+		}
+	}
+	aLowRef, aHigh := ref("a", "low"), ref("a", "high")
+	aUnknownEffort := ref("a", "ultra")
+	bPlain := ref("b", "")
+
+	// "a" exists at two efforts, so the model name alone cannot select the
+	// evidence: A/high (90) -> B (60) is a downgrade, A/low (40) -> B (60) is not.
+	if !sel.IsDowngrade(aHigh, bPlain) {
+		t.Fatal("A/high to B must be a downgrade")
+	}
+	if sel.IsDowngrade(aLowRef, bPlain) {
+		t.Fatal("A/low to B must not be a downgrade")
+	}
+	// Scores are never borrowed across efforts: an effort carrying no evidence
+	// yields no comparison rather than falling back to another effort's score.
+	if sel.IsDowngrade(aUnknownEffort, bPlain) {
+		t.Fatal("an effort without evidence must not borrow another effort's score")
+	}
+	// Incomparable input is not a downgrade.
+	if sel.IsDowngrade(nil, bPlain) || sel.IsDowngrade(aHigh, nil) {
+		t.Fatal("a nil candidate must not be reported as a downgrade")
+	}
+	// A LoRA variant shares the model's params but is compared at its own effort.
+	loraHigh := ref("a", "high")
+	loraHigh.LoRAName = "a-adapter"
+	if !sel.IsDowngrade(loraHigh, bPlain) {
+		t.Fatal("a LoRA candidate must be compared at its own effort")
+	}
+	// Direction follows the refs, not any ordering of the candidate set.
+	if sel.IsDowngrade(bPlain, aHigh) {
+		t.Fatal("B to A/high must not be a downgrade")
 	}
 }
 

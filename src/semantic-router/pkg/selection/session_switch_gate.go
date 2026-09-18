@@ -154,29 +154,20 @@ func (d SwitchGateDecision) Suppressed() bool {
 	return d.Enforced && d.Decision == GateDecisionSuppress
 }
 
-// IsDowngrade compares available evidence on the same index and candidate effort.
-func (s *SessionAwareSelector) IsDowngrade(selCtx *SelectionContext, current, proposed string) bool {
-	if s == nil {
+// IsDowngrade compares available evidence on the same index and the exact
+// candidate efforts supplied by the caller.
+func (s *SessionAwareSelector) IsDowngrade(current, proposed *config.ModelRef) bool {
+	if s == nil || current == nil || proposed == nil {
 		return false
 	}
-	currentParams, currentOK := s.modelParams[current]
-	proposedParams, proposedOK := s.modelParams[proposed]
+	currentParams, currentOK := s.modelParams[current.Model]
+	proposedParams, proposedOK := s.modelParams[proposed.Model]
 	if !currentOK || !proposedOK || currentParams.QualityIndex == "" ||
 		currentParams.QualityIndex != proposedParams.QualityIndex {
 		return false
 	}
-	effort := func(model string) string {
-		if selCtx != nil {
-			for _, candidate := range selCtx.CandidateModels {
-				if candidate.Model == model {
-					return candidate.ReasoningEffort
-				}
-			}
-		}
-		return ""
-	}
-	currentQuality, currentOK := currentParams.EvidenceScoreAt(currentParams.QualityIndex, effort(current))
-	proposedQuality, proposedOK := proposedParams.EvidenceScoreAt(currentParams.QualityIndex, effort(proposed))
+	currentQuality, currentOK := currentParams.EvidenceScoreAt(currentParams.QualityIndex, current.ReasoningEffort)
+	proposedQuality, proposedOK := proposedParams.EvidenceScoreAt(currentParams.QualityIndex, proposed.ReasoningEffort)
 	return currentOK && proposedOK && proposedQuality < currentQuality
 }
 

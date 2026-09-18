@@ -211,6 +211,8 @@ func (r *OpenAIRouter) protectionRescueDecision(
 	if current == "" || proposalModel == "" || current == proposalModel {
 		return routerLearningDecision{}, false
 	}
+	currentRef := currentLearningModelRef(learningCtx)
+	proposedRef := selectedModelRefFromResult(learningCtx, proposalResult)
 	if !r.protectionRescueEvidence(preflight.config, learningCtx, input.ctx, current, proposalModel, proposalResult) {
 		return routerLearningDecision{}, false
 	}
@@ -234,7 +236,7 @@ func (r *OpenAIRouter) protectionRescueDecision(
 	selector.InitializeFromConfig(r.Config.ModelConfig)
 	gateDecision, gateTrace, gateRan := r.switchGateVerdict(
 		preflight.config, input.ctx, learningCtx, current, proposalModel,
-		selector.IsDowngrade(learningCtx, current, proposalModel),
+		selector.IsDowngrade(currentRef, proposedRef),
 	)
 	if gateRan {
 		gateTrace.Source = "rescue"
@@ -450,7 +452,7 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	currentModel := currentLearningModel(learningCtx)
 	proposedModel := selectedModelName(result)
 	proposed := selectedModelRefFromResult(learningCtx, result)
-	downgrade := selector.IsDowngrade(learningCtx, currentModel, proposedModel)
+	downgrade := selector.IsDowngrade(current, proposed)
 
 	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, downgrade)
 	if !ran {
