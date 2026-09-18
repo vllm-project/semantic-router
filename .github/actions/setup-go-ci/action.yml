@@ -1,0 +1,21 @@
+name: Set up Go CI
+description: Install the shared Go 1.25 toolchain and cache module downloads.
+
+inputs:
+  cache-dependency-path:
+    description: Newline-separated go.sum paths used for the setup-go cache key.
+    required: false
+    default: |
+      go.sum
+      deploy/operator/go.sum
+      dashboard/backend/go.sum
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go 1.25
+      uses: actions/setup-go@v5
+      with:
+        go-version: "1.25"
+        cache: true
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
