@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 func srBenchTestRequest(method, path, body string) *http.Request {
@@ -145,6 +146,38 @@ func TestSRBenchOfflineRoutes(t *testing.T) {
 	for _, path := range []string{"/replays", "/runs/run-1/regrade", "/runs/run-1/export"} {
 		if method, found := srBenchRouteMethod(SRBenchAPIPath + path); !found || method != http.MethodPost {
 			t.Fatalf("offline route missing: %s", path)
+		}
+	}
+}
+
+func TestSRBenchEvidencePaginationAndCallDetail(t *testing.T) {
+	var paths []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.RequestURI())
+		_, _ = w.Write([]byte(`{"calls":[],"next_cursor":25}`))
+	}))
+	defer upstream.Close()
+	handler, err := NewSRBenchHandler(upstream.URL, "service-secret", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"/runs/run-1/calls?after=5&limit=20",
+		"/runs/run-1/results?after=5&limit=20",
+		"/runs/run-1/calls/call_2",
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, srBenchTestRequest("GET", SRBenchAPIPath+path, ""))
+		if response.Code != http.StatusOK || response.Body.String() != `{"calls":[],"next_cursor":25}` {
+			t.Fatalf("evidence response: %d %s", response.Code, response.Body.String())
+		}
+		if paths[len(paths)-1] != SRBenchAPIPath+path {
+			t.Fatalf("pagination changed: %s", paths[len(paths)-1])
+		}
+	}
+	for _, path := range []string{"/runs/run-1/calls/..", "/runs/run-1/calls/", "/runs/run-1/calls/call-1/extra"} {
+		if _, known := srBenchRouteMethod(SRBenchAPIPath + path); known {
+			t.Fatalf("invalid call route accepted: %s", path)
 		}
 	}
 }

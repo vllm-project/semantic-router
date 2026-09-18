@@ -53,8 +53,8 @@ visible and selectable rather than disappearing from the catalog.
 The aggregate uses fixed capability weights: breadth 20% (MMLU-Pro 10%,
 SimpleQA 10%), reasoning 40% (GPQA 15%, HLE 15%, ARC 10%), coding 20%
 (LiveCodeBench 10%, SciCode 10%), and agents 20% (Terminal-Bench 10%, τ³ 10%).
-Every benchmark score and denominator accompanies the aggregate. Users may
-define another versioned weighting policy; it receives a different identity.
+Every benchmark score and denominator accompanies the aggregate. The 1.0
+weights are immutable. A future weighting policy requires a new bench version.
 
 τ³ is pinned to release v1.0.1 and its resolved source commit. Its upstream
 Python package/command name does not determine the benchmark version. Only the
@@ -75,8 +75,9 @@ Quick and standard selections are disjoint. Smoke is a subset of quick. A
 deterministic hash ordering within each stratum allocates whole tasks; it never
 uses answers, model outputs or candidate scores. MMLU-Pro is subject-stratified;
 agent tasks are domain-stratified. SciCode subproblems and ARC examples cannot
-cross partitions. Related task families must remain in one partition where the
-source provides family IDs. Benchmark names, expected answers and split labels
+cross partitions. The pinned sources use whole problem IDs; an adapter that
+introduces related task variants must partition by family before selection.
+Benchmark names, expected answers and split labels
 are grading metadata, never routing hints in the subject request.
 
 Public evaluation splits reused as sr-bench development data are identified as
@@ -117,7 +118,7 @@ configuration snapshot and reject a mismatched expected revision. A management
 hash read before and after a request alone cannot establish this guarantee.
 
 `BenchmarkAdapter` prepares/preflights tasks, executes the problem's interaction
-protocol and grades saved final responses or sandbox outcomes. `TargetAdapter`
+protocol and grades saved final responses or sandbox outcomes. The shared target client
 provides actual calls, identity, routing trace, streaming and usage. Their
 separation lets a benchmark run against single and MoM targets without custom
 schedulers or Dashboard code. Installed extensions are registered server-side;
@@ -127,8 +128,8 @@ External harnesses run in isolated versioned environments and use the same
 instrumented call path. Their user simulators and judges have fixed identities
 and separately tagged calls. Each coding task uses a clean sandbox, fixed tests,
 resource limits and a pinned runtime. Agent task turn limits and trial counts
-are explicit. The default is one trial per task; repeated all-success metrics
-and at-least-one-success metrics are reported with their distinct definitions.
+are explicit. Version 1.0 uses one trial per task; it does not report multi-trial
+all-success or at-least-one-success claims.
 
 ## Iteration modes
 

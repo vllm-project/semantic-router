@@ -127,7 +127,9 @@ class DashboardGateTest(unittest.TestCase):
         self.assertIsNotNone(check)
         self.assertNotIn("dashboard-evaluation-catalog-check", check.prereqs)
         self.assertFalse((REPO_ROOT / "tools/ci/sync_evaluation_catalogs.py").exists())
-        api = (REPO_ROOT / "dashboard/frontend/src/components/sr-bench/api.ts").read_text()
+        api = (
+            REPO_ROOT / "dashboard/frontend/src/components/sr-bench/api.ts"
+        ).read_text()
         self.assertIn("/api/sr-bench/v1", api)
         self.assertIn("'/catalog'", api)
 

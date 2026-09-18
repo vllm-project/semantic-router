@@ -90,11 +90,11 @@ def digest(value):
 
 
 def catalog():
+    from .adapters import list_adapters
+
     return {
         "version": VERSION,
-        "benchmarks": [
-            dict(id=i, title=t, kind=k, source_url=u) for i, t, k, u in BENCHMARKS
-        ],
+        "benchmarks": [adapter.catalog_entry() for adapter in list_adapters()],
         "profiles": [
             {"id": "smoke", "purpose": "Integration validation"},
             {"id": "quick", "purpose": "Fixed development cases"},
@@ -127,6 +127,98 @@ def _finite_positive(value, name, upper=None):
         raise ValueError(f"{name} must be finite and positive")
     if upper and value > upper:
         raise ValueError(f"{name} must be at most {upper}")
+
+
+GENERATION_FIELDS = {
+    "n",
+    "temperature",
+    "top_p",
+    "top_k",
+    "min_p",
+    "presence_penalty",
+    "frequency_penalty",
+    "repetition_penalty",
+    "length_penalty",
+    "stop",
+    "seed",
+    "max_tokens",
+    "min_tokens",
+    "reasoning_effort",
+    "chat_template_kwargs",
+    "ignore_eos",
+    "skip_special_tokens",
+    "spaces_between_special_tokens",
+}
+
+
+def validate_request_params(params, limits, label="request_params"):
+    if not isinstance(params, dict) or set(params) - GENERATION_FIELDS:
+        raise ValueError(f"{label} contains unsupported generation fields")
+    try:
+        serialized = json.dumps(params, allow_nan=False)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"{label} must contain finite JSON values") from exc
+    if len(serialized.encode()) > 65536:
+        raise ValueError(f"{label} exceeds the frozen parameter size limit")
+    if "n" in params and (isinstance(params["n"], bool) or params["n"] != 1):
+        raise ValueError(
+            f"{label}.n must be exactly 1; generation multiplicity is fixed"
+        )
+    for name in ("max_tokens", "min_tokens", "top_k", "seed", "n"):
+        if name in params and (
+            isinstance(params[name], bool) or not isinstance(params[name], int)
+        ):
+            raise ValueError(f"{label}.{name} must be an integer")
+    if (
+        "max_tokens" in params
+        and not 1 <= params["max_tokens"] <= limits["max_output_tokens"]
+    ):
+        raise ValueError(f"{label}.max_tokens exceeds the output token cap")
+    if "min_tokens" in params and not 0 <= params["min_tokens"] <= params.get(
+        "max_tokens", limits["max_output_tokens"]
+    ):
+        raise ValueError(f"{label}.min_tokens exceeds max_tokens")
+    if "top_k" in params and params["top_k"] != -1 and params["top_k"] < 1:
+        raise ValueError(f"{label}.top_k must be -1 or positive")
+    for name, low, high in (
+        ("temperature", 0, 2),
+        ("top_p", 0, 1),
+        ("min_p", 0, 1),
+        ("presence_penalty", -2, 2),
+        ("frequency_penalty", -2, 2),
+    ):
+        if name in params and (
+            isinstance(params[name], bool)
+            or not isinstance(params[name], (int, float))
+            or not low <= params[name] <= high
+        ):
+            raise ValueError(f"{label}.{name} is outside its valid range")
+    for name in ("repetition_penalty", "length_penalty"):
+        if name in params:
+            _finite_positive(params[name], f"{label}.{name}")
+    if "reasoning_effort" in params and params["reasoning_effort"] not in {
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    }:
+        raise ValueError(f"{label}.reasoning_effort is unsupported")
+    if "chat_template_kwargs" in params and not isinstance(
+        params["chat_template_kwargs"], dict
+    ):
+        raise ValueError(f"{label}.chat_template_kwargs must be an object")
+    if "stop" in params and not (
+        isinstance(params["stop"], str)
+        or isinstance(params["stop"], list)
+        and all(isinstance(item, str) for item in params["stop"])
+    ):
+        raise ValueError(f"{label}.stop must be text or a list of text")
+    for name in ("ignore_eos", "skip_special_tokens", "spaces_between_special_tokens"):
+        if name in params and not isinstance(params[name], bool):
+            raise ValueError(f"{label}.{name} must be boolean")
 
 
 def plan(manifest):
@@ -177,7 +269,9 @@ def plan(manifest):
     if not isinstance(cases, list) or not cases:
         raise ValueError("at least one case is required")
     ids = set()
-    available = {x[0] for x in BENCHMARKS}
+    from .adapters import get_adapter, list_adapters
+
+    available = {adapter.id for adapter in list_adapters()}
     for c in cases:
         if (
             not isinstance(c, dict)
@@ -194,11 +288,8 @@ def plan(manifest):
             raise ValueError("Standard profile requires prepared holdout cases")
         if c.get("benchmark") not in available:
             raise ValueError(f"unknown benchmark for case {c['id']}")
-        if not c.get("messages") and c["benchmark"] not in {
-            "tau3",
-            "terminal-bench-2.1",
-            "scicode",
-        }:
+        adapter = get_adapter(c["benchmark"])
+        if not c.get("messages") and adapter.requires_messages:
             raise ValueError(f"messages are required for case {c['id']}")
         for msg in c.get("messages", []):
             if not isinstance(msg, dict) or msg.get("role") not in {
@@ -209,11 +300,7 @@ def plan(manifest):
                 "developer",
             }:
                 raise ValueError("invalid case message")
-        if (
-            m["mode"] == "live"
-            and c["benchmark"] in {"mmlu-pro", "gpqa-diamond", "arc-agi-2"}
-            and "answer" not in c
-        ):
+        if m["mode"] == "live" and adapter.requires_answer and "answer" not in c:
             raise ValueError(f"answer is required for {c['id']}")
     targets = m.get("targets")
     if not isinstance(targets, list) or not targets:
@@ -307,6 +394,7 @@ def plan(manifest):
         "concurrency",
         "max_output_tokens",
         "max_output_chars",
+        "max_log_bytes",
         "repetition_window",
         "repetition_limit",
         "max_calls_per_case",
@@ -320,42 +408,41 @@ def plan(manifest):
     ):
         raise ValueError("invalid concurrency or timeout hierarchy")
     m["limits"] = limits
+    if not isinstance(m.get("sampling", {}), dict):
+        raise ValueError("sampling must be an object")
     sampling = {
         "temperature": 0,
         "max_tokens": limits["max_output_tokens"],
         **m.get("sampling", {}),
     }
-    if (
-        sampling.get("max_tokens", 0) > limits["max_output_tokens"]
-        or sampling.get("max_tokens", 0) <= 0
-    ):
-        raise ValueError(
-            "sampling.max_tokens must be positive and within output token cap"
+    validate_request_params(sampling, limits, "sampling")
+    for target in targets + list(auxiliary.values()):
+        params = target.get("request_params", {})
+        validate_request_params(params, limits)
+        validate_request_params(
+            {**sampling, **params}, limits, "effective request_params"
         )
-    forbidden = {"model", "messages", "stream", "tools", "api_key"} & set(sampling)
-    if forbidden:
-        raise ValueError(f"sampling cannot override {sorted(forbidden)}")
     m["sampling"] = sampling
     m["case_sha256"] = digest(cases)
-    weights = m.get("benchmark_weights", BENCHMARK_WEIGHTS)
-    if weights != BENCHMARK_WEIGHTS:
+    expected_weights = {
+        **BENCHMARK_WEIGHTS,
+        **{c["benchmark"]: get_adapter(c["benchmark"]).weight for c in cases},
+    }
+    weights = m.get("benchmark_weights", expected_weights)
+    if weights != expected_weights:
         raise ValueError(
-            "sr-bench 1.0 benchmark weights are fixed; use per-benchmark results for custom analysis"
+            "Benchmark weights differ from the registered versioned adapters"
         )
-    m["benchmark_weights"] = BENCHMARK_WEIGHTS
-
-    if m["mode"] == "live" and any(
-        c["benchmark"] not in {"mmlu-pro", "gpqa-diamond", "arc-agi-2"} for c in cases
-    ):
-        from .external import preflight_case
-
-        checked = set()
+    m["benchmark_weights"] = expected_weights
+    versions = {c["benchmark"]: get_adapter(c["benchmark"]).version for c in cases}
+    if m.get("adapter_versions", versions) != versions:
+        raise ValueError("Frozen adapter versions differ from installed adapters")
+    m["adapter_versions"] = versions
+    if m["mode"] == "live":
+        cache = {}
         for case in cases:
-            b = case["benchmark"]
-            if b not in {"mmlu-pro", "gpqa-diamond", "arc-agi-2"} and (
-                b not in checked or b in {"hle", "simpleqa-verified"}
-            ):
-                preflight_case(case, m)
-                checked.add(b)
+            adapter = get_adapter(case["benchmark"])
+            if adapter.preflight is not None:
+                adapter.preflight(case, m, cache)
     m["plan_sha256"] = digest({k: v for k, v in m.items() if k != "plan_sha256"})
     return m

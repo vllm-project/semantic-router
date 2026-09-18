@@ -14,8 +14,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from cli.runtime_env_names import runtime_env_name_is_allowed
+
 from . import VERSION
-from .contracts import catalog, digest, plan
+from .contracts import catalog, plan
 from .engine import Engine
 from .report import compare, make_report
 from .store import Store
@@ -23,6 +25,22 @@ from .store import Store
 PREFIX = "/api/sr-bench/v1"
 DEFAULT_STORE = Path.home() / ".local" / "share" / "vllm-sr" / "sr-bench"
 DEFAULT_URL = "http://127.0.0.1:8090"
+
+
+def service_credentials():
+    reference = os.environ.get("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN")
+    if not runtime_env_name_is_allowed(reference) or reference in {
+        "SR_BENCH_URL",
+        "SR_BENCH_STORE",
+        "SR_BENCH_TOKEN_ENV",
+    }:
+        raise ValueError("SR_BENCH_TOKEN_ENV must name a safe environment variable")
+    token = os.environ.get(reference)
+    if reference != "SR_BENCH_TOKEN" and not token:
+        raise ValueError(
+            f"The configured sr-bench service token is missing: {reference}"
+        )
+    return reference, token
 
 
 def datasets(store):
@@ -113,6 +131,7 @@ class Handler(BaseHTTPRequestHandler):
             "cost_mode",
             "max_inference_calls",
             "preview_api_key_env",
+            "request_params",
         }
         if any(set(t) - safe for t in data):
             raise ValueError("Server target registry contains unsupported fields")
@@ -254,6 +273,8 @@ class Handler(BaseHTTPRequestHandler):
                 run = self.server.store.get(run_id, owner)
                 if len(route) == 2 and method == "GET":
                     return self._send(200, run)
+                if len(route) == 4 and route[2] == "calls" and method == "GET":
+                    return self._send(200, self.server.store.call(run_id, route[3]))
                 if len(route) == 3:
                     action = route[2]
                     if action in {"regrade", "export"} and method == "POST":
@@ -265,13 +286,12 @@ class Handler(BaseHTTPRequestHandler):
                                 self.server.store, run_id
                             ),
                         )
-                    if action == "results" and method == "GET":
+                    if action in {"results", "calls"} and method == "GET":
+                        query = parse_qs(parsed.query)
+                        after = int(query.get("after", ["0"])[0])
+                        limit = int(query.get("limit", ["100"])[0])
                         return self._send(
-                            200, {"results": self.server.store.results(run_id)}
-                        )
-                    if action == "calls" and method == "GET":
-                        return self._send(
-                            200, {"calls": self.server.store.calls(run_id)}
+                            200, self.server.store.page(run_id, action, after, limit)
                         )
                     if action == "report" and method == "GET":
                         return self._send(200, make_report(self.server.store, run_id))
@@ -296,10 +316,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None):
-    if host not in {"127.0.0.1", "::1", "localhost"} and not os.environ.get(
-        "SR_BENCH_TOKEN"
-    ):
-        raise ValueError("Non-loopback sr-bench service requires SR_BENCH_TOKEN")
+    token_reference, token = service_credentials()
+    if host not in {"127.0.0.1", "::1", "localhost"} and not token:
+        raise ValueError(f"Non-loopback sr-bench service requires {token_reference}")
     if store_identity and (
         len(store_identity) != 64
         or any(c not in "0123456789abcdef" for c in store_identity)
@@ -312,9 +331,7 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         raise ValueError("A service already owns this store") from None
-    server = Server(
-        (host, port), Store(root), os.environ.get("SR_BENCH_TOKEN"), store_identity
-    )
+    server = Server((host, port), Store(root), token, store_identity)
     (root / "service.json").write_text(
         json.dumps(
             {"pid": os.getpid(), "url": f"http://{host}:{port}", "version": VERSION}

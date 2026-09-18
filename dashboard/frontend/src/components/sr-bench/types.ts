@@ -75,7 +75,22 @@ export interface TargetMetrics {
   latency_p50_s?: number | null
   latency_p95_s?: number | null
   ttft_p50_s?: number | null
+  selected_models?: Record<string, number>
+  decisions?: Record<string, number>
   [key: string]: unknown
+}
+
+export interface EvidencePage {
+  total: number
+  limit: number
+  next_cursor: number | null
+}
+
+export interface PageState {
+  total: number | null
+  nextCursor: number | null
+  loading: boolean
+  error: string
 }
 
 export interface Run {

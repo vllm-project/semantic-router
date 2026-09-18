@@ -29,12 +29,14 @@ class Store:
         os.chmod(self.path, 0o600)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
-        self.db.executescript("""
+        self.db.executescript(
+            """
         CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, owner TEXT NOT NULL, request_key TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, manifest TEXT NOT NULL, error TEXT, UNIQUE(owner,request_key));
         CREATE TABLE IF NOT EXISTS results(run_id TEXT, case_id TEXT, target_id TEXT, status TEXT, data TEXT, PRIMARY KEY(run_id,case_id,target_id));
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,run_id TEXT,case_id TEXT,target_id TEXT,role TEXT,status TEXT,data TEXT);
         CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT,at TEXT,kind TEXT,data TEXT);
-        """)
+        """
+        )
         self.db.commit()
 
     def event(self, run_id, kind, data):
@@ -205,22 +207,69 @@ class Store:
                 {"call_id": call_id, "source_call_id": data["source_call_id"]},
             )
 
-    def calls(self, run_id):
+    @staticmethod
+    def _call_record(row):
+        return {
+            "id": row[0],
+            "case_id": row[1],
+            "target_id": row[2],
+            "role": row[3],
+            "status": row[4],
+            **json.loads(row[5]),
+        }
+
+    def calls(self, run_id, summary=False):
+        data = (
+            "json_remove(data,'$.request','$.final','$.reasoning','$.raw_usage','$.tool_calls')"
+            if summary
+            else "data"
+        )
         with self.lock:
             return [
-                {
-                    "id": r[0],
-                    "case_id": r[1],
-                    "target_id": r[2],
-                    "role": r[3],
-                    "status": r[4],
-                    **json.loads(r[5]),
-                }
-                for r in self.db.execute(
-                    "SELECT id,case_id,target_id,role,status,data FROM calls WHERE run_id=? ORDER BY rowid",
+                self._call_record(row)
+                for row in self.db.execute(
+                    f"SELECT id,case_id,target_id,role,status,{data} FROM calls WHERE run_id=? ORDER BY rowid",
                     (run_id,),
                 )
             ]
+
+    def call(self, run_id, call_id):
+        with self.lock:
+            row = self.db.execute(
+                "SELECT id,case_id,target_id,role,status,data FROM calls WHERE run_id=? AND id=?",
+                (run_id, call_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError("call not found")
+            return self._call_record(row)
+
+    def page(self, run_id, kind, after=0, limit=100):
+        if kind not in {"calls", "results"} or not 0 <= after or not 1 <= limit <= 500:
+            raise ValueError(
+                "Evidence pages require after>=0 and limit between 1 and 500"
+            )
+        with self.lock:
+            total = self.db.execute(
+                f"SELECT count(*) FROM {kind} WHERE run_id=?", (run_id,)
+            ).fetchone()[0]
+            if kind == "calls":
+                selection = "id,case_id,target_id,role,status,json_remove(data,'$.request','$.final','$.reasoning','$.raw_usage','$.tool_calls')"
+            else:
+                selection = "json_remove(data,'$.partial')"
+            rows = self.db.execute(
+                f"SELECT rowid,{selection} FROM {kind} WHERE run_id=? AND rowid>? ORDER BY rowid LIMIT ?",
+                (run_id, after, limit + 1),
+            ).fetchall()
+            values = [
+                self._call_record(row[1:]) if kind == "calls" else json.loads(row[1])
+                for row in rows[:limit]
+            ]
+            return {
+                kind: values,
+                "total": total,
+                "limit": limit,
+                "next_cursor": rows[limit - 1][0] if len(rows) > limit else None,
+            }
 
     def events(self, run_id, after=0):
         with self.lock:

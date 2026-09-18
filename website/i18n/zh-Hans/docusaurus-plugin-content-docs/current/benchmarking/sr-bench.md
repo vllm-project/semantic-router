@@ -1,0 +1,116 @@
+---
+title: sr-bench 1.0
+description: 在可复用的冻结任务上比较 MoM 和单模型的能力、成本、延迟与 token 消耗。
+---
+
+# sr-bench 1.0
+
+sr-bench 使用相同的冻结题目比较 MoM 入口与单模型。CLI 和 **Dashboard → Evaluation** 共用一个持久化服务、运行 ID、结果与报告。先用小规模开发集改进路由，再用不相交的保留集验收。
+
+## 选择题量
+
+下表是**每个目标的完整任务数**，不是模型调用次数。代码、Agent、裁判和用户模拟器可能产生多次调用；辅助调用费用单独报告。
+
+| 基准 ID | 能力 | Smoke | Quick/dev | Standard/holdout |
+| --- | --- | ---: | ---: | ---: |
+| `mmlu-pro` | 14 个学科的知识 | 14 | 500 | 2,000 |
+| `gpqa-diamond` | 科学推理 | 4 | 40 | 158 |
+| `hle` | HLE 纯文本推理 | 4 | 40 | 200 |
+| `livecodebench` | v6 累积编程题 | 2 | 30 | 150 |
+| `scicode` | 科学编程完整主问题 | 1 | 3 | 20 |
+| `terminal-bench-2.1` | 隔离终端任务 | 1 | 3 | 15 |
+| `simpleqa-verified` | 事实准确性 | 5 | 100 | 500 |
+| `arc-agi-2` | 公开评测谜题与精确网格输出 | 2 | 12 | 80 |
+| `tau3` | τ³ 三个文本交互领域 | 3 | 12 | 60 |
+| **总计** | | **36** | **740** | **3,183** |
+
+用 `vllm-sr benchmark catalog` 检查当前安装版本。允许只选择某个能力切片；500 题 MMLU-Pro 开发集不是上游 12,032 题的全量结果。缺少任一基准时，没有完整 sr-bench 分数。
+
+数据准备固定来源版本、内容哈希、任务 ID、种子和分层算法。Smoke 是 quick 的子集，standard 与 quick 不相交。SciCode 子问题保留在同一个任务中。公开题目不能宣称无污染；已看过标签的 GPQA 结果仍需注明复测。
+
+## 使用同一个服务
+
+`vllm-sr serve` 会独立启动核心评测 worker。存储位置为 `<state-root>/.sr-bench/<stack>/store`，主机 API 仅监听回环地址的 `8090 + 端口偏移`。同一工作目录中的 CLI 自动发现该存储和私有服务 token。Dashboard 或配置重载不会中断 worker；`vllm-sr stop` 停止 worker，但保留结果。
+
+核心容器不挂载 Docker socket 或 GPU，也不包含全部上游运行环境。代码和 Agent 任务应使用准备好的独立 worker 主机：
+
+```bash
+vllm-sr benchmark setup --benchmark all
+vllm-sr benchmark setup --benchmark all --install
+```
+
+默认只检查；`--install` 显式安装固定版本的可选解释器和源码，并获取经过 SHA256 校验的 SciCode 测试数据。`--build-sandbox` 构建离线代码评分镜像，回执保存镜像和基础镜像 digest 及固定依赖。这些操作不调用模型。缓存默认为 `~/.cache/vllm-sr/sr-bench-1.0`，可通过 `SR_BENCH_HOME` 覆盖；SciCode 数据默认位于缓存内的 `assets/scicode/test_data.h5`，也可通过 `SR_BENCH_SCICODE_TEST_DATA` 指定已准备文件。终端任务镜像、数据源权限以及裁判/模拟器仍需满足前置条件。
+
+通过 `SR_BENCH_URL` 选择外部 worker 后，不会再创建本地 worker 容器。地址需要从 Dashboard 容器可达；CLI 的主机地址与 Dashboard 的容器地址可以不同，但必须指向同一服务。
+
+```bash
+# 在服务和客户端环境中私下配置相同的 SR_BENCH_TOKEN。
+vllm-sr benchmark --store ./data/sr-bench serve --host 127.0.0.1 --port 8090
+```
+
+非回环监听必须设置服务 token。浏览器通过已认证的 Dashboard 访问代理，不直接访问 worker。`SR_BENCH_TOKEN_ENV` 可以指定自定义服务凭据变量名；模型使用独立的 `api_key_env`。不要把密钥值写入清单或命令参数。
+
+## 准备数据和目标
+
+Parquet 来源需要在准备主机安装 `vllm-sr[bench]`。在 worker 主机或它的共享存储准备数据；本地路径不会自动上传到远端。
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+  --benchmark mmlu-pro --profile quick > mmlu-quick.json
+vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+  --benchmark gpqa-diamond --profile quick > gpqa-quick.json
+vllm-sr benchmark --store ./data/sr-bench dataset combine \
+  mmlu-quick.json gpqa-quick.json > quick-dataset.json
+vllm-sr benchmark --store ./data/sr-bench target register --file targets.json
+```
+
+受限来源需要相应访问权限。导入本地任务需提供 `--source-path` 和 `--revision`；实际内容仍会被哈希。`--limit` 产生明确标注的子集，不要原地修改冻结文件。
+
+目标字段包括 `id`、`kind: single|mom`、`base_url`、`model` 和可选的 `api_key_env`。计价运行需按实际模型身份提供四类 USD/百万 token 价格：`input`、`cached_input`、`cache_write`、`output`。MoM 还需固定实际配置 `config_hash`，预览使用 `preview_url`，计价时声明 `max_inference_calls`。当前直接 MoM 适配器要求完整的一次推理计量；不能用最终模型的价格代替未计量的组合调用。
+
+HLE/SimpleQA 需固定裁判和 `grader_version: sr-bench-reference-judge-v1`；τ³ 需固定模拟器和 `release: 1.0.1`。运维在 store 的 `benchmark-options.json` 配置这些依赖。外部运行环境使用 `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON` 和对应 `_ROOT`；源码和沙箱镜像必须固定版本。预检会在付费派发前报告缺失依赖。
+
+## 冻结并运行
+
+清单使用 `version: sr-bench-1.0`，引用数据的 `path`/`sha256`，匹配其 profile/seed，并固定目标、采样和限额。完整示例见 [英文配置说明](https://vllm-sr.ai/docs/benchmarking/sr-bench#plan-and-run)。
+
+```bash
+vllm-sr benchmark plan --manifest candidate.yaml --output frozen.json
+vllm-sr benchmark run --manifest frozen.json --detach --idempotency-key loop-1
+vllm-sr benchmark runs
+vllm-sr benchmark show RUN_ID --calls
+vllm-sr benchmark report RUN_ID --output report.json
+vllm-sr benchmark cancel RUN_ID
+```
+
+重复提交相同幂等键绑定相同计划，不会重发模型请求。`Ctrl-C` 仅停止 CLI 等待；停止实际工作需使用 `cancel`。异常、部分输出和派发记录全部保留，不会自动重试生成或重启停止的 worker。
+
+默认 `cost_policy: require_priced` 要求完整价格；显式选择 `capability_only` 可以在价格未知时测试能力，但不能证明节省。绝对超时、空闲超时、输出/重复保护以及任务和运行时限约束工作。费用预留和实际费用停止不是供应商强制执行的通用硬美元上限；缺失计量必须显示未知，不能当作零。
+
+## 两阶段迭代
+
+1. 在相同 dev 题目上保存单模型和当前 MoM 的真实结果，检查错误、路由、成本和延迟。
+2. 用 `config validate`、`config plan`、`config apply` 做一次明确的配置调整，确认预期配置哈希已激活；需重启时使用受支持的 `serve --replace-active-config`。
+3. 以新哈希冻结清单，用 `benchmark preview` 检查真实 query 的 decision/model。预览没有能力分数。
+4. 直接静态路由可用保存的单模型答案做 replay。插件、Agent、组合执行或缺失答案不隐式调用模型。
+5. 在相同 dev 集上做候选 live 评测和成对比较。正式结论使用未用于调优的 standard 保留集。
+
+```bash
+vllm-sr benchmark preview --manifest preview.json --detach
+vllm-sr benchmark replay --baseline BASELINE_ID --preview PREVIEW_ID
+vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
+vllm-sr benchmark regrade RUN_ID --output regrade.json
+vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
+```
+
+Replay 是答案复用产生的诊断估计，不是实测能力、延迟或节省结果。离线 regrade 目前只支持选择题/网格最终答案，零模型调用且不改写原始结果。Export 仅允许明确标记的 dev 数据，拒绝 holdout 和未知 split；它不会启动训练。
+
+## 阅读报告和 Dashboard
+
+报告给出完整计划分母、正确/已评分/失败数、每个基准的分数和区间、四类互斥 token、主体与裁判/模拟器成本、TTFT、延迟分位数、请求时长之和及实际 wall time。未知为 null；失败和部分运行不能称为完整评测。
+
+完整 sr-bench 权重为 MMLU-Pro 10%、SimpleQA 10%、GPQA 15%、HLE 15%、ARC 10%、LiveCodeBench 10%、SciCode 10%、Terminal-Bench 10%、τ³ 10%。九项都完整时才输出总分；子集宏平均仍是子集结果。
+
+基线是在相同完整题集上按相同汇总规则选出的最强已测单模型，不是逐题选优 oracle。节省率为 `100 × (1 − 候选主体成本 / 基线主体成本)`，要求完整兼容的计量。小样本用于判断方向；质量持平需要预先确定的非劣界值和保留集置信区间。自托管 token 等价价格不是 GPU 账单节省。
+
+Dashboard 提供数据集/目标选择、冻结计划、启动/取消、实时进度、成对比较、诊断回放、题目证据、重评分和训练矩阵导出。CLI 创建的运行也在同一界面可见。刷新页面不会重启任务。

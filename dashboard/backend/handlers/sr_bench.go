@@ -138,11 +138,14 @@ func srBenchRouteMethod(path string) (string, bool) {
 	}
 	if len(parts) == 3 {
 		switch parts[2] {
-		case "results", "report", "events":
+		case "results", "report", "events", "calls":
 			return http.MethodGet, true
 		case "cancel", "regrade", "export":
 			return http.MethodPost, true
 		}
+	}
+	if len(parts) == 4 && parts[2] == "calls" && validSRBenchRunID(parts[3]) {
+		return http.MethodGet, true
 	}
 	return "", false
 }
@@ -152,7 +155,9 @@ func validSRBenchRunID(value string) bool {
 		return false
 	}
 	for _, char := range value {
-		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_') {
+		switch {
+		case char >= 'a' && char <= 'z', char >= 'A' && char <= 'Z', char >= '0' && char <= '9', char == '-', char == '_':
+		default:
 			return false
 		}
 	}

@@ -1,4 +1,4 @@
-import type { CallRecord, CaseResult, Dataset, Manifest, Target } from './types'
+import type { Dataset, Manifest, Target, TargetMetrics } from './types'
 
 export const DEFAULT_LIMITS: Manifest['limits'] = {
   concurrency: 1,
@@ -76,17 +76,17 @@ export const seconds = (value: unknown): string =>
   typeof value === 'number' && Number.isFinite(value) ? `${number(value, 2)} s` : '—'
 export const active = (status: string) => status === 'queued' || status === 'running'
 
-export function distribution(
-  results: CaseResult[],
-  field: 'model' | 'decision',
+export function reportDistribution(
+  targets: TargetMetrics[],
+  field: 'selected_models' | 'decisions',
 ): Array<[string, number]> {
-  const counts = new Map<string, number>()
-  for (const result of results) {
-    const details = result.details ?? {}
-    const value = details[field] ?? details[`selected_${field}`]
-    if (typeof value === 'string' && value) counts.set(value, (counts.get(value) ?? 0) + 1)
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])
+  return targets
+    .flatMap((target) =>
+      Object.entries(target[field] ?? {})
+        .filter(([, count]) => Number.isFinite(count) && count > 0)
+        .map(([name, count]): [string, number] => [`${target.id}: ${name}`, count]),
+    )
+    .sort((a, b) => b[1] - a[1])
 }
 
 export function tokenTotal(value: unknown): number | null {
@@ -99,17 +99,4 @@ export function tokenTotal(value: unknown): number | null {
   if (buckets.every((key) => typeof usage[key] === 'number'))
     return buckets.reduce((sum, key) => sum + (usage[key] as number), 0)
   return null
-}
-
-export function callDistribution(
-  calls: CallRecord[],
-  field: 'model' | 'decision',
-): Array<[string, number]> {
-  const counts = new Map<string, number>()
-  for (const call of calls) {
-    if (call.role !== 'subject') continue
-    const value = field === 'model' ? (call.selected_model ?? call.model) : call.decision
-    if (value) counts.set(value, (counts.get(value) ?? 0) + 1)
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])
 }

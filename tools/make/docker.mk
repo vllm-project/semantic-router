@@ -529,9 +529,12 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
 		src/vllm-sr/tests/test_embedding_api_config.py \
 		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
-		src/vllm-sr/tests/test_evaluation_live.py \
-		src/vllm-sr/tests/test_evaluation_worker_task_limit.py \
-		src/vllm-sr/tests/test_evaluation_worker_sandbox.py \
+		src/vllm-sr/tests/test_evaluation_cli.py \
+		src/vllm-sr/tests/test_sr_bench.py \
+		src/vllm-sr/tests/test_sr_bench_client.py \
+		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_sources.py \
+		src/vllm-sr/tests/test_sr_bench_runtime.py \
 		src/vllm-sr/tests/test_install_package_resolution.py \
 		src/vllm-sr/tests/test_install_runtime_behavior.py \
 		src/vllm-sr/tests/test_install_script_surface.py \

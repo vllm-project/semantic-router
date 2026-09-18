@@ -3,6 +3,7 @@ import type {
   Comparison,
   Catalog,
   CaseResult,
+  EvidencePage,
   Dataset,
   Manifest,
   Plan,
@@ -64,10 +65,18 @@ export const benchApi = {
   start: (manifest: Manifest, idempotencyKey: string) =>
     post<Run>('/runs', { manifest, idempotency_key: idempotencyKey }),
   cancel: (id: string) => post<Run>(`${runPath(id)}/cancel`, {}),
-  calls: (id: string, signal?: AbortSignal) =>
-    request<{ calls: CallRecord[] }>(`${runPath(id)}/calls`, { signal }),
-  results: (id: string, signal?: AbortSignal) =>
-    request<{ results: CaseResult[] }>(`${runPath(id)}/results`, { signal }),
+  calls: (id: string, after = 0, signal?: AbortSignal) =>
+    request<EvidencePage & { calls: CallRecord[] }>(
+      `${runPath(id)}/calls?after=${after}&limit=100`,
+      { signal },
+    ),
+  call: (id: string, callId: string, signal?: AbortSignal) =>
+    request<CallRecord>(`${runPath(id)}/calls/${encodeURIComponent(callId)}`, { signal }),
+  results: (id: string, after = 0, signal?: AbortSignal) =>
+    request<EvidencePage & { results: CaseResult[] }>(
+      `${runPath(id)}/results?after=${after}&limit=100`,
+      { signal },
+    ),
   report: (id: string, signal?: AbortSignal) =>
     request<Report>(`${runPath(id)}/report`, { signal }),
   events: (id: string, after = 0, signal?: AbortSignal) =>

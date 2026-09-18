@@ -189,38 +189,8 @@ selection, projections, compact decisions, session continuity, and retrieval.
 Keep the original probes and compare the same requests before and after the
 change. A successful configuration edit is the start of verification.
 
-## Requested workloads and benchmarks
+## Reusable benchmark comparison
 
-Run benchmarks when requested or when the agreed optimization objective requires
-them. Discover routing workloads with `benchmark catalog` and the installed
-workload validation/run help. Compare paired baseline and candidate runs using
-the same inputs and preserve their manifests and receipts.
-
-For model-quality evaluation, begin with:
-
-```bash
-vllm-sr benchmark intelligence list
-vllm-sr benchmark intelligence plan --help
-```
-
-Use the exact dataset and runner revisions reported by the installed catalog.
-Materialize frozen sources as the plan requires, keep them clean, and supply
-credentials through named environment variables. Do not substitute rolling data
-or change the suite's modality/subset under the same score label. Use the
-installed `run` contract only after the plan's prerequisites are satisfied.
-
-Live exact-answer grading reports incomplete final answers as unavailable for
-grading; reasoning output remains observed evidence rather than a final answer.
-
-Physical and virtual models follow the same evaluation contract. Evaluate a
-virtual model through its actual routed endpoint so route failures, retries,
-model mix, latency, and cost are observable. Never synthesize its score from
-member-model scores. A partial run or `--sample-limit` supplies smoke evidence,
-not a full Intelligence score.
-
-For optimization, capture the baseline first, make one coherent change, and
-compare the agreed quality, cost, latency, and reliability gates. Retain the
-candidate only when the evidence supports the objective without violating hard
-constraints; otherwise use the [configuration recovery path](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md).
-Keep raw outputs private and preserve secret-free receipts with runtime and
-config identity so the comparison can be reproduced.
+Use [sr-bench 1.0](https://vllm-sr.ai/install/agent/vllm-sr/references/sr-bench.md) for versioned datasets, paired single-model/MoM
+comparison, diagnostic replay, live generation, costs and the dev/holdout loop.
+Individual route probes remain delivery checks rather than benchmark scores.

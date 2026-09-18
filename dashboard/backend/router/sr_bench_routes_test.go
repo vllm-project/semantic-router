@@ -1,11 +1,12 @@
 package router
 
 import (
-	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
-	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 )
 
 func TestSRBenchRoutesUseIndependentServiceAndRetireEvaluation(t *testing.T) {

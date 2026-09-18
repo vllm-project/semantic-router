@@ -47,32 +47,39 @@ def output(value):
     "--no-autostart", is_flag=True, help="Require an already running service."
 )
 @click.pass_context
+@guarded
 def benchmark(ctx, url, store, no_autostart):
     """Prepare, run, inspect, and compare sr-bench 1.0 evaluations."""
     from cli.runtime_stack import resolve_runtime_stack
 
     explicit_url, explicit_store = url is not None, store is not None
-    stack = resolve_runtime_stack()
-    root = (
-        Path(os.environ.get("VLLM_SR_STATE_ROOT_DIR", str(Path.cwd())))
-        .expanduser()
-        .resolve()
-        / ".sr-bench"
-        / stack.stack_name
-    )
-    managed = root / "store"
-    if store is None and managed.is_dir():
-        store = managed
+    if not explicit_url:
+        stack = resolve_runtime_stack()
+        root = (
+            Path(os.environ.get("VLLM_SR_STATE_ROOT_DIR", str(Path.cwd())))
+            .expanduser()
+            .resolve()
+            / ".sr-bench"
+            / stack.stack_name
+        )
+        managed = root / "store"
+        if store is None and managed.is_dir():
+            store = managed
     store = Path(store or DEFAULT_STORE).expanduser().resolve()
     token_file = store.parent / "service-token"
-    managed_service = token_file.is_file()
+    managed_service = not explicit_url and token_file.is_file()
     if url is None:
         url = (
             f"http://127.0.0.1:{stack.sr_bench_port}"
             if managed_service
             else DEFAULT_URL
         )
-    client = Client(url, store, not no_autostart and not managed_service and not explicit_url, verify_store=explicit_store or not explicit_url or managed_service)
+    client = Client(
+        url,
+        store,
+        not no_autostart and not managed_service and not explicit_url,
+        verify_store=explicit_store or not explicit_url,
+    )
     if managed_service and "Authorization" not in client.headers:
         if token_file.is_symlink() or token_file.stat().st_mode & 0o077:
             raise click.ClickException(
@@ -90,13 +97,22 @@ def catalog_command():
 
 @benchmark.command("setup")
 @click.option("--benchmark", "benchmark_id", default="all")
-@click.option("--install", is_flag=True, help="Install pinned optional harnesses and task sources; makes no model requests.")
+@click.option(
+    "--install",
+    is_flag=True,
+    help="Install pinned optional harnesses and task sources; makes no model requests.",
+)
+@click.option(
+    "--build-sandbox",
+    is_flag=True,
+    help="Build a local offline grading image and record its content digest.",
+)
 @guarded
-def setup_command(benchmark_id, install):
+def setup_command(benchmark_id, install, build_sandbox):
     """Inspect prerequisites or explicitly install optional benchmark harnesses."""
     from cli.sr_bench.setup import setup
 
-    output(setup(benchmark_id, install))
+    output(setup(benchmark_id, install, build_sandbox))
 
 
 @benchmark.command("serve")
@@ -257,16 +273,35 @@ def runs_command(client):
 @click.option("--results", is_flag=True)
 @click.option("--calls", is_flag=True)
 @click.option("--events", is_flag=True)
+@click.option(
+    "--after",
+    type=click.IntRange(min=0),
+    default=0,
+    help="Evidence cursor from the previous page.",
+)
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1, max=500),
+    default=100,
+    help="Calls/results per page.",
+)
+@click.option(
+    "--call-id", help="Read one full saved call including prompt and final response."
+)
 @click.pass_obj
 @guarded
-def show_command(client, run_id, results, calls, events):
-    """Inspect status, case results, calls, or durable events."""
-    if sum((results, calls, events)) > 1:
-        raise ValueError("Choose one of results/calls/events")
-    suffix = (
-        "/results" if results else "/calls" if calls else "/events" if events else ""
-    )
-    output(client.request("GET", "/runs/" + run_id + suffix))
+def show_command(client, run_id, results, calls, events, after, limit, call_id):
+    """Read a run, bounded evidence page, or one complete saved call."""
+    if sum((results, calls, events, bool(call_id))) > 1:
+        raise ValueError("Choose one evidence view")
+    path = "/runs/" + run_id
+    if call_id:
+        path += "/calls/" + call_id
+    elif results or calls:
+        path += ("/results" if results else "/calls") + f"?after={after}&limit={limit}"
+    elif events:
+        path += f"/events?after={after}"
+    output(client.request("GET", path))
 
 
 @benchmark.command("cancel")
@@ -360,35 +395,63 @@ def target_register(client, source):
 
 
 @benchmark.command("replay")
-@click.option("--baseline",required=True,help="Completed single-model answer matrix run ID.")
-@click.option("--preview",required=True,help="Completed deterministic routing preview run ID.")
+@click.option(
+    "--baseline", required=True, help="Completed single-model answer matrix run ID."
+)
+@click.option(
+    "--preview", required=True, help="Completed deterministic routing preview run ID."
+)
 @click.option("--idempotency-key")
 @click.pass_obj
 @guarded
-def replay_command(client,baseline,preview,idempotency_key):
+def replay_command(client, baseline, preview, idempotency_key):
     """Estimate eligible static routes from saved answers without inference."""
-    output(client.request("POST","/replays",{"baseline_run_id":baseline,"preview_run_id":preview,"idempotency_key":idempotency_key}))
+    output(
+        client.request(
+            "POST",
+            "/replays",
+            {
+                "baseline_run_id": baseline,
+                "preview_run_id": preview,
+                "idempotency_key": idempotency_key,
+            },
+        )
+    )
 
 
 @benchmark.command("regrade")
 @click.argument("run_id")
-@click.option("--output","destination",type=click.Path(path_type=Path),required=True)
+@click.option("--output", "destination", type=click.Path(path_type=Path), required=True)
 @click.pass_obj
 @guarded
-def regrade_command(client,run_id,destination):
+def regrade_command(client, run_id, destination):
     """Regrade saved MCQ/grid final outputs without mutating original evidence."""
-    artifact=client.request("POST","/runs/"+run_id+"/regrade",{})
-    with destination.open("x") as file: file.write(json.dumps(artifact,indent=2,ensure_ascii=False)+"\n")
-    output({"path":str(destination),"changed_count":artifact["changed_count"],"model_requests":0})
+    artifact = client.request("POST", "/runs/" + run_id + "/regrade", {})
+    with destination.open("x") as file:
+        file.write(json.dumps(artifact, indent=2, ensure_ascii=False) + "\n")
+    output(
+        {
+            "path": str(destination),
+            "changed_count": artifact["changed_count"],
+            "model_requests": 0,
+        }
+    )
 
 
 @benchmark.command("export")
 @click.argument("run_id")
-@click.option("--output","destination",type=click.Path(path_type=Path),required=True)
+@click.option("--output", "destination", type=click.Path(path_type=Path), required=True)
 @click.pass_obj
 @guarded
-def export_command(client,run_id,destination):
+def export_command(client, run_id, destination):
     """Export a dev response matrix for training; holdout export is rejected."""
-    artifact=client.request("POST","/runs/"+run_id+"/export",{})
-    with destination.open("x") as file: file.write(json.dumps(artifact,indent=2,ensure_ascii=False)+"\n")
-    output({"path":str(destination),"case_count":len(artifact["cases"]),"split":artifact["split"]})
+    artifact = client.request("POST", "/runs/" + run_id + "/export", {})
+    with destination.open("x") as file:
+        file.write(json.dumps(artifact, indent=2, ensure_ascii=False) + "\n")
+    output(
+        {
+            "path": str(destination),
+            "case_count": len(artifact["cases"]),
+            "split": artifact["split"],
+        }
+    )

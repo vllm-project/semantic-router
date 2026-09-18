@@ -1,18 +1,10 @@
 import { useState } from 'react'
 import { benchApi, SR_BENCH_API } from './api'
-import {
-  active,
-  callDistribution,
-  distribution,
-  money,
-  number,
-  percent,
-  seconds,
-  tokenTotal,
-} from './model'
+import { active, reportDistribution, money, number, percent, seconds, tokenTotal } from './model'
 import type { CaseResult, TargetMetrics } from './types'
 import { useRunEvidence } from './useRunEvidence'
 import RunArtifacts from './RunArtifacts'
+import CallEvidence from './CallEvidence'
 import styles from './SrBench.module.css'
 
 function MetricsTable({
@@ -110,15 +102,32 @@ export default function RunDetails({
   const [selected, setSelected] = useState<CaseResult | null>(null)
   const [revision, setRevision] = useState(0)
   const [actionError, setActionError] = useState('')
-  const { run, report, results, events, calls, error: readError } = useRunEvidence(id, revision)
+  const {
+    run,
+    report,
+    results,
+    events,
+    calls,
+    error: readError,
+    resultsPage,
+    callsPage,
+    loadMoreResults,
+    loadMoreCalls,
+  } = useRunEvidence(id, revision)
   const error = actionError || readError
+
+  function refreshEvidence() {
+    setPage(0)
+    setSelected(null)
+    setRevision((value) => value + 1)
+  }
 
   async function cancel() {
     setPending(true)
     setActionError('')
     try {
       await benchApi.cancel(id)
-      setRevision((value) => value + 1)
+      refreshEvidence()
       onChanged()
     } catch (cause) {
       setActionError(
@@ -150,7 +159,7 @@ export default function RunDetails({
           <code>{id}</code>
         </div>
         <div className={styles.actions}>
-          <button onClick={() => setRevision((value) => value + 1)}>Refresh evidence</button>
+          <button onClick={refreshEvidence}>Refresh evidence</button>
           {run && active(run.status) && (
             <button
               className={styles.danger}
@@ -315,17 +324,11 @@ export default function RunDetails({
           <div className={styles.twoColumns}>
             <Distribution
               title="Selected models"
-              entries={
-                calls.length ? callDistribution(calls, 'model') : distribution(results, 'model')
-              }
+              entries={reportDistribution(metrics, 'selected_models')}
             />
             <Distribution
               title="Matched decisions"
-              entries={
-                calls.length
-                  ? callDistribution(calls, 'decision')
-                  : distribution(results, 'decision')
-              }
+              entries={reportDistribution(metrics, 'decisions')}
             />
           </div>
           {!!report?.limitations.length && (
@@ -341,7 +344,7 @@ export default function RunDetails({
           <div className={styles.sectionHeading}>
             <h3>Case results</h3>
             <label className={styles.inlineLabel}>
-              Filter results
+              Filter loaded results
               <input
                 type="search"
                 value={filter}
@@ -353,6 +356,11 @@ export default function RunDetails({
               />
             </label>
           </div>
+          <p className={styles.muted}>
+            Loaded {number(results.length)} of {number(resultsPage.total)} persisted results.
+            Filtering applies to loaded results. Detail pages are snapshots; refresh evidence to
+            reload them. Scores and costs above use the full report.
+          </p>
           <div className={styles.tableScroll}>
             <table>
               <thead>
@@ -393,7 +401,9 @@ export default function RunDetails({
               Previous results
             </button>
             <span>
-              {number(visible.length)} results · page {page + 1}
+              Showing {number(visible.length ? page * 25 + 1 : 0)}–
+              {number(Math.min((page + 1) * 25, visible.length))} of {number(visible.length)} loaded
+              matches · page {page + 1}
             </span>
             <button
               disabled={(page + 1) * 25 >= visible.length}
@@ -402,6 +412,16 @@ export default function RunDetails({
               Next results
             </button>
           </div>
+          {resultsPage.error && (
+            <p className={styles.error} role="alert">
+              {resultsPage.error}
+            </p>
+          )}
+          {resultsPage.nextCursor !== null && (
+            <button disabled={resultsPage.loading} onClick={() => void loadMoreResults()}>
+              {resultsPage.loading ? 'Loading results…' : 'Load more results'}
+            </button>
+          )}
           {selected && (
             <div className={styles.caseDetail}>
               <div className={styles.sectionHeading}>
@@ -419,6 +439,7 @@ export default function RunDetails({
               </details>
             </div>
           )}
+          <CallEvidence id={id} calls={calls} page={callsPage} loadMore={loadMoreCalls} />
           <details className={styles.details}>
             <summary>Run events ({events.length})</summary>
             <ol className={styles.events}>
@@ -452,7 +473,7 @@ export default function RunDetails({
               target="_blank"
               rel="noreferrer"
             >
-              Open case results ↗
+              Open first results page ↗
             </a>
             <a
               href={`${SR_BENCH_API}/runs/${encodeURIComponent(id)}/events?after=0`}

@@ -18,6 +18,7 @@ def test_catalog_and_clean_command_surface():
     assert "tau2" not in {b["id"] for b in catalog["benchmarks"]}
     assert set(benchmark.commands) == {
         "catalog",
+        "setup",
         "dataset",
         "plan",
         "run",

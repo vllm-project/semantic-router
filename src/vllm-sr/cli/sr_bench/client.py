@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import hashlib
+import json
+import os
 import subprocess
 import sys
 import time
@@ -13,7 +14,7 @@ from urllib.parse import urlparse
 import requests
 
 from . import VERSION
-from .service import DEFAULT_STORE, DEFAULT_URL, PREFIX
+from .service import DEFAULT_STORE, DEFAULT_URL, PREFIX, service_credentials
 
 
 class Client:
@@ -25,8 +26,9 @@ class Client:
         self.autostart = autostart
         self.verify_store = verify_store
         self.headers = {}
-        if os.environ.get("SR_BENCH_TOKEN"):
-            self.headers["Authorization"] = "Bearer " + os.environ["SR_BENCH_TOKEN"]
+        self.token_env, token = service_credentials()
+        if token:
+            self.headers["Authorization"] = "Bearer " + token
 
     def ready(self):
         try:
@@ -34,7 +36,7 @@ class Client:
                 self.url + "/health", headers=self.headers, timeout=2
             )
             if response.status_code in {401, 403}:
-                raise ValueError("Service authentication failed; set SR_BENCH_TOKEN")
+                raise ValueError(f"Service authentication failed; set {self.token_env}")
             if (
                 response.status_code == 200
                 and response.json().get("version") == VERSION
@@ -63,7 +65,39 @@ class Client:
             raise ValueError(
                 "sr-bench service is unavailable; start vllm-sr benchmark serve"
             )
+        markers = (
+            "service.json",
+            "service.lock",
+            "service.log",
+            "journal.sqlite3",
+            "service-autostart.json",
+        )
+        if any((self.store / name).exists() for name in markers):
+            raise ValueError(
+                "sr-bench service is unavailable and this store has prior execution evidence; "
+                "inspect its journal before explicitly starting vllm-sr benchmark serve "
+                "(automatic restart is disabled)"
+            )
         self.store.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # Reserve first startup atomically so concurrent CLI readers cannot each
+        # spawn a worker. Keep this receipt even when startup fails.
+        try:
+            receipt_fd = os.open(
+                self.store / "service-autostart.json",
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+        except FileExistsError:
+            raise ValueError(
+                "sr-bench startup is already recorded; inspect the service before retrying"
+            ) from None
+        with os.fdopen(receipt_fd, "w") as receipt:
+            json.dump({"url": self.url, "store": str(self.store)}, receipt)
+            receipt.flush()
+            os.fsync(receipt.fileno())
+        environment = os.environ.copy()
+        if token := os.environ.get(self.token_env):
+            environment["SR_BENCH_TOKEN"] = token
         with (self.store / "service.log").open("ab") as log:
             subprocess.Popen(
                 [
@@ -79,6 +113,7 @@ class Client:
                 stdout=log,
                 stderr=log,
                 start_new_session=True,
+                env=environment,
             )
         for _ in range(50):
             if self.ready():

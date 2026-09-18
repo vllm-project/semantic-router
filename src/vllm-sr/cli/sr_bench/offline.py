@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import json
 
 from . import VERSION
 from .contracts import digest
@@ -98,6 +97,7 @@ def export_training(store, run_id):
                     "id": target["id"],
                     "model": target["model"],
                     "kind": target["kind"],
+                    "request_params": target.get("request_params", {}),
                     **{
                         k: row.get(k)
                         for k in (
@@ -174,6 +174,12 @@ def replay(store, baseline_id, preview_id, owner="local", request_key=None):
             if selected is None:
                 raise ValueError(
                     "Preview selected a model absent from the live answer matrix"
+                )
+            baseline_params = {**bm["sampling"], **selected.get("request_params", {})}
+            preview_params = {**pm["sampling"], **target.get("request_params", {})}
+            if baseline_params != preview_params:
+                raise ValueError(
+                    "Replay selected model has different frozen request parameters"
                 )
             result = baseline_rows.get((case["id"], selected["id"]))
             calls = [

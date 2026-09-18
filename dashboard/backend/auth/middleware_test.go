@@ -180,6 +180,7 @@ func TestRequiredPermissions(t *testing.T) {
 		expected string
 	}{
 		{method: http.MethodGet, path: "/api/sr-bench/v1/catalog", expected: PermEvalRead},
+		{method: http.MethodGet, path: "/api/sr-bench/v1/runs/run-1/calls/call-1", expected: PermEvalRead},
 		{method: http.MethodPost, path: "/api/sr-bench/v1/plans", expected: PermEvalWrite},
 		{method: http.MethodPost, path: "/api/sr-bench/v1/runs", expected: PermEvalWrite},
 		{method: http.MethodPost, path: "/api/sr-bench/v1/runs/run-1/cancel", expected: PermEvalRun},

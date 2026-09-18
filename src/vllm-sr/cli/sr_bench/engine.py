@@ -12,8 +12,8 @@ import requests
 
 from .contracts import plan
 from .report import BUCKETS, make_report
-from .store import TERMINAL
-from .transport import CallFailure, chat
+from .store import TERMINAL, now
+from .transport import effective_request, CallFailure, chat
 
 
 def basic_grade(case, final):
@@ -113,6 +113,9 @@ class Context:
                 raise ValueError("Unknown auxiliary target reference")
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
+        request_body = effective_request(
+            selected, messages, self.manifest["sampling"], extra_body
+        )
         reservation = 0
         if self.manifest["cost_policy"] == "require_priced":
             prices = list(selected.get("prices", {}).values())
@@ -124,7 +127,7 @@ class Context:
                 else 1
             )
             input_bound = (
-                len(json.dumps([messages, extra_body], ensure_ascii=False).encode())
+                len(json.dumps(request_body, ensure_ascii=False).encode())
                 + 64 * len(messages)
                 + 256
             )
@@ -137,8 +140,7 @@ class Context:
                         max(p["input"], p["cached_input"], p["cache_write"])
                         for p in prices
                     )
-                    + self.limits["max_output_tokens"]
-                    * max(p["output"] for p in prices)
+                    + request_body["max_tokens"] * max(p["output"] for p in prices)
                 )
                 / 1_000_000
             )
@@ -176,6 +178,8 @@ class Context:
                 "request": {
                     "messages": messages,
                     "sampling": self.manifest["sampling"],
+                    "request_params": selected.get("request_params", {}),
+                    "effective_body": request_body,
                     "extra_body": extra_body,
                 },
             },
@@ -275,17 +279,24 @@ class Engine:
         self.store.event(run_id, "cancellation_requested", {})
         return self.store.get(run_id)
 
-    def _case(self, run_id, manifest, case, target, cancel, deadline):
+    def _case(self, run_id, manifest, case, target, cancel, deadline, enqueued_at):
         if cancel.is_set() or time.monotonic() > deadline:
             return
+        queue_wait_s = max(0, time.monotonic() - enqueued_at)
+        case_started_at = now()
         self.store.result(
             run_id,
             case["id"],
             target["id"],
             "running",
-            {"benchmark": case["benchmark"]},
+            {
+                "benchmark": case["benchmark"],
+                "queue_wait_s": queue_wait_s,
+                "started_at": case_started_at,
+            },
         )
         ctx = Context(self, run_id, manifest, case, target, cancel, deadline)
+        ctx.queue_wait_s, ctx.started_at = queue_wait_s, case_started_at
         started = time.monotonic()
         try:
             if manifest["mode"] == "preview":
@@ -307,7 +318,9 @@ class Engine:
                 payload = {
                     "messages": case["messages"],
                     "model": target["model"],
-                    "max_tokens": manifest["sampling"]["max_tokens"],
+                    "max_tokens": target.get("request_params", {}).get(
+                        "max_tokens", manifest["sampling"]["max_tokens"]
+                    ),
                     "options": {"trace": True},
                 }
                 payload.update(
@@ -348,13 +361,18 @@ class Engine:
                     "score": None,
                     "details": {"routing": routing},
                 }
-            elif case["benchmark"] in {"mmlu-pro", "gpqa-diamond", "arc-agi-2"}:
-                response = ctx.call(case["messages"])
-                result = basic_grade(case, response["final"])
             else:
-                from .external import execute_case
+                from .adapters import get_adapter
 
-                result = execute_case(case, ctx)
+                result = get_adapter(case["benchmark"]).execute(case, ctx)
+                if (
+                    not isinstance(result, dict)
+                    or not isinstance(result.get("correct"), bool)
+                    or result.get("score") not in {0, 1}
+                ):
+                    raise ValueError(
+                        "Adapter result requires a terminal binary graded outcome"
+                    )
             self._completed_case(ctx, result, started)
         except Exception as exc:
             if ctx.quality_failure:
@@ -374,6 +392,9 @@ class Engine:
                 {
                     "benchmark": case["benchmark"],
                     "error": message,
+                    "queue_wait_s": queue_wait_s,
+                    "started_at": case_started_at,
+                    "finished_at": now(),
                     "latency_s": time.monotonic() - started,
                     "partial": getattr(exc, "partial", {}),
                 },
@@ -412,6 +433,9 @@ class Engine:
             "subject_latency_s": sum(c.get("latency_s", 0) for c in subject),
             "ttft_s": subject[0].get("ttft_s") if subject else None,
             "call_count": len(ctx.calls),
+            "queue_wait_s": ctx.queue_wait_s,
+            "started_at": ctx.started_at,
+            "finished_at": now(),
         }
         self.store.result(
             ctx.run_id, ctx.case["id"], ctx.target["id"], "completed", data
@@ -419,7 +443,8 @@ class Engine:
 
     def _run(self, run_id, manifest, cancel):
         self.store.status(run_id, "running")
-        deadline = time.monotonic() + manifest["limits"]["max_run_seconds"]
+        enqueued_at = time.monotonic()
+        deadline = enqueued_at + manifest["limits"]["max_run_seconds"]
         pending = iter((c, t) for c in manifest["cases"] for t in manifest["targets"])
         try:
             with concurrent.futures.ThreadPoolExecutor(
@@ -438,7 +463,13 @@ class Engine:
                             break
                         active.add(
                             pool.submit(
-                                self._case, run_id, manifest, *pair, cancel, deadline
+                                self._case,
+                                run_id,
+                                manifest,
+                                *pair,
+                                cancel,
+                                deadline,
+                                enqueued_at,
                             )
                         )
 

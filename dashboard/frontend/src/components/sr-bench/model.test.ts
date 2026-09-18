@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_LIMITS,
-  distribution,
+  reportDistribution,
   makeManifest,
   money,
   tokenTotal,
@@ -58,21 +58,20 @@ describe('sr-bench run contract', () => {
     ).toBe(120)
     expect(tokenTotal({ input_tokens: 100 })).toBeNull()
   })
-  it('counts only observed routing traces', () => {
+  it('uses full report routing counts while keeping targets separate', () => {
     expect(
-      distribution(
+      reportDistribution(
         [
-          {
-            case_id: 'a',
-            target_id: 'balance',
-            benchmark: 'gpqa',
-            status: 'completed',
-            details: { selected_model: 'model-a' },
-          },
-          { case_id: 'b', target_id: 'balance', benchmark: 'gpqa', status: 'failed' },
+          { id: 'balance', selected_models: { 'model-a': 200, 'model-b': 50 } },
+          { id: 'single', selected_models: { 'model-a': 250 } },
+          { id: 'unknown' },
         ],
-        'model',
+        'selected_models',
       ),
-    ).toEqual([['model-a', 1]])
+    ).toEqual([
+      ['single: model-a', 250],
+      ['balance: model-a', 200],
+      ['balance: model-b', 50],
+    ])
   })
 })

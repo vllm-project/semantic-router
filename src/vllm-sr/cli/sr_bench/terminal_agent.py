@@ -1,4 +1,5 @@
 """Fixed sr-bench terminal agent using Harbor's task environment and verifier."""
+
 import asyncio
 import json
 
@@ -8,9 +9,10 @@ from .harness_worker import call
 
 
 class SRBenchTerminalAgent(BaseAgent):
-    def __init__(self, *args, max_steps=100, **kwargs):
+    def __init__(self, *args, max_steps=100, max_log_bytes=8388608, **kwargs):
         super().__init__(*args, **kwargs)
         self.max_steps = max_steps
+        self.max_log_bytes = max_log_bytes
 
     @staticmethod
     def name():
@@ -19,34 +21,79 @@ class SRBenchTerminalAgent(BaseAgent):
     def version(self):
         return "1.0"
 
+    def _save_transcript(self, path, messages):
+        data = json.dumps(messages, indent=2).encode()
+        if len(data) > self.max_log_bytes:
+            raise ValueError("Terminal trajectory exceeded the frozen log limit")
+        path.write_bytes(data)
+
     async def setup(self, environment):
         pass
 
     async def run(self, instruction, environment, context):
-        messages = [{"role": "system", "content": "Complete the task in the provided isolated terminal environment. Use the terminal tool to inspect and modify files. When finished, give a concise final response."}, {"role": "user", "content": instruction}]
-        tools = [{"type": "function", "function": {"name": "terminal", "description": "Execute a shell command in the task sandbox.", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"], "additionalProperties": False}}}]
+        messages = [
+            {
+                "role": "system",
+                "content": "Complete the task in the provided isolated terminal environment. Use the terminal tool to inspect and modify files. When finished, give a concise final response.",
+            },
+            {"role": "user", "content": instruction},
+        ]
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "terminal",
+                    "description": "Execute a shell command in the task sandbox.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"command": {"type": "string"}},
+                        "required": ["command"],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        ]
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         transcript = self.logs_dir / "trajectory.json"
         for _ in range(self.max_steps):
-            response = await asyncio.to_thread(call, messages, "subject", {"tools": tools, "parallel_tool_calls": False})
+            response = await asyncio.to_thread(
+                call,
+                messages,
+                "subject",
+                {"tools": tools, "parallel_tool_calls": False},
+            )
             item = {"role": "assistant", "content": response["final"] or None}
             if response.get("tool_calls"):
                 item["tool_calls"] = response["tool_calls"]
             messages.append(item)
-            transcript.write_text(json.dumps(messages, indent=2))
+            self._save_transcript(transcript, messages)
             context.metadata = {"turns": len(messages), "agent": "sr-bench-terminal-v1"}
-            if not response.get("tool_calls"):
+            if response.get("output_complete") is False or not response.get(
+                "tool_calls"
+            ):
                 return
             for tool in response["tool_calls"]:
                 try:
                     args = json.loads(tool["function"]["arguments"])
-                    if tool["function"]["name"] != "terminal" or not isinstance(args.get("command"), str):
+                    if tool["function"]["name"] != "terminal" or not isinstance(
+                        args.get("command"), str
+                    ):
                         raise ValueError("invalid tool invocation")
-                    result = await environment.exec(command=args["command"], timeout_sec=30)
-                    output = json.dumps({"stdout": (result.stdout or "")[-24000:], "stderr": (result.stderr or "")[-8000:], "return_code": result.return_code})
+                    result = await environment.exec(
+                        command=args["command"], timeout_sec=30
+                    )
+                    output = json.dumps(
+                        {
+                            "stdout": (result.stdout or "")[-24000:],
+                            "stderr": (result.stderr or "")[-8000:],
+                            "return_code": result.return_code,
+                        }
+                    )
                 except (ValueError, TimeoutError) as exc:
                     output = type(exc).__name__
-                messages.append({"role": "tool", "tool_call_id": tool["id"], "content": output})
-                transcript.write_text(json.dumps(messages, indent=2))
+                messages.append(
+                    {"role": "tool", "tool_call_id": tool["id"], "content": output}
+                )
+                self._save_transcript(transcript, messages)
         # Task step exhaustion is a model outcome; the actual verifier decides
         # whether work completed before the step cap.

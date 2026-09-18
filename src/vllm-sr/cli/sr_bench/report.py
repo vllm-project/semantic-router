@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import math
 import random
+from collections import Counter
 from datetime import datetime
 from statistics import mean
 
 from . import VERSION
-from .contracts import BENCHMARK_WEIGHTS, digest
+from .contracts import BENCHMARK_WEIGHTS
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
 
@@ -84,6 +85,22 @@ def metric(target_id, results, calls, total):
             else None
         ),
         "request_count": len(subject),
+        "selected_models": dict(
+            Counter(
+                c.get("selected_model") or c.get("model")
+                for c in subject
+                if c.get("selected_model") or c.get("model")
+            )
+        ),
+        "decisions": dict(Counter(c["decision"] for c in subject if c.get("decision"))),
+        "queue_wait_p50_s": percentile(
+            [r["queue_wait_s"] for r in results if r.get("queue_wait_s") is not None],
+            0.5,
+        ),
+        "queue_wait_p95_s": percentile(
+            [r["queue_wait_s"] for r in results if r.get("queue_wait_s") is not None],
+            0.95,
+        ),
         "evaluation_call_count": len(overhead),
         "case_wall_time_p50_s": percentile(
             [r["latency_s"] for r in completed if r.get("latency_s") is not None], 0.5
@@ -101,7 +118,7 @@ def make_report(store, run_id):
     run = store.get(run_id)
     manifest = run["manifest"]
     results = store.results(run_id)
-    calls = store.calls(run_id)
+    calls = store.calls(run_id, summary=True)
     metrics = []
     benchmarks = []
     for target in manifest["targets"]:
@@ -124,20 +141,57 @@ def make_report(store, run_id):
             )
     present = {c["benchmark"] for c in manifest["cases"]}
     full_suite = present == set(BENCHMARK_WEIGHTS)
+    weights = manifest["benchmark_weights"]
+    custom_subset = bool((manifest.get("dataset") or {}).get("custom_subset", True))
+    extension_subset = not present.issubset(BENCHMARK_WEIGHTS)
     for item in metrics:
         rows = [row for row in benchmarks if row["target_id"] == item["id"]]
-        weight_sum = sum(BENCHMARK_WEIGHTS[row["benchmark"]] for row in rows)
+        weight_sum = sum(weights[row["benchmark"]] for row in rows)
         macro = (
-            sum(BENCHMARK_WEIGHTS[row["benchmark"]] * row["accuracy"] for row in rows)
+            sum(weights[row["benchmark"]] * row["accuracy"] for row in rows)
             / weight_sum
         )
         item["macro_accuracy"] = macro
         item["sr_bench_score"] = macro if full_suite and item["complete"] else None
         item["score_scope"] = (
-            "full sr-bench 1.0"
-            if full_suite
-            else "selected benchmark subset; renormalized fixed weights"
+            (
+                "full sr-bench 1.0"
+                if full_suite
+                else (
+                    "extension diagnostic; normalized adapter weights"
+                    if extension_subset
+                    else "selected benchmark subset; renormalized fixed weights"
+                )
+            )
+            + f"; profile={manifest['profile']}"
+            + ("; custom task subset" if custom_subset else "")
         )
+    if manifest["mode"] in {"preview", "replay"}:
+        routing_rows = (
+            results
+            if manifest["mode"] == "preview"
+            else store.results(manifest["replay_sources"]["preview_run_id"])
+        )
+        for item in metrics:
+            routing = [
+                row.get("details", {}).get("routing", {})
+                for row in routing_rows
+                if row["target_id"] == item["id"]
+            ]
+            item["selected_models"] = dict(
+                Counter(
+                    row["selected_model"]
+                    for row in routing
+                    if row.get("selected_model")
+                )
+            )
+            item["decisions"] = dict(
+                Counter(
+                    row["decision_result"]["decision_name"]
+                    for row in routing
+                    if (row.get("decision_result") or {}).get("decision_name")
+                )
+            )
     if manifest["mode"] == "preview":
         for item in metrics + benchmarks:
             for key in (
@@ -200,6 +254,10 @@ def make_report(store, run_id):
         limitations.append(
             "GPQA labels were previously seen in this project; this is a retest, not an unseen holdout claim."
         )
+    if manifest["cost_policy"] == "require_priced":
+        limitations.append(
+            "Dispatch reservations use frozen request estimates. Provider or router prompt/output transformations can exceed those estimates; max_cost_usd stops future dispatch from measured spend but is not a universal hard billing cap."
+        )
     wall = (
         datetime.fromisoformat(run["updated_at"])
         - datetime.fromisoformat(run["created_at"])
@@ -222,6 +280,18 @@ def make_report(store, run_id):
             "case_sha256": manifest["case_sha256"],
             "dataset": manifest.get("dataset"),
             "sampling": manifest["sampling"],
+            "adapter_versions": manifest.get("adapter_versions", {}),
+            "custom_subset": custom_subset,
+            "target_profiles": [
+                {
+                    "id": t["id"],
+                    "model": t["model"],
+                    "kind": t["kind"],
+                    "request_params": t.get("request_params", {}),
+                    "config_hash": t.get("config_hash"),
+                }
+                for t in manifest["targets"]
+            ],
             "profile": manifest["profile"],
             "seed": manifest["seed"],
         },
@@ -239,6 +309,7 @@ def compare(store, baseline_id, candidate_id):
         "benchmark_options",
         "auxiliary_targets",
         "benchmark_weights",
+        "adapter_versions",
         "mode",
     ):
         if bm.get(key) != cm.get(key):
@@ -249,6 +320,18 @@ def compare(store, baseline_id, candidate_id):
         raise ValueError("Both runs must complete before a paired comparison")
     br = store.results(baseline_id)
     cr = store.results(candidate_id)
+    baseline_profiles = {
+        t["model"]: t.get("request_params", {})
+        for t in bm["targets"]
+        if t["kind"] == "single"
+    }
+    for target in cm["targets"]:
+        if (
+            target["kind"] == "single"
+            and target["model"] in baseline_profiles
+            and target.get("request_params", {}) != baseline_profiles[target["model"]]
+        ):
+            raise ValueError("Cannot compare changed single-model request parameters")
     singles = [t for t in bm["targets"] if t["kind"] == "single"]
     if not singles:
         raise ValueError("Baseline must contain a single-model target")
@@ -286,7 +369,8 @@ def compare(store, baseline_id, candidate_id):
             for b in {c["benchmark"] for c in bm["cases"]}
         }
         weights = {
-            b: BENCHMARK_WEIGHTS[b] / sum(BENCHMARK_WEIGHTS[k] for k in groups)
+            b: bm["benchmark_weights"][b]
+            / sum(bm["benchmark_weights"][k] for k in groups)
             for b in groups
         }
         macro_delta = sum(weights[b] * mean(values) for b, values in groups.items())

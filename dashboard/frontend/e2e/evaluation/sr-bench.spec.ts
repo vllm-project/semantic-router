@@ -45,6 +45,8 @@ const report = {
         tokens: 120,
         latency_p50_s: 1,
         latency_p95_s: 2,
+        selected_models: { 'model-a': 2 },
+        decisions: { reasoning: 2 },
       },
     ],
     wall_time_s: 10,
@@ -108,6 +110,9 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
     else if (path === '/runs/run-1/report') body = report
     else if (path === '/runs/run-1/results')
       body = {
+        total: 1,
+        limit: 100,
+        next_cursor: null,
         results: [
           {
             case_id: 'case-a',
@@ -122,7 +127,8 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
           },
         ],
       }
-    else if (path === '/runs/run-1/calls') body = { calls: [] }
+    else if (path === '/runs/run-1/calls')
+      body = { calls: [], total: 0, limit: 100, next_cursor: null }
     else if (path === '/runs/run-1/events') body = { events: [{ seq: 1, type: 'completed' }] }
     else if (path === '/comparisons')
       body = {
@@ -189,6 +195,134 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
     'href',
     '/api/sr-bench/v1/runs/run-1/report',
   )
+})
+
+test('loads bounded evidence pages on demand and keeps full report aggregates', async ({
+  page,
+}) => {
+  await mockBench(page)
+  const resultReads: number[] = []
+  const callReads: number[] = []
+  const detailReads: string[] = []
+  let failLastPage = true
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        summary: {
+          ...report.summary,
+          targets: [
+            {
+              ...report.summary.targets[0],
+              total: 250,
+              completed: 250,
+              correct: 125,
+              scored: 250,
+              selected_models: { 'full-report-model': 250 },
+              decisions: { 'full-report-decision': 250 },
+            },
+          ],
+        },
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/results?*', async (route) => {
+    const query = new URL(route.request().url()).searchParams
+    const after = Number(query.get('after'))
+    expect(query.get('limit')).toBe('100')
+    resultReads.push(after)
+    if (after === 200 && failLastPage) {
+      failLastPage = false
+      await route.fulfill({ status: 503, json: { error: 'Evidence read temporarily unavailable' } })
+      return
+    }
+    await route.fulfill({
+      json: {
+        results: Array.from({ length: Math.min(100, 250 - after) }, (_, i) => ({
+          case_id: `case-${after + i}`,
+          target_id: 'single',
+          benchmark: 'mmlu-pro',
+          status: 'completed',
+          score: 1,
+          answer: 'B',
+        })),
+        total: 250,
+        limit: 100,
+        next_cursor: after < 200 ? after + 100 : null,
+      },
+    })
+  })
+  await page.route('**/api/sr-bench/v1/runs/run-1/calls?*', async (route) => {
+    const query = new URL(route.request().url()).searchParams
+    const after = Number(query.get('after'))
+    expect(query.get('limit')).toBe('100')
+    callReads.push(after)
+    await route.fulfill({
+      json: {
+        calls: Array.from({ length: Math.min(100, 201 - after) }, (_, i) => ({
+          id: `call-${after + i}`,
+          case_id: `case-${after + i}`,
+          target_id: 'single',
+          role: 'subject',
+          status: 'completed',
+          model: 'page-only-model',
+        })),
+        total: 201,
+        limit: 100,
+        next_cursor: after < 200 ? after + 100 : null,
+      },
+    })
+  })
+  await page.route('**/api/sr-bench/v1/runs/run-1/calls/call-*', async (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)!
+    detailReads.push(id)
+    await route.fulfill({
+      json: {
+        id,
+        request: { messages: [{ content: 'Saved call prompt' }] },
+        final: 'Saved final answer',
+      },
+    })
+  })
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(
+    page.getByText('Loaded 100 of 250 persisted results.', { exact: false }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Showing 100 of 201 persisted call summaries.', { exact: false }),
+  ).toBeVisible()
+  await expect(page.getByText('single: full-report-model', { exact: true })).toBeVisible()
+  await expect(page.getByText('single: full-report-decision', { exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '125 / 250', exact: true })).toBeVisible()
+  expect(resultReads).toEqual([0])
+  expect(callReads).toEqual([0])
+  expect(detailReads).toEqual([])
+  await page.getByRole('button', { name: 'Load more results', exact: true }).click()
+  await expect(
+    page.getByText('Loaded 200 of 250 persisted results.', { exact: false }),
+  ).toBeVisible()
+  await page.getByLabel('Filter loaded results').fill('case-150')
+  await page.getByRole('button', { name: 'case-150', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'case-150 · single' })).toBeVisible()
+  await page.getByRole('button', { name: 'Load more results', exact: true }).click()
+  await expect(page.getByText('Evidence read temporarily unavailable')).toBeVisible()
+  expect(resultReads).toEqual([0, 100, 200])
+  await expect(
+    page.getByText('Loaded 200 of 250 persisted results.', { exact: false }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Load more results', exact: true }).click()
+  await expect(
+    page.getByText('Loaded 250 of 250 persisted results.', { exact: false }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Load more results', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Load more call records', exact: true }).click()
+  await expect(
+    page.getByText('Showing 200 of 201 persisted call summaries.', { exact: false }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'call-150', exact: true }).click()
+  await expect(page.getByText('Saved call prompt', { exact: false })).toBeVisible()
+  expect(detailReads).toEqual(['call-150'])
+  await expect(page.getByRole('cell', { name: '125 / 250', exact: true })).toBeVisible()
 })
 
 test('compares complete runs using paired results', async ({ page }) => {
@@ -281,9 +415,9 @@ test('replays saved answers and labels estimated metrics separately', async ({ p
           limitations: ['Replay diagnostics only.'],
         }
       : path.endsWith('/calls')
-        ? { calls: [] }
+        ? { calls: [], total: 0, limit: 100, next_cursor: null }
         : path.endsWith('/results')
-          ? { results: [] }
+          ? { results: [], total: 0, limit: 100, next_cursor: null }
           : path.endsWith('/events')
             ? { events: [] }
             : replayRun

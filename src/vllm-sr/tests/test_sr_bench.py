@@ -268,6 +268,61 @@ def test_shared_api_enforces_actor_scope(tmp_path, target):
             == 1
         )
         assert requests.get(url + "/runs", timeout=2).status_code == 403
+        registered = manifest(target)["targets"]
+        registered[0]["request_params"] = {
+            "reasoning_effort": "xhigh",
+            "max_tokens": 64,
+        }
+        (tmp_path / "targets.json").write_text(json.dumps(registered))
+        frozen = requests.post(
+            url + "/plans",
+            headers=headers,
+            json={"manifest": manifest(target)},
+            timeout=2,
+        )
+        assert frozen.status_code == 200
+        assert (
+            frozen.json()["manifest"]["targets"][0]["request_params"]
+            == registered[0]["request_params"]
+        )
+        override = manifest(target)
+        override["targets"][0]["request_params"] = {"reasoning_effort": "low"}
+        assert (
+            requests.post(
+                url + "/plans", headers=headers, json={"manifest": override}, timeout=2
+            ).status_code
+            == 403
+        )
+        registered[0]["request_params"] = {"max_tokens": 1000000}
+        (tmp_path / "targets.json").write_text(json.dumps(registered))
+        assert (
+            requests.post(
+                url + "/plans",
+                headers=headers,
+                json={"manifest": manifest(target)},
+                timeout=2,
+            ).status_code
+            == 400
+        )
+        call_id = service.store.calls(run["id"])[0]["id"]
+        page = requests.get(
+            url + "/runs/" + run["id"] + "/calls?limit=1", headers=headers, timeout=2
+        ).json()
+        assert page["total"] == 1 and "request" not in page["calls"][0]
+        assert (
+            requests.get(
+                url + "/runs/" + run["id"] + "/calls/" + call_id,
+                headers=headers,
+                timeout=2,
+            ).json()["final"]
+            == "A"
+        )
+        assert (
+            requests.get(
+                url + "/runs/" + run["id"] + "/calls/" + call_id, headers=bob, timeout=2
+            ).status_code
+            == 404
+        )
     finally:
         service.shutdown()
         service.server_close()
@@ -398,7 +453,7 @@ def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
                     "selection_status": "selected",
                     "selection_method": "static",
                     "selected_model": "model",
-                    "decision_result": {"plugins": []},
+                    "decision_result": {"plugins": [], "decision_name": "direct"},
                 }
             },
         },
@@ -409,6 +464,11 @@ def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
     assert report["summary"]["total_spend_usd"] == 0
     assert report["summary"]["targets"][0]["accuracy"] is None
     assert report["summary"]["targets"][0]["estimated_accuracy"] == 1
+    assert report["summary"]["targets"][0]["selected_models"] == {"model": 1}
+    assert report["summary"]["targets"][0]["decisions"] == {"direct": 1}
+    preview_metric = make_report(store, preview["id"])["summary"]["targets"][0]
+    assert preview_metric["selected_models"] == {"model": 1}
+    assert preview_metric["decisions"] == {"direct": 1}
     assert report["summary"]["targets"][0]["sr_bench_score"] is None
     assert regrade(store, baseline["id"])["changed_count"] == 0
     exported = export_training(store, baseline["id"])
@@ -429,3 +489,138 @@ def test_training_export_refuses_unknown_split(tmp_path, target):
     wait_run(store, run["id"])
     with pytest.raises(ValueError, match="holdout and unknown"):
         export_training(store, run["id"])
+
+
+def test_native_target_params_are_frozen_sent_and_journaled(tmp_path, target):
+    m = manifest(target)
+    params = {
+        "n": 1,
+        "reasoning_effort": "xhigh",
+        "chat_template_kwargs": {"enable_thinking": True},
+        "temperature": 0.7,
+        "max_tokens": 64,
+    }
+    m["targets"][0]["request_params"] = params
+    m["sampling"] = {"temperature": 0, "max_tokens": 128}
+    store = Store(tmp_path)
+    run = Engine(store).start(m)
+    assert wait_run(store, run["id"])["status"] == "completed"
+    body = target.requests[0]
+    assert all(body[key] == value for key, value in params.items())
+    assert body["model"] == "model" and body["stream"] is True
+    call = store.calls(run["id"])[0]
+    assert call["request"]["effective_body"] == body
+    assert call["request"]["request_params"] == params
+    assert (
+        make_report(store, run["id"])["provenance"]["target_profiles"][0][
+            "request_params"
+        ]
+        == params
+    )
+    before = len(target.requests)
+    for invalid in (
+        {"model": "other"},
+        {"max_tokens": 1000000},
+        {"n": 3},
+        {"temperature": float("nan")},
+        {"chat_template_kwargs": "bad"},
+    ):
+        m["targets"][0]["request_params"] = invalid
+        with pytest.raises(ValueError):
+            Engine(Store(tmp_path / str(before))).start(m)
+    assert len(target.requests) == before
+
+
+def test_registered_adapter_preflights_all_cases_and_executes_shared_client(
+    tmp_path, target, monkeypatch
+):
+    from cli.sr_bench import adapters
+    from cli.sr_bench.contracts import catalog
+
+    adapters.list_adapters()
+    monkeypatch.setattr(adapters, "_adapters", dict(adapters._adapters))
+    seen = []
+
+    def preflight(case, manifest, cache):
+        cache.setdefault("seen", []).append(case["id"])
+        seen.append(list(cache["seen"]))
+
+    def execute(case, context):
+        response = context.call(case["messages"])
+        correct = response["final"] == "A"
+        return {"answer": response["final"], "correct": correct, "score": int(correct)}
+
+    adapters.register_adapter(
+        adapters.BenchmarkAdapter(
+            "extension-check",
+            "Extension check",
+            "exact",
+            "https://example.test/source",
+            "immutable-test-v1",
+            execute,
+            preflight=preflight,
+        )
+    )
+    m = manifest(target)
+    first = {**m["cases"][0], "benchmark": "extension-check"}
+    m["cases"] = [first, {**first, "id": "q2"}]
+    target.delay = 0.015
+    store = Store(tmp_path)
+    run = Engine(store).start(m)
+    assert wait_run(store, run["id"])["status"] == "completed"
+    assert seen == [["q1"], ["q1", "q2"]]
+    assert len(target.requests) == 2
+    assert "extension-check" in {item["id"] for item in catalog()["benchmarks"]}
+    metric = make_report(store, run["id"])["summary"]["targets"][0]
+    assert metric["sr_bench_score"] is None
+    assert "extension diagnostic" in metric["score_scope"]
+    assert metric["macro_accuracy"] == 1
+    rows = store.results(run["id"])
+    assert rows[1]["queue_wait_s"] > rows[0]["queue_wait_s"]
+    assert rows[0]["started_at"] <= rows[0]["finished_at"]
+    assert metric["selected_models"] == {"model": 2}
+
+
+def test_evidence_pages_are_bounded_and_call_detail_is_run_scoped(tmp_path, target):
+    store = Store(tmp_path)
+    run, _ = store.create(plan(manifest(target)))
+    other, _ = store.create(plan(manifest(target)))
+    ids = []
+    for index in range(205):
+        ids.append(
+            store.start_call(
+                run["id"],
+                str(index),
+                "single",
+                "subject",
+                {
+                    "request": {"messages": ["secret-large-prompt"]},
+                    "final": "saved answer",
+                    "reasoning": "saved reasoning",
+                    "selected_model": "model",
+                    "usage": {"input_tokens": 1},
+                },
+            )
+        )
+        store.result(
+            run["id"], str(index), "single", "completed", {"correct": True, "score": 1}
+        )
+    cursor, seen = 0, []
+    while True:
+        page = store.page(run["id"], "calls", cursor, 100)
+        assert page["total"] == 205 and len(page["calls"]) <= 100
+        assert all(
+            "request" not in row and "reasoning" not in row and "final" not in row
+            for row in page["calls"]
+        )
+        seen.extend(row["id"] for row in page["calls"])
+        if page["next_cursor"] is None:
+            break
+        cursor = page["next_cursor"]
+    assert seen == ids
+    assert store.call(run["id"], ids[0])["final"] == "saved answer"
+    with pytest.raises(KeyError):
+        store.call(other["id"], ids[0])
+    assert len(store.page(run["id"], "results", limit=5)["results"]) == 5
+    with pytest.raises(ValueError):
+        store.page(run["id"], "calls", limit=501)

@@ -154,19 +154,34 @@ def mom_usage(response_headers, response_usage, prices):
     }
 
 
-def chat(
-    target, messages, sampling, limits, cancelled, extra_body=None, stream_path=None
-):
-    started = time.monotonic()
-    endpoint = target["base_url"].rstrip("/") + "/chat/completions"
-    body = {
+def effective_request(target, messages, sampling, extra_body=None):
+    extras = extra_body or {}
+    if set(extras) - {
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "response_format",
+        "functions",
+        "function_call",
+    }:
+        raise CallFailure("Adapter attempted to override frozen request parameters")
+    return {
         **sampling,
-        **(extra_body or {}),
+        **target.get("request_params", {}),
+        **extras,
         "model": target["model"],
         "messages": messages,
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+
+
+def chat(
+    target, messages, sampling, limits, cancelled, extra_body=None, stream_path=None
+):
+    started = time.monotonic()
+    endpoint = target["base_url"].rstrip("/") + "/chat/completions"
+    body = effective_request(target, messages, sampling, extra_body)
     if body.get("max_tokens", 0) > limits["max_output_tokens"]:
         raise CallFailure("Requested tokens exceed frozen cap")
     headers = {"Content-Type": "application/json"}
