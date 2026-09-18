@@ -67,6 +67,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.logicalModel); err != nil {
 		return nil, err
 	}
+	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+		return nil, err
+	}
 	// Selection already compared capable candidates. Late mutations may still
 	// invalidate the result, but cannot restart routing or bypass its policies.
 	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
@@ -288,6 +291,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		return response, nil
 	}
 	if ctx != nil && ctx.SemanticRequest != nil {
+		if err := r.prepareAutomaticDispatch(ctx, ctx.SemanticRequest, dispatch); err != nil {
+			return nil, err
+		}
 		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {
 			return nil, err
 		}

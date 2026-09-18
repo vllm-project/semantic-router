@@ -274,10 +274,11 @@ func (c *Compiler) compileRequestParamsPluginConfig(fields map[string]Value) con
 	cfg := config.RequestParamsPluginConfig{}
 	if value, exists := fields["default_max_tokens"]; exists {
 		if integer, ok := value.(IntValue); ok && integer.V > 0 {
-			v := integer.V
-			cfg.DefaultMaxTokens = &v
+			cfg.DefaultMaxTokens = config.FixedOutputTokenDefault(integer.V)
+		} else if text, ok := value.(StringValue); ok && text.V == "auto" {
+			cfg.DefaultMaxTokens = &config.OutputTokenDefault{Auto: true}
 		} else {
-			c.addError(Position{}, "request_params.default_max_tokens must be a positive integer")
+			c.addError(Position{}, "request_params.default_max_tokens must be a positive integer or auto")
 		}
 	}
 	if v, ok := getStringArrayField(fields, "blocked_params"); ok {

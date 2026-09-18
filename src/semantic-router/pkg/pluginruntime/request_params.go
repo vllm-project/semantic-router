@@ -34,7 +34,11 @@ func ApplyRequestParams(request *llmprotocol.Request, policy *config.RequestPara
 			result.Blocked = append(result.Blocked, field)
 		}
 	}
-	result.DefaultedOutputTokens = llmprotocol.DefaultOutputTokens(request, policy.DefaultMaxTokens)
+	if policy.DefaultMaxTokens.IsAuto() {
+		result.DefaultedOutputTokens = llmprotocol.DefaultAutomaticOutput(request)
+	} else {
+		result.DefaultedOutputTokens = llmprotocol.DefaultOutputTokens(request, policy.DefaultMaxTokens.Fixed())
+	}
 	result.CappedOutputTokens = llmprotocol.CapOutputTokens(request, policy.MaxTokensLimit)
 	result.CappedCandidateCount = llmprotocol.CapCandidateCount(request, policy.MaxN)
 	result.Changed = len(result.Blocked) > 0 || result.DefaultedOutputTokens || result.CappedOutputTokens || result.CappedCandidateCount

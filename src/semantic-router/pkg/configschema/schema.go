@@ -205,6 +205,15 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 			},
 		}
 	}
+	if value == reflect.TypeOf(routerconfig.OutputTokenDefault{}) {
+		return &jsonschema.Schema{
+			Description: "A positive output default, or auto to use the selected model's available output capacity.",
+			OneOf: []*jsonschema.Schema{
+				{Type: "integer", Minimum: json.Number("1")},
+				{Type: "string", Const: "auto"},
+			},
+		}
+	}
 	return nil
 }
 

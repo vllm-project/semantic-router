@@ -253,26 +253,20 @@ export function getRouterModelConsumers(
   return consumers.length ? consumers : [selected]
 }
 
+// Summary values count bindings, while cards show pooled runtime resources.
+// Use the same concrete resources for the count and card list whenever present.
 export function getLoadedModelCount(modelsInfo?: RouterModelsInfo | null): number {
   if (!modelsInfo) return 0
-  const models = modelsInfo.models ?? []
-  const resources = getRouterModelResources(models)
-  const duplicates =
-    models.filter((model) => model.loaded).length -
-    resources.filter(({ model }) => model.loaded).length
-  return Math.max(
-    0,
-    (modelsInfo.summary?.loaded_models ?? models.filter((model) => model.loaded).length) -
-      duplicates,
-  )
+  if (modelsInfo.models == null) return modelsInfo.summary?.loaded_models ?? 0
+  return getRouterModelResources(modelsInfo.models).filter(
+    ({ model }) => getRouterModelState(model) === 'ready',
+  ).length
 }
 
 export function getTotalKnownModelCount(modelsInfo?: RouterModelsInfo | null): number {
   if (!modelsInfo) return 0
-  const models = modelsInfo.models ?? []
-  const resourceCount = getRouterModelResources(models).length
-  const duplicates = models.length - resourceCount
-  return Math.max(resourceCount, (modelsInfo.summary?.total_models ?? models.length) - duplicates)
+  if (modelsInfo.models == null) return modelsInfo.summary?.total_models ?? 0
+  return getRouterModelResources(modelsInfo.models).length
 }
 
 export function sortRouterModels(models: RouterModelInfo[]): RouterModelInfo[] {
@@ -289,7 +283,7 @@ export function sortRouterModels(models: RouterModelInfo[]): RouterModelInfo[] {
 
 export function getPreviewRouterModels(
   modelsInfo?: RouterModelsInfo | null,
-  limit = 4,
+  limit?: number,
 ): RouterModelInfo[] {
   if (!modelsInfo?.models?.length) {
     return []
@@ -298,12 +292,9 @@ export function getPreviewRouterModels(
   const sorted = sortRouterModels(
     getRouterModelResources(modelsInfo.models).map(({ model }) => model),
   )
-  const loaded = sorted.filter((model) => model.loaded)
-  if (loaded.length > 0) {
-    return loaded.slice(0, limit)
-  }
-
-  return sorted.slice(0, limit)
+  // The dashboard shows the entire known inventory, including a failed or
+  // loading resource beside ready resources. An explicit limit is opt-in.
+  return limit === undefined ? sorted : sorted.slice(0, limit)
 }
 
 export function getRouterModelAnchor(model: Pick<RouterModelInfo, 'name' | 'recipe'>): string {

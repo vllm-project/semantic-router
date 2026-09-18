@@ -134,7 +134,7 @@ func TestRequestParamsDefaultRoundTrip(t *testing.T) {
 		t.Fatal(errs)
 	}
 	want := cfg.Decisions[0].GetRequestParamsConfig()
-	if want.DefaultMaxTokens == nil || *want.DefaultMaxTokens != 4096 || !reflect.DeepEqual(want, again.Decisions[0].GetRequestParamsConfig()) {
+	if want.DefaultMaxTokens == nil || want.DefaultMaxTokens.Value != 4096 || !reflect.DeepEqual(want, again.Decisions[0].GetRequestParamsConfig()) {
 		t.Fatalf("request default lost through DSL: %s", output)
 	}
 	ast := DecompileRoutingToAST(cfg)
@@ -146,5 +146,33 @@ func TestRequestParamsDefaultRoundTrip(t *testing.T) {
 		if _, errs := Compile(strings.Replace(source, "default_max_tokens: 4096", "default_max_tokens: "+value, 1)); len(errs) == 0 {
 			t.Errorf("accepted invalid default %s", value)
 		}
+	}
+}
+
+func TestAutomaticOutputAndForecastRoundTrip(t *testing.T) {
+	source := `ROUTE capacity {
+ PRIORITY 1
+ MODEL "local"
+ ALGORITHM multi_factor {expected_output_tokens: 4096}
+ PLUGIN request_params {default_max_tokens: "auto"}
+}`
+	cfg, errs := Compile(source)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	text, err := DecompileConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, errs := Compile(text)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if !parsed.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens.IsAuto() || *parsed.Decisions[0].Algorithm.MultiFactor.ExpectedOutputTokens != 4096 {
+		t.Fatalf("auto/forecast lost: %s", text)
+	}
+	astConfig, errs := CompileAST(DecompileRoutingToAST(cfg))
+	if len(errs) > 0 || !reflect.DeepEqual(cfg.Decisions[0].GetRequestParamsConfig(), astConfig.Decisions[0].GetRequestParamsConfig()) {
+		t.Fatalf("AST lost automatic default: %v", errs)
 	}
 }

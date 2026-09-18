@@ -52,6 +52,9 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
 			return err
 		}
+		if err := validateDecisionAutomaticOutput(decision); err != nil {
+			return err
+		}
 		if err := validateDecisionPromptModel(cfg, decision); err != nil {
 			return err
 		}
@@ -727,6 +730,9 @@ func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorS
 		return fmt.Errorf("decision '%s': algorithm.type=multi_factor requires algorithm.multi_factor configuration", decisionName)
 	}
 	path := fmt.Sprintf("decision '%s', algorithm.multi_factor", decisionName)
+	if cfg.ExpectedOutputTokens != nil && *cfg.ExpectedOutputTokens <= 0 {
+		return fmt.Errorf("%s.expected_output_tokens must be positive", path)
+	}
 	if err := validateMultiFactorObjective(cfg, path); err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ SOAK_STREAM_INTERVAL_MS ?= 50
 SOAK_STREAM_FRAMES ?= 64
 SOAK_LOG_DIR ?= /tmp/soak-logs
 SOAK_ARGS ?=
+SOAK_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/soak
 
 SOAK_SCRIPT := tools/test/soak/run-soak-local.sh
 SOAK_ENV := SOAK_CONFIG=$(SOAK_CONFIG) \
@@ -31,7 +32,10 @@ build-soak:
 soak-test: ## Vet and unit-test the soak harness (no running stack required)
 soak-test:
 	@$(LOG_TARGET)
-	@cd e2e && go build ./... && go vet ./cmd/soak/... ./pkg/soak/... && go test -count=1 ./pkg/soak/...
+	@mkdir -p "$(SOAK_TEST_REPORT_DIR)"
+	@cd e2e && go build ./cmd/soak/... ./pkg/soak/... && go vet ./cmd/soak/... ./pkg/soak/... && \
+		go test -json -list '^(Test|Fuzz|Example)' ./pkg/soak/... > "$(SOAK_TEST_REPORT_DIR)/inventory.jsonl" && \
+		go test -json -count=1 ./pkg/soak/... > "$(SOAK_TEST_REPORT_DIR)/tests.jsonl"
 
 soak-local: ## Run the local soak baseline against a full router + Envoy + mock backend stack
 soak-local: build-router build-soak

@@ -234,6 +234,19 @@ runtime generation, including each binding's `recipe` and effective provider,
 device, precision, and input limit in `metadata`. Shared artifacts may appear
 under several recipe bindings. Configured but unused models are not marked ready.
 During startup, the inventory can instead report pending artifact downloads.
+`registry.repo_id` preserves the Hugging Face source identity, including for a
+derived local graph whose declared source revision uniquely matches a registered
+checkpoint. Such a match is reported as `metadata.registry_match: source_revision`;
+it identifies the declared source, not byte-for-byte equivalence of the derived
+artifact. `metadata.resource_id` remains the physical runtime identity.
+
+Input limits have separate meanings: `forward_max_tokens` is the model's single
+forward-pass capacity, `input_max_tokens` is the effective input budget, and
+windowed bindings also expose `document_max_tokens`, `window_size`, and
+`window_overlap`. Unknown values are omitted. The legacy `max_sequence_length`
+field retains its effective-input-limit meaning and must not be interpreted as
+the physical context window.
+
 `system.gpu_available` means an active prepared binding uses local GPU execution;
 it does not indicate whether the host has unused GPU hardware.
 
