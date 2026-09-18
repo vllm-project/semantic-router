@@ -99,9 +99,9 @@ func addKnowledgeBaseActivationResponses(route apiRoute, operation *OpenAPIOpera
 		delete(operation.Responses, "200")
 		operation.Responses["201"] = openAPIObjectResponse("Knowledge base created")
 	}
-	pending := openAPIObjectResponse("Saved candidate awaiting whole-generation publication; poll /api/v1/config/hash until active_runtime_hash matches generated_runtime_hash")
+	pending := openAPIObjectResponse("Saved candidate awaiting whole-generation publication (poll /api/v1/config/hash until active_runtime_hash matches generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart")
 	pending.Content["application/json"].Schema.Properties = map[string]OpenAPISchema{
-		"activation_status":      {Type: "string", Enum: []string{"pending"}},
+		"activation_status":      {Type: "string", Enum: []string{"pending", "persisted"}},
 		"generated_runtime_hash": {Type: "string", Description: "Exact candidate runtime document hash, when available"},
 	}
 	pending.Content["application/json"].Schema.Required = []string{"activation_status"}
